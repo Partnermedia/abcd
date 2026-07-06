@@ -18,7 +18,7 @@ Decision interview conducted 2026-05-04 in conversation. Outcomes captured below
 
 ## Pass 1 — Methodology rules
 
-Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style domain rules per [`itd-3-modular-rules-loader`](../roadmap/intents/drafts/itd-3-modular-rules-loader.md), shipped as `scripts/abcd/defaults/rules.json` in the plugin.
+Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style domain rules per [`itd-3-modular-rules-loader`](../intents/shipped/itd-3-modular-rules-loader.md), shipped as `scripts/abcd/defaults/rules.json` in the plugin.
 
 | § | Section | Verdict | Domain mapping | Notes |
 |---|---|---|---|---|
@@ -29,7 +29,7 @@ Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style
 | 5 | Documentation Structure Standards | **Keep decision tree only** | `DOCUMENTATION` | The work-to-do vs work-done framing survives; the prescriptive directory layout (Diátaxis-flavoured) drops |
 | 6 | Feature-Centric Roadmap Standard | **Drop** | — | Superseded by intent system (`.abcd/development/roadmap/intents/`) |
 | 7 | No Time Estimates | **Drop** | — | Implicit in press-release intent format; no separate enforcement needed |
-| 8 | Milestone Completion Requirements | **Drop file mandates; reframe** | — | Devlogs become flow-next epic completion records (plan-sync output). Retrospectives land in `/abcd:reflect` (a later phase, see [`itd-24`](../roadmap/intents/drafts/itd-24-reflect-command.md)). Time logs dropped entirely |
+| 8 | Milestone Completion Requirements | **Drop file mandates; reframe** | — | Devlogs become flow-next epic completion records (plan-sync output). Retrospectives land in `/abcd:reflect` (a later phase, see [`itd-24`](../intents/planned/itd-24-reflect-command.md)). Time logs dropped entirely |
 | 9 | Singular vs Plural Naming | **Keep** | `NAMING` | Low-cost rule; prevents bikeshedding |
 | 10 | Complete Directory Coverage (README per dir) | **Drop** | — | Busywork without enforcement layer |
 | 11 | Cross-Reference Standards | **Drop** | — | Bidirectional linking decays without tooling |
@@ -88,7 +88,7 @@ Source: `~/.claude/templates/` (24 files). Disposition: most drop; transparency-
 |---|---|---|
 | `ai-contributions.md.template` | **Auto-generate, no template** | `dev_sync.py` reads `.abcd/logbook/*.jsonl` and emits `AI-CONTRIBUTIONS.md` at lifeboat-creation time. Always-current, lifeboat-portable |
 | `devlog.md.template` | **Drop file; harvest prompt structure** | Per Pass 1 §8: devlogs become flow-next plan-sync output. Template's narrative/challenges/highlights structure folds into plan-sync's output prompt |
-| `retrospective.md.template` | **Later phase** | Captured as [`itd-24-reflect-command`](../roadmap/intents/drafts/itd-24-reflect-command.md) — `/abcd:reflect` for major-milestone retrospectives. `intent-fidelity-reviewer` also gains retrospective output mode for major shipped intents |
+| `retrospective.md.template` | **Later phase** | Captured as [`itd-24-reflect-command`](../intents/planned/itd-24-reflect-command.md) — `/abcd:reflect` for major-milestone retrospectives. `intent-fidelity-reviewer` also gains retrospective output mode for major shipped intents |
 | `pre-implementation-checklist.md` | **Drop** | flow-next task structure + intent acceptance criteria (`itd-1`) replace |
 | `post-implementation-checklist.md` | **Drop** | Same |
 | `manual-test-script.md.template` | **Drop** | Not load-bearing now; corpus tests + golden-test fixtures cover plugin's own testing |
@@ -208,7 +208,7 @@ abcdDev/
 }
 ```
 
-Merge semantics, conflict policy, and diagnostic surface (`abcd rules show`, `abcd rules diff`, `abcd rules lint`) defined in [`itd-3-modular-rules-loader`](../roadmap/intents/drafts/itd-3-modular-rules-loader.md).
+Merge semantics, conflict policy, and diagnostic surface (`abcd rules show`, `abcd rules diff`, `abcd rules lint`) defined in [`itd-3-modular-rules-loader`](../intents/shipped/itd-3-modular-rules-loader.md).
 
 ## Migration sequence
 
@@ -277,10 +277,10 @@ If the first phase starts feeling too heavy, the candidates for moving to a late
 ## References
 
 [itd-1]: ../intents/disciplines/itd-1-acceptance-gates.md "itd-1 — Acceptance gates"
-[itd-3]: ../roadmap/intents/drafts/itd-3-modular-rules-loader.md "itd-3 — Modular rules loader"
+[itd-3]: ../intents/shipped/itd-3-modular-rules-loader.md "itd-3 — Modular rules loader"
 [itd-7]: ../intents/drafts/itd-7-rp-workspace-portability.md "itd-7 — RP workspace portability"
 [itd-17]: ../intents/drafts/itd-17-model-effectiveness-tracking.md "itd-17 — Model effectiveness tracking (a later phase)"
 [itd-23]: ../intents/drafts/itd-23-spec-kit-interop.md "itd-23 — Spec Kit interop (a later phase)"
-[itd-24]: ../roadmap/intents/drafts/itd-24-reflect-command.md "itd-24 — /abcd:reflect command (a later phase)"
+[itd-24]: ../intents/planned/itd-24-reflect-command.md "itd-24 — /abcd:reflect command (a later phase)"
 [carl]: https://github.com/ChristopherKahler/carl "CARL — Context Augmentation & Reinforcement Layer"
 [paul]: https://github.com/ChristopherKahler/paul "PAUL — Plan-Apply-Unify Loop"
