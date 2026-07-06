@@ -550,7 +550,7 @@ the host-reuse lifecycle boundary.
   derived from; Criteria 1–7b results
 - `.abcd/development/research/phase/0/spikes/mcpbridge_probe.py` — spike implementation
 - `scripts/abcd/harness.py` — the interface file governed by ADR-01 and extended by this ADR
-- `.abcd/development/roadmap/intents/planned/itd-6-rp-mcp-only-integration.md` — RP MCP
+- `.abcd/development/intents/planned/itd-6-rp-mcp-only-integration.md` — RP MCP
   architectural lock; same-chat semantics (narrowed by this ADR)
-- `.abcd/development/roadmap/intents/drafts/itd-22-opencode-portability.md` — portability target for a later phase
+- `.abcd/development/intents/drafts/itd-22-opencode-portability.md` — portability target for a later phase
   target; concrete MCPBridge implementation must remain swappable

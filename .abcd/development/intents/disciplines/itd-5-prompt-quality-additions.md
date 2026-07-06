@@ -5,8 +5,6 @@ kind: discipline
 kind_notes: "Cross-cutting prompt-quality gate; applied per-agent at v1.0.0 lock-time (one-shot self-improvement pre-flight) and continuously via lint_prompts + golden-test injection canaries. Every agent spec inherits this rule."
 suggested_kind: null
 spec_id: null
-created: 2026-05-04
-updated: 2026-05-08
 reclassification_history:
   - { date: 2026-05-07, from: standalone, to: discipline, reason: "Reclassified per the three-intent-kinds change: itd-5 is a rule that applies to every agent spec — `prompt_version` frontmatter, one-shot pre-flight at lock-time, injection canaries — not a feature with a user moment of its own. Discipline shape (## Rule + ## Why) fits." }
 ---
@@ -149,6 +147,6 @@ _Empty. Populated by intent-fidelity-reviewer's single-document role when this d
 - [`../../../brief/05-internals/05-prompt-quality.md`](../../brief/05-internals/05-prompt-quality.md) — the B+C+D baseline this discipline extends.
 - [`../../../brief/05-internals/01-agents.md § Agent prompt frontmatter`](../../brief/05-internals/01-agents.md#agent-prompt-frontmatter) — canonical agent-frontmatter contract; this discipline's `prompt_version` + `capability_scope` requirements register there.
 - [Dell'Acqua et al. 2023][jagged-frontier] — framing source for the `capability_scope` Add 4 (added 2026-05-08 per idea-4 jagged-frontier review). Also at [`../../../research/related-work.md § Dell'Acqua et al. 2023 — Jagged Frontier`](../../research/related-work.md#dellacqua-et-al-2023--jagged-frontier).
-- [`.work/idea-assessments/4-jagged-frontier.md`](../../../../../.work/idea-assessments/4-jagged-frontier.md) — full assessment with 2-round review trail (chat `idea-4-jagged-frontier-r-33C475`); split static (itd-5 here) vs dynamic (Frontier Awareness) preserved in chat record.
+- `.work/idea-assessments/4-jagged-frontier.md` — full assessment with 2-round review trail (chat `idea-4-jagged-frontier-r-33C475`); split static (itd-5 here) vs dynamic (Frontier Awareness) preserved in chat record.
 
 [jagged-frontier]: https://www.hbs.edu/faculty/Pages/item.aspx?num=64700 "Dell'Acqua, McFowland, Mollick et al. (2023) — Navigating the Jagged Technological Frontier, HBS Working Paper 24-013; published Organization Science 2025"

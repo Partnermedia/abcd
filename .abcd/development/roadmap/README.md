@@ -68,7 +68,7 @@ native spec store via the Go CLI; never transcribe it here.
 # Live count per lifecycle bucket.
 for b in drafts planned shipped disciplines superseded; do
   printf '%-12s %s\n' "$b" \
-    "$(ls .abcd/development/roadmap/intents/$b/itd-*.md 2>/dev/null | wc -l)"
+    "$(ls .abcd/development/intents/$b/itd-*.md 2>/dev/null | wc -l)"
 done
 ```
 

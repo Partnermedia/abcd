@@ -5,8 +5,6 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-04
-updated: 2026-05-04
 ---
 
 # Lifeboats Speak To External Tools
@@ -39,7 +37,7 @@ See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) Pass 2 (ski
 - **Real-time sync** — this is one-shot import/export, not bidirectional live sync. Real-time sync is its own product.
 - **Authoring spec-kit-shaped content within abcd** — abcd users write intents; intents convert to spec-kit only at export time.
 - **Conflict resolution UI** — when round-trip introduces drift, surface the diff; don't auto-merge.
-- **Linear/Jira/Notion as primary backends** — abcd's source of truth remains intents in `.abcd/development/roadmap/intents/`; external tools are sync targets, not primary stores.
+- **Linear/Jira/Notion as primary backends** — abcd's source of truth remains intents in `.abcd/development/intents/`; external tools are sync targets, not primary stores.
 
 ## Acceptance Criteria
 

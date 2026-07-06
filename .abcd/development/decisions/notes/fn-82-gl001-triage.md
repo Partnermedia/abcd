@@ -126,7 +126,7 @@ flagged token appears in this report):
 ```bash
 for f in itd-27-grill-skill-and-glossary itd-28-rp-reviews-into-flow; do
   bash scripts/lib/python_pick.sh -m scripts.abcd.lint \
-    ".abcd/development/roadmap/intents/shipped/$f.md" --json \
+    ".abcd/development/intents/shipped/$f.md" --json \
   | python3 -c "import sys,json,re;d=json.load(sys.stdin);\
 print(sorted({re.search(r'\`([^\`]+)\`',x['message']).group(1) for x in d['findings'] if x['code']=='GL001'}))"
 done

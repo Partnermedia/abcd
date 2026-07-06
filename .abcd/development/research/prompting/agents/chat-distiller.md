@@ -108,7 +108,7 @@ When the agent's prompt bumps version (per baseline § 5), reference back here:
 ## Related Documentation
 
 - [`../01-general-best-practices.md`](../01-general-best-practices.md) — baseline (the gate)
-- [`../../../../agents/chat-distiller.md`](../../../../agents/chat-distiller.md) — the agent prompt this research informs (created in chat-distiller's flow-next epic)
+- `../../../../agents/chat-distiller.md` — the agent prompt this research informs (created in chat-distiller's flow-next epic)
 - `../../../../agents/chat-distiller/fixtures/` — golden-test fixtures (created when the epic ships)
-- [`../../roadmap/intents/drafts/itd-11-pass-b-pitfall-mitigation.md`](../../../intents/drafts/itd-11-pass-b-pitfall-mitigation.md) — directly-related intent
-- [`../../roadmap/intents/drafts/itd-5-prompt-quality-additions.md`](../../../intents/disciplines/itd-5-prompt-quality-additions.md) — version field, self-improvement pre-flight, injection canary fixture (Add 3 mandates fixture #5 above)
+- [`../../intents/drafts/itd-11-pass-b-pitfall-mitigation.md`](../../../intents/drafts/itd-11-pass-b-pitfall-mitigation.md) — directly-related intent
+- [`../../intents/drafts/itd-5-prompt-quality-additions.md`](../../../intents/disciplines/itd-5-prompt-quality-additions.md) — version field, self-improvement pre-flight, injection canary fixture (Add 3 mandates fixture #5 above)

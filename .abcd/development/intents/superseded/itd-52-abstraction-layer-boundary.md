@@ -7,8 +7,6 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-15]
 routed_from: ["fn-33:I-D1"]
-created: 2026-06-03
-updated: 2026-06-11
 prd_path: null
 ---
 

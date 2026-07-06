@@ -186,7 +186,7 @@ Per abcd's External Acknowledgement Policy:
 
 ## Related Documentation
 
-- [`.flow/reviews/README.md`](../../../../.flow/reviews/README.md) — two-store split overview
+- `.flow/reviews/README.md` — two-store split overview
 - [ADR-5: Brief Is Current State](0005-brief-is-current-state.md) — JSON-internal / MD-render invariant
-- [F-075 flow-next-local-review prior art](../../../../REPPL/abcdZero/docs/development/roadmap/features/planned/F-075-flow-next-local-review.md) — prior wrapper evaluation (external repo)
-- [F-037 multi-model-review prior art](../../../../REPPL/abcdZero/docs/development/roadmap/features/completed/F-037-multi-model-review.md) — v2.5.1 patch-based wrapper (external repo)
+- F-075 flow-next-local-review prior art — prior wrapper evaluation (external repo)
+- F-037 multi-model-review prior art — v2.5.1 patch-based wrapper (external repo)

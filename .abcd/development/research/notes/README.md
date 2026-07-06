@@ -19,7 +19,7 @@ themselves.
 
 - **Decisions** — go to `.abcd/development/decisions/adrs/` (ADRs). A note here
   may *inform* an ADR; the ADR is where the choice is recorded.
-- **Intents** — go to `.abcd/development/roadmap/intents/`. A note may seed an
+- **Intents** — go to `.abcd/development/intents/`. A note may seed an
   intent; the intent is the forward-looking record.
 - **Phase-scoped research** — goes to `research/phase/<N>/` (design inputs a
   given phase consumes).
@@ -42,5 +42,5 @@ folder-convention artefacts promoted into ADRs/intents by hand.
 ## Related
 
 - [`../decisions/adrs/`](../../decisions/adrs) — decisions a note may inform
-- [`../roadmap/intents/`](../../intents) — intents a note may seed
+- [`../intents/`](../../intents) — intents a note may seed
 - [`../research/`](..) — sibling research directories (`phase/`, `prompting/`, `adr/`)

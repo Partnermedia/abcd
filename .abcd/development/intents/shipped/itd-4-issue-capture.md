@@ -5,8 +5,6 @@ spec_id: fn-20-issue-ledger-primitives-iss-n-allocator
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-04
-updated: 2026-05-04
 ---
 
 # Nothing You Notice Gets Lost

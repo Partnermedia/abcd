@@ -26,7 +26,7 @@ See [`phases/README.md`](../../roadmap/phases/README.md) for the phase plan and 
 
 ## What comes in a later phase
 
-**All later-phase items live as press-release intents** in `.abcd/development/roadmap/intents/drafts/`. The canonical out-of-scope list is at [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md).
+**All later-phase items live as press-release intents** in `.abcd/development/intents/drafts/`. The canonical out-of-scope list is at [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md).
 
 The later-phase set is the live `drafts/` corpus minus the intents already scoped into a planned phase; it is enumerated — and kept non-drifting via a filesystem-derived command rather than a hand-count — in the canonical [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md). itd-31 and itd-32 are superseded (preserved as historical record in `intents/superseded/`).
 

@@ -23,7 +23,7 @@ artefact — it is never edited after `/abcd:intent plan` is run.
 ## When to use
 
 Use "intent" when referring to the human-authored document that precedes implementation. Intent
-files live under `.abcd/development/roadmap/intents/` and carry a slugged identifier (e.g.,
+files live under `.abcd/development/intents/` and carry a slugged identifier (e.g.,
 `itd-27`).
 
 ## When NOT to use

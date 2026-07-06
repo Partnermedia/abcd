@@ -6,8 +6,6 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-28]
-created: 2026-07-03
-updated: 2026-07-03
 prd_path: null
 prd_grandfathered: true
 grandfathered: true

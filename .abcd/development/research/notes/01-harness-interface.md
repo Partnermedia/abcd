@@ -344,11 +344,11 @@ place." (practice-scout)
 ## Related Documentation
 
 - ``scripts/abcd/harness.py`` — the interface file this ADR governs
-- ``.abcd/development/roadmap/intents/planned/itd-6-rp-mcp-only-integration.md``
+- ``.abcd/development/intents/planned/itd-6-rp-mcp-only-integration.md``
   — architectural lock: RP is MCP-only
-- ``.abcd/development/roadmap/intents/drafts/itd-22-opencode-portability.md``
+- ``.abcd/development/intents/drafts/itd-22-opencode-portability.md``
   — OpenCode portability target that harness.py is designed to serve
-- ``.abcd/development/roadmap/intents/drafts/itd-2-in-session-subagent-dispatch.md``
+- ``.abcd/development/intents/drafts/itd-2-in-session-subagent-dispatch.md``
   — in-session subagent dispatch (one of the three oracle transports)
 - ``.abcd/development/research/phase/0/predecessor-notes.md`` — Task 1 output;
   abcdSubZero's ``cli_adapter_base.py`` is the closest predecessor

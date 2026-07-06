@@ -18,7 +18,7 @@ This directory holds the *plumbing* design for abcd: the agents, adapters, confi
 
 The brief skeleton (numbered-folder layout under `.abcd/development/brief/`) is **not enforced** by `intent-fidelity-reviewer` or `documentation-auditor`. This is a deliberate choice — rigidity on a young template kills iteration; better to let the shape settle through use, then enforce.
 
-**Future enforcement candidates** (deferred, captured in [`.work/issues.md`](../../../../.work/issues.md) under "[Brief restructure — future enforcement note]"):
+**Future enforcement candidates** (deferred, captured in `.work/issues.md` under "[Brief restructure — future enforcement note]"):
 
 - Require a populated `01-product/01-press-release.md` (no placeholder content)
 - Require at least one entry in `04-surfaces/`

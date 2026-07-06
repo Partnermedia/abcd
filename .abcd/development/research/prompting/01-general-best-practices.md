@@ -141,7 +141,7 @@ Reviewing the brief and in-flight `itd-2` (in-session subagent dispatch) work ag
 2. **A self-improvement pre-flight** before locking each agent prompt at v1.0.0: ask the oracle to suggest improvements, accept only changes that pass golden tests. Anthropic got 40% task-time reduction this way; even a fraction of that across 15 agents is worth a one-shot pass.
 3. **An injection-canary fixture** in `chat-distiller`'s and `embark-scaffolder`'s golden tests. A specstory transcript / lifeboat with a deliberately-injected `IGNORE PREVIOUS INSTRUCTIONS` payload. The agent must not honour it. The cheapest possible regression test for OWASP LLM01.
 
-These three are tracked as a candidate intent (`itd-N`); see `roadmap/intents/drafts/`.
+These three are tracked as a candidate intent (`itd-N`); see `intents/drafts/`.
 
 ---
 

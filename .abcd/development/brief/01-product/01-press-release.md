@@ -22,7 +22,7 @@ See [`04-scope.md`](04-scope.md) for the full scope boundary and [`04-surfaces/`
 
 ## What's Out of Scope
 
-Code-bundling lifeboats, cross-corpus synthesis, public-source vendoring with provenance, scheduled `dev-sync`, OpenCode harness portability, hash-chain conversation audit, and 13 more later-phase items — all live as press-release intents in `.abcd/development/roadmap/intents/drafts/`. See [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md) for the canonical later-phase list.
+Code-bundling lifeboats, cross-corpus synthesis, public-source vendoring with provenance, scheduled `dev-sync`, OpenCode harness portability, hash-chain conversation audit, and 13 more later-phase items — all live as press-release intents in `.abcd/development/intents/drafts/`. See [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md) for the canonical later-phase list.
 
 ## Acceptance Criteria
 

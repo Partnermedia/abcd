@@ -195,7 +195,7 @@ This is what makes "memory never overflows" an enforced property rather than a h
 
 **Diagnostic.** `abcd memory recall [keyword]` shows which pages a prompt/keyword would surface and in which bracket — explainability, per the bare-command-as-render discipline.
 
-See [`../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md`](../../intents/drafts/itd-39-scope-aware-memory-retrieval.md) for the full intent, acceptance criteria, and the architectural-audit reconciliation with itd-3's global-rules rejection.
+See [`../../intents/drafts/itd-39-scope-aware-memory-retrieval.md`](../../intents/drafts/itd-39-scope-aware-memory-retrieval.md) for the full intent, acceptance criteria, and the architectural-audit reconciliation with itd-3's global-rules rejection.
 
 ## References
 

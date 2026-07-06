@@ -5,8 +5,6 @@ spec_id: fn-15-folder-classification-workspacesjson
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
-created: 2026-05-16
-updated: 2026-05-16
 ---
 
 # abcd Knows What Kind of Folder You're In

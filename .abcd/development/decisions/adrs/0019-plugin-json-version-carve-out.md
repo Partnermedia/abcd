@@ -33,7 +33,7 @@ questions the framework has to settle before any manifest is written:
    validated. Hard-coding `plugin.json.version` as the answer would be a guess.
    The version-location decision resolves it against the pinned schemastore
    fixtures and records the outcome in a machine-readable decision artifact
-   ([`.abcd/config/version-location.json`](../../../config/version-location.json)),
+   (`.abcd/config/version-location.json`),
    with three fully-specified terminal outcomes: **ACCEPT** (`version` is an
    explicit schema property → write `plugin.json.version`), **FALLBACK** (a
    different schema-valid explicit-property location), or **BLOCKED** (no

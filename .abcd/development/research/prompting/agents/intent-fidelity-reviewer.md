@@ -36,7 +36,7 @@ baseline: ../01-general-best-practices.md
   runs at epic plan-review and ship time, wired into the abcd-owned
   CI/pre-commit `plan_review_disciplines.py` path.
 - **Inputs.** itd-1 pass: an intent/discipline file under
-  `.abcd/development/roadmap/intents/**` plus a deterministically-collected
+  `.abcd/development/intents/**` plus a deterministically-collected
   `delivered_reality` bundle (the linked spec's task `## Done summary` /
   `## Evidence` sections), a glossary summary, and a frozen PRD when present.
   `MG004` pass: a flow-next spec's `## Modification Grammar` section text plus
@@ -212,5 +212,5 @@ material § 0–6 rewrite that would change the findings' scope.
 - [`../01-general-best-practices.md`](../01-general-best-practices.md) — baseline (the gate)
 - `../../../../agents/intent-fidelity-reviewer.md` — the agent prompt this research informs
 - `../../../../agents/intent-fidelity-reviewer/fixtures/` — golden-test + injection-canary fixtures
-- `../../roadmap/intents/disciplines/itd-1-acceptance-gates.md` — the acceptance-gate discipline Role 1's itd-1 pass enforces
-- `../../roadmap/intents/disciplines/itd-37-modification-grammar.md` — the modification-grammar discipline Role 1's `MG004` pass enforces
+- `../../intents/disciplines/itd-1-acceptance-gates.md` — the acceptance-gate discipline Role 1's itd-1 pass enforces
+- `../../intents/disciplines/itd-37-modification-grammar.md` — the modification-grammar discipline Role 1's `MG004` pass enforces

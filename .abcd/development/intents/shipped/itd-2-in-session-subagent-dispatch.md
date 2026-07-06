@@ -5,8 +5,6 @@ spec_id: fn-10-in-session-subagent-dispatch-oracle
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-04
-updated: 2026-05-07
 ---
 
 # In-Session Subagent Dispatch — the Default Host-Delegated Oracle

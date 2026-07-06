@@ -6,8 +6,6 @@ kind: null
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-created: 2026-06-29
-updated: 2026-06-29
 prd_path: null
 ---
 

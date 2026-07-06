@@ -6,8 +6,6 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-created: 2026-05-22
-updated: 2026-05-22
 ---
 
 # `/abcd:intent "<text>"` And `/abcd:capture "<text>"` Become Symmetric Create Paths

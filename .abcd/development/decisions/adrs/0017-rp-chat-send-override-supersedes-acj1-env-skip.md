@@ -158,7 +158,7 @@ invocation path, not the bug workaround.
 
 ## Related Documentation
 
-- [`../../../../.flow/specs/fn-44-rp-chat-send-override-fixed-budget-pre.md`](../../../../.flow/specs/fn-44-rp-chat-send-override-fixed-budget-pre.md) — the fn-44 spec (design decisions 1–8, boundaries, test surfaces)
-- [`../../../../.flow/specs/fn-33-phase-3-to-4-cleanup-placeholder.md`](../../../../.flow/specs/fn-33-phase-3-to-4-cleanup-placeholder.md) — fn-33 Cluster J / AC-J1, the superseded spec-level decision (amendment pointer next to its locked-decisions block)
-- [`../../../../scripts/abcd/overlay/sources/flowctl-dispatcher.sh`](../../../../scripts/abcd/overlay/sources/flowctl-dispatcher.sh) — the dispatcher carrying the retained rollback-path export
-- [`../../../../scripts/abcd/README.md`](../../../../scripts/abcd/README.md) — module table (handler in `abcd_flowctl_ext.py`, standalone front door in `abcd_rp_cli.py`)
+- `../../../../.flow/specs/fn-44-rp-chat-send-override-fixed-budget-pre.md` — the fn-44 spec (design decisions 1–8, boundaries, test surfaces)
+- `../../../../.flow/specs/fn-33-phase-3-to-4-cleanup-placeholder.md` — fn-33 Cluster J / AC-J1, the superseded spec-level decision (amendment pointer next to its locked-decisions block)
+- `../../../../scripts/abcd/overlay/sources/flowctl-dispatcher.sh` — the dispatcher carrying the retained rollback-path export
+- `../../../../scripts/abcd/README.md` — module table (handler in `abcd_flowctl_ext.py`, standalone front door in `abcd_rp_cli.py`)

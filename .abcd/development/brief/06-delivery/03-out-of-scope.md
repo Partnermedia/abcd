@@ -1,6 +1,6 @@
 # Out of Phase Scope
 
-This brief describes the work bundled into the six planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **All later-phase items live as press-release intents** in `.abcd/development/roadmap/intents/drafts/` — see [intents/README.md](../../intents/README.md) for the full index.
+This brief describes the work bundled into the six planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **All later-phase items live as press-release intents** in `.abcd/development/intents/drafts/` — see [intents/README.md](../../intents/README.md) for the full index.
 
 **In a later phase.** The set below is the live `drafts/` corpus minus the
 intents already scoped into a planned phase (a phase doc's `## Scope` section is
@@ -18,7 +18,7 @@ phased-in IDs, rather than maintaining a total that re-drifts —
 # below is therefore ONLY the phased-in IDs that are STILL physically in drafts/
 # (lifecycle move pending): itd-2,3,4,7
 # (phase-0/1/2 scoped) and itd-34,36,40,42 (later phased-in, captured post-brief).
-ls .abcd/development/roadmap/intents/drafts/itd-*.md \
+ls .abcd/development/intents/drafts/itd-*.md \
   | sed -E 's#.*/(itd-[0-9]+).*#\1#' | sort -V -u \
   | grep -vxE 'itd-(2|3|4|7|34|36|40|42)'
 ```

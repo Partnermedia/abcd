@@ -5,8 +5,6 @@ spec_id: fn-2-move-repoprompt-review-artifacts-into
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-07
-updated: 2026-05-11
 prd_path: null
 prd_grandfathered: true
 grandfathered: true

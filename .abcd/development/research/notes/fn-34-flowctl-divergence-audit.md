@@ -67,7 +67,7 @@ numbers are a snapshot, not a pin.
 
 ## Related
 
-- [fn-34 spec](../../../.flow/specs/fn-34-detach-scriptsralphflowctlpy-from.md)
+- fn-34 spec
 - Extension: `scripts/abcd/abcd_flowctl_ext.py`
 - Loader: `scripts/abcd/tools/flowctl_loader.py` (fn-34.2)
 

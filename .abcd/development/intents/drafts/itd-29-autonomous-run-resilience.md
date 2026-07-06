@@ -5,8 +5,6 @@ spec_id: fn-55-autonomous-run-operator-surface-v1
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-07
-updated: 2026-05-07
 ---
 
 # Domain Experts Run A Spec Autonomously And Recover From Anything Without Touching Git

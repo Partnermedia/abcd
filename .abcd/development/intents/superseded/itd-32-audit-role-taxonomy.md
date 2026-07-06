@@ -8,8 +8,6 @@ superseded_by: itd-31
 bundle: null
 spec_id: null
 suggested_kind: null
-created: 2026-05-07
-updated: 2026-05-07
 reclassification_history:
   - { date: 2026-05-07, from: bundle-member, to: superseded, reason: "Premise dissolved when role-by-verb split landed (per command-structure-review round 2): the unified-/abcd:audit-surface assumption that this taxonomy intent rested on no longer holds. Each review/audit role now has its own verb (/abcd:intent review, /abcd:intent consistency, /abcd:intent shape, /abcd:audit). The 'register every audit role in one table' need is absorbed into itd-31's brief edits to 05-internals/01-agents.md (which already documents each role's inputs, outputs, triggers) — itd-32's separate taxonomy file (07-audits.md) is no longer load-bearing. The tier-0-audit-substrate bundle dissolves; itd-31 promotes to standalone." }
 ---

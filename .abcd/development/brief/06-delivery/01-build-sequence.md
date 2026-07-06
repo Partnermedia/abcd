@@ -6,7 +6,7 @@ autonomous `run` seam picks ready work up in dependency order, with parallelism
 where dependencies allow. The canonical intent set and its bundling into product
 phases live in the phase docs and the intent index — see
 [`roadmap/phases/README.md`](../../roadmap/phases/README.md) and
-[`roadmap/intents/README.md`](../../intents/README.md); this file is the
+[`intents/README.md`](../../intents/README.md); this file is the
 canonical **build-milestone** detail (what each milestone stands up in the Go
 core, the adapters, and the front doors).
 

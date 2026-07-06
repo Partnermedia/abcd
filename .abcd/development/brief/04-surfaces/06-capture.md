@@ -42,8 +42,6 @@ found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
 related_intents: [itd-N, ...]
 related_specs: [fn-N, ...]
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
 wontfix_reason: "<text>"   # required when in wontfix/
 resolution: "<one-line>"   # required when in resolved/
 ---

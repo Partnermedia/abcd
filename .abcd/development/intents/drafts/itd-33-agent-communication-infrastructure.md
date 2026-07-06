@@ -5,8 +5,6 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-07
-updated: 2026-05-08
 ---
 
 # Multiple Agents Coordinate On Intent And Spec Work Without Duplicating Effort Or Producing Competing Artefacts

@@ -6,8 +6,6 @@ kind: bundle-member
 bundle: fn-83-operator-surfaces
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-03
-updated: 2026-05-03
 prd_path: null
 prd_grandfathered: true
 grandfathered: true

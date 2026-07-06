@@ -193,7 +193,7 @@ The decision is unambiguous on the policy hinge: **(B) forbids re-including
   gate); `05-internals/09-provenance-substrate.md` (§4 "Launch-gate licence
   gates", and the `/abcd:launch consumes the registry for licence-gate
   enforcement` line at :108 — relabel to the lifeboat consumer). The shipped-intent
-  record `roadmap/intents/shipped/itd-36-memory-unification.md` is checked and
+  record `intents/shipped/itd-36-memory-unification.md` is checked and
   reconciled by edit or explicit supersession reference. Supersession-reference-only
   is permitted ONLY for durable historical records (fn-38 prose, shipped-intent
   caveats), never to leave a live brief section contradicting this policy.

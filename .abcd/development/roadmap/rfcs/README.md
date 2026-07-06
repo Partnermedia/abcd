@@ -45,7 +45,7 @@ itd-N (proposed work) ──► rfc-N (community discussion) ──► itd-N (re
 
 RFCs are where contested intents go to be *sharpened*. The output of an RFC is either a refined version of the original intent, a different intent, or an explicit "no, and here's why" entry that future RFC-stubs can reference. ADRs are written after settlement, when an inflection-point decision warrants permanent rationale.
 
-RFCs live here under `.abcd/development/roadmap/` because they are roadmap artefacts (forward-looking, decision-shaping). ADRs live at `.abcd/development/decisions/adrs/` because they are settled-decision records (retrospective, decision-preserving). Intents live at `.abcd/development/roadmap/intents/` for the same reason as RFCs.
+RFCs live here under `.abcd/development/roadmap/` because they are roadmap artefacts (forward-looking, decision-shaping). ADRs live at `.abcd/development/decisions/adrs/` because they are settled-decision records (retrospective, decision-preserving). Intents live at `.abcd/development/intents/` for the same reason as RFCs.
 
 ---
 

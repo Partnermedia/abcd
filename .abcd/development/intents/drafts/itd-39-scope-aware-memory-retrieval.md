@@ -5,8 +5,6 @@ spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
-created: 2026-05-16
-updated: 2026-05-16
 ---
 
 # abcd Surfaces the Right Memory at the Right Moment

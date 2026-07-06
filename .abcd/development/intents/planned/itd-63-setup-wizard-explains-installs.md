@@ -7,8 +7,6 @@ bundle: fn-83-operator-surfaces
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-22]
-created: 2026-06-29
-updated: 2026-06-29
 prd_path: null
 prd_grandfathered: true
 grandfathered: true

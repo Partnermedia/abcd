@@ -5,8 +5,6 @@ kind: standalone
 suggested_kind: standalone
 bundle: null
 spec_id: fn-9-three-intent-kinds-kinddirectory-lint
-created: 2026-05-07
-updated: 2026-05-07
 reclassification_history: []
 ---
 

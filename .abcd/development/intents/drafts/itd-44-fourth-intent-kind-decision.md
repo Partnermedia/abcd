@@ -6,8 +6,6 @@ kind: null
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-created: 2026-05-22
-updated: 2026-05-22
 ---
 
 # A Capture-Time `decision` Verdict That Routes Infrastructure Choices Into The Existing ADR Store

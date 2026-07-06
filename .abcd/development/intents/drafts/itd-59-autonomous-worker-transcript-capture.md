@@ -7,8 +7,6 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-27, adr-29]
 routed_from: []
-created: 2026-06-25
-updated: 2026-06-25
 prd_path: null
 ---
 

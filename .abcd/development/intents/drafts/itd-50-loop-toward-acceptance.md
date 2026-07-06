@@ -8,8 +8,6 @@ reclassification_history: []
 related_adrs: []
 routed_from: ["fn-33:I-D3"]
 glossary_terms_used: [core/intent, core/spec, core/phase, core/oracle, core/lifeboat, interview/session]
-created: 2026-06-02
-updated: 2026-06-02
 grilled_at: 2026-06-02
 ---
 

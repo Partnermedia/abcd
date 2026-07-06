@@ -27,7 +27,7 @@ Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style
 | 3 | Working Files Directory (.work/) | **Keep, retarget** | `ARTEFACTS` | `.work/` for scratch, `.abcd/development/activity/` for curated |
 | 4 | Mandatory Issue Recording | **Keep, retarget** | `ISSUES` | Scratch → `.work/issues.md`; curated → `.abcd/development/activity/issues/` via dev-sync. Couples to `itd-4` (capture) and `issue-scout` |
 | 5 | Documentation Structure Standards | **Keep decision tree only** | `DOCUMENTATION` | The work-to-do vs work-done framing survives; the prescriptive directory layout (Diátaxis-flavoured) drops |
-| 6 | Feature-Centric Roadmap Standard | **Drop** | — | Superseded by intent system (`.abcd/development/roadmap/intents/`) |
+| 6 | Feature-Centric Roadmap Standard | **Drop** | — | Superseded by intent system (`.abcd/development/intents/`) |
 | 7 | No Time Estimates | **Drop** | — | Implicit in press-release intent format; no separate enforcement needed |
 | 8 | Milestone Completion Requirements | **Drop file mandates; reframe** | — | Devlogs become flow-next epic completion records (plan-sync output). Retrospectives land in `/abcd:reflect` (a later phase, see [`itd-24`](../intents/planned/itd-24-reflect-command.md)). Time logs dropped entirely |
 | 9 | Singular vs Plural Naming | **Keep** | `NAMING` | Low-cost rule; prevents bikeshedding |

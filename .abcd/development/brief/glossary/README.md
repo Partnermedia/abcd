@@ -156,7 +156,7 @@ See `skills/abcd-intent-grill/phase-1-glossary-mode.md` for the complete write-b
 
 ## Allowlist entries
 
-The top-level `terminology_exclude_files` array in [`.abcd/config.json`](../../../config.json)
+The top-level `terminology_exclude_files` array in `.abcd/config.json`
 lists files that must not be scanned for forbidden-synonym hits even when a future terminology
 linter is wired up. Each entry below names the file, the controlling intent, and the reason it
 is intentionally allowlisted.

@@ -48,4 +48,4 @@ Per-agent files are **immutable once their epic ships**. Subsequent additions go
 | `launch-gatekeeper` | launch | PII regex completeness; false-negatives | TBD |
 | `intent-fidelity-reviewer` | post-ship | LLM-judge bias against own intent author | TBD |
 
-Replace "TBD" with `[present](<agent-name>.md)` as each agent's epic kicks off.
+Replace "TBD" with `present` as each agent's epic kicks off.

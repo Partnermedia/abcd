@@ -6,8 +6,6 @@ kind: null
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-created: 2026-05-22
-updated: 2026-05-22
 ---
 
 > **⚠️ Superseded by [ADR-21](../../decisions/adrs/0021-rebuild-in-go.md)** (a one-time debt sweep of the old Python repo is moot in a from-scratch rebuild). Preserved as historical record per the supersession lifecycle.

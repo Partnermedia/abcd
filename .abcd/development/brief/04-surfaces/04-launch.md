@@ -78,7 +78,7 @@ trigger a major bump, and an escape hatch if detection is wrong).
 `launch ship` is responsible for writing the version into **the selected
 version location**, never a hard-coded `plugin.json`. That location is recorded
 by the fn-77.1 decision artifact
-([`.abcd/config/version-location.json`](../../../config/version-location.json))
+(`.abcd/config/version-location.json`)
 as `manifest_path` + `json_pointer` (see
 [adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md)); a
 `blocked: true` decision has no schema-valid location, so version-writing
@@ -97,7 +97,7 @@ refuses and the escalation stands. Concretely, `ship`:
 3. Records the version + changelog entry in the marketplace metadata at the ONE
    canonical `.claude-plugin/marketplace.json` (never a root-level copy). The
    changelog entry conforms to
-   [`changelog-entry.schema.json`](../../../../scripts/abcd/schemas/changelog-entry.schema.json)
+   `changelog-entry.schema.json`
    (validated programmatically by this bump step, per
    [adr-20](../../decisions/adrs/0020-manifest-version-lockstep.md)).
 4. Refreshes any other version references generated from the config slug.

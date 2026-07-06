@@ -5,8 +5,6 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-03
-updated: 2026-05-08
 related_adrs: [adr-8, adr-25]
 ---
 

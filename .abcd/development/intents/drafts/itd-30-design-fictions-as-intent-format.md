@@ -6,8 +6,6 @@ kind: standalone
 suggested_kind: null
 reclassification_history:
   - { date: 2026-05-07, from: bundle-member, to: standalone, reason: "Originally bundled with itd-27 (grill sub-verb) under `intent-capture-discipline`, but itd-27 and itd-30 are not co-scheduled — bundle members must belong to the same phase. Reclassified to standalone; when this lands, its epic depends on or extends fn-3 (the grill sub-verb's epic) for shared interview/lint/persona-registry plumbing." }
-created: 2026-05-07
-updated: 2026-05-07
 ---
 
 # Design Fictions As An Alternative Capture Format For Intents
@@ -85,7 +83,7 @@ This intent moves from `drafts/` to `planned/` when ANY of the following happens
 ## Open Questions
 
 - **Naming of the format flag.** `--format=fiction` (terse) vs `--format=design-fiction` (precise but verbose). Recommend short form with `design-fiction` only in frontmatter and docs.
-- **Where shipped fiction examples live.** `examples/intents/` (parallel to `drafts/planned/shipped`) vs `.abcd/development/roadmap/intents/examples/`. Recommend the latter to keep the registry self-contained.
+- **Where shipped fiction examples live.** `examples/intents/` (parallel to `drafts/planned/shipped`) vs `.abcd/development/intents/examples/`. Recommend the latter to keep the registry self-contained.
 - **Fiction artefact-type taxonomy.** Should the interview enumerate a fixed set (diary / transcript / screenshot caption / news clipping / calendar invite / post-mortem / Slack thread) or accept free-form? Recommend a fixed-with-Other set, ranked by frequency of use, to give authors a starting point without forcing a category.
 - **Acceptance-extraction trust.** When the interview asks "what would have to be true for this scene to happen?", does the LLM-driven extraction reliably produce verifiable Given/When/Then bullets, or does it tend to restate the fiction in pseudo-formal language? Probably the latter on first pass — the prompt for that step needs explicit examples of "good" extracted criteria vs "narrative-restated" pseudo-criteria. Item for fn-N-42 (or successor prompt-quality spec).
 - **Auditor reading model.** Press releases are short and quote-shaped; fictions are longer and scene-shaped. Does `intent-fidelity-reviewer` need a separate prompt path for each format, or does one prompt with a "format-aware" preamble suffice? Probably one prompt with conditional preamble; revisit after first three shipped fictions.

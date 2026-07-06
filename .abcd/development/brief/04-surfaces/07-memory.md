@@ -111,5 +111,5 @@ Per universal pattern 6 (logbook-as-reports-only); coordination locks live at `.
 
 - [`05-internals/07-memory.md`](../05-internals/07-memory.md) — substrate spec (page-class enum, source classes, curator behaviour)
 - [`05-internals/09-provenance-substrate.md`](../05-internals/09-provenance-substrate.md) — provenance/licence subsystem (shared with the later-phase loot verb)
-- [`../../roadmap/intents/drafts/itd-36-memory-unification.md`](../../intents/shipped/itd-36-memory-unification.md) — full intent spec with acceptance criteria + adversarial worked-example ship gate
+- [`../../intents/drafts/itd-36-memory-unification.md`](../../intents/shipped/itd-36-memory-unification.md) — full intent spec with acceptance criteria + adversarial worked-example ship gate
 - [`research/related-work.md § Karpathy LLM Wiki`](../../research/related-work.md#karpathy-llm-wiki--pattern-source-for-abcdmemory) — pattern source

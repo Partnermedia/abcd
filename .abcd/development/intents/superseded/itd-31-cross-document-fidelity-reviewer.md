@@ -8,8 +8,6 @@ suggested_kind: null
 reclassification_history:
   - { date: 2026-05-07, from: bundle-member, to: standalone, reason: "Bundle dissolved when role-by-verb split landed (per command-structure-review round 2): three intent-review roles now have three distinct verbs (review/consistency/shape) under /abcd:intent, dissolving the unified-/abcd:audit-surface premise that the tier-0-audit-substrate bundle rested on. itd-32 superseded by this intent." }
   - { date: 2026-05-27, from: "standalone", to: "superseded", reason: "absorbed by itd-48" }
-created: 2026-05-07
-updated: 2026-05-07
 kind_at_supersession: standalone
 superseded_by: itd-48
 ---
@@ -53,7 +51,7 @@ The audit categories are **empirical**, derived from the 2026-05-07 sweep. Futur
 **Mechanical half** (`intent_lint.py --cross-doc`, CI-integrated):
 - R3 fn-N collisions (compare every intent's `epic_id` against `.flow/epics/`)
 - R3 command-name reservations (parse `04-naming.md` reserved list, scan all intents for unauthorised use)
-- R6 reference rot (every `[link](path)` resolves; every `itd-N` / `fn-N` / `iss-N` / file-path / line-number cited resolves)
+- R6 reference rot (every `link` resolves; every `itd-N` / `fn-N` / `iss-N` / file-path / line-number cited resolves)
 - R7 acknowledgement aggregation (every intent's References section's external citations appear in README's Acknowledgements; CI fails if missing)
 - R2 schema (intent frontmatter against `intent.schema.json`)
 - R2 sequencing (every intent's declared dependencies are scoped to the same phase or an earlier one)

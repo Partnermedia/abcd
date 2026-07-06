@@ -5,8 +5,6 @@ spec_id: fn-14-modular-rules-loader-prompt-router-hook
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-04
-updated: 2026-05-04
 ---
 
 # abcd Loads Its Own Rules On Demand

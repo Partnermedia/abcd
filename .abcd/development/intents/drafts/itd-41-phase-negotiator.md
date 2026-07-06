@@ -6,8 +6,6 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-10]
-created: 2026-05-16
-updated: 2026-05-16
 ---
 
 # abcd Tells You, Honestly, What a Phasing Choice Costs

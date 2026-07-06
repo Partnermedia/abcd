@@ -6,8 +6,6 @@ kind: bundle-member
 bundle: fn-83-operator-surfaces
 suggested_kind: null
 reclassification_history: []
-created: 2026-05-04
-updated: 2026-05-16
 glossary_terms_used: [core/phase, core/intent, core/voyage, core/persona, core/brief, core/epic, core/lifeboat, core/oracle, core/spec, interview/embark, distribution/release]
 grill_session_id: e6a24d86-e133-495f-8dec-94dec21449ea
 grilled_at: 2026-05-16T15:37:17Z

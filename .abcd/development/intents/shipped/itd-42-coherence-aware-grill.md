@@ -6,8 +6,6 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-created: 2026-05-16
-updated: 2026-05-16
 prd_path: .abcd/intents/itd-42/prd.md
 grilled_at: 2026-05-16T17:21:40Z
 grill_session_id: 1d0ed7a5-b52e-455d-b353-4b30685ad7ae

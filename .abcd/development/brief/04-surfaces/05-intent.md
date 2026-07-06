@@ -4,7 +4,7 @@ abcd uses **intents** in press-release format (Amazon working-backwards) as the 
 
 Plumbing work (adapters, agents, harness, scaffolding) lives in this brief, not in intents — see [`01-product/03-mental-model.md`](../01-product/03-mental-model.md) for the rationale.
 
-Intents live at `.abcd/development/roadmap/intents/{drafts,planned,shipped,disciplines,superseded}/`. Five directories encode lifecycle position. Three are for press-release-shaped intents (the standalone + bundle-member kinds); one is for disciplines (no press release, no spec); one is for intents killed by reclassification.
+Intents live at `.abcd/development/intents/{drafts,planned,shipped,disciplines,superseded}/`. Five directories encode lifecycle position. Three are for press-release-shaped intents (the standalone + bundle-member kinds); one is for disciplines (no press release, no spec); one is for intents killed by reclassification.
 
 - **`drafts/`** — press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard.
 - **`planned/`** — `/abcd:intent plan` has created a linked spec stub in the native spec store ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)) and run its plan-review. The intent's `spec_id` frontmatter points at the new `fn-N`. Work hasn't started yet (or is in flight); the linked spec in the native spec store is the active marker. Bundle-member intents in `planned/` share a `spec_id` with their bundle-mates.
@@ -53,8 +53,6 @@ slug: <kebab-case>
 kind: discipline
 kind_notes: "<free-text describing what kind of discipline this is — e.g.,
               'cross-cutting acceptance-criteria gate, applied via lint and auditor'>"
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
 ---
 
 # <Headline — what rule this imposes on every spec>
@@ -224,8 +222,6 @@ kind: null               # set by /abcd:intent plan: "standalone" | "bundle-memb
 suggested_kind: null     # advisory, written by capture-time LLM classifier; can be ignored
 bundle: null             # for kind: bundle-member, the bundle ID
 spec_id: null            # or fn-N (set by /abcd:intent plan)
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
 reclassification_history: []   # appended to by /abcd:intent reclassify (kind changes only)
 surface_history: []            # appended when an intent's user-facing surface shape changes (e.g., skill → sub-verb, top-level command → sub-verb, command → flag) WITHOUT changing kind. Distinct from reclassification_history. Schema: { date, from, to, reason }. Hand-edited or written by future tooling.
 ---

@@ -157,8 +157,6 @@ slug: <kebab-case-slug>
 #   See brief/04-surfaces/05-intent.md § 6 for the lint rule and rationale.
 kind: null               # set by /abcd:intent plan: "standalone" | "bundle-member" | "discipline"
 spec_id: null            # or fn-N (set by /abcd:intent plan)
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
 # fn-3 fields (optional; additive — pre-existing intents valid without them):
 contexts: null           # [list] of bounded-context IDs; required when term has cross-context collision
 glossary_terms_used: null  # [list] of qualified <context>/<term> IDs; auto-populated by grill skill
