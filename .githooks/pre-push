@@ -1,8 +1,49 @@
 #!/usr/bin/env bash
 # Pre-push gate, run on every clone via the global ~/.githooks dispatcher
-# (core.hooksPath): the CI check-job trio (build/vet/test + internal race) must
-# pass natively before a push leaves this machine. Secret-scan and workflow-audit
-# lanes stay in Actions.
+# (core.hooksPath). Two jobs:
+#
+#   1. Local branch protection — a stopgap for server-side rulesets, which
+#      GitHub blocks on a free-tier private repo (403: Upgrade to Pro / make
+#      public). Enforced only for pushes that go through these hooks, not the
+#      web UI or an unhooked clone; the full ruleset lands at the public flip
+#      (see the public-flip checklist). It refuses: a direct push to the
+#      protected branch, a deletion of it, and any non-fast-forward (force)
+#      push to any branch.
+#   2. The CI check-job trio (build/vet/test + internal race) must pass
+#      natively before a push leaves this machine. Secret-scan and
+#      workflow-audit lanes stay in Actions.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-exec make preflight
+
+protected="main"
+zero="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  branch="${remote_ref#refs/heads/}"
+
+  if [ "$branch" = "$protected" ]; then
+    if [ "$local_sha" = "$zero" ]; then
+      echo "pre-push: refusing to delete protected branch '$protected'." >&2
+    else
+      echo "pre-push: refusing direct push to protected branch '$protected' — open a PR." >&2
+    fi
+    exit 1
+  fi
+
+  # Non-fast-forward (force) push guard on an existing remote branch.
+  if [ "$remote_sha" != "$zero" ] && [ "$local_sha" != "$zero" ]; then
+    if git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      : # fast-forward — fine
+    else
+      rc=$?
+      # rc==1: definitively not an ancestor -> a force push. rc>1: the remote
+      # object is not present locally / indeterminate -> don't false-block.
+      if [ "$rc" -eq 1 ]; then
+        echo "pre-push: refusing non-fast-forward (force) push to '$branch'." >&2
+        exit 1
+      fi
+    fi
+  fi
+done
+
+make preflight
