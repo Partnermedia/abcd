@@ -1,12 +1,12 @@
 # `.abcd/memory/` — Multi-Upstream Curated Knowledge Substrate
 
-`.abcd/memory/` is abcd's compounding-curated knowledge artefact (lifecycle class per [`04-universal-patterns.md § 8`](./04-universal-patterns.md#8-artefact-lifecycle-taxonomy)). It accumulates synthesised knowledge across project lifetime from multiple upstream pipelines, structured per the [Karpathy LLM Wiki pattern][karpathy-llm-wiki] (April 2026): raw sources → curated wiki → schema. abcd realises the pattern at the destination namespace; the wiki is the *organisation* of memory, not a separate artefact.
+`.abcd/memory/` is abcd's compounding-curated knowledge artefact (lifecycle class per [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy)). It accumulates synthesised knowledge across project lifetime from multiple upstream pipelines, structured per the [Karpathy LLM Wiki pattern][karpathy-llm-wiki] (April 2026): raw sources → curated wiki → schema. abcd realises the pattern at the destination namespace; the wiki is the *organisation* of memory, not a separate artefact.
 
 Per itd-36 (storage model) and itd-39 (scope-aware retrieval).
 
 ## 0. Memory scopes and routing
 
-Memory exists at the two `.abcd/` scopes (see [`03-configuration.md`](./03-configuration.md#the-two-abcd-scopes)):
+Memory exists at the two `.abcd/` scopes (see [`03-configuration.md`](03-configuration.md#the-two-abcd-scopes)):
 
 | Scope | Location | What lands here |
 |---|---|---|
@@ -18,7 +18,7 @@ Memory exists at the two `.abcd/` scopes (see [`03-configuration.md`](./03-confi
 - Default → **workspace**. Anything project-shaped.
 - Promote to **user** when the knowledge is a personal preference, or a principle that applies across projects with no single workspace home.
 
-**The vendor boundary.** abcd never writes to `~/.claude/.../memory/`. The Claude Code memory directory is a *read-only harvest source* for `dev-sync memory` (see [`02-adapters.md`](./02-adapters.md)); curated output is written to the scope-appropriate `.abcd/memory/`, never back upstream.
+**The vendor boundary.** abcd never writes to `~/.claude/.../memory/`. The Claude Code memory directory is a *read-only harvest source* for `dev-sync memory` (see [`02-adapters.md`](02-adapters.md)); curated output is written to the scope-appropriate `.abcd/memory/`, never back upstream.
 
 **Retrieval is not flat inheritance.** An agent does **not** load the union of both scopes — that is precisely the context-overflow failure mode. Retrieval is keyword-recall + budget-bracketed injection; see § 9.
 
@@ -60,7 +60,7 @@ Every memory page declares its source class via typed `source:` frontmatter. The
 
 ## 3. Typed `source:` frontmatter
 
-Every memory page carries a typed `source:` block. `citation` is the **object** shape from [`09-provenance-substrate.md § 2`](./09-provenance-substrate.md#2-citation-generation) — a mapping, never a string — so one canonical citation shape serves both the provenance registry and memory pages.
+Every memory page carries a typed `source:` block. `citation` is the **object** shape from [`09-provenance-substrate.md § 2`](09-provenance-substrate.md#2-citation-generation) — a mapping, never a string — so one canonical citation shape serves both the provenance registry and memory pages.
 
 A **single-source** page carries a scalar `source.class`:
 
@@ -144,7 +144,7 @@ total_source_coverage_pct(source_hash) =
 
 ## 6. The curator — `principle-distiller` extended
 
-`principle-distiller` (Pass C agent, per [`01-agents.md`](./01-agents.md)) curates `.abcd/memory/`. Per itd-36, its scope extends to:
+`principle-distiller` (Pass C agent, per [`01-agents.md`](01-agents.md)) curates `.abcd/memory/`. Per itd-36, its scope extends to:
 
 | Input | Source | Behaviour |
 |---|---|---|
@@ -165,11 +165,11 @@ User-facing surface (per itd-36):
 | Bare `/abcd:memory` | Status + help + render of current memory state (page count by class, last-ingest timestamp, recent contradictions). Per the [bare-command-as-render discipline](../02-constraints/04-naming.md). Quotation-budget headroom renders per external source READ-ONLY from the fn-39 `.coverage_index.json`: a fingerprint-fresh index shows per-source warn/block headroom, fingerprint drift shows a "stale — run /abcd:memory lint" hint, an absent index an info line, and a malformed index/crawl failure a non-fatal "headroom unavailable" line. The bare render never rebuilds or mutates the index (the `lint` sub-verb is the sole writer). |
 | `/abcd:memory ingest <path-or-url>` | Read external source, distil into typed pages with citation, append to log. Default: do NOT store original. Flag: `--keep-original` (opt-in storage; the lifeboat licence-gate allowlist is required before a kept original could ever publish — via `/abcd:disembark`, not launch; adr-18). |
 | `/abcd:memory ask <question>` | Query memory by domain + class; synthesise answer with citations; optionally file result back. |
-| `/abcd:memory lint` **(fn-39 — shipped)** | Full-store curator health-check: ALWAYS crawls the whole workspace store (the cumulative `MQ002` needs the full corpus), runs the `MQ`/`MS`/`ML` family (`MQ001`/`MQ002`/`MQ003` quotation budgets + coverage, `MS001`/`MS002` source-class advisories, `ML001` missing licences), rebuilds the regenerable `.coverage_index.json`, and writes `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Mutates NO memory-store state — the coverage index + logbook report are its only writes. Exit: blockers → nonzero; warn-only → exit 0 (curator advisory; the recorded divergence from the standalone grammar, see [`06-lint.md §2`](./06-lint.md#2-severity-model)). **Not part of fn-39:** contradiction surfacing is RENDERED by fn-38's reconciliation into `contradictions.md` (surfaced by the bare render, not lint-coded), and orphan/stale-claim audits are DEFERRED to a later intent — `lint` runs neither. |
+| `/abcd:memory lint` **(fn-39 — shipped)** | Full-store curator health-check: ALWAYS crawls the whole workspace store (the cumulative `MQ002` needs the full corpus), runs the `MQ`/`MS`/`ML` family (`MQ001`/`MQ002`/`MQ003` quotation budgets + coverage, `MS001`/`MS002` source-class advisories, `ML001` missing licences), rebuilds the regenerable `.coverage_index.json`, and writes `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Mutates NO memory-store state — the coverage index + logbook report are its only writes. Exit: blockers → nonzero; warn-only → exit 0 (curator advisory; the recorded divergence from the standalone grammar, see [`06-lint.md §2`](06-lint.md#2-severity-model)). **Not part of fn-39:** contradiction surfacing is RENDERED by fn-38's reconciliation into `contradictions.md` (surfaced by the bare render, not lint-coded), and orphan/stale-claim audits are DEFERRED to a later intent — `lint` runs neither. |
 
 ## 8. Cross-cutting integration
 
-- **itd-26 `/abcd:loot`** uses the same provenance/licence subsystem as memory ingest (see [`09-provenance-substrate.md`](./09-provenance-substrate.md)). the later-phase `/abcd:loot` verb sits on top of this substrate; the substrate ships alongside itd-36.
+- **itd-26 `/abcd:loot`** uses the same provenance/licence subsystem as memory ingest (see [`09-provenance-substrate.md`](09-provenance-substrate.md)). the later-phase `/abcd:loot` verb sits on top of this substrate; the substrate ships alongside itd-36.
 - **itd-25 `/abcd:dredge`** stays a distinct verb (per the dredge-pushback in idea-1 R4: storage vs operation; user-moments differ). Dredge synthesis output writes to `.abcd/memory/<type>_<domain>_<slug>.md` with `source.class: dredge_synthesis`; per-run report stays at `.abcd/logbook/dredge/<ts>/`.
 - **itd-37 modification grammar** extracts per-spec theory into `spec_modification_grammar_<spec_id>.md` (append-only per itd-36 lifecycle taxonomy) and curator-merged per-domain `modification_grammar_<domain>.md` (compounding-curated). See [`02-disembark.md`](../04-surfaces/02-disembark.md) and [`03-embark.md`](../04-surfaces/03-embark.md) for recovery-humility framing.
 
@@ -195,16 +195,16 @@ This is what makes "memory never overflows" an enforced property rather than a h
 
 **Diagnostic.** `abcd memory recall [keyword]` shows which pages a prompt/keyword would surface and in which bracket — explainability, per the bare-command-as-render discipline.
 
-See [`../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md`](../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md) for the full intent, acceptance criteria, and the architectural-audit reconciliation with itd-3's global-rules rejection.
+See [`../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md`](../../intents/drafts/itd-39-scope-aware-memory-retrieval.md) for the full intent, acceptance criteria, and the architectural-audit reconciliation with itd-3's global-rules rejection.
 
 ## References
 
 - [Karpathy LLM Wiki gist (April 2026)][karpathy-llm-wiki] — pattern source for the wiki organisation
 - [`research/related-work.md`](../../research/related-work.md#karpathy-llm-wiki--pattern-source-for-abcdmemory) — full prior-art comparison
-- [`04-universal-patterns.md § 8`](./04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — artefact-lifecycle taxonomy this file's lifecycle class derives from
-- [`02-adapters.md`](./02-adapters.md) — `memory.py` semantic adapter (vendor-agnostic dispatcher)
+- [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — artefact-lifecycle taxonomy this file's lifecycle class derives from
+- [`02-adapters.md`](02-adapters.md) — `memory.py` semantic adapter (vendor-agnostic dispatcher)
 - [CARL][carl] — recall-engine prior art; itd-3 adopts its rule payload, itd-39 its memory payload + context brackets
-- [`itd-39`](../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md) — scope-aware memory retrieval intent
+- [`itd-39`](../../intents/drafts/itd-39-scope-aware-memory-retrieval.md) — scope-aware memory retrieval intent
 
 [karpathy-llm-wiki]: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 [carl]: https://github.com/ChristopherKahler/carl

@@ -188,4 +188,4 @@ These three are tracked as a candidate intent (`itd-N`); see `roadmap/intents/dr
 
 - [`.abcd/development/brief/README.md`](../../brief/README.md) — design brief; § "Research-driven prompts" mandates this doc
 - [`.abcd/development/research/related-work.md`](../related-work.md) — prior-art comparison (PAUL, CARL, claude-skills)
-- [`prompting/agents/`](agents/) — per-agent SOTA research (one file per agent, references this baseline)
+- [`prompting/agents/`](agents) — per-agent SOTA research (one file per agent, references this baseline)

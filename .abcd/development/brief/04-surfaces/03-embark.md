@@ -95,7 +95,7 @@ Single decision, transparent (shows scope before asking).
 
 ## 7. Voyage layout — embark/disembark provenance and history
 
-Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd/development/voyage/`. The `.abcd/lifeboat/` directory itself holds only the latest output snapshot ([`02-disembark.md § 5`](./02-disembark.md#5-output-shape)); it does not accumulate.
+Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd/development/voyage/`. The `.abcd/lifeboat/` directory itself holds only the latest output snapshot ([`02-disembark.md § 5`](02-disembark.md#5-output-shape)); it does not accumulate.
 
 ```
 .abcd/
@@ -135,4 +135,4 @@ Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd
 }
 ```
 
-Manifests are small (file list + hashes, not contents); the log answers "what did this repo's lifeboat look like at point T?" and "did I share that lifeboat with anyone?" without keeping stale snapshots around. Acceptance criteria for voyage writes live in [`02-disembark.md § 7`](./02-disembark.md#7-acceptance) (disembark-side history.jsonl) and [§ 6](#6-acceptance) above (embark-side provenance.json + optional --archive copy).
+Manifests are small (file list + hashes, not contents); the log answers "what did this repo's lifeboat look like at point T?" and "did I share that lifeboat with anyone?" without keeping stale snapshots around. Acceptance criteria for voyage writes live in [`02-disembark.md § 7`](02-disembark.md#7-acceptance) (disembark-side history.jsonl) and [§ 6](#6-acceptance) above (embark-side provenance.json + optional --archive copy).

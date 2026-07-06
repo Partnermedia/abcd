@@ -2,7 +2,7 @@
 
 Short, narrowly-scoped decision artifacts that are NOT full ADRs.
 
-An **ADR** ([`../adrs/`](../adrs/)) records a settled architecture decision —
+An **ADR** ([`../adrs/`](../adrs)) records a settled architecture decision —
 the *why* plus the alternatives rejected — for a choice that is reversible in
 principle. A **note** here records something narrower and more operational:
 

@@ -16,7 +16,7 @@ An **RFC** captures a *question* — not a feature, not a decision. It exists to
 RFCs are *not* used for:
 
 - Feature specifications — those are intents (`itd-N`), in press-release format.
-- Architectural decisions already made — those are ADRs (`adr-N`), at [`../../decisions/adrs/`](../../decisions/adrs/). ADR format is for retrospective decision records, not forward-looking discussion.
+- Architectural decisions already made — those are ADRs (`adr-N`), at [`../../decisions/adrs/`](../../decisions/adrs). ADR format is for retrospective decision records, not forward-looking discussion.
 - Internal-only nitpicks — those go in `.work/issues.md` and surface via `/abcd:dredge` later.
 
 ---
@@ -27,9 +27,9 @@ Three decision-record surfaces, each with a distinct job:
 
 | Class | Direction | Surface | Use when |
 |---|---|---|---|
-| **intent** (`itd-N`) | Forward-looking, user-facing | [`../intents/`](../intents/) | Capturing capability the project will ship. |
+| **intent** (`itd-N`) | Forward-looking, user-facing | [`../intents/`](../../intents) | Capturing capability the project will ship. |
 | **RFC** (`rfc-N`) | Forward-looking, contested | this directory | A decision is contested; discussion is the deliverable. |
-| **ADR** (`adr-N`) | Retrospective | [`../../decisions/adrs/`](../../decisions/adrs/) | A decision is settled; record the *why* + alternatives rejected. |
+| **ADR** (`adr-N`) | Retrospective | [`../../decisions/adrs/`](../../decisions/adrs) | A decision is settled; record the *why* + alternatives rejected. |
 
 For an intent-driven configuration like abcd, the natural flow is:
 
@@ -138,6 +138,6 @@ frontmatter links).
 
 ## Related Documentation
 
-- [Intents](../intents/) — the press-release-format roadmap surface
-- [Phases](../phases/) — the ordered build plan
+- [Intents](../../intents) — the press-release-format roadmap surface
+- [Phases](../phases) — the ordered build plan
 - [Brief § 5](../../brief/README.md) — command and naming conventions (RFC-1 is referenced from `/abcd:loot`'s licence-check non-circumventability rule)

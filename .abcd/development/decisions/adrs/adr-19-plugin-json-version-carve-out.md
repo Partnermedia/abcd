@@ -21,7 +21,7 @@ was written:
 1. **Where does the version live?** Claude Code discovers a plugin by directory
    convention and reads its manifest metadata. A published plugin needs a version
    so `/plugin update abcd` can compare installed-vs-available. But
-   [adr-5](./adr-5-brief-is-current-state.md) already established that the dev
+   [adr-5](adr-5-brief-is-current-state.md) already established that the dev
    record carries **no** version label — versions are an *output* of promotion,
    not a sequencing input on abcdDev. So the dev repo's committed
    `.claude-plugin/plugin.json` must stay unversioned while the *published*

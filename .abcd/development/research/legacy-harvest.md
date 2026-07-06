@@ -54,9 +54,9 @@ Source: `~/ABCDevelopment/.claude/skills/` (12 packages). Disposition: 3 skills 
 | `documentation-standards` | **Drop as skill** | Folded into `DOCUMENTATION` domain rules |
 | `governance` | **Later phase** | v0 bounded-autonomy framework not load-bearing now |
 | `metrics` | **Drop** | DORA metrics inappropriate for plugin-development context |
-| `sig-verify` | **Later phase** | Couples to [`itd-16-hash-chain-merkle-audit`](../roadmap/intents/drafts/itd-16-hash-chain-merkle-audit.md) |
+| `sig-verify` | **Later phase** | Couples to [`itd-16-hash-chain-merkle-audit`](../intents/drafts/itd-16-hash-chain-merkle-audit.md) |
 | `vap-verify` | **Later phase** | Same audit-machinery cluster |
-| `spec-export` | **Later phase** | Captured as [`itd-23-spec-kit-interop`](../roadmap/intents/drafts/itd-23-spec-kit-interop.md) |
+| `spec-export` | **Later phase** | Captured as [`itd-23-spec-kit-interop`](../intents/drafts/itd-23-spec-kit-interop.md) |
 | `spec-import` | **Later phase** | Same |
 | `test-reminder` | **Drop** | Modern Claude handles test discipline internally; re-emerges as domain rule if needed |
 
@@ -136,10 +136,10 @@ Source: `~/.abcd/` (~1.6 GB). Disposition: drop runtime data; harvest a few patt
 
 | Source | Coupled later-phase intent |
 |---|---|
-| `audit-export.py`, `audit-query.py`, `hash-chain.py`, `sign.py`, `keygen.py`, `uuid7.py`, `jcs.py` | [`itd-16-hash-chain-merkle-audit`](../roadmap/intents/drafts/itd-16-hash-chain-merkle-audit.md) |
+| `audit-export.py`, `audit-query.py`, `hash-chain.py`, `sign.py`, `keygen.py`, `uuid7.py`, `jcs.py` | [`itd-16-hash-chain-merkle-audit`](../intents/drafts/itd-16-hash-chain-merkle-audit.md) |
 | `audit.schema.json`, `vap-record-types.json` | Same |
-| `spec-export.py`, `spec-import.py` | [`itd-23-spec-kit-interop`](../roadmap/intents/drafts/itd-23-spec-kit-interop.md) |
-| `model-effectiveness.json`, `model-scorecard.jsonl` | [`itd-17-model-effectiveness-tracking`](../roadmap/intents/drafts/itd-17-model-effectiveness-tracking.md) — referenced as v0 empirical seed; the tracker resets and rebuilds |
+| `spec-export.py`, `spec-import.py` | [`itd-23-spec-kit-interop`](../intents/drafts/itd-23-spec-kit-interop.md) |
+| `model-effectiveness.json`, `model-scorecard.jsonl` | [`itd-17-model-effectiveness-tracking`](../intents/drafts/itd-17-model-effectiveness-tracking.md) — referenced as v0 empirical seed; the tracker resets and rebuilds |
 
 ### Archive (move outside active tree, don't delete, don't harvest into plugin)
 
@@ -276,11 +276,11 @@ If the first phase starts feeling too heavy, the candidates for moving to a late
 
 ## References
 
-[itd-1]: ../roadmap/intents/disciplines/itd-1-acceptance-gates.md "itd-1 — Acceptance gates"
+[itd-1]: ../intents/disciplines/itd-1-acceptance-gates.md "itd-1 — Acceptance gates"
 [itd-3]: ../roadmap/intents/drafts/itd-3-modular-rules-loader.md "itd-3 — Modular rules loader"
-[itd-7]: ../roadmap/intents/drafts/itd-7-rp-workspace-portability.md "itd-7 — RP workspace portability"
-[itd-17]: ../roadmap/intents/drafts/itd-17-model-effectiveness-tracking.md "itd-17 — Model effectiveness tracking (a later phase)"
-[itd-23]: ../roadmap/intents/drafts/itd-23-spec-kit-interop.md "itd-23 — Spec Kit interop (a later phase)"
+[itd-7]: ../intents/drafts/itd-7-rp-workspace-portability.md "itd-7 — RP workspace portability"
+[itd-17]: ../intents/drafts/itd-17-model-effectiveness-tracking.md "itd-17 — Model effectiveness tracking (a later phase)"
+[itd-23]: ../intents/drafts/itd-23-spec-kit-interop.md "itd-23 — Spec Kit interop (a later phase)"
 [itd-24]: ../roadmap/intents/drafts/itd-24-reflect-command.md "itd-24 — /abcd:reflect command (a later phase)"
 [carl]: https://github.com/ChristopherKahler/carl "CARL — Context Augmentation & Reinforcement Layer"
 [paul]: https://github.com/ChristopherKahler/paul "PAUL — Plan-Apply-Unify Loop"

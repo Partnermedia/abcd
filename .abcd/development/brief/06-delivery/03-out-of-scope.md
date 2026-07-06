@@ -1,6 +1,6 @@
 # Out of Phase Scope
 
-This brief describes the work bundled into the six planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **All later-phase items live as press-release intents** in `.abcd/development/roadmap/intents/drafts/` — see [intents/README.md](../../roadmap/intents/README.md) for the full index.
+This brief describes the work bundled into the six planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **All later-phase items live as press-release intents** in `.abcd/development/roadmap/intents/drafts/` — see [intents/README.md](../../intents/README.md) for the full index.
 
 **In a later phase.** The set below is the live `drafts/` corpus minus the
 intents already scoped into a planned phase (a phase doc's `## Scope` section is

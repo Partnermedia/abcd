@@ -80,12 +80,12 @@ valid state. Further phases will be authored as that work is committed to.
 
 This section is deliberately a placeholder, not a forecast: naming which intents
 land in which future phase before the phase is planned would only go stale. See
-[intents/README.md](../intents/README.md) for the full corpus; an intent moves
+[intents/README.md](../../intents/README.md) for the full corpus; an intent moves
 into a phase's `## Scope` when the phase that bundles it is written.
 
 ## Related Documentation
 
 - [Roadmap](../README.md) — status dashboard
-- [Intents](../intents/README.md) — the intent registry
+- [Intents](../../intents/README.md) — the intent registry
 - [Build sequence](../../brief/06-delivery/01-build-sequence.md) — the brief's plumbing-phase DAG, which phases bundle from
 - [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) — the phase layer decision

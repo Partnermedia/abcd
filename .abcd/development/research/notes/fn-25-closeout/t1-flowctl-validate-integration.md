@@ -58,7 +58,7 @@ T1 attempted the spec's **preferred sourcing path** (GitHub release-tag
 extraction from `gmickel/claude-marketplace`) and found the API + tarball
 both return 404 — the repo is **not publicly reachable** from this
 operator's environment. Documented separately in
-[`t1-snapshot-blocked.md`](./t1-snapshot-blocked.md).
+[`t1-snapshot-blocked.md`](t1-snapshot-blocked.md).
 
 T1's **fallback** is the local-cache copy with mechanical contamination
 removal (`tests/abcd/_build_pristine_fixture.py`). The script copies a

@@ -4,7 +4,7 @@ Reference artifact for whoever builds Phase 7 (`/abcd:launch ship`). Not a
 living document; a snapshot of a publish mechanism that briefly lived in
 `abcdDev/scripts/` and was removed for conflicting with the brief's design.
 
-> **Read alongside:** [`publish-implementation-spec.md`](./publish-implementation-spec.md)
+> **Read alongside:** [`publish-implementation-spec.md`](publish-implementation-spec.md)
 > — the canonical Phase 7 hand-off spec — and
 > [`../../brief/04-surfaces/04-launch.md`](../../brief/04-surfaces/04-launch.md),
 > the brief's launch design.

@@ -18,11 +18,11 @@ The scope this brief covers is bounded by what is bundled into the six planned p
 
 **Thirteen phased intents — ten standalone plus three disciplines:**
 - **Standalone (10):** itd-2, itd-3, itd-4, itd-6, itd-7, itd-27, itd-28, itd-34, itd-36, itd-40.
-- **Disciplines (3):** itd-1 (acceptance gates), itd-5 (prompt-quality + capability_scope per idea-4), itd-37 (modification grammar per ideas 2+3). Disciplines have no user moment; they impose acceptance gates on every other spec per the three-kinds taxonomy in [`01-product/03-mental-model.md`](./03-mental-model.md) and itd-34.
+- **Disciplines (3):** itd-1 (acceptance gates), itd-5 (prompt-quality + capability_scope per idea-4), itd-37 (modification grammar per ideas 2+3). Disciplines have no user moment; they impose acceptance gates on every other spec per the three-kinds taxonomy in [`01-product/03-mental-model.md`](03-mental-model.md) and itd-34.
 
-See [`phases/README.md`](../../roadmap/phases/README.md) for the phase plan and each phase's intent scope, and [`intents/README.md`](../../roadmap/intents/README.md) for the intent index. itd-27 (`/abcd:intent grill` sub-verb), itd-28 (spec-tied RP reviews), and itd-34 (three intent kinds) were captured post-brief on 2026-05-07. itd-36 (memory unification) and itd-37 (modification grammar) were captured on 2026-05-08 following adversarial RP review of four candidate ideas (LLM Wiki, Naur theory-building, systems thinking, jagged frontier); itd-40 (folder classification) was captured 2026-05-16.
+See [`phases/README.md`](../../roadmap/phases/README.md) for the phase plan and each phase's intent scope, and [`intents/README.md`](../../intents/README.md) for the intent index. itd-27 (`/abcd:intent grill` sub-verb), itd-28 (spec-tied RP reviews), and itd-34 (three intent kinds) were captured post-brief on 2026-05-07. itd-36 (memory unification) and itd-37 (modification grammar) were captured on 2026-05-08 following adversarial RP review of four candidate ideas (LLM Wiki, Naur theory-building, systems thinking, jagged frontier); itd-40 (folder classification) was captured 2026-05-16.
 
-**Plumbing infrastructure** (15 agents, 11 adapters, harness shim, prompt-quality stack, hooks): see [`05-internals/`](../05-internals/).
+**Plumbing infrastructure** (15 agents, 11 adapters, harness shim, prompt-quality stack, hooks): see [`05-internals/`](../05-internals).
 
 ## What comes in a later phase
 
