@@ -132,3 +132,4 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-28](0028-single-repo-curated-release.md) | One repository, a curated release artifact — no dev→public mirror (supersedes adr-18) | accepted | 2026-07-06 |
 | [adr-29](0029-native-transcript-corpus.md) | A native local redacted transcript corpus | accepted | 2026-07-06 |
 | [adr-30](0030-record-information-architecture.md) | Design-record information architecture — flat artefact-type folders | accepted | 2026-07-06 |
+| [adr-31](0031-derived-versioning-from-intents.md) | The release version is derived from the intents in it, never authored (extends adr-19, adr-20) | accepted | 2026-07-07 |

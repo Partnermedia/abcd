@@ -293,7 +293,8 @@ drafts/
 ├── itd-61-brief-change-derivation.md
 ├── itd-62-pluggable-safety-gate.md
 ├── itd-64-benchmark-driven-config-optimization.md
-└── itd-70-launch-release-retention-newest-per-line.md
+├── itd-70-launch-release-retention-newest-per-line.md
+└── itd-73-derived-versioning.md
 ```
 
 ---
