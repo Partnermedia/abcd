@@ -1,7 +1,7 @@
 ---
 id: itd-20
 slug: top-level-abcd-dispatcher
-spec_id: spc-83-operator-surfaces-manifest-lockstep
+spec_id: null
 kind: bundle-member
 bundle: spc-83-operator-surfaces
 suggested_kind: null

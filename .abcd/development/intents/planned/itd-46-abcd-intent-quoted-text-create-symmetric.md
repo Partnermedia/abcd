@@ -1,7 +1,7 @@
 ---
 id: itd-46
 slug: abcd-intent-quoted-text-create-symmetric
-spec_id: spc-30-symmetric-abcdintent-and-abcdcapture
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

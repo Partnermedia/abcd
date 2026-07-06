@@ -1,7 +1,7 @@
 ---
 id: itd-6
 slug: rp-mcp-only-integration
-spec_id: spc-5-rp-mcp-integration-declare
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []

@@ -373,10 +373,11 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 		if kindNull || !(kindVal == "standalone" || kindVal == "bundle-member") {
 			add(kind.line, "planned: kind must be standalone or bundle-member (non-null)")
 		}
-		if specNull {
-			add(spec.line, "planned: spec_id must be non-null")
-		} else if !specIDRe.MatchString(spec.value) {
-			add(spec.line, "planned: spec_id must match ^spc- (got '"+spec.value+"')")
+		// Re-baselined for the Go build: a planned intent is committed to build, but
+		// its native spec_id is assigned only when the spec layer schedules it
+		// (Phase 4). So spec_id may be null (unscheduled) or a spc- id — never other.
+		if !specNull && !specIDRe.MatchString(spec.value) {
+			add(spec.line, "planned: spec_id must be null (unscheduled) or match ^spc- (got '"+spec.value+"')")
 		}
 	case "shipped":
 		if kindNull || !(kindVal == "standalone" || kindVal == "bundle-member") {

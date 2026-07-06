@@ -1,7 +1,7 @@
 ---
 id: itd-36
 slug: memory-unification
-spec_id: spc-38-abcd-memory-write-core-abcdmemory
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -10,7 +10,7 @@ related_adrs: [adr-28]
 
 # Knowledge That Compounds, Not Knowledge That Re-Derives
 
-> **Superseded in part by [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) (packaging framing; supersedes adr-18).** This shipped intent describes the spc-38 restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-28 packages the curated release to exclude `.abcd/**` **wholesale**, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the LIVE brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`). This historical record is preserved as shipped, not rewritten.
+> **Superseded in part by [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) (packaging framing; supersedes adr-18).** This intent describes the restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-28 packages the curated release to exclude `.abcd/**` **wholesale**, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`).
 
 ## Press Release
 

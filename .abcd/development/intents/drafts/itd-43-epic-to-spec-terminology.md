@@ -1,7 +1,7 @@
 ---
 id: itd-43
 slug: epic-to-spec-terminology
-spec_id: spc-65-terminology-epic-to-spec-sweep
+spec_id: null
 kind: null
 suggested_kind: standalone
 reclassification_history: []
@@ -17,20 +17,13 @@ prd_path: null
 >
 > "I'd renamed the field and thought I was done — then a contributor opened `terminology/core/epic.md` and asked which word was real," said Alex, framework author. "abcd's whole pitch is that each concept has one canonical term. Having `spec` in the schema and `epic` in the glossary was exactly the drift the glossary exists to prevent. One sweep, one word, and the term file is the source of truth again."
 
-## Status (spc-48 B6 decision)
+## Status
 
-This intent is **open** — it is the *remaining* terminology sweep, not a shipped
-one. spc-7 shipped only the atomic `epic_id`→`spec_id` intent-frontmatter field
-rename (it had to be atomic: schema + data + code together, or intent-lint
-fails). The broader, non-atomic surface/prose/glossary sweep enumerated under
-*What's In Scope* below was deliberately deferred and parked **in this intent**.
-spc-48's intent-lifecycle backfill therefore does NOT move itd-43 to `shipped/`:
-the remaining sweep is now delivered by **spc-65** (the intent's `spec_id` points
-at `spc-65-terminology-epic-to-spec-sweep`), but the intent stays in `drafts/`
-until spc-65 closes — only then does the on-close lifecycle hook move it to
-`shipped/`. The earlier "shipped in spc-7" annotation in
-`06-delivery/03-out-of-scope.md` was the B6 contradiction this decision
-resolves — now corrected to name spc-65 as the delivering spec.
+This intent is the *remaining* terminology sweep. The atomic
+`epic_id`→`spec_id` intent-frontmatter field rename is a separate concern (it
+has to be atomic: schema + data + code together, or intent-lint fails); the
+broader, non-atomic surface/prose/glossary sweep enumerated under *What's In
+Scope* below is what this intent carries.
 
 ## Why This Matters
 

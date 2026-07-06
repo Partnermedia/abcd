@@ -1,7 +1,7 @@
 ---
 id: itd-29
 slug: autonomous-run-resilience
-spec_id: spc-55-autonomous-run-operator-surface-v1
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -15,14 +15,14 @@ reclassification_history: []
 >
 > "I'd kicked off an autonomous run, gone to lunch, come back to find it had burned through my Opus budget on iteration 7 of a task that was already wrong," said Carol, product lead. "abcd's pre-flight check would have flagged the budget; the rewind would have undone iteration 6; resume would have picked up Sonnet for the rest. Instead I spent two hours with git and a model bill. Never again."
 
-## Delivery Reconciliation (operator-decided at the spc-55 planning interview)
+## Scope Reconciliation
 
-The substrate this intent was waiting for has shipped, and parts of the scope were DELIVERED by run-seam specs:
+Parts of this intent's scope overlap with adjacent run-seam specs:
 - **Graceful 429/quota handling, checkpoint, clean exit, resume-on-reset** — spc-19 (infra-failure classification, no-burn backoff) + spc-35 (quota-window sleep-until-reset, cross-run markers, clean weekly exits). The run-seam side of scope items "Graceful 429 handling" and the checkpoint substrate exists.
 - **Budget spreading** — spc-47 (iteration pacing, model-aware) covers part of the budget concern from the proactive side.
 - **Checkpoints per spec** — the native spec-store checkpoint records exist (spc-41 consumes them).
 
-The UNDELIVERED residual is the OPERATOR SURFACE: the verbs, the pre-flight budget estimate, model auto-downgrade, rewind, and the trunk/auto-merge pattern. The operator elected a **v1 cut** — `status` / `pause` / `resume` / standalone `preflight` riding the existing sentinels + checkpoints + markers — specced as **spc-55**; `rewind`, `ship`, `resolve`, auto-merge, and auto-downgrade stay in this intent for a later cut (the v2 trigger: first real demand for rewind or trunk promotion). Terminology note: the surface uses run/spec vocabulary, not `epic` (the itd-43 direction). The autonomous engine underneath is the **pluggable run seam** (Workflows / the companion harness / native loop), not a fixed loop ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)); checkpoints and reviews live in the **native spec store** ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)).
+The residual scope this intent owns is the OPERATOR SURFACE: the verbs, the pre-flight budget estimate, model auto-downgrade, rewind, and the trunk/auto-merge pattern. A **v1 cut** — `status` / `pause` / `resume` / standalone `preflight` riding the existing sentinels + checkpoints + markers — comes first; `rewind`, `ship`, `resolve`, auto-merge, and auto-downgrade stay in this intent for a later cut (the v2 trigger: first real demand for rewind or trunk promotion). Terminology note: the surface uses run/spec vocabulary, not `epic` (the itd-43 direction). The autonomous engine underneath is the **pluggable run seam** (Workflows / the companion harness / native loop), not a fixed loop ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)); checkpoints and reviews live in the **native spec store** ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)).
 
 ## Why This Matters
 

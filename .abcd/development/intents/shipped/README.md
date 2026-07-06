@@ -1,7 +1,10 @@
 # Shipped
 
-Intents whose linked spec has closed and against which `intent-fidelity-reviewer`
-has run. Each file's "Audit Notes" section carries the per-criterion verdicts and
+Capabilities built in Go. This directory is empty until the Go build ships
+capabilities into it (Phase 1 onward).
+
+An intent moves here when its linked spec closes and `intent-fidelity-reviewer`
+has run: each file's "Audit Notes" section carries the per-criterion verdicts and
 three-bucket prose audit comparing delivered reality to the press release.
 Bundle members move here together when their shared spec closes.
 

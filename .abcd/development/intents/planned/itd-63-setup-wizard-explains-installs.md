@@ -1,7 +1,7 @@
 ---
 id: itd-63
 slug: setup-wizard-explains-installs
-spec_id: spc-83-operator-surfaces-manifest-lockstep
+spec_id: null
 kind: bundle-member
 bundle: spc-83-operator-surfaces
 suggested_kind: standalone

@@ -1,7 +1,7 @@
 ---
 id: itd-50
 slug: loop-toward-acceptance
-spec_id: spc-52-audit-loop-to-acceptance-modes
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

@@ -1,7 +1,7 @@
 ---
 id: itd-24
 slug: reflect-command
-spec_id: spc-83-operator-surfaces-manifest-lockstep
+spec_id: null
 kind: bundle-member
 bundle: spc-83-operator-surfaces
 suggested_kind: null
@@ -82,9 +82,9 @@ A phase audit and a phase retrospective are **distinct activities**, the same sp
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
-### Implementation notes (spc-83.3 — v1 scope, delivered by spc-83)
+### Implementation notes (v1 scope)
 
-The shipped `/abcd:reflect` (thin V1) refines two acceptance behaviours from
+`/abcd:reflect` (thin V1) refines two acceptance behaviours from
 their originally-drafted form; both are recorded here so the fidelity review
 reads them as deliberate v1 scope, not gaps:
 

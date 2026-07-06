@@ -1,7 +1,7 @@
 ---
 id: itd-49
 slug: flow-state-drift-detector
-spec_id: spc-41-flow-state-drift-detector-fs001
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

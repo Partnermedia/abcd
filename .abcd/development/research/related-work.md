@@ -57,7 +57,7 @@ Architecture in one paragraph:
 
 ### Where abcd overlaps
 
-abcd's 978-line `~/ABCDevelopment/.claude/CLAUDE.md` is exactly the failure mode CARL addresses. Most sessions need none of those rules; every session pays for all of them. The plugin-bundled defaults + per-repo `.abcd/rules.json` model proposed in [`itd-3-modular-rules-loader`](../intents/shipped/itd-3-modular-rules-loader.md) is structurally identical to CARL.
+abcd's 978-line `~/ABCDevelopment/.claude/CLAUDE.md` is exactly the failure mode CARL addresses. Most sessions need none of those rules; every session pays for all of them. The plugin-bundled defaults + per-repo `.abcd/rules.json` model proposed in [`itd-3-modular-rules-loader`](../intents/planned/itd-3-modular-rules-loader.md) is structurally identical to CARL.
 
 ### Why not depend on CARL
 

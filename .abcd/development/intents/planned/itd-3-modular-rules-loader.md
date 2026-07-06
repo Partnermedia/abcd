@@ -1,7 +1,7 @@
 ---
 id: itd-3
 slug: modular-rules-loader
-spec_id: spc-14-modular-rules-loader-prompt-router-hook
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []

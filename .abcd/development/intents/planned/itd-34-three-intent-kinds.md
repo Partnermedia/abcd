@@ -4,7 +4,7 @@ slug: three-intent-kinds
 kind: standalone
 suggested_kind: standalone
 bundle: null
-spec_id: spc-9-three-intent-kinds-kinddirectory-lint
+spec_id: null
 reclassification_history: []
 ---
 

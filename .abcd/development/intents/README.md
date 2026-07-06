@@ -51,7 +51,7 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 | Directory | Status / role | Meaning |
 |---|---|---|
 | `drafts/` | 📝 Draft | Press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard. |
-| `planned/` | 📅 Planned | `/abcd:intent plan` has created a linked native spec stub. Bundle-member intents share a `spec_id` with their bundle-mates. The linked spec in the native spec store is the active marker. |
+| `planned/` | 📅 Planned | A committed capability, scoped into a roadmap phase and awaiting its Go build. `spec_id` is `null` until the native spec layer schedules it (Phase 4), then points at a `spc-N`; bundle-member intents share a `spec_id` with their bundle-mates. |
 | `shipped/` | ✅ Shipped | Linked spec closed; `intent-fidelity-reviewer` ran. The intent's "Audit Notes" section contains per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
 | `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
 | `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <itd-N>` (the successor) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). Preserved as historical record. |
@@ -156,7 +156,7 @@ slug: <kebab-case-slug>
 # NOTE: no `status:` field — directory location is the canonical lifecycle state.
 #   See brief/04-surfaces/05-intent.md § 6 for the lint rule and rationale.
 kind: null               # set by /abcd:intent plan: "standalone" | "bundle-member" | "discipline"
-spec_id: null            # or spc-N (set by /abcd:intent plan)
+spec_id: null
 # spc-3 fields (optional; additive — pre-existing intents valid without them):
 contexts: null           # [list] of bounded-context IDs; required when term has cross-context collision
 glossary_terms_used: null  # [list] of qualified <context>/<term> IDs; auto-populated by grill skill
@@ -257,9 +257,6 @@ Captured intents that haven't been promoted to native specs yet. Each standalone
 
 ```
 drafts/
-├── itd-2-in-session-subagent-dispatch.md        (replan-pending — see footnote ¹)
-├── itd-3-modular-rules-loader.md
-├── itd-4-issue-capture.md
 ├── itd-7-rp-workspace-portability.md
 ├── itd-8-with-code-bundling.md
 ├── itd-9-schema-migration.md
@@ -273,27 +270,31 @@ drafts/
 ├── itd-17-model-effectiveness-tracking.md
 ├── itd-18-permission-template-per-project-type.md
 ├── itd-19-stage-aware-behaviour.md
-├── itd-20-top-level-abcd-dispatcher.md
 ├── itd-21-no-lifeboat-scaffolding.md
 ├── itd-22-opencode-portability.md
 ├── itd-23-spec-kit-interop.md
-├── itd-24-reflect-command.md
 ├── itd-25-dredge-cross-corpus-synthesist.md
 ├── itd-26-loot-oss-vendor.md
-├── itd-29-autonomous-run-resilience.md
 ├── itd-30-design-fictions-as-intent-format.md
 ├── (itd-31 superseded — moved to superseded/itd-31-cross-document-fidelity-reviewer.md; absorbed by itd-48)
 ├── (itd-32 superseded — moved to superseded/itd-32-audit-role-taxonomy.md)
 ├── itd-33-agent-communication-infrastructure.md
-├── itd-34-three-intent-kinds.md
 ├── itd-35-lifeboat-integrity-audit.md           (sibling to itd-16)
-├── itd-36-memory-unification.md
 ├── itd-39-scope-aware-memory-retrieval.md        (extends itd-3 recall hook to memory)
-├── itd-40-folder-classification.md
-└── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
+├── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
+├── itd-43-epic-to-spec-terminology.md
+├── itd-44-fourth-intent-kind-decision.md
+├── itd-47-oracle-gates-autonomous-mode.md
+├── itd-51-harness-adoption-readiness-rubric.md
+├── itd-55-first-principles-foundations-auditor.md
+├── itd-57-manual-hold-sentinel.md
+├── itd-59-autonomous-worker-transcript-capture.md
+├── itd-60-doc-fidelity-anti-drift.md
+├── itd-61-brief-change-derivation.md
+├── itd-62-pluggable-safety-gate.md
+├── itd-64-benchmark-driven-config-optimization.md
+└── itd-70-launch-release-retention-newest-per-line.md
 ```
-
-¹ itd-2 (was itd-17) had a plan-reviewed spec that was deleted during a prior renumbering pass. It needs re-planning via `/abcd:intent plan` once the brief is settled. The historical `spc-3` spec-ID reservation is no longer in force — that slot in the native spec store is now taken by itd-27's spec. itd-2 will receive a fresh slot when replanned; it sits in `drafts/` with `spec_id: null` until that replan happens. (itd-6 followed a different route — it was promoted to `planned/` by the spc-5 spec, which implements its RP MCP bridge foundation; see the Planned section below.)
 
 ---
 
@@ -316,16 +317,36 @@ See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-
 
 ## Planned
 
-One intent currently planned:
+`planned/` holds the committed capabilities — the intents scoped into the roadmap phases and awaiting their Go build. Their `spec_id` is `null` until the spec layer schedules them (Phase 4).
 
 ```
 planned/
-├── itd-6-rp-mcp-only-integration.md    (linked to spc-5-rp-mcp-integration-declare)
+├── itd-2-in-session-subagent-dispatch.md
+├── itd-3-modular-rules-loader.md
+├── itd-4-issue-capture.md
+├── itd-6-rp-mcp-only-integration.md
+├── itd-20-top-level-abcd-dispatcher.md
+├── itd-24-reflect-command.md
+├── itd-27-grill-skill-and-glossary.md
+├── itd-28-rp-reviews-into-flow.md
+├── itd-29-autonomous-run-resilience.md
+├── itd-34-three-intent-kinds.md
+├── itd-36-memory-unification.md
+├── itd-40-folder-classification.md
+├── itd-42-coherence-aware-grill.md
+├── itd-46-abcd-intent-quoted-text-create-symmetric.md
+├── itd-48-intent-fidelity-reviewer-roles-2-3.md
+├── itd-49-flow-state-drift-detector.md
+├── itd-50-loop-toward-acceptance.md
+├── itd-53-review-queue-auto-drain-fidelity-gate.md
+├── itd-58-session-reviewer-verdict-ingestion.md
+├── itd-63-setup-wizard-explains-installs.md
+├── itd-65-launch-preflight-gate-suite.md
+├── itd-66-launch-payload-render-parity.md
+├── itd-67-installable-versioned-plugin.md
+├── itd-69-plugin-metadata-lockstep-update.md
+└── itd-72-launch-ship-tier-b-publishing.md
 ```
-
-itd-27 and itd-28 had plan-reviewed native specs (`spc-3` for grill, `spc-2` for RP-reviews-into-flow); both specs have since closed and the intents now sit in `shipped/` (see the Shipped section below). itd-6 was promoted to `planned/` by the `spc-5-rp-mcp-integration-declare` spec, which implements the RP MCP bridge foundation itd-6 describes; it is linked to spc-5-rp-mcp-integration-declare (`spec_id` stays `null` — spc-5 was not created by `/abcd:intent plan itd-6`). itd-6's own acceptance criteria for the three-step cascade, ahoy setup discovery, and non-Mac flow remain DEFERRED beyond spc-5 (see the intent's Implementation status section). itd-6 moves to `shipped/` automatically when its spec closes (via `intent_lifecycle_hook`).
-
-(Earlier history note: itd-2 also sat in `planned/` at one point with plan-reviewed history, but its native spec was deleted during a renumbering pass — reset to `drafts/` with `spec_id: null`. Running `/abcd:intent plan itd-2` creates a fresh native spec and re-establishes the bidirectional link.)
 
 ---
 
@@ -352,8 +373,4 @@ Files in `superseded/` are preserved as historical record; never deleted.
 
 ## Shipped
 
-```
-shipped/
-├── itd-27-grill-skill-and-glossary.md  (spec_id: spc-3-strengthen-intent-stage-abcdgrill-skill)
-└── itd-28-rp-reviews-into-flow.md      (spec_id: spc-2-move-repoprompt-review-artifacts-into)
-```
+`shipped/` holds capabilities built in Go. It is empty until the Go build ships them (Phase 1 onward); an intent moves here automatically when its linked spec closes and `intent-fidelity-reviewer` has run.

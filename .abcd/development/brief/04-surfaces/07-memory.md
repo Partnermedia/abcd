@@ -62,7 +62,7 @@ DISCARD ORIGINAL (default behaviour)
 
 ## 2. Acceptance Criteria (Given-When-Then, per itd-1)
 
-See [the full acceptance criteria](../../intents/shipped/itd-36-memory-unification.md#acceptance-criteria) in itd-36's intent spec. Surface-level summary:
+See [the full acceptance criteria](../../intents/planned/itd-36-memory-unification.md#acceptance-criteria) in itd-36's intent spec. Surface-level summary:
 
 - **Bare**: bare `/abcd:memory` renders current state; never mutates.
 - **Ingest default-no-original**: original NOT stored unless `--keep-original`; citation + source_hash recorded; quotation budget applied per page (enforced at lint time by spc-39's `MQ001`, never at ingest).
@@ -111,5 +111,5 @@ Per universal pattern 6 (logbook-as-reports-only); coordination locks live at `.
 
 - [`05-internals/07-memory.md`](../05-internals/07-memory.md) — substrate spec (page-class enum, source classes, curator behaviour)
 - [`05-internals/09-provenance-substrate.md`](../05-internals/09-provenance-substrate.md) — provenance/licence subsystem (shared with the later-phase loot verb)
-- [`../../intents/drafts/itd-36-memory-unification.md`](../../intents/shipped/itd-36-memory-unification.md) — full intent spec with acceptance criteria + adversarial worked-example ship gate
+- [`../../intents/planned/itd-36-memory-unification.md`](../../intents/planned/itd-36-memory-unification.md) — full intent spec with acceptance criteria + adversarial worked-example ship gate
 - [`research/related-work.md § Karpathy LLM Wiki`](../../research/related-work.md#karpathy-llm-wiki--pattern-source-for-abcdmemory) — pattern source

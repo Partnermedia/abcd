@@ -213,6 +213,7 @@ func TestIntentLifecycle(t *testing.T) {
 	// Well-formed intents across buckets (the reference targets for superseded).
 	writeFile(t, root, base+"/shipped/itd-48-good.md", "---\nid: itd-48\nkind: standalone\nspec_id: spc-10-thing\n---\n# ok\n")
 	writeFile(t, root, base+"/planned/itd-20-good.md", "---\nid: itd-20\nkind: bundle-member\nspec_id: spc-83-thing\n---\n# ok\n")
+	writeFile(t, root, base+"/planned/itd-23-good.md", "---\nid: itd-23\nkind: standalone\nspec_id: null\n---\n# ok\n") // re-baseline: planned may be unscheduled (null spec_id)
 	writeFile(t, root, base+"/drafts/itd-10-good.md", "---\nid: itd-10\nkind: null\nspec_id: null\n---\n# ok\n")
 	writeFile(t, root, base+"/disciplines/itd-1-good.md", "---\nid: itd-1\nkind: discipline\nspec_id: null\n---\n# ok\n")
 	writeFile(t, root, base+"/superseded/itd-31-good.md", "---\nid: itd-31\nkind: standalone\nsuperseded_by: itd-48\n---\n# ok\n")
@@ -254,8 +255,8 @@ func TestIntentLifecycle(t *testing.T) {
 			t.Errorf("expected intent_lifecycle finding on %s:%d; got %+v", c.file, c.line, fs)
 		}
 	}
-	// The five good intents must produce no lifecycle findings.
-	good := []string{"itd-48-good.md", "itd-20-good.md", "itd-10-good.md", "itd-1-good.md", "itd-31-good.md"}
+	// The good intents must produce no lifecycle findings.
+	good := []string{"itd-48-good.md", "itd-20-good.md", "itd-23-good.md", "itd-10-good.md", "itd-1-good.md", "itd-31-good.md"}
 	for _, f := range fs {
 		for _, g := range good {
 			if filepath.Base(f.File) == g {

@@ -1,7 +1,7 @@
 ---
 id: itd-53
 slug: review-queue-auto-drain-fidelity-gate
-spec_id: spc-43-review-queue-auto-drain-fidelity
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

@@ -1,7 +1,7 @@
 ---
 id: itd-27
 slug: grill-skill-and-glossary
-spec_id: spc-3-strengthen-intent-stage-abcdgrill-skill
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history:

@@ -1,7 +1,7 @@
 ---
 id: itd-4
 slug: issue-capture
-spec_id: spc-20-issue-ledger-primitives-iss-n-allocator
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []

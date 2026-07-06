@@ -1,7 +1,7 @@
 ---
 id: itd-65
 slug: launch-preflight-gate-suite
-spec_id: spc-79-launch-pre-flight-gate-suite
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

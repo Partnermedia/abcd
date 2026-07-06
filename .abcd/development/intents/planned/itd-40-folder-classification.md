@@ -1,7 +1,7 @@
 ---
 id: itd-40
 slug: folder-classification
-spec_id: spc-15-folder-classification-workspacesjson
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

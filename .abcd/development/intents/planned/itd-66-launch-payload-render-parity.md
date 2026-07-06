@@ -1,7 +1,7 @@
 ---
 id: itd-66
 slug: launch-payload-render-parity
-spec_id: spc-78-launch-payload-render-parity-smoke
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

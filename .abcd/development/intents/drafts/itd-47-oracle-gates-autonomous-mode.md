@@ -1,7 +1,7 @@
 ---
 id: itd-47
 slug: spc-12-oracle-gates-autonomous-mode
-spec_id: spc-27-oracle-cli-codex-leg-autonomous-mode
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

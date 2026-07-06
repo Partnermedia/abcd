@@ -1,7 +1,7 @@
 ---
 id: itd-28
 slug: rp-reviews-into-flow
-spec_id: spc-2-move-repoprompt-review-artifacts-into
+spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []

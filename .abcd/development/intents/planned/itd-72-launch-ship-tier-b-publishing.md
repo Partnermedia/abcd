@@ -1,7 +1,7 @@
 ---
 id: itd-72
 slug: launch-ship-tier-b-publishing
-spec_id: spc-80-abcd-launch-ship-tier-b-publishing
+spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
