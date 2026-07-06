@@ -19,16 +19,16 @@ updated: 2026-05-04
 
 ## Why This Matters
 
-abcd previously shipped `spec-export.py` and `spec-import.py` for [GitHub Spec Kit][spec-kit] interop, but those tools targeted the earlier feature-spec format. abcd now uses intents (press-release format), so the old importers don't apply directly. The interop concept is still valuable — abcd users collaborate with non-abcd teams who use Spec Kit, Linear, Jira, or Notion as their canonical artefact.
+Legacy abcd shipped `spec-export` and `spec-import` for [GitHub Spec Kit][spec-kit] interop, but those tools targeted the earlier feature-spec format. abcd uses intents (press-release format), so the old importers do not apply directly. The interop concept is still valuable — abcd users collaborate with non-abcd teams who use Spec Kit, Linear, Jira, or Notion as their canonical artefact.
 
-The right format-of-record question (which external tools, which adapter shapes, what fidelity guarantee on round-trip) needs fresh design — the earlier implementation is not the answer.
+The right format-of-record question (which external tools, which adapter shapes, what fidelity guarantee on round-trip) needs fresh design. This interop is now more tractable than before: adapters are a first-class abcd pattern ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md), [adr-24](../../decisions/adrs/0024-the companion harness-peer-via-conventions-and-mcp.md)), so a Spec Kit ↔ intent adapter is one more instance of an established shape rather than bespoke plumbing.
 
 See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) Pass 2 (skills) and Pass 5 (v0 scripts) for the deferral context.
 
 ## What's In Scope
 
 - **Spec Kit ↔ intent adapter**: read Spec Kit format and emit intent press releases; emit Spec Kit format from a shipped intent's press release + acceptance criteria + audit notes.
-- **Adapter pattern reused from existing infrastructure**: same vendor-agnostic-dispatcher + per-vendor-backend shape used for memory and reviews adapters (brief § 6.7).
+- **Adapter pattern reused from existing infrastructure**: the same vendor-agnostic-adapter shape abcd uses for its bundled dependencies (adr-22) and for the memory and reviews adapters (brief § 6.7).
 - **Round-trip fidelity test**: corpus test imports a Spec Kit project, embarks, ships an intent, exports back to Spec Kit, diffs against original — measures information loss.
 - **`/abcd:embark from-spec-kit <path>`** sub-verb — ingest external spec-kit content as starter intents.
 - **`/abcd:disembark to-spec-kit <path>`** sub-verb — export shipped intents to spec-kit format alongside the lifeboat.
@@ -50,7 +50,7 @@ See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) Pass 2 (ski
 
 ## Open Questions
 
-- **Format-of-record for round-trip stability**: spec-kit's acceptance-criteria field maps cleanly to abcd's `itd-1` BDD acceptance criteria, but spec-kit's "tasks" don't map to anything in abcd (tasks live in flow-next, not in intents). What does the round-trip do with task content?
+- **Format-of-record for round-trip stability**: spec-kit's acceptance-criteria field maps cleanly to abcd's `itd-1` BDD acceptance criteria, but spec-kit's "tasks" don't map to anything in abcd (tasks live in the native spec store, not in intents). What does the round-trip do with task content?
 - **Linear/Jira/Notion priority order**: which one is the next adapter after spec-kit? Depends on user demand.
 - **Persona handling**: spec-kit doesn't have a persona registry; abcd does (`personas.json`). On import, default to a persona; on export, drop the persona attribution? Or transmit as a custom field spec-kit ignores?
 - **Versioning**: spec-kit may evolve its format; abcd's adapter must pin to a specific spec-kit version and gracefully decline newer/older.

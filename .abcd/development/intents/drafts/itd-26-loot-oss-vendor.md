@@ -61,7 +61,7 @@ This is also a chance to formalise the `vendor/` convention abcd projects should
   - `.gitignore` semantics: `vendor/` is **always committed** (loot's whole point is committed provenance). No visibility-driven exception.
 - **`loot-quartermaster` agent** (16th agent — provisional name; the loot-equivalent of `lifeboat-oracle`):
   - Audits the proposed loot operation before commit: confirms licence is correctly identified, manifest matches what was copied, no unwanted files (e.g., the source repo's `.git/`, build artefacts, secrets) crept into `vendor/<source>/`.
-  - Oracle backend chain: RP MCP → Codex CLI → in-session subagent.
+  - Oracle backend chain: host-delegated by default, with the opt-in RepoPrompt adapter and Codex CLI as configured alternatives.
   - Failure aborts the loot operation (atomic; nothing is left half-vendored).
 - **Brief § 5 reserved-commands table update** (already landed): row for `/abcd:loot` reflecting raid-frame + provenance scope.
 - **Provenance/licence substrate reuse from itd-36** (added 2026-05-08). The licence-detection / citation-generation / source-hash-registry / launch-gate-licence-gate machinery itd-26 needs is the **same** machinery memory ingest needs. itd-36 ships the substrate as a separable spec at [`05-internals/09-provenance-substrate.md`](../../brief/05-internals/09-provenance-substrate.md); itd-26 sits on top — no re-implementation, no fragile bespoke licence layer. Two distinct user-facing verbs (`/abcd:loot` for code, `/abcd:memory ingest` for knowledge); one shared substrate. The cross-consumer registry (`.abcd/memory/.sources_index.json`) is shared; the `consumer` field disambiguates which verb produced each entry.
@@ -71,7 +71,7 @@ This is also a chance to formalise the `vendor/` convention abcd projects should
 - **Replacing package managers.** Loot is for vendoring small focused snippets and single-purpose utilities, not for managing graphs of versioned dependencies. `npm` / `pip` / `cargo` continue to handle that.
 - **Cross-host support beyond GitHub** (GitLab, Bitbucket, Codeberg, sourcehut, etc.). The initial implementation is GitHub-only; other hosts are itd-N-future when demand emerges.
 - **Looting from private repos**. Authentication, rate-limiting, and per-org policy are large surfaces. The initial implementation is public-only; the verb's rationale (loot the open ocean) reinforces the scope.
-- **Automatic security scanning of looted code.** gitleaks / Presidio scanning of the *consumer* project at launch time (per existing `scan.py`) covers the looted code transitively. No per-loot security scan is added; that's a possible itd-N extension.
+- **Automatic security scanning of looted code.** gitleaks / Presidio scanning of the *consumer* project at launch time (per the native launch scan) covers the looted code transitively. No per-loot security scan is added; that's a possible itd-N extension.
 - **Dependency resolution / transitive looting.** If the looted code itself depends on another OSS snippet, loot doesn't follow the chain. The user decides what to vendor.
 - **Auto-updating loot when upstream changes.** No watcher, no scheduled refresh. `loot update` is explicit and manual. Drift between looted SHA and upstream HEAD is intentional — that's the point of vendoring.
 - **A treasure-themed alias.** `/abcd:treasure` was deliberately *not* reserved in the reserved-commands work. Loot is the canonical OSS-vendor verb; no alias.

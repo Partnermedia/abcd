@@ -10,6 +10,8 @@ created: 2026-05-22
 updated: 2026-05-22
 ---
 
+> **⚠️ Superseded by [ADR-21](../../decisions/adrs/0021-rebuild-in-go.md)** (a one-time debt sweep of the old Python repo is moot in a from-scratch rebuild). Preserved as historical record per the supersession lifecycle.
+
 # Sweep The Workshop Before Phase 2 — Cleanup Bundle From `.work/issues.md`
 
 ## Press Release

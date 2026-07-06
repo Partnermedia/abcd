@@ -13,13 +13,15 @@ updated: 2026-05-04
 
 ## Press Release
 
-> **abcd packs the RepoPrompt workspace definition into the lifeboat.** When `dev-sync` runs (and as part of `/abcd:disembark`), abcd reads the project's RepoPrompt workspace definition from `~/Library/Application Support/RepoPrompt/Workspaces/` and writes it into `.abcd/rp/workspace.json` in the repo. On `/abcd:embark`, the workspace is read back and offered for registration with RepoPrompt on the new machine. Migrating to a fresh user account no longer means rebuilding workspace boundaries by hand for every active project.
+> **When the RepoPrompt adapter is configured, abcd packs the RP workspace definition into the lifeboat.** When `dev-sync` runs (and as part of `/abcd:disembark`), abcd reads the project's RepoPrompt workspace definition from `~/Library/Application Support/RepoPrompt/Workspaces/` and writes it into `.abcd/rp/workspace.json` in the repo. On `/abcd:embark`, the workspace is read back and offered for registration with RepoPrompt on the new machine. For personas who drive RepoPrompt, migrating to a fresh user account no longer means rebuilding workspace boundaries by hand for every active project.
 >
 > "I switched user accounts and dreaded rebuilding RP workspaces for a dozen active projects from memory," said Frank, DevOps engineer. "abcd's workspace pull meant each project's `.abcd/rp/workspace.json` came along with the lifeboat. Embark on the new account asked whether to register each one. Thirty seconds per project instead of half an hour."
 
 ## Why This Matters
 
-abcd already pulls **review content** from RepoPrompt's Application Support via `reviews_backends/repoprompt.py` (per brief § 6.7). That's the lifeboat-valuable *output* of RP. The parallel state that's *also* project-shaped and lifeboat-valuable is the **workspace definition** — which files RP considers part of the project's context, the partition strategy, the project boundaries. Workspace definitions are fiddly to recreate from memory; they encode real curation work.
+The RepoPrompt adapter already pulls **review content** from RP's Application Support. That's the lifeboat-valuable *output* of RP. The parallel state that's *also* project-shaped and lifeboat-valuable is the **workspace definition** — which files RP considers part of the project's context, the partition strategy, the project boundaries. Workspace definitions are fiddly to recreate from memory; they encode real curation work.
+
+All of this is scoped to the RepoPrompt adapter: it runs only when that adapter is configured, and every surface degrades gracefully when RP is absent. RP is one optional adapter, never a hard dependency — abcd assumes nothing about it being present.
 
 This intent ships workspace pull only. Presets and routing are global RP state with cross-project complications; they need a richer scoping design before shipping. `--preset` and `abcd rp link` are convenience layers that need workspace pull as a foundation and are out of scope here.
 
@@ -27,7 +29,7 @@ See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) for the bro
 
 ## What's In Scope
 
-- **`rp_state_backend.py`** — new adapter under `scripts/abcd/adapters/`. Reads the workspace whose root path matches the current repo from `~/Library/Application Support/RepoPrompt/Workspaces/`. Workspace identity match: walk all workspaces, parse each `workspace.json`'s root-path field, match against `git rev-parse --show-toplevel`. Multi-match: prefer the most-recently-modified.
+- **A RepoPrompt workspace-state adapter** — new adapter in the native adapter layer. Reads the workspace whose root path matches the current repo from `~/Library/Application Support/RepoPrompt/Workspaces/`. Workspace identity match: walk all workspaces, parse each `workspace.json`'s root-path field, match against `git rev-parse --show-toplevel`. Multi-match: prefer the most-recently-modified.
 - **Pull on `dev-sync`**: writes `.abcd/rp/workspace.json` with `~/`-relative path normalisation (per privacy rules). Visibility-driven gitignore handling: private repos commit; public repos exclude.
 - **Pack on `/abcd:disembark`**: dev-sync runs as a pre-pack step (already in brief). Workspace state goes into the lifeboat naturally.
 - **Unpack + reconnect on `/abcd:embark`**:
@@ -76,4 +78,4 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 ## References
 
 [itd-22]: itd-22-opencode-portability.md "itd-22 — OpenCode portability"
-[itd-6]: itd-6-rp-mcp-only-integration.md "itd-6 — RP-only integration via MCP"
+[itd-6]: ../superseded/itd-6-rp-mcp-only-integration.md "itd-6 — RP-only integration via MCP"

@@ -18,13 +18,13 @@ This is a **codified abcd principle**: intent capture is press-release-shaped. a
 
 ## Intent IDs
 
-Intent IDs follow the pattern `itd-N` (unpadded, mirrors flow-next's `fn-N` convention). Filenames: `itd-N-<slug>.md`.
+Intent IDs follow the pattern `itd-N` (unpadded, mirrors the native spec `fn-N` convention). Filenames: `itd-N-<slug>.md`.
 
-`itd` reads as "intent" and pairs visually with flow-next's `fn-N` (spec).
+`itd` reads as "intent" and pairs visually with the native spec `fn-N`.
 
 **IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
 
-**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `fn-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint.py`, registries, dashboards) rather than via filename padding.
+**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `fn-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint`, registries, dashboards) rather than via filename padding.
 
 ---
 
@@ -50,15 +50,15 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 
 | Directory | Status / role | Meaning |
 |---|---|---|
-| `drafts/` | 📝 Draft | Press-release-shaped intent captured but no flow-next spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard. |
-| `planned/` | 📅 Planned | `/abcd:intent plan` has called `/flow-next:plan` + `/flow-next:plan-review`, creating a linked spec stub. Bundle-member intents share a `spec_id` with their bundle-mates. The linked spec in `.flow/specs/` is the active marker. |
+| `drafts/` | 📝 Draft | Press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard. |
+| `planned/` | 📅 Planned | `/abcd:intent plan` has created a linked native spec stub. Bundle-member intents share a `spec_id` with their bundle-mates. The linked spec in the native spec store is the active marker. |
 | `shipped/` | ✅ Shipped | Linked spec closed; `intent-fidelity-reviewer` ran. The intent's "Audit Notes" section contains per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
-| `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a flow-next spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
+| `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
 | `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <itd-N>` (the successor) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). Preserved as historical record. |
 
-There is no `active/` state — "active" is implicit (a planned intent's linked spec is currently in flight under `.flow/specs/`; an active discipline is any intent in `disciplines/`).
+There is no `active/` state — "active" is implicit (a planned intent's linked spec is currently in flight in the native spec store; an active discipline is any intent in `disciplines/`).
 
-**Directory location is the single source of truth for lifecycle state across all kinds.** Standalone and bundle-member intents derive state from `drafts/` / `planned/` / `shipped/`; disciplines derive state from `disciplines/` / `superseded/`. No intent has a `status` field that could disagree with its directory; `intent_lint.py` enforces the contract.
+**Directory location is the single source of truth for lifecycle state across all kinds.** Standalone and bundle-member intents derive state from `drafts/` / `planned/` / `shipped/`; disciplines derive state from `disciplines/` / `superseded/`. No intent has a `status` field that could disagree with its directory; `intent_lint` enforces the contract.
 
 ---
 
@@ -70,7 +70,7 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
    ├─ Assigns next itd-N ID (capture-stable — never renumbered)
    ├─ Requires `## Acceptance Criteria` section (per the itd-1 discipline) — refuses to write if missing/malformed
    ├─ LLM classifier writes advisory `suggested_kind` (default: standalone)
-   └─ Writes intents/drafts/itd-N-<slug>.md (no flow-next call yet)
+   └─ Writes intents/drafts/itd-N-<slug>.md (no spec-plan call yet)
 
 2. /abcd:intent plan <itd-N> [<itd-M>...]    (when ready to commit to work)
    ├─ Lints acceptance criteria; refuses promotion if missing/malformed
@@ -78,27 +78,27 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
    ├─ User confirms or overrides; binding `kind:` is written
    │
    ├─ standalone (single intent ID):
-   │     ├─ Calls /flow-next:plan + plan-review
+   │     ├─ Plans the native spec (plan + plan-review)
    │     ├─ Injects bidirectional link (spec.intent = itd-N; intent.spec_id = fn-N)
    │     └─ drafts/ → planned/
    │
    ├─ bundle-member (multiple intent IDs in one plan call):
-   │     ├─ /flow-next:plan once with all intents as joint input
+   │     ├─ Plans one native spec with all intents as joint input
    │     ├─ spec.intent = [itd-A, itd-B]; each intent.spec_id = fn-N; each intent.bundle = <bundle-id>
    │     └─ All members: drafts/ → planned/
    │
    └─ discipline (single intent, kind chosen explicitly):
-         ├─ NO /flow-next:plan call
+         ├─ NO spec-plan call
          ├─ Registers acceptance gates in .abcd/disciplines/<itd-N>.json
-         ├─ /flow-next:plan-review on the discipline's `## Rule` for sanity
+         ├─ Plan-review on the discipline's `## Rule` for sanity
          └─ drafts/ → disciplines/ (active state encoded by directory location; no `status:` field)
 
 3. /abcd:intent ship <itd-N>          (standalone + bundle only — disciplines never ship)
    ├─ If intent is in drafts/: runs full pipeline (plan + plan-review first)
-   ├─ Calls /flow-next:work
-   └─ Spec continues in .flow/specs/
+   ├─ Runs the native spec work
+   └─ Spec continues in the native spec store
 
-4. Spec marked done in .flow/         (standalone + bundle: work complete, automatic from here)
+4. Spec marked done in the native spec store   (standalone + bundle: work complete, automatic from here)
    ├─ intent_lifecycle_hook detects status change via the intent: link
    ├─ planned/ → shipped/ (bundles: all members move together)
    └─ Triggers intent-fidelity-reviewer agent (single-document role)
@@ -139,9 +139,9 @@ Continuously: intent-fidelity-reviewer's shape-classification role suggests
 | File | Frontmatter field |
 |---|---|
 | `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `spec_id: fn-N` (or list, or `null` when in drafts/) |
-| `.flow/specs/fn-N-<slug>.md` | `intent: itd-N` (or list) |
+| the native spec `fn-N-<slug>` | `intent: itd-N` (or list) |
 
-Both directions present once `/abcd:intent plan` runs. `intent_lint.py` (pre-commit + CI) verifies they agree.
+Both directions present once `/abcd:intent plan` runs. `intent_lint` (pre-commit + CI) verifies they agree.
 
 ---
 
@@ -247,7 +247,7 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 |---|---|---|
 | ~~`tier-0-audit-substrate`~~ (dissolved 2026-05-07) | ~~itd-31 + itd-32~~ | The bundle premise (unified `/abcd:audit` surface bundling all review/audit roles into one verb's subverbs) was dissolved when the round-2 command-structure review split the three intent-fidelity-reviewer roles into three distinct verbs under `/abcd:intent` (review/consistency/shape). itd-31 promoted to standalone; itd-32 superseded by itd-31. |
 
-Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint.py`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
+Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
 
 **Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
 
@@ -255,7 +255,7 @@ Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); mem
 
 ## Drafts
 
-Captured intents that haven't been promoted to flow-next specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases); this directory listing is the raw filesystem view.
+Captured intents that haven't been promoted to native specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases); this directory listing is the raw filesystem view.
 
 ```
 drafts/
@@ -295,13 +295,13 @@ drafts/
 └── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
 ```
 
-¹ itd-2 (was itd-17) had a plan-reviewed spec that was deleted during a prior renumbering pass. It needs re-planning via `/abcd:intent plan` once the brief is settled. The historical `fn-3` spec-ID reservation is no longer in force — that slot in `.flow/` is now taken by itd-27's spec. itd-2 will receive a fresh slot when replanned; it sits in `drafts/` with `spec_id: null` until that replan happens. (itd-6 followed a different route — it was promoted to `planned/` by the fn-5 spec, which implements its RP MCP bridge foundation; see the Planned section below.)
+¹ itd-2 (was itd-17) had a plan-reviewed spec that was deleted during a prior renumbering pass. It needs re-planning via `/abcd:intent plan` once the brief is settled. The historical `fn-3` spec-ID reservation is no longer in force — that slot in the native spec store is now taken by itd-27's spec. itd-2 will receive a fresh slot when replanned; it sits in `drafts/` with `spec_id: null` until that replan happens. (itd-6 followed a different route — it was promoted to `planned/` by the fn-5 spec, which implements its RP MCP bridge foundation; see the Planned section below.)
 
 ---
 
 ## Disciplines
 
-Active discipline-kind intents (cross-cutting rules with no user moment of their own; impose acceptance gates that every other spec inherits). They never get a flow-next spec — they ARE the rule, not a feature being built. **No `status` frontmatter field — presence in `disciplines/` IS the active state; supersession moves to `superseded/`.**
+Active discipline-kind intents (cross-cutting rules with no user moment of their own; impose acceptance gates that every other spec inherits). They never get a native spec — they ARE the rule, not a feature being built. **No `status` frontmatter field — presence in `disciplines/` IS the active state; supersession moves to `superseded/`.**
 
 ```
 disciplines/
@@ -325,9 +325,9 @@ planned/
 ├── itd-6-rp-mcp-only-integration.md    (linked to fn-5-rp-mcp-integration-declare)
 ```
 
-itd-27 and itd-28 had plan-reviewed flow-next specs (`fn-3` for grill, `fn-2` for RP-reviews-into-flow); both specs have since closed and the intents now sit in `shipped/` (see the Shipped section below). itd-6 was promoted to `planned/` by the `fn-5-rp-mcp-integration-declare` spec, which implements the RP MCP bridge foundation itd-6 describes; it is linked to fn-5-rp-mcp-integration-declare (`spec_id` stays `null` — fn-5 was not created by `/abcd:intent plan itd-6`). itd-6's own acceptance criteria for the three-step cascade, ahoy setup discovery, and non-Mac flow remain DEFERRED beyond fn-5 (see the intent's Implementation status section). itd-6 moves to `shipped/` automatically when its spec closes (via `intent_lifecycle_hook`).
+itd-27 and itd-28 had plan-reviewed native specs (`fn-3` for grill, `fn-2` for RP-reviews-into-flow); both specs have since closed and the intents now sit in `shipped/` (see the Shipped section below). itd-6 was promoted to `planned/` by the `fn-5-rp-mcp-integration-declare` spec, which implements the RP MCP bridge foundation itd-6 describes; it is linked to fn-5-rp-mcp-integration-declare (`spec_id` stays `null` — fn-5 was not created by `/abcd:intent plan itd-6`). itd-6's own acceptance criteria for the three-step cascade, ahoy setup discovery, and non-Mac flow remain DEFERRED beyond fn-5 (see the intent's Implementation status section). itd-6 moves to `shipped/` automatically when its spec closes (via `intent_lifecycle_hook`).
 
-(Earlier history note: itd-2 also sat in `planned/` at one point with plan-reviewed history, but its flow-next spec was deleted during a renumbering pass — reset to `drafts/` with `spec_id: null`. Running `/abcd:intent plan itd-2` creates a fresh flow-next spec and re-establishes the bidirectional link.)
+(Earlier history note: itd-2 also sat in `planned/` at one point with plan-reviewed history, but its native spec was deleted during a renumbering pass — reset to `drafts/` with `spec_id: null`. Running `/abcd:intent plan itd-2` creates a fresh native spec and re-establishes the bidirectional link.)
 
 ---
 

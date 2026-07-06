@@ -19,7 +19,7 @@ updated: 2026-05-03
 
 ## Why This Matters
 
-abcd's `/abcd:ahoy` doesn't touch `.claude/settings.local.json`. Users start with whatever permissions they had (often nothing project-specific) and accumulate them by repeatedly approving Bash commands. This is friction that adds up, especially for autonomous-mode work where every prompt interrupts a Ralph loop or Claude Code session.
+abcd's `/abcd:ahoy` doesn't touch `.claude/settings.local.json`. Users start with whatever permissions they had (often nothing project-specific) and accumulate them by repeatedly approving Bash commands. This is friction that adds up, especially for autonomous-mode work where every prompt interrupts a run-seam loop or Claude Code session.
 
 `~/.claude/templates/settings.local.json.template` from abcd v0 already shows the pattern: a base permission set + per-language additions. Lift the pattern; detect the project type during ahoy; install a sensible starting set with transparent confirm.
 

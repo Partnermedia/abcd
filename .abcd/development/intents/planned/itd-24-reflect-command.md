@@ -26,7 +26,7 @@ prd_grandfathered: true
 
 ## Why This Matters
 
-abcd ships strong post-implementation transparency: shipped intents have audit notes (per `itd-1` acceptance criteria); flow-next spec completion records capture what was built; and per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) a completed phase gets a **phase audit** — the phase-fidelity-reviewer comparing delivered reality against the phase's `## Phase Acceptance`. What's missing is **post-phase reflection** — the structured "what did we learn" doc that's bigger than per-intent audit notes, bigger than a pass/fail audit verdict, and smaller than a brief rewrite.
+abcd ships strong post-implementation transparency: shipped intents have audit notes (per `itd-1` acceptance criteria); the native spec store's completion records capture what was built; and per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) a completed phase gets a **phase audit** — the phase-fidelity-reviewer comparing delivered reality against the phase's `## Phase Acceptance`. What's missing is **post-phase reflection** — the structured "what did we learn" doc that's bigger than per-intent audit notes, bigger than a pass/fail audit verdict, and smaller than a brief rewrite.
 
 The legacy `~/.claude/templates/retrospective.md.template` had the right prompt structure (what went well, what could improve, lessons learned, decisions made, metrics) but lived as a manual template that rarely got used. It was deferred (see [`research/legacy-harvest.md`](../../research/legacy-harvest.md) Pass 4 retrospective decision); `/abcd:reflect` promotes it to a first-class command with structured interview + structured output.
 

@@ -12,6 +12,8 @@ updated: 2026-06-11
 prd_path: null
 ---
 
+> **⚠️ Superseded by [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)** (with no bundled hard dependencies to hide, the reach-past boundary and its warn-not-block subsystem have nothing to guard). Preserved as historical record per the supersession lifecycle.
+
 # abcd Warns When You Reach Past It Into A Tool It Was Built To Hide
 
 ## Press Release

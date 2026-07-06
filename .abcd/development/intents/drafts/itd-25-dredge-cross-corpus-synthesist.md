@@ -19,7 +19,7 @@ updated: 2026-05-04
 
 ## Why This Matters
 
-[itd-4](itd-4-issue-capture.md) ships `/abcd:capture` and the structured `.abcd/development/activity/issues/` ledger. That's the *capture* half of the original combined intent. The synthesis half — `/abcd:dredge` plus the `issue-synthesist` agent — was deliberately split out because **its value is empty until the ledger has accumulated meaningful data**. Shipping a synthesist with no ledger to synthesise produces a tool that everyone tries once and nobody returns to.
+[itd-4](../shipped/itd-4-issue-capture.md) ships `/abcd:capture` and the structured `.abcd/development/activity/issues/` ledger. That's the *capture* half of the original combined intent. The synthesis half — `/abcd:dredge` plus the `issue-synthesist` agent — was deliberately split out because **its value is empty until the ledger has accumulated meaningful data**. Shipping a synthesist with no ledger to synthesise produces a tool that everyone tries once and nobody returns to.
 
 Once the ledger has months of usage across the corpus repos, the synthesist has something to chew on. The pattern echoes the broader abcd philosophy: ship the capture surface that earns its keep on day one; defer the synthesis surface until there's enough data for synthesis to be more than empty ceremony.
 
@@ -36,8 +36,8 @@ The maritime metaphor lands cleanly here: `/abcd:dredge` is the cross-corpus cou
   - Clusters by category, file proximity, semantic similarity, and frontmatter tags
   - Outputs `synthesis-report.{json,md}` to `.abcd/logbook/dredge/<timestamp>/`
   - Surfaces top-N clusters as candidate intent drafts (operator can promote any via `/abcd:dredge promote <cluster-id>`)
-  - Oracle backend chain: RP MCP → Codex CLI → in-session subagent (same as other agents)
-- **N:1 promotion semantics** — a cluster of related issues should fold into a single intent. The bidirectional link convention extends `related_intents: [itd-N]` on multiple issues pointing to the same intent, and the intent's frontmatter gains `resolves_issues: [iss-N, iss-NM, iss-NO]` reciprocally. `intent_lint.py` extends to verify these reciprocally.
+  - Oracle backend chain (same as other agents): host-delegated by default, with the opt-in RepoPrompt adapter and Codex CLI as configured alternatives
+- **N:1 promotion semantics** — a cluster of related issues should fold into a single intent. The bidirectional link convention extends `related_intents: [itd-N]` on multiple issues pointing to the same intent, and the intent's frontmatter gains `resolves_issues: [iss-N, iss-NM, iss-NO]` reciprocally. The intent lint extends to verify these reciprocally.
 - **Synthesist cadence option** — on-demand via `/abcd:dredge synth`, or periodic via the existing `dev-sync` cadence ([itd-13](itd-13-scheduled-dev-sync.md) covers scheduled `dev-sync`). Default: on-demand; couple to scheduled `dev-sync` if itd-13 has shipped.
 - **`intent-fidelity-reviewer` extension** — when an intent ships that was promoted from an issue cluster, the reviewer cross-references whether the cluster's open issues actually moved to `resolved/`. Mismatch = drift finding.
 

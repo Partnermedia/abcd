@@ -22,7 +22,7 @@ Every spec carries a `## Modification Grammar` section with three sub-headings, 
 
 A fourth axis — **`### Ripple`** — captures the per-spec-external concerns absorbed from idea-3 (systems thinking) at adversarial review (chat `idea-3-itd-38-adversaria-31A06A`, MAJOR_RETHINK outcome): vocabulary delta (HARD-enforced via the [vocabulary-registration requirement in `02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md)), surface delta (new commands / sub-verbs / agents / disciplines), coupling delta (what this spec newly depends on; what newly depends on it). The `Ripple` axis stays under itd-37 (same retrieval key as modification grammar — domain) rather than spawning a separate discipline.
 
-At spec completion, `principle-distiller` (the role-extended curator from [itd-36](../drafts/itd-36-memory-unification.md)) extracts the `## Modification Grammar` section into two memory pages per [`05-internals/07-memory.md`](../../brief/05-internals/07-memory.md):
+At spec completion, `principle-distiller` (the role-extended curator from [itd-36](../shipped/itd-36-memory-unification.md)) extracts the `## Modification Grammar` section into two memory pages per [`05-internals/07-memory.md`](../../brief/05-internals/07-memory.md):
 
 - **`spec_modification_grammar_<spec_id>.md`** — append-only, per-spec. Source class `spec_modification_grammar`. Lifecycle: append-only per [`05-internals/04-universal-patterns.md § 8`](../../brief/05-internals/04-universal-patterns.md#8-artefact-lifecycle-taxonomy).
 - **`modification_grammar_<domain>.md`** — compounding-curated, per-domain. `principle-distiller` runs a curator-pass that synthesises across the per-spec pages. Lifecycle: compounding-curated per the same taxonomy.
@@ -42,7 +42,7 @@ The discipline is named for what's actually new — **modification grammar**, no
 
 The semantic enforcement is genuine LLM-judgement work. The discipline owns the requirement explicitly — regex cannot catch boilerplate.
 
-**`MG004` enforcement surface (made concrete by fn-12).** The timing is unchanged — `MG004` runs at plan-review and ship time — but the named surface is the abcd-owned CI / pre-commit path: the `plan_review_disciplines.py` lint/CI wrapper invoked from `.github/workflows/lint.yml`, **not** a `/flow-next:plan-review` integration. The Role 1 `MG004` pass emits a `PASS` / `FAIL` boilerplate verdict; the verdict lands in a per-run batch receipt at `.abcd/logbook/audit/spec-mg-<ts>/report.{json,md}` (flow-next specs have no `## Audit Notes` section, so the verdict cannot land in-file). fn-12 ships the `MG004` judgement pass, its receipt writer, and the receipt schema; the CI wiring is added by fn-12 itself via `plan_review_disciplines.py`.
+**`MG004` enforcement surface (made concrete by fn-12).** The timing is unchanged — `MG004` runs at plan-review and ship time — but the named surface is the abcd-owned CI / pre-commit path: the native disciplines lint/CI wrapper invoked from `.github/workflows/lint.yml`, **not** a plan-review-step integration. The Role 1 `MG004` pass emits a `PASS` / `FAIL` boilerplate verdict; the verdict lands in a per-run batch receipt at `.abcd/logbook/audit/spec-mg-<ts>/report.{json,md}` (native specs have no `## Audit Notes` section, so the verdict cannot land in-file). fn-12 ships the `MG004` judgement pass, its receipt writer, and the receipt schema; the CI wiring is added by fn-12 itself via the native disciplines lint.
 
 **Why the cost is justified.** itd-37 is the first *expensive* discipline in abcd's stack (~15-30 min careful thought per spec, vs ~5 min for itd-1 / itd-5 / itd-36's mechanical gates). With itd-1 + itd-5 + itd-36 + itd-37 all live, every spec carries 4 discipline gates costing ~30-45 min total — real, but justified. The failure modes the disciplines prevent (specs without acceptance bars, agents without quality gates, specs without modification grammar, specs without provenance) compound exponentially as the corpus grows. Disciplines are a fixed per-spec tax; the failures are exponential. Trade favourably.
 
@@ -53,7 +53,7 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 ## What's In Scope
 
 - **`## Modification Grammar` section template** added to `scripts/abcd/templates/spec.md.template` with three sub-headings (`Extends cleanly` / `Breaks the design` / `Why`) plus the `Ripple` axis (vocabulary / surface / coupling deltas), one worked example per axis. Section header is fixed (parser depends on it).
-- **Concreteness lint** at `intent_lint.py` with three codes:
+- **Concreteness lint** in the native intent lint with three codes:
   - `MG001` — section missing.
   - `MG002` — sub-heading missing or empty.
   - `MG003` — sub-heading present but contains no concrete reference (code block / file path / line ref).
@@ -64,9 +64,9 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
   - Updates curator-merged `modification_grammar_<domain>.md` with `source.class: modification_grammar` (compounding-curated).
 - **Recovery-humility paragraphs** on `/abcd:disembark` and `/abcd:embark` surfaces (≤4 sentences each). Disembark: lifeboat is the floor of recoverable theory, not theory itself. Embark: hunt the originating session before trusting the lifeboat blindly. Already landed in [`04-surfaces/02-disembark.md`](../../brief/04-surfaces/02-disembark.md) and [`04-surfaces/03-embark.md`](../../brief/04-surfaces/03-embark.md) per Layer A brief edits.
 - **Mental-model "Naurian gap" sub-section** — added at [`01-product/03-mental-model.md`](../../brief/01-product/03-mental-model.md). Names the three Naur axes; identifies Modification as the genuinely new gap; cites Naur 1985.
-- **Vocabulary-registration requirement** (HARD) — every term introduced in `### Ripple > Vocabulary delta` MUST appear in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) glossary in the same spec. `intent_lint.py` blocks at plan-review with code `VR001`.
+- **Vocabulary-registration requirement** (HARD) — every term introduced in `### Ripple > Vocabulary delta` MUST appear in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) glossary in the same spec. The intent lint blocks at plan-review with code `VR001`.
 - **Karpathy & Naur citations** in `research/related-work.md` (Karpathy as pattern source for itd-36; Naur as philosophical citation for itd-37). Both in [`research/related-work.md`](../../research/related-work.md).
-- **Inheritance into every spec** — every flow-next spec plan-reviewed under abcd inherits this discipline's gates: spec must include `## Modification Grammar`; concreteness lint runs at plan-review; Role 1 boilerplate detection runs at plan-review and ship time.
+- **Inheritance into every spec** — every native spec plan-reviewed under abcd inherits this discipline's gates: spec must include `## Modification Grammar`; concreteness lint runs at plan-review; Role 1 boilerplate detection runs at plan-review and ship time.
 
 ## What's Out of Scope
 
@@ -81,11 +81,11 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 
 > _BDD format, per [itd-1 acceptance gates](itd-1-acceptance-gates.md). These gates are checked by `intent-fidelity-reviewer` Role 1 against every spec plan-reviewed under abcd._
 
-- **Given** a spec without a `## Modification Grammar` section, **when** `/flow-next:plan-review` runs, **then** `intent_lint.py` emits `MG001` and blocks promotion.
+- **Given** a spec without a `## Modification Grammar` section, **when** plan-review runs, **then** the intent lint emits `MG001` and blocks promotion.
 - **Given** a spec with `## Modification Grammar` but missing one of the three required sub-headings (`Extends cleanly` / `Breaks the design` / `Why`), **when** plan-review runs, **then** the lint emits `MG002` naming the missing sub-heading.
 - **Given** a spec where any of the three sub-headings is present but contains no concrete reference (no code block, no file path, no line ref), **when** plan-review runs, **then** the lint emits `MG003` and points at the offending sub-heading.
 - **Given** a spec where `## Modification Grammar` content could equally describe a different spec (boilerplate failure), **when** `intent-fidelity-reviewer` Role 1 runs the discipline check, **then** the reviewer emits `MG004` with the rejection reason ("strip-the-name test fails: this prose describes [generic concern] not [this spec's specifics]").
-- **Given** a spec with `### Ripple > Vocabulary delta` introducing a new term not registered in `02-constraints/04-naming.md`, **when** plan-review runs, **then** `intent_lint.py` emits `VR001` and blocks promotion until the term is registered.
+- **Given** a spec with `### Ripple > Vocabulary delta` introducing a new term not registered in `02-constraints/04-naming.md`, **when** plan-review runs, **then** the intent lint emits `VR001` and blocks promotion until the term is registered.
 - **Given** a spec transitions to shipped, **when** `principle-distiller` runs the extraction pass, **then** an append-only memory page `spec_modification_grammar_<spec_id>.md` is written to `.abcd/memory/` with `source.class: spec_modification_grammar` AND a curator-merged page `modification_grammar_<domain>.md` is updated with `source.class: modification_grammar`.
 - **Given** the cost-discipline boundary (itd-37 is first expensive discipline; ~15-30 min capture per spec), **when** any spec proposes adding "modification grammar exemption for trivial specs", **then** the proposal is rejected — trivial-self-exemption invites loophole-driven bypass; trivial specs produce short Modification Grammar sections, not absent ones.
 - **Given** the partial-ship fallback (itd-36 ships only `ingest`/bare without `ask`/`lint`, OR `principle-distiller` extraction trigger slips), **when** itd-37 lands, **then** capture (`## Modification Grammar` in a spec) and reviewer-Role-1 enforcement (`MG001`-`MG004`) survive independently; memory extraction (`spec_modification_grammar_*` and `modification_grammar_*` pages) defers gracefully.
@@ -111,7 +111,7 @@ _Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity
 - [`research/related-work.md § Naur 1985`](../../research/related-work.md#naur-1985--programming-as-theory-building) — full prior-art comparison.
 - [`itd-1-acceptance-gates.md`](itd-1-acceptance-gates.md) — companion discipline; this discipline's acceptance criteria conform to its Given-When-Then shape.
 - [`itd-5-prompt-quality-additions.md`](itd-5-prompt-quality-additions.md) — companion discipline; disciplines stack at three (itd-1 + itd-5 + itd-37).
-- [`../drafts/itd-36-memory-unification.md`](../drafts/itd-36-memory-unification.md) — companion intent (standalone); ships alongside itd-37; provides the substrate for `spec_modification_grammar` and `modification_grammar` page classes.
+- [`../drafts/itd-36-memory-unification.md`](../shipped/itd-36-memory-unification.md) — companion intent (standalone); ships alongside itd-37; provides the substrate for `spec_modification_grammar` and `modification_grammar` page classes.
 - [`05-internals/07-memory.md`](../../brief/05-internals/07-memory.md) — substrate spec for the curator agent's two-page-class extraction.
 - [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) — vocabulary-registration requirement (HARD) and bare-command-as-render discipline; both companion rules to this discipline's `Ripple` axis.
 - [`01-product/03-mental-model.md § The Naurian gap`](../../brief/01-product/03-mental-model.md) — the framing this discipline closes.

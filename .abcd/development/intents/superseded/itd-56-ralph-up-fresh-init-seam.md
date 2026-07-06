@@ -11,6 +11,8 @@ updated: 2026-06-06
 prd_path: null
 ---
 
+> **⚠️ Superseded by [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)** (flow-next, ralph-init, and the abcd overlay all cease to exist; there is no re-vendor cycle to guard — see also [ADR-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md), [ADR-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)). Preserved as historical record per the supersession lifecycle.
+
 # One Command Re-Vendors Upstream And Restores The abcd Overlay In A Single, Guarded Step
 
 ## Press Release

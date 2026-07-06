@@ -7,40 +7,35 @@ suggested_kind: null
 reclassification_history: []
 created: 2026-05-03
 updated: 2026-05-08
-related_adrs: [adr-8]
+related_adrs: [adr-8, adr-25]
 ---
 
 # Pick the Right Oracle for the Job, Automatically
 
-> **Reframe pending (committed 2026-05-08 per idea-4 jagged-frontier review).** This intent will be reframed from "model-effectiveness tracking" to **"frontier mapping"** — sharper framing per Dell'Acqua et al. 2023 ("Navigating the Jagged Technological Frontier"). Reframe scope:
+> **This intent is abcd's frontier mapping** — capability-aware dispatch across the configured oracle adapters and the host-delegated default, framed per Dell'Acqua et al. 2023 ("Navigating the Jagged Technological Frontier"). It observes the jagged frontier (which adapter or the host is strong for which task), dispatches capability-aware, and renders the frontier map on demand:
 >
-> - **Headline** rewritten around frontier observation + capability-aware dispatch + frontier rendering (not generic effectiveness tracking).
-> - **Persona quote** rewritten — Carol is product-lead per `personas.json`; pick a researcher / dispatch-operator role for the frontier framing.
-> - **`What's In Scope`** rewritten around `{task_class, agent, backend, model_id, outcome, failure_mode_tag}` schema + closed-enum failure-mode tags (`hallucination` / `scope_drift` / `stale_context` / `under_specification_blindness` / `format_violation`) + `/abcd:frontier` command (bare = render; sub-verbs `flag` / `history` / `explain` for actions bare can't do; no `show` per the bare-command-as-render discipline).
-> - **Storage migration** (named as breaking change to itd-17's existing scope): from `.abcd/oracle-effectiveness.json` + `.abcd/oracle-scorecard.jsonl` (current paths) to logbook events at `.abcd/logbook/frontier/<ts>/frontier-events.{json,md}` + agent-frontmatter declarations (`capability_scope` per itd-5; `known_failure_modes` per the new Frontier Awareness intent) + aggregate frontier-map rendered on demand from the two source-of-truth locations. No new top-level namespace (`.abcd/toolchain-state/` was killed at idea-4 review per the namespace-creep precedent).
-> - **Composition with Frontier Awareness intent** (capture-stable after itd-17 ships; no ID reserved per the idea-3 release-don't-reserve precedent). Frontier Awareness owns the dynamic half (events + plan-time check + pre-cascade selector + `/abcd:frontier` command); itd-17 either folds entirely into Frontier Awareness or remains as the implementation substrate (logbook event schema + aggregation algorithm). Decision deferred to itd-17's reframed plan-review.
-> - **Cascade contract preserved**: capability-aware routing is a *pre-cascade selector* (a layer above the cascade defined in itd-2 + itd-6), NOT a modification. § 7 "fixed cascade" language in `04-universal-patterns.md` stays intact.
->
-> **Until the reframe lands** (in itd-17's plan-review), the body of this intent below describes the original "model-effectiveness tracking" framing. Treat it as the prior shape; the new shape is documented in `.work/idea-assessments/4-jagged-frontier.md` and the itd-5 extension at `disciplines/itd-5-prompt-quality-additions.md § Add 4`.
+> - The dispatch signal is a `{task_class, agent, adapter, model_id, outcome, failure_mode_tag}` schema, with closed-enum failure-mode tags (`hallucination` / `scope_drift` / `stale_context` / `under_specification_blindness` / `format_violation`).
+> - Frontier data lands as logbook events at `.abcd/logbook/frontier/<ts>/frontier-events.{json,md}`, complemented by agent-frontmatter declarations (`capability_scope` per itd-5; `known_failure_modes`); the aggregate frontier-map is rendered on demand from those source-of-truth locations. No new top-level namespace.
+> - The `/abcd:frontier` command renders bare, with sub-verbs `flag` / `history` / `explain` for actions bare can't do (no `show`, per the bare-command-as-render discipline).
+> - Capability-aware routing is a **selector over the configured adapters and the host default** — it picks which target handles a call, and where data is thin it defers to the host-delegated default.
 
 ## Press Release
 
-> **abcd learns which oracle backend performs best for which agent task.** Every oracle audit (lifeboat-oracle, press-release-composer's product audit, intent-fidelity-reviewer) records its outcome — was the verdict accurate? Did revisions follow? Over time, abcd builds a per-backend per-agent effectiveness profile and biases backend selection automatically. RP for content-fidelity audits, Codex for product critique, in-session for fast iteration — chosen based on data, not configuration guesswork.
+> **abcd learns which oracle target performs best for which agent task.** Every oracle audit (lifeboat-oracle, press-release-composer's product audit, intent-fidelity-reviewer) records its outcome — was the verdict accurate? Did revisions follow? Over time, abcd builds a per-target per-agent effectiveness profile and biases dispatch automatically across the configured oracle adapters and the host-delegated default — chosen based on data, not configuration guesswork.
 >
-> "I had no way of knowing which backend was actually catching the most real issues," said Eve, ML engineer. "abcd tracks the data and just picks the right one. My oracle audits got better without me changing any config."
+> "I had no way of knowing which oracle was actually catching the most real issues," said Eve, ML engineer. "abcd tracks the data and just picks the right one. My oracle audits got better without me changing any config."
 
 ## Why This Matters
 
-abcd's oracle backend resolution is configuration-driven: `oracle.backend` chooses RP > Codex > in-session subagent in a fixed order. There's no feedback loop — abcd never learns which backend produces audits that actually correlate with real issues vs noise.
+abcd's default oracle path is the host-delegated in-session reviewer, with configured oracle adapters available on top. There's no feedback loop — abcd never learns which target produces audits that actually correlate with real issues vs noise, so a capability-aware selector cannot improve on a static choice.
 
-Lifted directly from `~/.abcd/`'s `model-effectiveness.json` and `model-scorecard.jsonl` patterns: track per-model statistics (ship_count, revise_count, false_revise_count, accuracy ratios) and per-judge scoring (depth_score, calibration_score). Apply to oracle backends. Bias selection by measured effectiveness.
+The fix: track per-target statistics (ship_count, revise_count, false_revise_count, accuracy ratios) and per-judge scoring (depth_score, calibration_score) across every oracle adapter and the host default, and bias dispatch by measured effectiveness for the requesting agent type.
 
 ## What's In Scope
 
-- `.abcd/oracle-effectiveness.json` — per-backend per-agent rolling statistics
-- `.abcd/oracle-scorecard.jsonl` — per-audit detail (run_id, backend, agent, verdict, follow-up actions)
-- Backend selection logic: weighted by recent effectiveness for the requesting agent type
-- `abcd oracle [agent]` CLI subcommand to inspect effectiveness profiles. Bare `abcd oracle` renders the full per-backend per-agent table; `abcd oracle <agent>` scopes to one agent. No `stats` sub-verb — collapses to bare per the bare-command-as-render discipline (see `02-constraints/04-naming.md`).
+- `.abcd/logbook/frontier/<ts>/frontier-events.{json,md}` — per-audit frontier events (run_id, target, agent, verdict, follow-up actions, failure_mode_tag) plus the rolling per-target per-agent statistics aggregated from them
+- Dispatch selection logic: weighted by recent effectiveness for the requesting agent type, across the configured adapters and the host default
+- `abcd oracle [agent]` CLI subcommand to inspect effectiveness profiles. Bare `abcd oracle` renders the full per-target per-agent table; `abcd oracle <agent>` scopes to one agent. No `stats` sub-verb — collapses to bare per the bare-command-as-render discipline (see `02-constraints/04-naming.md`).
 - Manual override remains (config setting, per-call flag)
 
 ## What's Out of Scope
@@ -53,17 +48,17 @@ Lifted directly from `~/.abcd/`'s `model-effectiveness.json` and `model-scorecar
 
 > _BDD format, per `itd-1-acceptance-gates`. These gates are checked by `intent-fidelity-reviewer` when this intent moves to `shipped/`._
 
-- **Given** a project with N completed oracle audits across multiple backends, **when** the user runs `abcd oracle` (bare), **then** the output reports per-backend per-agent rolling statistics (ship_count, revise_count, false_revise_count, accuracy ratio) sourced from `.abcd/oracle-effectiveness.json`.
-- **Given** an oracle audit completes, **when** the audit-fix loop or downstream review action confirms or refutes the verdict, **then** a row is appended to `.abcd/oracle-scorecard.jsonl` recording `run_id`, `backend`, `agent`, `verdict`, `confirmed/refuted`, and `follow_up_action`.
-- **Given** sufficient effectiveness data exists for a given agent type (`>=` configured threshold of past audits), **when** abcd selects a backend for a new oracle call with `oracle.backend = "auto"`, **then** the selection is biased by recent effectiveness AND the rationale ("Codex chosen for press-release audit; +12% accuracy over RP on this agent in last 20 calls") is logged in the run report.
-- **Given** insufficient effectiveness data (cold start), **when** abcd selects a backend, **then** the selection falls back to the fixed order (RP > Codex > in-session) AND the run log records "cold-start fallback".
-- **Given** the user runs an oracle call with an explicit backend override (`--backend rp`), **when** the call executes, **then** the override is respected unconditionally AND the call's outcome is still recorded in `oracle-scorecard.jsonl` for future statistics.
-- **Given** effectiveness data exists for a previously-used backend that has since been disabled (e.g., user removed RP), **when** `abcd oracle` (bare) runs, **then** the stale rows are surfaced under "historical (backend not currently available)" rather than influencing live selection.
+- **Given** a project with N completed oracle audits across multiple targets, **when** the user runs `abcd oracle` (bare), **then** the output reports per-target per-agent rolling statistics (ship_count, revise_count, false_revise_count, accuracy ratio) aggregated from `.abcd/logbook/frontier/`.
+- **Given** an oracle audit completes, **when** the audit-fix loop or downstream review action confirms or refutes the verdict, **then** a frontier event is appended under `.abcd/logbook/frontier/<ts>/frontier-events.json` recording `run_id`, `target`, `agent`, `verdict`, `confirmed/refuted`, `failure_mode_tag`, and `follow_up_action`.
+- **Given** sufficient effectiveness data exists for a given agent type (`>=` configured threshold of past audits), **when** abcd selects a target for a new oracle call with `oracle.backend = "auto"`, **then** the selection is biased by recent effectiveness AND the rationale ("RepoPrompt adapter chosen for press-release audit; +12% accuracy over the host default on this agent in last 20 calls") is logged in the run report.
+- **Given** insufficient effectiveness data (cold start), **when** abcd selects a target, **then** the selection defers to the host-delegated default AND the run log records "cold-start fallback".
+- **Given** the user runs an oracle call with an explicit target override (`--backend rp`), **when** the call executes, **then** the override is respected unconditionally AND the call's outcome is still recorded as a frontier event for future statistics.
+- **Given** effectiveness data exists for a previously-used adapter that is no longer configured (e.g., user removed the RepoPrompt adapter), **when** `abcd oracle` (bare) runs, **then** the stale rows are surfaced under "historical (target not currently available)" rather than influencing live selection.
 
 ## Open Questions
 
 - How is "effectiveness" measured — verdict accuracy? Followed-up actions? User feedback signal?
-- Cold-start: how does selection work before any data exists? (Falls back to fixed order.)
+- Cold-start: how does selection work before any data exists? (Defers to the host-delegated default.)
 - Does the user see selection decisions ("using Codex for this audit because it's outperformed RP on press-release audits")?
 
 ## Field Evidence

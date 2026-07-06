@@ -13,28 +13,28 @@ updated: 2026-05-07
 
 ## Press Release
 
-> **abcd collapses autonomous-run safety to a six-verb operating surface a domain expert can use without ever opening git.** Before `abcd spec start fn-X` kicks off the autonomous loop (Ralph or successor), a pre-flight budget check estimates token cost against remaining quota and refuses to start if the math doesn't add up. Mid-run telemetry surfaces "X% of daily budget consumed, Y tasks remaining" via fn-29-42i (telemetry spec). On a 429 rate-limit response the loop catches it cleanly, writes a `RESUME-FROM` checkpoint to `.flow/.checkpoint-<spec>.json`, and exits. `abcd spec resume fn-X` picks up exactly where it stopped. `abcd spec rewind fn-X --to-task 3` undoes a wrong turn — soft by default (lets the user edit the task spec and re-run; keeps reviews visible for context), hard with `--hard` (full discard). Completed specs auto-merge to a `dev` trunk branch only when all reviews verdict `SHIP` and lint/smoke pass; promotion to `main` requires explicit `abcd spec ship fn-X`. When auto-rebase hits a conflict, the spec suspends and emits a single concrete next-step: `abcd spec resolve fn-X` walks the user through resolution. The domain expert never types `git reset`, never sees a branch name, never decides whether a 429 means "retry" or "give up."
+> **abcd collapses autonomous-run safety to a six-verb operating surface a domain expert can use without ever opening git.** Before `abcd spec start fn-X` kicks off the autonomous run through the pluggable run seam, a pre-flight budget check estimates token cost against remaining quota and refuses to start if the math doesn't add up. Mid-run telemetry surfaces "X% of daily budget consumed, Y tasks remaining" via fn-29-42i (telemetry spec). On a 429 rate-limit response the run catches it cleanly, writes a `RESUME-FROM` checkpoint to the native spec store, and exits. `abcd spec resume fn-X` picks up exactly where it stopped. `abcd spec rewind fn-X --to-task 3` undoes a wrong turn — soft by default (lets the user edit the task spec and re-run; keeps reviews visible for context), hard with `--hard` (full discard). Completed specs auto-merge to a `dev` trunk branch only when all reviews verdict `SHIP` and lint/smoke pass; promotion to `main` requires explicit `abcd spec ship fn-X`. When auto-rebase hits a conflict, the spec suspends and emits a single concrete next-step: `abcd spec resolve fn-X` walks the user through resolution. The domain expert never types `git reset`, never sees a branch name, never decides whether a 429 means "retry" or "give up."
 >
-> "I'd kicked off a Ralph loop, gone to lunch, come back to find it had burned through my Opus budget on iteration 7 of a task that was already wrong," said Carol, product lead. "abcd's pre-flight check would have flagged the budget; the rewind would have undone iteration 6; resume would have picked up Sonnet for the rest. Instead I spent two hours with git and a model bill. Never again."
+> "I'd kicked off an autonomous run, gone to lunch, come back to find it had burned through my Opus budget on iteration 7 of a task that was already wrong," said Carol, product lead. "abcd's pre-flight check would have flagged the budget; the rewind would have undone iteration 6; resume would have picked up Sonnet for the rest. Instead I spent two hours with git and a model bill. Never again."
 
 ## Delivery Reconciliation (operator-decided at the fn-55 planning interview)
 
-The substrate this intent was waiting for has shipped, and parts of the scope were DELIVERED by loop-side specs:
-- **Graceful 429/quota handling, checkpoint, clean exit, resume-on-reset** — fn-19 (infra-failure classification, no-burn backoff) + fn-35 (quota-window sleep-until-reset, cross-run markers, clean weekly exits). The loop side of scope items "Graceful 429 handling" and the checkpoint substrate exists.
+The substrate this intent was waiting for has shipped, and parts of the scope were DELIVERED by run-seam specs:
+- **Graceful 429/quota handling, checkpoint, clean exit, resume-on-reset** — fn-19 (infra-failure classification, no-burn backoff) + fn-35 (quota-window sleep-until-reset, cross-run markers, clean weekly exits). The run-seam side of scope items "Graceful 429 handling" and the checkpoint substrate exists.
 - **Budget spreading** — fn-47 (iteration pacing, model-aware) covers part of the budget concern from the proactive side.
-- **Checkpoints per spec** — the Ralph checkpoint files (`.flow/.checkpoint-<spec>.json`) exist (fn-41 consumes them).
+- **Checkpoints per spec** — the native spec-store checkpoint records exist (fn-41 consumes them).
 
-The UNDELIVERED residual is the OPERATOR SURFACE: the verbs, the pre-flight budget estimate, model auto-downgrade, rewind, and the trunk/auto-merge pattern. The operator elected a **v1 cut** — `status` / `pause` / `resume` / standalone `preflight` riding the existing sentinels+checkpoints+markers — specced as **fn-55**; `rewind`, `ship`, `resolve`, auto-merge, and auto-downgrade stay in this intent for a later cut (the v2 trigger: first real demand for rewind or trunk promotion). Terminology note: the surface uses run/spec vocabulary, not `epic` (the itd-43 direction).
+The UNDELIVERED residual is the OPERATOR SURFACE: the verbs, the pre-flight budget estimate, model auto-downgrade, rewind, and the trunk/auto-merge pattern. The operator elected a **v1 cut** — `status` / `pause` / `resume` / standalone `preflight` riding the existing sentinels + checkpoints + markers — specced as **fn-55**; `rewind`, `ship`, `resolve`, auto-merge, and auto-downgrade stay in this intent for a later cut (the v2 trigger: first real demand for rewind or trunk promotion). Terminology note: the surface uses run/spec vocabulary, not `epic` (the itd-43 direction). The autonomous engine underneath is the **pluggable run seam** (Workflows / the companion harness / native loop), not a fixed loop ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)); checkpoints and reviews live in the **native spec store** ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)).
 
 ## Why This Matters
 
 abcd's near-term value is autonomous execution: a domain expert hands an intent to the engineering loop and walks away. Today, three things can go wrong, each requiring git literacy or model-quota intuition the domain expert shouldn't need:
 
 1. **Rate-limit failure mid-run.** Anthropic API 429 / quota exhaustion mid-iteration leaves the repo in some intermediate state. The domain expert sees "the model stopped working" and has no clean recovery path.
-2. **A spec completes wrong but later tasks built on the wrong one.** The domain expert wants to "go back" — currently means knowing about `git reset`, branches, `flowctl task uncomplete`, manual cleanup, possibly cross-branch reverts.
-3. **Branch lifecycle stranding.** Ralph creates `fn-X-foo` branch, completes it, and then nothing. Branch stays open, work is invisible to the rest of the repo, lifeboat doesn't see it. Domain expert never merges → branches pile up → confusion about "is this done?"
+2. **A spec completes wrong but later tasks built on the wrong one.** The domain expert wants to "go back" — currently means knowing about `git reset`, branches, low-level task-uncomplete commands, manual cleanup, possibly cross-branch reverts.
+3. **Branch lifecycle stranding.** The autonomous run creates a `fn-X-foo` branch, completes it, and then nothing. Branch stays open, work is invisible to the rest of the repo, lifeboat doesn't see it. Domain expert never merges → branches pile up → confusion about "is this done?"
 
-These are **failure modes of a system that doesn't yet exist.** The substrate (`/abcd:intent` + sub-verbs including `/abcd:intent grill`, lifeboat, fn-1 reviews, fn-2 review artefacts → `.flow/reviews/`) must ship first. The first time a domain expert runs an autonomous loop end-to-end and hits any of these, the texture becomes clear and this intent can be designed against real evidence — not guesses.
+These are **failure modes of a system that doesn't yet exist.** The substrate (`/abcd:intent` + sub-verbs including `/abcd:intent grill`, lifeboat, fn-1 reviews, fn-2 review artefacts → the native review store) must ship first. The first time a domain expert runs an autonomous loop end-to-end and hits any of these, the texture becomes clear and this intent can be designed against real evidence — not guesses.
 
 This intent **captures the concern now** so the project memory holds it. **Implementation depends on the substrate shipping first.** The triggers to revisit are listed below.
 
@@ -53,15 +53,15 @@ This intent **captures the concern now** so the project memory holds it. **Imple
 - **Graceful 429 handling**: catch rate-limit response, write `RESUME-FROM` checkpoint, exit cleanly. No retry loops that burn remaining budget.
 - **Optional model auto-downgrade**: domain-expert opt-in: "if Opus runs out, fall back to Sonnet for remaining tasks." Configurable per-project.
 - **Checkpoint-per-task**: each task ending creates a tagged restore point; `rewind --to-task <N>` reverts via the tag, not raw git.
-- **Soft vs hard rewind**: soft keeps reviews/work visible in `.flow/reviews/` for context; hard discards. Default soft.
+- **Soft vs hard rewind**: soft keeps reviews/work visible in the native review store for context; hard discards. Default soft.
 - **Trunk pattern**: `dev` (or `staging`) is the auto-merge target when conditions met; `main` requires `abcd spec ship`. Conditions: all tasks done + all reviews verdict `SHIP` + lint passes + smoke passes + no human-flagged concern.
 - **Auto-rebase before declaring done**: spec branch rebases on `dev` after each task; on conflict, spec auto-suspends with single next-step.
-- **Audit trail**: every auto-merge writes an entry to `.flow/reviews/<spec>/INDEX.md` (auto-merged-at, by, reviews-cited, smoke-tests-passed).
-- **Wrap-and-coexist with Ralph**: Ralph remains the proven autonomous engine; abcd verbs are the friendly surface layer. Ralph is not replaced.
+- **Audit trail**: every auto-merge writes an entry to the native review store (`<spec>/INDEX.md`: auto-merged-at, by, reviews-cited, smoke-tests-passed).
+- **Ride the pluggable run seam**: the autonomous engine is a pluggable seam (Workflows / the companion harness / native loop); abcd verbs are the friendly surface layer above whichever engine is configured.
 
 ## What's Out of Scope
 
-- **Replacing Ralph itself** — wrap-and-coexist is the stance; if Ralph proves inadequate, replacement is a future question.
+- **Building a bespoke autonomous engine** — the run seam is pluggable (Workflows / the companion harness / native loop); abcd provides the operator surface over the configured engine, not a new engine.
 - **Distributed multi-machine autonomous runs** — single-machine only.
 - **Auto-merge to `main`** — explicit `abcd spec ship` always required for main-branch promotion.
 - **Cross-spec conflict auto-resolution** — when two parallel autonomous specs both touch the same file, the second to rebase suspends and the user resolves manually via `abcd spec resolve`.
@@ -72,9 +72,9 @@ This intent **captures the concern now** so the project memory holds it. **Imple
 ## Acceptance Criteria
 
 - **Given** a user runs `abcd spec start fn-X`, **when** the pre-flight check estimates token cost > remaining quota, **then** the command refuses to start with a clear cost-vs-budget breakdown and a recommendation (downgrade model, defer some tasks, or top up).
-- **Given** an autonomous run encounters a 429 response, **when** the loop catches it, **then** a `RESUME-FROM` checkpoint is written to `.flow/.checkpoint-<spec>.json`, the loop exits 0, and `abcd spec resume fn-X` picks up at the exact iteration it stopped.
+- **Given** an autonomous run encounters a 429 response, **when** the run catches it, **then** a `RESUME-FROM` checkpoint is written to the native spec store, the run exits 0, and `abcd spec resume fn-X` picks up at the exact iteration it stopped.
 - **Given** a spec has completed 3 of 5 tasks and the user runs `abcd spec rewind fn-X --to-task 3`, **when** the command completes, **then** task 3 is marked incomplete, tasks 4–5 (if any) are reverted, and the user sees `abcd spec status fn-X` reflecting the new state — without any git command being typed by the user.
-- **Given** a spec completes with all tasks done + all reviews verdict `SHIP` + lint passes + smoke passes, **when** the auto-merge condition is checked, **then** the spec branch auto-merges to `dev` and an audit entry is written to `.flow/reviews/<spec>/INDEX.md`.
+- **Given** a spec completes with all tasks done + all reviews verdict `SHIP` + lint passes + smoke passes, **when** the auto-merge condition is checked, **then** the spec branch auto-merges to `dev` and an audit entry is written to the native review store (`<spec>/INDEX.md`).
 - **Given** a spec auto-rebase hits a conflict, **when** the loop detects it, **then** the spec suspends, emits a single concrete next-step (`abcd spec resolve fn-X`), and `abcd spec status` reflects the suspension reason.
 - **Given** the user runs `abcd spec ship fn-X`, **when** the command completes, **then** the user is shown a confirmation prompt summarising what's about to merge to `main` and only proceeds on explicit confirmation.
 - **Given** a domain expert who has never used git from the terminal, **when** they walk through start → 429 → resume → wrong-task discovery → rewind → re-run → ship, **then** they complete the flow without typing any git command and without consulting git documentation.
@@ -85,9 +85,9 @@ This intent moves from `drafts/` to `planned/` when ANY of the following happens
 
 1. **First user reports lost work** from an autonomous run that died mid-iteration.
 2. **First user reports mystery 429** that they couldn't diagnose without help.
-3. **First user reports stranded branch** where Ralph completed but they didn't know how to merge.
+3. **First user reports stranded branch** where the autonomous run completed but they didn't know how to merge.
 4. **First user reports rewind difficulty** that took >30 minutes to undo a wrong autonomous turn.
-5. **Two consecutive autonomous runs** of substrate specs that succeed end-to-end (proving the loop works enough to surface its own failure modes at scale).
+5. **Two consecutive autonomous runs** of substrate specs that succeed end-to-end (proving the run seam works enough to surface its own failure modes at scale).
 
 The first user to hit (1)–(4) is also asked to record the texture in `.work/issues.md` so this intent designs against real evidence when promoted.
 
@@ -97,7 +97,7 @@ The first user to hit (1)–(4) is also asked to record the texture in `.work/is
 - **Trunk branch name**: `dev` vs `staging` vs `main-staging` vs project-configurable. Recommend project-configurable with `dev` default.
 - **Rewind semantics for `--hard`**: discard branch entirely vs keep branch but tag a "rewound-from" marker. Recommend tag-and-keep so the user can `git reflog` if they realise they wanted the work back.
 - **Auto-downgrade decision logic**: Opus → Sonnet → Haiku on budget exhaustion vs single-step Opus → Sonnet only. Probably single-step initially; multi-step if proven needed.
-- **Telemetry / multi-model substrate**: this intent assumes a telemetry surface (cost/budget visibility) and a multi-model orchestration surface (for auto-downgrade). Earlier drafts referenced legacy abcd-repo IDs (`fn-29-42i`, `fn-9-kbe`) which do NOT exist in `abcdDev` — those are speculative substrate from the legacy roadmap, not declared in this brief. **Action for plan-review:** identify or create the actual specs (under `abcdDev/.flow/`) that deliver the telemetry + multi-model substrate, then list them as hard dependencies here.
+- **Telemetry / multi-model substrate**: this intent assumes a telemetry surface (cost/budget visibility) and a multi-model orchestration surface (for auto-downgrade). Earlier drafts referenced legacy abcd-repo IDs (`fn-29-42i`, `fn-9-kbe`) which do NOT exist in `abcdDev` — those are speculative substrate from the legacy roadmap, not declared in this brief. **Action for plan-review:** identify or create the actual specs (in the native spec store) that deliver the telemetry + multi-model substrate, then list them as hard dependencies here.
 
 ## Audit Notes
 
@@ -105,6 +105,6 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Coordinates with: `itd-1` (acceptance gates), `itd-3` (modular rules loader, may govern budget rules), `itd-9` (schema migration, for checkpoint format), `itd-28` (RP reviews → `.flow/reviews/`, audit-trail integration target via `fn-2-move-repoprompt-review-artifacts-into`).
-- Builds on: future flow-next spec for budget/cost surfacing (likely a `fn-N-budget` spec); existing `flowctl ralph-init` harness.
+- Coordinates with: `itd-1` (acceptance gates), `itd-3` (modular rules loader, may govern budget rules), `itd-9` (schema migration, for checkpoint format), `itd-28` (RP reviews → the native review store, audit-trail integration target via `fn-2-move-repoprompt-review-artifacts-into`).
+- Builds on: a future native spec for budget/cost surfacing (likely a `fn-N-budget` spec); the pluggable run seam.
 - Implemented by: `fn-35-ralph-quota-window-resilience` — the 429/quota implementation. fn-35 delivers the window-aware quota classifier (`QUOTA_WEEKLY`/`QUOTA_FIVE_HOUR`), the `RATE_LIMITED` completion marker, and the window-aware sleep that this intent's "graceful 429 handling" acceptance describes. fn-35 is the concrete substrate behind this intent's rate-limit scope.

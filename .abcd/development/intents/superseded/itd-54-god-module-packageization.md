@@ -12,6 +12,8 @@ updated: 2026-06-03
 prd_path: null
 ---
 
+> **⚠️ Superseded by [ADR-21](../../decisions/adrs/0021-rebuild-in-go.md)** (the Python god-modules this intent factored no longer exist; the from-scratch Go rebuild replaces them). Preserved as historical record per the supersession lifecycle.
+
 # abcd's Largest Source Files Become Navigable Packages Without Changing A Line Of Behavior
 
 ## Press Release

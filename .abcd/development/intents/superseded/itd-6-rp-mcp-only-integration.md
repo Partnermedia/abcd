@@ -9,6 +9,8 @@ created: 2026-05-03
 updated: 2026-05-17
 ---
 
+> **⚠️ Superseded by [ADR-25](../../decisions/adrs/0025-host-delegated-llm-default.md)** (host-delegated LLM is the default; RepoPrompt is one optional oracle adapter among many, not abcd's single integration — see also [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). Preserved as historical record per the supersession lifecycle.
+
 # RP-Only Integration: abcd Talks to RepoPrompt via MCP, Period
 
 ## Press Release

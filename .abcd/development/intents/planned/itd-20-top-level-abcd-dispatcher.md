@@ -75,8 +75,8 @@ _Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ### Implementation notes (fn-83.2)
 
-- **Dev-sync staleness is a v1 terminal known-state stub.** `dev_sync.py`
-  exposes migration logic (`abcd dev-sync work`), NOT a durable last-run
+- **Dev-sync staleness is a v1 terminal known-state stub.** The dev-sync
+  implementation exposes migration logic (`abcd dev-sync work`), NOT a durable last-run
   timestamp; no config field or history-store record captures when dev-sync
   last ran. Section (3) of the `/abcd` board therefore renders `no dev-sync
   record` permanently in v1 — the staleness signal does not function until a
