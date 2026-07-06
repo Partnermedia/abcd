@@ -1,0 +1,20 @@
+{
+  "roots": [".abcd/development"],
+  "banned_tokens": [
+    {"id":"moved-intents-path","pattern":"roadmap/intents","message":"intents live at intents/ (record IA); update the path","severity":"blocker","allow_context":[]},
+    {"id":"python-lint-names","pattern":"intent_lint\\.py|inventory\\.py","message":"Python tool name; the lint engine is internal/core/lint (Go)","severity":"blocker","allow_context":["historical","fn-15"]},
+    {"id":"dev-repo-name","pattern":"\\babcdDev\\b","message":"single-repo (adr-28): use 'the frozen reference implementation' / abcd-cli","severity":"blocker","allow_context":[]},
+    {"id":"workspaces-json","pattern":"workspaces\\.json","message":"the workspace concept is dropped; only a negation may mention it","severity":"blocker","allow_context":["no ","not ","there is no","sole user-scope","dropped","without a"]},
+    {"id":"meta-json-file","pattern":"\\bmeta\\.json\\b","message":"meta.json is abolished as a repo file; setup metadata is config.json[\"meta\"]","severity":"blocker","allow_context":["history","root-sha","root-commit","per-root","index.json","identity","no ","there is no","separate","abolished","not ","without"]},
+    {"id":"presidio-default","pattern":"Presidio","message":"native Go PII engine is the default; Presidio is only one opt-in scanner adapter","severity":"warn","allow_context":["gitleaks","opt-in","adapter","seam"]}
+  ],
+  "rules": {
+    "no_git_metadata": {"enabled": true, "severity": "blocker", "fields": ["created","updated","author","maintained_by","version"]},
+    "links_resolve": {"enabled": true, "severity": "blocker"},
+    "no_brittle_line_refs": {"enabled": true, "severity": "warn"},
+    "directory_coverage": {"enabled": true, "severity": "warn", "exempt": []},
+    "intent_lifecycle": {"enabled": true, "severity": "blocker", "intents_dir": "intents"}
+  },
+  "exempt_paths": [".abcd/development/research/", ".abcd/development/intents/superseded/"],
+  "exempt_if_status": ["superseded"]
+}

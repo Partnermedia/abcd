@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/REPPL/abcd-cli/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews
+.PHONY: build test vet clean preflight lint-reviews record-lint
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
 # Pass VERSION=vX.Y.Z to stamp the version (release builds); omit for a dev build.
@@ -34,6 +34,12 @@ vet:
 # (RD002 is append-only over committed history), which the local pre-push hook has.
 lint-reviews:
 	@bash scripts/check-reviews.sh
+
+# Deterministic drift gate for the .abcd/development design record (first slice
+# of internal/core/lint). Informational for now — not a preflight prerequisite —
+# until the record's current violations are cleared in a follow-up fix pass.
+record-lint:
+	@go run ./cmd/record-lint
 
 # Pre-push gate (invoked by .githooks/pre-push): the same steps CI's check job
 # runs — build, vet, test, and race-enabled internal tests — natively, plus the
