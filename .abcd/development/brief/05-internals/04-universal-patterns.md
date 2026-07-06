@@ -207,7 +207,7 @@ This table is the **maintained classification** of bundled-dep surfaces (itd-52 
 | Direct `/flow-next:*` skill invocation (e.g. `/flow-next:plan`) | reach-past | no | — (indistinguishable on disk from the sanctioned wrapped call) | use the wrapping `/abcd:*` verb (`/abcd:intent plan` / `ship`) |
 | Direct RepoPrompt / codex use | reach-past | no | — | use the `/abcd:*` review surfaces |
 
-The detectable rows each earn a doctor probe (the fn-33 probe is the template; fn-42.2 shipped the second — `flow_next_marker_block_probe`). The always-loaded principle statement lives in `CLAUDE.md` § "The abcd abstraction boundary"; the decision record is [`adr-15`](../../decisions/adrs/adr-15-abstraction-boundary-warn-not-block.md).
+The detectable rows each earn a doctor probe (the fn-33 probe is the template; fn-42.2 shipped the second — `flow_next_marker_block_probe`). The always-loaded principle statement lives in `CLAUDE.md` § "The abcd abstraction boundary"; the decision record is [`adr-15`](../../decisions/adrs/0015-abstraction-boundary-warn-not-block.md).
 
 ## 10. Guard receipt classification — review-backend receipts the Stop gate recognises
 

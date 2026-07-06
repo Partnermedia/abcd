@@ -49,7 +49,7 @@ Technical files (`meta.json`, `config.json`, `corpus.json`, `rules.json`) are ex
 
 **Rationale:** the bare convention is what gives abcd its discoverability ("type the verb, see what it does"). Sub-verbs that just rename "show me the state" obscure the discoverability instead of enhancing it. The discipline rules `show`/`stats`/`list`/`view` out of the namespace at design time, not in review.
 
-**Brief-is-current-state discipline (per [adr-5](../../decisions/adrs/adr-5-brief-is-current-state.md)):** the brief reflects the project's *current* state. No version label on the brief; no `archive/<NN>/` directory inside `brief/`; no version-changelog blobs in `brief/README.md`. History lives in `git log brief/`; inflection-point rationale lives in [`../../decisions/adrs/`](../../decisions/adrs); forensic snapshots come from `/abcd:disembark` (logged in `voyage/disembark/history.jsonl`, per [adr-4](../../decisions/adrs/adr-4-lifeboat-as-regenerable-output.md)).
+**Brief-is-current-state discipline (per [adr-5](../../decisions/adrs/0005-brief-is-current-state.md)):** the brief reflects the project's *current* state. No version label on the brief; no `archive/<NN>/` directory inside `brief/`; no version-changelog blobs in `brief/README.md`. History lives in `git log brief/`; inflection-point rationale lives in [`../../decisions/adrs/`](../../decisions/adrs); forensic snapshots come from `/abcd:disembark` (logged in `voyage/disembark/history.jsonl`, per [adr-4](../../decisions/adrs/0004-lifeboat-as-regenerable-output.md)).
 
 ## Vocabulary-registration requirement (HARD from the start)
 

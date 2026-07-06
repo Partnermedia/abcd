@@ -33,7 +33,7 @@ a planner can consume without re-interrogating it.
 
 ## Phase Acceptance
 
-> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/adr-9-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
+> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
 - **Given** a vague draft intent, **when** a user runs `/abcd:intent grill`
   and then `/abcd:intent plan`, **then** the intent reaches `planned/` carrying

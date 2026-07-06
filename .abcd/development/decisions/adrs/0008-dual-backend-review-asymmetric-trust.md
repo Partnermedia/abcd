@@ -14,7 +14,7 @@ related_adrs: [adr-6]
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR
-> ([adr-11](adr-11-spec-terminology-rename.md)).
+> ([adr-11](0011-spec-terminology-rename.md)).
 
 ## Context
 
@@ -148,7 +148,7 @@ round* terminates while still guaranteeing no Critical/Major ships.
 
 ## Related
 
-- [adr-6](adr-6-rp-review-storage-and-architecture.md) — where review artifacts land
+- [adr-6](0006-rp-review-storage-and-architecture.md) — where review artifacts land
 - [itd-28](../../roadmap/intents/planned/itd-28-rp-reviews-into-flow.md) — RP review capture into Flow
 - [itd-17](../../intents/drafts/itd-17-model-effectiveness-tracking.md) — frontier mapping; absorbs review-backend effectiveness as tracked data
 - `.flow/reviews/fn-5-rp-mcp-integration-declare/` — the twelve-round dual-backend loop this ADR generalises from

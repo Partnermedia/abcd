@@ -81,7 +81,7 @@ A new **`task_class: review_backend`** worth tracking once itd-17 reframes. The 
 
 **Candidate failure-mode tags this surfaces** (for the reframe's closed enum): `verdict_unreliable` (self-assessment contradicts findings), `selection_blind` (reviewer scope too narrow to see the issue). Both are distinct from the draft enum (`hallucination` / `scope_drift` / `stale_context` / `under_specification_blindness` / `format_violation`) and worth considering as additions.
 
-**Implication for capability-aware dispatch:** for review `task_class`, the selection signal is not "which backend is better" but "which axis the review needs" — repo-breadth → Codex; scoped-consistency + a trustworthy gate verdict → RepoPrompt; high-stakes → both. The qualitative decision is recorded in [adr-8](../../decisions/adrs/adr-8-dual-backend-review-asymmetric-trust.md); itd-17's reframe should make it data-driven.
+**Implication for capability-aware dispatch:** for review `task_class`, the selection signal is not "which backend is better" but "which axis the review needs" — repo-breadth → Codex; scoped-consistency + a trustworthy gate verdict → RepoPrompt; high-stakes → both. The qualitative decision is recorded in [adr-8](../../decisions/adrs/0008-dual-backend-review-asymmetric-trust.md); itd-17's reframe should make it data-driven.
 
 ## Audit Notes
 

@@ -20,7 +20,7 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 
 - **ID format:** `itd-N` (unpadded — e.g., `itd-1`, `itd-15`). Mirrors flow-next's `fn-N`. Filenames: `itd-N-<slug>.md`. Lexical-vs-numeric sort handled at tool layer (`intent_lint.py`, registries) rather than via filename padding.
 - **The low IDs (itd-1..itd-7) reflect an early one-time rebase to ordering signal.** Intents created since are capture-stable, picking up at itd-27+. ID number is *not* an execution-order guarantee — the canonical build order is the phase plan at [`roadmap/phases/`](../../roadmap/phases/README.md).
-- **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
+- **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
 
 ### Intent kinds (per [`01-product/03-mental-model.md`](../01-product/03-mental-model.md))
 
@@ -105,7 +105,7 @@ Until then, `kind_notes` is the free-text descriptor.
 ### Lifecycle
 
 - **The low IDs (itd-1..itd-7) reflect an early one-time rebase to ordering signal.** Intents created since are capture-stable, picking up at itd-27+. ID number is *not* an execution-order guarantee — the canonical build order is the phase plan at [`roadmap/phases/`](../../roadmap/phases/README.md).
-- **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
+- **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
 - **Lifecycle (automated, not user-managed):**
 
 ```

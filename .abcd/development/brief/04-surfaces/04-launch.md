@@ -27,7 +27,7 @@ Pre-flight report written to `.abcd/logbook/launch/<timestamp>/preflight.{json,m
 ## 2. Payload manifest (default-deny)
 
 - **Include:** `.claude-plugin/` (holds both `plugin.json` and the ONE canonical `marketplace.json` — there is no root-level `marketplace.json`), `commands/`, `skills/`, `agents/`, `scripts/`, `hooks/`, `README.md`, `LICENSE`, `.gitignore`, `docs/` (user-facing only)
-- **Exclude:** `.work/`, `.flow/`, `.specstory/`, `.abcd/` (entire namespace — `development/` (brief, roadmap, research, activity, voyage, personas), `memory/`, `lifeboat/`, `logbook/`, `rp/`), `memory/` (legacy snapshot), patterns from `.gitignore`. Per [adr-18](../../decisions/adrs/adr-18-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) the wholesale `.abcd/` exclusion (incl. `.abcd/memory/**`) is deliberate policy: the public plugin repo carries plugin code, never abcdDev's project knowledge store. The fn-38 restrictive-licence gate is NOT this payload's gate — its real consumer is the lifeboat (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is future/inert; `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview.
+- **Exclude:** `.work/`, `.flow/`, `.specstory/`, `.abcd/` (entire namespace — `development/` (brief, roadmap, research, activity, voyage, personas), `memory/`, `lifeboat/`, `logbook/`, `rp/`), `memory/` (legacy snapshot), patterns from `.gitignore`. Per [adr-18](../../decisions/adrs/0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) the wholesale `.abcd/` exclusion (incl. `.abcd/memory/**`) is deliberate policy: the public plugin repo carries plugin code, never abcdDev's project knowledge store. The fn-38 restrictive-licence gate is NOT this payload's gate — its real consumer is the lifeboat (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is future/inert; `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview.
 - **Override:** `.abcd/launch.allow` allowlist — the payload-promotion override (the only mechanism that can put a path *into* the public payload). Per adr-18 it must **never** promote any `.abcd/**` path (a `.abcd/**` line is refused / never promoted), so it cannot re-include `.abcd/memory/**` and reopen the dead-gate contradiction. This is a **distinct** mechanism from the gate's JSON `.abcd/launch-allowlist.json` (`_ALLOWLIST_REL`), which only re-includes files into the fn-38 gate's *own evaluation input*, never into the publish payload — the two are documented-distinct, never one name.
 
 ## 3. Mirror modes
@@ -41,7 +41,7 @@ Pre-flight report written to `.abcd/logbook/launch/<timestamp>/preflight.{json,m
 The public `abcd/` snapshot is the only abcd artefact that carries a semantic
 version. Versions are an *output* of promotion, never a sequencing input on the
 design record — the dev repo organises work by **phase** (see
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md)), and a release
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)), and a release
 number is what falls out when a stretch of that work is published. The brief,
 intents, and roadmap carry no version label.
 
@@ -86,7 +86,7 @@ version location**, never a hard-coded `plugin.json`. That location is recorded
 by the fn-77.1 decision artifact
 ([`.abcd/config/version-location.json`](../../../config/version-location.json))
 as `manifest_path` + `json_pointer` (see
-[adr-19](../../decisions/adrs/adr-19-plugin-json-version-carve-out.md)); a
+[adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md)); a
 `blocked: true` decision has no schema-valid location, so version-writing
 refuses and the escalation stands. Concretely, `ship`:
 
@@ -95,7 +95,7 @@ refuses and the escalation stands. Concretely, `ship`:
    (`scripts/abcd/public_manifest.py`), which reads the decision artifact and
    never parses a location string.
 2. Leaves the **dev** manifests UNVERSIONED. Per
-   [adr-19](../../decisions/adrs/adr-19-plugin-json-version-carve-out.md) the
+   [adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md) the
    version is single-sourced in the *published* snapshot; the dev repo's
    committed manifests carry no version, so there is nothing to keep in sync on
    the dev side. `render_public_manifests()` writes the version into the public
@@ -105,14 +105,14 @@ refuses and the escalation stands. Concretely, `ship`:
    changelog entry conforms to
    [`changelog-entry.schema.json`](../../../../scripts/abcd/schemas/changelog-entry.schema.json)
    (validated programmatically by this bump step, per
-   [adr-20](../../decisions/adrs/adr-20-manifest-version-lockstep.md)).
+   [adr-20](../../decisions/adrs/0020-manifest-version-lockstep.md)).
 4. Refreshes any other version references generated from the config slug.
 
 **Anti-drift (present state).** The two published manifests describe one release,
 so they must stay version-consistent: the version at the selected location and the
 marketplace entry's version + changelog must agree. A read-only lockstep checker
 (`scripts/abcd/manifest_lockstep.py`, `--tree public`) proves this over the
-pinned path list [adr-20](../../decisions/adrs/adr-20-manifest-version-lockstep.md)
+pinned path list [adr-20](../../decisions/adrs/0020-manifest-version-lockstep.md)
 records; a half-state (a version in one manifest and not the other) is drift.
 `ship`'s bump step runs it against the staged public tree and refuses to publish
 on drift. The checker has no bypass flag, and adr-20 records that `--allow-dirty`

@@ -14,7 +14,7 @@ related_adrs: [adr-19]
 
 ## Context
 
-[adr-19](adr-19-plugin-json-version-carve-out.md) settled **where** the plugin
+[adr-19](0019-plugin-json-version-carve-out.md) settled **where** the plugin
 version lives: only in the published public snapshot, at the location the fn-77.1
 decision artifact ([`.abcd/config/version-location.json`](../../../config/version-location.json))
 selects — today `plugin.json` at pointer `/version`. adr-19 owns the *write*

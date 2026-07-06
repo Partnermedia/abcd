@@ -25,7 +25,7 @@ and becomes a project that is built *with itself*.
 
 ## Phase Acceptance
 
-> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/adr-9-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
+> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
 - **Given** a project disembarked in Phase 4, **when** a user runs
   `/abcd:embark` into an empty target and then inspects it, **then** the new

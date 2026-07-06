@@ -22,7 +22,7 @@ Intent IDs follow the pattern `itd-N` (unpadded, mirrors flow-next's `fn-N` conv
 
 `itd` reads as "intent" and pairs visually with flow-next's `fn-N` (spec).
 
-**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)).
+**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
 
 **Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `fn-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint.py`, registries, dashboards) rather than via filename padding.
 
@@ -233,7 +233,7 @@ This is also a codified abcd principle: never use real names in press releases (
 
 ## Sequencing — see `phases/`
 
-Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — a `drafts/` bench item, captured but not yet sequenced.
+Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — a `drafts/` bench item, captured but not yet sequenced.
 
 This README describes the intent corpus by *lifecycle state* (the directory listings below); it deliberately does not duplicate the phase→intent mapping.
 
@@ -249,7 +249,7 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 
 Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint.py`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
 
-**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
+**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
 
 ---
 

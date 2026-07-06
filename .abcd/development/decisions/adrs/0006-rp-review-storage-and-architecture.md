@@ -14,7 +14,7 @@ related_adrs: [adr-5]
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR
-> ([adr-11](adr-11-spec-terminology-rename.md)).
+> ([adr-11](0011-spec-terminology-rename.md)).
 
 ## Context
 
@@ -183,6 +183,6 @@ Per abcd's External Acknowledgement Policy:
 ## Related Documentation
 
 - [`.flow/reviews/README.md`](../../../../.flow/reviews/README.md) — two-store split overview
-- [ADR-5: Brief Is Current State](adr-5-brief-is-current-state.md) — JSON-internal / MD-render invariant
+- [ADR-5: Brief Is Current State](0005-brief-is-current-state.md) — JSON-internal / MD-render invariant
 - [F-075 flow-next-local-review prior art](../../../../REPPL/abcdZero/docs/development/roadmap/features/planned/F-075-flow-next-local-review.md) — prior wrapper evaluation (external repo)
 - [F-037 multi-model-review prior art](../../../../REPPL/abcdZero/docs/development/roadmap/features/completed/F-037-multi-model-review.md) — v2.5.1 patch-based wrapper (external repo)

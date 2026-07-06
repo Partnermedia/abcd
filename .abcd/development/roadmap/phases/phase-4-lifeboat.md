@@ -22,7 +22,7 @@ of abcd: the surface that makes a project survivable.
 
 ## Phase Acceptance
 
-> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/adr-9-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
+> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
 - **Given** a corpus repo with no abcd lifeboat, **when** a user runs
   `/abcd:disembark to <path>`, **then** a lifeboat is produced that carries both

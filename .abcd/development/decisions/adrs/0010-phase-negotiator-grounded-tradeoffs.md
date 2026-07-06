@@ -14,11 +14,11 @@ related_adrs: [adr-9]
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR
-> ([adr-11](adr-11-spec-terminology-rename.md)).
+> ([adr-11](0011-spec-terminology-rename.md)).
 
 ## Context
 
-[adr-9](adr-9-phase-as-product-layer.md) made the **phase** abcd's sequencing
+[adr-9](0009-phase-as-product-layer.md) made the **phase** abcd's sequencing
 layer: an ordered stretch of work that bundles intents and plumbing and ends in
 a milestone, with a product-authored `## Expectation` and `## Phase Acceptance`.
 

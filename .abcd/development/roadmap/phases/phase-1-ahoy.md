@@ -33,7 +33,7 @@ something a contributor installs rather than something that merely exists.
 
 ## Phase Acceptance
 
-> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/adr-9-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
+> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
 - **Given** a fresh repo with abcd never installed, **when** a user runs
   `/abcd:ahoy install`, **then** in one command the folder is classified,

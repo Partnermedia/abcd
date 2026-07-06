@@ -9,13 +9,13 @@ Status dashboard for the abcd plugin.
 abcd organises work into ordered **phases**, each ending in a **milestone** — a
 concrete, checkable end condition. Phases are the project's sequencing axis;
 they replace plugin-version language (`v1`, `v2`). See
-[adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md) for why.
+[adr-9](../decisions/adrs/0009-phase-as-product-layer.md) for why.
 
 - **Brief**: lives at `.abcd/development/brief/README.md` (canonical, current).
   It reflects the project's *current* state — not versioned, not archived;
   history lives in `git log`, inflection-point rationale in
   [`../decisions/adrs/`](../decisions/adrs) (see
-  [adr-5](../decisions/adrs/adr-5-brief-is-current-state.md)).
+  [adr-5](../decisions/adrs/0005-brief-is-current-state.md)).
 - **Phases**: `phases/phase-N-<slug>.md` — the ordered build plan. Each phase
   doc opens with the product Expectation, then its milestone, scope, and
   traceability. See [phases/README.md](phases/README.md).
@@ -83,7 +83,7 @@ done
 
 **Phase membership** is editorial, not counted here — each phase doc's `## Scope`
 is the single source for which intents it bundles (per
-[adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)). The later-phase
+[adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). The later-phase
 (not-yet-scoped) set is enumerated stale-proof in
 [`../brief/06-delivery/03-out-of-scope.md`](../brief/06-delivery/03-out-of-scope.md).
 See [intents/README.md](../intents/README.md) for the full intent index.
@@ -96,7 +96,7 @@ scripts.abcd.phase_audit_reviewer <phase-id>`) — a sibling of
 `## Scope` membership chain (intents → implementing specs), emits per-acceptance
 verdicts, and writes a receipt to `.abcd/logbook/audit/phase-<ts>/` without
 mutating the phase doc. The companion `PA001` lint verifies any `phase:` anchor
-names a real phase. (fn-66; see [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md).)
+names a real phase. (fn-66; see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md).)
 
 There is no `intents/active/` directory — "active" is implicit (a planned intent's linked spec is currently in flight under `.flow/specs/`). See [intents/README.md](../intents/README.md) for full lifecycle details.
 

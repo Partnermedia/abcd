@@ -58,7 +58,7 @@ product-capability user moment.
 
 ## Phase Acceptance
 
-> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/adr-9-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
+> _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
 - **Given** the three disciplines are registered, **when** any spec is planned
   in a later phase, **then** that spec inherits all three discipline

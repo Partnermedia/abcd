@@ -3,7 +3,7 @@
 The **phase** is abcd's sequencing layer — an ordered stretch of work that ends
 in a **milestone**. Phases replace plugin-version language (`v1`, `v2`) as the
 way the project organises *what ships together, in what order*. See
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) for why this layer
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) for why this layer
 exists and [`01-product/03-mental-model.md`](../../brief/01-product/03-mental-model.md)
 for where it sits among brief / phase / intent / spec.
 
@@ -28,9 +28,9 @@ whole-project brief. Every phase doc carries:
 intent's press-release-then-`## Acceptance Criteria` shape, one grain up. The
 product thinker authors both. `## Milestone` answers "is the work finished?";
 `## Phase Acceptance` answers "is the expectation met?" — see
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) and its amendment.
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) and its amendment.
 
-A phase doc carries **no status** — per [adr-5](../../decisions/adrs/adr-5-brief-is-current-state.md),
+A phase doc carries **no status** — per [adr-5](../../decisions/adrs/0005-brief-is-current-state.md),
 status is never stored in design docs. The [roadmap dashboard](../README.md)
 renders phase progress by reading `.flow/`.
 
@@ -88,4 +88,4 @@ into a phase's `## Scope` when the phase that bundles it is written.
 - [Roadmap](../README.md) — status dashboard
 - [Intents](../../intents/README.md) — the intent registry
 - [Build sequence](../../brief/06-delivery/01-build-sequence.md) — the brief's plumbing-phase DAG, which phases bundle from
-- [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) — the phase layer decision
+- [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) — the phase layer decision
