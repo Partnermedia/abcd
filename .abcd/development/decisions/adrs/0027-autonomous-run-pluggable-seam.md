@@ -16,7 +16,7 @@ related_adrs: [adr-22, adr-25]
 
 abcd's autonomous execution was Ralph: a specific iteration loop with its own
 post-iteration edge, where abcd hung behaviour like the autodrain gate
-([ADR-16](0016-fn43-autodrain-boundary-and-gate-defaults.md)). That tied abcd's
+(ADR-16). That tied abcd's
 "run work unattended" capability to one bundled loop and its internals. The
 rebuild drops Ralph as a hard dependency
 ([ADR-22](0022-bundled-deps-as-pluggable-adapters.md)), so the autonomous run
@@ -38,7 +38,7 @@ an adapter:
 
 Because the loop is now an adapter and Ralph's post-iteration edge no longer
 exists as a fixed thing, this ADR **supersedes**
-[ADR-16](0016-fn43-autodrain-boundary-and-gate-defaults.md): the autodrain
+ADR-16: the autodrain
 behaviour ADR-16 anchored to Ralph's edge is re-expressed as **receipt gating**
 inside the seam — a report-don't-block gate at each iteration boundary,
 whichever adapter provides the loop.

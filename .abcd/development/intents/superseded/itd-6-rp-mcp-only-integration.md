@@ -71,11 +71,11 @@ This intent re-frames the brief's RP integration: drop "select RP backend with p
 These questions were settled by the fn-5 epic — ADR-02 (`02-mcpbridge-implementation-contract.md`), ADR-01 (`01-harness-interface.md`), and the fn-5 `.6` host-reuse / failure-mapping work.
 
 - **Does RP MCP support the long-running, async-result pattern abcd needs (e.g., a 5-minute Carmack review)? Or is it strictly synchronous within an MCP call lifetime?**
-  Resolved by [ADR-02 § 4](../../research/notes/02-mcpbridge-implementation-contract.md): the `MCPBridge` contract is synchronous within an MCP call lifetime — `mcp_call` blocks for the call's duration. There is no async-result handle. The long-running case is handled by a generous per-tool `call_timeout_s` budget (`oracle_send` / `context_builder` get 600 s) inside one held-warm stdio session, not by an async poll. fn-5's concrete `MCPBridge` implements exactly this.
+  Resolved by ADR-02 § 4: the `MCPBridge` contract is synchronous within an MCP call lifetime — `mcp_call` blocks for the call's duration. There is no async-result handle. The long-running case is handled by a generous per-tool `call_timeout_s` budget (`oracle_send` / `context_builder` get 600 s) inside one held-warm stdio session, not by an async poll. fn-5's concrete `MCPBridge` implements exactly this.
 - **If RP MCP returns a chat ID for long-running work, how does abcd poll/listen for completion?**
-  Resolved by [ADR-02 §§ 3–4](../../research/notes/02-mcpbridge-implementation-contract.md): there is no polling. The call is synchronous; `mcp_call` returns when the tool call returns. The `chat_id` on `McpResult` is for *same-session re-review threading*, not completion polling. The async-vs-sync decision referenced for "Task 5's harness.py" is settled — the harness method stays synchronous (ADR-01 § 3 lock), and the concrete sync↔async bridge is internal to fn-5's `MCPBridge`.
+  Resolved by ADR-02 §§ 3–4: there is no polling. The call is synchronous; `mcp_call` returns when the tool call returns. The `chat_id` on `McpResult` is for *same-session re-review threading*, not completion polling. The async-vs-sync decision referenced for "Task 5's harness.py" is settled — the harness method stays synchronous (ADR-01 § 3 lock), and the concrete sync↔async bridge is internal to fn-5's `MCPBridge`.
 - **Chat identity and continuation — what does a `chat_id` mean, and can a chat be resumed across `abcd-cli` invocations?**
-  Resolved by [ADR-02 § 3](../../research/notes/02-mcpbridge-implementation-contract.md) and the fn-5 `.6` exception mapping: a `chat_id` is meaningful only within the `MCPBridge` instance / MCP session that produced it. Cross-invocation (and cross-bridge) chat continuation is **not supported** — RP's GUI approval gate forecloses it, and any RP-infrastructure failure surfaces as the typed `RPUnavailable` (`OSError` subclass) declared by fn-5. "Same chat" therefore means same-MCP-session only; the fn-5 `.6` failure-path mapping routes every unreachable-RP path through `RPUnavailable` so callers cascade cleanly rather than relying on a stale `chat_id`.
+  Resolved by ADR-02 § 3 and the fn-5 `.6` exception mapping: a `chat_id` is meaningful only within the `MCPBridge` instance / MCP session that produced it. Cross-invocation (and cross-bridge) chat continuation is **not supported** — RP's GUI approval gate forecloses it, and any RP-infrastructure failure surfaces as the typed `RPUnavailable` (`OSError` subclass) declared by fn-5. "Same chat" therefore means same-MCP-session only; the fn-5 `.6` failure-path mapping routes every unreachable-RP path through `RPUnavailable` so callers cascade cleanly rather than relying on a stale `chat_id`.
 
 ## Resolved Questions
 
@@ -86,7 +86,7 @@ These questions were settled by the fn-5 epic — ADR-02 (`02-mcpbridge-implemen
   mid-call transport failure), `oracle.py` routes to `dispatch_agent(agent_name="codex", ...)`.
   No silent retry within the RP transport; fall-through IS the retry (to the next cascade level).
   Timeout defaults: `startup_timeout_s = 10.0 s` (combined spawn + initialize); `call_timeout_s`
-  default 30 s with per-tool overrides. See [ADR-02 §§ 4–6](../../research/notes/02-mcpbridge-implementation-contract.md).
+  default 30 s with per-tool overrides. See ADR-02 §§ 4–6.
 
 ## Implementation status
 

@@ -21,7 +21,7 @@ abcd needs its own transcript capture — and transcripts are worth keeping for
 their own sake: they are the research and benchmark corpus that lets abcd study
 how its own flows behave. abcd already owns a proven redaction design — the
 two-stage write-time-sanitise-then-verify model of
-[ADR-6](0006-rp-review-storage-and-architecture.md) — built for exactly this
+ADR-6 — built for exactly this
 class of content.
 
 ## Decision
@@ -36,7 +36,7 @@ specstory replacement and as a **research/benchmark corpus**:
 - **Redacted on capture** — redaction runs at write time, before anything lands
   on disk.
 
-Redaction **reuses [ADR-6](0006-rp-review-storage-and-architecture.md)'s
+Redaction **reuses ADR-6's
 two-stage model** — the write-time sanitiser rewrites high-confidence secrets
 and home-directory paths, and the pre-commit-class verifier catches the rest —
 so this store and the review store share one redaction discipline. This ADR

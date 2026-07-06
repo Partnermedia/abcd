@@ -23,7 +23,7 @@ synthesis) — itself adapted from `mattpocock/skills` (`/grill-me`,
 `/grill-with-docs`), credited in its ACKNOWLEDGEMENTS. So socratic-grill is a
 sibling of something abcd built deeper. Importing it whole would collide with
 abcd-intent-grill and violate the one-canonical-surface-per-concept rule
-(abstraction-layer boundary, itd-52).
+(the abstraction-layer boundary).
 
 **What socratic-grill does better (the harvest):**
 1. **Domain-agnostic targeting.** abcd-intent-grill only grills `itd-N` intents.

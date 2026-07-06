@@ -1,6 +1,6 @@
 # Provenance / Licence Substrate
 
-A separable plumbing layer used by both `/abcd:memory ingest` (per itd-36) and `/abcd:loot` (a later phase, per itd-26). Owns: licence detection, citation generation, source-hash registry, the restrictive-licence publish gate (per [adr-18](../../decisions/adrs/0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) the gate's consumer is the lifeboat `/abcd:disembark`, future/inert at launch — see § 4).
+A separable plumbing layer used by both `/abcd:memory ingest` (per itd-36) and `/abcd:loot` (a later phase, per itd-26). Owns: licence detection, citation generation, source-hash registry, the restrictive-licence publish gate (per adr-18 the gate's consumer is the lifeboat `/abcd:disembark`, future/inert at launch — see § 4).
 
 ## Why it exists as a separate component doc
 
@@ -80,7 +80,7 @@ Citation is read-only after creation; updates require a new ingest pass (`/abcd:
 
 ## 4. Restrictive-licence publish gate (lifeboat consumer; future/inert at launch)
 
-Per [adr-18](../../decisions/adrs/0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md), the fn-38 restrictive-licence gate is **NOT** the `/abcd:launch` payload's gate. The launch payload manifest (see [`04-launch.md § 2`](../04-surfaces/04-launch.md#2-payload-manifest-default-deny)) excludes the entire `.abcd/` namespace — including `.abcd/memory/**` — **wholesale**, so nothing the gate evaluates is ever in the launch publish walk. The gate's real consumer is the **lifeboat** (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is **future/inert** against the lifeboat's provenance surface (`02-disembark.md § 5`); `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview, never as enforcement over files launch excludes. The exact verbatim `.abcd/memory/` lifeboat payload (if any) is deferred to the disembark spec that wires the packer.
+Per adr-18, the fn-38 restrictive-licence gate is **NOT** the `/abcd:launch` payload's gate. The launch payload manifest (see [`04-launch.md § 2`](../04-surfaces/04-launch.md#2-payload-manifest-default-deny)) excludes the entire `.abcd/` namespace — including `.abcd/memory/**` — **wholesale**, so nothing the gate evaluates is ever in the launch publish walk. The gate's real consumer is the **lifeboat** (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is **future/inert** against the lifeboat's provenance surface (`02-disembark.md § 5`); `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview, never as enforcement over files launch excludes. The exact verbatim `.abcd/memory/` lifeboat payload (if any) is deferred to the disembark spec that wires the packer.
 
 The gate's substrate integration (consumed by the lifeboat, not launch):
 

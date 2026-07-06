@@ -68,7 +68,7 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
   harness today) — the rubric's first concrete application.
 - Routed-here: the `[external-dep]` harness halves of fn-33's cluster-I
   deferrals — **I-D1** (abstraction-layer boundary) and **I-D2** (review-queue
-  auto-drain) each split an abcd-owned half (routed to itd-52 / itd-53) from an
+  auto-drain) each split an abcd-owned half (routed to itd-53) from an
   `[external-dep]` harness half. Those external-dep halves are owned by the
   harness-readiness rubric (this intent) and enforced today by **fn-37**, not
   built in the fn-33 sweep. Tracked by the `routed_from` tokens

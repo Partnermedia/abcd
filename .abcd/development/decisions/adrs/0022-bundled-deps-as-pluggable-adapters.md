@@ -49,11 +49,11 @@ Because no tool re-vendors itself onto abcd's state, the entire
 overlay/dispatcher/session-mirror/boundary subsystem **ceases to exist**. This
 ADR therefore **supersedes** the three decisions that built and tuned it:
 
-- [ADR-14](0014-fn40-guard-fail-closed-full-required-manifest.md) — the
+- ADR-14 — the
   degraded-fallback guard over the required overlay manifest.
-- [ADR-15](0015-abstraction-boundary-warn-not-block.md) — the warn-not-block
+- ADR-15 — the warn-not-block
   abstraction boundary, the argv sentinel, and the artifact-only doctor probes.
-- [ADR-17](0017-rp-chat-send-override-supersedes-acj1-env-skip.md) — the
+- ADR-17 — the
   `rp chat-send` override machinery layered onto the bundled RP path.
 
 ## Alternatives Considered

@@ -58,18 +58,18 @@ historical note at the end of this section, not here.)
 - itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
 - itd-43 — Spec-terminology rename (one canonical word for a specced block of work) — **in flight on fn-65; the remaining sweep.** fn-7 shipped only the atomic `epic_id`→`spec_id` field rename ([adr-11](../../decisions/adrs/0011-spec-terminology-rename.md)); the broader surface/prose/glossary sweep was deliberately parked in this intent and is now delivered by **fn-65** (lint enforcement + prose sweep). The intent's `spec_id` points at fn-65. Stays in `drafts/` until fn-65 closes.
 - itd-44 — A fourth intent kind for infrastructure choices the product thinker wants to record
-- itd-45 — `.work/issues.md` cleanup bundle (sweep the workshop before a later phase)
+- `.work/issues.md` cleanup bundle (sweep the workshop before a later phase)
 - ~~itd-46~~ — `/abcd:intent "<text>"` ↔ `/abcd:capture "<text>"` symmetric create paths — **shipped in fn-30 (LIVE).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
 - itd-47 — fn-12's oracle-backed gates pass honestly without a human in the loop (not yet shipped)
 - ~~itd-48~~ — `intent-fidelity-reviewer` gains its cross-doc + kind-classification roles (absorbed itd-31) — **shipped in fn-29 (Roles 2 + 3).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
 - ~~itd-49~~ — Flow-state drift becomes visible before it compounds — **shipped in fn-41 (LIVE; the `FS` flow-state-drift family, `FS001`).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
 - ~~itd-50~~ — The audit loop drives an intent to acceptance — or calls for a replan — **shipped in fn-52 (LIVE; the record-only ↔ loop-to-acceptance audit policy).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
 - itd-51 — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
-- itd-52 — abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired (adr-22 supersedes adr-15)
+- abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired
 - ~~itd-53~~ — A shipped intent no longer drifts out of audit just because nobody ran the review — **shipped in fn-43 (LIVE; the `RC` review-completeness family).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
-- itd-54 — abcd's largest source files become navigable packages without changing behavior
+- abcd's largest source files become navigable packages without changing behavior
 - itd-55 — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
-- itd-56 — One command re-vendors upstream and restores the abcd overlay in a single guarded step — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: no external tool re-vendors itself onto abcd's state, so there is no overlay to re-apply
+- One command re-vendors upstream and restores the abcd overlay in a single guarded step — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: no external tool re-vendors itself onto abcd's state, so there is no overlay to re-apply
 
 **Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied reviews in the native spec review store), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
 

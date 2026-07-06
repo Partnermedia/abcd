@@ -18,7 +18,7 @@ abcd shipped through a two-repo mirror: active work in a development repo, a
 curated snapshot published to a separate public repo via the launch flow. That
 split forced a payload-exclusion policy at the mirror boundary — the launch
 payload dropped `.abcd/memory/**` and scoped a restrictive-licence gate to the
-lifeboat ([ADR-18](0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md))
+lifeboat (ADR-18)
 — and it created two trees to keep version-consistent, which
 [ADR-19](0019-plugin-json-version-carve-out.md) and
 [ADR-20](0020-manifest-version-lockstep.md) exist to police (dev stays
@@ -38,7 +38,7 @@ from it — there is **no dev→public mirror**.
   artifact is the published surface; **the repo is the marketplace**.
 
 This retires the mirror, so this ADR **supersedes**
-[ADR-18](0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md): the
+ADR-18: the
 payload-exclusion policy is no longer a mirror-boundary concern but a packaging
 filter — `.abcd/**` (memory included) is excluded from the release artifact by
 the same mechanism, on one tree.

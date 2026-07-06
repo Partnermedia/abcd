@@ -16,7 +16,7 @@ related_adrs: [adr-6, adr-22, adr-23]
 
 abcd's review and oracle path was a fixed cascade: RepoPrompt → codex →
 in-session, with a dual-backend review that ran RP and codex in parallel and
-trusted their verdicts asymmetrically ([ADR-8](0008-dual-backend-review-asymmetric-trust.md)).
+trusted their verdicts asymmetrically (ADR-8).
 That cascade assumed those tools were always present and always the way abcd
 reached a model — the same mandatory-bundling premise the rebuild removes
 ([ADR-22](0022-bundled-deps-as-pluggable-adapters.md)). It also put abcd in the
@@ -39,7 +39,7 @@ Concrete oracle backends — **native, CLI, API, MCP** — are **opt-in adapters
 behind the same seam, selected when an operator wants abcd to reach a model
 directly. The old RP→codex→in-session cascade is **replaced** by this
 delegate-by-default-plus-adapters model, so this ADR **supersedes**
-[ADR-8](0008-dual-backend-review-asymmetric-trust.md).
+ADR-8.
 
 The *principle* ADR-8 established survives as **adapter guidance**, not as a
 hard-wired cascade: a **scoped reviewer** (seeing only a selection) and a
@@ -77,4 +77,4 @@ is now whatever adapter is wired, over the native default.
   whichever is configured.
 - Review-artifact capture and its redaction follow whichever adapter runs,
   over the native transcript/redaction default
-  ([ADR-29](0029-native-transcript-corpus.md), [ADR-6](0006-rp-review-storage-and-architecture.md)).
+  ([ADR-29](0029-native-transcript-corpus.md), ADR-6).

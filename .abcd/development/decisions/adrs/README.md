@@ -38,10 +38,10 @@ IDs are capture-stable. Once assigned, an ADR's ID never changes — superseding
 |---|---|
 | `proposed` | Draft; the decision is not yet locked. Rare — most ADRs are written after the fact. |
 | `accepted` | The decision is in force. Default for retrospective ADRs. |
-| `superseded` | Replaced by a newer ADR. Frontmatter `superseded_by: <adr-N>` points to the successor. |
+| `superseded` | Replaced by a newer ADR. Once the successor is in place, the superseded ADR is pruned from the record — the successor's `supersedes` note records what it replaced. |
 | `deprecated` | The decision no longer applies but no successor replaces it (the surface itself was removed). |
 
-Transitions are deliberate. An ADR is never deleted — superseded or deprecated, but always retained as historical record.
+Transitions are deliberate. Accepted ADRs are retained in the record; a superseded ADR is pruned once its successor lands and carries the transition rationale — git history preserves the original text.
 
 ---
 
@@ -114,19 +114,12 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-3](0003-directory-as-truth-for-lifecycle.md) | Directory location is the source of truth for lifecycle state | accepted | 2026-05-07 |
 | [adr-4](0004-lifeboat-as-regenerable-output.md) | Lifeboat is regenerable output; voyage is the operations namespace | accepted | 2026-05-04 |
 | [adr-5](0005-brief-is-current-state.md) | Brief is the current state; no version label, no archive directory | accepted | 2026-05-08 |
-| [adr-6](0006-rp-review-storage-and-architecture.md) | RP review storage (hybrid commit/ignore) and abcd-side wrapper architecture | superseded → [adr-25](0025-host-delegated-llm-default.md) | 2026-05-10 |
 | [adr-7](0007-grill-skill-and-glossary.md) | `/abcd:intent grill` — one sub-verb with two inseparable phases; cite-or-fail lint; bounded-context glossary structure | accepted | 2026-05-11 |
-| [adr-8](0008-dual-backend-review-asymmetric-trust.md) | Dual-backend review (RP + Codex CLI) with asymmetric trust — scoped reviewer's verdict gates; mandatory stopping rule | superseded → [adr-25](0025-host-delegated-llm-default.md) | 2026-05-16 |
 | [adr-9](0009-phase-as-product-layer.md) | Phase as a product-reflection layer between brief and intent; replaces plugin-version language | accepted | 2026-05-16 |
 | [adr-10](0010-phase-negotiator-grounded-tradeoffs.md) | The phase negotiator — a Socratic agent that proposes phases and grounds every trade-off in the DAG / phase acceptance | accepted | 2026-05-16 |
 | [adr-11](0011-spec-terminology-rename.md) | One canonical word for a specced block of work — spec | accepted | 2026-05-18 |
 | [adr-12](0012-issue-ledger-live-vs-structured.md) | `.work/issues.md` stays the live operational ledger; structured `iss-*` store deferred until the native spec layer schedules the migration | accepted | 2026-06-06 |
 | [adr-13](0013-fn38-memory-single-writer-and-write-lint-split.md) | Durable memory writes — single-writer, atomic-rename crash model | accepted | 2026-06-09 |
-| [adr-14](0014-fn40-guard-fail-closed-full-required-manifest.md) | Guard degraded fallback fails closed to the full required manifest (integrity not coverage); floor beneath, never empty | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-10 |
-| [adr-15](0015-abstraction-boundary-warn-not-block.md) | Abstraction boundary warns, never blocks — argv-sentinel live discriminator (fn-37.3), artifact-only static detection, PreToolUse hook deferred | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-11 |
-| [adr-16](0016-fn43-autodrain-boundary-and-gate-defaults.md) | Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; drain cost-bounded by processed entries | superseded → [adr-27](0027-autonomous-run-pluggable-seam.md) | 2026-06-11 |
-| [adr-17](0017-rp-chat-send-override-supersedes-acj1-env-skip.md) | `rp chat-send` becomes a declared abcd override (scoped supersession of fn-33 AC-J1's env-skip) — fixed budget pre-flight on every path, driven-path reversal, durable `--selected-paths`, vestigial SKIP export as rollback path | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-11 |
-| [adr-18](0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) | The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch (no override may re-include memory) | superseded → [adr-28](0028-single-repo-curated-release.md) | 2026-06-13 |
 | [adr-19](0019-plugin-json-version-carve-out.md) | The plugin version lives only in the released artifact; the working tree stays unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
 | [adr-20](0020-manifest-version-lockstep.md) | The two release manifests stay version-consistent via a read-only anti-drift checker over a pinned per-view path list; the source view stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |
 | [adr-21](0021-rebuild-in-go.md) | Rebuild abcd as a Go binary | accepted | 2026-07-06 |

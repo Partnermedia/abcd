@@ -10,10 +10,10 @@ themselves.
   best-practice synthesis with cited sources (e.g. `factoring-large-files-sota.md`,
   `spec-kit-vs-flow-next.md`).
 - **Review and audit syntheses** — cross-cutting findings that span the codebase
-  and don't belong to one spec (e.g. `abcd-lineage.md`, `fn-34-flowctl-divergence-audit.md`).
+  and don't belong to one spec (e.g. `abcd-lineage.md`, `related-work.md`).
 - **Spike / investigation write-ups** — manual scaffolding notes, divergence
   audits, evidence collected while answering a design question
-  (e.g. `ahoy-history-store-manual-scaffolding.md`, `fn-3-coordination.md`).
+  (e.g. `ahoy-history-store-manual-scaffolding.md`).
 
 ## What does NOT belong here
 
@@ -24,8 +24,6 @@ themselves.
 - **Phase-scoped research** — goes to `research/phase/<N>/` (design inputs a
   given phase consumes).
 - **Prompt R&D** — goes to `research/prompting/` (agent prompt drafts, templates).
-- **MCP/architecture contracts** — go to `research/adr/` (the implementation-contract
-  ADRs, e.g. the MCPBridge contract).
 - **Run logs / ephemeral acceptance output** — go to `.abcd/logbook/`.
 
 ## Naming convention
@@ -36,7 +34,7 @@ finding), `-study` / `-notes` (investigation), or a spec/fn tag when the note is
 spec-scoped (`fn-34-...`). Notes are not a numbered record-type; they are
 folder-convention artefacts promoted into ADRs/intents by hand.
 
-> A subdirectory (e.g. `fn-25-closeout/`) groups a cluster of notes produced for
+> A subdirectory groups a cluster of notes produced for
 > one piece of work.
 
 ## Related
