@@ -15,6 +15,16 @@ Commissioned reviews of this project — plan reviews, code reviews, external au
 - **Append-only.** A review is immutable once written — reality is never edited to match a review, and a review is never edited to match reality. Follow-up work gets a new dated directory.
 - All paths in review documents are repo-relative.
 
+## Enforcement
+
+The machine-checkable half of this charter is enforced deterministically as lint codes `RD001`–`RD003` (defined in [`../../development/brief/05-internals/06-lint.md`](../../development/brief/05-internals/06-lint.md)):
+
+- **`RD001`** — each review directory is `<YYYY-MM-DD>-<scope>/` and carries a `00-summary.md`.
+- **`RD002`** — review files are append-only (no post-creation edit in git history).
+- **`RD003`** — repo-relative paths only (no absolute personal paths).
+
+Until these land in abcd's own lint (`internal/core/lint`), the standalone gate `scripts/check-reviews.sh` runs them on every push (via `make preflight`) and in CI (the `record-lint` job). The provenance discriminator and the "not a shadow backlog" rule above are semantic — they are enforced by review, not by the gate.
+
 ## Related Documentation
 
 - [`../CONTEXT.md`](../CONTEXT.md) — current working state
