@@ -1,16 +1,20 @@
 ---
 id: adr-18
 slug: launch-payload-excludes-memory-gate-scoped-to-lifeboat
-status: accepted
+status: superseded
 date: 2026-06-13
 supersedes: null
-superseded_by: null
+superseded_by: adr-28
 related_intents: [itd-36]
 related_rfcs: []
 related_adrs: [adr-4, adr-5]
 ---
 
 # ADR-18: The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch
+
+> Superseded by [ADR-28](0028-single-repo-curated-release.md) — one curated repo
+> with a release-artifact view replaces the dev→public payload split; `.abcd/**`
+> is excluded from the release artifact by packaging.
 
 ## Context
 

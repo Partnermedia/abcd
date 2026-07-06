@@ -23,7 +23,7 @@ Each decision passes Pocock's three-clause ADR test: (1) hard to reverse, (2) su
 ### Decision 1 — One sub-verb, two inseparable phases
 
 `/abcd:intent grill` runs a two-phase lifecycle:
-- **Phase 1 (interactive):** Socratic interrogation of the intent, producing a grill report at `.abcd/logbook/grill/<ts>-<itd>/grill-report.{json,md}`.
+- **Phase 1 (interactive):** Socratic interrogation of the intent, producing a grill report at `.abcd/logbook/grill/<ts>-<itd>/grill-report.{json,md}`. The interrogation is host-delegated to the agent harness ([adr-25](0025-host-delegated-llm-default.md)); abcd owns the prompts and consumes the structured result.
 - **Phase 2 (silent synthesis):** Consumes the sharpened intent + grill findings + glossary citations + ADRs in scope → writes a Pocock-shaped PRD to `.abcd/intents/<itd-N>/prd.md`.
 
 Phase 2 cannot be skipped or separated from Phase 1. Once synthesis runs, the session is sealed.
@@ -40,7 +40,7 @@ failure mode this design rules out. Extension path if PRD regen is needed post-g
 `/abcd:intent grill --resynthesise`, not a new sub-verb.
 
 **Three-clause test:**
-- Hard to reverse? **Yes** — once consumers (flow-next specs) depend on the `prd_path` field
+- Hard to reverse? **Yes** — once consumers (native specs, [adr-26](0026-native-spec-layer-ccpm-backend.md)) depend on the `prd_path` field
   set by Phase 2, splitting the phases would break every downstream spec.
 - Surprising? **Yes** — most intent-review tools are pure interrogation; the silent synthesis
   phase with its seven Pocock sections is unexpected. New contributors will ask "why does grill
@@ -51,7 +51,7 @@ failure mode this design rules out. Extension path if PRD regen is needed post-g
 
 ### Decision 2 — Cite-or-fail lint enforcement
 
-`intent_lint.py` enforces glossary discipline as a promotion blocker, not advisory:
+The intent lint (a Go implementation) enforces glossary discipline as a promotion blocker, not advisory:
 - `GL001` undefined term — warn
 - `GL002` forbidden synonym — blocker
 - `GL003` cross-context collision without `contexts:` — warn
@@ -112,7 +112,7 @@ surfaced during questions, and the ADR decisions offered during the session. Non
 reconstructable from the intent file alone after the session ends.
 
 A user who runs Phase 1 and skips Phase 2 has a grill report but no handoff artefact — the
-session produces no contract that `/flow-next:plan` can consume. This is the design failure the
+session produces no contract that `/abcd:intent plan` can consume. This is the design failure the
 inseparability constraint prevents. The one exception to "no skip" is `--lite` mode, which
 still runs Phase 2 (the flag controls glossary loading, not the two-phase lifecycle).
 
@@ -122,10 +122,11 @@ At `/abcd:intent plan` time, the PRD is frozen: `frozen_at`, `frozen_content_has
 (SHA-256 of all PRD content except the self-referential freeze fields `frozen_at`,
 `frozen_content_hash`, `spec`, and `planning_attempt_id`; provenance fields such as
 `source_intent_hash`, `grill_report_hash`, and `grill_report_path` ARE included to prevent
-post-freeze tampering), and `planning_attempt_id` (UUIDv4 linking to the flow-next plan run)
+post-freeze tampering), and `planning_attempt_id` (UUIDv4 linking to the plan run in the native spec
+layer, [adr-26](0026-native-spec-layer-ccpm-backend.md))
 are written to PRD frontmatter. After freeze:
 - Any modification to the PRD body triggers `GR003` blocker
-- The press-release intent and frozen PRD are both immutable input artefacts for flow-next
+- The press-release intent and frozen PRD are both immutable input artefacts for the native spec layer
 - The press release is the elevator pitch; the PRD is the AI-consumption contract
 - v1 refuses regrill on frozen PRDs immediately via `FrozenPRDError` (not a GR003 check — GR003
   fires only on frozen-PRD body mutation); regrill-after-freeze (`--resynthesise`) is reserved for v2

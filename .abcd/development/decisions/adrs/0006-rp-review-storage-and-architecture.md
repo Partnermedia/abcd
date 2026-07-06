@@ -1,16 +1,20 @@
 ---
 id: adr-6
 slug: rp-review-storage-and-architecture
-status: accepted
+status: superseded
 date: 2026-05-10
 supersedes: null
-superseded_by: null
+superseded_by: adr-25
 related_intents: [itd-28]
 related_rfcs: []
 related_adrs: [adr-5]
 ---
 
 # ADR-6: RP Review Storage and Architecture
+
+> Superseded by [ADR-25](0025-host-delegated-llm-default.md) — oracle capture is
+> now host-delegated, and the redaction model is salvaged into
+> [ADR-29](0029-native-transcript-corpus.md).
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR

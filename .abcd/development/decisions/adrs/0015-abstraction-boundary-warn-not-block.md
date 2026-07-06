@@ -1,16 +1,20 @@
 ---
 id: adr-15
 slug: abstraction-boundary-warn-not-block
-status: accepted
+status: superseded
 date: 2026-06-11
 supersedes: null
-superseded_by: null
+superseded_by: adr-22
 related_intents: [itd-52]
 related_rfcs: []
 related_adrs: []
 ---
 
 # ADR-15: The abstraction boundary warns, never blocks — argv-sentinel live discriminator, artifact-only static detection
+
+> Superseded by [ADR-22](0022-bundled-deps-as-pluggable-adapters.md) — with
+> native defaults there is no wrapped foreign surface for an operator to reach
+> past, so the abstraction boundary is retired.
 
 ## Context
 

@@ -7,7 +7,7 @@ supersedes: null
 superseded_by: null
 related_intents: []
 related_rfcs: []
-related_adrs: [adr-2, adr-4, adr-5, adr-9, adr-11]
+related_adrs: [adr-2, adr-4, adr-5, adr-9, adr-11, adr-26]
 ---
 
 # ADR-1: Three-layer mental model (brief / intent / spec)
@@ -29,14 +29,14 @@ abcd organises development work in three layers, each tuned to the kind of quest
 
 - **Brief** — the *what*. Shared canvas; covers user-facing scope AND plumbing infrastructure. Read by anyone needing to understand the project as a whole.
 - **Intent** — the *why* (user-facing). Press-release-shaped (Amazon working-backwards), with persona quote, scope, and Given-When-Then acceptance criteria. Lives as standalone documents so it can be reordered, bundled, deferred, or killed without disturbing the brief or each other.
-- **Spec** — the *how*. flow-next spec at `.flow/{specs,tasks}/`. Plan-reviewed before work; completion-reviewed after. Traces back to either an intent (user-facing) or a brief phase (plumbing) or a discipline (cross-cutting rule).
+- **Spec** — the *how*. A native minimal spec store — specs and tasks are directories whose location encodes status, over a dependency graph — with the companion harness `ccpm` as the primary deeper backend ([adr-26](0026-native-spec-layer-ccpm-backend.md)). Plan-reviewed before work; completion-reviewed after. Traces back to either an intent (user-facing) or a brief phase (plumbing) or a discipline (cross-cutting rule).
 
 Acceptance discipline applies uniformly across both surfaces (intent and brief-phase), in Given-When-Then format. The `intent-fidelity-reviewer` agent compares delivered reality against intent acceptance; phase audit compares reality against brief-phase acceptance. The format is uniform; the *home* differs to match the nature of the work.
 
 ## Alternatives Considered
 
 1. **Single unified "spec" surface** (one document type for all work). Rejected: forces press-release format on plumbing (mistargeted) and forces engineering-shape on user-facing capability (kills product clarity). The friction is load-bearing — different jobs need different shapes.
-2. **Brief + intent only** (no separate spec layer). Rejected: specs are how-to-build artefacts; mixing them with why-it-matters intents collapses the press-release discipline. flow-next already provides a clean engineering surface; reinventing it inside intents would duplicate.
+2. **Brief + intent only** (no separate spec layer). Rejected: specs are how-to-build artefacts; mixing them with why-it-matters intents collapses the press-release discipline. The native spec layer ([adr-26](0026-native-spec-layer-ccpm-backend.md)) provides a clean engineering surface; folding it into intents would duplicate.
 3. **Intent + spec only** (no brief). Rejected: plumbing has no user moment to press-release. Without a brief, plumbing would either become silent (no acceptance gate) or be forced into intent shape (mistargeted prose). The brief carries the project-as-a-whole canvas that neither intent nor spec can hold.
 
 ## Consequences

@@ -1,16 +1,21 @@
 ---
 id: adr-8
 slug: dual-backend-review-asymmetric-trust
-status: accepted
+status: superseded
 date: 2026-05-16
 supersedes: null
-superseded_by: null
+superseded_by: adr-25
 related_intents: [itd-17, itd-28]
 related_rfcs: []
 related_adrs: [adr-6]
 ---
 
 # ADR-8: Dual-Backend Review with Asymmetric Trust
+
+> Superseded by [ADR-25](0025-host-delegated-llm-default.md) — the fixed
+> RP→codex cascade is replaced by a host-delegated LLM with opt-in oracle
+> adapters; the scoped/broad asymmetric-trust principle survives as adapter
+> guidance.
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR

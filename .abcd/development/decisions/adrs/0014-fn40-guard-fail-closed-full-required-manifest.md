@@ -1,16 +1,20 @@
 ---
 id: adr-14
 slug: fn40-guard-fail-closed-full-required-manifest
-status: accepted
+status: superseded
 date: 2026-06-10
 supersedes: null
-superseded_by: null
+superseded_by: adr-22
 related_intents: []
 related_rfcs: []
 related_adrs: []
 ---
 
 # ADR-14: Guard degraded fallback fails closed to the full required manifest
+
+> Superseded by [ADR-22](0022-bundled-deps-as-pluggable-adapters.md) — with no
+> mandatory bundled tool re-vendoring itself onto abcd's state, the overlay
+> manifest and its guard subsystem no longer exist.
 
 ## Context
 

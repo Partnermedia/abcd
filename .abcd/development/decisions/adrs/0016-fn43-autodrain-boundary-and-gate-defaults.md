@@ -1,16 +1,20 @@
 ---
 id: adr-16
 slug: fn43-autodrain-boundary-and-gate-defaults
-status: accepted
+status: superseded
 date: 2026-06-11
 supersedes: null
-superseded_by: null
+superseded_by: adr-27
 related_intents: [itd-53]
 related_rfcs: []
 related_adrs: []
 ---
 
 # ADR-16: Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; the drain is cost-bounded by processed entries
+
+> Superseded by [ADR-27](0027-autonomous-run-pluggable-seam.md) — the autonomous
+> run is a pluggable seam rather than a Ralph port, so the Ralph
+> post-iteration edge this autodrain boundary depends on no longer exists.
 
 ## Context
 

@@ -1,16 +1,20 @@
 ---
 id: adr-17
 slug: rp-chat-send-override-supersedes-acj1-env-skip
-status: accepted
+status: superseded
 date: 2026-06-11
 supersedes: null
-superseded_by: null
+superseded_by: adr-22
 related_intents: []
 related_rfcs: []
 related_adrs: []
 ---
 
 # ADR-17: `rp chat-send` becomes a declared abcd override — fixed budget pre-flight on every path, delegated send; scoped supersession of fn-33 AC-J1's configuration-only mechanism
+
+> Superseded by [ADR-22](0022-bundled-deps-as-pluggable-adapters.md) — RP is an
+> opt-in oracle adapter over a native default, so the override machinery layered
+> onto the mandatory bundled-RP path no longer exists.
 
 > Supersession note: this ADR supersedes a **spec-level** decision (fn-33
 > Cluster J / AC-J1, "Configuration, not interception"), not a prior ADR — so

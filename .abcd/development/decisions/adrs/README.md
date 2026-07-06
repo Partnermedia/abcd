@@ -19,14 +19,14 @@ If any of the three is missing, skip the ADR. File-scoped rationale (why this se
 ADRs are *not* used for:
 
 - Forward-looking discussion — those are RFCs (`../roadmap/rfcs/`).
-- User-facing capability — those are intents (`../roadmap/intents/`).
+- User-facing capability — those are intents (`../../intents/`).
 - Bug fixes, refactors, content edits — git log + commit messages cover deltas.
 
 ---
 
 ## ADR IDs
 
-ADR IDs follow the pattern `adr-N` (unpadded, mirrors `itd-N` / `rfc-N` / `fn-N`). Filenames: `adr-N-<slug>.md`.
+ADR IDs follow the pattern `adr-N` (unpadded, mirrors `itd-N` / `rfc-N`) as the prose handle. Filenames are the zero-padded four-digit sequential form `NNNN-<slug>.md` (`adr-7` lives in `0007-<slug>.md`), a stable cross-reference handle per [ADR-30](0030-record-information-architecture.md).
 
 IDs are capture-stable. Once assigned, an ADR's ID never changes — superseding ADRs use new IDs and link backwards.
 
@@ -91,25 +91,21 @@ What's now easier; what's now harder; what new obligations the decision creates
 
 | File | Frontmatter field |
 |---|---|
-| `adrs/adr-N-<slug>.md` | `related_intents: [itd-N, ...]` (intents whose framework this ADR justifies) |
-| `adrs/adr-N-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
-| `adrs/adr-N-<slug>.md` | `supersedes: adr-N` / `superseded_by: adr-N` (chain) |
+| `adrs/NNNN-<slug>.md` | `related_intents: [itd-N, ...]` (intents whose framework this ADR justifies) |
+| `adrs/NNNN-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
+| `adrs/NNNN-<slug>.md` | `supersedes: adr-N` / `superseded_by: adr-N` (chain) |
 | `intents/{drafts,planned,shipped,disciplines}/itd-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an intent references an ADR) |
 | `rfcs/rfc-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an RFC references an ADR or its resolution becomes one) |
 
-`intent_lint.py` extends to verify these reciprocally.
+The intent lint (a Go implementation) extends to verify these reciprocally.
 
 ---
 
 ## Index
 
-> **Index maintenance (fn-56/itd-44):** the `reserve-and-write-adr` writer
-> allocates `adr-N` and materialises the ADR file race-safely, but it does
-> **not** touch this index table — appending the new row is a manual edit (or
-> a future tooling pass). Auto-updating the index under the allocation lock
-> (atomic rewrite + rollback) is **out of scope** for the thin adoption; the
-> follow-up is recorded in `.work/issues.md` (2026-06-14). Until then, add the
-> row by hand when an ADR is captured.
+> **Index maintenance:** allocating the next `adr-N` and materialising the ADR
+> file is race-safe, but appending the row to this index table is a manual edit;
+> add the row by hand when an ADR is captured.
 
 | ID | Title | Status | Date |
 |---|---|---|---|
@@ -118,18 +114,28 @@ What's now easier; what's now harder; what new obligations the decision creates
 | [adr-3](0003-directory-as-truth-for-lifecycle.md) | Directory location is the source of truth for lifecycle state | accepted | 2026-05-07 |
 | [adr-4](0004-lifeboat-as-regenerable-output.md) | Lifeboat is regenerable output; voyage is the operations namespace | accepted | 2026-05-04 |
 | [adr-5](0005-brief-is-current-state.md) | Brief is the current state; no version label, no archive directory | accepted | 2026-05-08 |
-| [adr-6](0006-rp-review-storage-and-architecture.md) | RP review storage (hybrid commit/ignore) and abcd-side wrapper architecture | accepted | 2026-05-10 |
+| [adr-6](0006-rp-review-storage-and-architecture.md) | RP review storage (hybrid commit/ignore) and abcd-side wrapper architecture | superseded → [adr-25](0025-host-delegated-llm-default.md) | 2026-05-10 |
 | [adr-7](0007-grill-skill-and-glossary.md) | `/abcd:intent grill` — one sub-verb with two inseparable phases; cite-or-fail lint; bounded-context glossary structure | accepted | 2026-05-11 |
-| [adr-8](0008-dual-backend-review-asymmetric-trust.md) | Dual-backend review (RP + Codex CLI) with asymmetric trust — scoped reviewer's verdict gates; mandatory stopping rule | accepted | 2026-05-16 |
+| [adr-8](0008-dual-backend-review-asymmetric-trust.md) | Dual-backend review (RP + Codex CLI) with asymmetric trust — scoped reviewer's verdict gates; mandatory stopping rule | superseded → [adr-25](0025-host-delegated-llm-default.md) | 2026-05-16 |
 | [adr-9](0009-phase-as-product-layer.md) | Phase as a product-reflection layer between brief and intent; replaces plugin-version language | accepted | 2026-05-16 |
 | [adr-10](0010-phase-negotiator-grounded-tradeoffs.md) | The phase negotiator — a Socratic agent that proposes phases and grounds every trade-off in the DAG / phase acceptance | accepted | 2026-05-16 |
-| [adr-11](0011-spec-terminology-rename.md) | One canonical word for a specced block of work — rename the *how* layer to "spec" | accepted | 2026-05-18 |
-| [adr-12](0012-issue-ledger-live-vs-structured.md) | `.work/issues.md` stays the live operational ledger; structured `iss-*` store deferred until fn-22 is re-planned | accepted | 2026-06-06 |
-| [adr-13](0013-fn38-memory-single-writer-and-write-lint-split.md) | fn-38 memory is single-writer (atomic-rename, no txn/recovery); split into fn-38 (write) + fn-39 (lint); re-plan via flow-next with triple-backend review | accepted | 2026-06-09 |
-| [adr-14](0014-fn40-guard-fail-closed-full-required-manifest.md) | Guard degraded fallback fails closed to the full required manifest (integrity not coverage); floor beneath, never empty | accepted | 2026-06-10 |
-| [adr-15](0015-abstraction-boundary-warn-not-block.md) | Abstraction boundary warns, never blocks — argv-sentinel live discriminator (fn-37.3), artifact-only static detection, PreToolUse hook deferred | accepted | 2026-06-11 |
-| [adr-16](0016-fn43-autodrain-boundary-and-gate-defaults.md) | Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; drain cost-bounded by processed entries | accepted | 2026-06-11 |
-| [adr-17](0017-rp-chat-send-override-supersedes-acj1-env-skip.md) | `rp chat-send` becomes a declared abcd override (scoped supersession of fn-33 AC-J1's env-skip) — fixed budget pre-flight on every path, driven-path reversal, durable `--selected-paths`, vestigial SKIP export as rollback path | accepted | 2026-06-11 |
-| [adr-18](0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) | The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch (no override may re-include memory) | accepted | 2026-06-13 |
-| [adr-19](0019-plugin-json-version-carve-out.md) | The plugin version lives only in the published snapshot; dev files stay unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
-| [adr-20](0020-manifest-version-lockstep.md) | The two published manifests stay version-consistent via a read-only anti-drift checker over a pinned per-tree path list; dev stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |
+| [adr-11](0011-spec-terminology-rename.md) | One canonical word for a specced block of work — spec | accepted | 2026-05-18 |
+| [adr-12](0012-issue-ledger-live-vs-structured.md) | `.work/issues.md` stays the live operational ledger; structured `iss-*` store deferred until the native spec layer schedules the migration | accepted | 2026-06-06 |
+| [adr-13](0013-fn38-memory-single-writer-and-write-lint-split.md) | Durable memory writes — single-writer, atomic-rename crash model | accepted | 2026-06-09 |
+| [adr-14](0014-fn40-guard-fail-closed-full-required-manifest.md) | Guard degraded fallback fails closed to the full required manifest (integrity not coverage); floor beneath, never empty | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-10 |
+| [adr-15](0015-abstraction-boundary-warn-not-block.md) | Abstraction boundary warns, never blocks — argv-sentinel live discriminator (fn-37.3), artifact-only static detection, PreToolUse hook deferred | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-11 |
+| [adr-16](0016-fn43-autodrain-boundary-and-gate-defaults.md) | Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; drain cost-bounded by processed entries | superseded → [adr-27](0027-autonomous-run-pluggable-seam.md) | 2026-06-11 |
+| [adr-17](0017-rp-chat-send-override-supersedes-acj1-env-skip.md) | `rp chat-send` becomes a declared abcd override (scoped supersession of fn-33 AC-J1's env-skip) — fixed budget pre-flight on every path, driven-path reversal, durable `--selected-paths`, vestigial SKIP export as rollback path | superseded → [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | 2026-06-11 |
+| [adr-18](0018-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) | The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch (no override may re-include memory) | superseded → [adr-28](0028-single-repo-curated-release.md) | 2026-06-13 |
+| [adr-19](0019-plugin-json-version-carve-out.md) | The plugin version lives only in the released artifact; the working tree stays unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
+| [adr-20](0020-manifest-version-lockstep.md) | The two release manifests stay version-consistent via a read-only anti-drift checker over a pinned per-view path list; the source view stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |
+| [adr-21](0021-rebuild-in-go.md) | Rebuild abcd as a Go binary | accepted | 2026-07-06 |
+| [adr-22](0022-bundled-deps-as-pluggable-adapters.md) | Bundled dependencies become pluggable adapters over a native default (supersedes adr-14, adr-15, adr-17) | accepted | 2026-07-06 |
+| [adr-23](0023-transport-agnostic-core.md) | A transport-agnostic Go core behind thin front doors | accepted | 2026-07-06 |
+| [adr-24](0024-the companion harness-peer-via-conventions-and-mcp.md) | the companion harness is a peer integrated via conventions and MCP, not a code dependency | accepted | 2026-07-06 |
+| [adr-25](0025-host-delegated-llm-default.md) | The LLM is host-delegated by default; oracles are opt-in adapters (supersedes adr-8) | accepted | 2026-07-06 |
+| [adr-26](0026-native-spec-layer-ccpm-backend.md) | A native minimal spec layer with the companion harness `ccpm` as the primary deeper backend | accepted | 2026-07-06 |
+| [adr-27](0027-autonomous-run-pluggable-seam.md) | The autonomous run is a pluggable seam, not a Ralph port (supersedes adr-16) | accepted | 2026-07-06 |
+| [adr-28](0028-single-repo-curated-release.md) | One repository, a curated release artifact — no dev→public mirror (supersedes adr-18) | accepted | 2026-07-06 |
+| [adr-29](0029-native-transcript-corpus.md) | A native local redacted transcript corpus | accepted | 2026-07-06 |
+| [adr-30](0030-record-information-architecture.md) | Design-record information architecture — flat artefact-type folders | accepted | 2026-07-06 |
