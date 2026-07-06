@@ -1,0 +1,91 @@
+name: ci
+
+# Lightweight checks on every push and pull request: build, vet, and test on
+# macOS and Linux, plus full-history secret scanning and a workflow audit.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Cancel superseded runs of the same ref (PRs and branch pushes); a merged
+# default-branch push is never cancelled mid-run because each ref has its own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Build + vet + test on both host OSes. Race-enabled unit tests catch data
+  # races the plain `go test` would miss.
+  check:
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25'
+
+      # Enforce the format gate AGENTS.md documents (`gofmt -l .`). Formatting is
+      # platform-independent, so run it once on the ubuntu leg to avoid duplicate
+      # work; any file gofmt lists needs `gofmt -w` and fails the job.
+      - name: Format (gofmt)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt: these files are not formatted (run gofmt -w .):" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Test (race, internal)
+        run: go test -race ./internal/...
+
+  # Secrets never land in history: full-history scan on every push/PR. Required
+  # before the eventual private->public flip.
+  gitleaks:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Audit the workflows themselves (pwn requests, template injection,
+  # cache poisoning, unpinned uses).
+  zizmor:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7

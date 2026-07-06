@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Pre-push gate, run on every clone via the global ~/.githooks dispatcher
+# (core.hooksPath): the CI check-job trio (build/vet/test + internal race) must
+# pass natively before a push leaves this machine. Secret-scan and workflow-audit
+# lanes stay in Actions.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+exec make preflight

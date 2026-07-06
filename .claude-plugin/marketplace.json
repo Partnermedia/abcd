@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "abcd-marketplace",
+  "owner": {
+    "name": "REPPL",
+    "url": "https://github.com/REPPL"
+  },
+  "plugins": [
+    {
+      "name": "abcd",
+      "source": "./",
+      "description": "Host-agnostic configuration layer for development — a single Go binary, usable as a Claude Code and the companion harness plugin."
+    }
+  ]
+}

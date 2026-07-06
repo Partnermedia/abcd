@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "purpose": "Personas used by press-release composers to attribute customer quotes. Avoids PII while keeping quotes grounded.",
+  "convention": "When generating a press release with a customer quote, pick a persona at random. Optionally bias selection by role to match the intent's audience.",
+  "personas": [
+    { "name": "Alice", "role_hints": ["solo founder", "product engineer"] },
+    { "name": "Bob", "role_hints": ["staff engineer", "platform team"] },
+    { "name": "Carol", "role_hints": ["engineering manager", "tech lead"] },
+    { "name": "Dave", "role_hints": ["security engineer", "compliance lead"] },
+    { "name": "Eve", "role_hints": ["data scientist", "ML engineer"] },
+    { "name": "Frank", "role_hints": ["DevOps engineer", "SRE"] },
+    { "name": "Grace", "role_hints": ["CTO", "VP Engineering"] },
+    { "name": "Henry", "role_hints": ["junior developer", "new hire"] },
+    { "name": "Iris", "role_hints": ["product manager", "designer"] },
+    { "name": "Jack", "role_hints": ["consultant", "agency lead"] },
+    { "name": "Kira", "role_hints": ["open-source maintainer", "DX engineer"] },
+    { "name": "Liam", "role_hints": ["mobile developer", "iOS/Android lead"] },
+    { "name": "Maya", "role_hints": ["AI/agent researcher", "prompt engineer"] }
+  ]
+}
