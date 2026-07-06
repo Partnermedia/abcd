@@ -154,6 +154,6 @@ round* terminates while still guaranteeing no Critical/Major ships.
 ## Related
 
 - [adr-6](0006-rp-review-storage-and-architecture.md) — where review artifacts land
-- [itd-28](../../roadmap/intents/planned/itd-28-rp-reviews-into-flow.md) — RP review capture into Flow
+- [itd-28](../../intents/shipped/itd-28-rp-reviews-into-flow.md) — RP review capture into Flow
 - [itd-17](../../intents/drafts/itd-17-model-effectiveness-tracking.md) — frontier mapping; absorbs review-backend effectiveness as tracked data
 - `.flow/reviews/fn-5-rp-mcp-integration-declare/` — the twelve-round dual-backend loop this ADR generalises from

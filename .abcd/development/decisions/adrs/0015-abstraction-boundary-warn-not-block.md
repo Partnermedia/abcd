@@ -132,7 +132,7 @@ docs + the static artifact probes.
 
 ## Related
 
-- [itd-52](../../roadmap/intents/drafts/itd-52-abstraction-layer-boundary.md) — the intent this realises (stays in `drafts/`; R7 + the live hook remain open)
+- [itd-52](../../intents/superseded/itd-52-abstraction-layer-boundary.md) — the intent this realises (stays in `drafts/`; R7 + the live hook remain open)
 - Sentinel (fn-37.3): `scripts/ralph/flowctl` (`--abcd-driven` handling), `scripts/abcd/session/ralph_mirror.py` (emission), `scripts/abcd/tools/_dispatch.py` (consumption), brief `05-internals/10-in-session-dispatch.md`
 - Artifact probe (fn-33): `flow_bin_flowctl_probe` in `scripts/abcd/tools/doctor.py`, wired from `ahoy.py:_run_doctor`
 - Classification map: `.abcd/development/brief/05-internals/04-universal-patterns.md` § 9

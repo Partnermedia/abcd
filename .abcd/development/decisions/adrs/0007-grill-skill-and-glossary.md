@@ -143,6 +143,6 @@ are written to PRD frontmatter. After freeze:
 
 ## Related
 
-- [itd-27](../../roadmap/intents/planned/itd-27-grill-skill-and-glossary.md) — source intent
+- [itd-27](../../intents/shipped/itd-27-grill-skill-and-glossary.md) — source intent
 - [05-internals/01-agents.md](../../brief/05-internals/01-agents.md) — `intent-fidelity-reviewer` auditor contract
 - [tests/fixtures/grill/](../../../../tests/fixtures/grill/) — fixture corpus

@@ -46,7 +46,7 @@ project, not to the model's generative fluency.
 
 abcd adds a **phase negotiator**: an agent that proposes a phase (or a
 re-sequencing of phases) and then discusses the trade-offs with the product
-thinker. It is captured as a user-facing capability in [itd-41](../roadmap/intents/drafts/itd-41-phase-negotiator.md).
+thinker. It is captured as a user-facing capability in [itd-41](../../intents/drafts/itd-41-phase-negotiator.md).
 
 The negotiator is built from two patterns abcd already has, deliberately —
 it is **the same family as `intent-fidelity-reviewer` and the grill skill**,

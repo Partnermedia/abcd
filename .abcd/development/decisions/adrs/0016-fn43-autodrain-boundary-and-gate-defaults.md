@@ -141,5 +141,5 @@ Constraints already locked when fn-43 was decided:
 
 - [`../../brief/05-internals/03-configuration.md`](../../brief/05-internals/03-configuration.md) — the `review.autodrain` config keys
 - [`../../brief/05-internals/06-lint.md`](../../brief/05-internals/06-lint.md) — § 1 RC code registry (RC001–RC003 delivered, RC004–RC005 reserved)
-- [`../../roadmap/intents/drafts/itd-53-review-queue-auto-drain-fidelity-gate.md`](../../roadmap/intents/drafts/itd-53-review-queue-auto-drain-fidelity-gate.md) — the intent whose open questions this ADR settles
+- [`../../roadmap/intents/drafts/itd-53-review-queue-auto-drain-fidelity-gate.md`](../../intents/shipped/itd-53-review-queue-auto-drain-fidelity-gate.md) — the intent whose open questions this ADR settles
 - [`../../../../scripts/abcd/overlay/README.md`](../../../../scripts/abcd/overlay/README.md) — overlay patch mechanism (`patch:ralph-autodrain-trigger`)
