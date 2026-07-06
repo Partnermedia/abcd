@@ -18,7 +18,7 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 
 ### Intent IDs
 
-- **ID format:** `itd-N` (unpadded — e.g., `itd-1`, `itd-15`). Mirrors the spec store's `fn-N` format. Filenames: `itd-N-<slug>.md`. Lexical-vs-numeric sort handled at the tool layer (`intent_lint.py`, registries) rather than via filename padding.
+- **ID format:** `itd-N` (unpadded — e.g., `itd-1`, `itd-15`). Mirrors the spec store's `fn-N` format. Filenames: `itd-N-<slug>.md`. Lexical-vs-numeric sort handled at the tool layer (`internal/core/lint`, registries) rather than via filename padding.
 - **The low IDs (itd-1..itd-7) reflect an early one-time rebase to ordering signal.** Intents created since are capture-stable, picking up at itd-27+. ID number is *not* an execution-order guarantee — the canonical build order is the phase plan at [`roadmap/phases/`](../../roadmap/phases/README.md).
 - **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
 
@@ -116,7 +116,9 @@ Until then, `kind_notes` is the free-text descriptor.
    └─ Writes intents/drafts/itd-N-<slug>.md (no spec created yet)
 
 2. /abcd:intent plan <itd-N> [<itd-M>...]    (when ready to commit to work)
-   ├─ Runs intent_lint: refuses to promote if `## Acceptance Criteria` is missing/malformed
+   ├─ Reads prd_path (produced by the grill → PRD flow); refuses if null — no PRD yet, grill first
+   │   (GR002 blocker; suppressed-as-info for prd_grandfathered intents). See § 5 for the full freeze sequence.
+   ├─ Runs internal/core/lint: refuses to promote if `## Acceptance Criteria` is missing/malformed
    ├─ Reads suggested_kind + cross-references; proposes a kind (standalone / bundle-member / discipline)
    ├─ User confirms or overrides the kind (binding); written to `kind:` frontmatter
    │
@@ -195,7 +197,7 @@ On demand: intent-fidelity-reviewer (shape-classification role) scans the corpus
 | `/abcd:intent "<free-text>"` | **Canonical create** (fn-30/itd-46): a leading quoted seed is the canonical create entry. Interview-driven capture (press release with persona quote + acceptance criteria); assigns `itd-N`; LLM classifier writes advisory `suggested_kind`. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent refine <itd-N>` | Interactive refinement of an existing intent (sharpen press release, fill open questions, update scope, add/edit acceptance criteria) | (stays in current state) |
 | `/abcd:intent grill <itd-N>` | Socratic adversarial interview that stress-tests an intent for vagueness, missing acceptance, hidden assumptions before planning. Glossary-aware once `terminology/` exists. `--brief-section <id>` flag for stress-testing a brief section instead. (per itd-27) | (stays in current state) |
-| `/abcd:intent plan <itd-N> [<itd-M>...]` | Lints acceptance criteria; proposes `kind` (standalone / bundle-member / discipline) based on `suggested_kind` + cross-references; user confirms or overrides; binds `kind:`; routes to the kind-specific lifecycle path (see § 1 lifecycle diagram) | varies by kind: `drafts/` → `planned/` (standalone, bundle) or `drafts/` → `disciplines/` (discipline) |
+| `/abcd:intent plan <itd-N> [<itd-M>...]` | Validates the frozen PRD exists (refuses if `prd_path` is null — the grill → PRD flow produces it first; GR002 blocker, suppressed-as-info for `prd_grandfathered`); lints acceptance criteria; proposes `kind` (standalone / bundle-member / discipline) based on `suggested_kind` + cross-references; user confirms or overrides; binds `kind:`; routes to the kind-specific lifecycle path (see § 5 freeze sequence) | varies by kind: `drafts/` → `planned/` (standalone, bundle) or `drafts/` → `disciplines/` (discipline) |
 | `/abcd:intent ship <itd-N>` | Kicks off implementation via the native ship/run seam. Only valid for `kind: standalone` or `kind: bundle-member`. If intent is still in `drafts/`, runs the full pipeline first (plan + plan-review). On spec completion the lifecycle hook completes the move automatically; this command can also force-move if hook missed. **Disciplines have no `ship` step** — they are continuously active once in `disciplines/`. | (eventually) → `shipped/` (or no-op for disciplines) |
 | `/abcd:intent review <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). fn-12 ships this **manual** verb; fn-28 shipped the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; fn-6 disowned auto-firing). | (stays) |
 | `/abcd:intent consistency [<itd-N>]` | **Role 2 — cross-document fidelity.** Surfaces five judgement categories (terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts) across briefs + intents. **Bare** scans the whole corpus; **with `<itd-N>`** narrows to one intent's relationship with the rest. Findings land in `.abcd/logbook/audit/consistency-<ts>/report.{json,md}`. Live as of fn-29 (judgement half + on-demand verb); mechanical-half categories and pre-commit hook are deferred follow-ups (see `.work/issues.md` `[fn-29 follow-up]` entries). | (stays) |
@@ -271,7 +273,7 @@ fn-3 adds the following optional frontmatter fields to intent files. All are add
 - `glossary_terms_used` frontmatter field
 - PRD frontmatter `glossary_terms_used`
 - Grill report `glossary_candidates`
-- Lint output and `intent_lint.py` JSON output
+- Lint output and `internal/core/lint` JSON output
 - Schema enforcement
 
 **Body prose** (canonical display name only): intent body markdown uses the term's canonical display name (e.g., `persona`, not `core/persona`). Lint extractor for GL005 knows both shapes. Optional explicit citation in body: `[persona](glossary:core/persona)` is supported; lint treats the link target as authoritative when present.
@@ -304,7 +306,7 @@ Both the press-release intent and the frozen PRD are immutable input artefacts p
 
 ## 6. Acceptance gates and bidirectional link verification
 
-`intent_lint.py` (cross-cutting) runs pre-commit and at `/abcd:intent plan` time. It verifies:
+`internal/core/lint` (cross-cutting) runs pre-commit and at `/abcd:intent plan` time. It verifies:
 
 - **Acceptance criteria present and well-formed** (per the itd-1 discipline): every intent in `drafts/`, `planned/`, and `disciplines/` has a `## Acceptance Criteria` section with at least one Given-When-Then bullet. Intents cannot be promoted from `drafts/` → `planned/` (or `drafts/` → `disciplines/`) without this. Hard block.
 - **`kind` is set on intents in `planned/`, `shipped/`, `disciplines/`, and `superseded/`.** Intents in `drafts/` may have `kind: null` (binding decision is at plan time). Lint blocks promotion from `drafts/` if `kind` cannot be inferred + confirmed.
@@ -405,7 +407,7 @@ Introduced by itd-48 (which superseded itd-31). The opponent is *other documents
 
 fn-29 ships the judgement half on demand via `/abcd:intent consistency` (Carmack-level oracle review).
 
-**Deferred follow-up** (recorded in `.work/issues.md` under `[fn-29 follow-up]`): the mechanical-half lint categories — schema/state contradictions, reference rot, acknowledgement gaps — were originally planned as `intent_lint.py --cross-doc` codes `XD002`/`XD006`/`XD007` per `05-internals/06-lint.md`; the lint-code half is deferred to a follow-up intent. Pre-commit hook wiring that would let `/abcd:intent consistency` findings block commits is also deferred.
+**Deferred follow-up** (recorded in `.work/issues.md` under `[fn-29 follow-up]`): the mechanical-half lint categories — schema/state contradictions, reference rot, acknowledgement gaps — were originally planned as `internal/core/lint --cross-doc` codes `XD002`/`XD006`/`XD007` per `05-internals/06-lint.md`; the lint-code half is deferred to a follow-up intent. Pre-commit hook wiring that would let `/abcd:intent consistency` findings block commits is also deferred.
 
 **Polymorphic on arg presence (same operation, narrowed scope):** bare = scan the whole corpus; with `<itd-N>` = scan one intent's relationship with the rest. This is *not* the forbidden hidden-state dispatch — the operation is identical; the arg just narrows scope (like `git log` vs `git log <path>`).
 

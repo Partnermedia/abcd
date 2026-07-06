@@ -36,4 +36,4 @@ The linter is delivered in two stages. **Shipped by fn-8 — the mechanical itd-
 
 **In a later phase (recorded as intents):**
 - **itd-14 — Prompt registry + versioning** — full diff-on-update workflow, treated like code (heavier rigour layer than itd-5's `prompt_version` field)
-- **itd-15 — Self-dogfooded SOTA audit** — abcd's own disembark of abcdDev runs the prompt audit as part of Pass C (eat-your-own-dogfood)
+- **itd-15 — Self-dogfooded SOTA audit** — abcd's own disembark of the frozen reference implementation runs the prompt audit as part of Pass C (eat-your-own-dogfood)

@@ -27,7 +27,7 @@ PHASE 0 — DEV-SYNC (see 05-internals/03-configuration.md § 2)
                            │
                            ▼
 PROBE & CONFIRM
-  inventory.py runs all adapters' probe() in parallel
+  the disembark probe entrypoint (internal/core) runs all adapters' probe() in parallel
   → ActiveSources list (reads curated .abcd/development/activity/, not raw sources)
   → AskUserQuestion (transparent): confirm assets/docs sources
                            │

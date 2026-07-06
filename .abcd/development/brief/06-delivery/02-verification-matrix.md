@@ -4,9 +4,9 @@
 |---|---|
 | Front-door wiring (CLI↔core↔plugin) | A `commands/abcd/*.md` surface shells to the binary → `internal/surface/cli` parses input → the core returns a **structured result** the door renders. The same core call is reachable from the MCP door with no logic re-expressed (adr-23). Core behaviour with no front door calling it is dead scaffolding — fails the wiring check |
 | ahoy idempotency | Run twice same version → no marker duplication, "already up to date", transparent re-confirm of visibility |
-| ahoy upgrade | Bump plugin version → meta.json updated, marker content refreshed, no duplication |
+| ahoy upgrade | Bump plugin version → `config.json["meta"]` updated, marker content refreshed, no duplication |
 | ahoy visibility flip | Switch private→public → `.gitignore` updated correctly, user shown resulting tracked-vs-ignored list |
-| ahoy scanner probe | scanner seam defaults to the native secret/PII scan; a missing opt-in backend (gitleaks/Presidio; TruffleHog when scan.deep=true) → native scan used, opt-in install offered with confirm — never a hard-fail on absence |
+| ahoy scanner probe | scanner seam defaults to the native secret/PII scan; a missing opt-in backend (gitleaks; TruffleHog when scan.deep=true) → native scan used, opt-in install offered with confirm — never a hard-fail on absence |
 | ahoy rules-loader install | Marker block from the bundled defaults injected; `.abcd/rules.json` skeleton written; the prompt-router hook registered |
 | Probe report | `/abcd:disembark probe` on corpus reports correct source-reader findings per repo (rich on idelphiDev, sparse on idelphiSubZero) |
 | Native transcript capture | A session transcript is written to the root-SHA-keyed native local store, **redacted at write time before anything lands on disk** (adr-29, reusing adr-6's two-stage model); the store is gitignored; an optional specstory import merges by timestamp/content hash over the same store |
@@ -28,7 +28,7 @@
 | Embark RP workspace registration | Lifeboat with `.abcd/rp/workspace.json` + the opt-in RP adapter present → user prompted to register; RP adapter absent → graceful warn-and-continue |
 | Round-trip | disembark on idelphiDev → embark into empty target → new repo memory+ADRs faithful subset |
 | Multi-repo corpus | All milestone acceptance gates pass on each corpus repo (with documented exemptions) |
-| Launch preflight | Deliberate PII fixture → hard-fail with preflight.md path |
+| Launch preflight | Deliberate PII fixture → `/abcd:launch ship` hard-fails with preflight.md path; `/abcd:launch dry-run` prints the would-refuse finding and exits 0 (report-only) |
 | Launch curated release (single repo) | Packaging **excludes `.abcd/**`** from the release artifact; a `/abcd:launch dry-run` proves nothing under `.abcd/` appears in the artifact manifest (adr-28). There is no second repo — the cut is a build-time filter over one tree |
 | Launch manifest | Correct include/exclude; `.abcd/launch.allow` honoured |
 | Launch branch mode | `--mode=branch` → `launch/<version>` branch; main untouched |

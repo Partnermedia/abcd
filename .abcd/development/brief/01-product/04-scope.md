@@ -14,7 +14,7 @@ The scope this brief covers is bounded by what is bundled into the six planned p
 - `/abcd:capture` — issue ledger — see [`04-surfaces/06-capture.md`](../04-surfaces/06-capture.md)
 - `/abcd:memory` — multi-upstream curated knowledge substrate (per itd-36) — see [`05-internals/07-memory.md`](../05-internals/07-memory.md)
 
-**Operator-internal commands** (wiring under `commands/abcd/`, NOT part of the user-facing surface above): `deps-check`, `ralph-up`, `session`, and `/abcd:run` — the itd-29 autonomous-run operator surface (`status`/`pause`/`resume`/`preflight`; read-mostly over the pluggable autonomous-run seam ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)), v1 never starts or kills the loop). See [`04-surfaces/README.md`](../04-surfaces/README.md) for the user-facing-vs-operator-internal boundary.
+**Operator-internal commands** (wiring under `commands/abcd/`, NOT part of the user-facing surface above): `/abcd:run` — the itd-29 autonomous-run operator surface (`status`/`pause`/`resume`/`preflight`; read-mostly over the pluggable autonomous-run seam ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)), v1 never starts or kills the loop). See [`04-surfaces/README.md`](../04-surfaces/README.md) for the user-facing-vs-operator-internal boundary.
 
 **Thirteen phased intents — ten standalone plus three disciplines:**
 - **Standalone (10):** itd-2, itd-3, itd-4, itd-6, itd-7, itd-27, itd-28, itd-34, itd-36, itd-40.

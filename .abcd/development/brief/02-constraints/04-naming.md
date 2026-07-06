@@ -24,18 +24,18 @@ Commands and abcd-owned directories use ship/voyage metaphors where natural.
 - `/abcd:capture` — issue-capture surface (see itd-4). "Capture" is deliberately neutral so the verb doesn't pre-commit to whether a finding is bug, nitpick, or systemic pattern; the synthesist (in a later phase) decides later.
 - `/abcd:intent grill` — Socratic-questioning sub-verb (see itd-27). "Grill" is borrowed register from prior art ([Pocock skills](https://github.com/mattpocock/skills)) and signals adversarial interrogation directly; no maritime word carries that meaning. Lives as a sub-verb of `/abcd:intent` — its mid-session glossary writes and per-session logbook output are command-shaped (per `05-internals/08-skills.md`).
 - `/abcd:audit` — formal verification surface (see itd-16 — a later phase). Reserved; not metaphor-mapped, dignified register.
-- `/abcd:reflect` — major-milestone retrospective (see itd-24 — a later phase). Reserved; not metaphor-mapped, soft register.
+- `/abcd:reflect` — phase-retrospective surface (see itd-24). Not metaphor-mapped, soft register.
+- `/abcd` (bare, top-level) — where-am-i status board (see itd-20). Not metaphor-mapped; the namespace root renders status + help (`status` / `help` are byte-identical aliases).
 
 **Reserved meta-development commands** (later phases; named now to prevent collisions):
 
-> **Note:** `/abcd:audit` and `/abcd:reflect` appear in BOTH this table AND the "Metaphor exemptions" list above. The two listings encode two distinct contracts: the exemptions list says these verbs are *exempt from the maritime convention*; this table says they are *reserved for later-phase intents*. Both are true simultaneously, so both listings are kept.
+> **Note:** `/abcd:audit` appears in BOTH this table AND the "Metaphor exemptions" list above. The two listings encode two distinct contracts: the exemptions list says the verb is *exempt from the maritime convention*; this table says it is *reserved for a later-phase intent*. Both are true simultaneously, so both listings are kept.
 
 | Path / command | Meaning |
 |---|---|
 | `/abcd:dredge` | cross-corpus synthesis (see itd-25 — a later phase). Maritime: dredging the seabed. Pairs with `lifeboat` as the cross-corpus counterpart to per-project rescue. |
 | `/abcd:loot` | OSS-vendor-with-provenance — clone selected files from public repos into `vendor/<source>/`, record origin / licence / SHA / rationale in `.abcd/development/activity/loot/<source>.md` (see itd-26 — a later phase). Maritime: raid the open ocean for outside cargo. Pairs with `dredge` (own corpus, salvage-frame) as the public-corpus counterpart (raid-frame). The pirate connotation is feature-not-bug — the verb itself prompts a licence-check reflex. |
 | `/abcd:audit` | formal verification surface — hash-chain / Merkle audit trails, fidelity checks (see itd-16 — a later phase). Reserved; not metaphor-mapped, dignified register. |
-| `/abcd:reflect` | major-milestone retrospectives (see itd-24 — a later phase). Reserved; not metaphor-mapped, soft register. |
 
 Technical files (`meta.json`, `config.json`, `corpus.json`, `rules.json`) are exempt — no metaphor needed.
 

@@ -1,17 +1,19 @@
 # Configuration Model
 
-This file holds the configuration schema (`meta.json`, `config.json`), the visibility-driven gitignore policy, and the `dev-sync` namespace that pumps volatile sources into curated artefacts.
+This file holds the configuration schema (`config.json`, including its `meta` setup block), the visibility-driven gitignore policy, and the `dev-sync` namespace that pumps volatile sources into curated artefacts.
 
-## `.abcd/meta.json`
+## Setup metadata — `config.json["meta"]`
 
-(example values shown):
+Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separate `.abcd/meta.json` at repo scope (fn-16). ahoy stamps and reads it via `config.json["meta"]` (example values shown):
 
 ```json
 {
-  "schema_version": 1,
-  "setup_version": "0.1.0",
-  "setup_date": "2026-05-04",
-  "project_name": "abcdDev"
+  "meta": {
+    "schema_version": 1,
+    "setup_version": "0.1.0",
+    "setup_date": "2026-05-04",
+    "project_name": "abcd-cli"
+  }
 }
 ```
 
@@ -166,54 +168,26 @@ Re-founding (clean-history rebuild — the case in [`../research/notes/ahoy-hist
 
 > **Legacy:** `~/ABCDevelopment/.abcd/changelog.md` is a hand-maintained toolchain changelog that predates abcd's `.abcd/` namespace. It is **not** an ahoy-managed artefact and is not part of the `.abcd/` namespace defined below.
 
-## The workspace registry — `~/.abcd/workspaces.json`
-
-`~/.abcd/workspaces.json` (user scope) is the registry of **everything abcd manages and where** — the human-structure counterpart to the root-SHA-keyed history `index.json`. ahoy reads it to classify the current folder and to resolve user-scope state without a hardcoded path or directory walk (per itd-40).
-
-```json
-{
-  "schema": 1,
-  "entries": [
-    {
-      "kind": "workspace",             // "workspace" | "repo"
-      "name": "abcd",
-      "path": "~/ABCDevelopment/Apps/abcd",
-      "repos": ["abcd", "abcdDev"]      // workspace only — names of member repo entries
-    },
-    {
-      "kind": "repo",
-      "name": "abcdDev",
-      "path": "~/ABCDevelopment/Apps/abcd/abcdDev",
-      "workspace": "abcd",             // repo only — parent workspace name, or null for standalone
-      "root_commit": "<sha>"           // repo only — REFERENCE into history index.json; not duplicated identity
-    }
-  ]
-}
-```
-
-**Two registries, one fact each — the cross-reference rule:**
-
-| Registry | Scope | Holds | Keyed on |
-|---|---|---|---|
-| `~/.abcd/workspaces.json` | user | **human structure** — workspace↔repo groupings, mutable paths, `kind` tag | `name` (mutable label) |
-| `~/.abcd/history/index.json` | user | **identity + lineage** — name, github, status, `supersedes` | `root_commit` (immutable) |
-
-A repo entry in `workspaces.json` carries **only a `root_commit` reference** into `index.json`; it never copies `github`, `status`, or lineage. Identity lives in `index.json`; structure lives in `workspaces.json`. This keeps the two from drifting — `path` is mutable and refreshed in both by ahoy, but every other identity field has exactly one home.
-
-If `~/.abcd/workspaces.json` does not exist, the first `/abcd:ahoy install` creates it (alongside the `~/.abcd/history/` store). See [`../04-surfaces/01-ahoy.md`](../04-surfaces/01-ahoy.md) for the classification mechanics that consume it.
+The history-store `index.json` is the sole user-scope registry — it records each managed repo's identity and lineage keyed on the immutable `root_commit`; `name`, `github`, and `path` are mutable labels ahoy refreshes on every run. There is no separate `workspaces.json`: abcd manages one repository per tree (see § The two `.abcd/` scopes below), so there is no workspace↔repo grouping to register.
 
 ## The two `.abcd/` scopes
 
-`.abcd/` is **one namespace pattern instantiated at two scopes**, not a repo-only directory. `/abcd:ahoy` classifies the folder it runs in (see [`../04-surfaces/01-ahoy.md`](../04-surfaces/01-ahoy.md)) and acts on the scope that applies:
+`.abcd/` is **one namespace pattern instantiated at two scopes**. abcd lives in **one repository** ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)): its design record is **repo-scoped and in-tree**, and the user scope holds only state that is genuinely machine-wide. `/abcd:ahoy` classifies the folder it runs in (see [`../04-surfaces/01-ahoy.md`](../04-surfaces/01-ahoy.md)) and acts on the scope that applies:
 
 | Scope | Location | Holds |
 |---|---|---|
-| **user** | `~/.abcd/` | one per machine — the `workspaces.json` registry, the shared `history/` store (`index.json` + per-root-SHA corpus), `config.json`, and the user-scope `memory/` (personal, cross-project knowledge) |
-| **workspace** | `<workspace>/.abcd/` | per workspace — `development/` (brief, roadmap, research, activity, voyage, personas), `memory/`, `lifeboat/`, `logbook/`, `rp/`. **The primary home for project work.** |
+| **user** | `~/.abcd/` | one per machine — **machine-local shared state only**: the root-SHA-keyed `history/` store (`index.json` + per-root-SHA transcript corpus, [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)), machine `config.json` defaults, and the user-scope `memory/` (personal, cross-project knowledge). **Never the design record.** |
+| **repo** | in-tree `.abcd/` | this repository's record and working files — the three-tier layout below, plus `config.json` (with its `meta` setup block), `rules.json`, and the `memory/`, native spec store, `lifeboat/`, `logbook/`, `rp/` namespaces. **The home for project work.** |
 
-**There is no development-environment scope.** A folder like `~/ABCDevelopment/` is just where a user happens to keep repos — abcd does not privilege it or hardcode it. Anything that was previously "development-wide" is **user-scoped**: it lives under `~/.abcd/`, one per machine. The shared history store and `index.json` live there; `~/.abcd/` is the single user-scope root.
+**The repo-scope three-tier working layout** (matching [`../02-constraints/01-platform.md`](../02-constraints/01-platform.md) and [`../01-product/02-context.md`](../01-product/02-context.md)):
 
-**There is no repo-scope `.abcd/` — with four named exceptions.** A repo (a single repository, possibly the dev repo inside a workspace) keeps only what *must* be physically in-repo: the CLAUDE.md/AGENTS.md marker block, the gitignored specstory redirect shim (`.specstory/cli/config.toml`, present only when the opt-in specstory capture adapter is wired), and the per-repo `<repo>/.abcd/rules.json` (modular rules loader override; see fn-14) plus `<repo>/.abcd/config.json` (per-repo lint and loader config; the modular loader reads `rules.force_refresh_every_n` and `docs.target` from it). All four are explicit carve-outs from the "no repo-scope `.abcd/`" rule — physically in-repo because the Claude Code hook and the marker-block installer must read them from the repo directory deterministically without resolving workspace inheritance. Everything else a repo would need is workspace-scoped and inherited. Earlier drafts of this brief located `development/`, `memory/`, `lifeboat/`, `logbook/`, `rp/` at the repo — they are **workspace-scoped**; wherever the rest of this file says "repo" for those artefacts, read "workspace".
+| Tier | Path | Committed? | Holds |
+|---|---|---|---|
+| **record** | `.abcd/development/` | committed — excluded from the release artefact by packaging | the durable design record: brief, roadmap, intents, ADRs, research |
+| **shared work** | `.abcd/work/` | committed | shared working files — `CONTEXT.md` + `DECISIONS.md` |
+| **local ephemeral** | `.abcd/.work.local/` | gitignored | machine-local scratch — `NEXT.md`, `scratch/`, `logs/` |
+
+**The record is repo-scoped and in-tree — no workspace layer holds it, and there is no `workspaces.json`.** abcd is one repository, so the record lives in that repository's tree; there is no dev→public mirror and no workspace registry. The user scope survives only for state that cannot live in any one repo's tree because it is shared across every abcd-managed repo on the machine: the `history/` store keyed on each repo's root-commit SHA, and machine `config.json` defaults. The repo keeps its `config.json` (carrying the `meta` setup block) and `rules.json` in-tree too — the Claude Code hook and the marker-block installer read them from the repo directory deterministically.
 
 **The `~/.claude/` boundary.** `~/.claude/` is the vendor harness directory. abcd keeps it minimal — **only the abcd plugin install lives there.** No abcd-specific material is written under `~/.claude/`; it routes to the scope-appropriate `.abcd/` instead. The one interaction abcd has with `~/.claude/` is *read-only*: `dev-sync memory` harvests `~/.claude/projects/<encoded-cwd>/memory/` as a source (see [`02-adapters.md`](02-adapters.md)). abcd never writes there.
 
@@ -241,11 +215,11 @@ In private repos, the entire `.abcd/` namespace is reproducible from a fresh clo
 
 abcd's curated memory exists at **two scopes** (per § The two `.abcd/` scopes), and there is one non-abcd memory location alongside it:
 
-1. **`<workspace>/.abcd/memory/`** — the **primary** abcd memory: curated semantic summaries written by `dev-sync memory`, tracked in private repos, the canonical input for `principle-distiller`. Most memory lives here.
+1. **`.abcd/memory/`** (repo scope) — the **primary** abcd memory: curated semantic summaries written by `dev-sync memory`, tracked in private repos, the canonical input for `principle-distiller`. Most memory lives here.
 2. **`~/.abcd/memory/`** — **user-scope** memory: personal preferences and cross-project principles that have no single workspace home.
 3. **`memory/`** — legacy `cp -r` snapshot at the repo root that some existing projects maintain. abcd respects if present but doesn't write to it.
 
-Which scope a curated page lands in is a routing decision — see [`07-memory.md`](07-memory.md) § scope routing. Retrieval across the two scopes is **not** a flat union (that would overflow context); it is keyword-recall + budget-bracketed injection per itd-39. When the brief says "memory" without qualification, it means the workspace-scope `.abcd/memory/`.
+Which scope a curated page lands in is a routing decision — see [`07-memory.md`](07-memory.md) § scope routing. Retrieval across the two scopes is **not** a flat union (that would overflow context); it is keyword-recall + budget-bracketed injection per itd-39. When the brief says "memory" without qualification, it means the repo-scope `.abcd/memory/`.
 
 **`.work/` is local-only everywhere.** Working notes, drafts, status trackers stay gitignored. abcd consumes them via `dev-sync` ([§ 2](#2-abcddevelopmentactivity-namespace-and-dev-sync)) which promotes useful content into tracked `.abcd/development/activity/` artefacts before disembark.
 
@@ -300,7 +274,7 @@ Scheduled/cron sync **comes in a later phase** of the plugin (itd-13).
 
 - **Memory (volatile) → `.abcd/memory/` (curated):** Source is an opt-in memory harvest per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — under Claude Code: `~/.claude/projects/<encoded-cwd>/memory/`. The repo-local legacy `memory/` snapshot (the `cp -r` pattern) is the workflow `dev-sync memory` replaces. Output is *not verbatim*: distilled summaries grouped by domain, written as actionable suggestions for future agents (e.g., "When implementing UI hit areas, always use `.contentShape(Rectangle())` — source: `feedback_hit_target_full_box`"). Why curated: raw memories grow unbounded and contain personal phrasing ("user got annoyed when X"). Inputs to `principle-distiller` (Pass C).
 
-- **Reviews (volatile) → `.abcd/development/activity/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching). The primary adapter is **RepoPrompt**. `dev-sync reviews` sweeps **ad-hoc oracle reviews not tied to a spec** from two RP sources: (a) the chat store at `~/Library/Application Support/RepoPrompt/Workspaces/Workspace-<project>-<UUID>/Chats/ChatSession-*.json` (plain JSON, well-structured); and (b) the history store's `prompt-exports/` — RP's `export_response: true` writes ad-hoc reviews to `<cwd>/prompt-exports/` with a **hardcoded, non-configurable path**, which ahoy redirects into `~/.abcd/history/<root-sha>/prompt-exports/` via the `<repo>/prompt-exports` symlink. **Spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. `dev-sync reviews` renders its sources → `.abcd/development/activity/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. One project may have multiple RP workspaces — match by content of `workspace.json`. **Stability risk:** vendor JSON schemas may change between releases. Mitigation: probe defensively, version-stamp in `_provenance.json`, on parse failure log a warning and fall back to existing `.abcd/development/activity/reviews/*.md` (don't lose what was already synced). **Privacy:** filter strictly by workspace → project-path match before reading chat content. Inputs to `review-collator` (Pass A).
+- **Reviews (volatile) → `.abcd/development/activity/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — host-delegated by default ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), with **RepoPrompt** as one opt-in adapter. When the RepoPrompt adapter is wired, `dev-sync reviews` sweeps **ad-hoc oracle reviews not tied to a spec** from two RP sources: (a) the chat store at `~/Library/Application Support/RepoPrompt/Workspaces/Workspace-<project>-<UUID>/Chats/ChatSession-*.json` (plain JSON, well-structured); and (b) the history store's `prompt-exports/` — RP's `export_response: true` writes ad-hoc reviews to `<cwd>/prompt-exports/` with a **hardcoded, non-configurable path**, which ahoy redirects into `~/.abcd/history/<root-sha>/prompt-exports/` via the `<repo>/prompt-exports` symlink. **Spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. `dev-sync reviews` renders its sources → `.abcd/development/activity/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. One project may have multiple RP workspaces — match by content of `workspace.json`. **Stability risk:** vendor JSON schemas may change between releases. Mitigation: probe defensively, version-stamp in `_provenance.json`, on parse failure log a warning and fall back to existing `.abcd/development/activity/reviews/*.md` (don't lose what was already synced). **Privacy:** filter strictly by workspace → project-path match before reading chat content. Inputs to `review-collator` (Pass A).
 
 - **`.work/` (volatile, local-only) → `.abcd/development/activity/issues/`, `.abcd/development/activity/notes/` (curated):** `.work/issues.md` (the abcd CLAUDE.md mandatory issue log) gets parsed entry-by-entry; each entry promoted to `.abcd/development/activity/issues/open/iss-N-<slug>.md` (per itd-4 ledger structure). `.work/notes/`, `.work/<feature>/` get distilled into `.abcd/development/activity/notes/`. Files in `.work/` are never moved or deleted — `dev-sync work` is read-and-curate, source stays put. Inputs to `principle-distiller` (Pass C) and `chat-distiller` (Pass B, as auxiliary context).
 
@@ -383,8 +357,7 @@ external plug-in — so this brief does not restate it here.
 
 ```
 .abcd/
-├── meta.json
-├── config.json
+├── config.json                         # config + the `meta` setup block (schema_version, setup_version, ...)
 ├── corpus.json
 ├── rules.json                          # per-repo override of plugin-bundled rule defaults (per itd-3)
 ├── development/

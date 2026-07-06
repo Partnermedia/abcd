@@ -136,7 +136,7 @@ Steps, run in parallel where independent:
    this step only reports which **opt-in** scanners are on PATH: `gitleaks`
    (deeper secret scan) and `trufflehog` if `scan.deep` is (or would be)
    enabled.
-3. **`.abcd/` skeleton** — presence of `meta.json`, `config.json`, `rules.json`.
+3. **`.abcd/` skeleton** — presence of `config.json` (which carries the `meta` setup block) and `rules.json`.
 4. **Identity** — `git rev-list --max-parents=0 HEAD` → root SHA. Cross-check
    against `~/.abcd/history/index.json`: is this SHA registered?
    Is there a sibling entry with a matching name/github but a *different* root
@@ -163,7 +163,7 @@ Steps, run in parallel where independent:
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per fn-14 T7.
-10. **Version** — read `meta.json.setup_version`; classify `first-time` /
+10. **Version** — read `config.json["meta"].setup_version`; classify `first-time` /
     `upgrade` / `current`. One input among many — never the sole gate.
 
 Each detected discrepancy becomes a **gap** with a stable `id`, a `category`,
@@ -198,7 +198,7 @@ category present, and applies the approved categories' gaps.
    per-tool). fn-16 NEVER auto-executes package managers; the user runs the
    install commands manually.
 3. **Skeleton gaps** (`safe-autocreate`) — `abcd init --json` creates `.abcd/`,
-   writes `meta.json` + `config.json` (idempotent merge). Create `.abcd/bin/`
+   writes `config.json` (idempotent merge; the `meta` setup block is a key within it). Create `.abcd/bin/`
    only if `--with-scripts`; copy scripts with `chmod +x`; write
    `.abcd/usage.md`. Create history-store dirs (see step 6).
 4. **Config gaps** (`config-change`) — transparent prompts; each skips with a
@@ -247,7 +247,7 @@ category present, and applies the approved categories' gaps.
    per fn-14 T7). Install NEVER writes `hooks.json`; uninstall NEVER mutates
    `hooks.json`. A missing manifest surfaces as a `plugin-owned` non-resolvable
    diagnostic gap.
-10. Stamp `setup_version` + `setup_date` in `meta.json`.
+10. Stamp `setup_version` + `setup_date` in `config.json["meta"]`.
 11. Print summary: installed files, config table, symlink status, hook status,
     notes (re-run hint, uninstall hint).
 

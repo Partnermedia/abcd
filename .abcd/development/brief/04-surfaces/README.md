@@ -1,6 +1,6 @@
 # Surfaces — User-Facing Commands
 
-The brief's user-facing command surface is the set enumerated below (not all are shipped yet — see [`06-delivery/`](../06-delivery) for current delivery state). Each has its own file with the surface contract: purpose, flow, acceptance criteria. (Operator-internal commands under `commands/abcd/` — e.g. `deps-check` and `run` (the itd-29 autonomous-run operator surface over the pluggable run seam: `status`/`pause`/`resume`/`preflight`) — are wiring, not part of this user-facing surface.)
+The brief's user-facing command surface is the set enumerated below (not all are shipped yet — see [`06-delivery/`](../06-delivery) for current delivery state). Each has its own file with the surface contract: purpose, flow, acceptance criteria. (Operator-internal commands under `commands/abcd/` — e.g. `run` (the itd-29 autonomous-run operator surface over the pluggable run seam: `status`/`pause`/`resume`/`preflight`) — are wiring, not part of this user-facing surface.)
 
 | # | Command | Purpose | File |
 |---|---|---|---|
