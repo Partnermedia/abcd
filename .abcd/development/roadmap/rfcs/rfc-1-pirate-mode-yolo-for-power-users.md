@@ -107,7 +107,7 @@ What we'd find most useful:
 
 This RFC is intentionally the *first* community-facing artefact for abcd. The way it gets discussed sets cultural priors for everything that follows. Useful contributions:
 
-- **Comment on the GitHub issue/discussion** linked from this RFC at launch time. (Link TBD — this RFC currently lives in private dev; will be opened for public discussion when the public `abcd/` repo launches.)
+- **Comment on the GitHub issue/discussion** linked from this RFC. (The single repo is the marketplace — per [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) there is no separate public repository; this RFC is discussable at the repo's public surface, not deferred to a mirror.)
 - **Reference your own experience** — a story about when expert mode helped or hurt is worth more than abstract argumentation.
 - **Suggest constraints we missed.** The "What We've Already Decided" section is where we want pushback most: did we mark something non-negotiable that should actually be open?
 - **Weigh in on tone.** If pirate mode (the *name*) feels wrong even if the *design* is sound, say so — naming is design.
