@@ -14,7 +14,7 @@ The brief is split across numbered folders rather than a single `README.md`. Rea
 ## Naming convention
 
 - **Numeric prefixes** use two-digit zero-padding (`01-`, `02-`, …, `10-`, …) so sort order survives past 9 entries.
-- **Hyphens** (not underscores) separate words, matching the kebab-case norm elsewhere in the project (`fn-1-add-oauth`, `itd-N-<slug>`, `adr-N-<slug>`).
+- **Hyphens** (not underscores) separate words, matching the kebab-case norm elsewhere in the project (`spc-1-add-oauth`, `itd-N-<slug>`, `adr-N-<slug>`).
 - **`README.md`** (the index) deliberately has *no* numeric prefix because it's the entry point, not a section. GitHub renders it automatically when browsing the folder.
 
 ## Brief vs lifeboat

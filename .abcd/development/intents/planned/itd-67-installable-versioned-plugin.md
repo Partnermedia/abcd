@@ -1,7 +1,7 @@
 ---
 id: itd-67
 slug: installable-versioned-plugin
-spec_id: fn-77-abcd-installable-versioned-plugin
+spec_id: spc-77-abcd-installable-versioned-plugin
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

@@ -51,7 +51,7 @@ RFCs live here under `.abcd/development/roadmap/` because they are roadmap artef
 
 ## RFC IDs
 
-RFC IDs follow the pattern `rfc-N` (unpadded — mirrors `itd-N` and `fn-N`). Filenames: `rfc-N-<slug>.md`. Lexical-vs-numeric sort handled at tool layer.
+RFC IDs follow the pattern `rfc-N` (unpadded — mirrors `itd-N` and `spc-N`). Filenames: `rfc-N-<slug>.md`. Lexical-vs-numeric sort handled at tool layer.
 
 ---
 

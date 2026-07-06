@@ -1,7 +1,7 @@
 ---
 id: itd-2
 slug: in-session-subagent-dispatch
-spec_id: fn-10-in-session-subagent-dispatch-oracle
+spec_id: spc-10-in-session-subagent-dispatch-oracle
 kind: standalone
 suggested_kind: null
 reclassification_history: []

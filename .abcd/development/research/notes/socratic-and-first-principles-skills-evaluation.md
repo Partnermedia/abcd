@@ -28,7 +28,7 @@ abcd-intent-grill and violate the one-canonical-surface-per-concept rule
 **What socratic-grill does better (the harvest):**
 1. **Domain-agnostic targeting.** abcd-intent-grill only grills `itd-N` intents.
    socratic-grill's structure works on ANY artifact — a spec, an ADR, an
-   architecture sketch. abcd has no way to grill a non-intent today (the fn-37
+   architecture sketch. abcd has no way to grill a non-intent today (the spc-37
    grill this session was done by hand, with no skill behind it).
 2. **Temperature dial.** `explore` / `challenge` / `stress-test` is a cleaner,
    more explicit model than abcd-intent-grill's gentle-refine-vs-adversarial-grill
@@ -57,7 +57,7 @@ I, used as method not citation.
 before engineering (the press-release / "Why This Matters" discipline). But abcd
 has no tool that audits whether a "Why This Matters" rests on a genuine first
 principle vs an unexamined assumption or a circular justification. The
-fidelity-reviewer (fn-12) checks intent-vs-delivery fidelity; the grill
+fidelity-reviewer (spc-12) checks intent-vs-delivery fidelity; the grill
 (abcd-intent-grill) stress-tests acceptance criteria; neither audits the
 *foundations* of the reasoning. The regress-terminus classifier (esp. the
 circular-dependency flag) and the four-causes lens are a strong fit for auditing

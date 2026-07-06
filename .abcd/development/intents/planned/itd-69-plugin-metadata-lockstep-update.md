@@ -1,9 +1,9 @@
 ---
 id: itd-69
 slug: plugin-metadata-lockstep-update
-spec_id: fn-83-operator-surfaces-manifest-lockstep
+spec_id: spc-83-operator-surfaces-manifest-lockstep
 kind: bundle-member
-bundle: fn-83-operator-surfaces
+bundle: spc-83-operator-surfaces
 suggested_kind: standalone
 reclassification_history: []
 prd_path: null
@@ -34,7 +34,7 @@ glossary_terms_used:
 > disagreement before it publishes."
 
 _Drawn out from a human brief edit by the brief-change derivation gate
-(itd-61 / fn-75)._
+(itd-61 / spc-75)._
 
 ## Why This Matters
 
@@ -42,7 +42,7 @@ Launch and version-bump workflows must update plugin metadata in lockstep at the
 canonical plugin metadata locations, including both `plugin.json` files and
 `.claude-plugin/marketplace.json`, so version and changelog state cannot drift
 across duplicated surfaces. Where the version is WRITTEN is owned by the launch
-flow (fn-77 / fn-80); what no surface owned before was the invariant that the two
+flow (spc-77 / spc-80); what no surface owned before was the invariant that the two
 manifests actually AGREE after a write. A drifted pair publishes a broken plugin:
 the marketplace advertises one version, the plugin declares another, and the
 mismatch surfaces only when a downstream install fails. A cheap read-only checker
@@ -56,13 +56,13 @@ turns that latent drift into an early, loud refusal.
   argument (no auto-detection).
 - A policy ADR recording the lockstep invariant, the per-tree pinned path list,
   and the `--allow-dirty`-must-not-bypass rule (enforced downstream by
-  fn-79/fn-80 wiring).
+  spc-79/spc-80 wiring).
 - The published-marketplace changelog-entry schema the bump step consumes.
 
 ## What's Out of Scope
 
-- Version WRITES — owned by fn-77 / fn-80; this checker never bumps a version.
-- Preflight WIRING of the checker into the launch gate suite — fn-79 / fn-80.
+- Version WRITES — owned by spc-77 / spc-80; this checker never bumps a version.
+- Preflight WIRING of the checker into the launch gate suite — spc-79 / spc-80.
 
 ## Acceptance Criteria
 
@@ -83,11 +83,11 @@ turns that latent drift into an early, loud refusal.
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
-### Linkage note (fn-83.5)
+### Linkage note (spc-83.5)
 
 Ships as one of FOUR intents sharing spec
-`fn-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
-spec" as a bundle (`kind: bundle-member` + shared `bundle: fn-83-operator-surfaces`)
+`spc-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
+spec" as a bundle (`kind: bundle-member` + shared `bundle: spc-83-operator-surfaces`)
 — the representation the doc_fidelity intent-resolution + spec-close preflight
 require. Bundle member by delivery relationship, not a scope change. The grill/PRD
 bypass for this ungrilled intent is handled via the grandfather fields

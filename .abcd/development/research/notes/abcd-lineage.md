@@ -75,7 +75,7 @@ Status: ✅ built · ◑ partial · ⛔ stub/unbuilt.
 | **Brief surface** | `04-surfaces/01-ahoy.md` | `…/05-intent.md` | `…/06-capture.md` | `…/02-disembark.md` | `…/03-embark.md` | `…/04-launch.md` | `…/07-memory.md` |
 | **Roadmap phase** | Phase 1 | Phase 3 | Phase 2 | Phase 4 | Phase 5 | Phase 5 | (unphased, itd-36) |
 | **Implementing intents** | itd-3, itd-7 | itd-1, itd-5, itd-27, itd-34, itd-37, itd-48 | itd-4 | itd-6/itd-2 (oracle) | — | itd-23 (interop) | itd-36, itd-39 |
-| **Key spec(s)** | fn-16 | fn-3/9/12/26/29/30 | fn-20/21/22 | fn-17 (probe) | fn-17 (probe) | — | — |
+| **Key spec(s)** | spc-16 | spc-3/9/12/26/29/30 | spc-20/21/22 | spc-17 (probe) | spc-17 (probe) | — | — |
 | **Main module** | `ahoy.py` (4.5k) | `intent_*` (6.3k/4.4k/4.0k) | `capture.py` (2.1k) | `disembark.py` | `embark.py` | `launch.py` | — |
 | **What it produces** | installed plugin + CLAUDE.md marker + overlay | `itd-N` intent corpus + audit verdicts | `iss-N` issues + promote→intent | `.abcd/lifeboat/` (output) | scaffolded target + provenance | public repo payload | curated memory pages |
 | **Provenance / output** | history store (`~/.abcd/`) | `## Audit Notes` + logbook | `activity/issues/{open,resolved,wontfix}/` | `voyage/` manifests | `voyage/embark/provenance.json` | `launch.allow` + manifest | `.abcd/memory/` |
@@ -108,7 +108,7 @@ Brief (always-current canvas)
 
 Per the project goal "abcd implementation-tool-agnostic," the **flow-next** and
 **Ralph** rows are the replacement targets. abcd reads flow-next's `.flow/` JSON
-data contract directly (~250 refs across ~30 files). fn-34 (in progress) is the
+data contract directly (~250 refs across ~30 files). spc-34 (in progress) is the
 first decoupling brick — a flow-next *contract loader* that resolves the
 installed flowctl by path rather than hard-vendoring it. The recommended path to
 agnosticism is a thin abcd-owned backend interface
@@ -212,7 +212,7 @@ flowchart LR
   launch + 14 agents) is correctly deferred to Phases 4–5.
 - **The two dashed-red boxes** (`flow-next`, `Ralph`) are the replacement
   targets — everything the autonomous execution depends on. The decoupling seam
-  (fn-34) and the backend-interface recommendation are the road to making these
+  (spc-34) and the backend-interface recommendation are the road to making these
   swappable.
 - **The oracle cascade** is the one piece of cross-cutting infrastructure every
   intelligent stage leans on — and the one that already honours its invariants

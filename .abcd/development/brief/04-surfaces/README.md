@@ -12,7 +12,7 @@ The brief's user-facing command surface is the set enumerated below (not all are
 | 6 | `/abcd:capture` | Issue ledger (capture / list / promote / resolve / wontfix) | [`06-capture.md`](06-capture.md) |
 | 7 | `/abcd:memory` | Multi-upstream curated knowledge substrate (per itd-36) — `ingest` external sources / `ask` queries / `lint` health-checks. Component spec: [`05-internals/07-memory.md`](../05-internals/07-memory.md). | [`07-memory.md`](07-memory.md) |
 | 8 | `/abcd` | Top-level where-am-i status board (per itd-20) — cross-command re-orientation: project + visibility, lifeboat, dev-sync, recent logbook, active intents, next actions. `status` / `help` are byte-identical aliases. Read-only. | [`08-abcd.md`](08-abcd.md) |
-| 9 | `/abcd:reflect` | Phase retrospective (per itd-24) — `/abcd:reflect <phase-id>` composes a five-section retrospective (went well / could improve / lessons / decisions / metrics) seeded by the fn-66 phase-audit receipt. Phase-only grain. | [`09-reflect.md`](09-reflect.md) |
+| 9 | `/abcd:reflect` | Phase retrospective (per itd-24) — `/abcd:reflect <phase-id>` composes a five-section retrospective (went well / could improve / lessons / decisions / metrics) seeded by the spc-66 phase-audit receipt. Phase-only grain. | [`09-reflect.md`](09-reflect.md) |
 
 **Bare-command-as-help is a universal abcd convention** — every command shows status + suggested next actions when invoked without args. Provides discoverability without forcing the user to remember subcommand names.
 

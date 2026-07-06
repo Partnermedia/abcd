@@ -1,9 +1,9 @@
 ---
 id: itd-24
 slug: reflect-command
-spec_id: fn-83-operator-surfaces-manifest-lockstep
+spec_id: spc-83-operator-surfaces-manifest-lockstep
 kind: bundle-member
-bundle: fn-83-operator-surfaces
+bundle: spc-83-operator-surfaces
 suggested_kind: null
 reclassification_history: []
 glossary_terms_used: [core/phase, core/intent, core/voyage, core/persona, core/brief, core/epic, core/lifeboat, core/oracle, core/spec, interview/embark, distribution/release]
@@ -76,13 +76,13 @@ A phase audit and a phase retrospective are **distinct activities**, the same sp
 
 `/abcd:reflect` **cannot be planned until the phase-fidelity-reviewer ships** and its output artefact is stable and machine-readable. The reviewer is deferred in adr-9. Because `/abcd:reflect`'s core design is to *consume* the audit's per-bullet verdicts as interview seed material, and the audit-missing AC depends on running the reviewer inline, the command has no buildable contract until the reviewer's output format exists. `/abcd:intent plan itd-24` must not proceed while the phase-fidelity-reviewer remains unbuilt.
 
-**Satisfied:** the stable machine-readable phase-fidelity output is provided by fn-66 (`phase_review_report.schema.json` + `.abcd/logbook/audit/phase-<ts>/report.{json,md}`), so this dependency is met and `/abcd:reflect` is planned under fn-83. V1 keys empty-phase detection off the fn-66 receipts (not a `phase:` anchor) and refuses on a missing/empty-audited receipt rather than offering the inline reviewer — see the `### Implementation notes (fn-83.3 — v1 scope)` block below.
+**Satisfied:** the stable machine-readable phase-fidelity output is provided by spc-66 (`phase_review_report.schema.json` + `.abcd/logbook/audit/phase-<ts>/report.{json,md}`), so this dependency is met and `/abcd:reflect` is planned under spc-83. V1 keys empty-phase detection off the spc-66 receipts (not a `phase:` anchor) and refuses on a missing/empty-audited receipt rather than offering the inline reviewer — see the `### Implementation notes (spc-83.3 — v1 scope)` block below.
 
 ## Audit Notes
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
-### Implementation notes (fn-83.3 — v1 scope, delivered by fn-83)
+### Implementation notes (spc-83.3 — v1 scope, delivered by spc-83)
 
 The shipped `/abcd:reflect` (thin V1) refines two acceptance behaviours from
 their originally-drafted form; both are recorded here so the fidelity review
@@ -90,9 +90,9 @@ reads them as deliberate v1 scope, not gaps:
 
 - **Missing-audit inline-reviewer offer → refusal (deferred).** The draft AC
   had the command "offer to run the phase-fidelity-reviewer inline" when no
-  audit exists. V1 instead **refuses** when no fn-66 phase-audit receipt exists
+  audit exists. V1 instead **refuses** when no spc-66 phase-audit receipt exists
   for the named phase (and when the latest matching receipt is empty-audited).
-  Empty-phase detection keys off the fn-66 receipts, not a `phase:` spec anchor
+  Empty-phase detection keys off the spc-66 receipts, not a `phase:` spec anchor
   (that anchor is deferred; phase membership is editorial). Running the reviewer
   inline from reflect is a recorded future extension.
 - **Open-spec warn/confirm (deferred).** The draft AC had reflect warn and ask
@@ -101,20 +101,20 @@ reads them as deliberate v1 scope, not gaps:
   semantics above are the v1 gate.
 - **Phase-only grain, source links, lifeboat.** `/abcd:reflect <itd-N>` is
   refused (phase-only grain). V1 links to the phase doc + audit report + member
-  specs only (no intent links — the fn-66 receipt carries no intent ids;
+  specs only (no intent links — the spc-66 receipt carries no intent ids;
   recorded future extension). The lifeboat-packs-all-retrospectives requirement
-  is a DOCUMENTED forward requirement on the future disembark spec (fn-17 stubs),
+  is a DOCUMENTED forward requirement on the future disembark spec (spc-17 stubs),
   not a behaviour this surface implements — recorded in the surface doc.
 
 The interview is a single seeded pass (per-bullet verdicts → five questions);
 multi-turn depth is a recorded future extension. Full surface record:
 [`../../brief/04-surfaces/09-reflect.md`](../../brief/04-surfaces/09-reflect.md).
 
-### Linkage note (fn-83.5)
+### Linkage note (spc-83.5)
 
 Ships as one of FOUR intents sharing spec
-`fn-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
-spec" as a bundle (`kind: bundle-member` + shared `bundle: fn-83-operator-surfaces`)
+`spc-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
+spec" as a bundle (`kind: bundle-member` + shared `bundle: spc-83-operator-surfaces`)
 — the representation the doc_fidelity intent-resolution + spec-close preflight
 require. Bundle member by delivery relationship, not a scope change. This intent
 keeps its real grill linkage (`grill_session_id`); GR002 is handled via

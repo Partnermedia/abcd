@@ -43,7 +43,7 @@ not the phase itself.
 ## Examples
 
 - "Phase 1 — Substrate ends when the oracle backend ships and project state is reconciled."
-- "Spec `fn-5` carries `phase: phase-1-substrate` in its frontmatter." (The `phase:` anchor's tooling shipped in fn-66 — the phase-audit reviewer that reads it and the `PA001` verify-exists lint both exist; what stays deferred is the *corpus backfill* that would make the anchor a standing convention. Phase membership today is still editorial, via each phase doc's `## Scope`.)
+- "Spec `spc-5` carries `phase: phase-1-substrate` in its frontmatter." (The `phase:` anchor's tooling shipped in spc-66 — the phase-audit reviewer that reads it and the `PA001` verify-exists lint both exist; what stays deferred is the *corpus backfill* that would make the anchor a standing convention. Phase membership today is still editorial, via each phase doc's `## Scope`.)
 - "The phase audit reviews delivered reality against the phase's structured `## Phase Acceptance`." (Per the adr-9 amendment: the reviewable cut is the structured `## Phase Acceptance` bullets, NOT the prose `## Expectation` — prose is the narrative re-statement, not the audit target.)
 
 ## Related terms

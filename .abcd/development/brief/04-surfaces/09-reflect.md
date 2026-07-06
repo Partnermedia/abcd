@@ -9,21 +9,21 @@ deterministic reflect-writer capability, which renders
 
 This surface doc records the design contract; the runtime behaviour (contract
 verification, README write, consumed-receipt-path + phase/audit/member-spec
-links) is owned by task `fn-83-operator-surfaces-manifest-lockstep.3` and the
+links) is owned by task `spc-83-operator-surfaces-manifest-lockstep.3` and the
 command file `commands/abcd/reflect.md`.
 
 ## Argument
 
 The command takes exactly one positional argument: a **phase id** (e.g.
 `phase-1-substrate`, `phase-5-roundtrip`). It is NOT `itd-N` and NOT a
-milestone/`fn-N` id. `/abcd:reflect <itd-N>` is refused — reflection is
+milestone/`spc-N` id. `/abcd:reflect <itd-N>` is refused — reflection is
 phase-grained only.
 
 Bare `/abcd:reflect` (no argument) renders help/state and writes nothing.
 
 ## What it does
 
-1. Selects the **latest** fn-66 phase-audit receipt whose `phase_id` matches the
+1. Selects the **latest** spc-66 phase-audit receipt whose `phase_id` matches the
    argument (newest `timestamp` wins) at
    `.abcd/logbook/audit/phase-<ts>/report.json`.
 2. Runs the `reflection-composer` agent as a seeded single-pass interview: five
@@ -58,13 +58,13 @@ The writer refuses (each with a message naming the phase-audit prerequisite):
 |---------|-----------|
 | Non-phase argument | `itd-N` or free text — phase-only grain |
 | No reflection answers | A bare `{}` on stdin (hollow all-"none recorded") — refused unless `--allow-empty` |
-| No fn-66 audit receipt | No phase-audit receipt exists for the named phase |
+| No spc-66 audit receipt | No phase-audit receipt exists for the named phase |
 | Empty-audited latest receipt | `member_specs` empty OR `done_total.total == 0` — nothing shipped to reflect on |
 | Re-run without `--overwrite` | A retrospective already exists for the phase |
 
 The writer also enforces write-site containment (defense-in-depth): the resolved
 target must be inside `.abcd/retrospectives/`, and receipt-supplied
-`member_specs[].spec_id` values are validated against the `fn-NN-slug` shape
+`member_specs[].spec_id` values are validated against the `spc-NN-slug` shape
 before they are rendered into link text.
 
 ## Invocation model
@@ -82,7 +82,7 @@ Output is fixed at `.abcd/retrospectives/<phase-id>/README.md` (a peer of
 `.abcd/intents/` and `.abcd/logbook/`), committed as part of the phase's
 permanent record. The README LINKS to the phase doc, the audit report (its
 receipt path recorded in the README), and each member spec — it never copies
-their bodies. v1 links are limited to those three: the fn-66 receipt carries no
+their bodies. v1 links are limited to those three: the spc-66 receipt carries no
 intent ids, so intent links are a recorded future extension.
 
 Canonical glossary terms (`voyage`, `persona`) are used in body prose; the README
@@ -91,7 +91,7 @@ records `glossary_terms_used: core/voyage, core/persona`.
 ## Lifeboat forward requirement (grill Q6)
 
 The lifeboat must pack EVERY phase retrospective a voyage produced, so the full
-reflection arc travels between voyages. disembark/embark are unbuilt (fn-17
+reflection arc travels between voyages. disembark/embark are unbuilt (spc-17
 stubs), so this is a **documented forward requirement on the future disembark
 spec** — NOT a behaviour this surface implements. It is recorded here and in the
 itd-24 intent acceptance so a later reader treats it as a requirement, not a
@@ -111,6 +111,6 @@ shipped capability.
 - Agent: `agents/reflection-composer.md` (the 16th catalog agent — see
   [`../05-internals/01-agents.md`](../05-internals/01-agents.md))
 - Intent: `itd-24` (`../intents/…/itd-24-reflect-command.md`)
-- The fn-66 phase-audit contract reflect consumes:
+- The spc-66 phase-audit contract reflect consumes:
   `scripts/abcd/schemas/phase_review_report.schema.json`
 - Naming / VR001 registration: [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md)

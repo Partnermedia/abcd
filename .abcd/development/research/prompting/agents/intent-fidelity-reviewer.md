@@ -15,11 +15,11 @@ baseline: ../01-general-best-practices.md
 > **Role.** Research is the **gate**, not the **source**. The author writes the
 > agent's prompt informed by this file; the oracle audits alignment.
 >
-> **fn-12 scope note.** fn-12 ships **Role 1 only** — the discipline-judgement
+> **spc-12 scope note.** spc-12 ships **Role 1 only** — the discipline-judgement
 > subset (the itd-1 acceptance pass and the itd-37 `MG004` boilerplate pass).
 > Role 2 (cross-document fidelity, itd-31) and Role 3 (kind classification,
-> itd-34 — fragment authored by fn-9) are out of fn-12's behavioural scope;
-> Role 3's fragment is *assembled into* the agent file by fn-12 but is not
+> itd-34 — fragment authored by spc-9) are out of spc-12's behavioural scope;
+> Role 3's fragment is *assembled into* the agent file by spc-12 but is not
 > dispatched or tested here. This research file therefore concentrates on
 > Role 1; Roles 2/3 are sketched only where they constrain Role 1's prompt
 > shape.
@@ -121,7 +121,7 @@ Techniques explicitly **rejected** and why:
 ## 4. Golden-test fixture sketches
 
 The actual fixture files live at `agents/intent-fidelity-reviewer/fixtures/`
-(per baseline § 5). fn-12 T1 creates a *minimal* canary under
+(per baseline § 5). spc-12 T1 creates a *minimal* canary under
 `fixtures/canary/itd1/`; T5 expands the golden set and adds
 `fixtures/canary/mg004/`. Shapes:
 
@@ -137,7 +137,7 @@ The actual fixture files live at `agents/intent-fidelity-reviewer/fixtures/`
 Per baseline § 7, Role 1 reads attacker-influenceable intent *and* spec
 bodies, so a canary fixture is **mandatory**. Role 1 has two distinct
 untrusted-input paths (itd-1 reads intent bodies; `MG004` reads spec bodies),
-so two canaries are required — fixtures 4 and 6. The fn-12 spec makes the
+so two canaries are required — fixtures 4 and 6. The spc-12 spec makes the
 canary a **hard gate** (R7): either canary failing blocks the epic.
 
 ## 5. Open questions
@@ -163,20 +163,20 @@ When the agent's prompt bumps version (per baseline § 5), reference back here
 with a one-line rationale:
 
 - `1.0.0` (initial) — written against this research file's initial revision.
-  fn-12 T1 ships Role 1 (itd-1 acceptance pass + `MG004` boilerplate pass);
-  the itd-5 one-shot self-improvement pre-flight runs in fn-12 T5 once the
+  spc-12 T1 ships Role 1 (itd-1 acceptance pass + `MG004` boilerplate pass);
+  the itd-5 one-shot self-improvement pre-flight runs in spc-12 T5 once the
   golden fixtures exist (it needs them as the eval set).
 
 ## 7. Oracle review outcome (per 05-prompt-quality.md non-trivial-research rule)
 
 `05-internals/05-prompt-quality.md` requires this research file to be
 oracle-reviewed as "non-trivial" (specific findings, not empty bullets)
-*before* the prompt is authored. fn-11's `oracle.py` cascade is the dispatch
+*before* the prompt is authored. spc-11's `oracle.py` cascade is the dispatch
 mechanism.
 
-**Status: SHIP — verified by oracle review under fn-12 T8 / fn-12.8.**
+**Status: SHIP — verified by oracle review under spc-12 T8 / spc-12.8.**
 
-Re-run carried out under `caller=fn-12.8/t1-research-review` against the
+Re-run carried out under `caller=spc-12.8/t1-research-review` against the
 `_build_cli_oracle` cascade (RP MCP → Codex CLI → in-session). The Codex leg
 served the review live:
 

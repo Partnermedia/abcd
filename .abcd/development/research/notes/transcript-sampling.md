@@ -27,14 +27,14 @@ Corpus snapshot: 2026-05-09, `ls | wc -l`.
   (corpus grew by 30 files; denominator adjusted accordingly)
 - Stratification: 3 small + 3 medium + 3 large + 5 boundary (14 total)
 - Boundary criteria: ±2 days around idelphiDev epic transitions:
-  - fn-14 (created 2026-04-19, done 2026-04-19)
-  - fn-19 (created 2026-04-20, done 2026-04-27)
-  - fn-21 (done 2026-04-29)
+  - spc-14 (created 2026-04-19, done 2026-04-19)
+  - spc-19 (created 2026-04-20, done 2026-04-27)
+  - spc-21 (done 2026-04-29)
 - Small stratum (S1–S3): intentionally sampled `command-name-clear-command` stubs (bottom 5% by
   size, ≤1 KB); these represent the zero-signal floor and are useful to confirm the 2 KB cutoff.
 - Medium/large strata: `you-are-running-one` (Ralph autonomous, 399 files) and most
   `command-name-clear-command` files (23 files) excluded to avoid over-representing noise. M3
-  was selected for medium stratum; it happens to fall near fn-19 done but is counted as medium
+  was selected for medium stratum; it happens to fall near spc-19 done but is counted as medium
   (not boundary) to preserve the 3 + 3 + 3 + 5 split.
 - Boundary picks chosen for genuine human–agent sessions near epic transitions.
 
@@ -52,15 +52,15 @@ Density % (user) = decisions / user turns.
 | `2026-05-07_15-42-04Z-command-name-clear-command.md` (S3) | 1 | 5 | 5 | 0 | 0 | 0 | 0% | 0% |
 | `2026-05-03_11-05-48Z-first-then-add-epics.md` (M1) | 64 | 57 | 7 | 1 | 0 | 0 | 1.8% | 14% |
 | `2026-04-30_05-07-16Z-we-hit-the-rate.md` (M2) | 70 | 24 | 1 | 0 | 0 | 1 | 0% | 0% |
-| `2026-04-27_11-23-55Z-any-branches-to-merge.md` (M3, near fn-19 done) | 180 | 62 | 5 | 1 | 0 | 1 | 1.6% | 20% |
+| `2026-04-27_11-23-55Z-any-branches-to-merge.md` (M3, near spc-19 done) | 180 | 62 | 5 | 1 | 0 | 1 | 1.6% | 20% |
 | `2026-04-14_06-49-26Z-what-s-the-status.md` (L1) | 3,267 | 1,737 | 176 | 36 | 7 | 66 | 2.1% | 20% |
 | `2026-04-22_06-04-12Z-update-claude.md` (L2) | 3,071 | 1,536 | 73 | 29 | 9 | 23 | 1.9% | 40% |
 | `2026-04-18_11-52-38Z-what-s-the-status.md` (L3) | 6,003 | 3,081 | 189 | 44 | 17 | 66 | 1.4% | 23% |
-| `2026-04-19_21-26Z.md` (B1) ★fn-14 done | 34 | 22 | 2 | 0 | 0 | 1 | 0% | 0% |
-| `2026-04-19_21-11-26Z-an-autonomous-ralph-loop.md` (B2) ★fn-14 done | 2,108 | 1,099 | 104 | 15 | 8 | 54 | 1.4% | 14% |
-| `2026-04-20_09-42-33Z-command-name-clear-command.md` (B3) ★fn-19 created | 2,793 | 857 | 24 | 5 | 0 | 6 | 0.6% | 21% |
-| `2026-04-29_13-51-36Z-command-name-clear-command.md` (B4) ★fn-21 done | 1,233 | 417 | 13 | 5 | 0 | 6 | 1.2% | 38% |
-| `2026-05-01_06-30-34Z-what-s-the-status.md` (B5) ★fn-21 done+2d | 2,781 | 890 | 9 | 2 | 0 | 4 | 0.2% | 22% |
+| `2026-04-19_21-26Z.md` (B1) ★spc-14 done | 34 | 22 | 2 | 0 | 0 | 1 | 0% | 0% |
+| `2026-04-19_21-11-26Z-an-autonomous-ralph-loop.md` (B2) ★spc-14 done | 2,108 | 1,099 | 104 | 15 | 8 | 54 | 1.4% | 14% |
+| `2026-04-20_09-42-33Z-command-name-clear-command.md` (B3) ★spc-19 created | 2,793 | 857 | 24 | 5 | 0 | 6 | 0.6% | 21% |
+| `2026-04-29_13-51-36Z-command-name-clear-command.md` (B4) ★spc-21 done | 1,233 | 417 | 13 | 5 | 0 | 6 | 1.2% | 38% |
+| `2026-05-01_06-30-34Z-what-s-the-status.md` (B5) ★spc-21 done+2d | 2,781 | 890 | 9 | 2 | 0 | 4 | 0.2% | 22% |
 
 ★ = boundary pick; adjacent epic shown.
 Corpus-weighted density: **1.4%** (spec) / **22.3%** (user-message denominator).
@@ -81,7 +81,7 @@ Density % (user) = Decision / User turns.
    density is an artefact of specstory's fine-grained turn recording, not content poverty.
 
 3. **Boundary sessions (near epic transitions) have the highest user-message decision density
-   (~20–38%).** B3 (fn-19 created, 21%) and B4 (fn-21 done, 38%) are among the highest. Marathon
+   (~20–38%).** B3 (spc-19 created, 21%) and B4 (spc-21 done, 38%) are among the highest. Marathon
    sessions (L2, `update-claude`, 40%) also show high density. The time-window hypothesis holds:
    decisions concentrate around epic transitions and active design sessions.
 
@@ -174,17 +174,17 @@ denominator (22.3%).
 - **S1–S3** (<2 KB): /clear or /exit sequences; rate-limit interrupts. Zero signal.
 - **M1** (64 KB): Opens with multi-point feature spec → 1 decision. Ralph loop takes over remainder.
 - **M2** (70 KB): Single user turn "we hit the rate limit." No decision content.
-- **M3** (180 KB, medium stratum; near fn-19 done): Branch merge check + plan-review invocation. 1 decision (20%).
+- **M3** (180 KB, medium stratum; near spc-19 done): Branch merge check + plan-review invocation. 1 decision (20%).
 - **L1** (3.3 MB): Multi-day marathon. Dense feature design interspersed with manual testing. 20%.
 - **L2** (3.1 MB): Repo migration, publish skill design, security audit, architectural discussion.
   40% user density — design-heavy.
 - **L3** (6.0 MB): Largest file. Facilitator page, model curation, methodology variant design.
   23% user density; highest tool-step count.
-- **B1** (34 KB, fn-14 done): Short. 1 real turn (status question). No decision.
-- **B2** (2.1 MB, fn-14 done): Ralph loop near fn-14 completion. 14% — human intervention turns.
-- **B3** (2.8 MB, fn-19 created 2026-04-20): Active epic scoping for analytics/telemetry. 21%.
-- **B4** (1.2 MB, fn-21 done 2026-04-29): Ralph timeout investigation + Ollama/LM Studio epic. 38%.
-- **B5** (2.8 MB, fn-21 done+2d 2026-05-01): Status/merge session. Light decisions (22%).
+- **B1** (34 KB, spc-14 done): Short. 1 real turn (status question). No decision.
+- **B2** (2.1 MB, spc-14 done): Ralph loop near spc-14 completion. 14% — human intervention turns.
+- **B3** (2.8 MB, spc-19 created 2026-04-20): Active epic scoping for analytics/telemetry. 21%.
+- **B4** (1.2 MB, spc-21 done 2026-04-29): Ralph timeout investigation + Ollama/LM Studio epic. 38%.
+- **B5** (2.8 MB, spc-21 done+2d 2026-05-01): Status/merge session. Light decisions (22%).
 
 ## Forward tracking
 

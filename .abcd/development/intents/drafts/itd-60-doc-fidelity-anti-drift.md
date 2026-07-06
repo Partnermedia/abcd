@@ -75,7 +75,7 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 - Originating assessment: `~/Desktop/abcd-assessment.html` (2026-06-26) — the
   README-over-promises / brief-honest finding that motivates the forward
   doc-fidelity loop.
-- Complements: the fn-12 fidelity reviewer (delivery-vs-intention) — this pass
+- Complements: the spc-12 fidelity reviewer (delivery-vs-intention) — this pass
   is the documentation-vs-delivery analogue, reusing its fail-closed,
   deterministic-shell, never-auto-commit posture.
 - Paired with: [[itd-61-brief-change-derivation]] (the reverse direction) and

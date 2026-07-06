@@ -1,7 +1,7 @@
 ---
 id: itd-58
 slug: session-reviewer-verdict-ingestion
-spec_id: fn-69-session-reviewer-verdict-ingestion-path
+spec_id: spc-69-session-reviewer-verdict-ingestion-path
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
@@ -11,7 +11,7 @@ prd_path: null
 
 # A Real Reviewer's SHIP Verdict Reaches The Session Gate Through A Channel The Worker Cannot Forge
 
-> **DELIVERED by `fn-69`.** The seam-owned ingestion (reviewer run → capture →
+> **DELIVERED by `spc-69`.** The seam-owned ingestion (reviewer run → capture →
 > trusted-verdict parse → advance-gate record) ships on the pluggable autonomous seam,
 > and the A4-positive round-trip is proven end-to-end through a real reviewer and a
 > seam-produced spec — no direct record-verdict shortcut, no real-repo mutation. The

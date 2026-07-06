@@ -1,9 +1,9 @@
 ---
 id: itd-20
 slug: top-level-abcd-dispatcher
-spec_id: fn-83-operator-surfaces-manifest-lockstep
+spec_id: spc-83-operator-surfaces-manifest-lockstep
 kind: bundle-member
-bundle: fn-83-operator-surfaces
+bundle: spc-83-operator-surfaces
 suggested_kind: null
 reclassification_history: []
 prd_path: null
@@ -57,7 +57,7 @@ The pattern was already prototyped in `~/.claude/commands/abcd.md` (the user-lev
 - **Given** an abcd-managed repo, **when** the user runs `/abcd` (no subcommand), **then** the output includes (in this order): project name + visibility, lifeboat presence + age, dev-sync last-run timestamp, recent commands (last 5 from logbook), planned/active intents (from `intents/planned/` and any in-flight specs), and a "suggested next actions" bullet list — all in markdown with light table formatting.
 - **Given** a project where `dev-sync` hasn't run in > N hours (configurable threshold), **when** `/abcd` runs, **then** the dev-sync status is highlighted (e.g., "stale: 3 days") AND "Run dev-sync" appears in suggested next actions.
 - **Given** a project with no lifeboat ever produced, **when** `/abcd` runs, **then** the lifeboat status reads "never disembarked" AND "Run /abcd:disembark when ready" is among suggested next actions.
-- **Given** a project with planned intents in `intents/planned/`, **when** `/abcd` runs, **then** each planned intent is listed with its title, its phase, and `spec_id` AND an "in flight on spec fn-N" annotation if the linked spec shows active status.
+- **Given** a project with planned intents in `intents/planned/`, **when** `/abcd` runs, **then** each planned intent is listed with its title, its phase, and `spec_id` AND an "in flight on spec spc-N" annotation if the linked spec shows active status.
 - **Given** the user runs `/abcd help`, **when** the output renders, **then** it summarises the four main verbs (ahoy, disembark, embark, launch) and the meta-development surfaces (`/abcd:intent`, `/abcd:capture`) plus the `/abcd` status command — single-page, scannable.
 - **Given** the user is OUTSIDE an abcd-managed repo (no `.abcd/` directory), **when** they run `/abcd`, **then** the output gracefully reports "no abcd config in this directory" and suggests either `cd` to an abcd repo or `/abcd:ahoy` to install — does not error.
 
@@ -71,7 +71,7 @@ The pattern was already prototyped in `~/.claude/commands/abcd.md` (the user-lev
 
 _Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
-### Implementation notes (fn-83.2)
+### Implementation notes (spc-83.2)
 
 - **Dev-sync staleness is a v1 terminal known-state stub.** The dev-sync
   implementation exposes migration logic (`abcd dev-sync work`), NOT a durable last-run
@@ -81,7 +81,7 @@ _Populated by intent-fidelity-reviewer when intent moves to shipped/._
   state substrate exists. This is a recorded terminal state, not a shipped
   capability. Adding the substrate is out of scope. Full record in the
   surface doc: [`../../brief/04-surfaces/08-abcd.md`](../../brief/04-surfaces/08-abcd.md).
-- **No fn-17 stub to replace.** fn-17 shipped bare/probe renders for the
+- **No spc-17 stub to replace.** spc-17 shipped bare/probe renders for the
   *sub-verb* surfaces only; the top-level `commands/abcd.md` never existed.
   This task creates it fresh — the "stub replacement" premise is
   not-applicable (verified against `git log`).
@@ -97,11 +97,11 @@ _Populated by intent-fidelity-reviewer when intent moves to shipped/._
   the help output. A separate verb-summary render would be a forbidden SD001
   sub-verb; folding help into the bare render is the deliberate v1 resolution,
   fully covering the `/abcd help` requirement without a divergent surface.
-- **Bundle-member linkage (fn-83 four-intents-one-spec).** This intent is
+- **Bundle-member linkage (spc-83 four-intents-one-spec).** This intent is
   authored as a standalone press release but ships as one of FOUR intents
-  sharing spec `fn-83-operator-surfaces-manifest-lockstep`. abcd's data model
+  sharing spec `spc-83-operator-surfaces-manifest-lockstep`. abcd's data model
   represents "N intents, one spec" as a bundle (`kind: bundle-member` + shared
-  `bundle: fn-83-operator-surfaces`), which the doc_fidelity intent-resolution
+  `bundle: spc-83-operator-surfaces`), which the doc_fidelity intent-resolution
   and the spec-close preflight require — so this intent carries that linkage. It
   is a bundle member by delivery relationship, not a change to its standalone
   press-release scope.

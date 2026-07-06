@@ -1,7 +1,7 @@
 ---
 id: itd-28
 slug: rp-reviews-into-flow
-spec_id: fn-2-move-repoprompt-review-artifacts-into
+spec_id: spc-2-move-repoprompt-review-artifacts-into
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -85,8 +85,8 @@ The unscoped-transport sweep is adapter-scoped and runs only when an oracle adap
 
 ## Acceptance Criteria
 
-- **Given** a persona runs a plan-review for `fn-X` end-to-end via any oracle adapter, **when** the review completes, **then** a per-review directory lands at `.abcd/reviews/fn-X/<NNNN>-<slug>-<ref>/` containing `review.json` (all required fields populated, `verdict` ∈ `{SHIP, NEEDS_WORK, MAJOR_RETHINK}`, non-empty `body_markdown` and `reviewed_files`) and `review.md` (mechanically rendered from `review.json`).
-- **Given** the post-processor runs twice on the same receipt, **when** both invocations complete, **then** there is exactly one per-review directory in `.abcd/reviews/fn-X/` (idempotent; the second invocation is a no-op).
+- **Given** a persona runs a plan-review for `spc-X` end-to-end via any oracle adapter, **when** the review completes, **then** a per-review directory lands at `.abcd/reviews/spc-X/<NNNN>-<slug>-<ref>/` containing `review.json` (all required fields populated, `verdict` ∈ `{SHIP, NEEDS_WORK, MAJOR_RETHINK}`, non-empty `body_markdown` and `reviewed_files`) and `review.md` (mechanically rendered from `review.json`).
+- **Given** the post-processor runs twice on the same receipt, **when** both invocations complete, **then** there is exactly one per-review directory in `.abcd/reviews/spc-X/` (idempotent; the second invocation is a no-op).
 - **Given** the post-processor is killed mid-write (`kill -9`), **when** the persona inspects the working tree, **then** no `.tmp` or partial files are visible to git.
 - **Given** 5 concurrent post-processor invocations on the same spec, **when** they complete, **then** 5 distinct sequence numbers exist (no collisions).
 - **Given** the persona sets `ABCD_REVIEW_POSTPROCESS=0` and runs a plan-review, **when** the review completes, **then** the post-processor exits 0 with no side effects and the review remains only in the producing oracle adapter's raw output.

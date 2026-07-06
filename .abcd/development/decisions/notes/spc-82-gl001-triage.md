@@ -1,11 +1,11 @@
-# fn-82.5c — GL001 triage over shipped itd-27 / itd-28
+# spc-82.5c — GL001 triage over shipped itd-27 / itd-28
 
 Probe-gated, report-first triage of the 69 unbucketable GL001 tokens left
-PARTIAL by fn-24 T8 R7. Seed inventory: `.work/issues.md` `2026-05-25` T8 entry.
+PARTIAL by spc-24 T8 R7. Seed inventory: `.work/issues.md` `2026-05-25` T8 entry.
 
 ## Mechanism probe (gating decision)
 
-The `terminology_exceptions` mechanism named in the fn-24 follow-up (a
+The `terminology_exceptions` mechanism named in the spc-24 follow-up (a
 `code_identifiers` / `artefact_ids` allowlist that would let GL001 skip
 API-shape and artefact-ID tokens without inflating the glossary with
 non-domain entries) **is absent from the tree**. Probe:
@@ -41,7 +41,7 @@ Every token is placed in exactly one of three buckets:
 |---|---|---|
 | `disembark` | added `core/disembark.md` (`term: disembark`, `bounded_context: core`) — a genuine project-lifecycle surface, peer to `lifeboat`/`voyage`, referenced by `core/lifeboat.md` | ✓ GL001 no longer fires for `disembark` on itd-27 |
 
-`blueprint` was a candidate in the fn-24 follow-up but is NOT a realized
+`blueprint` was a candidate in the spc-24 follow-up but is NOT a realized
 concept: it has zero brief presence and appears only inside itd-27's seed-term
 **enumeration** (line 62) as an example `core/` bounded-context name that was
 never actually created. It is not a domain noun deserving a canonical file, so
@@ -88,9 +88,9 @@ domain nouns.
 Would belong in a `terminology_exceptions.artefact_ids` allowlist.
 
 - itd-27: `itd-1`, `itd-24`, `itd-42`,
-  `fn-3-strengthen-intent-stage-abcdgrill-skill`
+  `spc-3-strengthen-intent-stage-abcdgrill-skill`
 - itd-28: `itd-1`, `itd-7`, `itd-13`,
-  `fn-2-move-repoprompt-review-artifacts-into`, `fn-5-bsc`
+  `spc-2-move-repoprompt-review-artifacts-into`, `spc-5-bsc`
 
 (`itd-1` and `press-release` are shared across both intents — counted once in
 the unique totals.)
@@ -99,7 +99,7 @@ the unique totals.)
 
 - `flock`, `gitleaks` — third-party tools
 - `abcd` — the project's own product name (listing it as a glossary term has
-  design implications; deferred to a dedicated decision, per fn-24 follow-up)
+  design implications; deferred to a dedicated decision, per spc-24 follow-up)
 
 **G5 — stale aspirational context-name (1).**
 

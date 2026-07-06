@@ -40,7 +40,7 @@ var (
 	// Intent id embedded in a filename or a superseded_by value.
 	intentIDRe    = regexp.MustCompile(`itd-\d+`)
 	intentFileRe  = regexp.MustCompile(`^itd-\d+.*\.md$`)
-	fnSpecRe      = regexp.MustCompile(`^fn-`)
+	specIDRe      = regexp.MustCompile(`^spc-`)
 	supersededRe  = regexp.MustCompile(`^itd-\d+`)
 	intentBuckets = map[string]bool{
 		"drafts": true, "planned": true, "shipped": true,
@@ -375,8 +375,8 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 		}
 		if specNull {
 			add(spec.line, "planned: spec_id must be non-null")
-		} else if !fnSpecRe.MatchString(spec.value) {
-			add(spec.line, "planned: spec_id must match ^fn- (got '"+spec.value+"')")
+		} else if !specIDRe.MatchString(spec.value) {
+			add(spec.line, "planned: spec_id must match ^spc- (got '"+spec.value+"')")
 		}
 	case "shipped":
 		if kindNull || !(kindVal == "standalone" || kindVal == "bundle-member") {

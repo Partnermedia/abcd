@@ -1,9 +1,9 @@
 ---
 id: itd-63
 slug: setup-wizard-explains-installs
-spec_id: fn-83-operator-surfaces-manifest-lockstep
+spec_id: spc-83-operator-surfaces-manifest-lockstep
 kind: bundle-member
-bundle: fn-83-operator-surfaces
+bundle: spc-83-operator-surfaces
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-22]
@@ -28,12 +28,12 @@ glossary_terms_used:
 
 ## Why This Matters
 
-abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than degrading to advisory — the right call for the guarantee, but it puts an install prerequisite in front of an amateur who may not recognise the tool. The thesis says keep the human's judgment the constraint; an install prompt the human cannot evaluate is judgment removed, not preserved. A setup wizard restores it: by explaining what and why, it lets the product thinker make an INFORMED decision rather than a blind one. This is a general need. Most abcd capabilities run on a native default and expose an optional adapter (adr-22) — the wizard explains that the native default already works and names what the adapter would add, so an optional install is never mistaken for a requirement. The few capabilities with a genuine external prerequisite (a security scanner, a runtime, a CLI, a model) get the same explain-then-install surface; itd-62 is the first caller.
+abcd's safety gate (itd-62/spc-76) ALWAYS blocks on a missing scanner rather than degrading to advisory — the right call for the guarantee, but it puts an install prerequisite in front of an amateur who may not recognise the tool. The thesis says keep the human's judgment the constraint; an install prompt the human cannot evaluate is judgment removed, not preserved. A setup wizard restores it: by explaining what and why, it lets the product thinker make an INFORMED decision rather than a blind one. This is a general need. Most abcd capabilities run on a native default and expose an optional adapter (adr-22) — the wizard explains that the native default already works and names what the adapter would add, so an optional install is never mistaken for a requirement. The few capabilities with a genuine external prerequisite (a security scanner, a runtime, a CLI, a model) get the same explain-then-install surface; itd-62 is the first caller.
 
 ## What's In Scope
 
 - A reusable setup-wizard surface that, given a missing optional adapter or a genuine prerequisite, presents: the tool/adapter name, the capability that uses it (for an adapter, the native default that already covers it; for a prerequisite, what fails without it), a plain-language description of what the tool does, the exact install step, and a confirmation.
-- Integration as the install-guidance path for itd-62/fn-76's "always block on missing scanner" (its first consumer).
+- Integration as the install-guidance path for itd-62/spc-76's "always block on missing scanner" (its first consumer).
 - Honesty about what the install does to the machine (and what it does NOT do), so the human consents knowingly.
 - Local-first, no Claude-Code dependency for the explain-and-guide mechanics.
 
@@ -49,7 +49,7 @@ abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than
 
 - **Given** a capability needs a dependency the machine lacks (an optional adapter or a genuine prerequisite), **when** the wizard runs, **then** it states the tool name, the requiring capability, the native default already covering it (for an adapter) or what fails without it (for a prerequisite), a plain-language description, and the exact install step before any install.
 - **Given** the wizard's explanation, **when** the human decides, **then** the install proceeds only on explicit confirmation; declining does not silently weaken the gate that required it.
-- **Given** itd-62/fn-76's missing-scanner block, **when** it surfaces the prerequisite, **then** it routes through this wizard rather than a bare command.
+- **Given** itd-62/spc-76's missing-scanner block, **when** it surfaces the prerequisite, **then** it routes through this wizard rather than a bare command.
 - **Given** the explain-and-guide mechanics, **when** invoked outside Claude Code, **then** they run with no Claude-Code dependency.
 
 ## Open Questions
@@ -62,11 +62,11 @@ abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
-### Linkage note (fn-83.5)
+### Linkage note (spc-83.5)
 
 Ships as one of FOUR intents sharing spec
-`fn-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
-spec" as a bundle (`kind: bundle-member` + shared `bundle: fn-83-operator-surfaces`)
+`spc-83-operator-surfaces-manifest-lockstep`. abcd represents "N intents, one
+spec" as a bundle (`kind: bundle-member` + shared `bundle: spc-83-operator-surfaces`)
 — the representation the doc_fidelity intent-resolution + spec-close preflight
 require. Bundle member by delivery relationship, not a scope change. The grill/PRD
 bypass for this ungrilled intent is handled via the grandfather fields
@@ -75,7 +75,7 @@ for GR001). Full record in the spec's process-exception note.
 
 ## References
 
-- Originating context: the itd-62/fn-76 grill (2026-06-29) — "always block on a missing
+- Originating context: the itd-62/spc-76 grill (2026-06-29) — "always block on a missing
   scanner; provide a setup wizard that guides install" rather than degrade to advisory.
 - First consumer: [[itd-62-pluggable-safety-gate]] (the safety gate's missing-scanner path).
 - Thesis tie: keeping human JUDGMENT the constraint requires the human to understand what

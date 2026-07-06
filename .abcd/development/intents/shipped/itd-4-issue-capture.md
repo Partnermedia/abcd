@@ -1,7 +1,7 @@
 ---
 id: itd-4
 slug: issue-capture
-spec_id: fn-20-issue-ledger-primitives-iss-n-allocator
+spec_id: spc-20-issue-ledger-primitives-iss-n-allocator
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -37,7 +37,7 @@ This split closes a separate loop on `/abcd:capture` as a command name. The mari
   - `open/iss-N-<slug>.md` — captured, not yet acted on
   - `resolved/iss-N-<slug>.md` — fixed (with resolution notes)
   - `wontfix/iss-N-<slug>.md` — explicit non-action decision
-  - Frontmatter schema: `id`, `slug`, `severity`, `category`, `source` (review / manual-test / drift / nitpick / observation), `found_during`, `found_at` (path), `related_intents` (list of `itd-N`), `related_epics` (list of `fn-N`), `created`, `updated`
+  - Frontmatter schema: `id`, `slug`, `severity`, `category`, `source` (review / manual-test / drift / nitpick / observation), `found_during`, `found_at` (path), `related_intents` (list of `itd-N`), `related_epics` (list of `spc-N`), `created`, `updated`
   - Folder-as-status (mirrors intent and spec-roadmap conventions)
   - Stable `iss-N` IDs (unpadded; mirrors `itd-N` convention; lexical-vs-numeric sort handled at tool layer)
 - **Brief § 5 update** (lands in the accompanying brief rewrite): exemption note for `/abcd:intent` + `/abcd:capture`; reserved-meta-command table covering `/abcd:dredge` (see itd-25), `/abcd:audit` (reserved, see itd-16 hash-chain-merkle-audit), `/abcd:reflect` (reserved, see itd-24).
@@ -59,8 +59,8 @@ This split closes a separate loop on `/abcd:capture` as a command name. The mari
 > _BDD format, per `itd-1-acceptance-gates`. These gates are checked by `intent-fidelity-reviewer` when this intent moves to `shipped/`._
 
 - **Given** an abcd-installed repo, **when** the persona runs `/abcd:capture "review nitpick: T7 cache_ttl_days dead-config alternative"`, **then** a new file `.abcd/development/activity/issues/open/iss-N-<slug>.md` exists with frontmatter populated (id, severity, category, source, found_during) and the captured text in the body.
-- **Given** an existing `iss-N` entry at `.abcd/development/activity/issues/open/iss-3-foo.md`, **when** the persona runs `/abcd:capture resolve iss-3 "fixed in fn-7 task 4"`, **then** the file moves to `.abcd/development/activity/issues/resolved/iss-3-foo.md` with the resolution note appended to the body.
-- **Given** an existing `iss-N` entry, **when** the persona runs `/abcd:capture promote iss-N`, **then** `/abcd:intent new` is invoked with the entry's content as the seed; the resulting intent's frontmatter has `related_issues: [iss-N]`; the `iss-N` entry's frontmatter has `related_intents: [itd-M]` (the new intent's ID). Drift detection enforced by fn-23 (intent-fidelity-reviewer `--issue-drift`).
+- **Given** an existing `iss-N` entry at `.abcd/development/activity/issues/open/iss-3-foo.md`, **when** the persona runs `/abcd:capture resolve iss-3 "fixed in spc-7 task 4"`, **then** the file moves to `.abcd/development/activity/issues/resolved/iss-3-foo.md` with the resolution note appended to the body.
+- **Given** an existing `iss-N` entry, **when** the persona runs `/abcd:capture promote iss-N`, **then** `/abcd:intent new` is invoked with the entry's content as the seed; the resulting intent's frontmatter has `related_issues: [iss-N]`; the `iss-N` entry's frontmatter has `related_intents: [itd-M]` (the new intent's ID). Drift detection enforced by spc-23 (intent-fidelity-reviewer `--issue-drift`).
 - **Given** a fresh `/abcd:ahoy` upgrade with an existing `.work/issues.md`, **when** `dev-sync` runs, **then** every entry in `.work/issues.md` is promoted to a corresponding `.abcd/development/activity/issues/open/iss-N-<slug>.md` with provenance noting "migrated from .work/issues.md".
 - **Given** the persona runs `/abcd:capture list --open`, **when** there are 5 open `iss-N` entries, **then** the output lists all 5 with id, slug, severity, and one-line summary.
 
@@ -74,14 +74,14 @@ This split closes a separate loop on `/abcd:capture` as a command name. The mari
 ## Implementing specs
 
 itd-4 is implemented across multiple specs. The single-valued frontmatter
-`spec_id` records the **primary** delivering spec (fn-20); the remaining specs
+`spec_id` records the **primary** delivering spec (spc-20); the remaining specs
 are recorded here because `spec_id` holds one value and would understate scope.
 This section is the canonical multi-spec implementation index:
 
-- **fn-20** (primary) — `iss-N`-ledger primitives (`iss-N` allocator, schema, capture/resolve/wontfix/update_field workflow, structure under `.abcd/development/activity/issues/`).
-- **fn-21** — `/abcd:capture` command surface (flow-text ingest into the ledger).
-- **fn-22** — `.work/issues.md` migration to the structured ledger (`dev-sync work` orchestrator, regex-extracted intent linkage on migrated issues).
-- **fn-23** — `intent-fidelity-reviewer --issue-drift` mode (bidirectional cross-reference walk; reader half of the bidirectional contract).
+- **spc-20** (primary) — `iss-N`-ledger primitives (`iss-N` allocator, schema, capture/resolve/wontfix/update_field workflow, structure under `.abcd/development/activity/issues/`).
+- **spc-21** — `/abcd:capture` command surface (flow-text ingest into the ledger).
+- **spc-22** — `.work/issues.md` migration to the structured ledger (`dev-sync work` orchestrator, regex-extracted intent linkage on migrated issues).
+- **spc-23** — `intent-fidelity-reviewer --issue-drift` mode (bidirectional cross-reference walk; reader half of the bidirectional contract).
 
 ## Audit Notes
 

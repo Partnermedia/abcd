@@ -364,6 +364,6 @@ place." (practice-scout)
   — closes the implementation-level gaps deferred by § 4 (server discovery, session lifecycle,
   timeout, cancellation, RP-unavailable typed exception). Does NOT supersede this ADR.
 - ADR-03: MCPBridge Host-Reuse Extension
-  (`adr-3-mcpbridge-host-reuse-extension`, fn-5) — extends § 4's `MCPBridge` to a
+  (`adr-3-mcpbridge-host-reuse-extension`, spc-5) — extends § 4's `MCPBridge` to a
   second caller shape (a host harness injected at construction) without changing
   the `mcp_call` signature. Additive only; does NOT supersede this ADR.

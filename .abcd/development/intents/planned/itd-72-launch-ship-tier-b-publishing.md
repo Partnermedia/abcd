@@ -1,7 +1,7 @@
 ---
 id: itd-72
 slug: launch-ship-tier-b-publishing
-spec_id: fn-80-abcd-launch-ship-tier-b-publishing
+spec_id: spc-80-abcd-launch-ship-tier-b-publishing
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
@@ -20,7 +20,7 @@ glossary_terms_used:
 
 # Publishing A Release Is One Atomic, Refusable `ship`
 
-> _Retroactive intent record for fn-80. fn-80 builds the Tier B (publishing)
+> _Retroactive intent record for spc-80. spc-80 builds the Tier B (publishing)
 > half of the itd-67 consolidated PRD — see
 > [itd-67](itd-67-installable-versioned-plugin.md), whose grilled PRD defines
 > both tiers. This record exists so the spec resolves to an intent under
@@ -67,9 +67,9 @@ safety refusal built in.
 
 ## What's Out of Scope
 
-- The payload resolution itself (fn-78's render manifest is consumed, never
+- The payload resolution itself (spc-78's render manifest is consumed, never
   re-derived)
-- The pre-flight gate suite (fn-79 owns it; `ship` invokes it)
+- The pre-flight gate suite (spc-79 owns it; `ship` invokes it)
 - Release retention pruning of prior tags/Releases (itd-70)
 
 ## Acceptance Criteria

@@ -31,7 +31,7 @@ themselves.
 `<topic>-<kind>.md` — kebab-case topic, then a kind suffix that says what the
 note *is*: `-sota` (state-of-the-art survey), `-audit` (review/divergence
 finding), `-study` / `-notes` (investigation), or a spec/fn tag when the note is
-spec-scoped (`fn-34-...`). Notes are not a numbered record-type; they are
+spec-scoped (`spc-34-...`). Notes are not a numbered record-type; they are
 folder-convention artefacts promoted into ADRs/intents by hand.
 
 > A subdirectory groups a cluster of notes produced for

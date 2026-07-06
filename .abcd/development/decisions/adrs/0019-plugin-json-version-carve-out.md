@@ -57,7 +57,7 @@ location string, and never from a hard-coded field name. When the decision recor
 `blocked: true`, the render refuses: there is no schema-valid location to write, so
 a versioned release manifest cannot be produced and the escalation stands.
 
-This is compatible with the Claude Code plugin schema: fn-77.1 validated `version`
+This is compatible with the Claude Code plugin schema: spc-77.1 validated `version`
 as an explicit property of the pinned manifest schema (not merely permitted by
 `additionalProperties`), so a version-carrying public manifest is schema-valid. The
 decision artifact records the exact accepting schema clause in its

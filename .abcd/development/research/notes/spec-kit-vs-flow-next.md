@@ -111,9 +111,9 @@ can back `SpecStore`/`TaskStore` read/write but **must synthesize `next_task`,
 asymmetry is the whole story: Spec Kit backs the *authoring* half; it cannot back
 the *execution* half without abcd supplying the missing machinery.
 
-## Already in motion: fn-34 is the first brick
+## Already in motion: spc-34 is the first brick
 
-`scripts/abcd/tools/flowctl_loader.py` (the fn-34 work) is abcd's **flow-next
+`scripts/abcd/tools/flowctl_loader.py` (the spc-34 work) is abcd's **flow-next
 contract loader** — it resolves and importlib-loads the *installed* upstream
 flowctl by path (TRACK LATEST) — never the repo fork — and AST-extracts the
 upstream verb inventory so abcd can route `flowctl <verb>` between exec-through
@@ -131,7 +131,7 @@ existing direction rather than starting fresh.
    not deliver tool-agnosticism. Keep itd-23 as a *feature*, not the architecture.
 3. **Thin abcd backend interface; flow-next + Spec Kit pluggable → RECOMMENDED
    primary direction.** Only option that delivers tool-agnosticism AND honours
-   "flow-next/Ralph replaced later." Extends fn-34's loader seam. Cost: abstract
+   "flow-next/Ralph replaced later." Extends spc-34's loader seam. Cost: abstract
    ~38 `.flow/`-readers + ~54 `flowctl` sites behind the four protocols,
    incrementally (route flow-next through them first, no behaviour change).
 4. **abcd grows its own minimal state+loop; Spec Kit authoring/import only →
@@ -170,4 +170,4 @@ later something else) behind the *execution* half.
 - MarkTechPost (2026-05-08) https://www.marktechpost.com/2026/05/08/meet-github-spec-kit-an-open-source-toolkit-for-spec-driven-development-with-ai-coding-agents/
 - Scott Logic review (2025-11) https://blog.scottlogic.com/2025/11/26/putting-spec-kit-through-its-paces-radical-idea-or-reinvented-waterfall.html
 - gotalab/cc-sdd (autonomous SDD harness on spec-kit) https://github.com/gotalab/cc-sdd
-- in-repo: itd-23-spec-kit-interop.md; fn-34 tools/flowctl_loader.py
+- in-repo: itd-23-spec-kit-interop.md; spc-34 tools/flowctl_loader.py

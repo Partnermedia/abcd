@@ -7,8 +7,8 @@ Plumbing work (adapters, agents, harness, scaffolding) lives in this brief, not 
 Intents live at `.abcd/development/intents/{drafts,planned,shipped,disciplines,superseded}/`. Five directories encode lifecycle position. Three are for press-release-shaped intents (the standalone + bundle-member kinds); one is for disciplines (no press release, no spec); one is for intents killed by reclassification.
 
 - **`drafts/`** — press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard.
-- **`planned/`** — `/abcd:intent plan` has created a linked spec stub in the native spec store ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)) and run its plan-review. The intent's `spec_id` frontmatter points at the new `fn-N`. Work hasn't started yet (or is in flight); the linked spec in the native spec store is the active marker. Bundle-member intents in `planned/` share a `spec_id` with their bundle-mates.
-- **`shipped/`** — linked spec closed. The intent's "Audit Notes" section holds drift findings (per-criterion verdicts: `MET`, `MET_WITH_CONCERNS`, `NOT_MET`, `INCONCLUSIVE`) once `intent-fidelity-reviewer`'s Role 1 has been run on it via `/abcd:intent review <itd-N>`. fn-12 ships that **manual** review surface; fn-28 then shipped the on-close hook that moves the intent `planned → shipped` and **queues** a review on that transition. Auto-running the reviewer off that queue is still deferred (no spec currently owns it; fn-6 disowned auto-firing), so a freshly shipped intent's `## Audit Notes` is populated only after the reviewer is run manually.
+- **`planned/`** — `/abcd:intent plan` has created a linked spec stub in the native spec store ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)) and run its plan-review. The intent's `spec_id` frontmatter points at the new `spc-N`. Work hasn't started yet (or is in flight); the linked spec in the native spec store is the active marker. Bundle-member intents in `planned/` share a `spec_id` with their bundle-mates.
+- **`shipped/`** — linked spec closed. The intent's "Audit Notes" section holds drift findings (per-criterion verdicts: `MET`, `MET_WITH_CONCERNS`, `NOT_MET`, `INCONCLUSIVE`) once `intent-fidelity-reviewer`'s Role 1 has been run on it via `/abcd:intent review <itd-N>`. spc-12 ships that **manual** review surface; spc-28 then shipped the on-close hook that moves the intent `planned → shipped` and **queues** a review on that transition. Auto-running the reviewer off that queue is still deferred (no spec currently owns it; spc-6 disowned auto-firing), so a freshly shipped intent's `## Audit Notes` is populated only after the reviewer is run manually.
 - **`disciplines/`** — discipline-kind intents (cross-cutting rules with no user moment). They never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. Disciplines have no `status` frontmatter — presence in this directory IS the active state. Superseded disciplines move to `superseded/`.
 - **`superseded/`** — intents killed by reclassification or absorption (e.g., when a smaller intent is folded into a larger one, or a discipline is replaced by a stricter successor). The file records `superseded_by: <itd-N>` (the successor) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired — standalone vs bundle-member vs discipline). Preserved as historical record; never deleted.
 
@@ -18,7 +18,7 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 
 ### Intent IDs
 
-- **ID format:** `itd-N` (unpadded — e.g., `itd-1`, `itd-15`). Mirrors the spec store's `fn-N` format. Filenames: `itd-N-<slug>.md`. Lexical-vs-numeric sort handled at the tool layer (`internal/core/lint`, registries) rather than via filename padding.
+- **ID format:** `itd-N` (unpadded — e.g., `itd-1`, `itd-15`). Mirrors the spec store's `spc-N` format. Filenames: `itd-N-<slug>.md`. Lexical-vs-numeric sort handled at the tool layer (`internal/core/lint`, registries) rather than via filename padding.
 - **The low IDs (itd-1..itd-7) reflect an early one-time rebase to ordering signal.** Intents created since are capture-stable, picking up at itd-27+. ID number is *not* an execution-order guarantee — the canonical build order is the phase plan at [`roadmap/phases/`](../../roadmap/phases/README.md).
 - **An intent carries no release or sequencing field.** Per [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md), an intent's sequencing is its *phase membership*, recorded editorially in the owning phase doc's `## Scope` — not in intent frontmatter. An intent not yet listed in any phase doc is implicitly unscheduled (a `drafts/` bench item). "Which release" is an output of completing phases, never an input stamped on a draft; the former `target_release` field was removed for this reason.
 
@@ -125,14 +125,14 @@ Until then, `kind_notes` is the free-text descriptor.
    ├─ IF kind = standalone (single intent ID passed):
    │     ├─ Creates a stub spec in the native spec store for the intent
    │     ├─ Runs plan-review (Carmack-style review of the stub)
-   │     ├─ Injects bidirectional link (spec.intent: itd-N; intent.spec_id: fn-N)
+   │     ├─ Injects bidirectional link (spec.intent: itd-N; intent.spec_id: spc-N)
    │     └─ Moves intents/drafts/itd-N-*.md → intents/planned/itd-N-*.md
    │
    ├─ IF kind = bundle-member (multiple intent IDs passed):
    │     ├─ Creates one shared spec with all intents as joint input
    │     ├─ Runs plan-review for the combined plan
-   │     ├─ Injects bidirectional link to shared fn-N (spec.intent: [itd-A, itd-B];
-   │     │   each intent.spec_id: fn-N; each intent.bundle: <bundle-id>)
+   │     ├─ Injects bidirectional link to shared spc-N (spec.intent: [itd-A, itd-B];
+   │     │   each intent.spec_id: spc-N; each intent.bundle: <bundle-id>)
    │     └─ Moves all members from drafts/ → planned/
    │
    └─ IF kind = discipline (single intent ID, kind chosen explicitly):
@@ -150,7 +150,7 @@ Until then, `kind_notes` is the free-text descriptor.
    (Disciplines have no `ship` step — they are continuously active once in disciplines/.)
 
 4. Spec marked done in the native spec store   (standalone + bundle: work complete)
-   ├─ native spec-store `spec close` close-hook (fn-36) → intent lifecycle reconcile (fn-28)
+   ├─ native spec-store `spec close` close-hook (spc-36) → intent lifecycle reconcile (spc-28)
    └─ Moves intents/planned/itd-N-*.md → intents/shipped/itd-N-*.md (+ enqueues a review)
        (For bundles, all member intents move together when the shared spec closes.)
 
@@ -162,10 +162,10 @@ Until then, `kind_notes` is the free-text descriptor.
                plus a per-run audit/review-<ts>/ logbook report.
                For bundles, review runs per-intent (each member's acceptance criteria
                checked separately against the same delivered reality).
-   (fn-12 ships only this MANUAL review surface. fn-28 then shipped the on-close hook
+   (spc-12 ships only this MANUAL review surface. spc-28 then shipped the on-close hook
     that moves the intent planned → shipped and QUEUES a review on that transition.
     Auto-running the reviewer off that queue is still deferred (no epic currently owns
-    it; fn-6 disowned auto-firing). Until then, the `## Audit Notes` of a freshly
+    it; spc-6 disowned auto-firing). Until then, the `## Audit Notes` of a freshly
     shipped intent stays empty until /abcd:intent review is run by hand.)
 
 5. /abcd:intent reclassify <itd-N> --kind <new-kind>     (late reclassification)
@@ -179,12 +179,12 @@ Until then, `kind_notes` is the free-text descriptor.
    └─ Triggers intent-fidelity-reviewer (shape-classification role) to verify the new kind fits
 
 On demand: intent-fidelity-reviewer (shape-classification role) scans the corpus when
-              the user runs /abcd:intent shape (fn-29 ships only the on-demand surface).
+              the user runs /abcd:intent shape (spc-29 ships only the on-demand surface).
               Bare /abcd:intent (status+help) surfaces the latest cached shape suggestions
               in its summary — bare invocation never runs a fresh scan. The user accepts
               via /abcd:intent reclassify; declined suggestions become entries in the
               intent's Audit Notes for future review. (Deferred follow-up per
-              .work/issues.md [fn-29 follow-up]: scheduled / pre-commit shape scanning —
+              .work/issues.md [spc-29 follow-up]: scheduled / pre-commit shape scanning —
               the shape(...) function's mode="pre_commit" parameter is preserved as a seam
               but no hook invokes it.)
 ```
@@ -194,18 +194,18 @@ On demand: intent-fidelity-reviewer (shape-classification role) scans the corpus
 | Subcommand | Purpose | File movement |
 |---|---|---|
 | `/abcd:intent` (no args) | Help + status: lists intents grouped by directory (drafts / planned / shipped / disciplines / superseded), shows commands, surfaces shape suggestions from `intent-fidelity-reviewer`, suggests next actions for any intent in flight | — |
-| `/abcd:intent "<free-text>"` | **Canonical create** (fn-30/itd-46): a leading quoted seed is the canonical create entry. Interview-driven capture (press release with persona quote + acceptance criteria); assigns `itd-N`; LLM classifier writes advisory `suggested_kind`. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
+| `/abcd:intent "<free-text>"` | **Canonical create** (spc-30/itd-46): a leading quoted seed is the canonical create entry. Interview-driven capture (press release with persona quote + acceptance criteria); assigns `itd-N`; LLM classifier writes advisory `suggested_kind`. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent refine <itd-N>` | Interactive refinement of an existing intent (sharpen press release, fill open questions, update scope, add/edit acceptance criteria) | (stays in current state) |
 | `/abcd:intent grill <itd-N>` | Socratic adversarial interview that stress-tests an intent for vagueness, missing acceptance, hidden assumptions before planning. Glossary-aware once `terminology/` exists. `--brief-section <id>` flag for stress-testing a brief section instead. (per itd-27) | (stays in current state) |
 | `/abcd:intent plan <itd-N> [<itd-M>...]` | Validates the frozen PRD exists (refuses if `prd_path` is null — the grill → PRD flow produces it first; GR002 blocker, suppressed-as-info for `prd_grandfathered`); lints acceptance criteria; proposes `kind` (standalone / bundle-member / discipline) based on `suggested_kind` + cross-references; user confirms or overrides; binds `kind:`; routes to the kind-specific lifecycle path (see § 5 freeze sequence) | varies by kind: `drafts/` → `planned/` (standalone, bundle) or `drafts/` → `disciplines/` (discipline) |
 | `/abcd:intent ship <itd-N>` | Kicks off implementation via the native ship/run seam. Only valid for `kind: standalone` or `kind: bundle-member`. If intent is still in `drafts/`, runs the full pipeline first (plan + plan-review). On spec completion the lifecycle hook completes the move automatically; this command can also force-move if hook missed. **Disciplines have no `ship` step** — they are continuously active once in `disciplines/`. | (eventually) → `shipped/` (or no-op for disciplines) |
-| `/abcd:intent review <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). fn-12 ships this **manual** verb; fn-28 shipped the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; fn-6 disowned auto-firing). | (stays) |
-| `/abcd:intent consistency [<itd-N>]` | **Role 2 — cross-document fidelity.** Surfaces five judgement categories (terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts) across briefs + intents. **Bare** scans the whole corpus; **with `<itd-N>`** narrows to one intent's relationship with the rest. Findings land in `.abcd/logbook/audit/consistency-<ts>/report.{json,md}`. Live as of fn-29 (judgement half + on-demand verb); mechanical-half categories and pre-commit hook are deferred follow-ups (see `.work/issues.md` `[fn-29 follow-up]` entries). | (stays) |
-| `/abcd:intent shape [<itd-N>]` | **Role 3 — kind classification.** Examines whether an intent's declared `kind` (the noun) still fits the corpus. Surfaces *suggested* reclassifications across three live types: `kind_change`, `bundle`, `supersession`. **Bare** scans the corpus; **with `<itd-N>`** checks one intent. Pairs with `reclassify` (action verb that commits a `shape` finding). On-demand only as of fn-29; findings land in `.abcd/logbook/audit/shape-<ts>/report.{json,md}`. Concurrency via `flock(2)` on `.abcd/coordination/shape.lock` (see § 6). Scheduled / continuous invocation is a deferred follow-up (see `.work/issues.md` `[fn-29 follow-up]`). | (stays) |
+| `/abcd:intent review <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). spc-12 ships this **manual** verb; spc-28 shipped the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; spc-6 disowned auto-firing). | (stays) |
+| `/abcd:intent consistency [<itd-N>]` | **Role 2 — cross-document fidelity.** Surfaces five judgement categories (terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts) across briefs + intents. **Bare** scans the whole corpus; **with `<itd-N>`** narrows to one intent's relationship with the rest. Findings land in `.abcd/logbook/audit/consistency-<ts>/report.{json,md}`. Live as of spc-29 (judgement half + on-demand verb); mechanical-half categories and pre-commit hook are deferred follow-ups (see `.work/issues.md` `[spc-29 follow-up]` entries). | (stays) |
+| `/abcd:intent shape [<itd-N>]` | **Role 3 — kind classification.** Examines whether an intent's declared `kind` (the noun) still fits the corpus. Surfaces *suggested* reclassifications across three live types: `kind_change`, `bundle`, `supersession`. **Bare** scans the corpus; **with `<itd-N>`** checks one intent. Pairs with `reclassify` (action verb that commits a `shape` finding). On-demand only as of spc-29; findings land in `.abcd/logbook/audit/shape-<ts>/report.{json,md}`. Concurrency via `flock(2)` on `.abcd/coordination/shape.lock` (see § 6). Scheduled / continuous invocation is a deferred follow-up (see `.work/issues.md` `[spc-29 follow-up]`). | (stays) |
 | `/abcd:intent reclassify <itd-N> --kind <new-kind> [--reason <text>]` | Late reclassification (e.g., a standalone intent realised to be a bundle-member; a draft realised to be a discipline; a shipped intent superseded by a later one). Records `reclassification_history` entry; moves the file between directories as the new kind dictates. `--kind superseded --by <itd-M>` is the supersession path: the file moves to `superseded/`, frontmatter records `superseded_by: itd-M` AND `kind_at_supersession: <original-kind>` so future readers know what shape the intent had when retired. | varies by destination kind |
-| `/abcd:intent link <itd-N> <fn-N>` | Manual bidirectional link — used if the auto-link missed (rare) or for retroactive linking of pre-existing specs | (no move; updates frontmatter) |
+| `/abcd:intent link <itd-N> <spc-N>` | Manual bidirectional link — used if the auto-link missed (rare) or for retroactive linking of pre-existing specs | (no move; updates frontmatter) |
 
-**No aggregator verb.** A `check` subverb that runs `review` + `consistency` + `shape` together is *not* provided — the three primitives have very different runtime costs (review is code+oracle expensive; consistency is corpus-wide expensive; shape is cheap on demand). Bundling them produces a slow verb users avoid. Release-readiness is `/abcd:launch`'s pre-flight job. (Note: a future scheduled / pre-commit shape leg is recorded as a **deferred follow-up** under `.work/issues.md` `[fn-29 follow-up]`; fn-29 ships only the on-demand surface.)
+**No aggregator verb.** A `check` subverb that runs `review` + `consistency` + `shape` together is *not* provided — the three primitives have very different runtime costs (review is code+oracle expensive; consistency is corpus-wide expensive; shape is cheap on demand). Bundling them produces a slow verb users avoid. Release-readiness is `/abcd:launch`'s pre-flight job. (Note: a future scheduled / pre-commit shape leg is recorded as a **deferred follow-up** under `.work/issues.md` `[spc-29 follow-up]`; spc-29 ships only the on-demand surface.)
 
 **Bare-command-as-help is a universal abcd convention** — every command (`/abcd:ahoy`, `/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent`, `/abcd:capture`) shows status + suggested next actions when invoked without args. Provides discoverability without forcing the user to remember subcommand names.
 
@@ -223,7 +223,7 @@ slug: <kebab-case>
 kind: null               # set by /abcd:intent plan: "standalone" | "bundle-member"
 suggested_kind: null     # advisory, written by capture-time LLM classifier; can be ignored
 bundle: null             # for kind: bundle-member, the bundle ID
-spec_id: null            # or fn-N (set by /abcd:intent plan)
+spec_id: null            # or spc-N (set by /abcd:intent plan)
 reclassification_history: []   # appended to by /abcd:intent reclassify (kind changes only)
 surface_history: []            # appended when an intent's user-facing surface shape changes (e.g., skill → sub-verb, top-level command → sub-verb, command → flag) WITHOUT changing kind. Distinct from reclassification_history. Schema: { date, from, to, reason }. Hand-edited or written by future tooling.
 ---
@@ -252,9 +252,9 @@ Discipline-kind intents use a different template — see § 1 "Discipline format
 
 See [`01-product/05-personas.md`](../01-product/05-personas.md) for the canonical persona registry (SSOT). The intent-create flow (`/abcd:intent "<text>"`) calls the native persona picker to pick a persona for the customer quote in each press release; the codified abcd principle (no real names, no "hypothetical user") lives in the canonical persona file.
 
-## 5. Frontmatter fields (fn-3 additions)
+## 5. Frontmatter fields (spc-3 additions)
 
-fn-3 adds the following optional frontmatter fields to intent files. All are additive — pre-existing intents without them remain valid (schema: `intent.schema.json`).
+spc-3 adds the following optional frontmatter fields to intent files. All are additive — pre-existing intents without them remain valid (schema: `intent.schema.json`).
 
 | Field | Type | When set | Purpose |
 |-------|------|----------|---------|
@@ -265,7 +265,7 @@ fn-3 adds the following optional frontmatter fields to intent files. All are add
 | `grill_session_id` | UUID | set by grill skill | UUIDv4 of the Phase 1 grill session that produced the latest grill report |
 | `grilled_intent_hash` | SHA-256 | set by grill skill | Hash of the intent at grill time (intent_source_hash recipe). Copied to PRD as `source_intent_hash`. Used by `/abcd:intent plan` to detect intent-edited-after-grill |
 | `prd_path` | string or null | set by grill skill Phase 2 | Relative path to the PRD at `.abcd/intents/<itd-N>/prd.md`. Null until grilled |
-| `prd_grandfathered` | bool or null | set by one-shot migration | True for pre-fn-3 planned intents. Suppresses GR002 and GL005 as info-only (not blocker). Cleared when intent is regrilled |
+| `prd_grandfathered` | bool or null | set by one-shot migration | True for pre-spc-3 planned intents. Suppresses GR002 and GL005 as info-only (not blocker). Cleared when intent is regrilled |
 
 ### Term ID semantics — machine vs body prose
 
@@ -300,7 +300,7 @@ The PRD is a **frozen contract** artefact (not a session log). It lives at a per
 7. Writes durable attempt journal at `.abcd/intents/<itd-N>/.planning-attempt.json`.
 8. Passes intent + frozen PRD to the native plan step as primary context.
 9. Writes `## Links` block to the new spec (atomic; idempotent).
-10. Writes `spec: fn-N` back to PRD frontmatter.
+10. Writes `spec: spc-N` back to PRD frontmatter.
 
 Both the press-release intent and the frozen PRD are immutable input artefacts post-promotion. The press release is the elevator pitch; the PRD is the AI-consumption contract.
 
@@ -322,7 +322,7 @@ Both the press-release intent and the frozen PRD are immutable input artefacts p
 - **Every intent in `superseded/` has both `superseded_by: <itd-M>` AND `kind_at_supersession: <original-kind>`.** The first names the successor; the second preserves what shape the intent had when it was retired (standalone vs bundle-member vs discipline change the meaning of "superseded"). Both are required. If `kind_at_supersession: bundle-member`, the intent ALSO carries `bundle_at_supersession: <bundle-id>` — preserving the bundle membership at retirement time even though the active `bundle:` field is `null`.
 - No intent ID collisions; no spec referencing a non-existent intent ID.
 - File location matches `kind` frontmatter (drift between dir and field flagged).
-- For intents promoted from issues (per itd-4): bidirectional `related_issues` ↔ `related_intents` linkage holds. Implemented by fn-23 (intent-fidelity-reviewer `--issue-drift` mode).
+- For intents promoted from issues (per itd-4): bidirectional `related_issues` ↔ `related_intents` linkage holds. Implemented by spc-23 (intent-fidelity-reviewer `--issue-drift` mode).
 
 Drift triggers a warning, not a block (since spec-store state may legitimately lag intent state during work in progress). Acceptance-criteria absence and kind/directory mismatch are hard blocks (the whole point of the itd-1 discipline is to force the AC discipline; the kind/directory contract makes the lifecycle navigable).
 
@@ -344,9 +344,9 @@ This is product-tier review. The opponent is the codebase. Distinct from the spe
 - the **itd-1 acceptance pass** (a shipped intent) writes per-criterion verdicts into that intent's `## Audit Notes` (the verdict of record) **plus** a per-run `audit/review-<ts>/` logbook report;
 - the **itd-37 `MG004` pass** (a native spec's `## Modification Grammar`) writes its `PASS` / `FAIL` verdict to an `audit/spec-mg-<ts>/` logbook receipt — native specs have no `## Audit Notes` section, so the verdict cannot land in-file.
 
-**What fn-12 ships.** fn-12 ships the **discipline-judgement subset** of `/abcd:intent review` — the itd-1 per-criterion acceptance verdicts and the itd-37 `MG004` boilerplate check, with their writers and receipts. The broader **press-release prose review** (the `honoured` / `diverged` / `missing` buckets below) and other prose/terminology/PRD-fidelity outputs are **deferred** to a later spec. fn-12 also ships the **manual** review surface; fn-28 then shipped the on-close hook (move `planned → shipped` + queue a review on that transition). Auto-running the reviewer off that queue is still deferred — no spec currently owns it; fn-6 disowned auto-firing.
+**What spc-12 ships.** spc-12 ships the **discipline-judgement subset** of `/abcd:intent review` — the itd-1 per-criterion acceptance verdicts and the itd-37 `MG004` boilerplate check, with their writers and receipts. The broader **press-release prose review** (the `honoured` / `diverged` / `missing` buckets below) and other prose/terminology/PRD-fidelity outputs are **deferred** to a later spec. spc-12 also ships the **manual** review surface; spc-28 then shipped the on-close hook (move `planned → shipped` + queue a review on that transition). Auto-running the reviewer off that queue is still deferred — no spec currently owns it; spc-6 disowned auto-firing.
 
-**What fn-23 ships.** fn-23 ships the `--issue-drift` role — a corpus-wide bidirectional cross-reference walk between shipped intents and the `iss-N` ledger (per itd-4). Receipts land at `.abcd/logbook/audit/issue-drift-<ts>/`. Default exit 0 with warnings to stderr; `--strict` opts into exit 1 for CI gates. See the native spec `fn-23-intent-fidelity-reviewer-extension`.
+**What spc-23 ships.** spc-23 ships the `--issue-drift` role — a corpus-wide bidirectional cross-reference walk between shipped intents and the `iss-N` ledger (per itd-4). Receipts land at `.abcd/logbook/audit/issue-drift-<ts>/`. Default exit 0 with warnings to stderr; `--strict` opts into exit 1 for CI gates. See the native spec `spc-23-intent-fidelity-reviewer-extension`.
 
 Outputs findings with two layers:
 
@@ -365,13 +365,13 @@ Findings appended to the intent's `## Audit Notes` section. Manual re-run via `/
 
 For bundle-member intents, this role runs *per intent* against the same delivered reality (each member's acceptance criteria checked separately).
 
-#### The audit loop — record-only vs loop-to-acceptance (itd-50 / fn-52)
+#### The audit loop — record-only vs loop-to-acceptance (itd-50 / spc-52)
 
 Role 1 records per-criterion verdicts; **itd-50 adds the POLICY that decides what happens to a recorded verdict.** The policy rides the review-queue drainer on the run seam (adr-27) — it is NEVER in the pure on-close lifecycle hook (the lifecycle close stays a pure data function; the mode logic lives in the drainer/policy layer).
 
 **Three audit-loop modes, facilitator-elected per intent** via the `audit_mode` frontmatter key:
 
-- **`record-only`** (the default, and today's behaviour) — a `NOT_MET` is written to `## Audit Notes`; no re-work is triggered. An **absent** `audit_mode` key resolves to `record-only` (additive, fn-28/fn-43-compatible).
+- **`record-only`** (the default, and today's behaviour) — a `NOT_MET` is written to `## Audit Notes`; no re-work is triggered. An **absent** `audit_mode` key resolves to `record-only` (additive, spc-28/spc-43-compatible).
 - **`loop-to-acceptance`** — a `NOT_MET` re-opens the linked work and iterates against the same acceptance criteria until they read `MET`, bounded by `audit_budget` (the spec-grain SHIP/NEEDS_WORK fix-loop lifted to the intent grain). See `05-internals/03-configuration.md` for the `audit_mode` / `audit_budget` keys, the default budget (`3`), and the fail-closed rule for a malformed/zero/negative budget.
 
 **Full state-coverage table** (every Family-2 rollup maps to a defined action — no dead-ends; the loop trigger is `NOT_MET` only):
@@ -387,7 +387,7 @@ Role 1 records per-criterion verdicts; **itd-50 adds the POLICY that decides wha
 
 `UNACHIEVABLE` is an intent-level **rollup** terminal the policy layer writes — it is **NOT** a per-criterion verdict (`ACCEPTANCE_VERDICTS = {MET, MET_WITH_CONCERNS, NOT_MET, INCONCLUSIVE}` is unchanged) and is recognised at the `Overall:` / rollup parse layer only.
 
-**The `UNACHIEVABLE` replan surface (no rollback).** A terminal `UNACHIEVABLE` writes a `why-unachievable` explanation + a **replan invitation** block (naming both the product thinker and the facilitator) into the intent's `## Audit Notes`. The intent **stays in `shipped/`** — its `spec_id` / `kind` / directory + delivered artifacts are byte-untouched (a `drafts/` move would break the lifecycle invariant + fn-48 lint and read as a partial un-ship). The invitation seeds `/abcd:intent grill`; no machine authors a replan, nothing is auto-rolled-back.
+**The `UNACHIEVABLE` replan surface (no rollback).** A terminal `UNACHIEVABLE` writes a `why-unachievable` explanation + a **replan invitation** block (naming both the product thinker and the facilitator) into the intent's `## Audit Notes`. The intent **stays in `shipped/`** — its `spec_id` / `kind` / directory + delivered artifacts are byte-untouched (a `drafts/` move would break the lifecycle invariant + spc-48 lint and read as a partial un-ship). The invitation seeds `/abcd:intent grill`; no machine authors a replan, nothing is auto-rolled-back.
 
 **Gated manual verification + verification receipt (R5).** The manual-verification invitation renders **only** when the machine rollup is acceptance-eligible (all `MET`, or `MET_WITH_CONCERNS` with no `NOT_MET`) — if any criterion is not `MET`/concerns, the loop or replan invitation runs first; the product thinker is never asked to hand-test something the audit already knows is broken. The sign-off is recorded as a **verification receipt distinct from the machine verdict of record** — a separate JSON artifact under `.abcd/logbook/audit/verify-<ts>/receipt.json`, never merged into `## Audit Notes`:
 
@@ -405,9 +405,9 @@ Receipt **states**: `offered` (the gate opened — the drainer stamps this on a 
 
 Introduced by itd-48 (which superseded itd-31). The opponent is *other documents*: compares the brief and every intent against each other (and against the brief itself), surfacing the five live judgement categories — **terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts**. No spec-store analogue — the spec store reviews one artefact at a time; corpus-wide consistency is pure abcd ground.
 
-fn-29 ships the judgement half on demand via `/abcd:intent consistency` (Carmack-level oracle review).
+spc-29 ships the judgement half on demand via `/abcd:intent consistency` (Carmack-level oracle review).
 
-**Deferred follow-up** (recorded in `.work/issues.md` under `[fn-29 follow-up]`): the mechanical-half lint categories — schema/state contradictions, reference rot, acknowledgement gaps — were originally planned as `internal/core/lint --cross-doc` codes `XD002`/`XD006`/`XD007` per `05-internals/06-lint.md`; the lint-code half is deferred to a follow-up intent. Pre-commit hook wiring that would let `/abcd:intent consistency` findings block commits is also deferred.
+**Deferred follow-up** (recorded in `.work/issues.md` under `[spc-29 follow-up]`): the mechanical-half lint categories — schema/state contradictions, reference rot, acknowledgement gaps — were originally planned as `internal/core/lint --cross-doc` codes `XD002`/`XD006`/`XD007` per `05-internals/06-lint.md`; the lint-code half is deferred to a follow-up intent. Pre-commit hook wiring that would let `/abcd:intent consistency` findings block commits is also deferred.
 
 **Polymorphic on arg presence (same operation, narrowed scope):** bare = scan the whole corpus; with `<itd-N>` = scan one intent's relationship with the rest. This is *not* the forbidden hidden-state dispatch — the operation is identical; the arg just narrows scope (like `git log` vs `git log <path>`).
 
@@ -417,7 +417,7 @@ Findings land in `.abcd/logbook/audit/consistency-<ts>/report.{json,md}`.
 
 Introduced alongside the three intent kinds (per itd-34). The opponent is the *kind taxonomy*: examines whether each intent's declared `kind` (the noun in frontmatter) still fits the corpus. The verb `shape` matches the taxonomy noun and pairs cleanly with `reclassify` (the action verb that commits a `shape` finding).
 
-fn-29 ships the on-demand surface only. **Bare** scans the corpus; **with `<itd-N>`** checks one intent. Findings appear in `/abcd:intent` status output (passive surface) and as a separate report at `.abcd/logbook/audit/shape-<ts>/report.{json,md}`. The user accepts a suggestion via `/abcd:intent reclassify`; declined suggestions are logged for future review (so the reviewer doesn't re-surface the same suggestion every run).
+spc-29 ships the on-demand surface only. **Bare** scans the corpus; **with `<itd-N>`** checks one intent. Findings appear in `/abcd:intent` status output (passive surface) and as a separate report at `.abcd/logbook/audit/shape-<ts>/report.{json,md}`. The user accepts a suggestion via `/abcd:intent reclassify`; declined suggestions are logged for future review (so the reviewer doesn't re-surface the same suggestion every run).
 
 **Concurrency contract** (between any future scheduled invocation and on-demand `shape`):
 
@@ -436,7 +436,7 @@ The three live `suggestion_type` values this role produces:
 - **`bundle`** — "intents X and Y reference each other in scope/references and target the same release; consider `kind: bundle-member` with shared bundle ID."
 - **`supersession`** — "intent X's scope is fully covered by intent Y; consider `kind: superseded --by Y`."
 
-> **Deferred follow-up** (recorded in `.work/issues.md` under `[fn-29 follow-up]`): pre-commit hook wiring for continuous shape scanning, and the `shape(...)` function's `mode="pre_commit"` parameter is preserved as a seam but no hook invokes it. Discipline subtype clustering ("once enough disciplines exist, surfaces 'three disciplines have similar `kind_notes`; consider formalising a subtype'") was named in earlier itd-34 drafts and is *not* shipped by fn-29 — it is not a live suggestion type.
+> **Deferred follow-up** (recorded in `.work/issues.md` under `[spc-29 follow-up]`): pre-commit hook wiring for continuous shape scanning, and the `shape(...)` function's `mode="pre_commit"` parameter is preserved as a seam but no hook invokes it. Discipline subtype clustering ("once enough disciplines exist, surfaces 'three disciplines have similar `kind_notes`; consider formalising a subtype'") was named in earlier itd-34 drafts and is *not* shipped by spc-29 — it is not a live suggestion type.
 
 ### Logbook layout
 

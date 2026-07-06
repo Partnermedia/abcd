@@ -18,13 +18,13 @@ This is a **codified abcd principle**: intent capture is press-release-shaped. a
 
 ## Intent IDs
 
-Intent IDs follow the pattern `itd-N` (unpadded, mirrors the native spec `fn-N` convention). Filenames: `itd-N-<slug>.md`.
+Intent IDs follow the pattern `itd-N` (unpadded, mirrors the native spec `spc-N` convention). Filenames: `itd-N-<slug>.md`.
 
-`itd` reads as "intent" and pairs visually with the native spec `fn-N`.
+`itd` reads as "intent" and pairs visually with the native spec `spc-N`.
 
 **IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
 
-**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `fn-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint`, registries, dashboards) rather than via filename padding.
+**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `spc-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint`, registries, dashboards) rather than via filename padding.
 
 ---
 
@@ -42,7 +42,7 @@ Standalone is the default (~60% of the corpus). Bundle-members ship together as 
 
 The kind is **project-agnostic** — application projects (e.g., a macOS app under abcd) produce their own disciplines (privacy-impact review, accessibility passes, code-style conventions). The three kinds are a property of the intent framework, not of abcd's particular subject matter.
 
-**The persisted `kind` enum stays three-valued.** The capture-time classifier has a *fourth* verdict, `decision` (a standing infrastructure choice — "we use Postgres"), but `decision` is **never a persisted `kind`** and never enters this lifecycle: a confirmed `decision` routes to the existing ADR store (`../../decisions/adrs/`, `adr-N-<slug>.md`), not to a draft. There is deliberately **no `intents/decisions/` directory**. See [itd-44](drafts/itd-44-fourth-intent-kind-decision.md) (fn-56 thin adoption) and `brief/04-surfaces/05-intent.md § 1`.
+**The persisted `kind` enum stays three-valued.** The capture-time classifier has a *fourth* verdict, `decision` (a standing infrastructure choice — "we use Postgres"), but `decision` is **never a persisted `kind`** and never enters this lifecycle: a confirmed `decision` routes to the existing ADR store (`../../decisions/adrs/`, `adr-N-<slug>.md`), not to a draft. There is deliberately **no `intents/decisions/` directory**. See [itd-44](drafts/itd-44-fourth-intent-kind-decision.md) (spc-56 thin adoption) and `brief/04-surfaces/05-intent.md § 1`.
 
 ---
 
@@ -79,12 +79,12 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
    │
    ├─ standalone (single intent ID):
    │     ├─ Plans the native spec (plan + plan-review)
-   │     ├─ Injects bidirectional link (spec.intent = itd-N; intent.spec_id = fn-N)
+   │     ├─ Injects bidirectional link (spec.intent = itd-N; intent.spec_id = spc-N)
    │     └─ drafts/ → planned/
    │
    ├─ bundle-member (multiple intent IDs in one plan call):
    │     ├─ Plans one native spec with all intents as joint input
-   │     ├─ spec.intent = [itd-A, itd-B]; each intent.spec_id = fn-N; each intent.bundle = <bundle-id>
+   │     ├─ spec.intent = [itd-A, itd-B]; each intent.spec_id = spc-N; each intent.bundle = <bundle-id>
    │     └─ All members: drafts/ → planned/
    │
    └─ discipline (single intent, kind chosen explicitly):
@@ -126,7 +126,7 @@ Continuously: intent-fidelity-reviewer's shape-classification role suggests
 **Manual overrides:**
 
 - `/abcd:intent ship` can force-move planned→shipped if the hook missed (standalone + bundle only)
-- `/abcd:intent link <itd-N> <fn-N>` for retroactive linking of pre-existing specs
+- `/abcd:intent link <itd-N> <spc-N>` for retroactive linking of pre-existing specs
 - `/abcd:intent review <itd-N>` to manually re-run the fidelity reviewer at any time (Role 1 — single-doc fidelity)
 - `/abcd:intent reclassify <itd-N> --kind <new-kind>` for late kind changes
 
@@ -138,8 +138,8 @@ Continuously: intent-fidelity-reviewer's shape-classification role suggests
 
 | File | Frontmatter field |
 |---|---|
-| `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `spec_id: fn-N` (or list, or `null` when in drafts/) |
-| the native spec `fn-N-<slug>` | `intent: itd-N` (or list) |
+| `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `spec_id: spc-N` (or list, or `null` when in drafts/) |
+| the native spec `spc-N-<slug>` | `intent: itd-N` (or list) |
 
 Both directions present once `/abcd:intent plan` runs. `intent_lint` (pre-commit + CI) verifies they agree.
 
@@ -147,7 +147,7 @@ Both directions present once `/abcd:intent plan` runs. `intent_lint` (pre-commit
 
 ## Press Release Format
 
-Every intent file uses this template (fn-3 fields shown; all new fields are optional — pre-existing intents without them remain valid):
+Every intent file uses this template (spc-3 fields shown; all new fields are optional — pre-existing intents without them remain valid):
 
 ```markdown
 ---
@@ -156,8 +156,8 @@ slug: <kebab-case-slug>
 # NOTE: no `status:` field — directory location is the canonical lifecycle state.
 #   See brief/04-surfaces/05-intent.md § 6 for the lint rule and rationale.
 kind: null               # set by /abcd:intent plan: "standalone" | "bundle-member" | "discipline"
-spec_id: null            # or fn-N (set by /abcd:intent plan)
-# fn-3 fields (optional; additive — pre-existing intents valid without them):
+spec_id: null            # or spc-N (set by /abcd:intent plan)
+# spc-3 fields (optional; additive — pre-existing intents valid without them):
 contexts: null           # [list] of bounded-context IDs; required when term has cross-context collision
 glossary_terms_used: null  # [list] of qualified <context>/<term> IDs; auto-populated by grill skill
 warrants_assumed: null   # [list] of Toulmin warrants assumed (not made explicit in AC)
@@ -165,7 +165,7 @@ grilled_at: null         # ISO8601 UTC; set by grill skill at Phase 1 completion
 grill_session_id: null   # UUIDv4; set by grill skill
 grilled_intent_hash: null  # SHA-256 of intent at grill time (intent_source_hash recipe)
 prd_path: null           # relative path to PRD (e.g. .abcd/intents/itd-N/prd.md); set by grill Phase 2
-prd_grandfathered: null  # true = pre-fn-3 planned intent; GR002+GL005 suppressed-as-info
+prd_grandfathered: null  # true = pre-spc-3 planned intent; GR002+GL005 suppressed-as-info
 ---
 
 # <Headline — what user-facing capability exists>
@@ -205,7 +205,7 @@ prd_grandfathered: null  # true = pre-fn-3 planned intent; GR002+GL005 suppresse
 
 ---
 
-## PRD Freeze Contract (fn-3)
+## PRD Freeze Contract (spc-3)
 
 When `/abcd:intent plan <itd-N>` runs, the PRD at `prd_path` is **frozen**:
 
@@ -247,7 +247,7 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 
 Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
 
-**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
+**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`spc-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `spc-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
 
 ---
 
@@ -293,7 +293,7 @@ drafts/
 └── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
 ```
 
-¹ itd-2 (was itd-17) had a plan-reviewed spec that was deleted during a prior renumbering pass. It needs re-planning via `/abcd:intent plan` once the brief is settled. The historical `fn-3` spec-ID reservation is no longer in force — that slot in the native spec store is now taken by itd-27's spec. itd-2 will receive a fresh slot when replanned; it sits in `drafts/` with `spec_id: null` until that replan happens. (itd-6 followed a different route — it was promoted to `planned/` by the fn-5 spec, which implements its RP MCP bridge foundation; see the Planned section below.)
+¹ itd-2 (was itd-17) had a plan-reviewed spec that was deleted during a prior renumbering pass. It needs re-planning via `/abcd:intent plan` once the brief is settled. The historical `spc-3` spec-ID reservation is no longer in force — that slot in the native spec store is now taken by itd-27's spec. itd-2 will receive a fresh slot when replanned; it sits in `drafts/` with `spec_id: null` until that replan happens. (itd-6 followed a different route — it was promoted to `planned/` by the spc-5 spec, which implements its RP MCP bridge foundation; see the Planned section below.)
 
 ---
 
@@ -320,10 +320,10 @@ One intent currently planned:
 
 ```
 planned/
-├── itd-6-rp-mcp-only-integration.md    (linked to fn-5-rp-mcp-integration-declare)
+├── itd-6-rp-mcp-only-integration.md    (linked to spc-5-rp-mcp-integration-declare)
 ```
 
-itd-27 and itd-28 had plan-reviewed native specs (`fn-3` for grill, `fn-2` for RP-reviews-into-flow); both specs have since closed and the intents now sit in `shipped/` (see the Shipped section below). itd-6 was promoted to `planned/` by the `fn-5-rp-mcp-integration-declare` spec, which implements the RP MCP bridge foundation itd-6 describes; it is linked to fn-5-rp-mcp-integration-declare (`spec_id` stays `null` — fn-5 was not created by `/abcd:intent plan itd-6`). itd-6's own acceptance criteria for the three-step cascade, ahoy setup discovery, and non-Mac flow remain DEFERRED beyond fn-5 (see the intent's Implementation status section). itd-6 moves to `shipped/` automatically when its spec closes (via `intent_lifecycle_hook`).
+itd-27 and itd-28 had plan-reviewed native specs (`spc-3` for grill, `spc-2` for RP-reviews-into-flow); both specs have since closed and the intents now sit in `shipped/` (see the Shipped section below). itd-6 was promoted to `planned/` by the `spc-5-rp-mcp-integration-declare` spec, which implements the RP MCP bridge foundation itd-6 describes; it is linked to spc-5-rp-mcp-integration-declare (`spec_id` stays `null` — spc-5 was not created by `/abcd:intent plan itd-6`). itd-6's own acceptance criteria for the three-step cascade, ahoy setup discovery, and non-Mac flow remain DEFERRED beyond spc-5 (see the intent's Implementation status section). itd-6 moves to `shipped/` automatically when its spec closes (via `intent_lifecycle_hook`).
 
 (Earlier history note: itd-2 also sat in `planned/` at one point with plan-reviewed history, but its native spec was deleted during a renumbering pass — reset to `drafts/` with `spec_id: null`. Running `/abcd:intent plan itd-2` creates a fresh native spec and re-establishes the bidirectional link.)
 
@@ -354,6 +354,6 @@ Files in `superseded/` are preserved as historical record; never deleted.
 
 ```
 shipped/
-├── itd-27-grill-skill-and-glossary.md  (spec_id: fn-3-strengthen-intent-stage-abcdgrill-skill)
-└── itd-28-rp-reviews-into-flow.md      (spec_id: fn-2-move-repoprompt-review-artifacts-into)
+├── itd-27-grill-skill-and-glossary.md  (spec_id: spc-3-strengthen-intent-stage-abcdgrill-skill)
+└── itd-28-rp-reviews-into-flow.md      (spec_id: spc-2-move-repoprompt-review-artifacts-into)
 ```

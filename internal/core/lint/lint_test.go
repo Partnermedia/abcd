@@ -211,20 +211,20 @@ func TestIntentLifecycle(t *testing.T) {
 	base := "rec/intents"
 
 	// Well-formed intents across buckets (the reference targets for superseded).
-	writeFile(t, root, base+"/shipped/itd-48-good.md", "---\nid: itd-48\nkind: standalone\nspec_id: fn-10-thing\n---\n# ok\n")
-	writeFile(t, root, base+"/planned/itd-20-good.md", "---\nid: itd-20\nkind: bundle-member\nspec_id: fn-83-thing\n---\n# ok\n")
+	writeFile(t, root, base+"/shipped/itd-48-good.md", "---\nid: itd-48\nkind: standalone\nspec_id: spc-10-thing\n---\n# ok\n")
+	writeFile(t, root, base+"/planned/itd-20-good.md", "---\nid: itd-20\nkind: bundle-member\nspec_id: spc-83-thing\n---\n# ok\n")
 	writeFile(t, root, base+"/drafts/itd-10-good.md", "---\nid: itd-10\nkind: null\nspec_id: null\n---\n# ok\n")
 	writeFile(t, root, base+"/disciplines/itd-1-good.md", "---\nid: itd-1\nkind: discipline\nspec_id: null\n---\n# ok\n")
 	writeFile(t, root, base+"/superseded/itd-31-good.md", "---\nid: itd-31\nkind: standalone\nsuperseded_by: itd-48\n---\n# ok\n")
 
 	// Violations, one family per file.
-	writeFile(t, root, base+"/drafts/itd-11-bad.md", "---\nid: itd-11\nkind: null\nspec_id: fn-99-nope\n---\n# bad\n")                        // drafts spec_id must be null
-	writeFile(t, root, base+"/planned/itd-21-bad.md", "---\nid: itd-21\nkind: null\nspec_id: fn-1-x\n---\n# bad\n")                           // planned kind must be non-null
-	writeFile(t, root, base+"/planned/itd-22-bad.md", "---\nid: itd-22\nkind: standalone\nspec_id: itd-5-wrong\n---\n# bad\n")                // planned spec_id must be ^fn-
-	writeFile(t, root, base+"/shipped/itd-49-bad.md", "---\nid: itd-49\nkind: standalone\nspec_id: null\n---\n# bad\n")                       // shipped spec_id must be non-null
-	writeFile(t, root, base+"/disciplines/itd-2-bad.md", "---\nid: itd-2\nkind: standalone\nspec_id: null\n---\n# bad\n")                     // disciplines kind must be discipline
-	writeFile(t, root, base+"/superseded/itd-32-bad.md", "---\nid: itd-32\nkind: standalone\nsuperseded_by: itd-999\n---\n# bad\n")           // target missing
-	writeFile(t, root, base+"/shipped/itd-50-status.md", "---\nid: itd-50\nkind: standalone\nspec_id: fn-2-x\nstatus: shipped\n---\n# bad\n") // status: forbidden
+	writeFile(t, root, base+"/drafts/itd-11-bad.md", "---\nid: itd-11\nkind: null\nspec_id: spc-99-nope\n---\n# bad\n")                        // drafts spec_id must be null
+	writeFile(t, root, base+"/planned/itd-21-bad.md", "---\nid: itd-21\nkind: null\nspec_id: spc-1-x\n---\n# bad\n")                           // planned kind must be non-null
+	writeFile(t, root, base+"/planned/itd-22-bad.md", "---\nid: itd-22\nkind: standalone\nspec_id: itd-5-wrong\n---\n# bad\n")                 // planned spec_id must be ^spc-
+	writeFile(t, root, base+"/shipped/itd-49-bad.md", "---\nid: itd-49\nkind: standalone\nspec_id: null\n---\n# bad\n")                        // shipped spec_id must be non-null
+	writeFile(t, root, base+"/disciplines/itd-2-bad.md", "---\nid: itd-2\nkind: standalone\nspec_id: null\n---\n# bad\n")                      // disciplines kind must be discipline
+	writeFile(t, root, base+"/superseded/itd-32-bad.md", "---\nid: itd-32\nkind: standalone\nsuperseded_by: itd-999\n---\n# bad\n")            // target missing
+	writeFile(t, root, base+"/shipped/itd-50-status.md", "---\nid: itd-50\nkind: standalone\nspec_id: spc-2-x\nstatus: shipped\n---\n# bad\n") // status: forbidden
 
 	cfg := Config{
 		Roots: []string{"rec"},

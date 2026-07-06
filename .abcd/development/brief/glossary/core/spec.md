@@ -24,7 +24,7 @@ whose location encodes its status, decomposed into numbered tasks; the companion
 
 ## When to use
 
-Use "spec" when referring to a specced technical work block with an `fn-N`
+Use "spec" when referring to a specced technical work block with an `spc-N`
 identifier. Specs have acceptance criteria, task lists, and are driven to
 completion by the pluggable run seam
 ([adr-27](../../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)) or direct
@@ -39,8 +39,8 @@ specs).
 
 ## Examples
 
-- "Spec `fn-3` implements the grill skill and glossary infrastructure."
-- "Task `fn-3.1` is the first implementation task of that spec."
+- "Spec `spc-3` implements the grill skill and glossary infrastructure."
+- "Task `spc-3.1` is the first implementation task of that spec."
 
 ## Related terms
 

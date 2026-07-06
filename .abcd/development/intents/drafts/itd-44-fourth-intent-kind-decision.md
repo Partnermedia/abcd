@@ -14,7 +14,7 @@ related_adrs: []
 
 > **This intent is delivered under an operator-elected THIN adoption** (interview
 > decision; ratified at plan-review r1 of the implementing spec
-> `fn-56-fourth-intent-kind-decision-thin`). Two design choices in the original
+> `spc-56-fourth-intent-kind-decision-thin`). Two design choices in the original
 > draft (preserved below the line, struck through where superseded) are
 > **rejected**, and the rejection is recorded here so a future reader does not
 > re-derive the heavy design:
@@ -122,7 +122,7 @@ language version. The verdict generalises.
 - `decision` is therefore NEVER written to the schema `kind` or
   `kind_at_supersession`, NEVER enters the `drafts/→planned/→shipped/`
   lifecycle, NEVER gets a native spec, and is referenced downstream as
-  `adr-N` (which fn-48's RC linkage lint, matching only `itd-N` tokens, already
+  `adr-N` (which spc-48's RC linkage lint, matching only `itd-N` tokens, already
   ignores).
 
 ### Plan/reclassify refusal guard
@@ -165,7 +165,7 @@ The original draft's full-store acceptance criteria are **superseded-by-decision
 (the thin-adoption operator deviation recorded above). They are struck through in
 the preserved draft below the line and are NOT requirements of the implementing
 spec. The live acceptance criteria for this intent are owned by
-`fn-56-fourth-intent-kind-decision-thin` (R1–R5); in summary:
+`spc-56-fourth-intent-kind-decision-thin` (R1–R5); in summary:
 
 - *Given* a product thinker records a standing choice, *when* they run
   `/abcd:intent "we use Postgres for the audit trail"`, *then* the capture
@@ -226,7 +226,7 @@ spec. The live acceptance criteria for this intent are owned by
 
 ### ~~Audit / fidelity~~ (superseded — no decision-kind intent files exist to audit)
 
-- ~~The `intent-fidelity-reviewer` agent (fn-12) gets a Role 1 variant for decisions, with per-decision verdicts (`IMPLEMENTED` / `IMPLEMENTED_WITH_DRIFT` / `NOT_IMPLEMENTED` / `INCONCLUSIVE`).~~
+- ~~The `intent-fidelity-reviewer` agent (spc-12) gets a Role 1 variant for decisions, with per-decision verdicts (`IMPLEMENTED` / `IMPLEMENTED_WITH_DRIFT` / `NOT_IMPLEMENTED` / `INCONCLUSIVE`).~~
 
 ### ~~Original full-store Acceptance Criteria~~ (superseded-by-decision)
 

@@ -126,7 +126,7 @@ audit (reality vs. intent acceptance).
   and prose are updated.
 - The `phase:` spec anchor needs eventual lint coverage (verify the named
   phase exists) — deferred until the phase-audit reviewer is built. **Delivered
-  (fn-66):** the `PA001` verify-exists anchor lint and the phase-audit reviewer
+  (spc-66):** the `PA001` verify-exists anchor lint and the phase-audit reviewer
   both now exist. The *corpus anchor backfill* onto the unanchored specs stays
   deferred (now unblocked — see the amendment's delivery note).
 - Removing `target_release` changes every intent's `intent_source_hash` (the
@@ -248,7 +248,7 @@ the anchor as live ("authored going forward") were aligned to this posture in th
 same change (`roadmap/phases/README.md`, `brief/01-product/03-mental-model.md`,
 `brief/04-surfaces/04-launch.md`).
 
-**Delivery note (fn-66).** Two of the three bundled artefacts are now built: the
+**Delivery note (spc-66).** Two of the three bundled artefacts are now built: the
 `PA001` valid-phase anchor lint (verify-exists, line-precise on the `phase:` key)
 and the phase-audit reviewer (`scripts/abcd/phase_audit_reviewer/` — a sibling of
 `intent-fidelity-reviewer`, reviewing delivered reality against a phase's
@@ -256,6 +256,6 @@ and the phase-audit reviewer (`scripts/abcd/phase_audit_reviewer/` — a sibling
 to `.abcd/logbook/audit/phase-<ts>/`). The **third** artefact — the corpus anchor
 backfill onto the unanchored specs — remains **deferred**, but is now **unblocked**:
 the reviewer + lint this backfill was gated on exist, so a future spec can do the
-editorial spec→phase mapping with the verification machinery in place. fn-66 makes
+editorial spec→phase mapping with the verification machinery in place. spc-66 makes
 the backfill *safe*; it deliberately does not perform it (a spec in no `## Scope`
 stays correctly unscheduled and carries no anchor).

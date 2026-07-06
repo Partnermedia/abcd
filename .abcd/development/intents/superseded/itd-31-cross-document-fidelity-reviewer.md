@@ -26,9 +26,9 @@ The 2026-05-07 brief audit found 40 inconsistencies across the brief and 27 inte
 
 1. **Brief-edit ownership has no audit trail.** Every intent that touches the brief lists "brief edits" in scope. There's no canonical mechanism for tracking which edits an in-flight intent owes vs. has shipped.
 2. **The "paper-only agent gets new responsibilities" pattern is unbounded.** Four intents committed `intent-fidelity-reviewer` to new responsibilities; the reviewer's documentation in five locations went stale.
-3. **Cross-cutting registries have no SSOT enforcement.** Verdict enums, lint codes, agent catalog, fn-N space, glossary, persona registry — every consumer either re-states or extends in isolation.
+3. **Cross-cutting registries have no SSOT enforcement.** Verdict enums, lint codes, agent catalog, spc-N space, glossary, persona registry — every consumer either re-states or extends in isolation.
 4. **Terminology drift around 4 nouns** (`session`, `review`, `context`, `intent`).
-5. **Reservation conflicts** (`fn-N` epic-ID space, command names).
+5. **Reservation conflicts** (`spc-N` epic-ID space, command names).
 
 These are not "bad intents" — they're failure modes of *coordination across many intents over time*. The intent-fidelity-reviewer (per itd-1) handles "did reality match this one intent?" but cannot handle "do these intents agree with each other and with the brief?". This intent fills that gap.
 
@@ -40,7 +40,7 @@ The audit categories are **empirical**, derived from the 2026-05-07 sweep. Futur
 
 - **R1 — Terminology drift**: same noun used with different meanings across docs. Mechanical detection via glossary cross-reference (consumes `.abcd/development/foundation/terminology/`); oracle judgement for un-glossed nouns.
 - **R2 — Schema/state contradictions**: intent fields the template doesn't acknowledge; status mismatches; sequencing impossibilities (intent X depends on itd-Y before it has shipped). Mechanical (lint).
-- **R3 — Reservation conflicts**: fn-N collisions, command-name reservations (per `02-constraints/04-naming.md`), duplicated agent/skill names. Mechanical.
+- **R3 — Reservation conflicts**: spc-N collisions, command-name reservations (per `02-constraints/04-naming.md`), duplicated agent/skill names. Mechanical.
 - **R4 — Premise drift**: brief makes a claim subsequent intents have superseded without amending the brief. Oracle judgement.
 - **R5 — Scope leakage**: intent X "in scope" overlaps intent Y "in scope"; "out of scope" of X is "in scope" of Y. Oracle judgement.
 - **R6 — Reference rot**: cross-references to nonexistent files / sections / IDs / agents. Mechanical.
@@ -49,9 +49,9 @@ The audit categories are **empirical**, derived from the 2026-05-07 sweep. Futur
 ### The two halves of implementation
 
 **Mechanical half** (`intent_lint.py --cross-doc`, CI-integrated):
-- R3 fn-N collisions (compare every intent's `epic_id` against `.flow/epics/`)
+- R3 spc-N collisions (compare every intent's `epic_id` against `.flow/epics/`)
 - R3 command-name reservations (parse `04-naming.md` reserved list, scan all intents for unauthorised use)
-- R6 reference rot (every `link` resolves; every `itd-N` / `fn-N` / `iss-N` / file-path / line-number cited resolves)
+- R6 reference rot (every `link` resolves; every `itd-N` / `spc-N` / `iss-N` / file-path / line-number cited resolves)
 - R7 acknowledgement aggregation (every intent's References section's external citations appear in README's Acknowledgements; CI fails if missing)
 - R2 schema (intent frontmatter against `intent.schema.json`)
 - R2 sequencing (every intent's declared dependencies are scoped to the same phase or an earlier one)

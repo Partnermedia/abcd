@@ -1,20 +1,20 @@
 ---
 id: itd-48
 slug: intent-fidelity-reviewer-roles-2-3
-spec_id: fn-29-intent-fidelity-reviewer-roles-23
+spec_id: spc-29-intent-fidelity-reviewer-roles-23
 kind: standalone
 suggested_kind: bundle-member
 reclassification_history:
   - { date: 2026-05-27, from: "null", to: "standalone", reason: "overrode erroneous capture-time `suggested_kind: bundle-member`; formal bundle-member requires multiple intent files sharing an `spec_id` and `bundle:` id per itd-34, and itd-48 is one intent file." }
 related_adrs: []
-routed_from: ["fn-33:A1", "fn-33:A2", "fn-33:A3", "fn-33:A4", "fn-33:G1"]
+routed_from: ["spc-33:A1", "spc-33:A2", "spc-33:A3", "spc-33:A4", "spc-33:G1"]
 ---
 
 # `intent-fidelity-reviewer` Gains Its Cross-Doc And Kind-Classification Roles
 
 ## Press Release
 
-> **abcd's `intent-fidelity-reviewer` agent grows from one `role` to three.** `Role 1` (per-intent fidelity) already ships in fn-12 — it grades a shipped intent's acceptance criteria against delivered reality and writes `MET`/`MET_WITH_CONCERNS`/`NOT_MET`/`INCONCLUSIVE` verdicts back into the intent's `## Audit Notes`. This intent ships `Role 2` (cross-document consistency — surfaces terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts across the brief + intents corpus) and `Role 3` (kind classification — examines whether intents' declared `kind` still fits the corpus and surfaces suggested reclassifications). With all three roles live, `/abcd:intent consistency` and `/abcd:intent shape` move from documented command surface to working command surface. The reviewer becomes the corpus's continuous fidelity auditor.
+> **abcd's `intent-fidelity-reviewer` agent grows from one `role` to three.** `Role 1` (per-intent fidelity) already ships in spc-12 — it grades a shipped intent's acceptance criteria against delivered reality and writes `MET`/`MET_WITH_CONCERNS`/`NOT_MET`/`INCONCLUSIVE` verdicts back into the intent's `## Audit Notes`. This intent ships `Role 2` (cross-document consistency — surfaces terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts across the brief + intents corpus) and `Role 3` (kind classification — examines whether intents' declared `kind` still fits the corpus and surfaces suggested reclassifications). With all three roles live, `/abcd:intent consistency` and `/abcd:intent shape` move from documented command surface to working command surface. The reviewer becomes the corpus's continuous fidelity auditor.
 >
 > "The corpus had drifted in three places I hadn't noticed," said Fatima, facilitator. "itd-29 still used `epic` throughout its `press release` copy; itd-34's discipline lifecycle said one thing and adr-9's brief amendment said another; itd-37 had been silently bundle-shaped for two intents now without anyone reclassifying. `/abcd:intent consistency` and `/abcd:intent shape` surfaced all three in one pass. None of them were urgent. All of them would have bitten."
 
@@ -24,11 +24,11 @@ The `intent-fidelity-reviewer` agent is named in `docs/reference/commands.md` as
 
 | Verb | Role | Status |
 |---|---|---|
-| `review <itd-N>` | Role 1 — per-intent fidelity | **Shipped (fn-12)** |
+| `review <itd-N>` | Role 1 — per-intent fidelity | **Shipped (spc-12)** |
 | `consistency [<itd-N>]` | Role 2 — cross-doc fidelity | **Documented, not built** |
 | `shape [<itd-N>]` | Role 3 — kind classification | **Documented, not built** |
 
-`.work/issues.md` 2026-05-16 line 178 names this gap: "No flow-next epic owns `intent_lint.py` or the `intent-fidelity-reviewer` agent" — partially addressed by fn-12 for Role 1, but Roles 2 and 3 still have no owner. fn-12's spec explicitly bounded itself to Role 1; the other two roles "are NOT in scope: they are a later Pass A/B/C agent epic" (fn-12 `## Overview`).
+`.work/issues.md` 2026-05-16 line 178 names this gap: "No flow-next epic owns `intent_lint.py` or the `intent-fidelity-reviewer` agent" — partially addressed by spc-12 for Role 1, but Roles 2 and 3 still have no owner. spc-12's spec explicitly bounded itself to Role 1; the other two roles "are NOT in scope: they are a later Pass A/B/C agent epic" (spc-12 `## Overview`).
 
 This intent ships those later epics as a **standalone intent whose scope covers both roles** — the two roles share substrate that should land together:
 
@@ -62,7 +62,7 @@ The intent is project-agnostic: every abcd project that uses the intent corpus b
   routing is stubbed).
 - Findings emitted as structured records grouped by judgement category
   (terminology drift, premise contradictions, scope leakage, sequencing
-  impossibilities, naming conflicts) — fn-29 ships finding categories,
+  impossibilities, naming conflicts) — spc-29 ships finding categories,
   not mechanical lint codes. Mechanical cross-doc categories
   (schema/state contradictions, reference rot, acknowledgement gaps)
   and any associated lint-code namespace are deferred to a follow-up
@@ -83,7 +83,7 @@ The intent is project-agnostic: every abcd project that uses the intent corpus b
   `suggestions[]` (matched by `finding_signature`).
 - Implement `/abcd:intent shape [<itd-N>]` routing as an **on-demand**
   verb. Continuous pre-commit shape scanning is **deferred** to a
-  follow-up intent — fn-29 ships only the on-demand surface.
+  follow-up intent — spc-29 ships only the on-demand surface.
 - Pairs with `/abcd:intent reclassify` (already documented) — when Role 3
   surfaces a finding, `reclassify` is the action verb that commits it.
 - Reports land at `.abcd/logbook/audit/shape-<ts>/report.{json,md}`.
@@ -91,24 +91,24 @@ The intent is project-agnostic: every abcd project that uses the intent corpus b
   `{kind_change, bundle, supersession}` with the matching arm fields
   (`current_kind` + `suggested_kind`, `bundle_members`, or
   `superseded_by`); scoped runs additionally emit the
-  `KIND_OK` / `KIND_DRIFT` / `INCONCLUSIVE` `scoped_verdict`. fn-29 does
+  `KIND_OK` / `KIND_DRIFT` / `INCONCLUSIVE` `scoped_verdict`. spc-29 does
   not introduce a mechanical lint-code namespace for this persona.
 
 ### Shared
 
-- Both roles share fn-12's testing pattern: golden fixtures + at least one
+- Both roles share spc-12's testing pattern: golden fixtures + at least one
   injection-canary per role (per itd-5).
 - Both roles call `_build_cli_oracle()` from itd-47's extended version, so
   they run in headless Ralph mode.
 - **Pre-commit hook wiring is deferred** to a follow-up intent for both
-  roles. fn-29 ships the on-demand verbs (`/abcd:intent consistency` and
+  roles. spc-29 ships the on-demand verbs (`/abcd:intent consistency` and
   `/abcd:intent shape`) only; the previous draft's promise of a
   `intent-fidelity-consistency` pre-commit hook and Role 3's
   "runs continuously in pre-commit" surface are explicitly out of scope.
 
 ## What's Out Of Scope
 
-- **Role 1 modifications.** fn-12 shipped Role 1; this intent does not
+- **Role 1 modifications.** spc-12 shipped Role 1; this intent does not
   edit it.
 - **`lifeboat-oracle` agent.** itd-5's named reviewer; out of scope here.
 - **Auto-fix for findings.** Role 2 and Role 3 surface findings; a
@@ -142,39 +142,39 @@ The intent is project-agnostic: every abcd project that uses the intent corpus b
   commit, or only at state transitions). Out of scope for this intent.
 - **Mechanical Role 2 categories.** Schema/state contradictions, reference
   rot, and acknowledgement gaps are deferred to a separate intent that
-  owns the mechanical (lint-driven) half of cross-doc fidelity. fn-29
+  owns the mechanical (lint-driven) half of cross-doc fidelity. spc-29
   ships only the judgement half.
 
-## Routed Deferrals (fn-33)
+## Routed Deferrals (spc-33)
 
-fn-33's Phase 3→4 cleanup sweep routes its cluster-A and G1 deferrals into this
+spc-33's Phase 3→4 cleanup sweep routes its cluster-A and G1 deferrals into this
 intent as their durable home (recorded as `routed_from` frontmatter backlinks,
 asserted by `tests/abcd/test_fn33_defer_backlinks.py`). These are follow-up
-scope captured here — NOT active fn-33 work:
+scope captured here — NOT active spc-33 work:
 
-- **`fn-33:A1`** — Role-2 mechanical half: schema/state contradictions,
+- **`spc-33:A1`** — Role-2 mechanical half: schema/state contradictions,
   reference rot, acknowledgement gaps → `intent_lint.py --cross-doc` lint codes
   `XD002` / `XD006` / `XD007` (the mechanical cross-doc categories this intent
   defers under "Open Questions → Mechanical Role 2 categories").
-- **`fn-33:A2`** — Role-2 pre-commit hook (blocking-vs-advisory policy) — the
+- **`spc-33:A2`** — Role-2 pre-commit hook (blocking-vs-advisory policy) — the
   hook wiring this intent lists as deferred under "Shared → Pre-commit hook
   wiring is deferred".
-- **`fn-33:A3`** — Role-3 pre-commit scheduling: the `mode="pre_commit"` seam
+- **`spc-33:A3`** — Role-3 pre-commit scheduling: the `mode="pre_commit"` seam
   exists; the hook wrapper + per-commit-cost policy is the deferred follow-up.
-- **`fn-33:A4`** — chunked corpus review. **DORMANT — triggered-by
+- **`spc-33:A4`** — chunked corpus review. **DORMANT — triggered-by
   `bundle_overflow: true`.** The Role-2 collector / Role-3 classifier set a
   `bundle_overflow` manifest flag on overflow and stop; this item activates ONLY
   when a persisted report actually shows `bundle_overflow: true`. Routing it here
   does NOT make it active implementation scope.
-- **`fn-33:G1`** — consistency-report reconciliation key non-convergence: the
+- **`spc-33:G1`** — consistency-report reconciliation key non-convergence: the
   R1 `finding_id` recipe is prose-derived and re-hashes differently across
   re-runs. Fix is structural-key / deterministic-decode / an `addressed` report
-  state on `consistency_report.schema.json` — fn-29-owned (this intent owns the
+  state on `consistency_report.schema.json` — spc-29-owned (this intent owns the
   reviewer + the consistency-report contract).
 
 ## Related
 
-- **fn-12** (`intent-fidelity-reviewer` agent — Role 1) — the foundation
+- **spc-12** (`intent-fidelity-reviewer` agent — Role 1) — the foundation
   this intent extends, via the shared agent file.
 - **itd-47** (autonomous-mode oracle gates) — precondition. Roles 2 and 3
   need headless oracle access; itd-47 ships it.

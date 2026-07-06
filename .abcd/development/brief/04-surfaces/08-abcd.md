@@ -45,10 +45,10 @@ therefore satisfy SD001 rather than tripping it. (Had they instead introduced
 divergent behaviour, they would be forbidden sub-verbs and the design would be
 reconsidered — the gate is real, not a rubber stamp.)
 
-## fn-17 stub replacement (investigation-gated)
+## spc-17 stub replacement (investigation-gated)
 
-itd-20 was planned assuming a fn-17 probe stub for the bare top-level command
-would be *replaced*. Investigation found NO such stub: fn-17 shipped
+itd-20 was planned assuming a spc-17 probe stub for the bare top-level command
+would be *replaced*. Investigation found NO such stub: spc-17 shipped
 probe/bare renders for the *sub-verb* surfaces (`/abcd:disembark`,
 `/abcd:embark`, `/abcd:launch`, and a verification of bare `/abcd:intent`) —
 never a top-level `commands/abcd.md`. `git log` confirms `commands/abcd.md`
@@ -110,7 +110,7 @@ Therefore section (3) is PERMANENTLY the `no dev-sync record` known-state line
 in v1 — the dev-sync-staleness signal does **not** function until a state
 substrate exists. This is an ALLOWED terminal state, recorded here and in the
 itd-20 intent so it is not read as a shipped capability. Adding a dev-sync
-state substrate is explicitly OUT of scope for fn-83.2 (and named in the .5
+state substrate is explicitly OUT of scope for spc-83.2 (and named in the .5
 out-of-scope update).
 
 ## Performance bounds (NFR)

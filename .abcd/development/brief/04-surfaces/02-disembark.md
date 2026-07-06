@@ -1,6 +1,6 @@
 # `/abcd:disembark` — Pack a Lifeboat
 
-> **Status:** design target — builds in Phase 4 (the lifeboat pipeline). Today only the probe / dry-run stubs ship (fn-17); the full flow below is not yet built.
+> **Status:** design target — builds in Phase 4 (the lifeboat pipeline). Today only the probe / dry-run stubs ship (spc-17); the full flow below is not yet built.
 
 > **Recovery humility.** Disembark packs the highest-fidelity proxy of the project's theory we can leave behind. It is not the theory. The theory of any non-trivial project lives in the people who built it, the conversations where decisions were made, and the alternatives they rejected before this one — what Naur (1985) called the lived activity of building. The lifeboat is the floor we can carry forward across a session, machine, or team boundary; it is not the activity itself. See [`01-product/03-mental-model.md § The Naurian gap`](../01-product/03-mental-model.md#the-naurian-gap) for the framing.
 
@@ -109,7 +109,7 @@ Pass B's chat-distiller is exempt (already streams by per-spine-entry queries). 
 │   └── code-principles.{json,md}       # from code-rescuer
 ├── docs/
 │   ├── adrs/                           # verbatim ADR copies
-│   ├── terminology.md                  # rendered from .abcd/development/foundation/terminology/<context>/<term>.md (per itd-27 / fn-3)
+│   ├── terminology.md                  # rendered from .abcd/development/foundation/terminology/<context>/<term>.md (per itd-27 / spc-3)
 │   ├── claude-md-snapshot.md
 │   └── tutorials/ guides/ reference/ explanation/   # verbatim from source docs/
 ├── assets/

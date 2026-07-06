@@ -4,7 +4,7 @@ This file holds the configuration schema (`config.json`, including its `meta` se
 
 ## Setup metadata — `config.json["meta"]`
 
-Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separate `.abcd/meta.json` at repo scope (fn-16). ahoy stamps and reads it via `config.json["meta"]` (example values shown):
+Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separate `.abcd/meta.json` at repo scope (spc-16). ahoy stamps and reads it via `config.json["meta"]` (example values shown):
 
 ```json
 {
@@ -81,8 +81,8 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
   },
   "intent": {
     "auto_link": true,                  // /abcd:intent plan injects bidirectional link automatically
-    "auto_ship": true                   // the native spec-close hook (fn-36) reconciles linked
-                                        // intents planned/ → shipped/ on a successful close (fn-28
+    "auto_ship": true                   // the native spec-close hook (spc-36) reconciles linked
+                                        // intents planned/ → shipped/ on a successful close (spc-28
                                         // intent_lifecycle.reconcile); /abcd:intent "<text>" always lands in
                                         // drafts/ (no auto-trigger)
   },
@@ -103,9 +103,9 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
 }
 ```
 
-**Owed-review draining (fn-43, itd-53) is receipt gating in the `run` seam (adr-27).** Owed fidelity reviews are drained at the `run` seam's iteration boundary: each iteration gates on a **receipt** and applies the safety guard, a report-not-block step whichever adapter provides the loop (native Go loop, Claude Workflows, the companion harness). There is no autodrain config knob and no post-iteration edge to hang it on — receipt gating is part of the seam contract, inherited by every adapter loop rather than re-implemented per loop. The full report-vs-block / cost-bound decision record is [`adr-27`](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md); the companion consistency gate's `RC*` codes are registered in [`06-lint.md § 1`](06-lint.md#1-lint-code-namespace).
+**Owed-review draining (spc-43, itd-53) is receipt gating in the `run` seam (adr-27).** Owed fidelity reviews are drained at the `run` seam's iteration boundary: each iteration gates on a **receipt** and applies the safety guard, a report-not-block step whichever adapter provides the loop (native Go loop, Claude Workflows, the companion harness). There is no autodrain config knob and no post-iteration edge to hang it on — receipt gating is part of the seam contract, inherited by every adapter loop rather than re-implemented per loop. The full report-vs-block / cost-bound decision record is [`adr-27`](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md); the companion consistency gate's `RC*` codes are registered in [`06-lint.md § 1`](06-lint.md#1-lint-code-namespace).
 
-**Audit-loop mode + budget — per-intent frontmatter (itd-50, fn-52).** The audit-loop policy is NOT configured in `config.json`; it is elected **per intent** in the intent's own frontmatter, so the choice is portable with the intent (it survives the lifeboat) and one intent can loop while another stays record-only:
+**Audit-loop mode + budget — per-intent frontmatter (itd-50, spc-52).** The audit-loop policy is NOT configured in `config.json`; it is elected **per intent** in the intent's own frontmatter, so the choice is portable with the intent (it survives the lifeboat) and one intent can loop while another stays record-only:
 
 ```yaml
 # intents/<dir>/itd-N-*.md frontmatter

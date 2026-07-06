@@ -1,7 +1,7 @@
 ---
 id: itd-36
 slug: memory-unification
-spec_id: fn-38-abcd-memory-write-core-abcdmemory
+spec_id: spc-38-abcd-memory-write-core-abcdmemory
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -10,7 +10,7 @@ related_adrs: [adr-28]
 
 # Knowledge That Compounds, Not Knowledge That Re-Derives
 
-> **Superseded in part by [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) (packaging framing; supersedes adr-18).** This shipped intent describes the fn-38 restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-28 packages the curated release to exclude `.abcd/**` **wholesale**, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the LIVE brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`). This historical record is preserved as shipped, not rewritten.
+> **Superseded in part by [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) (packaging framing; supersedes adr-18).** This shipped intent describes the spc-38 restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-28 packages the curated release to exclude `.abcd/**` **wholesale**, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the LIVE brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`). This historical record is preserved as shipped, not rewritten.
 
 ## Press Release
 
@@ -74,12 +74,12 @@ There's a real gap: **per-project durable knowledge has multiple legitimate upst
 ## Implementing specs
 
 itd-36 is implemented across multiple specs. The single-valued frontmatter
-`spec_id` records the **primary** delivering spec (fn-38); the remaining spec is
+`spec_id` records the **primary** delivering spec (spc-38); the remaining spec is
 recorded here because `spec_id` holds one value and would understate scope.
 This section is the canonical multi-spec implementation index:
 
-- **fn-38** (primary) — `/abcd:memory` write core (the memory substrate, ingest, registry).
-- **fn-39** — `/abcd:memory lint` quality gate (quotation-budget / licence / provenance lint).
+- **spc-38** (primary) — `/abcd:memory` write core (the memory substrate, ingest, registry).
+- **spc-39** — `/abcd:memory lint` quality gate (quotation-budget / licence / provenance lint).
 
 ## Ship gate — adversarial worked examples
 

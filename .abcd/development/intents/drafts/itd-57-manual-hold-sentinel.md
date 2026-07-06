@@ -13,7 +13,7 @@ prd_path: null
 
 ## Press Release
 
-> **abcd gains a built-in "park this, but keep it planned" primitive: a permanent sentinel spec, scaffolded at configure time, that any future spec can depend on to stay invisible to autonomous pickup until a human explicitly unblocks it.** Today, holding a spec back from the run seam means either deleting it (loses the work), leaving `plan_review_status` open (fragile — a reviewer can flip it), or hand-rolling a never-`done` dependency each time. With this, `abcd configure` plants a single `fn-0-manual-hold` sentinel spec (permanently open, zero tasks, a self-documenting plan) as the voyage's first spec; to park any spec, the facilitator adds a native spec dependency on it — the run seam's selector already skips specs blocked by a non-done dependency, which does the rest. To unblock, one native `spec rm-dep` lifts the hold. The spec stays fully planned, reviewed, and visible in the dependency graph the entire time — it simply cannot be picked up.
+> **abcd gains a built-in "park this, but keep it planned" primitive: a permanent sentinel spec, scaffolded at configure time, that any future spec can depend on to stay invisible to autonomous pickup until a human explicitly unblocks it.** Today, holding a spec back from the run seam means either deleting it (loses the work), leaving `plan_review_status` open (fragile — a reviewer can flip it), or hand-rolling a never-`done` dependency each time. With this, `abcd configure` plants a single `spc-0-manual-hold` sentinel spec (permanently open, zero tasks, a self-documenting plan) as the voyage's first spec; to park any spec, the facilitator adds a native spec dependency on it — the run seam's selector already skips specs blocked by a non-done dependency, which does the rest. To unblock, one native `spec rm-dep` lifts the hold. The spec stays fully planned, reviewed, and visible in the dependency graph the entire time — it simply cannot be picked up.
 
 > "I wanted the session-layer activation spec written and reviewed so the design was parked — but I absolutely did not want the autonomous run starting it behind my back," said a facilitator. "Deleting it loses the plan. Leaving it half-statused is a foot-gun. I want one obvious, durable lever: this spec is held until I say so."
 
@@ -27,7 +27,7 @@ This is voyage-agnostic: every voyage that runs an autonomous loop eventually ne
 
 ## What's In Scope
 
-- A sentinel spec scaffolded by `abcd configure` (or the equivalent first-run path): a fixed id (e.g. `fn-0-manual-hold`), status permanently open, zero tasks, a plan body that documents its own purpose and the block/unblock commands.
+- A sentinel spec scaffolded by `abcd configure` (or the equivalent first-run path): a fixed id (e.g. `spc-0-manual-hold`), status permanently open, zero tasks, a plan body that documents its own purpose and the block/unblock commands.
 - The block convention: a spec is held by adding a native spec dependency on the sentinel (`depends_on: [<sentinel>]`); the run seam's selector already skips specs with a non-done dependency, which enforces it. Unblock = native `spec rm-dep <spec> <sentinel>`.
 - A `🔒 BLOCKED` banner convention for held specs so the native `spec` view makes the state unmistakable.
 - Idempotent scaffolding: re-running configure never duplicates or resets the sentinel; never auto-closes it (it must stay non-done forever).
@@ -44,7 +44,7 @@ This is voyage-agnostic: every voyage that runs an autonomous loop eventually ne
 
 > _Given-When-Then per the itd-1 discipline._
 
-- **Given** a freshly configured abcd voyage, **when** configure completes, **then** a permanently-open, zero-task `fn-0-manual-hold` sentinel spec exists with a self-documenting plan (a test asserts presence + open status + zero tasks).
+- **Given** a freshly configured abcd voyage, **when** configure completes, **then** a permanently-open, zero-task `spc-0-manual-hold` sentinel spec exists with a self-documenting plan (a test asserts presence + open status + zero tasks).
 - **Given** a spec that depends on the sentinel, **when** the autonomous selector runs, **then** that spec is never offered (the existing non-done-dependency skip fires; a test proves it).
 - **Given** a held spec, **when** the facilitator runs the documented unblock command, **then** the dependency is removed and the spec becomes selectable on the next iteration (a test proves the round-trip).
 - **Given** configure is re-run on a voyage that already has the sentinel, **when** it completes, **then** the sentinel is unchanged (idempotent; never duplicated, never closed).
@@ -52,17 +52,17 @@ This is voyage-agnostic: every voyage that runs an autonomous loop eventually ne
 
 ## Open Questions
 
-- Sentinel id: `fn-0-manual-hold` (sorts first) vs a non-`fn-` reserved id outside the normal numbering — which avoids colliding with the spec sequence and reads clearest in the graph?
+- Sentinel id: `spc-0-manual-hold` (sorts first) vs a non-`spc-` reserved id outside the normal numbering — which avoids colliding with the spec sequence and reads clearest in the graph?
 - Should configure plant it, or should it be lazily created on first `spec hold`-style use? (Eager = always present and discoverable; lazy = no clutter in projects that never hold anything.)
 - Does the existing native spec-dependency skip emit a clear "blocked by manual-hold" reason in the native selector's `next` output, or does that need a small message addition so the operator sees WHY a spec is skipped?
 
 ## Audit Notes
 
-Captured 2026-06-12 from a facilitator decision while planning the session-layer activation spec (fn-58): the spec needed to be planned and double-backend reviewed but hard-blocked from run-seam pickup. The never-done-dependency mechanism was used ad hoc; this intent promotes it to a configure-time primitive. Hand-authored draft — validate via `/abcd:intent` or `intent_lint` before promotion.
+Captured 2026-06-12 from a facilitator decision while planning the session-layer activation spec (spc-58): the spec needed to be planned and double-backend reviewed but hard-blocked from run-seam pickup. The never-done-dependency mechanism was used ad hoc; this intent promotes it to a configure-time primitive. Hand-authored draft — validate via `/abcd:intent` or `intent_lint` before promotion.
 
 ## References
 
 - The native spec store's selector — the "skip specs blocked by a non-done spec-level dependency" rule this rides (referenced by behaviour, not a fixed location).
 - The native spec store's close path — the accidental-completion path the sentinel must be guarded against (a zero-task sentinel vacuously satisfies "no incomplete tasks"); the productized primitive should make `spec close` refuse the sentinel.
 - The native spec store's `spec add-dep` / `rm-dep` and task-block (task-grain precedent).
-- fn-60 (`fn-60-manual-hold-sentinel-never-completes`) — the current ad-hoc sentinel precursor this intent generalizes; fn-62 (`fn-62-session-enforcement-wiring-n1-a1-a4b2`) — its first real held consumer. fn-48 linkage lint — the guard that must exempt the sentinel.
+- spc-60 (`spc-60-manual-hold-sentinel-never-completes`) — the current ad-hoc sentinel precursor this intent generalizes; spc-62 (`spc-62-session-enforcement-wiring-n1-a1-a4b2`) — its first real held consumer. spc-48 linkage lint — the guard that must exempt the sentinel.

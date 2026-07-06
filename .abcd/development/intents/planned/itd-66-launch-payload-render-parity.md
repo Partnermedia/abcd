@@ -1,7 +1,7 @@
 ---
 id: itd-66
 slug: launch-payload-render-parity
-spec_id: fn-78-launch-payload-render-parity-smoke
+spec_id: spc-78-launch-payload-render-parity-smoke
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
@@ -24,8 +24,8 @@ warrants_assumed:
 # abcd Renders The Exact Public Payload, Proves The Excludes Never Leak, And Smoke-Tests The Installed Surface Before Any Snapshot
 
 > **⚠️ HISTORICAL / NON-CANONICAL.** This is the itd-66 intent draft (press-release + acceptance sketch). The
-> CANONICAL, implementation-authoritative contract for fn-78 is the native spec
-> **`fn-78-launch-payload-render-parity-smoke`**. This draft still names `.abcd/launch.allow` as
+> CANONICAL, implementation-authoritative contract for spc-78 is the native spec
+> **`spc-78-launch-payload-render-parity-smoke`**. This draft still names `.abcd/launch.allow` as
 > honored by render and describes manifest-declared smoke surfaces; both are SUPERSEDED (render consumes
 > `.abcd/config/launch-payload.json`, not `launch.allow`; smoke discovers surfaces by directory convention).
 > Where this draft and the spec disagree, the spec wins. Do NOT implement from this draft.
@@ -46,7 +46,7 @@ The pre-flight gate suite ([[itd-65-launch-preflight-gate-suite]]) decides wheth
 - A leak-proof assertion: the rendered tree contains ZERO `.abcd/**`, `.flow/**`, `.work/**` paths, and honours the `.abcd/launch.allow` allowlist contract (never promotes any `.abcd/**` line, per adr-28).
 - A parity diff between the rendered payload and the previously published release: added / changed / removed files, so the operator previews the exact snapshot delta before promotion.
 - An installed-surface smoke test: from the rendered snapshot, load `plugin.json` + `marketplace.json` and assert every declared `/abcd:*` command, skill, and hook resolves, and every shipped Python entrypoint imports.
-- All read-only w.r.t. the dev repo (temp-tree writes only, removed after) — matches the side-effect-free posture of the fn-64 gate.
+- All read-only w.r.t. the dev repo (temp-tree writes only, removed after) — matches the side-effect-free posture of the spc-64 gate.
 - Canonical payload resolution (grill Q3): itd-66's render is the SINGLE resolver of "the payload" (include-manifest + default-deny + `.gitignore` + symlink-resolve). [[itd-65-launch-preflight-gate-suite]]'s gate suite scans exactly this resolved output and never re-resolves — so render and gate can never disagree on what is being shipped. This makes itd-66 (render) a dependency of itd-65 (gate): render → gate.
 - Layered leak defense (grill Q2): the render asserts no excluded PATH in the tree AND resolves symlinks (a payload symlink targeting `.abcd/` fails the assertion); embedded `.abcd`/`.flow` CONTENT that rode along inside a shipped file is caught by itd-65's secret/PII/identity content scan. Structural exclusion here; content cleanliness there.
 - Parity baseline (grill Q1): the diff targets the previously published release at a configured ref (default: the latest release tag). An absent/empty prior release yields an all-added diff (valid first-launch); a wrong/missing configured baseline is a hard error, never a silent empty diff.

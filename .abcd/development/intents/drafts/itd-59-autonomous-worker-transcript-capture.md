@@ -33,12 +33,12 @@ This is also a *symmetry* failure, not just a missing feature: the native transc
 
 - **The capture gap itself:** every autonomous-run pass's instructions + reasoning lands in the native transcript corpus under `~/.abcd/history/<root_sha>/` — parity with interactive-session capture.
 - **All autonomous entry points:** every phase the run seam drives (plan / work / completion-review), and any other unattended model invocation the seam makes, are covered — not just the work phase.
-- **Queryability + provenance:** captured transcripts are associated with the run id, spec/task id, run pass, and phase, so a later audit can answer "what did the worker reason for fn-NN.M, run pass K?".
+- **Queryability + provenance:** captured transcripts are associated with the run id, spec/task id, run pass, and phase, so a later audit can answer "what did the worker reason for spc-NN.M, run pass K?".
 - **Honor abcd's boundaries:** whatever the mechanism, it feeds the native transcript corpus through the run seam's own capture point rather than forking anything, and stays intact across the pluggable seam's implementations (Workflows / the companion harness / native loop).
 
 ## What's Out of Scope
 
-- **Re-architecting the transcript corpus.** `~/.abcd/history/<root_sha>/` and its single-owner provisioning (fn-15) stay as-is; this intent FEEDS that store, it does not redesign it.
+- **Re-architecting the transcript corpus.** `~/.abcd/history/<root_sha>/` and its single-owner provisioning (spc-15) stay as-is; this intent FEEDS that store, it does not redesign it.
 - **Capturing the operator's interactive sessions** — already solved (native transcript-corpus redirect). This is only the autonomous-worker half.
 - **The live run-console view** — that is orthogonal to durable capture; unchanged.
 - **Retroactive recovery of already-pruned runs** — this is forward-looking capture, not archaeology of lost logs.
@@ -64,7 +64,7 @@ Open questions for grill: does capturing a headless (non-interactive) run need a
 
 ## References
 
-- The native transcript corpus at `~/.abcd/history/<root_sha>/` and its single-owner provisioning (fn-15) — the store this feeds
+- The native transcript corpus at `~/.abcd/history/<root_sha>/` and its single-owner provisioning (spc-15) — the store this feeds
 - `.abcd/development/research/notes/ahoy-history-store-manual-scaffolding.md` (the transcript-store design this feeds)
 - ADR-29 (native transcript corpus), ADR-27 (pluggable autonomous seam)
 - Related: the abcd transparency/provenance promise in the brief (`01-product/`), itd-58 (a sibling autonomous-run-provenance closure)

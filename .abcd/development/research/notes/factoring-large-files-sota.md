@@ -51,7 +51,7 @@ re-export (`__all__`); `__main__.py` to preserve `python -m` entrypoints;
 extract a **leaf** `_types.py`/`_base.py`/`_substrate.py` first to break cycles;
 `if TYPE_CHECKING:` for annotation-only back-edges; keep `__init__.py`
 side-effect-free. Tooling: **LibCST** codemods (lossless, preserves the
-`fn-NN`/`itd-N` banner comments) → `ruff` (F401/`__all__`) + `mypy/pyright` to
+`spc-NN`/`itd-N` banner comments) → `ruff` (F401/`__all__`) + `mypy/pyright` to
 prove no dangling refs → existing test suite as the characterization net (a pure
 move is correct iff the suite passes unchanged).
 https://libcst.readthedocs.io/en/latest/codemods.html ·
@@ -149,9 +149,9 @@ runners → cli → __init__/__main__`.
    `cli.py`. 7. Delete `_legacy.py`; final suite + `python3 -m scripts.abcd.ahoy
    --help` smoke.
 
-**Coordination note:** ahoy.py is NOT on the fn-34 surface, but this is a large
+**Coordination note:** ahoy.py is NOT on the spc-34 surface, but this is a large
 mechanical change — sequence it when no other agent is mid-edit on the abcd
-package, and use LibCST to preserve the `fn-NN`/`itd-N` banner comments.
+package, and use LibCST to preserve the `spc-NN`/`itd-N` banner comments.
 
 ---
 
@@ -177,12 +177,12 @@ Each extraction = one commit = green suite (Mikado leaf-first).
 
 ### B1. `intent_fidelity_reviewer.py` (6,333) — SPLIT, highest priority
 Clearest seams in the codebase (author banners confirm): three **roles** +
-shared substrate + dispatch + parsers/writers + a self-contained fn-23
+shared substrate + dispatch + parsers/writers + a self-contained spc-23
 issue-drift subsystem. Proposed `intent_fidelity_reviewer/`:
 `_types.py` (leaf: verdict/result dataclasses+enums) · `_common.py` (identity,
 fenced-block extraction, atomic writes, `_oracle_dispatch*`, runtime-invariant
 validators) · `itd1.py` · `mg004.py` · `role2.py` · `role3.py` ·
-`issue_drift.py` (fn-23, already self-contained) · `__init__.py`+`__main__.py`.
+`issue_drift.py` (spc-23, already self-contained) · `__init__.py`+`__main__.py`.
 Sequence: package-ize w/ façade → `_types` → `issue_drift` → `_common` →
 roles/itd1/mg004 one per commit.
 

@@ -33,8 +33,8 @@ Two things pull against that:
    makes "is `.work/issues.md` the durable record, or a staging surface?" a real
    decision rather than a content edit.
 
-The fn-33 Phase-3→4 cleanup sweep (I13) forced the question to a head: either
-run the fn-22 migration now, or record a durable decision that the flat ledger
+The spc-33 Phase-3→4 cleanup sweep (I13) forced the question to a head: either
+run the spc-22 migration now, or record a durable decision that the flat ledger
 stays the live operational surface — with the durable record being a committed
 ADR, *not* `.work/issues.md` itself (which, being git-ignored, can never be the
 checker-assertable artefact).
@@ -93,7 +93,7 @@ unchanged.
 
 3. **Vague deferral — "structured store deferred, TBD."** Rejected: a deferral
    with no named trigger is indistinguishable from indefinite drift. The
-   discipline here requires a concrete re-entry condition; "until fn-22 is
+   discipline here requires a concrete re-entry condition; "until spc-22 is
    re-planned" is that condition.
 
 ## Consequences
@@ -112,7 +112,7 @@ unchanged.
 - AC evidence and routed follow-ups recorded *only* in `.work/issues.md` remain
   invisible to PR reviewers (the gitignore). The obligation stands: any
   follow-up that must be durable still earns a committed home (`itd-*` / ADR /
-  `iss-*` once fn-22 runs) — this ADR does not relax that.
+  `iss-*` once spc-22 runs) — this ADR does not relax that.
 - The promote-bridge lint family (`PR000`/`PR001`/`PR002`, a Go implementation)
   and the `/abcd:capture promote` path reference the structured `iss-*` store,
   which stays empty until the migration runs; those surfaces are designed-ahead

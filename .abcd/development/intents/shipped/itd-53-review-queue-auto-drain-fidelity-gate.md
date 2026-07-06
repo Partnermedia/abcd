@@ -1,12 +1,12 @@
 ---
 id: itd-53
 slug: review-queue-auto-drain-fidelity-gate
-spec_id: fn-43-review-queue-auto-drain-fidelity
+spec_id: spc-43-review-queue-auto-drain-fidelity
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-16]
-routed_from: ["fn-33:I-D2"]
+routed_from: ["spc-33:I-D2"]
 prd_path: null
 ---
 
@@ -67,5 +67,5 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 - Source: design discussion on the audit-loop enforcement design
   (`.work/issues.md`, 2026-06-02, "should spec-close auto-run review" — resolved
   NO; add a drainer instead).
-- Touches: the pure on-close lifecycle hook (fn-28) and the review-queue
-  drain/claim machinery; the fidelity reviewer (fn-12) is the run target.
+- Touches: the pure on-close lifecycle hook (spc-28) and the review-queue
+  drain/claim machinery; the fidelity reviewer (spc-12) is the run target.

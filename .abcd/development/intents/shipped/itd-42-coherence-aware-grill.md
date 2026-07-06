@@ -1,7 +1,7 @@
 ---
 id: itd-42
 slug: coherence-aware-grill
-spec_id: fn-26-coherence-aware-grill-itd-42
+spec_id: spc-26-coherence-aware-grill-itd-42
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []

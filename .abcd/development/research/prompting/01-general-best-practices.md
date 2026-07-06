@@ -25,7 +25,7 @@ Adopted shape for abcd agent prompts:
 - **Distinct sections** via XML tags or Markdown headers: `<background_information>`, `<instructions>`, `## Tool guidance`, `<output_format>`, `<examples>`. Models follow structured prompts measurably better than monolithic prose.
 - **Few-shot examples**: 2–5 *diverse, canonical* examples that span the behaviour envelope. **Anti-pattern:** stuffing edge cases. Anthropic: *"For an LLM, examples are the 'pictures' worth a thousand words."*
 - **Explicit effort-scaling rules** when the agent dispatches sub-work. Anthropic's research-system prompt literally says: *"simple fact-finding requires just 1 agent with 3-10 tool calls"* vs *"complex research might use more than 10 subagents."* `chat-distiller` should encode an analogous budget cap.
-- **Place high-priority instructions at the start AND the end** to dodge lost-in-the-middle. Already done for verdict-tag emission in fn-3 T4 — generalise.
+- **Place high-priority instructions at the start AND the end** to dodge lost-in-the-middle. Already done for verdict-tag emission in spc-3 T4 — generalise.
 
 ## 3. Sub-agent prompt design (mapped to the 14 abcd agents)
 
@@ -115,7 +115,7 @@ OWASP LLM01 (Prompt Injection) is **#1 for the third year running** as of 2026. 
 | Trade-off | Lean toward | Why |
 |---|---|---|
 | Long detailed prompt vs. short focused prompt | **Short focused** | Goldilocks zone is biased toward minimal; long prompts compound context-rot risk and amortise badly across the 15 agents. |
-| Pin specific models vs. `model: inherit` | **`inherit` by default**, pin only where load-bearing | Future-proof; but requires acknowledging verdict-tag drift across model versions (already flagged for fn-3 T4). |
+| Pin specific models vs. `model: inherit` | **`inherit` by default**, pin only where load-bearing | Future-proof; but requires acknowledging verdict-tag drift across model versions (already flagged for spc-3 T4). |
 | LLM-judge rubric vs. structural test | **Structural where possible, judge where necessary** | Judges are bias-laden. Structural tests are deterministic. The brief's "round-trip + oracle = phase acceptance" already does this hybrid. |
 | Few-shot vs. zero-shot for agents | **Few-shot, ≤5 diverse examples** | The single biggest single-lever quality boost in the literature; cheap to add; ages well. |
 | Bundle prompts with code vs. separate prompt-management platform | **Bundle (git-native)** | Solo-developer scale, prompts-as-code, no non-engineer editors. Defer Langfuse/Braintrust until a contributor without git literacy needs to edit a prompt. |
@@ -130,7 +130,7 @@ Reviewing the brief and in-flight `itd-2` (in-session subagent dispatch) work ag
 - **`chat-distiller` is the highest context-rot risk.** Make the spine-entry-per-call discipline non-negotiable. If it ever drifts toward "load and summarise this whole transcript", performance will collapse silently.
 - **Specstory transcripts are an indirect-injection vector.** `chat-distiller` reads transcripts that may have captured attacker-influenced content (a malicious commit message quoted in chat, an MCP server's hostile output, a pasted artefact). This is OWASP LLM01 even when nothing is being unpacked; defence is § 7 rung 1 (spotlighting / delimiting) plus citation-bound output (every rationale claim resolves to a real transcript line-range). Surfaced from `prompting/agents/chat-distiller.md`.
 - **`press-release-composer` is the highest verbosity-bias risk.** LLM judges (and humans) reliably prefer longer marketing copy. Cap output tokens hard; have `lifeboat-oracle` audit on *fidelity* and *concision* separately.
-- **Verdict-tag drift across models** (flagged for fn-3 T4 + memory) is the *systemic* risk of `model: inherit` everywhere. Build the multi-model verdict-emission smoke matrix already noted as future work.
+- **Verdict-tag drift across models** (flagged for spc-3 T4 + memory) is the *systemic* risk of `model: inherit` everywhere. Build the multi-model verdict-emission smoke matrix already noted as future work.
 - **Subagents-cannot-spawn-subagents** (`.work/issues.md` capture) limits one-level-deep dispatch. The `claude -p` headless escape pattern is the documented workaround if a later phase needs it.
 - **The 14-agent count itself.** Anthropic's research system spawns 3–5 subagents per query — not 14. abcd is not running them all at once (Pass A: 3 parallel, Pass B: 1 looped, Pass C: ~5 sequential), so the tool-discrimination problem is bounded. But: audit the `description` fields explicitly for routing-rule clarity; that is where the 14-agent design will fail first.
 - **Provenance-washing on `embark`.** A lifeboat's `_provenance.json` can claim a trustworthy origin without abcd having any way to verify it cryptographically. The mitigation is procedural: the `embark-scaffolder` agent neither validates nor trusts provenance — it surfaces the fields verbatim in `embark-report` and requires user confirmation. Cryptographic verification comes in a later phase, tracked as `itd-16` (hash-chain Merkle audit). Surfaced from `prompting/agents/embark-scaffolder.md`.

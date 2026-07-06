@@ -161,7 +161,7 @@ lists files that must not be scanned for forbidden-synonym hits even when a futu
 linter is wired up. Each entry below names the file, the controlling intent, and the reason it
 is intentionally allowlisted.
 
-- the issue-schema validator's **negative-test corpus** fixture (fn-18) — this fixture is the
+- the issue-schema validator's **negative-test corpus** fixture (spc-18) — this fixture is the
   negative-test corpus for the
   issue-schema validator: it intentionally embeds strings that would otherwise be flagged as
   forbidden synonyms in order to assert that the validator rejects them. Linting the negative
