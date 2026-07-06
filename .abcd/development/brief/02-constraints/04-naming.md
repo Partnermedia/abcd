@@ -8,7 +8,7 @@ Commands and abcd-owned directories use ship/voyage metaphors where natural.
 | `/abcd:ahoy install` | mutating sub-verb — applies detected gaps (skeleton, config-change, history-store, marker-block, PATH symlink, version stamp). Centralised per-category approval. |
 | `/abcd:ahoy uninstall` | reversible removal — strips the marker block from `CLAUDE.md` / `AGENTS.md` and the `/usr/local/bin/abcd` symlink if owned. Preserves `.abcd/`, `~/.abcd/`, and `hooks/hooks.json`. |
 | `/abcd:ahoy dry-run` | read-only emit of the `DetectionResult` envelope as JSON. ZERO writes. Drives the Claude Code skill's two-pass approval protocol. |
-| `/abcd:ahoy doctor` | read-only audit — detection envelope + cross-machine `history_audit.audit_workspaces()` gaps. ZERO writes. |
+| `/abcd:ahoy doctor` | read-only audit — detection envelope + cross-machine `history_audit.audit_repos()` gaps. ZERO writes. |
 | `/abcd:disembark` | leave the ship → pack a lifeboat for the journey |
 | `/abcd:embark` | board a new ship → unpack the lifeboat |
 | `/abcd:launch` | put the (cleaned) ship to sea publicly |
@@ -37,7 +37,7 @@ Commands and abcd-owned directories use ship/voyage metaphors where natural.
 | `/abcd:loot` | OSS-vendor-with-provenance — clone selected files from public repos into `vendor/<source>/`, record origin / licence / SHA / rationale in `.abcd/development/activity/loot/<source>.md` (see itd-26 — a later phase). Maritime: raid the open ocean for outside cargo. Pairs with `dredge` (own corpus, salvage-frame) as the public-corpus counterpart (raid-frame). The pirate connotation is feature-not-bug — the verb itself prompts a licence-check reflex. |
 | `/abcd:audit` | formal verification surface — hash-chain / Merkle audit trails, fidelity checks (see itd-16 — a later phase). Reserved; not metaphor-mapped, dignified register. |
 
-Technical files (`meta.json`, `config.json`, `corpus.json`, `rules.json`) are exempt — no metaphor needed.
+Technical files (`config.json`, `corpus.json`, `rules.json`) are exempt — no metaphor needed.
 
 **Metaphor-vs-exempt criterion (added post-audit 2026-05-07):** apply a maritime metaphor when the verb has a **natural maritime cognate that adds meaning** (e.g., `dredge` literally raises settled material; `loot` carries the licence-check reflex). Otherwise stay exempt — neutral verbs (`intent`, `capture`, `grill`, `audit`, `reflect`) signal meta-development surfaces and avoid stretched metaphors that obscure the verb's intent. Reach for a metaphor only when it teaches; not just because the convention exists.
 
@@ -102,8 +102,8 @@ Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabula
 | `active` | rules.json domain state value (default). Recall-match injection fires when prompt matches recall keywords. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `*<DOMAIN>` | Leading-anchored uppercase prompt prefix that explicitly activates a domain regardless of recall match. Regex `(?:^|\s)\*([A-Z][A-Z0-9_]*)(?=$|\s)`. Hyphen/period/slash following the domain name fails the boundary (no activation). Multi-star activates multiple domains in left-to-right order. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.5` |
 | `force_refresh_every_n` | `.abcd/config.json` field under the `rules.` namespace. Integer; default 5. Every N prompts, the prompt-router hook forces a full re-inject regardless of dedup signature match (compaction recovery). | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.4` |
-| `.abcd/config.json` | Repo-scope config file. Named in the in-repo carve-out at `05-internals/03-configuration.md:182` alongside `<repo>/.abcd/rules.json` and `.specstory/cli/config.toml`. Reads include `rules.force_refresh_every_n` and `docs.target`. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.8` |
-| `rules.json` | Repo-scope rule overrides file at `<repo>/.abcd/rules.json`. Named in the in-repo carve-out at `05-internals/03-configuration.md:182`. JSON Schema 2020-12; schema at `scripts/abcd/schemas/rules.schema.json`. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
+| `.abcd/config.json` | Repo-scope config file. Named in the in-repo carve-out in `05-internals/03-configuration.md` § The two `.abcd/` scopes, alongside `<repo>/.abcd/rules.json` and `.specstory/cli/config.toml`. Reads include `rules.force_refresh_every_n` and `docs.target`. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.8` |
+| `rules.json` | Repo-scope rule overrides file at `<repo>/.abcd/rules.json`. Named in the in-repo carve-out in `05-internals/03-configuration.md` § The two `.abcd/` scopes. JSON Schema 2020-12; schema at `scripts/abcd/schemas/rules.schema.json`. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `COMMITTING` | Default plugin-bundled domain. Recall keywords trigger injection of commit-discipline rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `DOCUMENTATION` | Default plugin-bundled domain. Recall keywords trigger injection of documentation-discipline rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `ROADMAP` | Default plugin-bundled domain. Recall keywords trigger injection of roadmap/intent rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
@@ -111,14 +111,11 @@ Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabula
 | `INTENTS` | Default plugin-bundled domain. Recall keywords trigger injection of intent-capture rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `LIFEBOAT` | Default plugin-bundled domain. Recall keywords trigger injection of lifeboat/disembark rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
 | `PII` | Default plugin-bundled domain. Recall keywords trigger injection of PII-protection rules. | fn-14 spec + `fn-14-modular-rules-loader-prompt-router-hook.1` |
-| `managed-workspace` | Folder kind: holds repo-shaped subdirs, has an ABCD marker block, no `.git/` at its own root. Per brief `04-surfaces/01-ahoy.md:104-127`. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
-| `managed-repo` | Folder kind: has an ABCD marker block and a `.git/` directory. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
-| `unmanaged-workspace` | Folder kind: no marker block, holds repo-shaped subdirs. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
+| `managed-repo` | Folder kind: a git repo abcd already manages — has an ABCD marker block (or an in-tree `.abcd/`, or an `index.json` entry) and a `.git/` directory. Per brief `04-surfaces/01-ahoy.md` § 0 Folder classification. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
 | `unmanaged-repo` | Folder kind: a git repo without abcd management; bare `/abcd:ahoy` offers install to adopt. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
-| `unmanaged-folder` | Folder kind: no marker block, no `.git/`, no repo-shaped subdirs. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
+| `unmanaged-folder` | Folder kind: not a git repo and no abcd markers; nothing to act on. | fn-15 spec + `fn-15-folder-classification-workspacesjson.3` |
 | `root_commit` | Immutable repo identity key in `index.json`, computed via `git rev-list --max-parents=0 HEAD`. Survives rename, remote move, and GitHub-handle change. | fn-15 spec + `fn-15-folder-classification-workspacesjson.2` |
-| `workspaces.json` | User-scope registry at `~/.abcd/workspaces.json` listing every workspace and repo abcd manages on this machine. Keyed on mutable `name`. Per brief `05-internals/03-configuration.md:135-167`. | fn-15 spec + `fn-15-folder-classification-workspacesjson.4` |
-| `index.json` | History-store registry at `~/.abcd/history/index.json` recording each repo's identity + lineage. Keyed on immutable `root_commit`. | fn-15 spec + `fn-15-folder-classification-workspacesjson.5` |
+| `index.json` | History-store registry at `~/.abcd/history/index.json` recording each repo's identity + lineage. The **sole user-scope registry** (abcd is single-repo, adr-28 — there is no `workspaces.json`). Keyed on immutable `root_commit`. | fn-15 spec + `fn-15-folder-classification-workspacesjson.5` |
 | `aliases` | Array of prior names a repo has had (e.g., renamed on GitHub). Recorded in per-root-sha `meta.json`. | fn-15 spec + `fn-15-folder-classification-workspacesjson.5` |
 | `supersedes` | Lineage cross-ref in `index.json` repo entry: this entry was re-founded from another root-sha. | fn-15 spec + `fn-15-folder-classification-workspacesjson.5` |
 | `superseded_by` | Lineage cross-ref in `index.json` repo entry: this entry was superseded by another root-sha (re-founding produces a new entry). | fn-15 spec + `fn-15-folder-classification-workspacesjson.5` |

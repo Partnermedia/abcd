@@ -39,6 +39,37 @@ delegation is the default; when an operator wires two oracle adapters for a
 high-stakes review, the adapter layer offers the scoped-vs-broad,
 asymmetric-trust guidance of adr-25 — advice, never a cascade the core imposes.
 
+### RepoPrompt oracle adapter — `dev-sync reviews` harvesting
+
+RepoPrompt is one opt-in `oracle` (mcp) adapter. When it is wired, `dev-sync
+reviews` harvests **ad-hoc oracle reviews not tied to a spec** from two
+RepoPrompt-local sources (spec-tied reviews go straight to the native spec
+review store and are never swept here). Vendor filesystem layout lives here with
+the adapter, not in the core config brief:
+
+- **Chat store** — `~/Library/Application Support/RepoPrompt/Workspaces/Workspace-<project>-<UUID>/Chats/ChatSession-*.json` (plain JSON, well-structured).
+- **Prompt exports** — RepoPrompt's `export_response: true` writes ad-hoc reviews to `<cwd>/prompt-exports/` with a **hardcoded, non-configurable path**, which ahoy redirects into `~/.abcd/history/<root-sha>/prompt-exports/` via the `<repo>/prompt-exports` symlink.
+
+**Workspace matching.** One project may map to multiple RepoPrompt workspaces —
+match by content of `workspace.json` (RepoPrompt's own on-disk workspace file),
+not by name.
+
+**Stability.** Vendor JSON schemas may change between RepoPrompt releases. The
+adapter probes defensively, version-stamps in `_provenance.json`, and on a parse
+failure logs a warning and falls back to the existing
+`.abcd/development/activity/reviews/*.md` — never losing what was already synced.
+
+**Privacy.** Filter strictly by workspace → project-path match before reading any
+chat content.
+
+**Workspace-state pull (itd-7, distinct from reviews harvesting).** The same
+opt-in adapter pulls RepoPrompt's own workspace state into `.abcd/rp/workspace.json`.
+It walks `~/Library/Application Support/RepoPrompt/Workspaces/`, parses each
+workspace's root-path field, and matches against `git rev-parse --show-toplevel`
+(multi-match → most-recently-modified). The pulled state is written with
+`~/`-relative path normalisation. Source layout:
+`~/Library/Application Support/RepoPrompt/Workspaces/<id>/workspace.json`.
+
 ## Lifeboat source readers
 
 Disembark reads a repo's **own settled artefacts** into the lifeboat through a set
@@ -52,7 +83,7 @@ structure is ambiguous.
 |---|---|---|
 | spec reader | native spec store (`internal/adapter/spec`) | Reads the native spec/task tree, newest-first; powers spec-essence |
 | transcript reader | native transcript store (`internal/adapter/history`) | Reads the root-SHA-keyed local corpus; merge by timestamp/content hash when an imported specstory source is also present |
-| memory reader | `.abcd/memory/` | Reads the curated memory substrate (workspace by default; see [`07-memory.md § 0`](07-memory.md#0-memory-scopes-and-routing)). **Read-only on any vendor harvest source** — see invariant below |
+| memory reader | `.abcd/memory/` | Reads the curated memory substrate (repo by default; see [`07-memory.md § 0`](07-memory.md#0-memory-scopes-and-routing)). **Read-only on any vendor harvest source** — see invariant below |
 | reviews reader | `.abcd/development/activity/reviews/*.md` + spec-tied reviews | Reads oracle/review artefacts written by the `oracle` seam's capture side; powers review-collator |
 | `claude_md` reader | `CLAUDE.md` + `git log -p CLAUDE.md` | Snapshot + history |
 | `adr` reader | ADR location varies per project | Probes common paths: `docs/development/decisions/adrs/`, `docs/adr/`, `docs/architecture/decisions/`, `adrs/`. Newest-first; respects `Superseded-By`. Configurable via `.abcd/config.json` → `adr.path` if non-standard |

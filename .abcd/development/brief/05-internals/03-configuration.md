@@ -57,7 +57,7 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
   },
   "scan": {                             // scanner seam — internal/adapter/scanner
     "deep": false                       // native secret/PII scan is the default; deep adds an opt-in TruffleHog
-                                        //   backend (also gitleaks/Presidio when wired), asked only if visibility=private
+                                        //   backend (also gitleaks when wired), asked only if visibility=private
   },
   "disembark": {
     "maxAgentTokens": 100000            // per-agent context budget; over → stream + summarise
@@ -216,7 +216,7 @@ In private repos, the entire `.abcd/` namespace is reproducible from a fresh clo
 abcd's curated memory exists at **two scopes** (per § The two `.abcd/` scopes), and there is one non-abcd memory location alongside it:
 
 1. **`.abcd/memory/`** (repo scope) — the **primary** abcd memory: curated semantic summaries written by `dev-sync memory`, tracked in private repos, the canonical input for `principle-distiller`. Most memory lives here.
-2. **`~/.abcd/memory/`** — **user-scope** memory: personal preferences and cross-project principles that have no single workspace home.
+2. **`~/.abcd/memory/`** — **user-scope** memory: personal preferences and cross-project principles that have no single repo home.
 3. **`memory/`** — legacy `cp -r` snapshot at the repo root that some existing projects maintain. abcd respects if present but doesn't write to it.
 
 Which scope a curated page lands in is a routing decision — see [`07-memory.md`](07-memory.md) § scope routing. Retrieval across the two scopes is **not** a flat union (that would overflow context); it is keyword-recall + budget-bracketed injection per itd-39. When the brief says "memory" without qualification, it means the repo-scope `.abcd/memory/`.
@@ -251,10 +251,10 @@ Sanitised export pattern (lifted from `~/.abcd/`'s `/export-transparency`): laun
 | Volatile source (gitignored or external) | Curated abcd target (tracked in private repos) | Adapter |
 |---|---|---|
 | Agent memory (opt-in harvest per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — Claude Code: `~/.claude/projects/<encoded-cwd>/memory/`) | `.abcd/memory/` | memory harvest (`internal/core/memory`) |
-| Ad-hoc reviews not tied to a spec (captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — e.g. RepoPrompt: `~/Library/Application Support/RepoPrompt/Workspaces/Workspace-<project>-<UUID>/Chats/`). **Spec-tied reviews are written directly to the native spec review store at review time — `dev-sync reviews` does NOT sweep those.** | `.abcd/development/activity/reviews/` | oracle-adapter capture (`internal/core/reviews`) |
+| Ad-hoc reviews not tied to a spec (captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — e.g. RepoPrompt's local chat store; vendor paths in [`02-adapters.md`](02-adapters.md)). **Spec-tied reviews are written directly to the native spec review store at review time — `dev-sync reviews` does NOT sweep those.** | `.abcd/development/activity/reviews/` | oracle-adapter capture (`internal/core/reviews`) |
 | `.work/issues.md` | `.abcd/development/activity/issues/{open,resolved,wontfix}/iss-N-<slug>.md` (per itd-4) | workdir capture (`internal/core/workdir`; migration on first sync after install) |
 | `.work/notes/`, `.work/<feature>/` | `.abcd/development/activity/notes/` | workdir capture (`internal/core/workdir`) |
-| RP workspace state (`~/Library/Application Support/RepoPrompt/Workspaces/<id>/workspace.json`) | `.abcd/rp/workspace.json` (per itd-7) | RP workspace adapter (`internal/adapter/oracle`, opt-in) |
+| RepoPrompt workspace state (opt-in adapter; vendor paths in [`02-adapters.md`](02-adapters.md)) | `.abcd/rp/workspace.json` (per itd-7) | RP workspace adapter (`internal/adapter/oracle`, opt-in) |
 
 **`abcd dev-sync` triggers:**
 
@@ -274,11 +274,11 @@ Scheduled/cron sync **comes in a later phase** of the plugin (itd-13).
 
 - **Memory (volatile) → `.abcd/memory/` (curated):** Source is an opt-in memory harvest per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — under Claude Code: `~/.claude/projects/<encoded-cwd>/memory/`. The repo-local legacy `memory/` snapshot (the `cp -r` pattern) is the workflow `dev-sync memory` replaces. Output is *not verbatim*: distilled summaries grouped by domain, written as actionable suggestions for future agents (e.g., "When implementing UI hit areas, always use `.contentShape(Rectangle())` — source: `feedback_hit_target_full_box`"). Why curated: raw memories grow unbounded and contain personal phrasing ("user got annoyed when X"). Inputs to `principle-distiller` (Pass C).
 
-- **Reviews (volatile) → `.abcd/development/activity/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — host-delegated by default ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), with **RepoPrompt** as one opt-in adapter. When the RepoPrompt adapter is wired, `dev-sync reviews` sweeps **ad-hoc oracle reviews not tied to a spec** from two RP sources: (a) the chat store at `~/Library/Application Support/RepoPrompt/Workspaces/Workspace-<project>-<UUID>/Chats/ChatSession-*.json` (plain JSON, well-structured); and (b) the history store's `prompt-exports/` — RP's `export_response: true` writes ad-hoc reviews to `<cwd>/prompt-exports/` with a **hardcoded, non-configurable path**, which ahoy redirects into `~/.abcd/history/<root-sha>/prompt-exports/` via the `<repo>/prompt-exports` symlink. **Spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. `dev-sync reviews` renders its sources → `.abcd/development/activity/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. One project may have multiple RP workspaces — match by content of `workspace.json`. **Stability risk:** vendor JSON schemas may change between releases. Mitigation: probe defensively, version-stamp in `_provenance.json`, on parse failure log a warning and fall back to existing `.abcd/development/activity/reviews/*.md` (don't lose what was already synced). **Privacy:** filter strictly by workspace → project-path match before reading chat content. Inputs to `review-collator` (Pass A).
+- **Reviews (volatile) → `.abcd/development/activity/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — host-delegated by default ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), with **RepoPrompt** as one opt-in adapter. When the RepoPrompt adapter is wired, `dev-sync reviews` harvests **ad-hoc oracle reviews not tied to a spec** from RepoPrompt's local chat store; **spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. See [`02-adapters.md`](02-adapters.md) for the adapter's harvesting detail (vendor paths, the prompt-exports redirect, workspace matching, and the stability/privacy safeguards). `dev-sync reviews` renders its sources → `.abcd/development/activity/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. Inputs to `review-collator` (Pass A).
 
 - **`.work/` (volatile, local-only) → `.abcd/development/activity/issues/`, `.abcd/development/activity/notes/` (curated):** `.work/issues.md` (the abcd CLAUDE.md mandatory issue log) gets parsed entry-by-entry; each entry promoted to `.abcd/development/activity/issues/open/iss-N-<slug>.md` (per itd-4 ledger structure). `.work/notes/`, `.work/<feature>/` get distilled into `.abcd/development/activity/notes/`. Files in `.work/` are never moved or deleted — `dev-sync work` is read-and-curate, source stays put. Inputs to `principle-distiller` (Pass C) and `chat-distiller` (Pass B, as auxiliary context).
 
-- **RP workspace state (volatile) → `.abcd/rp/workspace.json` (curated, per itd-7):** Read the RP workspace whose root path matches the current repo (walk `~/Library/Application Support/RepoPrompt/Workspaces/`, parse each workspace's root-path field, match against `git rev-parse --show-toplevel`; multi-match = most-recently-modified). Write to `.abcd/rp/workspace.json` with `~/`-relative path normalisation. Workspace.json only for now; presets, mcp-routing scoping, `--preset <name>` flag, and `abcd rp link` window helper come in a later phase.
+- **RP workspace state (volatile) → `.abcd/rp/workspace.json` (curated, per itd-7):** The opt-in RepoPrompt adapter pulls RepoPrompt's own workspace state (the workspace whose root path matches the current repo) into `.abcd/rp/workspace.json`. The vendor filesystem layout and the match/normalisation mechanics live with the adapter — see [`02-adapters.md`](02-adapters.md). Workspace.json only for now; presets, mcp-routing scoping, `--preset <name>` flag, and `abcd rp link` window helper come in a later phase.
 
 **Reviews as a first-class pitfall source:**
 
@@ -312,7 +312,7 @@ abcd/
 │   │   ├── history/                    # native transcript store; specstory import (adr-29)
 │   │   ├── spec/                       # native minimal store; the companion harness ccpm over conventions (adr-26)
 │   │   ├── run/                        # thin native loop; Claude Workflows / the companion harness loop (adr-27)
-│   │   └── scanner/                    # native secret/PII scan; gitleaks / Presidio / TruffleHog
+│   │   └── scanner/                    # native secret/PII scan; gitleaks / TruffleHog
 │   ├── registry/                       # wired-adapter registry — resolves <seam>.backend to an implementation
 │   └── surface/
 │       ├── cli/                        # Cobra front door (ships in the MVP)

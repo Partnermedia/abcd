@@ -10,13 +10,13 @@ Memory exists at the two `.abcd/` scopes (see [`03-configuration.md`](03-configu
 
 | Scope | Location | What lands here |
 |---|---|---|
-| **workspace** | `<workspace>/.abcd/memory/` | **The primary home.** Project-shaped knowledge — pitfalls, decisions, principles tied to the project being built. Most memory is workspace-scoped. |
-| **user** | `~/.abcd/memory/` | **Personal preferences** and cross-project principles that have no single workspace home (e.g. a preferred phrasing convention, or a lesson that applies to every project). |
+| **repo** | in-tree `.abcd/memory/` | **The primary home.** Project-shaped knowledge — pitfalls, decisions, principles tied to the project being built. Most memory is repo-scoped. |
+| **user** | `~/.abcd/memory/` | **Personal preferences** and cross-project principles that have no single repo home (e.g. a preferred phrasing convention, or a lesson that applies to every project). |
 
 **Routing rule.** Which scope a curated page lands in is decided by `principle-distiller` at curation time, by the *kind* of knowledge — not by where the source happened to sit:
 
-- Default → **workspace**. Anything project-shaped.
-- Promote to **user** when the knowledge is a personal preference, or a principle that applies across projects with no single workspace home.
+- Default → **repo**. Anything project-shaped.
+- Promote to **user** when the knowledge is a personal preference, or a principle that applies across projects with no single repo home.
 
 **The vendor boundary.** abcd never writes to `~/.claude/.../memory/`. The Claude Code memory directory is a *read-only harvest source* for `dev-sync memory` (see [`02-adapters.md`](02-adapters.md)); curated output is written to the scope-appropriate `.abcd/memory/`, never back upstream.
 
@@ -165,7 +165,7 @@ User-facing surface (per itd-36):
 | Bare `/abcd:memory` | Status + help + render of current memory state (page count by class, last-ingest timestamp, recent contradictions). Per the [bare-command-as-render discipline](../02-constraints/04-naming.md). Quotation-budget headroom renders per external source READ-ONLY from the fn-39 `.coverage_index.json`: a fingerprint-fresh index shows per-source warn/block headroom, fingerprint drift shows a "stale — run /abcd:memory lint" hint, an absent index an info line, and a malformed index/crawl failure a non-fatal "headroom unavailable" line. The bare render never rebuilds or mutates the index (the `lint` sub-verb is the sole writer). |
 | `/abcd:memory ingest <path-or-url>` | Read external source, distil into typed pages with citation, append to log. Default: do NOT store original. Flag: `--keep-original` (opt-in storage; the lifeboat licence-gate allowlist is required before a kept original could ever publish — via `/abcd:disembark`, not launch; adr-18). |
 | `/abcd:memory ask <question>` | Query memory by domain + class; synthesise answer with citations; optionally file result back. |
-| `/abcd:memory lint` **(fn-39 — shipped)** | Full-store curator health-check: ALWAYS crawls the whole workspace store (the cumulative `MQ002` needs the full corpus), runs the `MQ`/`MS`/`ML` family (`MQ001`/`MQ002`/`MQ003` quotation budgets + coverage, `MS001`/`MS002` source-class advisories, `ML001` missing licences), rebuilds the regenerable `.coverage_index.json`, and writes `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Mutates NO memory-store state — the coverage index + logbook report are its only writes. Exit: blockers → nonzero; warn-only → exit 0 (curator advisory; the recorded divergence from the standalone grammar, see [`06-lint.md §2`](06-lint.md#2-severity-model)). **Not part of fn-39:** contradiction surfacing is RENDERED by fn-38's reconciliation into `contradictions.md` (surfaced by the bare render, not lint-coded), and orphan/stale-claim audits are DEFERRED to a later intent — `lint` runs neither. |
+| `/abcd:memory lint` **(fn-39 — shipped)** | Full-store curator health-check: ALWAYS crawls the whole repo store (the cumulative `MQ002` needs the full corpus), runs the `MQ`/`MS`/`ML` family (`MQ001`/`MQ002`/`MQ003` quotation budgets + coverage, `MS001`/`MS002` source-class advisories, `ML001` missing licences), rebuilds the regenerable `.coverage_index.json`, and writes `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Mutates NO memory-store state — the coverage index + logbook report are its only writes. Exit: blockers → nonzero; warn-only → exit 0 (curator advisory; the recorded divergence from the standalone grammar, see [`06-lint.md §2`](06-lint.md#2-severity-model)). **Not part of fn-39:** contradiction surfacing is RENDERED by fn-38's reconciliation into `contradictions.md` (surfaced by the bare render, not lint-coded), and orphan/stale-claim audits are DEFERRED to a later intent — `lint` runs neither. |
 
 ## 8. Cross-cutting integration
 
@@ -189,7 +189,7 @@ itd-36 (above) is the **storage** model. itd-39 is the **retrieval** model: how 
 
 This is what makes "memory never overflows" an enforced property rather than a hope: a long session degrades gracefully to titles-only instead of crowding out the work.
 
-**Two-scope query, narrower wins.** The hook queries the `index.md` of both memory scopes (workspace / user — § 0). It injects keyword-matched, bracket-filtered pages — never the union of both scopes. On a recall-keyword collision across scopes, the **narrower scope wins**: workspace overrides user.
+**Two-scope query, narrower wins.** The hook queries the `index.md` of both memory scopes (repo / user — § 0). It injects keyword-matched, bracket-filtered pages — never the union of both scopes. On a recall-keyword collision across scopes, the **narrower scope wins**: repo overrides user.
 
 **Per-prompt, not sticky.** Consistent with itd-3, recall is independent per prompt — no cross-prompt "pin this page" mode in scope. A session-sticky mode is a later-phase candidate (see itd-39 Open Questions).
 

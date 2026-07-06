@@ -22,61 +22,57 @@ Bare `/abcd:ahoy` shows status + help only — never mutates state. Current sub-
   unified-diff renderer). Never mutates state.
 - **`/abcd:ahoy doctor`** — run the **full** detection pass and report every
   gap read-only, including user-scope state (history store, `index.json`,
-  `workspaces.json`, symlink, hook) that `install` touches but never otherwise
+  symlink, hook) that `install` touches but never otherwise
   re-validates.
   Distinct from bare invocation, which only shows summary status + help.
 - **Later phase: `/abcd:ahoy destroy`** — nuclear uninstall (per itd-10): removes
   `.abcd/` namespace too. Distinct from `uninstall`'s reversible behaviour.
 
-## What abcd manages — repos, workspaces, and `~/.abcd/`
+## What abcd manages — repos and `~/.abcd/`
 
-abcd manages exactly two kinds of folder, and keeps one user-scope directory:
+abcd manages exactly one kind of folder — a **repository** — and keeps one
+user-scope directory for machine-local state:
 
 ```
-~/.abcd/                       USER SCOPE — one per machine
-  workspaces.json                registry of every managed repo + workspace
-  history/                       shared history store + index.json
-  memory/  config.json           user-scope memory + config
+~/.abcd/                       USER SCOPE — one per machine (machine-local state only)
+  history/                       shared history store + index.json (identity/lineage,
+                                 keyed on root-commit SHA — adr-29)
+  config.json                    machine config.json defaults
+  memory/                        user-scope memory (personal, cross-project)
 
-<anywhere>/<workspace>/        WORKSPACE — a collection of related repos
-  .abcd/                         workspace namespace — development/, memory/,
-                                 lifeboat/, logbook/, rp/
-  CLAUDE.md                      role declaration (public: X / dev: Y)
-  <repoA>/  <repoB>/           REPO — a single repository
-    CLAUDE.md                   marker block
-
-<anywhere>/<repo>/             REPO — a standalone single repository
-  CLAUDE.md                     marker block
+<anywhere>/<repo>/             REPO — a single repository (the only install target)
+  .abcd/                         repo-scope record + config.json + rules.json
+  CLAUDE.md                      marker block (stands alone)
 ```
 
-`/abcd:ahoy`'s detection pass **classifies the folder** into one of five
-kinds (`managed-repo` / `managed-workspace` / `unmanaged-workspace` /
-`unmanaged-repo` / `unmanaged-folder` — see detection step 0 and itd-40),
-then `install` acts on the matching kind:
+`/abcd:ahoy`'s detection pass **classifies `cwd`** into one of three kinds
+(`managed-repo` / `unmanaged-repo` / `unmanaged-folder` — see detection step 0
+and itd-40), then `install` acts on the matching kind:
 
 | Folder kind | What `install` does | `.abcd/` written |
 |---|---|---|
-| **repo** | the full repo install flow below; register in `workspaces.json` | **four-file carve-out** per fn-16 T1 + `05-internals/03-configuration.md:171-184` — repo install writes `<repo>/.abcd/config.json` and `<repo>/.abcd/rules.json` (no `meta.json` / `corpus.json` / workspace subdirs at repo scope; setup metadata lives at `config.json["meta"]`). Plus the CLAUDE.md/AGENTS.md marker block. |
-| **workspace** | declare public/dev roles in the workspace `CLAUDE.md`; create the gitignored workspace `.work/` + the workspace `.abcd/` namespace; register the workspace and its repos in `workspaces.json` | `<workspace>/.abcd/` |
+| **`managed-repo`** | a git repo abcd already manages — run the repo install flow below (idempotent update) | repo-scope `.abcd/config.json` (with the `meta` setup block) + `.abcd/rules.json` per fn-16 T1 (no `meta.json` at repo scope; setup metadata lives at `config.json["meta"]`). Plus the CLAUDE.md/AGENTS.md marker block. See [`05-internals/03-configuration.md` § The two `.abcd/` scopes](../05-internals/03-configuration.md#the-two-abcd-scopes). |
+| **`unmanaged-repo`** | a git repo with no abcd yet — bare `/abcd:ahoy` offers `install` to adopt it; `install` runs the same repo flow | same as `managed-repo` |
+| **`unmanaged-folder`** | not a git repo — nothing to act on; reports and stops | none |
 
-There is **no host or development-environment layer**. A folder like
-`~/ABCDevelopment/` is just where a user keeps repos — abcd does not privilege
-it. Everything that is genuinely machine-wide (the `workspaces.json` registry,
-the shared `history/` store, user memory and config) lives under **`~/.abcd/`**,
-which abcd bootstraps once. The `.abcd/` namespace is therefore scoped at two
-levels — **user** (`~/.abcd/`) and **workspace** (`<workspace>/.abcd/`); a repo
-is an install target but not an `.abcd/` scope. See
+There is **no workspace, host, or development-environment layer**. A folder
+like `~/ABCDevelopment/` is just where a user keeps repos — abcd does not
+privilege it, and it groups nothing. abcd lives in **one repository**
+([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)): the design
+record is repo-scoped and in-tree. Everything genuinely machine-wide — the
+`history/` store, machine config, user memory — lives under **`~/.abcd/`**,
+which abcd bootstraps once. The `.abcd/` namespace is scoped at two levels —
+**user** (`~/.abcd/`) and **repo** (in-tree `.abcd/`). See
 [`05-internals/03-configuration.md` § The two `.abcd/` scopes](../05-internals/03-configuration.md#the-two-abcd-scopes).
 
-The history store and `workspaces.json` are shared across every repo on the
-machine; they are bootstrapped once. An `install` that finds no `~/.abcd/`
-**bootstraps it transparently** before registering — the user is never blocked
-by missing user-scope state.
+The history store is shared across every repo on the machine; its `index.json`
+is the **sole user-scope registry** (identity and lineage keyed on each repo's
+immutable root-commit SHA). An `install` that finds no `~/.abcd/` **bootstraps
+it transparently** before registering — the user is never blocked by missing
+user-scope state.
 
-When a repo sits inside a workspace, CLAUDE.md files form an **inheritance
-chain**: repo → workspace. The repo's marker block references its parent
-(`../CLAUDE.md`) so agents pick up the workspace-level instructions too. A
-standalone repo has no parent and its CLAUDE.md stands alone.
+Each repo's CLAUDE.md/AGENTS.md marker block **stands alone** — there is no
+repo→workspace inheritance chain.
 
 ## Architecture: detection pass + apply pass
 
@@ -102,35 +98,30 @@ Probes the folder, the repo, and `~/.abcd/`, produces an in-memory state contrac
 `ahoy-state.json` shape — see [`05-internals/03-configuration.md`](../05-internals/03-configuration.md)).
 Steps, run in parallel where independent:
 
-0. **Folder classification** (per itd-40) — classify `cwd` into one of five
+0. **Folder classification** (per itd-40) — classify `cwd` into one of three
    kinds. Classification keys on a **signal hierarchy** — abcd-owned markers
-   decide managed-vs-unmanaged; weaker signals only disambiguate shape:
-   - **Strong (managed):** an entry for `cwd` in `~/.abcd/workspaces.json`, an
-     `.abcd/` directory, or a CLAUDE.md/AGENTS.md abcd marker block.
+   decide managed-vs-unmanaged; the `.git/` signal only disambiguates shape:
+   - **Strong (managed):** an entry for `cwd`'s root-commit SHA in
+     `~/.abcd/history/index.json`, an in-tree `.abcd/` directory, or a
+     CLAUDE.md/AGENTS.md abcd marker block.
    - **Weak:** a `.git/` directory means `cwd` is *a* repo — **not** that it is
-     *managed*, and not which workspace it belongs to. Necessary, not sufficient.
-   - **Heuristic:** sibling repo-shaped subdirs suggest a workspace shape — used
-     only to tell repo from workspace, never to decide managed-vs-unmanaged.
+     *managed*. Necessary, not sufficient.
 
-   The five kinds (fn-15 amends the historical four-row matrix by splitting
-   `unmanaged` along the `.git/` axis — bare `/abcd:ahoy` offers `install` on
-   an `unmanaged-repo` to adopt it, but reports-and-stops on an
-   `unmanaged-folder`, so the two need distinct kind tokens):
+   The three kinds (bare `/abcd:ahoy` offers `install` on an `unmanaged-repo`
+   to adopt it, but reports-and-stops on an `unmanaged-folder`, so the two need
+   distinct kind tokens):
 
-   | Kind | Strong marker? | `.git/`? | Sibling repos? | `install` acts as |
-   |---|---|---|---|---|
-   | `managed-repo` | yes | yes | — | `repo` |
-   | `managed-workspace` | yes | no | — | `workspace` |
-   | `unmanaged-workspace` | no | no | yes | `workspace` (after `install` adopts it) |
-   | `unmanaged-repo` | no | yes | — | `repo` (after `install` adopts it) |
-   | `unmanaged-folder` | no | no | no | none — nothing to act on |
+   | Kind | Strong marker? | `.git/`? | `install` acts as |
+   |---|---|---|---|
+   | `managed-repo` | yes | yes | `repo` (idempotent update) |
+   | `unmanaged-repo` | no | yes | `repo` (after `install` adopts it) |
+   | `unmanaged-folder` | no | no | none — nothing to act on |
 
    Bare `/abcd:ahoy` **reports the kind and stops** — it never adopts an
-   `unmanaged-repo` or `unmanaged-workspace`; it names `/abcd:ahoy install` as
-   the way to do that. Host discovery is a `~/.abcd/workspaces.json` lookup —
-   no hardcoded path, no parent-directory walk. Subsequent detection checks
-   are gated on the folder kind; a `repo` runs all of them, a `workspace` runs
-   its subset.
+   `unmanaged-repo`; it names `/abcd:ahoy install` as the way to do that.
+   Identity resolution is a `~/.abcd/history/index.json` lookup keyed on the
+   root-commit SHA — no hardcoded path, no parent-directory walk. The detection
+   checks run on a repo kind; an `unmanaged-folder` short-circuits.
 1. Resolve `${ABCD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}`.
 2. **Adapter probe** — the native secret + PII scan needs no external tool;
    this step only reports which **opt-in** scanners are on PATH: `gitleaks`
@@ -152,8 +143,8 @@ Steps, run in parallel where independent:
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
 7. **Marker drift** — diff the existing CLAUDE.md/AGENTS.md marker block
    against the current template; classify `current` / `outdated` / `missing`.
-   Also check the marker block's parent-`CLAUDE.md` reference is present and
-   resolves (inheritance chain — see § The three layers).
+   The marker block stands alone — there is no parent-`CLAUDE.md` reference to
+   verify.
 8. **PATH symlink** — does `/usr/local/bin/abcd` exist, and does it point at
    this plugin, a different binary, or nothing?
 9. **Hook manifest verification** (verify-only per fn-16 T1) — VERIFY that
@@ -215,22 +206,17 @@ category present, and applies the approved categories' gaps.
    the visibility table in
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
    Show the resulting tracked-vs-ignored list before confirming.
-6. **Registries** (`user-state` + `config-change`) — if `~/.abcd/workspaces.json`
-   does not exist, create it (first-ever run). Register `cwd` in it: a `repo`
-   or `workspace` entry per the classification in step 0, with its `path` and
-   — for repos — a `root_commit` reference and parent `workspace` name (the
-   single repo-vs-workspace question is asked here if the structure is
-   ambiguous). If the `~/.abcd/history/` store does not exist, bootstrap it:
-   create the directory and write an initial `index.json` with its `schema` +
-   `description` header (see
+6. **History-store registry** (`user-state`) — if the `~/.abcd/history/` store
+   does not exist, bootstrap it: create the directory and write an initial
+   `index.json` with its `schema` + `description` header (see
    [`05-internals/03-configuration.md`](../05-internals/03-configuration.md)
-   for both schemas and the two-registry cross-reference rule). Then create the
-   `~/.abcd/history/<root-sha>/` transcript directory (abcd's native local
-   redacted transcript corpus, per
+   for the schema). Then create the `~/.abcd/history/<root-sha>/` transcript
+   directory (abcd's native local redacted transcript corpus, per
    [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) and register
-   the repo in `index.json` (refreshing the entry's `path` if the repo moved).
-   Transcript capture is native — no external tool and no per-repo redirect
-   shim.
+   the repo in `index.json` by its immutable `root_commit`, refreshing the
+   entry's mutable `path` if the repo moved. The history `index.json` is the
+   **sole user-scope registry** — there is no `workspaces.json`. Transcript
+   capture is native — no external tool and no per-repo redirect shim.
 7. **Marker block** (`plugin-owned`) — inject/refresh the block between
    `<!-- BEGIN ABCD -->` / `<!-- END ABCD -->` in the target docs. **Silent
    overwrite on drift, per itd-3 — no prompt for hand-edits inside the block;
@@ -296,7 +282,7 @@ acceptance criterion, not just prose — see § Acceptance.
 **Dry-run (`/abcd:ahoy dry-run`):** runs the detection pass, then renders the
 canonical `DetectionResult` envelope as JSON (per fn-16 T1 — JSON ONLY; no
 unified-diff renderer in this command surface). Exits without writing. The
-JSON envelope shape is `{folder_kind, adopted, root_sha, parent_workspace,
+JSON envelope shape is `{folder_kind, adopted, root_sha,
 plugin_root_status, repo_identity, signals, gaps}` so consumers can drive
 the Claude Code skill's two-pass approval protocol off `folder_kind` +
 `gaps`.
@@ -352,7 +338,7 @@ user-scope app-state.
   resulting state is byte-identical to a fresh install modulo `setup_date`.
 - **Given** the user runs `/abcd:ahoy dry-run`, **when** the command completes,
   **then** the detection pass runs, the canonical `DetectionResult` JSON
-  envelope (`{folder_kind, adopted, root_sha, parent_workspace,
+  envelope (`{folder_kind, adopted, root_sha,
   plugin_root_status, repo_identity, signals, gaps}` per fn-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
@@ -361,24 +347,16 @@ user-scope app-state.
   modified.
 - **Given** a fresh machine with no `~/.abcd/`, **when** `/abcd:ahoy install`
   runs in a repo, **then** `~/.abcd/` is bootstrapped — the `history/` store
-  (directory + `index.json` with `schema`/`description` header) and
-  `workspaces.json` — before the repo is registered, so the user is not blocked
-  by missing user-scope state.
+  (directory + `index.json` with `schema`/`description` header) — before the
+  repo is registered, so the user is not blocked by missing user-scope state.
 - **Given** a registered repo that has been moved on disk, **when**
   `/abcd:ahoy install` or `doctor` runs, **then** detection notices the stale
   `index.json` `path` and `install` refreshes it (the root SHA is unchanged, so
   the entry is updated, not duplicated).
-- **Given** a git repository with no abcd markers and no `~/.abcd/workspaces.json`
-  entry, **when** the user runs bare `/abcd:ahoy`, **then** it reports
-  `unmanaged-repo`, names `/abcd:ahoy install` as the way to adopt it, and
-  mutates nothing — bare invocation never adopts.
-- **Given** a folder with sibling repo-shaped subdirectories but no abcd
-  markers and no `~/.abcd/workspaces.json` entry, **when** the user runs bare
-  `/abcd:ahoy`, **then** it reports `unmanaged-workspace`, names
-  `/abcd:ahoy install` as the way to adopt it, and mutates nothing.
-- **Given** no `~/.abcd/workspaces.json` exists, **when** the first
-  `/abcd:ahoy install` runs, **then** the registry is created and the managed
-  folder is recorded with the correct `repo`/`workspace` `kind`.
-- **Given** a folder with sibling repo-shaped subdirectories, **when**
-  `/abcd:ahoy install` runs, **then** the user is asked the single
-  repo-vs-workspace question and the answer is recorded in `workspaces.json`.
+- **Given** a git repository with no abcd markers and no `~/.abcd/history/index.json`
+  entry for its root-commit SHA, **when** the user runs bare `/abcd:ahoy`,
+  **then** it reports `unmanaged-repo`, names `/abcd:ahoy install` as the way to
+  adopt it, and mutates nothing — bare invocation never adopts.
+- **Given** a folder that is not a git repository and has no abcd markers,
+  **when** the user runs bare `/abcd:ahoy`, **then** it reports
+  `unmanaged-folder`, reports there is nothing to act on, and mutates nothing.
