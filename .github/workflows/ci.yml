@@ -62,30 +62,46 @@ jobs:
       - name: Test (race, internal)
         run: go test -race ./internal/...
 
-  # Secrets never land in history: full-history scan on every push/PR. Required
-  # before the eventual private->public flip.
+  # Secrets never land in history: full-history scan on every push/PR. Run as a
+  # pinned, checksum-verified CLI (no PR-comment / SARIF GitHub-API integration),
+  # so it works on a private repo and survives the private->public flip. A
+  # non-zero exit means gitleaks found a secret.
   gitleaks:
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.24.3
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          base="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -sSLf -o "$base" "$url/$base"
+          curl -sSLf -o checksums.txt "$url/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $base\$" checksums.txt | sha256sum -c -
+          tar -xzf "$base" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan full history
+        run: gitleaks git --redact --no-banner .
 
-  # Audit the workflows themselves (pwn requests, template injection,
-  # cache poisoning, unpinned uses).
+  # Audit the workflows themselves (pwn requests, template injection, cache
+  # poisoning, unpinned uses). Run as a pinned CLI image (no SARIF upload to
+  # code-scanning, which a private repo lacks). A non-zero exit means a finding.
   zizmor:
     timeout-minutes: 10
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa # v0.5.7
+      - name: Audit workflows
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" \
+            ghcr.io/zizmorcore/zizmor:v1.26.1 --persona regular /src
