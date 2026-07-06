@@ -65,9 +65,8 @@ jobs:
       # Drift gate for the .abcd/development design record. Visible but
       # non-blocking for now: the record still carries violations that a
       # follow-up fix pass clears before this becomes a hard gate.
-      - name: Record-lint (drift gate, informational)
+      - name: Record-lint (drift gate)
         if: matrix.os == 'ubuntu-latest'
-        continue-on-error: true
         run: go run ./cmd/record-lint
 
   # Secrets never land in history: full-history scan on every push/PR. Run as a

@@ -28,7 +28,7 @@ The `intent-fidelity-reviewer` agent is named in `docs/reference/commands.md` as
 | `consistency [<itd-N>]` | Role 2 — cross-doc fidelity | **Documented, not built** |
 | `shape [<itd-N>]` | Role 3 — kind classification | **Documented, not built** |
 
-`.work/issues.md` 2026-05-16 line 178 names this gap: "No flow-next epic owns `intent_lint.py` or the `intent-fidelity-reviewer` agent" — partially addressed by spc-12 for Role 1, but Roles 2 and 3 still have no owner. spc-12's spec explicitly bounded itself to Role 1; the other two roles "are NOT in scope: they are a later Pass A/B/C agent epic" (spc-12 `## Overview`).
+`.work/issues.md` 2026-05-16 line 178 names this gap: "No flow-next epic owns `internal/core/lint` or the `intent-fidelity-reviewer` agent" — partially addressed by spc-12 for Role 1, but Roles 2 and 3 still have no owner. spc-12's spec explicitly bounded itself to Role 1; the other two roles "are NOT in scope: they are a later Pass A/B/C agent epic" (spc-12 `## Overview`).
 
 This intent ships those later epics as a **standalone intent whose scope covers both roles** — the two roles share substrate that should land together:
 
@@ -153,7 +153,7 @@ asserted by `tests/abcd/test_fn33_defer_backlinks.py`). These are follow-up
 scope captured here — NOT active spc-33 work:
 
 - **`spc-33:A1`** — Role-2 mechanical half: schema/state contradictions,
-  reference rot, acknowledgement gaps → `intent_lint.py --cross-doc` lint codes
+  reference rot, acknowledgement gaps → `internal/core/lint --cross-doc` lint codes
   `XD002` / `XD006` / `XD007` (the mechanical cross-doc categories this intent
   defers under "Open Questions → Mechanical Role 2 categories").
 - **`spc-33:A2`** — Role-2 pre-commit hook (blocking-vs-advisory policy) — the

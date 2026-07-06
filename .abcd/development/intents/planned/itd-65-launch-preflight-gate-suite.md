@@ -41,7 +41,7 @@ abcd's whole thesis is routing the risks a non-expert cannot see to a fail-close
 - Marker-block sanity over shipped Markdown — hard-fail on malformed.
 - `plugin.json` parse + `marketplace.json` reference cross-check — hard-fail.
 - **Doc-history gate** — hard-fail on change-history / rationale-for-change
-  narration in shipped doc bodies (the `abcdDev/CLAUDE.md` "docs describe
+  narration in shipped doc bodies (the `abcd-cli/CLAUDE.md` "docs describe
   present state, never change history" rule, enforced at ship). On a finding
   the gate extracts the flagged passage and OFFERS to auto-append it to the
   changelog owned by [[itd-67-installable-versioned-plugin]] — so the fix is

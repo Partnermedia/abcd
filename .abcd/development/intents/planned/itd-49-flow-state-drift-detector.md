@@ -20,7 +20,7 @@ related_adrs: []
 
 ## Why This Matters
 
-spc-6 fixed the flow-state desync that abcdDev had accumulated: `.git/flow-state/` was never persisted (deliverables squashed into the initial commit), `flowctl validate --all` defaulted every task's status to `todo`, and three closed specs (spc-1, spc-2, spc-4) reported `0/N` because the runtime state store and the committed task JSONs disagreed silently. spc-6 reconciled by hand. spc-6's `## Boundaries / non-goals` explicitly deferred the **standing drift detector** — a read-only checker that would catch the desync from recurring — as a new feature with its own intent.
+spc-6 fixed the flow-state desync that abcd-cli had accumulated: `.git/flow-state/` was never persisted (deliverables squashed into the initial commit), `flowctl validate --all` defaulted every task's status to `todo`, and three closed specs (spc-1, spc-2, spc-4) reported `0/N` because the runtime state store and the committed task JSONs disagreed silently. spc-6 reconciled by hand. spc-6's `## Boundaries / non-goals` explicitly deferred the **standing drift detector** — a read-only checker that would catch the desync from recurring — as a new feature with its own intent.
 
 That intent is this one.
 
@@ -36,7 +36,7 @@ The drift detector is **project-agnostic** in the same sense spc-6 was: every ab
     per-task `status`, `claim_note`, `claimed_at` fields).
   - Reads the runtime state store at `<git-common-dir>/flow-state/tasks/*.state.json`.
   - Reports any divergence with a structured `Finding` (matching abcd's
-    existing `intent_lint.py`/`lint_prompts.py` `Finding` shape) and exits
+    existing `internal/core/lint`/`lint_prompts.py` `Finding` shape) and exits
     non-zero on any finding.
   - Supports `--json` for machine consumption, `--codes` for code-contract
     discovery, and a default human-readable text output.

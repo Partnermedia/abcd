@@ -11,9 +11,9 @@ reclassification_history: []
 
 ## Press Release
 
-> **abcd audits its own agent prompts whenever you disembark abcdDev.** Pass C automatically runs a SOTA-prompt-audit pass over every `agents/*.md` file in the repo, comparing each against its research baseline in `.abcd/development/research/prompting/agents/<name>.md`. Findings ship as part of the lifeboat, ready to inform the next round of prompt iteration. abcd uses its own infrastructure to maintain its own quality.
+> **abcd audits its own agent prompts whenever you disembark abcd-cli.** Pass C automatically runs a SOTA-prompt-audit pass over every `agents/*.md` file in the repo, comparing each against its research baseline in `.abcd/development/research/prompting/agents/<name>.md`. Findings ship as part of the lifeboat, ready to inform the next round of prompt iteration. abcd uses its own infrastructure to maintain its own quality.
 >
-> "Eat your own dog food," said Kira, open-source maintainer. "Disembarking abcdDev tells me which of my prompts have drifted from their research basis. The SOTA audit becomes part of the lifeboat itself, not a separate process to remember."
+> "Eat your own dog food," said Kira, open-source maintainer. "Disembarking abcd-cli tells me which of my prompts have drifted from their research basis. The SOTA audit becomes part of the lifeboat itself, not a separate process to remember."
 
 ## Why This Matters
 
@@ -23,7 +23,7 @@ This intent closes the loop. Once abcd is mature enough to reliably self-disemba
 
 ## What's In Scope
 
-- Pass C agent: `prompt-sota-self-auditor` (only runs on disembarks of abcdDev itself, detected via repo metadata)
+- Pass C agent: `prompt-sota-self-auditor` (only runs on disembarks of abcd-cli itself, detected via repo metadata)
 - Reads `agents/*.md` + `.abcd/development/research/prompting/agents/<name>.md` pairs
 - Generates findings per agent: alignment, drift, recommendations
 - Findings included in the disembark report and as a separate lifeboat artefact
@@ -39,8 +39,8 @@ This intent closes the loop. Once abcd is mature enough to reliably self-disemba
 
 > _BDD format, per `itd-1-acceptance-gates`. These gates are checked by `intent-fidelity-reviewer` when this intent moves to `shipped/`._
 
-- **Given** abcdDev itself runs `/abcd:disembark to <path>`, **when** Pass C executes, **then** `prompt-sota-self-auditor` activates, reads every pair `(agents/<name>.md, .abcd/development/research/prompting/agents/<name>.md)`, and produces per-agent findings in `audit/prompt-sota-<ts>.{json,md}` covering alignment, drift, and recommendations.
-- **Given** any other repo (not abcdDev) runs `/abcd:disembark to <path>`, **when** Pass C executes, **then** `prompt-sota-self-auditor` does NOT activate — the agent is gated by `meta.json.project_name == "abcd"` (or equivalent self-detection) and is silent on third-party repos.
+- **Given** abcd-cli itself runs `/abcd:disembark to <path>`, **when** Pass C executes, **then** `prompt-sota-self-auditor` activates, reads every pair `(agents/<name>.md, .abcd/development/research/prompting/agents/<name>.md)`, and produces per-agent findings in `audit/prompt-sota-<ts>.{json,md}` covering alignment, drift, and recommendations.
+- **Given** any other repo (not abcd-cli) runs `/abcd:disembark to <path>`, **when** Pass C executes, **then** `prompt-sota-self-auditor` does NOT activate — the agent is gated by `config.json["meta"].project_name == "abcd"` (or equivalent self-detection) and is silent on third-party repos.
 - **Given** the audit produces findings, **when** the lifeboat is written, **then** the findings are present both in the disembark report ("Self-audit summary") AND as a separate lifeboat artefact (`audit/prompt-sota-<ts>.json`) so they survive embark to a downstream copy.
 - **Given** the audit's drift exceeds a configured threshold for any agent, **when** the disembark concludes, **then** the disembark report flags the lifeboat as "ship-with-audit-warning" but does NOT refuse to ship — auditing is informational, not gating.
 - **Given** an agent's research file is missing (no `.abcd/development/research/prompting/agents/<name>.md` exists), **when** the auditor runs, **then** the agent is reported as "no research baseline" and a separate finding is emitted suggesting the user create the file rather than treating absence as drift.
@@ -48,7 +48,7 @@ This intent closes the loop. Once abcd is mature enough to reliably self-disemba
 
 ## Open Questions
 
-- How does abcd detect "this is a self-disembark" — repo name match? `.abcd/meta.json.project_name`?
+- How does abcd detect "this is a self-disembark" — repo name match? `.abcd/config.json["meta"].project_name`?
 - Should the audit gate the lifeboat (refuse to ship if drift exceeds threshold) or just report?
 - What's the recursion depth — does the prompt-sota-self-auditor itself get audited? Probably not (turtles stop somewhere).
 

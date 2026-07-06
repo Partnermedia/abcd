@@ -95,7 +95,7 @@ The first user to hit (1)–(4) is also asked to record the texture in `.work/is
 - **Trunk branch name**: `dev` vs `staging` vs `main-staging` vs project-configurable. Recommend project-configurable with `dev` default.
 - **Rewind semantics for `--hard`**: discard branch entirely vs keep branch but tag a "rewound-from" marker. Recommend tag-and-keep so the user can `git reflog` if they realise they wanted the work back.
 - **Auto-downgrade decision logic**: Opus → Sonnet → Haiku on budget exhaustion vs single-step Opus → Sonnet only. Probably single-step initially; multi-step if proven needed.
-- **Telemetry / multi-model substrate**: this intent assumes a telemetry surface (cost/budget visibility) and a multi-model orchestration surface (for auto-downgrade). Earlier drafts referenced legacy abcd-repo IDs (`spc-29-42i`, `spc-9-kbe`) which do NOT exist in `abcdDev` — those are speculative substrate from the legacy roadmap, not declared in this brief. **Action for plan-review:** identify or create the actual specs (in the native spec store) that deliver the telemetry + multi-model substrate, then list them as hard dependencies here.
+- **Telemetry / multi-model substrate**: this intent assumes a telemetry surface (cost/budget visibility) and a multi-model orchestration surface (for auto-downgrade). Earlier drafts referenced legacy abcd-repo IDs (`spc-29-42i`, `spc-9-kbe`) which do NOT exist in `abcd-cli` — those are speculative substrate from the legacy roadmap, not declared in this brief. **Action for plan-review:** identify or create the actual specs (in the native spec store) that deliver the telemetry + multi-model substrate, then list them as hard dependencies here.
 
 ## Audit Notes
 

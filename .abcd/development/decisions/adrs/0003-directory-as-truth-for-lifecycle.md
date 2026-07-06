@@ -20,7 +20,7 @@ After ADR-2 introduced three intent kinds, two field-vs-directory inconsistencie
 2. **For standalone/bundle-member intents**, `status` was historically a positional state in a sequence (`draft` / `planned` / `shipped`). For disciplines, `status: active` was a type predicate doubling for one of two directories (`disciplines/` vs `superseded/`). Different jobs, same field name — a smell.
 3. **Superseded intents** initially recorded only `superseded_by: <itd-M>`. But "superseded" means different things depending on what the intent *was*: a superseded standalone is a retired capability; a superseded discipline is a retired rule. Without recording the original kind, future readers (and the shape-classification auditor) had to infer it from context.
 
-Two failure modes followed: field-vs-directory drift (an intent could in principle have `status: active` in the wrong directory and `intent_lint.py` had no clear contract to assert) and lossy supersession (kind context erased on retirement).
+Two failure modes followed: field-vs-directory drift (an intent could in principle have `status: active` in the wrong directory and `internal/core/lint` had no clear contract to assert) and lossy supersession (kind context erased on retirement).
 
 ## Decision
 
@@ -31,7 +31,7 @@ Two failure modes followed: field-vs-directory drift (an intent could in princip
 - **No intent carries a `status:` frontmatter field.** Disciplines drop it entirely (it was redundant); standalone/bundle never had a `status:` field that disagreed with directory.
 - Superseded intents preserve `kind_at_supersession: <original-kind>` so the shape the intent had when retired stays legible.
 
-`intent_lint.py` enforces:
+`internal/core/lint` enforces:
 - No file in `drafts/` / `planned/` / `shipped/` carries a `kind: discipline` value.
 - No file in `disciplines/` / `superseded/` carries a `status:` field.
 - Every file in `superseded/` carries both `superseded_by:` and `kind_at_supersession:`.
@@ -47,7 +47,7 @@ Two failure modes followed: field-vs-directory drift (an intent could in princip
 **Gains:**
 - One source of truth per concern. `git log` shows lifecycle transitions as file moves; no parallel field history to reconcile.
 - The principle is uniform across kinds, applies consistently to future kinds, and generalises beyond intents (disembark snapshots, lifeboat artefacts, etc.).
-- `intent_lint.py` contract is simpler (assert directory matches kind, not directory matches field matches kind).
+- `internal/core/lint` contract is simpler (assert directory matches kind, not directory matches field matches kind).
 
 **Costs / obligations:**
 - Manual `mv` operations outside `/abcd:intent` verbs can put a file in the wrong directory; lint catches at pre-commit but the moment-of-error is the moment of move, not the moment of verb. Mitigated by `/abcd:intent reclassify` being the only sanctioned move path, with `reclassification_history` written in frontmatter.
@@ -61,6 +61,6 @@ Two failure modes followed: field-vs-directory drift (an intent could in princip
 
 | Lifecycle | Directories | Required-by-location field(s) | Enforced by |
 |---|---|---|---|
-| Intents (standalone / bundle-member) | `drafts/` / `planned/` / `shipped/` | — | `intent_lint.py` |
-| Disciplines | `disciplines/` / `superseded/` | `superseded_by:` + `kind_at_supersession:` in `superseded/` | `intent_lint.py` |
+| Intents (standalone / bundle-member) | `drafts/` / `planned/` / `shipped/` | — | `internal/core/lint` |
+| Disciplines | `disciplines/` / `superseded/` | `superseded_by:` + `kind_at_supersession:` in `superseded/` | `internal/core/lint` |
 | Issue ledger | `issues/{open,resolved,wontfix}/` | `resolution:` in `resolved/`; `wontfix_reason:` in `wontfix/` | `_issue_lib._validate_invariants` |

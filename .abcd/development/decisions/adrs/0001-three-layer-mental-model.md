@@ -49,7 +49,7 @@ Acceptance discipline applies uniformly across both surfaces (intent and brief-p
 
 **Costs / obligations:**
 - Three surfaces means three places to look — discoverability cost on first read. Mitigated by the reading guide in `brief/README.md`.
-- Bidirectional links (intent ↔ spec, ADR ↔ intent) require lint enforcement (`intent_lint.py`).
+- Bidirectional links (intent ↔ spec, ADR ↔ intent) require lint enforcement (`internal/core/lint`).
 - Cross-document fidelity becomes a real audit category (codes `XD001`–`XD007`); without it, drift between brief and intents goes undetected.
 
 **Downstream decisions enabled:**

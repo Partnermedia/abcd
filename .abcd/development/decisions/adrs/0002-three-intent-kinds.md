@@ -42,9 +42,9 @@ Discipline subtypes are deferred — v1 introduces the kind itself; subtype taxo
 
 ## Alternatives Considered
 
-1. **Keep 1:1-only; force coupled intents to share a spec name.** Rejected: the spec field is a single ID; representing "two intents, one spec" with naming convention only is ambiguous and breaks `intent_lint.py`'s reciprocal-link check.
+1. **Keep 1:1-only; force coupled intents to share a spec name.** Rejected: the spec field is a single ID; representing "two intents, one spec" with naming convention only is ambiguous and breaks `internal/core/lint`'s reciprocal-link check.
 2. **Two kinds: standalone + cross-cutting (no bundle-member).** Rejected: bundle-member captures a real pattern (coupled-but-each-has-its-own-press-release) that neither standalone nor discipline fits. Collapsing it into standalone forces an artificial split; collapsing into discipline strips the per-member press release.
-3. **Free-text `kind` field (no closed enum).** Rejected: vocabulary drift compounds. Closed enum (`standalone | bundle-member | discipline`) lets `intent_lint.py` enforce kind-specific lifecycle (e.g., disciplines never go to `planned/`).
+3. **Free-text `kind` field (no closed enum).** Rejected: vocabulary drift compounds. Closed enum (`standalone | bundle-member | discipline`) lets `internal/core/lint` enforce kind-specific lifecycle (e.g., disciplines never go to `planned/`).
 4. **Subtype taxonomy for disciplines now** (`methodology` / `documentation` / `audit`). Rejected: insufficient samples to cluster meaningfully. Free-text `kind_notes` field captures intent until the corpus warrants a closed enum.
 
 ## Consequences
@@ -57,7 +57,7 @@ Discipline subtypes are deferred — v1 introduces the kind itself; subtype taxo
 
 **Costs / obligations:**
 - `kind` enum becomes reserved vocabulary (registered in `02-constraints/04-naming.md`).
-- `intent_lint.py` extends to verify `kind` + `bundle:` + directory-matching contracts.
+- `internal/core/lint` extends to verify `kind` + `bundle:` + directory-matching contracts.
 - The `intent-fidelity-reviewer` agent grows a third role (continuous reclassification suggestions). Agent count stays at 15 — this is role extension, not agent splitting (per itd-31 precedent).
 - Discipline-shaped intents need a `## Rule` template separate from the press-release template. Discipline-format guidance lives in `04-surfaces/05-intent.md`.
 - Reclassification path (`/abcd:intent reclassify`) must move files between directories AND record `reclassification_history` in frontmatter — without it, the directory-as-truth principle (ADR-3) collapses.

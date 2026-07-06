@@ -55,7 +55,7 @@ The reviews subsystem, the schemas, and the spec store are all abcd-owned — th
 - **Given** the terminology directory, **when** a contributor looks up the concept, **then** it resolves to `terminology/core/spec.md` with `term: spec`, and `epic` appears there only as a `forbidden_synonyms` entry.
 - **Given** the reviews subsystem is renamed, **when** a review is classified, **then** classification succeeds against the `spec-review` type the native reviews surface emits — one internal token, no desync.
 - **Given** `issue.schema.json` is updated, **when** an issue links to a spec, **then** it uses `related_specs`, and an issue file using the old `related_epics` key fails schema validation.
-- **Given** the prose sweep is complete, **when** `intent_lint.py` runs, **then** no forbidden-synonym (`GL002`) violation for `epic` is raised by any abcd-owned intent or doc.
+- **Given** the prose sweep is complete, **when** `internal/core/lint` runs, **then** no forbidden-synonym (`GL002`) violation for `epic` is raised by any abcd-owned intent or doc.
 
 ## Open Questions
 
@@ -69,6 +69,6 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Follows: the `epic_id`→`spec_id` intent-field rename (intent.schema.json, prd.schema.json, all 41 intent files, intent_lint.py, commands/abcd/intent.md) — the atomic part, done first; this intent is the non-atomic remainder.
+- Follows: the `epic_id`→`spec_id` intent-field rename (intent.schema.json, prd.schema.json, all 41 intent files, internal/core/lint, commands/abcd/intent.md) — the atomic part, done first; this intent is the non-atomic remainder.
 - Sequenced with: the `intents/README.md` v1/v2/v3 → phase migration (logged in `.work/issues.md`, 2026-05-16 session) — both rewrite the same README; order or merge them.
 - Triggered by: the native spec store adopting `spec` as its term ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), which leaves abcd's older `epic` surfaces inconsistent.

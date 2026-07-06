@@ -67,7 +67,7 @@ None of these fit the existing kinds cleanly:
   Postgres" isn't structurally that shape — it's a standing choice, not a rule.
   There's no per-artefact enforcement, just a standing fact.
 
-In abcdDev today these decisions fall through three gaps: the brief (meant to
+In abcd-cli today these decisions fall through three gaps: the brief (meant to
 stay high-level), individual native specs (the choice leaks in as a
 side-effect of the feature that needed it), or nowhere at all (genuinely
 invisible plumbing). The cost: no canonical record; the decision and its
@@ -82,7 +82,7 @@ vocabularies point at the same artefact. The product thinker keeps writing
 standing-choice signature and emits a `decision` verdict; the system routes the
 artefact into the ADR store; the facilitator reads ADRs.
 
-This intent is **project-agnostic** in the same sense itd-34 is: abcdDev
+This intent is **project-agnostic** in the same sense itd-34 is: abcd-cli
 produces decisions about lint orchestration and Codex wiring; an application
 project produces decisions about its database, its deployment target, its
 language version. The verdict generalises.

@@ -44,7 +44,7 @@ This intent is project-agnostic in the same sense the rest of the command surfac
 
 ## What's In Scope
 
-- **Update `abcdDev/commands/abcd/intent.md`** — remove the `new` row from the
+- **Update `abcd-cli/commands/abcd/intent.md`** — remove the `new` row from the
   sub-verb table; add a `"<text>"` row with the same description; update the
   routing logic so the first argument being a quoted string (not a known
   sub-verb) dispatches to the create path.

@@ -36,8 +36,8 @@ lint-reviews:
 	@bash scripts/check-reviews.sh
 
 # Deterministic drift gate for the .abcd/development design record (first slice
-# of internal/core/lint). Informational for now — not a preflight prerequisite —
-# until the record's current violations are cleared in a follow-up fix pass.
+# of internal/core/lint). Blocking: any record drift (stale tool names, dropped
+# concepts, lifecycle or reference breakage) fails preflight and CI.
 record-lint:
 	@go run ./cmd/record-lint
 
@@ -45,7 +45,7 @@ record-lint:
 # runs — build, vet, test, and race-enabled internal tests — natively, plus the
 # reviews-charter discipline. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews
+preflight: lint-reviews record-lint
 	go build ./...
 	go vet ./...
 	go test ./...

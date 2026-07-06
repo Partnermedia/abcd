@@ -63,7 +63,7 @@ The unscoped-transport sweep is adapter-scoped and runs only when an oracle adap
 - **Size caps**: `body_max_bytes` (default 20 KiB, bounds `body_markdown`); `render_max_bytes` (default 24 KiB, bounds `review.md`). Both caps recorded in `review.json`.
 - **`.gitignore`** allow-lists the native review store `.abcd/reviews/`; ignores each per-review `raw/` subdirectory (`.abcd/reviews/**/<NNNN>-*/raw/`).
 - **Index discovery**: `reviews-index --spec <spec-id>` generates `INDEX.md` + `INDEX.json` on demand (no new command surface). CI verifier runs `--check` mode on PRs touching `.abcd/reviews/**`. No git hooks — on-demand plus CI only.
-- **Brief edits in this repo (abcdDev)**:
+- **Brief edits in this repo (abcd-cli)**:
   - `05-internals/02-adapters.md`: clarify the review dispatcher's two stores (spec-tied via the native review pipeline → `.abcd/reviews/`; unscoped via a configured oracle adapter → `.abcd/development/activity/reviews/`).
   - `05-internals/03-configuration.md`: clarify `dev_sync.reviews.enabled` only sweeps unscoped transports.
 - **Default**: post-processor ON by default; `ABCD_REVIEW_POSTPROCESS=0` kill switch.

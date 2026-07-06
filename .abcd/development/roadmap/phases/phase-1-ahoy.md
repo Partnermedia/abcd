@@ -4,9 +4,9 @@
 
 By the end of this phase — the **first milestone** — a user can install abcd and
 cut a release with it. `/abcd:ahoy install` runs in any folder: the folder is
-classified (managed repo / managed workspace / unmanaged), registered in
-`~/.abcd/workspaces.json`, given its CLAUDE.md marker block, and wired with the
-modular rules loader; re-running is idempotent. `/abcd:launch` cuts a **curated
+classified (managed-repo / unmanaged-repo / unmanaged-folder), registered in
+the history store's `~/.abcd/history/index.json`, given its CLAUDE.md marker
+block, and wired with the modular rules loader; re-running is idempotent. `/abcd:launch` cuts a **curated
 single-repo release** — a release artifact built from the one repository, with
 `.abcd/**` excluded by packaging so the design record never ships in the
 artifact (per [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)).
@@ -26,10 +26,10 @@ any deeper backend is wired.
 - `/abcd:ahoy install`, `uninstall`, `dry-run`, and `doctor` all run on a fresh
   repo and on a re-run, per the acceptance in `04-surfaces/01-ahoy.md`.
 - The folder-classification pass correctly distinguishes the folder kinds (per
-  the matrix in `04-surfaces/01-ahoy.md`, which splits `unmanaged` along the
-  `.git/` axis into `unmanaged-repo` and `unmanaged-folder`, with
-  `unmanaged-workspace` as the no-marker / sibling-repos shape) and
-  writes/updates `~/.abcd/workspaces.json`.
+  the matrix in `04-surfaces/01-ahoy.md`, which classifies `cwd` into
+  `managed-repo`, `unmanaged-repo`, and `unmanaged-folder` along the
+  strong-marker and `.git/` axes) and registers the managed repo in
+  `~/.abcd/history/index.json`.
 - The rules loader is live: keyword-triggered rule injection works; an
   unrelated prompt injects zero abcd rules.
 - The oracle resolves through its **host-delegated native default** (per
@@ -51,7 +51,7 @@ any deeper backend is wired.
 
 - **Given** a fresh repo with abcd never installed, **when** a user runs
   `/abcd:ahoy install`, **then** in one command the folder is classified,
-  registered in `~/.abcd/workspaces.json`, given its CLAUDE.md marker block,
+  registered in `~/.abcd/history/index.json`, given its CLAUDE.md marker block,
   and wired with the rules loader — a journey spanning itd-40, itd-3, and the
   ahoy command that no single intent delivers alone.
 - **Given** an installed repo, **when** a user runs `/abcd:launch`, **then** a
@@ -70,15 +70,16 @@ any deeper backend is wired.
 ## Scope
 
 **Intents:** itd-3 (modular rules loader), itd-40 (folder classification +
-`workspaces.json` — and the per-repo history-store *scaffolding* ahoy provisions
-per managed folder, see below), itd-2 (host-delegated oracle default — the
+the history-store `index.json` registry — and the per-repo history-store
+*scaffolding* ahoy provisions per managed repo, see below), itd-2
+(host-delegated oracle default — the
 always-available bottom of the oracle seam).
 
 **History-store scaffolding folds into itd-40.** ahoy provisions the per-repo
 native history store (`~/.abcd/history/` keyed on root-commit SHA, `index.json`)
-as part of what it sets up for each managed folder. itd-40 already owns the
-managed-folder model — folder classification and the `~/.abcd/workspaces.json`
-registry — so "what ahoy provisions for each managed folder" is the same intent.
+as part of what it sets up for each managed repo. itd-40 already owns the
+managed-repo model — folder classification and the `~/.abcd/history/index.json`
+registry — so "what ahoy provisions for each managed repo" is the same intent.
 The store's **capture and read behaviour** is Phase 2 (the native transcript
 corpus, per [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md));
 Phase 1 only lays down the directory scaffolding.
@@ -101,8 +102,8 @@ plus the probe-only stubs for the other surfaces.
 
 - **Brief:** `04-surfaces/01-ahoy.md` and `04-surfaces/04-launch.md` (the
   commands being built); `06-delivery/01-build-sequence.md`;
-  `05-internals/03-configuration.md` (rules-loader config, `workspaces.json`,
-  visibility-driven gitignore).
+  `05-internals/03-configuration.md` (rules-loader config, the history
+  `index.json` registry, visibility-driven gitignore).
 - **Intents deliver the expectation:** itd-3 delivers the marker block ahoy
   installs; itd-40 delivers the classification ahoy runs first and the history
   scaffolding; itd-2 delivers the host-delegated oracle default.
@@ -113,9 +114,9 @@ plus the probe-only stubs for the other surfaces.
 ## Dependency rationale
 
 - **itd-3 and itd-40 before `ahoy install`** — ahoy *installs* itd-3's marker
-  block and *reads* itd-40's `workspaces.json` classification. ahoy must ship
-  with both already in hand, so they precede the command flow within this
-  phase.
+  block and *reads* itd-40's folder classification, resolved against the
+  history `index.json` registry. ahoy must ship with both already in hand, so
+  they precede the command flow within this phase.
 - **launch after install** — launch packages an installed repo; the install
   flow and the `.abcd/**` layout it lays down must exist before packaging can
   exclude them.

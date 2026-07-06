@@ -103,7 +103,7 @@ audit (reality vs. intent acceptance).
    which then drifts from the phase docs. The editorial intent→phase mapping in
    phase docs is the single source; intents carry no sequencing field at all.
    (`target_release` was removed outright in this same change — schema,
-   `intent_lint.py`/`_prd_writer.py` hash recipes, fixtures, and all 40 intent
+   `internal/core/lint`/`_prd_writer.py` hash recipes, fixtures, and all 40 intent
    files — rather than renamed.)
 
 ## Consequences
@@ -132,7 +132,7 @@ audit (reality vs. intent acceptance).
 - Removing `target_release` changes every intent's `intent_source_hash` (the
   field was in the hash recipe). Harmless here — no intent in the corpus is
   grilled yet, so no stored `grilled_intent_hash` is invalidated — but the two
-  hash allow-lists (`intent_lint.py`, `_prd_writer.py`) and `prd.schema.json`'s
+  hash allow-lists (`internal/core/lint`, `_prd_writer.py`) and `prd.schema.json`'s
   recipe documentation were updated together to keep the "one canonical recipe"
   invariant intact.
 - Phase IDs must be stable once specs anchor to them; renaming a phase means

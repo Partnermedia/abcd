@@ -55,7 +55,7 @@ Hash chain: each disembark's `_provenance.json` (inside the lifeboat) matches th
 - Embark contract is unambiguous — read the lifeboat at `<path>`, full stop.
 
 **Costs / obligations:**
-- Hash-chain integrity must be maintained — `intent_lint.py` (or a sibling audit) verifies `_provenance.json.manifest_sha256` matches the latest line in `voyage/disembark/history.jsonl` for the same run.
+- Hash-chain integrity must be maintained — `internal/core/lint` (or a sibling audit) verifies `_provenance.json.manifest_sha256` matches the latest line in `voyage/disembark/history.jsonl` for the same run.
 - Reserved vocabulary: `voyage/`, `lifeboat/`, `manifest_sha256`, `_provenance.json`, `history.jsonl` — registered in `02-constraints/04-naming.md`.
 - The `embark --archive` flag is opt-in; users who don't know about it will lose the source-disappearance recovery path. Documented prominently in `04-surfaces/03-embark.md`.
 
