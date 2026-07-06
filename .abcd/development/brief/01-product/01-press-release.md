@@ -1,0 +1,46 @@
+# Press Release
+
+## Press Release
+
+> **abcd is a Claude Code plugin that rescues the lessons from a stuck project — so you can rebuild from scratch without losing what you learned.** Run `/abcd:disembark to home` in a repo that's grown unwieldy, and the plugin packs the project's hard-won knowledge — decisions, principles, pitfalls, the spine of what was built and why — into a portable lifeboat artefact. Run `/abcd:embark from <path>` in an empty repo, and the lifeboat unpacks into a clean foundation with the same wisdom but none of the cruft. A small command surface rounds out the workflow: install (`/abcd:ahoy install`) and public release (`/abcd:launch ship`); `/abcd:intent` and `/abcd:capture` keep forward-looking work and discovered issues structured as the project evolves; and `/abcd:memory` curates a queryable knowledge substrate from those same sources. Bare invocation of any command shows status + suggested next actions; state-mutating actions require an explicit sub-verb (the universal abcd convention).
+>
+> "I'd hit the wall on a side project three times this year — every rebuild from scratch lost the lessons I'd already learned the hard way. abcd is the first tool that treats those lessons as the *output* worth saving, not just the code," said Maya, an AI/agent researcher.
+
+## Why This Matters
+
+Long-running projects accumulate context that doesn't live in any one file: why a decision was made, what was tried and abandoned, which patterns earned their keep, which produced subtle bugs. When the project gets stuck and you decide to rebuild, that context evaporates — you re-learn the same lessons, retry the same dead ends, and re-make the same mistakes. abcd treats *the project's accumulated wisdom* as the artefact worth rescuing, separate from the code. The lifeboat is a portable directory you can share, archive, or unpack into a new repo; the plugin orchestrates packing and unpacking with audit gates so the rescue is faithful, not fan-fiction.
+
+## What's In Scope
+
+- **Pack the lifeboat:** `/abcd:disembark to <path>` runs three passes (settled artefacts → targeted chat retrieval → distil/compose/audit) over a project's specs, ADRs, transcripts, oracle reviews, and curated memory. Output is a structured directory with synthesised principles, decisions timeline, pitfalls, press-release framing, and verbatim copies of specs, ADRs, and user docs.
+- **Unpack the lifeboat:** `/abcd:embark from <path>` reads the lifeboat, runs a press-release interview to confirm the framing with the user, scaffolds the new repo at canonical locations, and writes provenance so the rebuild knows where it came from. The literal string `home` resolves to the current repo's `.abcd/lifeboat/` for the round-trip case.
+- **Install / promote:** `/abcd:ahoy install` bootstraps abcd in any repo (transparent prompts, visibility-driven gitignore, marker block in CLAUDE.md/AGENTS.md, prompt-router hook). `/abcd:launch ship` promotes the private dev repo to its public sibling with default-deny payload, secret/PII scans, and version bump.
+- **Forward-looking discipline:** `/abcd:intent` captures product intents in three structural kinds per itd-34 — `standalone` (one user moment, one spec), `bundle-member` (coupled intents share a spec), and `discipline` (cross-cutting rules with no user moment, e.g., the itd-1 acceptance-gates rule that enforces Given-When-Then on every other spec). Standalone and bundle-member intents are press-release-shaped; disciplines use a `## Rule` template instead. `/abcd:capture` runs a structured issue ledger that replaces free-form `.work/issues.md`. `/abcd:intent grill` (sibling of `refine`, per itd-27) is a Socratic-questioning sub-verb that stress-tests intents (or brief sections, via `--brief-section`) before planning. After shipping, `/abcd:intent review` (Role 1 of `intent-fidelity-reviewer`) reviews delivered reality against the press release; `/abcd:intent consistency` (Role 2, shipped in fn-29 per itd-48, which superseded itd-31) catches cross-document drift; `/abcd:intent shape` (Role 3) keeps each intent's `kind` honest.
+- **Plumbing that makes it possible:** 15 agents, 11 adapters, a vendor-agnostic dispatcher pattern, a three-transport oracle chain (RP MCP → Codex CLI → in-session subagent), a prompt-quality stack with golden-test fixtures, structural lint, periodic SOTA audit, prompt-version frontmatter, self-improvement pre-flight, and injection-canary fixtures — plus operator-internal command wiring (e.g. `/abcd:run`, the itd-29 autonomous-run operator surface — read-mostly `status`/`pause`/`resume`/`preflight` over an autonomous Ralph run; not part of the user-facing command set).
+
+See [`04-scope.md`](./04-scope.md) for the full scope boundary and [`04-surfaces/`](../04-surfaces/) for per-command detail.
+
+## What's Out of Scope
+
+Code-bundling lifeboats, cross-corpus synthesis, public-source vendoring with provenance, scheduled `dev-sync`, OpenCode harness portability, hash-chain conversation audit, and 13 more later-phase items — all live as press-release intents in `.abcd/development/roadmap/intents/drafts/`. See [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md) for the canonical later-phase list.
+
+## Acceptance Criteria
+
+- **Given** a corpus repo with `.flow/specs/`, ADRs, and a memory backend present, **when** `/abcd:disembark to home` runs to completion, **then** the current repo's `.abcd/lifeboat/` contains all sections specified in [`04-surfaces/02-disembark.md § 5`](../04-surfaces/02-disembark.md#5-output-shape) and the lifeboat-oracle audit returns a "sufficient" verdict with specific findings (not vague approval).
+- **Given** a lifeboat produced by `/abcd:disembark to <path>` and an empty target repo, **when** `/abcd:embark from <path>` runs, **then** the user is presented with the press-release interview as the first interaction, the amended press release becomes the new repo's `.abcd/development/brief/README.md`, and all canonical-location files (specs, ADRs, memory, docs, terminology, principles) land at the locations specified in [`04-surfaces/03-embark.md § 3`](../04-surfaces/03-embark.md#3-scaffold-steps).
+- **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy install` runs to completion, **then** the repo is bootstrapped per [`04-surfaces/01-ahoy.md § 1`](../04-surfaces/01-ahoy.md#1-acceptance), and re-running `install` at the same `setup_version` is idempotent (no marker duplication, transparent re-confirm of visibility).
+- **Given** a clean tree with a deliberate PII fixture (e.g., a real email in a comment), **when** `/abcd:launch dry-run` runs, **then** preflight hard-fails with the offending file/line cited and no payload is written.
+- **Given** the user runs `/abcd:intent "<text>"` (canonical bare quoted create), **when** the interview completes, **then** an `intents/drafts/itd-N-<slug>.md` file exists with press-release content, customer quote from the persona registry, and a `## Acceptance Criteria` section in Given-When-Then format (per itd-1).
+- **Given** the user runs `/abcd:capture "<text>"`, **when** the command completes, **then** a structured issue at `.abcd/development/activity/issues/open/iss-N-<slug>.md` exists with frontmatter populated and source provenance recorded.
+- **Given** an oracle audit is required (lifeboat-oracle, press-release-composer product audit, or intent-fidelity-reviewer), **when** all configured backends are unreachable, **then** the in-session subagent runs the audit and the command never blocks.
+- **Given** a corpus repo with sparse sources (e.g., no `.flow/`), **when** disembark runs, **then** the affected agent emits a documented exemption in its report and the oracle gate accepts the exemption rather than failing the run.
+
+## Open Questions
+
+- **Pass B signal density.** chat-distiller's effectiveness depends on `.specstory/` transcript signal-to-noise. Phase 0 sampling on idelphiDev measures actual density before Pass B's design locks. If signal is too thin, transcript-noise mitigation moves up from itd-11 (a later-phase item) into an earlier phase.
+- **Brief-skeleton enforcement.** The numbered-folder layout for `.abcd/development/brief/` is a current convention but not enforced by `intent-fidelity-reviewer` or `documentation-auditor`. See [`05-internals/README.md § enforcement policy`](../05-internals/README.md#policy-no-skeleton-enforcement-deferred) for the candidates list and the deferred-rigidity rationale (this "defer" means deferring the rigidity decision itself, not a release horizon).
+- **Round-trip fidelity floor.** What's the minimum percentage of source-repo principles, decisions, and pitfalls that must survive `disembark → embark` for the round-trip to be considered "successful"? abcd ships without an explicit floor; the lifeboat-oracle audit verdict is the proxy. A future intent (likely paired with itd-15 self-dogfooded SOTA audit) may quantify it.
+
+## Audit Notes
+
+*(populated by `intent-fidelity-reviewer` once the plugin ships and the press release can be checked against delivered reality)*

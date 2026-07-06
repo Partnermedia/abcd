@@ -1,0 +1,110 @@
+name: ci
+
+# Lightweight checks on every push and pull request: build, vet, and test on
+# macOS and Linux, plus full-history secret scanning and a workflow audit.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Cancel superseded runs of the same ref (PRs and branch pushes); a merged
+# default-branch push is never cancelled mid-run because each ref has its own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Build + vet + test on both host OSes. Race-enabled unit tests catch data
+  # races the plain `go test` would miss.
+  check:
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25'
+
+      # Enforce the format gate AGENTS.md documents (`gofmt -l .`). Formatting is
+      # platform-independent, so run it once on the ubuntu leg to avoid duplicate
+      # work; any file gofmt lists needs `gofmt -w` and fails the job.
+      - name: Format (gofmt)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt: these files are not formatted (run gofmt -w .):" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Test (race, internal)
+        run: go test -race ./internal/...
+
+  # Secrets never land in history: full-history scan on every push/PR. Run as a
+  # pinned, checksum-verified CLI (no PR-comment / SARIF GitHub-API integration),
+  # so it works on a private repo and survives the private->public flip. A
+  # non-zero exit means gitleaks found a secret.
+  gitleaks:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.24.3
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          base="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -sSLf -o "$base" "$url/$base"
+          curl -sSLf -o checksums.txt "$url/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $base\$" checksums.txt | sha256sum -c -
+          tar -xzf "$base" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan full history
+        run: gitleaks git --redact --no-banner .
+
+  # Audit the workflows themselves (pwn requests, template injection, cache
+  # poisoning, unpinned uses). Run as a pinned CLI image (no SARIF upload to
+  # code-scanning, which a private repo lacks). A non-zero exit means a finding.
+  zizmor:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Audit workflows
+        run: |
+          # zizmor v1.26.1, pinned by digest (the registry publishes version
+          # releases under :latest; a raw vX.Y.Z tag does not exist).
+          docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" \
+            ghcr.io/zizmorcore/zizmor@sha256:d1117e5dbd9ee4970644067b534ab6ab50371f3c6f7f4d05446eb603a6e78f48 \
+            --persona regular /src
