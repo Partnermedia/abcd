@@ -1,14 +1,16 @@
-# Platform & Repos
+# Platform & Repo
 
-This file holds locked decisions about *where* abcd runs and *what repos exist*. These are non-negotiable starting conditions for any agent working on abcd — the agent designs architecture inside these rails, not around them.
+This file holds locked decisions about *where* abcd runs and *how it ships*. These are non-negotiable starting conditions for any agent working on abcd — the agent designs architecture inside these rails, not around them.
 
-## This directory IS abcdDev
+## One repository
 
-The cwd is the private dev repo where abcd is built. The plugin lives at the repo root (`commands/`, `skills/`, `hooks/`, `scripts/`, `agents/`, `tests/`, `docs/`); spec/task tracking lives at `.flow/`; the design record (this brief, the roadmap, intents, ADRs, research) lives at `.abcd/development/`; `.work/` and `.specstory/` are gitignored local-only surfaces. See [`../../../../CLAUDE.md`](../../../../CLAUDE.md) for the canonical "where things live" map. Curated snapshots ship to the public `abcd/` repo via `/abcd:launch`.
+abcd lives in **one repository** and ships a **curated release artifact** cut from it — there is no dev→public mirror ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The Go binary is the product ([adr-21](../../decisions/adrs/0021-rebuild-in-go.md)); its source, its user-facing documentation, and the design record all share this one tree. The design record (this brief, the roadmap, intents, ADRs, research) lives in-tree at `.abcd/development/`; `.work/` is a gitignored local-only surface. See [`../../../../CLAUDE.md`](../../../../CLAUDE.md) for the canonical "where things live" map.
 
-## Repos
+**`.abcd/**` stays in-tree but is excluded from the release artifact by packaging** — exclusion is a build-time filter over the one tree, not a copy between two repos. `/abcd:launch` cuts a curated GitHub Release from this repo; **the repo is the marketplace**, so discovery, install, and the design record share one location.
 
-See [`01-product/02-context.md`](../01-product/02-context.md#repos) for the canonical Repos list (SSOT). Summary: `abcdSubZero/` (reference), `abcdDev/` (this directory, private dev), `abcd/` (public release target via `/abcd:launch`).
+## Front doors
+
+The core is a transport-agnostic Go package ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front doors. The **CLI (Cobra)** is the first front door and ships in the MVP. An **MCP server** and a **markdown plugin surface that shells to the Go binary** are later front doors — each is a new adapter over the unchanged core, not the substrate abcd is built on.
 
 ## Lifeboat path
 

@@ -15,7 +15,7 @@ User moments differ; underlying licence-tracking machinery is the same.
 
 ## 1. Licence detection
 
-**SPDX identifier extraction** from declared sources where present. Priority order (first match wins — canonical, implemented by `scripts/abcd/provenance.py:detect_licence`):
+**SPDX identifier extraction** from declared sources where present. Priority order (first match wins — canonical, implemented by `internal/core/provenance` `detect_licence`):
 
 1. Source has SPDX header in file content (`SPDX-License-Identifier: <id>`) → extract
 2. Source has package manifest declaring licence (`package.json` `license` field, `Cargo.toml` `[package] license`, `pyproject.toml` `[project] license`) → extract
@@ -23,7 +23,7 @@ User moments differ; underlying licence-tracking machinery is the same.
 4. HTTP source has `License:` HTTP header (rare) → extract
 5. None of the above → mark as `unknown` (explicit; never inferred)
 
-Steps 2–3 run only when the detector is given a `source_root` directory (`detect_licence(text, source_root=None, http_headers=None)`). **Substrate capability vs memory-ingest behaviour:** memory ingest of a single local file or URL passes `source_root=None`, so it detects only the content SPDX header + HTTP `License:` header; a consumer with a source directory (loot) enables the manifest/LICENSE steps.
+Steps 2–3 run only when the detector is given a `source_root` directory (`detect_licence(text, source_root, http_headers)`). **Substrate capability vs memory-ingest behaviour:** memory ingest of a single local file or URL passes no `source_root`, so it detects only the content SPDX header + HTTP `License:` header; a consumer with a source directory (loot) enables the manifest/LICENSE steps.
 
 A single identifier is matched case-insensitively and stored in canonical SPDX casing via a small local canonical-ID map; an ID outside the map is stored verbatim and flagged `unrecognised`. Compound expressions (`MIT OR Apache-2.0`, `... WITH <exception>`) are stored verbatim, never split; `classify_licence_expression` is the single classifier (`permissive | restrictive | unknown | unrecognised` — any restrictive token anywhere makes the expression restrictive) that the publish-gate policy layers on top of.
 
@@ -104,7 +104,7 @@ Lint codes referenced below (`ML*`, `MQ*`) ship with fn-39 (the write/lint split
 
 ## 6. Composition with adjacent surfaces
 
-- **`memory.py` adapter** ([`02-adapters.md`](02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
+- **`internal/core/memory` adapter** ([`02-adapters.md`](02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
 - **`/abcd:memory ingest`** (this substrate's primary consumer) consumes for: licence detection on every external source, citation generation on every page, registry update on every ingest.
 - **`/abcd:loot`** (later-phase consumer) consumes for: licence detection on vendored repos, citation generation in `.abcd/development/activity/loot/<source>.md`, registry update on every vendor pass.
 - **`/abcd:disembark` (lifeboat)** is the gate's real consumer (adr-18): it reads the registry for restrictive-licence enforcement over the curated memory/provenance it publishes; does not write to it. At launch the gate is future/inert — `/abcd:launch` excludes `.abcd/` wholesale and is not the gate's consumer (the launch dry-run only renders the gate's verdicts diagnostically).
@@ -120,6 +120,6 @@ The substrate ships alongside itd-36. The `ML*`/`MQ*` lint family is NOT part of
 ## References
 
 - [`07-memory.md`](07-memory.md) — primary consumer of this substrate
-- [`02-adapters.md`](02-adapters.md) — adapter dispatcher pattern (provenance substrate is NOT a dispatcher; it's a flat library used by ingest + loot)
+- [`02-adapters.md`](02-adapters.md) — the adapter seam model (provenance substrate is NOT a seam; it's a flat library used by ingest + loot)
 - [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — source-hash registry is regenerable per the lifecycle taxonomy
 - [`itd-26-loot-oss-vendor.md`](../../intents/drafts/itd-26-loot-oss-vendor.md) — later-phase consumer; verb lands in a later phase but substrate ships early

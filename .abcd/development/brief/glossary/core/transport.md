@@ -15,26 +15,32 @@ versions: null
 
 # transport
 
-The **transport** is the layer between the abcd pipeline and the oracle. It handles packaging
-(selecting which files, diffs, and context snippets to include), delivery (sending to the oracle's
-API or interface), and receipt (capturing the response for parsing). RepoPrompt is abcd's primary
-transport for code review; other transports may be used for intent review or linting tasks.
+The **transport** is the layer between the abcd pipeline and the oracle. It
+handles packaging (selecting which files, diffs, and context snippets to
+include), delivery (handing the material to the host's subagent dispatch when the
+oracle is host-delegated, or to a wired oracle adapter — native, CLI, API, or
+MCP), and receipt (capturing the structured response for parsing). The transport
+is distinct from the oracle itself — different transports can deliver to the same
+oracle model, and the same transport can route to different oracle models.
 
 ## When to use
 
-Use "transport" when referring to the mechanism used to send context to an oracle. The transport
-is distinct from the oracle itself — different transports can deliver to the same oracle model,
-and the same transport can route to different oracle models.
+Use "transport" when referring to the mechanism used to send context to an
+oracle, whether that is the host's subagent dispatch (the default) or a wired
+oracle adapter.
 
 ## When NOT to use
 
-Do not call the transport an "API call" (too implementation-level), "prompt" (conflates content
-with delivery), or "chat" (elides the structured review framing).
+Do not call the transport an "API call" (too implementation-level), "prompt"
+(conflates content with delivery), or "chat" (elides the structured review
+framing).
 
 ## Examples
 
-- "The impl-review skill uses the RepoPrompt transport to send the scoped diff to the oracle."
-- "The transport packages the frontmatter, diff, and schema into a single context window."
+- "The impl-review skill hands the scoped diff to the oracle through the host's
+  subagent dispatch."
+- "The transport packages the frontmatter, diff, and schema into a single
+  context window."
 
 ## Related terms
 

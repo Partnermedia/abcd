@@ -42,7 +42,7 @@ voyage with a spec.
 
 ## Examples
 
-- "This voyage covers the first release of abcdDev."
+- "This voyage covers the first release of abcd."
 - "At the end of the voyage, a retrospective captures what the team learned."
 
 ## Related terms

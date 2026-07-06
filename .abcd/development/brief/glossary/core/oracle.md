@@ -2,7 +2,7 @@
 ---
 term: oracle
 bounded_context: core
-definition: An AI model invoked via a structured transport to review, reason over, or validate artefacts produced during a voyage.
+definition: An AI model invoked to review, reason over, or validate artefacts produced during a voyage — host-delegated by default, or reached through an opt-in oracle adapter.
 aliases: ["reviewer", "AI reviewer"]
 forbidden_synonyms: ["LLM", "model", "bot", "AI", "chatbot"]
 status: stable
@@ -15,25 +15,32 @@ versions: null
 
 # oracle
 
-An **oracle** is abcd's abstraction for an AI model used in a review or reasoning role. The oracle
-receives context through a transport (e.g., RepoPrompt) and returns a structured verdict
-(SHIP / NEEDS_WORK / MAJOR_RETHINK). Referring to it as "oracle" rather than "LLM" or "AI"
-emphasises its role as a decider rather than a generator.
+An **oracle** is abcd's abstraction for an AI model used in a review or reasoning
+role. By default the oracle is **host-delegated**
+([adr-25](../../../decisions/adrs/0025-host-delegated-llm-default.md)): abcd's
+core does the deterministic work, hands a prompt to the host's subagent dispatch,
+and consumes the structured verdict (SHIP / NEEDS_WORK / MAJOR_RETHINK). When an
+operator wants abcd to reach a model directly, a concrete **oracle adapter** —
+native, CLI, API, or MCP — is wired behind the same seam. Referring to it as
+"oracle" rather than by a generic model name emphasises its role as a decider
+rather than a generator.
 
 ## When to use
 
-Use "oracle" when referring to the AI model invoked for a review step in the abcd pipeline. The
-oracle is always invoked through a named transport — never directly.
+Use "oracle" when referring to the AI model invoked for a review step in the
+abcd pipeline. The oracle is host-delegated by default; a wired oracle adapter
+reaches a model directly over the same seam.
 
 ## When NOT to use
 
-Do not call the oracle an "LLM", "model", "bot", or "AI" in workflow documentation — these terms
-elide the transport and role distinction. Do not confuse the oracle with the transport that
-delivers context to it.
+Do not reduce the oracle to a generic model or bot in workflow documentation —
+that elides its review-and-decide role. Do not confuse the oracle with the
+transport that delivers context to it.
 
 ## Examples
 
-- "The impl-review skill sends the diff to the oracle via the RepoPrompt transport."
+- "The impl-review skill hands the diff to the host-delegated oracle and reads
+  back its verdict."
 - "The oracle returned NEEDS_WORK on round 6."
 
 ## Related terms

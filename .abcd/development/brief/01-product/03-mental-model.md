@@ -21,8 +21,8 @@ flowchart TD
     Gate --> SpecUserFacing
     Gate --> SpecPlumbing
 
-    SpecUserFacing["<b>Spec</b> (user-facing)<br/>How do we build it?<br/><i>flow-next spec + tasks</i>"]
-    SpecPlumbing["<b>Spec</b> (plumbing)<br/>How do we build it?<br/><i>flow-next spec + tasks</i>"]
+    SpecUserFacing["<b>Spec</b> (user-facing)<br/>How do we build it?<br/><i>native spec + tasks</i>"]
+    SpecPlumbing["<b>Spec</b> (plumbing)<br/>How do we build it?<br/><i>native spec + tasks</i>"]
 
     SpecUserFacing -->|implementation| Reality
     SpecPlumbing -->|implementation| Reality
@@ -81,7 +81,7 @@ flowchart TD
 
 This is the *authoring-origin* axis and is a closed two-value split. The finer-grained taxonomy of what a discipline *does* (e.g., `methodology` / `documentation` / `audit`) is still deliberately deferred: each discipline keeps its free-text `kind_notes`, and that taxonomy moves from free-text to formal enum only once the corpus contains enough samples to cluster meaningfully — see the revisit triggers in [`04-surfaces/05-intent.md`](../04-surfaces/05-intent.md).
 
-**Specs** answer *how do we build this concrete thing?* They live in flow-next at `.flow/{specs,tasks}/`, are plan-reviewed before work starts, completion-reviewed after work finishes, and trace back to *something* — either one or more intents (for user-facing work; standalone or bundle), or a brief phase (for plumbing), or a discipline being made concrete in a particular spec's acceptance criteria (for cross-cutting rules). That trace is what keeps the project auditable.
+**Specs** answer *how do we build this concrete thing?* They live in the native spec store as specs and tasks ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md); the companion harness `ccpm` as the deeper backend), are plan-reviewed before work starts, completion-reviewed after work finishes, and trace back to *something* — either one or more intents (for user-facing work; standalone or bundle), or a brief phase (for plumbing), or a discipline being made concrete in a particular spec's acceptance criteria (for cross-cutting rules). That trace is what keeps the project auditable.
 
 **Acceptance discipline applies uniformly across the boundary.** Every standalone or bundle-member intent's press release is followed by a `## Acceptance Criteria` block in Given-When-Then format (per the itd-1 discipline). Every brief phase has an `## Acceptance` block in the same format. Discipline-kind intents skip the press release but use the same Given-When-Then format under a `## Rule` heading — the gate they impose on every other spec. The `intent-fidelity-reviewer` agent compares delivered reality against intent acceptance; the same agent's discipline role checks every spec against the active disciplines; the phase audit compares reality against the phase's `## Expectation`. The format is uniform; the *home* differs to match the nature of the work.
 

@@ -37,7 +37,7 @@ Hard stop unless only `.git/`, `.gitignore`, `LICENSE*`, `README.md`, `.github/`
 1. **Press release interview (FIRST INTERACTION).** Show the user the press release + the disembark-time product audit findings. Ask: "Confirm / amend / reframe before scaffolding." Amended press release becomes the new repo's **initial brief**: written to `.abcd/development/brief/README.md` in the embarked target. Subsequent ahoy/work iterates on it like any other abcd-managed project's brief. **`embark from <path> --refresh-audit`** flag re-runs the oracle product audit before showing the user (uses current oracle config; flags drift vs the disembark-time audit in the report).
 2. Show scaffold summary (referencing the amended press release); transparent confirm to proceed.
 3. Create dirs; copy ADRs, terminology, docs verbatim from lifeboat to canonical target locations.
-4. Run flowctl to create specs from `rescue/spec-plan.md` (or create minimal `.flow/` structure).
+4. Create specs from `rescue/spec-plan.md` in the native spec store (via `/abcd:intent plan` / `ship`, per [adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), or create a minimal native spec structure.
 5. Write curated memory files to `.abcd/memory/` — one per principle, grouped by domain, filename `<type>_<domain>_<slug>.md` (e.g., `feedback_ui_full_box_hit_target.md`) with YAML frontmatter matching Claude Code's auto-memory schema (`name`, `description`, `type`). The `<type>_` prefix preserves compatibility with Claude's memory-file convention. The volatile memory backend's source store is left untouched in the new repo's environment — the harness (Claude Code, OpenCode, etc.) will populate it as the user works.
 6. Inject principles into CLAUDE.md/AGENTS.md between BEGIN/END markers (idempotent). The marker block content is the modular-rules-loader block from `scripts/abcd/defaults/claude-md-marker-block.md` (per itd-3) — *not* a verbose copy of every principle. Principles are exposed via the rules-loader's domain rules, surfaced on demand by prompt-keyword recall.
 7. Apply asset curation ([§ 5](#5-asset-curation-per-_manifestjson-classifications)).
@@ -54,7 +54,7 @@ When the target already has files that the lifeboat would write, **a single bulk
 
 ```
 embark detected N conflicts across:
-  • 3 .flow/specs/ files
+  • 3 native spec store files
   • 1 CLAUDE.md (will inject markers if 'merge')
   • 2 .abcd/memory/ files
   • 1 docs/development/decisions/adrs/
@@ -115,7 +115,7 @@ Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd
 - `source_path` (the `<path>` argument passed to `embark from <path>`)
 - `source_manifest_sha256` (hash of input lifeboat's `_provenance.json` + file tree)
 - `timestamp`
-- `files_written` (target paths created in `.abcd/development/`, `.flow/specs/`, `.abcd/memory/`, `docs/development/decisions/adrs/`, etc.)
+- `files_written` (target paths created in `.abcd/development/`, the native spec store, `.abcd/memory/`, `docs/development/decisions/adrs/`, etc.)
 - `press_release_amended_diff` (diff between input lifeboat's `press-release.md` and the brief that landed at `.abcd/development/brief/README.md` after the [§ 3 step 1](#3-scaffold-steps) interview)
 - `audit_drift` (only if `--refresh-audit`: drift vs disembark-time `audit/press-release-oracle-*`)
 
@@ -130,7 +130,7 @@ Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd
   "files": ["README.md", "press-release.md", "rescue/specs/fn-1-foo.md", ...],
   "label": "post-itd-7-ship",
   "shared_with": ["idelphiDev"],
-  "oracle_backend": "rp-mcp",
+  "oracle_backend": "host-delegated",
   "oracle_verdict": "sufficient"
 }
 ```

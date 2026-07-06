@@ -11,7 +11,7 @@ constraints.
 ## Format Specification
 
 Every term file MUST begin with a YAML frontmatter block (`---` delimiters) conforming to
-`scripts/abcd/schemas/terminology.schema.json`. The body of the file (below the closing `---`)
+the terminology schema (`internal/core/schema/terminology.schema.json`). The body of the file (below the closing `---`)
 provides narrative context, examples, and cross-references.
 
 ### Required Frontmatter Fields
@@ -69,16 +69,17 @@ terminology/
 
 ## Validation
 
-Run the linter to validate all term files:
+The terminology lint (`internal/core/lint`) validates the term files against the
+schema. Run it via the abcd CLI over the glossary directory to check every term:
 
 ```bash
-python3 scripts/abcd/lint_terminology.py .abcd/development/foundation/terminology/
+abcd lint terminology .abcd/development/brief/glossary/
 ```
 
-Or validate a single file:
+Or over a single term file:
 
 ```bash
-python3 scripts/abcd/lint_terminology.py .abcd/development/foundation/terminology/core/brief.md
+abcd lint terminology .abcd/development/brief/glossary/core/brief.md
 ```
 
 ---
@@ -164,10 +165,9 @@ is intentionally allowlisted.
   issue-schema validator: it intentionally embeds strings that would otherwise be flagged as
   forbidden synonyms in order to assert that the validator rejects them. Linting the negative
   corpus for those same strings would produce a guaranteed false positive on every CI run.
-  The entry is currently **inert documentation** — no `scripts/abcd/lint.py` consumer reads
-  `terminology_exclude_files` yet. Recording the allowlist artifact now means the contract is
-  pinned to a single named location before any consumer is wired in (see fn-18 round-3
-  redesign, which deliberately split this allowlist establishment from any `lint.py` edits).
+  The entry is **inert documentation** — no `internal/core/lint` consumer reads
+  `terminology_exclude_files` yet. Recording the allowlist artifact means the contract is
+  pinned to a single named location before any consumer is wired in.
 
 ## Acknowledgements
 

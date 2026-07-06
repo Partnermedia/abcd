@@ -47,11 +47,11 @@ Every memory page declares its source class via typed `source:` frontmatter. The
 
 | `source.class` | Upstream | Mutability |
 |---|---|---|
-| `session_memory` | Vendor session memory (Claude / OpenCode / future), distilled by `memory.py` adapter via `dev-sync memory` | Re-distilled on each sync; lossy upstream |
+| `session_memory` | Vendor session memory (Claude / OpenCode / future), distilled by the `internal/core/memory` adapter via `dev-sync memory` | Re-distilled on each sync; lossy upstream |
 | `external_pdf` | User-ingested PDF via `/abcd:memory ingest <path>` | Immutable post-ingest (original NOT stored unless `--keep-original`) |
 | `external_transcript` | User-ingested transcript via `/abcd:memory ingest <path>` | Immutable post-ingest |
 | `external_article` | User-ingested article (URL or local) via `/abcd:memory ingest <path-or-url>` | Immutable post-ingest |
-| `oracle_review` | Synced from `.abcd/development/activity/reviews/` (RP / Codex review artefacts) | Immutable post-sync |
+| `oracle_review` | Synced from `.abcd/development/activity/reviews/` (RepoPrompt / codex review artefacts) | Immutable post-sync |
 | `work_notes` | Curated from `.abcd/development/activity/notes/` (which is in turn curated from `.work/`) | User-mutable upstream |
 | `issue_ledger` | Synthesised entries from `.abcd/development/activity/issues/` (per itd-4 capture) | Immutable post-create |
 | `dredge_synthesis` | Cross-corpus synthesis output from `/abcd:dredge synth` (per itd-25 — a later phase) | Per-run; durable knowledge |
@@ -149,7 +149,7 @@ total_source_coverage_pct(source_hash) =
 | Input | Source | Behaviour |
 |---|---|---|
 | Existing memory pages | `.abcd/memory/<type>_<domain>_<slug>.md` | Read for cross-source dedup (topic-hash) |
-| Vendor session memory | `memory.py` adapter (Claude / OpenCode) | Distill into `session_memory` pages (existing behaviour, unchanged) |
+| Vendor session memory | `internal/core/memory` adapter (Claude / OpenCode) | Distill into `session_memory` pages (existing behaviour, unchanged) |
 | External sources (new at itd-36) | `/abcd:memory ingest` invocations | Distill into typed `external_*` pages with citation frontmatter |
 | `spec_modification_grammar` (new at itd-37) | A spec's `## Modification Grammar` section at spec completion | Append per-spec page; run domain-curator pass to update `modification_grammar_<domain>.md` |
 | `dredge_synthesis` (itd-25, a later phase) | `/abcd:dredge synth` runs | Write synthesised entries to memory with `source.class: dredge_synthesis` |
@@ -177,7 +177,7 @@ User-facing surface (per itd-36):
 
 itd-36 (above) is the **storage** model. itd-39 is the **retrieval** model: how the right memory reaches an agent at the right moment without overflowing context. It builds on infrastructure abcd already has rather than introducing a parallel system.
 
-**One engine, two payloads.** itd-3's `hooks/prompt_router_hook.py` is abcd's in-plugin adoption of [CARL][carl]'s recall engine — a `UserPromptSubmit` hook with keyword recall, signature dedup, and force-refresh-every-N. CARL's same engine drives two payloads: procedural rules *and* a memory layer. itd-3 adopted the rules payload; itd-39 adopts the memory payload. The hook is extended to scan each prompt against **both** `rules.json` domains **and** memory-page `recall:` frontmatter, and to inject matching memory pages alongside matching rules. Same scan, same dedup, same refresh discipline.
+**One engine, two payloads.** itd-3's `hooks/prompt_router_hook` is abcd's in-plugin adoption of [CARL][carl]'s recall engine — a `UserPromptSubmit` hook with keyword recall, signature dedup, and force-refresh-every-N. CARL's same engine drives two payloads: procedural rules *and* a memory layer. itd-3 adopted the rules payload; itd-39 adopts the memory payload. The hook is extended to scan each prompt against **both** `rules.json` domains **and** memory-page `recall:` frontmatter, and to inject matching memory pages alongside matching rules. Same scan, same dedup, same refresh discipline.
 
 **Context brackets — the bounded-retrieval control.** § 5's quotation budgets bound *ingest*; nothing yet bounds *retrieval*. itd-39 adopts CARL's context brackets — injection adapts to remaining context window:
 
@@ -202,7 +202,7 @@ See [`../../roadmap/intents/drafts/itd-39-scope-aware-memory-retrieval.md`](../.
 - [Karpathy LLM Wiki gist (April 2026)][karpathy-llm-wiki] — pattern source for the wiki organisation
 - [`research/related-work.md`](../../research/related-work.md#karpathy-llm-wiki--pattern-source-for-abcdmemory) — full prior-art comparison
 - [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — artefact-lifecycle taxonomy this file's lifecycle class derives from
-- [`02-adapters.md`](02-adapters.md) — `memory.py` semantic adapter (vendor-agnostic dispatcher)
+- [`02-adapters.md`](02-adapters.md) — `internal/core/memory` semantic adapter (vendor-agnostic dispatcher)
 - [CARL][carl] — recall-engine prior art; itd-3 adopts its rule payload, itd-39 its memory payload + context brackets
 - [`itd-39`](../../intents/drafts/itd-39-scope-aware-memory-retrieval.md) — scope-aware memory retrieval intent
 

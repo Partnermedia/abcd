@@ -1,6 +1,6 @@
 # `/abcd:ahoy` — Install / Update
 
-Mirrors flow-next-setup pattern. Built on a **detect → contract → render/apply**
+Built on a **detect → contract → render/apply**
 architecture: a single detection pass produces a versioned, machine-readable
 state contract; every sub-verb is a thin consumer of it. Detection logic lives
 in exactly one place so bare invocation, `dry-run`, `doctor`, and `install`
@@ -43,11 +43,9 @@ abcd manages exactly two kinds of folder, and keeps one user-scope directory:
                                  lifeboat/, logbook/, rp/
   CLAUDE.md                      role declaration (public: X / dev: Y)
   <repoA>/  <repoB>/           REPO — a single repository
-    .specstory/cli/config.toml  gitignored redirect shim
     CLAUDE.md                   marker block
 
 <anywhere>/<repo>/             REPO — a standalone single repository
-  .specstory/cli/config.toml    gitignored redirect shim
   CLAUDE.md                     marker block
 ```
 
@@ -58,7 +56,7 @@ then `install` acts on the matching kind:
 
 | Folder kind | What `install` does | `.abcd/` written |
 |---|---|---|
-| **repo** | the full repo install flow below; register in `workspaces.json` | **four-file carve-out** per fn-16 T1 + `05-internals/03-configuration.md:171-184` — repo install writes `<repo>/.abcd/config.json` and `<repo>/.abcd/rules.json` (no `meta.json` / `corpus.json` / workspace subdirs at repo scope; setup metadata lives at `config.json["meta"]`). Plus the CLAUDE.md/AGENTS.md marker block and gitignored `.specstory/` shim. |
+| **repo** | the full repo install flow below; register in `workspaces.json` | **four-file carve-out** per fn-16 T1 + `05-internals/03-configuration.md:171-184` — repo install writes `<repo>/.abcd/config.json` and `<repo>/.abcd/rules.json` (no `meta.json` / `corpus.json` / workspace subdirs at repo scope; setup metadata lives at `config.json["meta"]`). Plus the CLAUDE.md/AGENTS.md marker block. |
 | **workspace** | declare public/dev roles in the workspace `CLAUDE.md`; create the gitignored workspace `.work/` + the workspace `.abcd/` namespace; register the workspace and its repos in `workspaces.json` | `<workspace>/.abcd/` |
 
 There is **no host or development-environment layer**. A folder like
@@ -134,18 +132,21 @@ Steps, run in parallel where independent:
    are gated on the folder kind; a `repo` runs all of them, a `workspace` runs
    its subset.
 1. Resolve `${ABCD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}`.
-2. **Dependency probe** — `gitleaks` and `presidio` on PATH; `trufflehog` if
-   `scan.deep` is (or would be) enabled.
+2. **Adapter probe** — the native secret + PII scan needs no external tool;
+   this step only reports which **opt-in** scanners are on PATH: `gitleaks`
+   (deeper secret scan) and `trufflehog` if `scan.deep` is (or would be)
+   enabled.
 3. **`.abcd/` skeleton** — presence of `meta.json`, `config.json`, `rules.json`.
 4. **Identity** — `git rev-list --max-parents=0 HEAD` → root SHA. Cross-check
    against `~/.abcd/history/index.json`: is this SHA registered?
    Is there a sibling entry with a matching name/github but a *different* root
    SHA (the re-founding signal — see below)?
-5. **History-store wiring** — does the `~/.abcd/history/` store exist at all
-   (bootstrap gap if not)? Does `<root-sha>/{specstory,prompt-exports}/`
-   exist? Does `.specstory/cli/config.toml`'s `[local_sync] output_dir`
-   actually resolve to `index.json`'s recorded path? Is the registered entry's
-   `path` still accurate (mutable label — refresh if the repo moved)?
+5. **History-store wiring** — does the `~/.abcd/history/` store (abcd's native
+   local redacted transcript corpus, per
+   [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) exist at all
+   (bootstrap gap if not)? Does the `<root-sha>/` transcript directory exist? Is
+   the registered entry's `path` still accurate (mutable label — refresh if the
+   repo moved)?
 6. **Visibility state** — compare current `.gitignore` allowlist entries
    against the visibility table in
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
@@ -155,19 +156,14 @@ Steps, run in parallel where independent:
    resolves (inheritance chain — see § The three layers).
 8. **PATH symlink** — does `/usr/local/bin/abcd` exist, and does it point at
    this plugin, a different binary, or nothing?
-9. **`prompt-exports` symlink** — is `<repo>/prompt-exports` a symlink
-   resolving to `~/.abcd/history/<root-sha>/prompt-exports/`? RepoPrompt's
-   `export_response: true` writes ad-hoc oracle reviews to `<cwd>/prompt-exports/`
-   with a hardcoded, non-configurable path — the symlink is the only mechanism
-   that redirects those into the history store for `dev-sync reviews` to curate.
-10. **Hook manifest verification** (verify-only per fn-16 T1) — VERIFY that
-    `hooks/hooks.json` is present in the plugin install AND contains the three
-    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
-    each referencing the expected `prompt_router_hook.py` / `prompt_router_reset.py`
-    commands. A missing or malformed manifest surfaces as a non-resolvable
-    `plugin-owned` diagnostic gap. Neither install nor uninstall ever mutates
-    `hooks.json` — the manifest is plugin-static per fn-14 T7.
-11. **Version** — read `meta.json.setup_version`; classify `first-time` /
+9. **Hook manifest verification** (verify-only per fn-16 T1) — VERIFY that
+   `hooks/hooks.json` is present in the plugin install AND contains the three
+   required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
+   each referencing the expected prompt-router hook commands. A missing or
+   malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
+   gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
+   is plugin-static per fn-14 T7.
+10. **Version** — read `meta.json.setup_version`; classify `first-time` /
     `upgrade` / `current`. One input among many — never the sole gate.
 
 Each detected discrepancy becomes a **gap** with a stable `id`, a `category`,
@@ -176,15 +172,15 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 | `category` | Examples | Apply behaviour |
 |---|---|---|
 | `safe-autocreate` | `.abcd/` skeleton, `.abcd/bin/` scripts, history-store dirs | apply once category approved, no per-item prompt |
-| `config-change` | visibility, oracle backend, PATH symlink, specstory redirect | transparent confirm; skip-if-set with "current value" notice |
+| `config-change` | visibility, oracle adapter, PATH symlink | transparent confirm; skip-if-set with "current value" notice |
 | `plugin-owned` | CLAUDE.md/AGENTS.md marker block (per itd-3); `hooks/hooks.json` manifest verification (verify-only per fn-16 T1) | silent overwrite on marker drift; non-resolvable diagnostic for malformed/missing manifest |
-| `dependency` | `gitleaks`, `presidio`, `trufflehog` install | offer brew/pip with ONE category-level approval covering all three tools (per fn-16 T1 — per-CATEGORY, not per-tool) |
+| `dependency` | opt-in scanners: `gitleaks`, `trufflehog` install | offer brew with ONE category-level approval covering the opt-in scanners (per fn-16 T1 — per-CATEGORY, not per-tool) |
 | `user-state` | `index.json` entry, re-founding, stale/duplicate entries | guided; never auto-edit user-scope app-state, report extras read-only |
 
 ### Templates as files
 
 Every artefact `install` writes — the marker block, the `.abcd/rules.json`
-skeleton, the `.specstory/cli/config.toml` redirect shim, `.abcd/usage.md` —
+skeleton, `.abcd/usage.md` —
 comes from a canonical file under `scripts/abcd/defaults/`, never from inline
 prose in this surface or in the apply logic. If a template is stale, edit the
 template file. Drift detection (step 7) is only meaningful because the marker
@@ -211,7 +207,10 @@ category present, and applies the approved categories' gaps.
      and consequences (which directories will be tracked/untracked).
    - **If private:** `scan.deep` — probe `trufflehog`, offer install if missing.
    - **Docs target** (`CLAUDE.md` / `AGENTS.md` / Both / Skip).
-   - **Oracle backend** (RP / Codex / In-session / Auto — defaults to Auto).
+   - **Oracle** — host-delegated by default (abcd hands prompts to the host's
+     subagent dispatch); an opt-in oracle adapter (native / CLI / API / MCP)
+     can be wired instead (per
+     [adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)).
 5. **Apply visibility** — add/remove `.gitignore` allowlist entries to match
    the visibility table in
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
@@ -225,16 +224,13 @@ category present, and applies the approved categories' gaps.
    create the directory and write an initial `index.json` with its `schema` +
    `description` header (see
    [`05-internals/03-configuration.md`](../05-internals/03-configuration.md)
-   for both schemas and the two-registry cross-reference rule). Then create
-   `~/.abcd/history/<root-sha>/{specstory,prompt-exports}/`,
-   register the repo in `index.json` (refreshing the entry's `path` if the
-   repo moved), and install the gitignored `.specstory/cli/config.toml`
-   redirect from `scripts/abcd/defaults/specstory-cli-config.toml` — note the
-   template uses a `[local_sync]` section with `output_dir` (this is what
-   SpecStory's CLI actually reads). Finally create the `<repo>/prompt-exports`
-   symlink → `~/.abcd/history/<root-sha>/prompt-exports/` so ad-hoc oracle
-   reviews land in the store (per the
-   [history-store note](../research/notes/ahoy-history-store-manual-scaffolding.md)).
+   for both schemas and the two-registry cross-reference rule). Then create the
+   `~/.abcd/history/<root-sha>/` transcript directory (abcd's native local
+   redacted transcript corpus, per
+   [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) and register
+   the repo in `index.json` (refreshing the entry's `path` if the repo moved).
+   Transcript capture is native — no external tool and no per-repo redirect
+   shim.
 7. **Marker block** (`plugin-owned`) — inject/refresh the block between
    `<!-- BEGIN ABCD -->` / `<!-- END ABCD -->` in the target docs. **Silent
    overwrite on drift, per itd-3 — no prompt for hand-edits inside the block;
@@ -308,8 +304,8 @@ the Claude Code skill's two-pass approval protocol off `folder_kind` +
 **Doctor (`/abcd:ahoy doctor`):** runs the detection pass and reports every gap
 read-only, grouped by category. Unlike bare invocation it shows full gap detail
 including user-state checks — the history store exists and is writable, the
-`index.json` entry matches this root SHA, the `output_dir` redirect resolves,
-the symlink and hook are intact, and any stale/duplicate `index.json` entries.
+`index.json` entry matches this root SHA, the PATH symlink and hook manifest
+are intact, and any stale/duplicate `index.json` entries.
 The check users reach for after a repo rename, a machine migration, or "why
 aren't my transcripts showing up." Never mutates state, never auto-fixes
 user-scope app-state.
@@ -324,8 +320,8 @@ user-scope app-state.
   install` runs to completion, **then** the four-file repo carve-out
   (`.abcd/config.json` + `.abcd/rules.json` per fn-16 T1) is written, the
   visibility-driven `.gitignore` allowlist entries are present, the
-  history-store dirs + `index.json` entry + `.specstory/cli/config.toml`
-  redirect are present, the CLAUDE.md/AGENTS.md marker block from
+  history-store dirs + `index.json` entry are present, the
+  CLAUDE.md/AGENTS.md marker block from
   `scripts/abcd/defaults/claude-md-marker-block.md` is installed, and
   `hooks/hooks.json` is verified present (verify-only — never mutated).
 - **Given** a repo with `install` already run, **when** `/abcd:ahoy install`
@@ -338,13 +334,14 @@ user-scope app-state.
 - **Given** a repo with `install` run at an older `setup_version`, **when**
   `/abcd:ahoy install` runs, **then** `setup_version` is updated, the marker
   block is refreshed, and existing config keys are preserved (skip-if-set).
-- **Given** install is running and `gitleaks` or `presidio` is not on PATH,
-  **when** the dependency category is approved, **then** the user is shown the
-  brew/pip install commands with ONE category-level approval (per fn-16 T1 —
-  per-category, not per-tool); fn-16 NEVER auto-executes package managers.
-- **Given** RP MCP is unreachable, **when** the detection pass probes oracle
-  backends, **then** `oracle.backend` is set to `"codex"` (if Codex CLI
-  present) or `"in-session"` (otherwise), and a one-time hint is surfaced.
+- **Given** install is running and an opt-in scanner (`gitleaks` / `trufflehog`)
+  is not on PATH, **when** the dependency category is approved, **then** the user
+  is shown the brew install commands with ONE category-level approval (per fn-16
+  T1 — per-category, not per-tool); fn-16 NEVER auto-executes package managers.
+- **Given** no oracle adapter is wired, **when** the detection pass resolves the
+  oracle, **then** `oracle` stays **host-delegated** (abcd needs no API keys or
+  model config — it emits prompts the host runs, per adr-25), and an opt-in
+  adapter (native / CLI / API / MCP) can be configured later.
 - **Given** a repo whose root SHA is absent from `index.json` while a sibling
   entry matches its name/github, **when** `/abcd:ahoy install` runs, **then**
   detection flags a re-founding candidate, ahoy asks before linking, and on
@@ -359,18 +356,14 @@ user-scope app-state.
   plugin_root_status, repo_identity, signals, gaps}` per fn-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
-  `.specstory/cli/config.toml` `output_dir` no longer matches `index.json`,
-  **then** the user-state gap is reported read-only with both paths cited, and
-  no files are modified.
+  registered history-store `path` no longer matches `index.json`, **then** the
+  user-state gap is reported read-only with both paths cited, and no files are
+  modified.
 - **Given** a fresh machine with no `~/.abcd/`, **when** `/abcd:ahoy install`
   runs in a repo, **then** `~/.abcd/` is bootstrapped — the `history/` store
   (directory + `index.json` with `schema`/`description` header) and
   `workspaces.json` — before the repo is registered, so the user is not blocked
   by missing user-scope state.
-- **Given** `/abcd:ahoy install` runs in a repo, **when** the apply pass
-  completes, **then** `<repo>/prompt-exports` is a symlink resolving to
-  `~/.abcd/history/<root-sha>/prompt-exports/`, so RepoPrompt's
-  `export_response` writes land in the history store.
 - **Given** a registered repo that has been moved on disk, **when**
   `/abcd:ahoy install` or `doctor` runs, **then** detection notices the stale
   `index.json` `path` and `install` refreshes it (the root SHA is unchanged, so
