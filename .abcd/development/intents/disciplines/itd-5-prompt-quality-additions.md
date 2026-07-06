@@ -2,7 +2,7 @@
 id: itd-5
 slug: prompt-quality-additions
 kind: discipline
-kind_notes: "Cross-cutting prompt-quality gate; applied per-agent at v1.0.0 lock-time (one-shot self-improvement pre-flight) and continuously via lint_prompts.py + golden-test injection canaries. Every agent spec inherits this rule."
+kind_notes: "Cross-cutting prompt-quality gate; applied per-agent at v1.0.0 lock-time (one-shot self-improvement pre-flight) and continuously via lint_prompts + golden-test injection canaries. Every agent spec inherits this rule."
 suggested_kind: null
 spec_id: null
 created: 2026-05-04
@@ -20,7 +20,7 @@ Every `agents/*.md` prompt that abcd ships carries four things, enforced at agen
 1. **`prompt_version: <semver>` frontmatter field**, with a corresponding entry in `agents/CHANGELOG.md` recording the bump rationale and golden-test pass/fail delta.
 2. **A one-shot oracle self-improvement pre-flight at v1.0.0 lock-time** — the candidate prompt submitted to `lifeboat-oracle` for clarity-rewrite; if the rewritten variant passes the same goldens and is shorter by >10%, accept it; otherwise keep the candidate. Decision logged in the CHANGELOG as the agent's first entry.
 3. **At least one injection-canary fixture** in `agents/<name>/fixtures/` for every agent that reads untrusted input (transcripts, lifeboats, GitHub issues, commit messages, model-emitted reviews). The fixture's input contains a prompt-injection payload; the expected output demonstrates the injection was ignored. Failing the canary blocks the agent's spec from closing.
-4. **`capability_scope` frontmatter field** (added 2026-05-08 per idea-4 jagged-frontier review). Object: `{ task_classes: [<token>, ...], designed_for: "<free-text 1-line>" }`, with `task_classes` authored as a YAML inline list. `task_classes` is a closed-enum list of tokens the agent is designed to handle; `lint_prompts.py` validates set-membership against `scripts/abcd/schemas/task_classes.json`. **Static declaration only**; dynamic `known_failure_modes` events + plan-time semantic check + capability-aware pre-cascade selector are deferred to the Frontier Awareness intent.
+4. **`capability_scope` frontmatter field** (added 2026-05-08 per idea-4 jagged-frontier review). Object: `{ task_classes: [<token>, ...], designed_for: "<free-text 1-line>" }`, with `task_classes` authored as a YAML inline list. `task_classes` is a closed-enum list of tokens the agent is designed to handle; `lint_prompts` validates set-membership against `scripts/abcd/schemas/task_classes.json`. **Static declaration only**; dynamic `known_failure_modes` events + plan-time semantic check + capability-aware pre-cascade selector are deferred to the Frontier Awareness intent.
 
 The discipline applies to every agent spec — Pass A spine, Pass B chat-distiller, Pass C principle / artefact / brief / press-release agents, the audit agents, the embark / launch agents. abcd ships all 14 (now 15) agents under this rule.
 
@@ -36,7 +36,7 @@ The 2026 SOTA evidence supporting each:
 
 - **Versioning** — git-native versioning is the consensus default for solo-developer prompts-as-code (Braintrust 2026, Prompt Assay 2026). The minimum useful unit is an explicit `prompt_version` field plus a per-agent CHANGELOG entry rationale; the full diff-on-update workflow is rightly deferred to `itd-14`.
 - **Self-improvement pre-flight** — Anthropic's multi-agent research system reported a *40% task-time reduction* from having Claude rewrite its own tool descriptions. Even capturing a fraction of that across 14+ agents at lock-time is a one-shot win that compounds.
-- **Injection canaries** — OWASP LLM01 has been #1 for three consecutive years. abcd's threat surface includes attacker-influenced specstory transcripts (`chat-distiller`), hostile lifeboats (`embark-scaffolder`), and adversarial GitHub issues (`issue-scout`). A single canary fixture per affected agent is the cheapest possible regression test.
+- **Injection canaries** — OWASP LLM01 has been #1 for three consecutive years. abcd's threat surface includes attacker-influenced transcripts in the native transcript store (`chat-distiller`), hostile lifeboats (`embark-scaffolder`), and adversarial GitHub issues (`issue-scout`). A single canary fixture per affected agent is the cheapest possible regression test.
 
 The discipline is project-agnostic: any project shipping LLM-driven agents under abcd inherits this rule. Application projects with their own agents (e.g., a macOS app using Claude for an in-app assistant) get the same `prompt_version` + pre-flight + canary requirements without any framework-specific reasoning.
 
@@ -58,7 +58,7 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
   3. If oracle variant ≥ candidate on goldens AND shorter by >10%, accept oracle variant; otherwise keep candidate.
   4. Log decision + diff in `agents/CHANGELOG.md` as the agent's first entry.
 - Pre-flight is a one-time gate per agent at v1.0.0 lock-time, not a recurring step.
-- Documented as a checklist item in each agent's flow-next spec (after the "task #1: SOTA research" task already mandated by the brief).
+- Documented as a checklist item in each agent's native spec (after the "task #1: SOTA research" task already mandated by the brief).
 
 ### Add 3: Injection-canary fixtures
 
@@ -69,7 +69,7 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
 
 ### Add 4: `capability_scope` frontmatter field (added 2026-05-08 per idea-4)
 
-- Every `agents/*.md` carries a `capability_scope` object in YAML frontmatter alongside `prompt_version`. The example below is *illustrative* of the shape; the **machine-required form authors a `task_classes` inline list** — `task_classes: [spec_planning, audit]` on one line — because the frontmatter parser does not support a block list nested under a nested key. `lint_prompts.py` emits a blocker (`PQ005`) when `task_classes` is authored as a block list of `- token` items.
+- Every `agents/*.md` carries a `capability_scope` object in YAML frontmatter alongside `prompt_version`. The example below is *illustrative* of the shape; the **machine-required form authors a `task_classes` inline list** — `task_classes: [spec_planning, audit]` on one line — because the frontmatter parser does not support a block list nested under a nested key. `lint_prompts` emits a blocker (`PQ005`) when `task_classes` is authored as a block list of `- token` items.
 
   ```yaml
   capability_scope:
@@ -79,7 +79,7 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
 
 - `task_classes` is a closed-enum list of tokens drawn from the controlled vocabulary in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) (`Reserved vocabulary § task_classes`). The machine-readable source of truth is `scripts/abcd/schemas/task_classes.json`. Initial set (~10 tokens, PR-to-extend): `oracle_review`, `intent_review`, `spec_planning`, `code_rescue`, `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`, `cross_document_audit`.
 - `designed_for` is a free-text 1-line description of the agent's intended task class (for human readers — does not participate in lint, and is NEVER read to infer scope).
-- **Validation in `lint_prompts.py`** — strictly set-membership, NEVER inference:
+- **Validation in `lint_prompts`** — strictly set-membership, NEVER inference:
   - (i) `capability_scope` field is present and parses; `task_classes` is a non-empty inline list; `designed_for` is a string.
   - (ii) Every `task_classes` token is a member of the `task_classes.json` enum.
   - (iii) The lint MUST NOT attempt to classify "is this task in scope?" by parsing the prose of `designed_for` or a task description. That's the moment static slips into dynamic and the linter becomes the wrong tool. Set-membership only; anything fuzzier is the Frontier Awareness Role 2 sub-check.
@@ -92,7 +92,7 @@ Cite [Dell'Acqua et al. 2023 "Navigating the Jagged Technological Frontier"][jag
 
 ### Inheritance into every agent spec
 
-Every flow-next spec that ships an agent inherits all four rules above as acceptance gates. The spec's plan-review verifies:
+Every native spec that ships an agent inherits all four rules above as acceptance gates. The spec's plan-review verifies:
 
 - The agent's `agents/<name>.md` will carry `prompt_version: 1.0.0` at close.
 - The spec's task list includes the self-improvement pre-flight step before lock.
@@ -112,7 +112,7 @@ Every flow-next spec that ships an agent inherits all four rules above as accept
 
 ## Acceptance Criteria
 
-> _BDD format, per the [itd-1 discipline](itd-1-acceptance-gates.md). The criteria below describe how this discipline is checked — by `lint_prompts.py` continuously, and by `intent-fidelity-reviewer`'s single-document role on every agent spec._
+> _BDD format, per the [itd-1 discipline](itd-1-acceptance-gates.md). The criteria below describe how this discipline is checked — by `lint_prompts` continuously, and by `intent-fidelity-reviewer`'s single-document role on every agent spec._
 
 - **Given** a fresh checkout, **when** the prompt linter runs, **then** it passes only if every `agents/*.md` has `prompt_version: <semver>` and a corresponding `CHANGELOG.md` entry exists for `1.0.0`.
 - **Given** any agent at v1.0.0 lock-time, **when** the agent's spec closes, **then** `agents/CHANGELOG.md` contains an entry with the self-improvement pre-flight outcome (oracle variant accepted | candidate retained + reason).
@@ -123,7 +123,7 @@ Every flow-next spec that ships an agent inherits all four rules above as accept
 
 ## Open Questions
 
-- **Pre-flight oracle backend choice.** RP, Codex, or in-session subagent? Probably "whatever `oracle.py` resolves" (per `itd-6`/`itd-2`), but pre-flight may want a deterministic backend so the chosen-variant decision is reproducible. Resolve during the spec's T1 of the agent being locked.
+- **Pre-flight oracle backend choice.** Host-delegated in-session, the opt-in RepoPrompt adapter, or Codex? Probably "whatever the `oracle` resolver returns" (per `itd-6`/`itd-2`), but pre-flight may want a deterministic backend so the chosen-variant decision is reproducible. Resolve during the spec's T1 of the agent being locked.
 - **CHANGELOG file location.** Single consolidated `agents/CHANGELOG.md` (proposed above) or per-agent `agents/<name>/CHANGELOG.md`? Single file scales worse but reads better at a glance. Resolve during the first agent spec's T1.
 - **Canary payload set canonicalisation.** Three template payloads listed above — do we lock them as a shared `tests/fixtures/injection-canaries/` directory, or let each agent's spec improvise? Shared lock is more rigorous; per-agent improvisation is faster. Lean shared, confirm during T1.
 - **Bumping version on the SOTA-audit oracle's recommendations.** When the periodic SOTA audit (D component) flags drift, does it auto-bump? Probably no — bumping is a human act tied to a behaviour change; the SOTA audit recommends, doesn't bump. Resolve during T1.

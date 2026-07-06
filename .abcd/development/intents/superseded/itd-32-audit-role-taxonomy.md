@@ -17,7 +17,7 @@ reclassification_history:
 <!-- NOTE: `status` field intentionally omitted — supersession is encoded by directory location (`superseded/`) per `04-surfaces/05-intent.md § 1`. `kind` retains the value at retirement (matches `kind_at_supersession`); the schema's three valid kinds are `standalone | bundle-member | discipline`. -->
 
 
-> **⚠️ Superseded by [itd-31](../drafts/itd-31-cross-document-fidelity-reviewer.md).** This intent's premise — a unified `/abcd:audit` surface bundling all review/audit roles — was dissolved when the round-2 command-structure review split the three intent-fidelity-reviewer roles into three distinct verbs under `/abcd:intent` (review, consistency, shape). The single canonical audit-taxonomy file at `brief/05-internals/07-audits.md` is no longer needed because each role's inputs/outputs/triggers are documented inline in `05-internals/01-agents.md` against the relevant agent. Preserved as historical record per the supersession lifecycle in `04-surfaces/05-intent.md § 1`.
+> **⚠️ Superseded by [itd-31](itd-31-cross-document-fidelity-reviewer.md).** This intent's premise — a unified `/abcd:audit` surface bundling all review/audit roles — was dissolved when the round-2 command-structure review split the three intent-fidelity-reviewer roles into three distinct verbs under `/abcd:intent` (review, consistency, shape). The single canonical audit-taxonomy file at `brief/05-internals/07-audits.md` is no longer needed because each role's inputs/outputs/triggers are documented inline in `05-internals/01-agents.md` against the relevant agent. Preserved as historical record per the supersession lifecycle in `04-surfaces/05-intent.md § 1`.
 
 # Every Audit In Abcd Knows What It Audits, By What, And Against What
 

@@ -70,7 +70,7 @@ None of these fit the existing kinds cleanly:
   There's no per-artefact enforcement, just a standing fact.
 
 In abcdDev today these decisions fall through three gaps: the brief (meant to
-stay high-level), individual flow-next specs (the choice leaks in as a
+stay high-level), individual native specs (the choice leaks in as a
 side-effect of the feature that needed it), or nowhere at all (genuinely
 invisible plumbing). The cost: no canonical record; the decision and its
 rationale are entangled with the code that consumed them — the wrong shape,
@@ -123,7 +123,7 @@ language version. The verdict generalises.
   plan/reclassify guard).
 - `decision` is therefore NEVER written to the schema `kind` or
   `kind_at_supersession`, NEVER enters the `drafts/→planned/→shipped/`
-  lifecycle, NEVER gets a flow-next spec, and is referenced downstream as
+  lifecycle, NEVER gets a native spec, and is referenced downstream as
   `adr-N` (which fn-48's RC linkage lint, matching only `itd-N` tokens, already
   ignores).
 

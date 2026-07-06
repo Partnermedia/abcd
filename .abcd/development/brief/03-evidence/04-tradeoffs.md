@@ -1,6 +1,8 @@
 # Tradeoffs Considered
 
-> **Status: PARTIAL.** Tradeoff-shaped content (decisions made + alternatives weighed, with rationale) accumulates here as the project progresses. Inflection-point decisions also live in [`../decisions/adrs/`](../decisions/adrs/) — this file is the lightweight rolodex, the ADRs are the deep dive.
+> **Status: PARTIAL.** Tradeoff-shaped content (decisions made + alternatives weighed, with rationale) accumulates here as the project progresses. Inflection-point decisions also live in [`../decisions/adrs/`](../../decisions/adrs/) — this file is the lightweight rolodex, the ADRs are the deep dive.
+
+> **Historical evidence — the architecture has moved on.** Several tradeoffs recorded below predate the rebuild and describe mechanisms the new architecture overturns — notably the fixed oracle cascade (RP → Codex → in-session) and the multi-pass agent pipeline framing. The oracle is now **host-delegated by default** with opt-in adapters ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), and the bundled tools those tradeoffs assumed are now **pluggable adapters over native defaults** ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). This content is **kept as evidence** of the decisions made and the alternatives weighed at the time — read the "Reconsider when" lines against the current ADRs, not as live design.
 
 ## Purpose
 

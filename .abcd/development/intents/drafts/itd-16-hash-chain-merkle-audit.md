@@ -20,7 +20,7 @@ updated: 2026-05-08
 
 ## Press Release
 
-> **abcd ships `/abcd:audit` — a compliance-grade audit umbrella with a tamper-evident hash chain over the project's conversation and edit history as its default application.** `/abcd:audit` is the *whole*; specific verifications register as sub-verbs that share the substrate. The default application — `/abcd:audit chain` — covers every Claude Code session transcript, every flow-next spec state transition, every disembark/embark/launch/intent invocation, and every file edit committed under abcd's lifecycle hooks. JCS-canonicalised (RFC 8785) entries land in a Merkle chain at `.abcd/logbook/audit/chain-<ts>/`. Sibling sub-verbs (`/abcd:audit lifeboat <path>` per itd-35; future audit applications) reuse the substrate's primitives without re-implementing them. Bare `/abcd:audit` shows status, last-verified timestamp, chain head, and the registered sub-verbs (per the universal bare-command-as-help convention) — it never mutates state. The chain-specific verification report comes from `/abcd:audit chain`. Mismatches surface immediately with the offending entry's path, line, and expected vs observed hash.
+> **abcd ships `/abcd:audit` — a compliance-grade audit umbrella with a tamper-evident hash chain over the project's conversation and edit history as its default application.** `/abcd:audit` is the *whole*; specific verifications register as sub-verbs that share the substrate. The default application — `/abcd:audit chain` — covers every Claude Code session transcript, every native spec state transition, every disembark/embark/launch/intent invocation, and every file edit committed under abcd's lifecycle hooks. JCS-canonicalised (RFC 8785) entries land in a Merkle chain at `.abcd/logbook/audit/chain-<ts>/`. Sibling sub-verbs (`/abcd:audit lifeboat <path>` per itd-35; future audit applications) reuse the substrate's primitives without re-implementing them. Bare `/abcd:audit` shows status, last-verified timestamp, chain head, and the registered sub-verbs (per the universal bare-command-as-help convention) — it never mutates state. The chain-specific verification report comes from `/abcd:audit chain`. Mismatches surface immediately with the offending entry's path, line, and expected vs observed hash.
 >
 > "When an auditor asked 'can you prove the project's history is intact?' we used to say 'check git'," said Dave, compliance lead. "git is great for code provenance but says nothing about the agent conversations and tool invocations that produced the code. `/abcd:audit` is the missing half: every conversation, every edit, hashed and chained. And because `/abcd:audit` is an umbrella, when we needed lifeboat integrity verification we got `/abcd:audit lifeboat` for free — same substrate, different target."
 
@@ -28,13 +28,13 @@ updated: 2026-05-08
 
 **`/abcd:audit` is the whole; specific verifications are applications.** This intent ships the *whole*: the umbrella verb, the substrate (JCS, UUIDv7, Merkle), the bare-verb dispatcher behaviour, and the default conversation/edit-chain application. Future audit needs (lifeboat integrity per itd-35, schema audit, prompt-quality audit) register as sub-verbs that share this substrate rather than re-implementing chain mechanics from scratch.
 
-abcd captures a lot of project history — `.specstory/` transcripts, `.flow/` spec states, `.abcd/logbook/` per-command reports, `.abcd/development/activity/` curated artefacts. That history is **legible** but not **tamper-evident**: anyone with filesystem access can edit a transcript or rewrite a logbook entry post-hoc, and a casual reader has no way to detect it. For most uses this is fine — abcd's audience is solo developers and small teams operating in good faith.
+abcd captures a lot of project history — the native transcript store's transcripts, the native spec store's spec states, `.abcd/logbook/` per-command reports, `.abcd/development/activity/` curated artefacts. That history is **legible** but not **tamper-evident**: anyone with filesystem access can edit a transcript or rewrite a logbook entry post-hoc, and a casual reader has no way to detect it. For most uses this is fine — abcd's audience is solo developers and small teams operating in good faith.
 
 For compliance-sensitive contexts (regulated industries, third-party handoffs, post-incident audits, regulated AI governance), the **non-repudiability** of project history becomes a hard requirement. Auditors need to prove that what's in the repo today is what was written yesterday — that the conversations, the agent decisions, and the resulting edits haven't been silently rewritten.
 
 The mechanism is well-established (lifted from `~/.abcd/` v0's F-031 / F-032 hash-chain work): JCS-canonicalised JSON for deterministic serialisation, UUIDv7 IDs for time-ordered entries, SHA-256 segment hashes chained via a Merkle tree to a single root hash. The trail covers four artefact classes:
 
-1. **Conversation transcripts** (`.specstory/*.md`) — every session as a discrete entry
+1. **Conversation transcripts** (native transcript store) — every session as a discrete entry
 2. **Lifecycle hook events** (intent moves drafts→planned→shipped, capture state changes, ahoy install/upgrade) — every state transition
 3. **Tool invocations** (`/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent plan/ship/review/consistency/shape`, `/abcd:capture`, `/abcd:grill`) — every command run
 4. **File edits** committed under abcd's pre-commit hook — the diffs that actually changed the repo
@@ -43,7 +43,7 @@ abcd doesn't need to host a separate audit service: the chain lives in `.abcd/lo
 
 ## What's In Scope
 
-- **`scripts/abcd/hash_chain.py`** — port the chain mechanics from `~/.abcd/scripts/hash-chain.py` patterns. JCS RFC 8785 canonicalisation; UUIDv7 RFC 9562 IDs; SHA-256 segment hashes; Merkle root anchoring.
+- **Native hash-chain mechanics** — port the chain mechanics from `~/.abcd/scripts/hash-chain.py` patterns. JCS RFC 8785 canonicalisation; UUIDv7 RFC 9562 IDs; SHA-256 segment hashes; Merkle root anchoring.
 - **Hook integration**: ahoy installs a pre-commit hook + a Stop hook that append entries to the active chain segment as transcripts close, lifecycle hooks fire, and edits commit. Append-only; no in-place rewrites.
 - **Chain segmentation**: each segment covers one calendar day (configurable). Segment-to-segment chaining anchors yesterday's segment in today's, so the chain head transitively covers all history.
 - **`/abcd:audit` (bare)** — status+help only per the universal bare-command-as-help convention. Shows chain head, last-verified timestamp, registered sub-verbs (`chain`, `lifeboat`, future), and suggested next actions. Never mutates state.

@@ -5,7 +5,7 @@ spec_id: fn-79-launch-pre-flight-gate-suite
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
-related_adrs: []
+related_adrs: [adr-28]
 created: 2026-07-01
 updated: 2026-07-01
 prd_path: ".abcd/intents/itd-65/prd.md"
@@ -35,7 +35,7 @@ warrants_assumed:
 
 ## Why This Matters
 
-abcd's whole thesis is routing the risks a non-expert cannot see to a fail-closed gate ([[itd-62-pluggable-safety-gate]]). Its OWN publish path is the highest-stakes instance of that: a launch snapshot pushes code to a public repo, where a leaked home-dir path, real email, or committed secret is irreversible. The canonical launch brief (`04-surfaces/04-launch.md` § 1) already specifies the full gate suite; fn-64 built the secret/PII floor; but the custom-regex identity layer, marker-block sanity, plugin/marketplace validation, and dirty-tree refusal are still stubs. Until they are real, `launch ship` cannot honestly claim to gate a promotion — and the project standards (no home-dir paths, no real emails, no usernames in file content) have no enforcement at the one moment they matter most. This closes that honesty gap the same way fn-74 closed the doc-fidelity one: make the built reality match what the surface implies.
+abcd's whole thesis is routing the risks a non-expert cannot see to a fail-closed gate ([[itd-62-pluggable-safety-gate]]). Its OWN publish path is the highest-stakes instance of that: a launch cuts a curated release from the single repo — packaging that excludes `.abcd/**` ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)) — and publishes it, where a leaked home-dir path, real email, or committed secret is irreversible. The canonical launch brief (`04-surfaces/04-launch.md` § 1) already specifies the full gate suite; fn-64 built the secret/PII floor; but the custom-regex identity layer, marker-block sanity, plugin/marketplace validation, and dirty-tree refusal are still stubs. Until they are real, `launch ship` cannot honestly claim to gate a promotion — and the project standards (no home-dir paths, no real emails, no usernames in file content) have no enforcement at the one moment they matter most. This closes that honesty gap the same way fn-74 closed the doc-fidelity one: make the built reality match what the surface implies.
 
 ## What's In Scope
 
@@ -83,5 +83,5 @@ abcd's whole thesis is routing the risks a non-expert cannot see to a fail-close
 
 - Should the custom-regex identity layer live inside the fn-64 gate module (extending its config) or as a sibling gate the orchestrator composes? (Reuse vs separation.)
 - What is the exact GitHub-username source — git config `user.name`/`user.email`, remote URLs, or a maintained denylist — and how are legitimate org handles in docs distinguished from leaked personal ones?
-- Does the documentation auditor reuse the existing `flow-next:prime` / doc-scout machinery, or is it a launch-specific pass?
+- Does the documentation auditor reuse the existing doc-scout machinery, or is it a launch-specific pass?
 - Where does `--allow-doc-warnings` sit relative to a strict CI invocation of the same suite?

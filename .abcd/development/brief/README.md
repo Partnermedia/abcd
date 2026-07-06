@@ -1,6 +1,6 @@
 # abcd Plug-in — Design Brief
 
-This is the canonical design brief for the abcd plug-in. The brief reflects the project's *current* state — it is not versioned, snapshotted, or archived in this directory. History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs) (ADRs); see [adr-5](../decisions/adrs/adr-5-brief-is-current-state.md) for why.
+This is the canonical design brief for the abcd plug-in. The brief reflects the project's *current* state — it is not versioned, snapshotted, or archived in this directory. History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs) (ADRs); see [adr-5](../decisions/adrs/0005-brief-is-current-state.md) for why.
 
 It is split across numbered folders for concurrent editing, diff legibility, and agent-context-budget friendliness.
 

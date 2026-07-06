@@ -21,7 +21,7 @@ updated: 2026-05-04
 
 The `~/ABCDevelopment/.claude/CLAUDE.md` `Mandatory Issue Recording` rule is correct in spirit but unreliable in practice. Reviews and manual testing surface nitpicks that vanish unless the persona explicitly tells the agent to log them. When they *are* logged, `.work/issues.md` is gitignored, per-repo, free-form Markdown — there's no way to ask "what categories of finding recur across my repos and over time?".
 
-Two distinct problems compound: **capture is unreliable** (during-work) and **synthesis doesn't exist** (over-time, cross-repo). They have very different value-timing: capture earns its keep on day one; synthesis only earns its keep once a meaningful ledger has accumulated. This intent ships **capture only**. The cross-corpus synthesist that uses the ledger as input is a separate intent ([itd-25](itd-25-dredge-cross-corpus-synthesist.md)), deferred until the ledger has sufficient volume.
+Two distinct problems compound: **capture is unreliable** (during-work) and **synthesis doesn't exist** (over-time, cross-repo). They have very different value-timing: capture earns its keep on day one; synthesis only earns its keep once a meaningful ledger has accumulated. This intent ships **capture only**. The cross-corpus synthesist that uses the ledger as input is a separate intent ([itd-25](../drafts/itd-25-dredge-cross-corpus-synthesist.md)), deferred until the ledger has sufficient volume.
 
 This split closes a separate loop on `/abcd:capture` as a command name. The maritime-metaphor review for `/abcd:intent` established that "capture" is too neutral for product-framing intent work — but it's *exactly right* for issues, where the verb genuinely shouldn't pre-commit to whether a finding is a bug, nitpick, or systemic pattern. The synthesist (itd-25) decides that later. So abcd lands `/abcd:capture` not as a rename of `/abcd:intent` but as its sibling. Two meta-development surfaces with distinct jobs: `intent` frames product, `capture` ingests signal. `capture` and `intent` are metaphor-exempt; `dredge` (itd-25) rejoins the maritime convention as the cross-corpus counterpart to `lifeboat`.
 
@@ -48,7 +48,7 @@ This split closes a separate loop on `/abcd:capture` as a command name. The mari
 
 ## What's Out of Scope
 
-- **`/abcd:dredge` cross-corpus synthesist** — a separate intent ([itd-25](itd-25-dredge-cross-corpus-synthesist.md)). Capture's value is immediate (every captured `iss-N` entry is useful from day one); dredge's value depends on having an accumulated ledger to synthesise. Shipping dredge without a meaningful ledger produces a synthesist with nothing to synthesise.
+- **`/abcd:dredge` cross-corpus synthesist** — a separate intent ([itd-25](../drafts/itd-25-dredge-cross-corpus-synthesist.md)). Capture's value is immediate (every captured `iss-N` entry is useful from day one); dredge's value depends on having an accumulated ledger to synthesise. Shipping dredge without a meaningful ledger produces a synthesist with nothing to synthesise.
 - **`issue-synthesist` agent** — belongs to itd-25 (`/abcd:dredge`).
 - **Auto-capture hooks** (the "B" tier of the design exploration). Stop-hook / PostToolUse heuristic extraction of `iss-N`-shaped statements from session output. Brittle on output-style drift; risks false-positive fatigue. Defer until the ledger has accumulated real usage data showing whether the manual path's volume is sufficient.
 - **Cross-repo `iss-N` copying.** Entries stay in the repo where they were captured. No "promote to a global ledger" behaviour.

@@ -70,7 +70,7 @@ This intent is **project-agnostic**: every abcd project ships intents whose deli
 - *Given* a fidelity review returns `INCONCLUSIVE` (the fail-closed result of a malformed or unreachable reviewer), *when* the loop processes it, *then* it is recorded as today — `INCONCLUSIVE` does **not** summon the product thinker and does **not** itself trigger replan (it is a "could not run the audit" signal, not a "the intent is impossible" signal).
 - *Given* an intent left at the default `audit_mode: record-only`, *when* a fidelity review returns `NOT_MET`, *then* behaviour is unchanged from today — the verdict is recorded to `## Audit Notes` and no re-work is triggered.
 - *Given* an intent reaches `UNACHIEVABLE` (loop exit) or its manual verification is rejected (wrong-criteria replan), *when* the product thinker takes it up, *then* they use the `/abcd:intent grill` skill to think the replan through, and the recorded `why-unachievable` / rejection justification seeds that grill session.
-- *Given* the on-close lifecycle hook (`intent_lifecycle.py`), *when* any of these modes is active, *then* the hook remains a pure data function (no subprocess, no oracle dispatch) — the mode logic lives in the drainer/policy layer.
+- *Given* the on-close lifecycle hook (`intent_lifecycle`), *when* any of these modes is active, *then* the hook remains a pure data function (no subprocess, no oracle dispatch) — the mode logic lives in the drainer/policy layer.
 
 ## Resolved (grill 2026-06-02)
 
@@ -104,7 +104,7 @@ itd-50 was implemented by `fn-52-audit-loop-to-acceptance-modes` (tasks .1–.3)
 
 | itd-50 Acceptance Criterion | Status | Where delivered |
 |---|---|---|
-| `loop-to-acceptance` re-opens + re-reviews a `NOT_MET` until `MET` or budget exhausted | Satisfied | fn-52.2 — `audit_loop_policy.decide_loop_action` + the queue-layer re-enqueue in `review_queue._apply_loop_policy` (reopen de-risk gate: no clean flowctl reopen surface, so the loop re-enqueues at the queue layer) |
+| `loop-to-acceptance` re-opens + re-reviews a `NOT_MET` until `MET` or budget exhausted | Satisfied | fn-52.2 — `audit_loop_policy.decide_loop_action` + the queue-layer re-enqueue in `review_queue._apply_loop_policy` (reopen de-risk gate: no clean native spec-store reopen surface, so the loop re-enqueues at the queue layer) |
 | budget-exhausted / unmeetable → `UNACHIEVABLE` rollup, loop stops, written explanation + replan invitation naming both roles, no rollback, no machine-authored replan | Satisfied | fn-52.2 — `UNACHIEVABLE` is a rollup-layer terminal; `write_replan_invitation` writes the `why-unachievable` block; intent stays `shipped/` |
 | machine criteria all `MET` → manual-verification offered, recorded as a receipt distinct from the machine verdict | Satisfied | fn-52.3 — `verification_receipt.write_receipt` (`offered` receipt under `.abcd/logbook/audit/verify-<ts>/`, never merged into `## Audit Notes`) |
 | `MET` but product thinker rejects (wrong criteria) → replan path, NOT a synthetic `NOT_MET` | Satisfied | fn-52.3 — `verification_receipt.record_rejection_replan` re-enters the SHARED replan surface (one writer, two entry points); test-pinned that no `NOT_MET` is written |
@@ -112,6 +112,6 @@ itd-50 was implemented by `fn-52-audit-loop-to-acceptance-modes` (tasks .1–.3)
 | `INCONCLUSIVE` → recorded as today, no summons, no replan | Satisfied | fn-52.2 — `decide_loop_action` fail-closed branch; never flips to `UNACHIEVABLE` |
 | `record-only` (default) → behaviour unchanged from today | Satisfied | fn-52.1 — absent mode resolves to `record-only`; queue-entry shape regression-pinned |
 | `UNACHIEVABLE` / rejection seeds `/abcd:intent grill` | Satisfied | fn-52.2 / .3 — both replan blocks name the grill seed |
-| on-close hook stays a pure data function (no subprocess / oracle) | Satisfied | The mode logic rides the fn-43 drainer / policy layer; `intent_lifecycle.py` is untouched by the loop |
+| on-close hook stays a pure data function (no subprocess / oracle) | Satisfied | The mode logic rides the fn-43 drainer / policy layer; `intent_lifecycle` is untouched by the loop |
 
 **Open questions (now resolved):** loop budget = one re-open+re-review cycle per iteration, default `3` (fn-52.1 § Decision context); replan surface = no `drafts/` move, a `why-unachievable` + replan block in `## Audit Notes` with the intent kept in `shipped/` (fn-52.2 R4); manual-verification sign-off = the receipt schema `{intent_id, machine_rollup, state, justification?, recorded_by_role, ts}` with the `rejected_wrong_criteria` state carrying the justification to the shared replan surface (fn-52.3 R5).

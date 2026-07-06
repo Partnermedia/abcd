@@ -20,11 +20,11 @@ updated: 2026-05-16
 
 ## Why This Matters
 
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) made the **phase** abcd's sequencing layer — an ordered stretch of work, bundling intents and plumbing, ending in a milestone, with a product-authored `## Expectation` and `## Phase Acceptance`. But adr-9 gave sequencing a *home*, not a *negotiator*. Which intent goes in which phase, and in what order phases run, stays the product thinker's unchallenged judgement.
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) made the **phase** abcd's sequencing layer — an ordered stretch of work, bundling intents and plumbing, ending in a milestone, with a product-authored `## Expectation` and `## Phase Acceptance`. But adr-9 gave sequencing a *home*, not a *negotiator*. Which intent goes in which phase, and in what order phases run, stays the product thinker's unchallenged judgement.
 
 The product thinker holds the whole product in their head — and so they want everything, soon. abcd has adversarial readers at every other grain: `/abcd:intent grill` interrogates an intent before it is planned; dual-backend review stress-tests a spec; `intent-fidelity-reviewer` checks delivered reality against acceptance. The phase-planning grain has none. This intent adds it.
 
-The danger is a fluent fake. An agent asked "what are the trade-offs?" will invent plausible ones, and a hallucinated trade-off spends the product thinker's trust on a fiction. So this intent's negotiator works the way `intent-fidelity-reviewer` and the grill skill work — **Socratic where it questions, grounded where it asserts** (per [adr-10](../../decisions/adrs/adr-10-phase-negotiator-grounded-tradeoffs.md)). It surfaces costs the product thinker can verify, and asks — rather than asserts — wherever it cannot ground the claim.
+The danger is a fluent fake. An agent asked "what are the trade-offs?" will invent plausible ones, and a hallucinated trade-off spends the product thinker's trust on a fiction. So this intent's negotiator works the way `intent-fidelity-reviewer` and the grill skill work — **Socratic where it questions, grounded where it asserts** (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md)). It surfaces costs the product thinker can verify, and asks — rather than asserts — wherever it cannot ground the claim.
 
 ## What's In Scope
 

@@ -34,7 +34,7 @@ Three decision-record surfaces, each with a distinct job:
 For an intent-driven configuration like abcd, the natural flow is:
 
 ```
-itd-N (proposed work) ──► rfc-N (community discussion) ──► itd-N (refined or new) ──► fn-N (spec) ──► ship
+itd-N (proposed work) ──► rfc-N (community discussion) ──► itd-N (refined or new) ──► native spec (native store / ccpm) ──► ship
                                                                                         │
                                                                                         ▼
                                                                               adr-N (retrospective record,
@@ -132,7 +132,7 @@ frontmatter links).
 | `rfcs/rfc-N-<slug>.md` | `spawned_intents: [itd-N, ...]` (if the RFC's resolution produced new intents) |
 | `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `related_rfcs: [rfc-N, ...]` (when an intent references an RFC) |
 
-`intent_lint.py` (per itd-4 + brief § 11) extends to verify these reciprocally.
+A Go lint (per itd-4 + brief § 11) extends to verify these reciprocally.
 
 ---
 

@@ -5,7 +5,7 @@ This brief describes the work bundled into the six planned phases (see [`roadmap
 **In a later phase.** The set below is the live `drafts/` corpus minus the
 intents already scoped into a planned phase (a phase doc's `## Scope` section is
 the single source of truth for which intents a phase bundles — see
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md)). It is **not**
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)). It is **not**
 hand-counted: derive set membership from the filesystem and subtract the
 phased-in IDs, rather than maintaining a total that re-drifts —
 
@@ -46,7 +46,7 @@ historical note at the end of this section, not here.)
 - itd-18 — `.claude/settings.local.json` permission templates
 - itd-19 — ABCDevelopment stage-aware defaults
 - itd-21 — `/abcd:init-project` empty-repo scaffolding
-- itd-22 — OpenCode harness implementation
+- itd-22 — OpenCode harness implementation — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with a transport-agnostic Go core ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front doors, a second harness is just another host over the same core, not a special port
 - itd-23 — Spec Kit interop
 - itd-25 — `/abcd:dredge` cross-corpus synthesist (split from itd-4 capture)
 - itd-26 — `/abcd:loot` OSS-vendor with provenance (pulled to an earlier phase on 2026-05-08)
@@ -55,8 +55,8 @@ historical note at the end of this section, not here.)
 - itd-33 — Agent-communication infrastructure (multi-agent coordination via `.abcd/coordination/`)
 - itd-35 — `/abcd:audit lifeboat <path>` lifeboat-integrity verification (sibling sub-verb under itd-16's umbrella; captured 2026-05-08)
 - itd-39 — Scope-aware memory retrieval (extends itd-3's recall hook to the memory store)
-- itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/adr-10-phase-negotiator-grounded-tradeoffs.md))
-- itd-43 — Spec-terminology rename (one canonical word for a specced block of work) — **in flight on fn-65; the remaining sweep.** fn-7 shipped only the atomic `epic_id`→`spec_id` field rename ([adr-11](../../decisions/adrs/adr-11-spec-terminology-rename.md)); the broader surface/prose/glossary sweep was deliberately parked in this intent and is now delivered by **fn-65** (lint enforcement + prose sweep). The intent's `spec_id` points at fn-65. Stays in `drafts/` until fn-65 closes.
+- itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
+- itd-43 — Spec-terminology rename (one canonical word for a specced block of work) — **in flight on fn-65; the remaining sweep.** fn-7 shipped only the atomic `epic_id`→`spec_id` field rename ([adr-11](../../decisions/adrs/0011-spec-terminology-rename.md)); the broader surface/prose/glossary sweep was deliberately parked in this intent and is now delivered by **fn-65** (lint enforcement + prose sweep). The intent's `spec_id` points at fn-65. Stays in `drafts/` until fn-65 closes.
 - itd-44 — A fourth intent kind for infrastructure choices the product thinker wants to record
 - itd-45 — `.work/issues.md` cleanup bundle (sweep the workshop before a later phase)
 - ~~itd-46~~ — `/abcd:intent "<text>"` ↔ `/abcd:capture "<text>"` symmetric create paths — **shipped in fn-30 (LIVE).** Draft retained pending the `drafts/` → `shipped/` lifecycle move.
@@ -65,13 +65,13 @@ historical note at the end of this section, not here.)
 - itd-49 — Flow-state drift becomes visible before it compounds
 - itd-50 — The audit loop drives an intent to acceptance — or calls for a replan
 - itd-51 — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
-- itd-52 — abcd warns when you reach past it into a tool it was built to hide
+- itd-52 — abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired (adr-22 supersedes adr-15)
 - itd-53 — A shipped intent no longer drifts out of audit just because nobody ran the review
 - itd-54 — abcd's largest source files become navigable packages without changing behavior
 - itd-55 — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
-- itd-56 — One command re-vendors upstream and restores the abcd overlay in a single guarded step
+- itd-56 — One command re-vendors upstream and restores the abcd overlay in a single guarded step — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: no external tool re-vendors itself onto abcd's state, so there is no overlay to re-apply
 
-**Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied RP reviews → `.flow/reviews/`), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
+**Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied reviews in the native spec review store), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
 
 **Later-phase additions captured post-brief (2026-05-07):** itd-30, itd-31, itd-32, and itd-33 were captured in the same audit pass. itd-30 and itd-33 remain in the later-phase list above; itd-31 and itd-32 have since been superseded (itd-31 absorbed by itd-48 and shipped in fn-29; itd-32 superseded by itd-31) and moved to `intents/superseded/`, so they are no longer in the canonical later-phase set above — this note records their capture timing and supersession for the brief's history. (See `superseded/itd-31-cross-document-fidelity-reviewer.md` and `superseded/itd-32-audit-role-taxonomy.md`.)
 

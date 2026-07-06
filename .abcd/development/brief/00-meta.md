@@ -1,6 +1,6 @@
 # Meta
 
-This file holds **stable conventions** for the brief itself: directory structure, file-naming rules, and the brief↔lifeboat shape contract. The brief reflects the project's *current* state at all times — not versioned, not archived in this directory; see [adr-5](../decisions/adrs/adr-5-brief-is-current-state.md). History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs).
+This file holds **stable conventions** for the brief itself: directory structure, file-naming rules, and the brief↔lifeboat shape contract. The brief reflects the project's *current* state at all times — not versioned, not archived in this directory; see [adr-5](../decisions/adrs/0005-brief-is-current-state.md). History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs).
 
 ## Directory structure
 
@@ -29,4 +29,4 @@ There is one canonical skeleton, used three ways. The mapping table between brie
 
 ## No archive directory
 
-The brief does not maintain an `archive/<NN>/` directory of prior iterations. Per [adr-5](../decisions/adrs/adr-5-brief-is-current-state.md), the live `brief/` directory IS the brief; `git log` covers history; ADRs cover inflection-point rationale. Disembark snapshots (per [adr-4](../decisions/adrs/adr-4-lifeboat-as-regenerable-output.md)) provide the audit-traceable history chain when a forensic snapshot is needed.
+The brief does not maintain an `archive/<NN>/` directory of prior iterations. Per [adr-5](../decisions/adrs/0005-brief-is-current-state.md), the live `brief/` directory IS the brief; `git log` covers history; ADRs cover inflection-point rationale. Disembark snapshots (per [adr-4](../decisions/adrs/0004-lifeboat-as-regenerable-output.md)) provide the audit-traceable history chain when a forensic snapshot is needed.

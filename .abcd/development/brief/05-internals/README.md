@@ -4,16 +4,15 @@ This directory holds the *plumbing* design for abcd: the agents, adapters, confi
 
 | # | File | Purpose |
 |---|---|---|
-| 1 | [`01-agents.md`](01-agents.md) | 15-agent catalog with declared JSON inputs/outputs; oracle backend resolution chain |
-| 2 | [`02-adapters.md`](02-adapters.md) | 11 adapters (vendor-agnostic semantic naming + per-vendor backends) |
-| 3 | [`03-configuration.md`](03-configuration.md) | `meta.json` + `config.json` schemas; visibility-driven gitignore policy; `dev-sync` namespace |
-| 4 | [`04-universal-patterns.md`](04-universal-patterns.md) | Seven cross-cutting patterns shared by all commands |
+| 1 | [`01-agents.md`](01-agents.md) | 16-agent catalog with declared JSON inputs/outputs; the host-delegated oracle seam (adr-25) |
+| 2 | [`02-adapters.md`](02-adapters.md) | The central adapter model (adr-22): the five capability seams (oracle \| history \| spec \| run \| scanner) — interface + native default + optional external plug-in — plus the lifeboat source readers |
+| 3 | [`03-configuration.md`](03-configuration.md) | `meta.json` + `config.json` schemas (seam-backend + adapter-registry config); visibility-driven gitignore policy; `dev-sync` namespace |
+| 4 | [`04-universal-patterns.md`](04-universal-patterns.md) | Cross-cutting patterns shared by all commands (host-delegated oracle, native-with-peer-interop, the adapter seam model, artefact-lifecycle taxonomy, …) |
 | 5 | [`05-prompt-quality.md`](05-prompt-quality.md) | Prompt-quality infrastructure (B+C+D + itd-5 prompt-quality additions) |
-| 6 | [`06-lint.md`](06-lint.md) | Lint contract: `intent_lint.py`/`lint_prompts.py`/`lint_terminology.py` namespace, severity model, CI integration (added 2026-05-07 post-audit) |
-| 7 | [`07-memory.md`](07-memory.md) | `.abcd/memory/` component — multi-upstream curated knowledge substrate per itd-36; page-class enum; curator role on `principle-distiller`; quotation/licence lints. Karpathy LLM Wiki pattern as prior art. (Slot 7 was previously reserved for `07-audits.md` — retired when itd-32 was superseded by itd-31; reused for memory on 2026-05-08.) |
+| 6 | [`06-lint.md`](06-lint.md) | Lint contract: the intent/prompt/terminology checkers in `internal/core/lint`, severity model, CI integration |
+| 7 | [`07-memory.md`](07-memory.md) | `.abcd/memory/` component — multi-upstream curated knowledge substrate per itd-36; page-class enum; curator role on `principle-distiller`; quotation/licence lints. Karpathy LLM Wiki pattern as prior art. |
 | 8 | [`08-skills.md`](08-skills.md) | Skills-vs-commands boundary: codifies decision criteria for later skill additions. abcd ships zero skills — `/abcd:grill` was originally proposed as one but is now `/abcd:intent grill` (mid-session glossary writes are command-shaped). |
 | 9 | [`09-provenance-substrate.md`](09-provenance-substrate.md) | Provenance/licence subsystem (used by both itd-36 memory ingest and itd-26 loot OSS-vendor). Licence detection (SPDX), citation generation, source-hash registry, restrictive-licence publish gate (lifeboat consumer, future/inert at launch — adr-18). Separable spec; pulled forward alongside itd-36. |
-| 10 | [`10-in-session-dispatch.md`](10-in-session-dispatch.md) | In-session subagent dispatch wire protocol (itd-2 / fn-10) — the two-phase, file-mediated handoff for the oracle cascade's always-available fallback leg: fence + payload schema, result-file schema, `InSessionDispatchPending` + sentinel exit, constrained `result_path`, re-entry mechanism, failure semantics, command-markdown file set. |
 
 ## Policy: no skeleton enforcement (deferred)
 

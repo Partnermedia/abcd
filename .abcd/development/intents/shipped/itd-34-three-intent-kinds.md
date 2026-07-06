@@ -112,7 +112,7 @@ This mirrors the lint-code namespace pattern in [`05-internals/06-lint.md`](../.
 
 ### Reclassification of two existing intents
 
-[itd-1](itd-1-acceptance-gates.md) (acceptance gates) and [itd-5](itd-5-prompt-quality-additions.md) (prompt-quality additions) are reclassified from `kind: standalone` to `kind: discipline`. Their press-release sections are replaced with `## Rule` + `## Why` (the press-release format requires a user moment, which disciplines do not have). Files move from `drafts/` to `disciplines/`. Each gains a `reclassification_history` entry recording the reclassification.
+[itd-1](../disciplines/itd-1-acceptance-gates.md) (acceptance gates) and [itd-5](../disciplines/itd-5-prompt-quality-additions.md) (prompt-quality additions) are reclassified from `kind: standalone` to `kind: discipline`. Their press-release sections are replaced with `## Rule` + `## Why` (the press-release format requires a user moment, which disciplines do not have). Files move from `drafts/` to `disciplines/`. Each gains a `reclassification_history` entry recording the reclassification.
 
 ### Brief edits
 

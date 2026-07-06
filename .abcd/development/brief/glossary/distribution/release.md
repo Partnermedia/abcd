@@ -1,7 +1,7 @@
 ---
 term: release
 bounded_context: distribution
-definition: A published, version-tagged snapshot of the abcd plugin in the public repo — the act and the artefact of promoting abcdDev to the public sibling, carrying a version and a changelog entry.
+definition: A published, version-tagged snapshot of abcd — the act and the artefact of cutting a curated release from the single repo, carrying a version and a changelog entry.
 aliases: ["published snapshot", "plugin release", "snapshot"]
 forbidden_synonyms: []
 status: stable
@@ -14,10 +14,11 @@ versions: null
 
 # release (distribution)
 
-A **release** is a published, version-tagged snapshot of the abcd plugin in the
-public repo — both the act of promoting abcdDev to its public sibling and the
-resulting artefact, carrying a [version](version.md), a changelog entry, and a
-git tag.
+A **release** is a published, version-tagged snapshot of abcd — both the act of
+cutting a curated release from the single repo
+([adr-28](../../../decisions/adrs/0028-single-repo-curated-release.md)) and the
+resulting artefact, a GitHub Release with `.abcd/**` excluded by packaging,
+carrying a [version](version.md), a changelog entry, and a git tag.
 
 As with [version](version.md), [phase](../core/phase.md) forbids "release" as a
 synonym *in the core context* — abcd does not organise development by releases.
@@ -27,8 +28,8 @@ release is the publish event, not the sequencing unit.
 
 ## When to use
 
-Use "release" for a published, version-tagged snapshot promoted to the public
-repo, and for the act of publishing one via `launch ship`.
+Use "release" for a published, version-tagged snapshot cut from the repo, and for
+the act of publishing one via `launch ship`.
 
 ## When NOT to use
 
@@ -38,7 +39,8 @@ condition).
 
 ## Examples
 
-- "The v0.2.0 release publishes the completed launch phase to the public repo."
+- "The v0.2.0 release publishes the completed launch phase as a GitHub Release
+  cut from the repo."
 - "`launch ship` refuses a no-change release unless `--force` is passed."
 
 ## Related terms

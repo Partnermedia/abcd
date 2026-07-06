@@ -17,11 +17,12 @@ Bare `/abcd:disembark` shows status + help only — never mutates state. Current
 
 ```
 PHASE 0 — DEV-SYNC (see 05-internals/03-configuration.md § 2)
-  abcd dev-sync runs per-source enabled flags (vendor-detected per 05-internals/04-universal-patterns.md § 7):
-    • reviews → render reviews backend (RP / Codex / ...) → .abcd/development/activity/reviews/
+  abcd dev-sync runs per-source enabled flags (each source is an opt-in adapter over a native default):
+    • reviews → render reviews via the wired oracle adapter (host-delegated
+                default; native / CLI / API / MCP opt-in)  → .abcd/development/activity/reviews/
     • memory  → distil memory backend  (Claude / OpenCode / ...) → .abcd/memory/
     • work    → curate .work/                            → .abcd/development/activity/{issues,notes}/
-    • rp      → RP workspace pull (per itd-7)            → .abcd/rp/workspace.json
+    • rp      → RP workspace pull (opt-in RP adapter only, per itd-7) → .abcd/rp/workspace.json
   Idempotent (content-hash dedup).
                            │
                            ▼
@@ -51,14 +52,14 @@ PASS C — distil, compose, audit (sequential)
   • brief-composer          → README.json
   • press-release-composer  → press-release.json
        ↳ oracle product audit → audit/press-release-oracle-<ts>.json
-         (RP MCP → Codex CLI → in-session subagent; findings appended to press-release.md)
+         (host-delegated by default; opt-in oracle adapter when wired; findings appended to press-release.md)
   • render                  → .md files from .json sources
   • lifeboat-oracle         → audit/oracle-<ts>.json
                               findings appended to README rendering
   • documentation-auditor (subagent, pre-pack) → audit/documentation-audit-<ts>.json
 ```
 
-\* code-rescuer reads source via RP MCP if available, else spec-driven git-window file selection. Outputs principles only — never copies code into the lifeboat (`--with-code` comes in a later phase as itd-8).
+\* code-rescuer reads source via a wired oracle adapter if available, else spec-driven git-window file selection. Outputs principles only — never copies code into the lifeboat (`--with-code` comes in a later phase as itd-8).
 
 ## 2. Recency rule
 
@@ -98,7 +99,7 @@ Pass B's chat-distiller is exempt (already streams by per-spine-entry queries). 
 │   ├── spec-plan.md                    # rendered (rebuild plan)
 │   ├── spec-essence.json               # spine
 │   ├── spec-essence.md                 # rendered
-│   └── specs/                          # verbatim copies of .flow/specs/*.md
+│   └── specs/                          # verbatim copies of the native spec store's spec files
 ├── research/
 │   ├── decisions-timeline.{json,md}
 │   ├── pitfalls.{json,md}              # source memory + Pass B deltas
@@ -129,7 +130,7 @@ The lifeboat is gitignored unless visibility=private (then it's committed alongs
 
 Each phase passes when **both gates** succeed:
 
-1. **Oracle gate**: `lifeboat-oracle` audit on phase outputs returns a "sufficient" verdict with specific findings (not vague approval). Backend resolved per [`05-internals/04-universal-patterns.md § 2`](../05-internals/04-universal-patterns.md#2-mcp-preferred-structural-fallback) + [`§ 7`](../05-internals/04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) (RP MCP → Codex CLI → in-session subagent fallback chain) — if all configured backends unavailable, in-session subagent runs the audit; never blocks.
+1. **Oracle gate**: `lifeboat-oracle` audit on phase outputs returns a "sufficient" verdict with specific findings (not vague approval). The oracle is **host-delegated by default** (per [adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)); an opt-in oracle adapter (native / CLI / API / MCP) runs the audit when wired — never blocks.
 2. **Round-trip gate**: phase outputs feed cleanly into the next phase's expected inputs (e.g., Pass A's `spec-essence.json` validates against schema and is consumed by Pass B's chat-distiller without parse errors).
 
 Acceptance is checked across the validation corpus (`.abcd/corpus.json`), with documented per-repo exemptions where a feature genuinely doesn't apply.
@@ -137,8 +138,8 @@ Acceptance is checked across the validation corpus (`.abcd/corpus.json`), with d
 ## 7. Acceptance
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:disembark`, **then** the dispatcher shows when the project last disembarked, where the lifeboat lives, the available sub-verbs (`to <path>`, `probe`, `dry-run`; later phase: `to-spec-kit`), and suggested next actions — bare invocation never mutates state.
-- **Given** a corpus repo with `.flow/specs/`, ADRs, and a memory backend present, **when** `/abcd:disembark to home` runs to completion, **then** `.abcd/lifeboat/` contains all sections in [§ 5](#5-output-shape) and the oracle audit returns a "sufficient" verdict with specific findings.
-- **Given** a corpus repo where one source is sparse (e.g., idelphiSubZero with no `.flow/`), **when** `disembark to home` runs, **then** the affected agent emits a documented exemption in its report (e.g., empty `spec-essence.json` with a `reason: "no .flow/ in source"` note) and the oracle gate accepts the exemption.
+- **Given** a corpus repo with a native spec store, ADRs, and a memory backend present, **when** `/abcd:disembark to home` runs to completion, **then** `.abcd/lifeboat/` contains all sections in [§ 5](#5-output-shape) and the oracle audit returns a "sufficient" verdict with specific findings.
+- **Given** a corpus repo where one source is sparse (e.g., a repo with no spec store), **when** `disembark to home` runs, **then** the affected agent emits a documented exemption in its report (e.g., empty `spec-essence.json` with a `reason: "no spec store in source"` note) and the oracle gate accepts the exemption.
 - **Given** the user runs `/abcd:disembark probe`, **when** the command completes, **then** all adapters' `probe()` runs in parallel, the ActiveSources list is reported to stdout, no `.abcd/lifeboat/` mutation occurs, and the run takes a small fraction of the time `to home` would take (no LLM dispatches).
 - **Given** the user runs `/abcd:disembark dry-run`, **when** the command completes, **then** the inventory + agent budget estimation runs end-to-end, the would-be writes are listed (file paths, agent dispatches, estimated tokens), no `.abcd/lifeboat/` mutation occurs, and the report explicitly notes which Pass A/B/C agents would have been dispatched.
 - **Given** an existing lifeboat at the destination, **when** `disembark to <path>` is re-run, **then** the user is asked transparently whether to overwrite (with `.bak` safety net) or skip.

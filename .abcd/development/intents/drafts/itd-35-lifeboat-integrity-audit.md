@@ -34,7 +34,7 @@ The pattern is well-established (lifted from `~/.abcd/` v0's F-031 / F-032 work)
 
 ## What's In Scope
 
-- **Lifeboat-specific Merkle implementation** layered on top of itd-16's substrate. Reuses `scripts/abcd/hash_chain.py` mechanics (JCS, UUIDv7, SHA-256); adds lifeboat-specific tree shape (artefact → section → root).
+- **Lifeboat-specific Merkle implementation** layered on top of itd-16's substrate. Reuses the native hash-chain mechanics (JCS, UUIDv7, SHA-256); adds lifeboat-specific tree shape (artefact → section → root).
 - **`_provenance.json` `lifeboat_merkle_root`** field in every lifeboat produced by `/abcd:disembark`. Distinct from itd-16's `audit_chain_root` (conversation/edit history); the two roots cover different artefact sets and live as sibling fields in the same provenance file.
 - **Embark verification step**: compute lifeboat hash, compare to manifest, fail-loud on mismatch. Aborts unpack.
 - **`/abcd:audit lifeboat <path>`** sub-verb: verifies a specific lifeboat's integrity outside the embark flow. Useful for compliance spot-checks of received lifeboats.

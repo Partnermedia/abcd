@@ -1,121 +1,113 @@
 # Build Sequence
 
-The build comprises the **brief Phase 0 — Foundation (fn-1 in flow-next)**, the **phased intents**, and the **brief-defined plumbing phases (Pass A/B/C, embark, launch)** below. The dependency DAG (not a linear list) governs what can run when. The intents are bundled across the roadmap phases — the canonical intent set and its execution order live in the phase docs and the intent index, not here: see [`roadmap/phases/README.md`](../../roadmap/phases/README.md) and [`roadmap/intents/README.md`](../../intents/README.md).
+The build follows the delivery order **MVP → the companion harness → Claude Code**, with
+**install + launch first**. It is a dependency DAG, not a linear list: the
+autonomous `run` seam picks ready work up in dependency order, with parallelism
+where dependencies allow. The canonical intent set and its bundling into product
+phases live in the phase docs and the intent index — see
+[`roadmap/phases/README.md`](../../roadmap/phases/README.md) and
+[`roadmap/intents/README.md`](../../intents/README.md); this file is the
+canonical **build-milestone** detail (what each milestone stands up in the Go
+core, the adapters, and the front doors).
 
-> **Canonical sequencing lives in [`roadmap/phases/`](../../roadmap/phases/README.md).** Per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md), the project's ordered build plan is the phase set — each phase doc bundles a set of intents and the plumbing phases below, and opens with a product `## Expectation`. This file remains the canonical *plumbing-phase detail* (what Pass A/B/C, embark, and launch actually do); the phase docs reference these sections via their `## Maps against`. The phase docs (Phase 0 — Substrate & disciplines, Phase 1 — ahoy, Phase 2 — capture, Phase 3 — intent, Phase 4 — lifeboat, Phase 5 — round-trip) are the live plan and the authoritative intent order (per adr-9).
->
-> **Two numberings, deliberately distinct.** This file's `## 2`–`## 10` headers number the *brief plumbing phases* (Foundation, ahoy flow, adapters, Pass A/B/C, embark, launch). The roadmap's Phase 0–5 are the *product phases*. They are not the same axis and not meant to align one-to-one — a product phase doc bundles one or more brief plumbing phases via its `## Maps against`. The plumbing-phase numbers below are stable; do not renumber them to chase the roadmap.
+abcd ships as a Go binary ([adr-21](../../decisions/adrs/0021-rebuild-in-go.md))
+with a transport-agnostic core
+([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front
+doors, and **no external tool as a hard dependency**
+([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). The
+first milestone is **install + launch**; every capability after it is a native
+default behind an already-wired interface, with an optional external adapter.
 
-## 1. Intent execution order
+## 0. Go scaffold + core/adapter skeleton
 
-Per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md), the authoritative intent set and its execution order — including per-intent dependencies and the bundling into product phases — live in the phase docs and the intent index, not in this file. See [`roadmap/phases/README.md`](../../roadmap/phases/README.md) for the ordered phase plan (each phase doc names the intents it bundles via its `## Maps against`) and [`roadmap/intents/README.md`](../../intents/README.md) for the intent corpus with kinds and lifecycle state. The dependency DAG governs what can run when; abcd's autonomous loop picks ready intents up in dependency order, with parallelism where dependencies allow.
+Stand up the module layout before any command logic:
+`cmd/abcd/main.go`; `internal/core/` (one package per capability);
+`internal/adapter/` (the five seams — oracle | history | spec | run | scanner —
+each an interface plus a stub native default); `internal/registry`;
+`internal/surface/cli` (Cobra). The plugin manifest
+(`.claude-plugin/plugin.json`, `marketplace.json`) and the markdown surfaces
+(`commands/`, `agents/`, `skills/`) that shell to the binary load cleanly. This
+locks the interface seams on day one, so every later milestone fills a native
+default behind an interface the core already depends on.
 
-## 2. Phase 0 — Foundation (fn-1 in flow-next)
+## 1. Install (`ahoy`) + launch (curated release)
 
-Five prerequisite tasks before any user-facing intent makes confident decisions. Already plan-reviewed and ready to ship.
+The first user-visible milestone, proving the CLI front door reaches the core and
+the packaging boundary holds.
 
-**Output destinations**: study artefacts (predecessor-notes, transcript-sampling, idelphi-rescue-study) go to `.abcd/development/research/phase/<N>/` (committed in private repos — these are *design inputs* future phases consume). Ephemeral acceptance-check logs (e.g., `claude plugin validate` stdout) go to `.abcd/logbook/phase/<N>/` (per the visibility rule [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy); same tracking semantics either way, but `research/` vs `logbook/` is a semantic split — design-input vs run-log).
+- **Install** — `/abcd:ahoy` end-to-end: `abcd init`, `abcd config get|set`, the
+  visibility-driven gitignore policy, the CLAUDE.md/AGENTS.md marker block + rules
+  loader (itd-3), and the user-scope history store + workspace registry bootstrap.
+- **Launch** — `/abcd:launch` cuts a **curated GitHub Release** from the single
+  repo ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md));
+  packaging **excludes `.abcd/**` from the release artifact** (a dry-run proves
+  nothing under `.abcd/` leaks). There is **no dev→public mirror** — the repo is
+  the marketplace.
 
-1. **Read predecessors (a skim, not a deep read).** Skim BOTH `~/ABCDevelopment/Autonomous/abcdZero/` (older first attempt) and `~/ABCDevelopment/Autonomous/abcdSubZero/` (Python CLI iteration). Notes file at `.abcd/development/research/phase/0/predecessor-notes.md`. Patterns to learn from, NOT a port plan. Same pass also confirms current state of Codex CLI/MCP for the oracle backend wiring ([`05-internals/01-agents.md` § Oracle backend resolution](../05-internals/01-agents.md#oracle-backend-resolution)).
-2. **Sample idelphiDev transcripts.** Open 5–10 `.specstory/` transcripts at random + 5 from time windows around known spec boundaries. Output: signal-density notes (focused / wandering / off-topic). Informs Pass B design.
-3. **Study idelphi rescue.** Two-part read: (a) `idelphiDev/.work/lifeboat/rescue/extraction.md` to understand what a *good lifeboat captures*; (b) directory diff `iDelphiZero/iDelphi/` ↔ `idelphiDev/iDelphi/` Swift source trees. Output: `.abcd/development/research/phase/0/idelphi-rescue-study.md` with sections "good lifeboat patterns" and "rescue diff observations", with anti-patterns flagged.
-4. **Scaffold abcdDev minimum.** Create `.claude-plugin/plugin.json`, `marketplace.json`, `README.md`, `.gitignore`, `scripts/abcd-cli` bash wrapper (named `abcd-cli` because `scripts/abcd/` package pre-exists), stub `abcd_cli.py`. Plugin loads cleanly via `claude --plugin-dir`.
-5. **Define harness.py interface.** Write the harness shim signatures (AskUserQuestion, agent dispatch, MCP calls, background, scheduling) before any command logic. Locks the abstraction boundary day one.
+## 2. Native history, capture, memory
 
-**Acceptance:** see fn-1 spec (`.flow/specs/fn-1-phase-0-foundation-predecessor-study.md`).
+- **history seam** — the native local redacted transcript store
+  ([adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)): root-SHA-keyed,
+  gitignored, redacted on capture (reusing the two-stage redaction model of
+  [adr-6](../../decisions/adrs/0006-rp-review-storage-and-architecture.md)).
+  specstory is an opt-in import over the same store. This is the research and
+  benchmark corpus abcd studies its own flows against.
+- **capture** — `/abcd:capture` issue ledger (itd-4) into
+  `.abcd/development/activity/issues/`.
+- **memory** — the `.abcd/memory/` curated substrate (itd-36); vendor memory
+  harvest is an opt-in, read-only source over it.
 
-## 3. Capability slices (intents itd-1..itd-7)
+## 3. Intent + brief + review via host-delegated oracle (+ MCP front door)
 
-Each **standalone or bundle-member** intent has its own spec under `.flow/specs/<fn-N>-<intent-id>-<slug>.md` once `/abcd:intent plan <itd-N>` runs (bundle-members share a spec with their bundle-mates). **Discipline** intents get no *dedicated 1:1* spec — the *rule* registers by living in `disciplines/` and is enforced by being inherited as an acceptance gate on every other spec (per itd-34). But this does not mean a discipline ships without code: the **enforcement machinery a discipline specifies** — lint checks (the `IL`/`MG`/`VR` families in `intent_lint.py`, the prompt-quality checks in `lint_prompts.py`), intent/spec template sections, and the `intent-fidelity-reviewer` roles that run the discipline checks — is *plumbing*, and ships through brief-phase plumbing specs like all other plumbing (per § 2 below and the plumbing-phase sections). So a discipline has two homes: the rule lives in `disciplines/` with no spec; the machinery that makes the rule biting is built by whichever plumbing spec owns the lint and reviewer infrastructure. All intent kinds carry their own acceptance criteria (per itd-1). The brief doesn't duplicate intent specs; see the intent files in `.abcd/development/roadmap/intents/{drafts,planned,disciplines}/`.
+- **intent** — `/abcd:intent` create / plan / ship / grill (itd-1, itd-27,
+  itd-34), with brief and press-release composition.
+- **review** — the oracle seam, **host-delegated by default**
+  ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)): abcd emits a
+  prompt, the host's subagent dispatch runs it, abcd consumes the structured
+  result. Native / CLI / API / MCP oracle adapters are opt-in for an operator who
+  wants abcd to reach a model directly; the default install needs no API keys.
+- **MCP front door** — enable `internal/surface/mcp` as a second thin door over
+  the unchanged core
+  ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)).
 
-Post-brief additions (itd-27, itd-28, itd-34) are not enumerated here; they ship per their own dependencies — see [`roadmap/phases/`](../../roadmap/phases/README.md) for the phase plan and [`intents/README.md`](../../intents/README.md) for the intent index.
+## 4. Native minimal spec engine + ccpm
 
-Notable inter-intent + intent-vs-phase couplings:
+- **spec seam** — the native minimal store
+  ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)):
+  directory-as-truth ([adr-3](../../decisions/adrs/0003-directory-as-truth-for-lifecycle.md))
+  plus a dependency graph over specs and tasks — enough to plan, sequence, and
+  track work with no external tool.
+- **ccpm backend** — the companion harness `ccpm` as the primary deeper backend, read and
+  written at the **convention level**
+  ([adr-24](../../decisions/adrs/0024-the companion harness-peer-via-conventions-and-mcp.md)) —
+  a peer over conventions + MCP, never a code dependency. **flow-next is not
+  built.**
 
-- **itd-3 (rules-loader) precedes ahoy** so ahoy ships with the right marker block.
-- **itd-4 (capture) writes to the issue ledger** that subsequent work references. Once shipped, all future "discovered issue" prose in the brief and intents references the structured ledger, not free-form `.work/issues.md`.
-- **itd-5 (prompt-quality) is a cross-cutting acceptance rule.** Every Pass A/B/C agent spec's acceptance includes the itd-5 gates (prompt_version, self-improvement preflight, injection-canary fixture for agents reading untrusted input).
-- **itd-6 (RP MCP) and itd-7 (RP workspace) ship after the lifeboat pipeline establishes the dev-sync + adapter foundation.**
+## 5. Autonomous run seam
 
-## 4. Phase 1 — `/abcd:ahoy` end-to-end
+The `run` seam
+([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)): iterate
+ready work, gate each step on a **receipt**, enforce a **safety guard**. The thin
+native Go loop is the always-available fallback; Claude Workflows and the the companion harness
+agent loop are opt-in adapter loops behind the same seam contract. It is **not a
+Ralph port** — the receipt-gated, report-not-block iteration boundary is the seam
+contract every adapter loop inherits.
 
-Runs after itd-2 (in-session), itd-3 (rules-loader), itd-4 (capture).
+## 6. Lifeboat round-trip
 
-1. `abcd init --json` and `abcd config get|set`.
-2. `/abcd:ahoy install` command flow (Steps 0–12 from [`../04-surfaces/01-ahoy.md`](../04-surfaces/01-ahoy.md)).
-3. Probe-only stubs: `/abcd:disembark probe`, `/abcd:embark probe <path>`, `/abcd:launch dry-run`, bare `/abcd:intent` (renders intent corpus per universal bare-command-as-render discipline; see [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md)), `/abcd:capture list` (filtered query — earned sub-verb).
+- **disembark** — the lifeboat pipeline (Pass A/B/C) reads the repo's own settled
+  artefacts through the source readers
+  ([`../05-internals/02-adapters.md`](../05-internals/02-adapters.md)) over the
+  native spec / history / memory stores, synthesises the lifeboat, and runs the
+  host-delegated oracle audit.
+- **embark** — scaffold a target repo from a lifeboat.
+- The **round-trip** (disembark on a corpus repo → embark into an empty target)
+  is the integration milestone that exercises every seam end-to-end.
 
-**Acceptance:** see [`../04-surfaces/01-ahoy.md § 1`](../04-surfaces/01-ahoy.md#1-acceptance).
+## Validation cadence
 
-## 5. Phase 2 — Settled-artefact adapters
-
-Runs after Phase 1.
-
-All adapters in [`../05-internals/02-adapters.md`](../05-internals/02-adapters.md). Interactive source confirmation when assets or ambiguous docs found.
-
-**Acceptance:**
-- **Given** each corpus repo, **when** `/abcd:disembark to home --no-agents` runs, **then** the current repo's `.abcd/lifeboat/` is produced with all verbatim sections (specs/, ADRs, memory, oracle reviews) but no synthesised files; all schemas validate.
-- **Given** a repo where an adapter source is missing or sparse, **when** the adapter probes, **then** the result is documented in the report (empty + reason) and downstream agents handle the absence gracefully.
-
-**Three orthogonal disembark preview shapes** (post bare-as-help refactor): `probe` sub-verb (adapter probes only, list sources, write nothing — ultra-light), `dry-run` sub-verb (full plan: what files would be written, which agents would be dispatched, estimated tokens — write nothing), `to <path> --no-agents` (the action with a flag-shaped modifier: write the verbatim/deterministic parts, skip LLM synthesis — used here for adapter validation).
-
-## 6. Phase 3 — Pass A spine agents
-
-Runs after Phase 2.
-
-`flow-essence`, `decision-archaeologist`, `review-collator`, `code-rescuer` (principle-only).
-
-**Acceptance:**
-- **Given** a corpus repo with `.flow/specs/` and ADRs present, **when** Pass A runs, **then** `spec-essence.json` shows correct supersession chain and `decisions-timeline.json` references all ADRs.
-- **Given** Pass A outputs, **when** the oracle audit runs, **then** the verdict is "sufficient" with specific findings.
-- **Given** Pass A outputs, **when** Pass B inputs are validated, **then** the round-trip gate passes (no parse errors, schemas validate).
-- **Given** itd-5 is in force, **when** any Pass A agent's spec closes, **then** the agent has `prompt_version: 1.0.0`, the self-improvement pre-flight is recorded in `agents/CHANGELOG.md`, and the injection-canary fixture (for agents reading untrusted input — `decision-archaeologist`, `review-collator`, `code-rescuer`) passes.
-
-## 7. Phase 4 — Pass B targeted chat retrieval
-
-Runs after Phase 3.
-
-Time-window index from `.flow/specs/` git-blame + override via `.abcd/lifeboat/spec-windows.json`. `chat-distiller` per spine entry. `--full-distill` opt-in for exhaustive map-reduce.
-
-**Acceptance:**
-- **Given** a spine entry with a time window, **when** `chat-distiller` is dispatched, **then** the agent receives only the time-windowed transcript subset (no full corpus dump).
-- **Given** a Pass B run on each corpus repo, **when** complete, **then** `rationale-fills.json` cites transcript filenames and the oracle gate passes.
-- **Given** the round-trip gate to Pass C, **when** Pass B outputs are consumed, **then** schemas validate without errors.
-- **Given** itd-5 is in force, **when** `chat-distiller`'s spec closes, **then** the injection-canary fixture (for transcript content) passes.
-- **Given** the input corpus, **when** Pass B starts, **then** files matching pattern `you-are-running-one*` are excluded before any LLM call.
-- **Given** a time-windowed transcript subset, **when** signal density is computed, **then** the denominator is total user messages in the window AND density ≥ 15% triggers VIABLE; <15% triggers MITIGATIONS-REQUIRED; the spec-formula metric is NOT the gating signal.
-- **Given** a transcript file >100 KB after time-window extraction, **when** Pass B processes it, **then** within-transcript chunking (2000-line segments) and map-reduce aggregation precede any `chat-distiller` call.
-
-## 8. Phase 5 — Pass C principles, compose, audit + `/abcd:disembark to <path>` end-to-end
-
-Runs after Phase 4.
-
-**Prerequisite:** `dev-sync` ([`../05-internals/03-configuration.md § 2`](../05-internals/03-configuration.md#2-abcddevelopmentactivity-namespace-and-dev-sync)) must run first as Phase 0 of disembark — Pass C agents (`principle-distiller`, `press-release-composer`) consume curated `.abcd/development/activity/` and `.abcd/memory/` content. If dev-sync fails on any source, Pass C runs in degraded mode with clear notes in the report.
-
-`principle-distiller`, `artefact-curator`, `brief-composer`, `press-release-composer` (with embedded oracle product audit), `lifeboat-oracle`, `documentation-auditor` (subagent pre-pack). Re-run flow with overwrite confirmation + `.bak` safety net. (The earlier `--apply-audit` flag was deprecated in the bare-as-help refactor; re-running `disembark to <path>` against a stale lifeboat applies the same Pass B+C re-execution.)
-
-**Acceptance:** see [`../04-surfaces/02-disembark.md § 7`](../04-surfaces/02-disembark.md#7-acceptance).
-
-## 9. Phase 6 — `/abcd:embark from <path>`
-
-Runs after Phase 5.
-
-Source lookup (`from home` for round-trip → `from <path>` → `scan` discovers candidates), emptiness check, scaffolder agent, conflict bulk prompt, asset curation per classification. Documentation-auditor runs post-scaffold.
-
-**Acceptance:** see [`../04-surfaces/03-embark.md § 6`](../04-surfaces/03-embark.md#6-acceptance).
-
-## 10. Phase 7 — `/abcd:launch ship`
-
-Runs after Phase 6.
-
-Scan stack (gitleaks + Presidio + custom regex + optional TruffleHog + OWASP/security check + documentation-auditor pre-promotion), payload manifest + `.abcd/launch.allow`, mirror modes, version bump + marketplace.json update.
-
-**Acceptance:** see [`../04-surfaces/04-launch.md § 7`](../04-surfaces/04-launch.md#7-acceptance).
-
-## 11. Validation cadence
-
-After **every phase**, run `/abcd:disembark to home` (or the relevant preview sub-verb — `probe` for adapter-only inspection, `dry-run` for the full plan without writes) against the full validation corpus. Catch regressions early. Acceptance recorded in `.abcd/logbook/phase/<phase-id>/` (per the logbook layout in [`../05-internals/04-universal-patterns.md § 6`](../05-internals/04-universal-patterns.md#6-abcdlogbook-layout)).
-
-## 12. OpenCode portability
-
-**Comes in a later phase as itd-22.** abcd ships Claude Code only with the `harness.py` shim ready for a second implementation later (the harness shim is the early commitment that makes the OpenCode port tractable). Same applies to the `memory_backends/opencode.py` and `reviews_backends/codex.py` stubs — interfaces declared, implementations come later.
+After **every milestone**, run `/abcd:disembark to home` (or the relevant preview
+sub-verb — `probe` for adapter-only inspection, `dry-run` for the full plan
+without writes) against the validation corpus. Catch regressions early. Acceptance
+recorded in `.abcd/logbook/phase/<phase-id>/` (per the logbook layout in
+[`../05-internals/04-universal-patterns.md § 6`](../05-internals/04-universal-patterns.md#6-abcdlogbook-layout)).

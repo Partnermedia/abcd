@@ -3,7 +3,7 @@
 The **phase** is abcd's sequencing layer — an ordered stretch of work that ends
 in a **milestone**. Phases replace plugin-version language (`v1`, `v2`) as the
 way the project organises *what ships together, in what order*. See
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) for why this layer
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) for why this layer
 exists and [`01-product/03-mental-model.md`](../../brief/01-product/03-mental-model.md)
 for where it sits among brief / phase / intent / spec.
 
@@ -28,11 +28,12 @@ whole-project brief. Every phase doc carries:
 intent's press-release-then-`## Acceptance Criteria` shape, one grain up. The
 product thinker authors both. `## Milestone` answers "is the work finished?";
 `## Phase Acceptance` answers "is the expectation met?" — see
-[adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) and its amendment.
+[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) and its amendment.
 
-A phase doc carries **no status** — per [adr-5](../../decisions/adrs/adr-5-brief-is-current-state.md),
+A phase doc carries **no status** — per [adr-5](../../decisions/adrs/0005-brief-is-current-state.md),
 status is never stored in design docs. The [roadmap dashboard](../README.md)
-renders phase progress by reading `.flow/`.
+renders phase progress by reading the native spec store (and the companion harness `ccpm` when
+that backend is attached) via the Go CLI.
 
 ## How phases connect to the rest of the model
 
@@ -40,43 +41,43 @@ renders phase progress by reading `.flow/`.
   in each phase doc's `## Scope`. Intent files themselves carry no phase field
   (per adr-9 — phase-grain mapping is editorial, not per-item linkage).
 - **Specs → phase.** Phase membership is reconstructed **editorially from each
-  phase doc's `## Scope`** — this is the live mechanism today. The `phase:`
-  frontmatter anchor described in adr-9 has its **tooling DELIVERED by fn-66**:
-  the phase-audit reviewer that reads it (`scripts/abcd/phase_audit_reviewer/`)
-  and the `PA001` verify-exists lint (a `phase:` naming a non-existent phase is
-  an error) both exist. What stays **deferred** is making `phase:` a *standing
+  phase doc's `## Scope`** — this is the live mechanism. A spec's `phase:` anchor
+  is a native-store field: the phase-audit reviewer reads it and the `PA001`
+  verify-exists lint (a `phase:` naming a non-existent phase is an error) both
+  run as Go tooling. What stays **deferred** is making `phase:` a *standing
   convention* — the corpus anchor backfill onto the unanchored specs is a
-  separate planning act (fn-49.2's deferral), now **unblocked** by fn-66 but not
-  performed by it. Until that backfill lands, no spec is expected to carry the
-  anchor and its absence on the corpus is not drift; a spec listed in no phase
-  doc's `## Scope` is implicitly unscheduled and correctly carries no anchor
-  (the spec analogue of adr-9's unscheduled-intent rule). `PA001` only validates
-  an anchor that IS present — a missing anchor is legal.
+  separate planning act. Until that backfill lands, no spec is expected to carry
+  the anchor and its absence on the corpus is not drift; a spec listed in no
+  phase doc's `## Scope` is implicitly unscheduled and correctly carries no
+  anchor (the spec analogue of adr-9's unscheduled-intent rule). `PA001` only
+  validates an anchor that IS present — a missing anchor is legal.
 
 ## Phase index
 
 | Phase | Milestone | Document |
 |---|---|---|
-| Phase 0 — Substrate & disciplines | Oracle backend shipped; project state honest; three disciplines in force | [phase-0-substrate.md](phase-0-substrate.md) |
-| Phase 1 — ahoy | `/abcd:ahoy` installs cleanly on any folder | [phase-1-ahoy.md](phase-1-ahoy.md) |
-| Phase 2 — capture | `/abcd:capture` writes a structured issue ledger | [phase-2-capture.md](phase-2-capture.md) |
-| Phase 3 — intent | `/abcd:intent` + `grill` harden an intent into a spec-ready PRD | [phase-3-intent.md](phase-3-intent.md) |
-| Phase 4 — The lifeboat pipeline | `/abcd:disembark` packs a faithful lifeboat | [phase-4-lifeboat.md](phase-4-lifeboat.md) |
-| Phase 5 — Round-trip and ship | `/abcd:embark` + `/abcd:launch`; abcd ships itself | [phase-5-roundtrip.md](phase-5-roundtrip.md) |
+| Phase 0 — Foundations | Go core + adapter seams with native defaults; disciplines in force | [phase-0-substrate.md](phase-0-substrate.md) |
+| Phase 1 — Install and launch | `/abcd:ahoy` installs cleanly on any folder; `/abcd:launch` cuts a curated single-repo release | [phase-1-ahoy.md](phase-1-ahoy.md) |
+| Phase 2 — History, capture, and memory | Native transcript store, `/abcd:capture` ledger, and `/abcd:memory` substrate | [phase-2-capture.md](phase-2-capture.md) |
+| Phase 3 — Intent, brief, and review | `/abcd:intent` + `grill` harden an intent; review runs via the host-delegated oracle; MCP front door opens | [phase-3-intent.md](phase-3-intent.md) |
+| Phase 4 — Native spec and task engine | `intent → plan → ship` over the native store, with the companion harness `ccpm` as the deeper backend | [phase-4-spec-engine.md](phase-4-spec-engine.md) |
+| Phase 5 — Autonomous run seam | A pluggable run seam (native loop / Workflows / the companion harness loop) drives specs unattended | [phase-5-run-seam.md](phase-5-run-seam.md) |
+| Phase 6 — Lifeboat round-trip | `/abcd:disembark` + `/abcd:embark`; a faithful lifeboat round-trips | [phase-6-lifeboat.md](phase-6-lifeboat.md) |
 
-Phases are organised by **user-capability moment** — each one ends in a
-milestone a contributor can demo. Phase 0 is the exception: it has no
-user-facing command, and is numbered 0 to say so honestly — it is the floor the
-five capability phases stand on. Phases are sequenced but their *contents* may
-run in any dependency-respecting order — see each phase's `## Dependency
-rationale`.
+Phases 1–6 are organised by **user-capability moment** — each one ends in a
+milestone a contributor can demo. **Install and launch (Phase 1) is the first
+milestone**, and the delivery order is MVP → the companion harness → Claude Code. Phase 0 is
+the exception: it has no user-facing command, and is numbered 0 to say so
+honestly — it is the floor the capability phases stand on. Phases are sequenced
+but their *contents* may run in any dependency-respecting order — see each
+phase's `## Dependency rationale`.
 
-## Beyond Phase 5
+## Beyond Phase 6
 
-Phase 5 closes abcd's loop and cuts the first public release; it is not the end
-of the work. Most of the intent corpus is not yet phased — an intent listed in
-no phase doc's `## Scope` is implicitly unscheduled (per adr-9), and that is a
-valid state. Further phases will be authored as that work is committed to.
+Phase 6 closes abcd's loop with the lifeboat round-trip; it is not the end of
+the work. Most of the intent corpus is not yet phased — an intent listed in no
+phase doc's `## Scope` is implicitly unscheduled (per adr-9), and that is a valid
+state. Further phases will be authored as that work is committed to.
 
 This section is deliberately a placeholder, not a forecast: naming which intents
 land in which future phase before the phase is planned would only go stale. See
@@ -88,4 +89,4 @@ into a phase's `## Scope` when the phase that bundles it is written.
 - [Roadmap](../README.md) — status dashboard
 - [Intents](../../intents/README.md) — the intent registry
 - [Build sequence](../../brief/06-delivery/01-build-sequence.md) — the brief's plumbing-phase DAG, which phases bundle from
-- [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) — the phase layer decision
+- [adr-9](../../decisions/adrs/0009-phase-as-product-layer.md) — the phase layer decision

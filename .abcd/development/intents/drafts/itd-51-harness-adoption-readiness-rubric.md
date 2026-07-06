@@ -5,7 +5,7 @@ spec_id: null
 kind: null
 suggested_kind: standalone
 reclassification_history: []
-related_adrs: []
+related_adrs: [adr-27]
 routed_from: ["fn-33:I-D1-extdep", "fn-33:I-D2-extdep"]
 created: 2026-06-03
 updated: 2026-06-03
@@ -16,17 +16,17 @@ prd_path: null
 
 ## Press Release
 
-> **abcd carries a written rubric of what any autonomous harness must guarantee before abcd will drive it — so when a candidate to succeed flow-next/Ralph appears, adoption is a checklist run, not a fresh argument.** abcd is an abstraction layer: operators work the `/abcd:*` surface and abcd calls a harness underneath. Today that harness is flow-next/Ralph, and a 2026-06-02 security review of it surfaced concrete failure modes — unbounded runaway when a session timeout never fires, a worker that can forge its own review verdict, protected paths bypassable through the shell. Those specific defects are addressed where abcd owns the code (fn-33) and bounded where abcd orchestrates the session (fn-37). But the deeper asset is the *generalization*: the same review implicitly defined a set of properties abcd cares about in ANY harness it drives. This intent makes that set explicit and durable — a harness-adoption-readiness rubric — so abcd never re-derives "is this safe to drive?" from scratch, and so a future migration is evaluated against stated requirements instead of vibes.
+> **abcd carries a written rubric of what any autonomous harness must guarantee before abcd will drive it — so when a candidate harness for the run seam appears, adoption is a checklist run, not a fresh argument.** abcd is an abstraction layer: operators work the `/abcd:*` surface and abcd drives an autonomous harness underneath through a **pluggable run seam** ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)). A security review of an early bundled harness surfaced concrete failure modes — unbounded runaway when a session timeout never fires, a worker that can forge its own review verdict, protected paths bypassable through the shell. Those specific defects are addressed where abcd owns the code (fn-33) and bounded where abcd orchestrates the session (fn-37). But the deeper asset is the *generalization*: the same review implicitly defined a set of properties abcd cares about in ANY harness it drives. The pluggable seam makes that rubric load-bearing — a candidate engine is only as safe as it scores. This intent makes the set explicit and durable — a harness-adoption-readiness rubric — so abcd never re-derives "is this safe to drive?" from scratch, and so a future adoption is evaluated against stated requirements instead of vibes.
 
 > "The first time we vetted a harness it took a full security review to notice the worker could run for a hundred hours unattended," said Carol, the platform tech lead. "I don't want to re-learn that the hard way on the next one. I want a page that says: here is what abcd refuses to drive blind — bounded runtime, verdict integrity it can't forge, a real boundary on what it can write and push. Score the candidate against it. Done."
 
 ## Why This Matters
 
-abcd's whole proposition is that operators trust the `/abcd:*` surface and stay out of the dependency's complexity. That trust is only honest if abcd itself knows what it is willing to drive. Right now that knowledge is implicit — scattered across review findings, two specs (fn-33, fn-37), and institutional memory. The moment a candidate replacement harness appears, that implicit knowledge has to be re-assembled under time pressure, which is exactly when important properties get dropped.
+abcd's whole proposition is that operators trust the `/abcd:*` surface and stay out of the dependency's complexity. That trust is only honest if abcd itself knows what it is willing to drive. Right now that knowledge is implicit — scattered across review findings, two specs (fn-33, fn-37), and institutional memory. The moment a candidate harness for the run seam appears, that implicit knowledge has to be re-assembled under time pressure, which is exactly when important properties get dropped.
 
 A written rubric converts a one-off security review into a reusable adoption gate. It also sharpens fn-37: fn-37 enforces guarantees for the harness abcd drives *today*; this rubric states the guarantees abcd requires of *any* harness, so fn-37 reads as one instantiation of the rubric rather than an ad-hoc list. The rubric is forward-looking and has no implementation surface of its own — it is a decision artifact (a scored checklist) that downstream adoption work consumes.
 
-Critically, this is **not** a plan to replace flow-next/Ralph. No replacement is planned. This intent only ensures abcd is *ready to evaluate* one whenever it becomes available — readiness, not migration.
+Critically, this is **not** a plan to swap the configured harness. This intent only ensures abcd is *ready to evaluate* a candidate whenever one becomes available — readiness, not migration.
 
 ## What's In Scope
 

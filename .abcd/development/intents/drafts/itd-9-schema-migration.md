@@ -45,13 +45,13 @@ This intent commits abcd to taking lifeboat portability seriously: schemas evolv
 - **Given** a lifeboat too old to migrate cleanly (e.g. its schema is below the lowest registered migrator's source version), **when** embark runs, **then** the command refuses with a "re-disembark required" error AND the error message includes the exact one-line command the user should run on the source repo (e.g., `cd <source> && /abcd:disembark to home`).
 - **Given** a newer-schema lifeboat, **when** an older abcd binary tries to embark from it, **then** the binary fails fast with a "lifeboat is from a newer abcd version; upgrade abcd to embark this lifeboat" message — two-way compatibility is explicitly not supported and the failure mode is clear.
 - **Given** a successful migration during embark, **when** the migration log is written, **then** it records: source schema version, target schema version, list of migrators applied (in order), per-artefact field changes, and any non-fatal warnings.
-- **Given** a migrator at `scripts/abcd/migrations/v1_to_v2.py`, **when** it runs against a v1 artefact, **then** it produces a v2 artefact that round-trips cleanly through the v2 schema validator (no unknown fields, no missing required fields, all enums valid).
+- **Given** the registered v1→v2 migrator, **when** it runs against a v1 artefact, **then** it produces a v2 artefact that round-trips cleanly through the v2 schema validator (no unknown fields, no missing required fields, all enums valid).
 - **Given** a lifeboat is migrated during embark, **when** the resulting `.abcd/development/voyage/embark/provenance.json` is written, **then** it records the migration history (`was_schema: 1`, `now_schema: 2`, `migrators_applied: [...]`) so future audits can reconstruct what was changed.
 
 ## Open Questions
 
 - Which schema version delta triggers re-disembark vs auto-migrate? Major-version bumps only?
-- Where do migrators live — `scripts/abcd/migrations/v1_to_v2.py`?
+- Where do migrators live in the native layout?
 - Should `_provenance.json` record the migration history (was-v1, now-v2)?
 
 ## Audit Notes

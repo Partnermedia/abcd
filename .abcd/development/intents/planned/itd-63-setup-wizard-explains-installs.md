@@ -6,7 +6,7 @@ kind: bundle-member
 bundle: fn-83-operator-surfaces
 suggested_kind: standalone
 reclassification_history: []
-related_adrs: []
+related_adrs: [adr-22]
 created: 2026-06-29
 updated: 2026-06-29
 prd_path: null
@@ -24,17 +24,17 @@ glossary_terms_used:
 
 ## Press Release
 
-> **abcd gains a setup wizard: when a capability needs an external dependency the amateur does not have (a security scanner, a runtime, a CLI), abcd explains in plain language WHAT it is about to install, WHY that capability needs it, and what it does — then guides the install — instead of dumping a command the product thinker cannot evaluate.** The thesis keeps human judgment the constraint, but a human cannot judge "run `pip install semgrep`" if they do not know what semgrep is or why their safety gate needs it. The wizard turns an opaque prerequisite into an informed choice: it names the tool, states the capability that requires it (e.g. "the security gate needs this to scan your app for vulnerabilities"), links what it is, shows the exact install step, and confirms before proceeding.
+> **abcd gains a setup wizard: when a capability offers an optional adapter the amateur has not installed — or genuinely needs an external tool (a security scanner, a runtime, a CLI) — abcd explains in plain language WHAT the adapter or tool is, WHY the capability would use it, what its native default already covers, and what the tool does — then guides any install — instead of dumping a command the product thinker cannot evaluate.** Most bundled dependencies are optional adapters with native defaults ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)), so the wizard's first job is to explain that a capability already works on its native default and an adapter is an upgrade, not a prerequisite. Where a capability does have a hard external prerequisite — abcd's safety gate always blocks on a missing scanner — the thesis keeps human judgment the constraint, but a human cannot judge "install a scanner" if they do not know what it is or why their safety gate needs it. The wizard turns an opaque prerequisite into an informed choice: it names the tool, states the capability that requires it (e.g. "the security gate needs this to scan your app for vulnerabilities"), links what it is, shows the exact install step, and confirms before proceeding.
 
 > "I'm fine installing things — I'm not fine installing things I don't understand," said a product thinker setting up abcd's safety gate. "Tell me this is a security scanner, that my safety check can't run without it, and what it'll do. Then I'll say yes. Don't just throw a command at me and assume I know."
 
 ## Why This Matters
 
-abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than degrading to advisory — the right call for the guarantee, but it puts an install prerequisite in front of an amateur who may not recognise the tool. The thesis says keep the human's judgment the constraint; an install prompt the human cannot evaluate is judgment removed, not preserved. A setup wizard restores it: by explaining what and why, it lets the product thinker make an INFORMED decision rather than a blind one. This is a general need — itd-62 is the first caller, but any abcd capability with an external prerequisite (a runtime, a CLI, a model) benefits from the same explain-then-install surface.
+abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than degrading to advisory — the right call for the guarantee, but it puts an install prerequisite in front of an amateur who may not recognise the tool. The thesis says keep the human's judgment the constraint; an install prompt the human cannot evaluate is judgment removed, not preserved. A setup wizard restores it: by explaining what and why, it lets the product thinker make an INFORMED decision rather than a blind one. This is a general need. Most abcd capabilities run on a native default and expose an optional adapter (adr-22) — the wizard explains that the native default already works and names what the adapter would add, so an optional install is never mistaken for a requirement. The few capabilities with a genuine external prerequisite (a security scanner, a runtime, a CLI, a model) get the same explain-then-install surface; itd-62 is the first caller.
 
 ## What's In Scope
 
-- A reusable setup-wizard surface that, given a missing dependency, presents: the tool name, the capability that requires it (and what fails without it), a plain-language description of what the tool does, the exact install step, and a confirmation.
+- A reusable setup-wizard surface that, given a missing optional adapter or a genuine prerequisite, presents: the tool/adapter name, the capability that uses it (for an adapter, the native default that already covers it; for a prerequisite, what fails without it), a plain-language description of what the tool does, the exact install step, and a confirmation.
 - Integration as the install-guidance path for itd-62/fn-76's "always block on missing scanner" (its first consumer).
 - Honesty about what the install does to the machine (and what it does NOT do), so the human consents knowingly.
 - Local-first, no Claude-Code dependency for the explain-and-guide mechanics.
@@ -49,7 +49,7 @@ abcd's safety gate (itd-62/fn-76) ALWAYS blocks on a missing scanner rather than
 
 > _Given-When-Then per the itd-1 discipline._
 
-- **Given** a capability needs a dependency the machine lacks, **when** the wizard runs, **then** it states the tool name, the requiring capability, what fails without it, a plain-language description, and the exact install step before any install.
+- **Given** a capability needs a dependency the machine lacks (an optional adapter or a genuine prerequisite), **when** the wizard runs, **then** it states the tool name, the requiring capability, the native default already covering it (for an adapter) or what fails without it (for a prerequisite), a plain-language description, and the exact install step before any install.
 - **Given** the wizard's explanation, **when** the human decides, **then** the install proceeds only on explicit confirmation; declining does not silently weaken the gate that required it.
 - **Given** itd-62/fn-76's missing-scanner block, **when** it surfaces the prerequisite, **then** it routes through this wizard rather than a bare command.
 - **Given** the explain-and-guide mechanics, **when** invoked outside Claude Code, **then** they run with no Claude-Code dependency.

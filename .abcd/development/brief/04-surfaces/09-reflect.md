@@ -4,7 +4,7 @@
 phase** of the voyage (itd-24). It is **phase-only grain**: the per-intent form
 was dropped (per-intent reflection is the `intent-fidelity-reviewer`'s Role 1).
 The command markdown performs ZERO writes — every write goes through the
-deterministic writer module `scripts/abcd/reflect_writer.py`, which renders
+deterministic reflect-writer capability, which renders
 `.abcd/retrospectives/<phase-id>/README.md`.
 
 This surface doc records the design contract; the runtime behaviour (contract

@@ -2,14 +2,18 @@
 
 The bare top-level `/abcd` command (no sub-verb) is the cross-command
 re-orientation surface (itd-20): type `/abcd` and see, at a glance, where you
-left off across the whole abcd setup. It is STRICTLY read-only — the render
-module `scripts/abcd/status_render.py` opens files for reading only and never
-writes.
+left off across the whole abcd setup. It is STRICTLY read-only — the
+status-render module opens files for reading only and never writes.
 
 This is the top-level command (`commands/abcd.md`), distinct from the
 per-verb bare renders (`/abcd:intent`, `/abcd:ahoy`, …). Each per-verb bare
 render is scoped to its own command's surface; this board is the *cross-verb*
 answer to "what's the state of my abcd project right now?".
+
+The `/abcd` surface routes every verb through the transport-agnostic core (the
+Cobra CLI is the front door today; an MCP server follows later, per
+[adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) — it no longer
+hides any bundled dependency behind the wrapper.
 
 ## Sub-verbs and aliases
 
@@ -72,7 +76,7 @@ known-state line (never an exception, never a silent omission).
    a recursive walk. Fewer than five → render what exists with a count.
 5. **Active intents** — intents in `intents/planned/` and `intents/shipped/`
    that carry a linked `spec_id` whose spec is NOT `done`, rendered with the
-   spec status read via the `scripts/ralph/flowctl` dispatcher.
+   spec status read from the native spec store.
 6. **Suggested next actions** — a short bullet list keyed off the state above.
 
 ## Per-source known-state table
@@ -85,7 +89,7 @@ known-state line (never an exception, never a silent omission).
 | dev-sync last-run artifact | `dev-sync: no dev-sync record …` (v1 terminal — see below) |
 | `.abcd/logbook/` (empty / unreadable) | `logbook: no entries yet` |
 | linked intents (none with a live spec) | `intents: no planned or active intents with a linked spec` |
-| spec status via flowctl (missing / fail / timeout / unparseable) | `unknown` |
+| spec status via the native spec store (missing / fail / timeout / unparseable) | `unknown` |
 
 ## Staleness thresholds (decided here)
 
@@ -96,8 +100,8 @@ known-state line (never an exception, never a silent omission).
 
 ## Dev-sync source (probed, recorded — v1 terminal stub)
 
-`scripts/abcd/dev_sync.py` exposes the `abcd dev-sync work` migration surface
-(`.work/issues.md` → the structured `iss-N` ledger). It is **migration logic,
+The `abcd dev-sync work` migration surface
+(`.work/issues.md` → the structured `iss-N` ledger) is **migration logic,
 not a durable last-run timestamp**: no config field and no history-store
 record captures "when dev-sync last ran". No such artifact exists anywhere in
 the repo.
@@ -116,14 +120,14 @@ out-of-scope update).
   NO recursive full-tree scans.
 - Last-N sorting only (logbook capped at 5, active intents capped at 10) — no
   full-history loads.
-- The flowctl spec-status read runs under a 5-second timeout; expiry maps to
-  the `unknown` status line so a slow dispatcher never wedges the render.
+- The native spec-store status read runs under a 5-second timeout; expiry maps
+  to the `unknown` status line so a slow read never wedges the render.
 
 ## Zero-writes guarantee
 
 The command markdown performs zero writes; the render module performs zero
 writes. This is proven by two tests: a static zero-mutation lint over
-`scripts/abcd/status_render.py` and an fs-snapshot test that asserts a render
+the status-render module and an fs-snapshot test that asserts a render
 over a populated fixture repo mutates nothing at run time.
 
 ## Related documentation

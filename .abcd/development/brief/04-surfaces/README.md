@@ -1,13 +1,13 @@
 # Surfaces — User-Facing Commands
 
-The brief's user-facing command surface is the set enumerated below (not all are shipped yet — see [`06-delivery/`](../06-delivery) for current delivery state). Each has its own file with the surface contract: purpose, flow, acceptance criteria. (Operator-internal commands under `commands/abcd/` — e.g. `deps-check`, `ralph-up`, `session`, and `run` (the itd-29 autonomous-run operator surface: `status`/`pause`/`resume`/`preflight`) — are wiring, not part of this user-facing surface.)
+The brief's user-facing command surface is the set enumerated below (not all are shipped yet — see [`06-delivery/`](../06-delivery) for current delivery state). Each has its own file with the surface contract: purpose, flow, acceptance criteria. (Operator-internal commands under `commands/abcd/` — e.g. `deps-check` and `run` (the itd-29 autonomous-run operator surface over the pluggable run seam: `status`/`pause`/`resume`/`preflight`) — are wiring, not part of this user-facing surface.)
 
 | # | Command | Purpose | File |
 |---|---|---|---|
 | 1 | `/abcd:ahoy` | Install / update abcd in any project | [`01-ahoy.md`](01-ahoy.md) |
 | 2 | `/abcd:disembark` | Pack a lifeboat from the current project | [`02-disembark.md`](02-disembark.md) |
 | 3 | `/abcd:embark` | Unpack a lifeboat into a (typically empty) target | [`03-embark.md`](03-embark.md) |
-| 4 | `/abcd:launch` | Promote `*Dev` → public sibling repo | [`04-launch.md`](04-launch.md) |
+| 4 | `/abcd:launch` | Cut a curated release artefact from the repo | [`04-launch.md`](04-launch.md) |
 | 5 | `/abcd:intent` | Capture / refine / grill / plan / ship / review / consistency / shape / reclassify / link intents (press-release format; three review roles, three verbs per [`05-intent.md § 6`](05-intent.md#6-the-intent-fidelity-reviewer-agent-three-roles-three-verbs)) | [`05-intent.md`](05-intent.md) |
 | 6 | `/abcd:capture` | Issue ledger (capture / list / promote / resolve / wontfix) | [`06-capture.md`](06-capture.md) |
 | 7 | `/abcd:memory` | Multi-upstream curated knowledge substrate (per itd-36) — `ingest` external sources / `ask` queries / `lint` health-checks. Component spec: [`05-internals/07-memory.md`](../05-internals/07-memory.md). | [`07-memory.md`](07-memory.md) |

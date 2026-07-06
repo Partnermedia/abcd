@@ -110,6 +110,6 @@ When the agent's prompt bumps version (per baseline § 5), reference back here:
 - [`../01-general-best-practices.md`](../01-general-best-practices.md) — baseline (the gate)
 - [`../../../../agents/embark-scaffolder.md`](../../../../agents/embark-scaffolder.md) — the agent prompt this research informs (created in embark-scaffolder's flow-next epic)
 - `../../../../agents/embark-scaffolder/fixtures/` — golden-test fixtures (created when the epic ships)
-- [`../../roadmap/intents/drafts/itd-16-hash-chain-merkle-audit.md`](../../roadmap/intents/drafts/itd-16-hash-chain-merkle-audit.md) — provenance verification comes in a later phase (currently desktop-checked manually)
-- [`../../roadmap/intents/drafts/itd-5-prompt-quality-additions.md`](../../roadmap/intents/drafts/itd-5-prompt-quality-additions.md) — Add 3 (injection canaries) mandates fixtures #4 and #5 above
-- [`../../brief/README.md`](../../brief/README.md) § 9.3–9.4 — embark workflow + conflict UX (this agent's behavioural envelope)
+- [`../../roadmap/intents/drafts/itd-16-hash-chain-merkle-audit.md`](../../../intents/drafts/itd-16-hash-chain-merkle-audit.md) — provenance verification comes in a later phase (currently desktop-checked manually)
+- [`../../roadmap/intents/drafts/itd-5-prompt-quality-additions.md`](../../../intents/disciplines/itd-5-prompt-quality-additions.md) — Add 3 (injection canaries) mandates fixtures #4 and #5 above
+- [`../../brief/README.md`](../../../brief/README.md) § 9.3–9.4 — embark workflow + conflict UX (this agent's behavioural envelope)

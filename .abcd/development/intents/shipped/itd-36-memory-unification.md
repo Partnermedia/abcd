@@ -5,14 +5,14 @@ spec_id: fn-38-abcd-memory-write-core-abcdmemory
 kind: standalone
 suggested_kind: null
 reclassification_history: []
-related_adrs: [adr-18]
+related_adrs: [adr-28]
 created: 2026-05-08
 updated: 2026-05-08
 ---
 
 # Knowledge That Compounds, Not Knowledge That Re-Derives
 
-> **Superseded in part by [adr-18](../../decisions/adrs/adr-18-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) (launch-gate framing).** This shipped intent describes the fn-38 restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-18 resolved that the public launch payload excludes `.abcd/**` **wholesale** as policy, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the LIVE brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`). This historical record is preserved as shipped, not rewritten.
+> **Superseded in part by [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) (packaging framing; supersedes adr-18).** This shipped intent describes the fn-38 restrictive-licence gate as a `/abcd:launch` payload gate (the "launch-gate refuses to publish under `.abcd/memory/sources/`" phrasing throughout, incl. the GWT criteria below). adr-28 packages the curated release to exclude `.abcd/**` **wholesale**, so launch is **not** the gate's consumer — the gate's real consumer is the lifeboat (`/abcd:disembark`), future/inert at launch. Read every "launch-gate" / "`/abcd:launch` refuses" reference here as the **lifeboat** licence gate; the canonical current-state framing lives in the LIVE brief (`05-internals/09-provenance-substrate.md § 4`, `07-memory.md § 4`, `04-surfaces/04-launch.md § 2`). This historical record is preserved as shipped, not rewritten.
 
 ## Press Release
 
@@ -22,7 +22,7 @@ updated: 2026-05-08
 
 ## Why This Matters
 
-Today's `.abcd/memory/` is the receiving end of a single upstream — vendor session memory (Claude / OpenCode), distilled by `memory.py` into domain-grouped principle pages. That's the per-project compounding-curated agent-experience layer. Useful, but narrow.
+Today's `.abcd/memory/` is the receiving end of a single upstream — vendor session memory (Claude / OpenCode), distilled by the memory writer into domain-grouped principle pages. That's the per-project compounding-curated agent-experience layer. Useful, but narrow.
 
 There's a real gap: **per-project durable knowledge has multiple legitimate upstreams, not just session memory.** Research-shaped projects ingest external papers; mixed-licence projects ingest internal notes alongside paywalled academic sources; long-running projects accumulate patterns from oracle reviews and the issue ledger. Today the user has no abcd surface for any of this — they paste context into chat, lose it at session end, and re-derive it next session. RAG patterns help but re-derive synthesis on every query. The Karpathy LLM Wiki pattern (April 2026, gist 5k+ stars) names a different shape: synthesis happens at ingest, not query — cross-references pre-built, contradictions flagged during maintenance.
 
@@ -113,7 +113,7 @@ _Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity
 - [`research/related-work.md § Karpathy LLM Wiki`](../../research/related-work.md#karpathy-llm-wiki--pattern-source-for-abcdmemory) — pattern source.
 - [`itd-1-acceptance-gates.md`](../disciplines/itd-1-acceptance-gates.md) — companion discipline; this intent's acceptance criteria conform to its Given-When-Then shape.
 - [`itd-37-modification-grammar.md`](../disciplines/itd-37-modification-grammar.md) — companion discipline; ships alongside itd-36 (page-classes `spec_modification_grammar` + `modification_grammar` are part of itd-36's source-class enum).
-- [`itd-25-dredge-cross-corpus-synthesist.md`](itd-25-dredge-cross-corpus-synthesist.md) — sibling intent; writes to `.abcd/memory/` with `source.class: dredge_synthesis`; verb stays distinct (storage vs operation per dredge-pushback in idea-1 R4).
-- [`itd-26-loot-oss-vendor.md`](itd-26-loot-oss-vendor.md) — sibling intent; consumes the same provenance/licence substrate this intent ships.
+- [`itd-25-dredge-cross-corpus-synthesist.md`](../drafts/itd-25-dredge-cross-corpus-synthesist.md) — sibling intent; writes to `.abcd/memory/` with `source.class: dredge_synthesis`; verb stays distinct (storage vs operation per dredge-pushback in idea-1 R4).
+- [`itd-26-loot-oss-vendor.md`](../drafts/itd-26-loot-oss-vendor.md) — sibling intent; consumes the same provenance/licence substrate this intent ships.
 
 [karpathy-llm-wiki]: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f "Karpathy LLM Wiki gist (April 2026)"
