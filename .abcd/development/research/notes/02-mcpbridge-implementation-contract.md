@@ -532,10 +532,10 @@ the host-reuse lifecycle boundary.
 
 ## Related ADRs
 
-- [ADR-01: Harness Interface Design](./01-harness-interface.md) — Phase 0 lock on the
+- [ADR-01: Harness Interface Design](01-harness-interface.md) — Phase 0 lock on the
   `Harness` Protocol, `MCPBridge`, `mcp_call` signature, and result type design. This ADR
   extends ADR-01 § 4 without superseding it.
-- Extended by [ADR-03: MCPBridge Host-Reuse Extension](./03-mcpbridge-host-reuse-extension.md)
+- Extended by [ADR-03: MCPBridge Host-Reuse Extension](03-mcpbridge-host-reuse-extension.md)
   (`adr-3-mcpbridge-host-reuse-extension`, fn-5) — adds an additive host-reuse code
   path selected at construction when a caller injects a host harness. The
   spawn-mode contract in this ADR is unchanged.

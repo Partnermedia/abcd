@@ -35,7 +35,7 @@ Key primitives:
 | `.paul/STATE.md` (loop position) | `.flow/` checkpoint files + `.abcd/logbook/` session logs |
 | `phases/NN-PLAN.md` + `…-SUMMARY.md` | flow-next epics + tasks |
 | Plan → Apply → Unify | `/flow-next:plan` → `/flow-next:work` → plan-sync + intent-fidelity-reviewer |
-| BDD acceptance | **First-class** — landed by [`itd-1-acceptance-gates`](../roadmap/intents/disciplines/itd-1-acceptance-gates.md) (the first intent shipped, so all later intents inherit the discipline) |
+| BDD acceptance | **First-class** — landed by [`itd-1-acceptance-gates`](../intents/disciplines/itd-1-acceptance-gates.md) (the first intent shipped, so all later intents inherit the discipline) |
 | `/paul:resume` | `/abcd:embark` (lifeboat unpack — post-disembark, not mid-flight) |
 
 ### Why not depend on PAUL

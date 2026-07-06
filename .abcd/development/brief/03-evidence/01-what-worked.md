@@ -21,4 +21,4 @@ For each entry:
 
 ## Why this is *evidence*, not *prescription*
 
-Patterns listed here are advisory. A future agent reading this file should treat them as informed defaults that earned their keep — but is free to propose alternatives if the platform, dependencies, or constraints have shifted (see [`02-constraints/01-platform.md`](../02-constraints/01-platform.md)). Architectural prescription belongs in [`02-constraints/`](../02-constraints/), not here.
+Patterns listed here are advisory. A future agent reading this file should treat them as informed defaults that earned their keep — but is free to propose alternatives if the platform, dependencies, or constraints have shifted (see [`02-constraints/01-platform.md`](../02-constraints/01-platform.md)). Architectural prescription belongs in [`02-constraints/`](../02-constraints), not here.

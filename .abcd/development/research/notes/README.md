@@ -41,6 +41,6 @@ folder-convention artefacts promoted into ADRs/intents by hand.
 
 ## Related
 
-- [`../decisions/adrs/`](../../decisions/adrs/) — decisions a note may inform
-- [`../roadmap/intents/`](../../roadmap/intents/) — intents a note may seed
-- [`../research/`](../) — sibling research directories (`phase/`, `prompting/`, `adr/`)
+- [`../decisions/adrs/`](../../decisions/adrs) — decisions a note may inform
+- [`../roadmap/intents/`](../../intents) — intents a note may seed
+- [`../research/`](..) — sibling research directories (`phase/`, `prompting/`, `adr/`)

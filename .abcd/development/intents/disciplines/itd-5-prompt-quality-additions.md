@@ -26,7 +26,7 @@ The discipline applies to every agent spec — Pass A spine, Pass B chat-distill
 
 ## Why
 
-The brief specifies prompt-quality infrastructure in three layers: golden-test fixtures (B), prompt linter (C), periodic SOTA-audit oracle (D). The brief's [`research/prompting/01-general-best-practices.md`](../../../research/prompting/01-general-best-practices.md) (May 2026) surfaces three concrete additions that:
+The brief specifies prompt-quality infrastructure in three layers: golden-test fixtures (B), prompt linter (C), periodic SOTA-audit oracle (D). The brief's [`research/prompting/01-general-best-practices.md`](../../research/prompting/01-general-best-practices.md) (May 2026) surfaces three concrete additions that:
 
 1. Are **cheap** — each is bounded by hours, not days.
 2. Address **distinct** SOTA risks — versioning illegibility, suboptimal initial prompts, OWASP LLM01.
@@ -77,14 +77,14 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
     designed_for: "<free-text 1-line>"
   ```
 
-- `task_classes` is a closed-enum list of tokens drawn from the controlled vocabulary in [`02-constraints/04-naming.md`](../../../brief/02-constraints/04-naming.md) (`Reserved vocabulary § task_classes`). The machine-readable source of truth is `scripts/abcd/schemas/task_classes.json`. Initial set (~10 tokens, PR-to-extend): `oracle_review`, `intent_review`, `spec_planning`, `code_rescue`, `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`, `cross_document_audit`.
+- `task_classes` is a closed-enum list of tokens drawn from the controlled vocabulary in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) (`Reserved vocabulary § task_classes`). The machine-readable source of truth is `scripts/abcd/schemas/task_classes.json`. Initial set (~10 tokens, PR-to-extend): `oracle_review`, `intent_review`, `spec_planning`, `code_rescue`, `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`, `cross_document_audit`.
 - `designed_for` is a free-text 1-line description of the agent's intended task class (for human readers — does not participate in lint, and is NEVER read to infer scope).
 - **Validation in `lint_prompts.py`** — strictly set-membership, NEVER inference:
   - (i) `capability_scope` field is present and parses; `task_classes` is a non-empty inline list; `designed_for` is a string.
   - (ii) Every `task_classes` token is a member of the `task_classes.json` enum.
   - (iii) The lint MUST NOT attempt to classify "is this task in scope?" by parsing the prose of `designed_for` or a task description. That's the moment static slips into dynamic and the linter becomes the wrong tool. Set-membership only; anything fuzzier is the Frontier Awareness Role 2 sub-check.
 - **Cost:** ~5 min/agent at v1.0.0 lock; itd-5 stays cheap.
-- **Cascade contract preserved.** Adding `capability_scope` does NOT modify the oracle cascade (per [`05-internals/04-universal-patterns.md § 7`](../../../brief/05-internals/04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) "fixed cascade"). Capability-aware routing — when it ships — is a *pre-cascade selector* layer above the cascade, not a modification. Selector consumes `(task_class, agent, model_id) → preferred_starting_backend`; cascade consumes `(starting_backend) → availability-driven fallback chain`. Thin seam.
+- **Cascade contract preserved.** Adding `capability_scope` does NOT modify the oracle cascade (per [`05-internals/04-universal-patterns.md § 7`](../../brief/05-internals/04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) "fixed cascade"). Capability-aware routing — when it ships — is a *pre-cascade selector* layer above the cascade, not a modification. Selector consumes `(task_class, agent, model_id) → preferred_starting_backend`; cascade consumes `(starting_backend) → availability-driven fallback chain`. Thin seam.
 
 **Deliberately omitted** (cost-discipline boundary; named explicitly to prevent drift): `known_failure_modes` runtime-appended events; plan-time semantic check ("is THIS task within agent X's frontier?"); capability-aware pre-cascade selector; `/abcd:frontier` command. All deferred to the Frontier Awareness intent (ID released, not reserved per the idea-3 release-don't-reserve precedent).
 
@@ -141,14 +141,14 @@ _Empty. Populated by intent-fidelity-reviewer's single-document role when this d
 
 ## References
 
-- [`../../../research/prompting/01-general-best-practices.md`](../../../research/prompting/01-general-best-practices.md) — § 10 sources this discipline's first three additions.
+- [`../../../research/prompting/01-general-best-practices.md`](../../research/prompting/01-general-best-practices.md) — § 10 sources this discipline's first three additions.
 - [`itd-14-prompt-registry-versioning.md`](../drafts/itd-14-prompt-registry-versioning.md) — heavier successor (full registry / diff-on-update).
 - [`itd-15-self-dogfooded-sota-audit.md`](../drafts/itd-15-self-dogfooded-sota-audit.md) — recurring sibling (per-disembark audit).
 - [`itd-1-acceptance-gates.md`](itd-1-acceptance-gates.md) — companion discipline; this discipline's acceptance block conforms to its Given-When-Then shape.
 - [`itd-37-modification-grammar.md`](itd-37-modification-grammar.md) — companion discipline (added 2026-05-08).
-- [`../../../brief/05-internals/05-prompt-quality.md`](../../../brief/05-internals/05-prompt-quality.md) — the B+C+D baseline this discipline extends.
-- [`../../../brief/05-internals/01-agents.md § Agent prompt frontmatter`](../../../brief/05-internals/01-agents.md#agent-prompt-frontmatter) — canonical agent-frontmatter contract; this discipline's `prompt_version` + `capability_scope` requirements register there.
-- [Dell'Acqua et al. 2023][jagged-frontier] — framing source for the `capability_scope` Add 4 (added 2026-05-08 per idea-4 jagged-frontier review). Also at [`../../../research/related-work.md § Dell'Acqua et al. 2023 — Jagged Frontier`](../../../research/related-work.md#dellacqua-et-al-2023--jagged-frontier).
+- [`../../../brief/05-internals/05-prompt-quality.md`](../../brief/05-internals/05-prompt-quality.md) — the B+C+D baseline this discipline extends.
+- [`../../../brief/05-internals/01-agents.md § Agent prompt frontmatter`](../../brief/05-internals/01-agents.md#agent-prompt-frontmatter) — canonical agent-frontmatter contract; this discipline's `prompt_version` + `capability_scope` requirements register there.
+- [Dell'Acqua et al. 2023][jagged-frontier] — framing source for the `capability_scope` Add 4 (added 2026-05-08 per idea-4 jagged-frontier review). Also at [`../../../research/related-work.md § Dell'Acqua et al. 2023 — Jagged Frontier`](../../research/related-work.md#dellacqua-et-al-2023--jagged-frontier).
 - [`.work/idea-assessments/4-jagged-frontier.md`](../../../../../.work/idea-assessments/4-jagged-frontier.md) — full assessment with 2-round review trail (chat `idea-4-jagged-frontier-r-33C475`); split static (itd-5 here) vs dynamic (Frontier Awareness) preserved in chat record.
 
 [jagged-frontier]: https://www.hbs.edu/faculty/Pages/item.aspx?num=64700 "Dell'Acqua, McFowland, Mollick et al. (2023) — Navigating the Jagged Technological Frontier, HBS Working Paper 24-013; published Organization Science 2025"

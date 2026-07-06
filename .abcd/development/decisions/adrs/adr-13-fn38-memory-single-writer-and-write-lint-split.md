@@ -98,5 +98,5 @@ A grill-me interview resolved the design tree:
 
 ## Related Documentation
 
-- [ADR-8: Dual-Backend Review with Asymmetric Trust](./adr-8-dual-backend-review-asymmetric-trust.md)
+- [ADR-8: Dual-Backend Review with Asymmetric Trust](adr-8-dual-backend-review-asymmetric-trust.md)
 - Intent: `.abcd/development/roadmap/intents/drafts/itd-36-memory-unification.md`

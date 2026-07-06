@@ -113,23 +113,23 @@ What's now easier; what's now harder; what new obligations the decision creates
 
 | ID | Title | Status | Date |
 |---|---|---|---|
-| [adr-1](./adr-1-three-layer-mental-model.md) | Three-layer mental model (brief / intent / spec) | accepted | 2026-05-04 |
-| [adr-2](./adr-2-three-intent-kinds.md) | Three intent kinds (standalone / bundle-member / discipline) | accepted | 2026-05-07 |
-| [adr-3](./adr-3-directory-as-truth-for-lifecycle.md) | Directory location is the source of truth for lifecycle state | accepted | 2026-05-07 |
-| [adr-4](./adr-4-lifeboat-as-regenerable-output.md) | Lifeboat is regenerable output; voyage is the operations namespace | accepted | 2026-05-04 |
-| [adr-5](./adr-5-brief-is-current-state.md) | Brief is the current state; no version label, no archive directory | accepted | 2026-05-08 |
-| [adr-6](./adr-6-rp-review-storage-and-architecture.md) | RP review storage (hybrid commit/ignore) and abcd-side wrapper architecture | accepted | 2026-05-10 |
-| [adr-7](./adr-7-grill-skill-and-glossary.md) | `/abcd:intent grill` — one sub-verb with two inseparable phases; cite-or-fail lint; bounded-context glossary structure | accepted | 2026-05-11 |
-| [adr-8](./adr-8-dual-backend-review-asymmetric-trust.md) | Dual-backend review (RP + Codex CLI) with asymmetric trust — scoped reviewer's verdict gates; mandatory stopping rule | accepted | 2026-05-16 |
-| [adr-9](./adr-9-phase-as-product-layer.md) | Phase as a product-reflection layer between brief and intent; replaces plugin-version language | accepted | 2026-05-16 |
-| [adr-10](./adr-10-phase-negotiator-grounded-tradeoffs.md) | The phase negotiator — a Socratic agent that proposes phases and grounds every trade-off in the DAG / phase acceptance | accepted | 2026-05-16 |
-| [adr-11](./adr-11-spec-terminology-rename.md) | One canonical word for a specced block of work — rename the *how* layer to "spec" | accepted | 2026-05-18 |
-| [adr-12](./adr-12-issue-ledger-live-vs-structured.md) | `.work/issues.md` stays the live operational ledger; structured `iss-*` store deferred until fn-22 is re-planned | accepted | 2026-06-06 |
-| [adr-13](./adr-13-fn38-memory-single-writer-and-write-lint-split.md) | fn-38 memory is single-writer (atomic-rename, no txn/recovery); split into fn-38 (write) + fn-39 (lint); re-plan via flow-next with triple-backend review | accepted | 2026-06-09 |
-| [adr-14](./adr-14-fn40-guard-fail-closed-full-required-manifest.md) | Guard degraded fallback fails closed to the full required manifest (integrity not coverage); floor beneath, never empty | accepted | 2026-06-10 |
-| [adr-15](./adr-15-abstraction-boundary-warn-not-block.md) | Abstraction boundary warns, never blocks — argv-sentinel live discriminator (fn-37.3), artifact-only static detection, PreToolUse hook deferred | accepted | 2026-06-11 |
-| [adr-16](./adr-16-fn43-autodrain-boundary-and-gate-defaults.md) | Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; drain cost-bounded by processed entries | accepted | 2026-06-11 |
-| [adr-17](./adr-17-rp-chat-send-override-supersedes-acj1-env-skip.md) | `rp chat-send` becomes a declared abcd override (scoped supersession of fn-33 AC-J1's env-skip) — fixed budget pre-flight on every path, driven-path reversal, durable `--selected-paths`, vestigial SKIP export as rollback path | accepted | 2026-06-11 |
-| [adr-18](./adr-18-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) | The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch (no override may re-include memory) | accepted | 2026-06-13 |
-| [adr-19](./adr-19-plugin-json-version-carve-out.md) | The plugin version lives only in the published snapshot; dev files stay unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
-| [adr-20](./adr-20-manifest-version-lockstep.md) | The two published manifests stay version-consistent via a read-only anti-drift checker over a pinned per-tree path list; dev stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |
+| [adr-1](adr-1-three-layer-mental-model.md) | Three-layer mental model (brief / intent / spec) | accepted | 2026-05-04 |
+| [adr-2](adr-2-three-intent-kinds.md) | Three intent kinds (standalone / bundle-member / discipline) | accepted | 2026-05-07 |
+| [adr-3](adr-3-directory-as-truth-for-lifecycle.md) | Directory location is the source of truth for lifecycle state | accepted | 2026-05-07 |
+| [adr-4](adr-4-lifeboat-as-regenerable-output.md) | Lifeboat is regenerable output; voyage is the operations namespace | accepted | 2026-05-04 |
+| [adr-5](adr-5-brief-is-current-state.md) | Brief is the current state; no version label, no archive directory | accepted | 2026-05-08 |
+| [adr-6](adr-6-rp-review-storage-and-architecture.md) | RP review storage (hybrid commit/ignore) and abcd-side wrapper architecture | accepted | 2026-05-10 |
+| [adr-7](adr-7-grill-skill-and-glossary.md) | `/abcd:intent grill` — one sub-verb with two inseparable phases; cite-or-fail lint; bounded-context glossary structure | accepted | 2026-05-11 |
+| [adr-8](adr-8-dual-backend-review-asymmetric-trust.md) | Dual-backend review (RP + Codex CLI) with asymmetric trust — scoped reviewer's verdict gates; mandatory stopping rule | accepted | 2026-05-16 |
+| [adr-9](adr-9-phase-as-product-layer.md) | Phase as a product-reflection layer between brief and intent; replaces plugin-version language | accepted | 2026-05-16 |
+| [adr-10](adr-10-phase-negotiator-grounded-tradeoffs.md) | The phase negotiator — a Socratic agent that proposes phases and grounds every trade-off in the DAG / phase acceptance | accepted | 2026-05-16 |
+| [adr-11](adr-11-spec-terminology-rename.md) | One canonical word for a specced block of work — rename the *how* layer to "spec" | accepted | 2026-05-18 |
+| [adr-12](adr-12-issue-ledger-live-vs-structured.md) | `.work/issues.md` stays the live operational ledger; structured `iss-*` store deferred until fn-22 is re-planned | accepted | 2026-06-06 |
+| [adr-13](adr-13-fn38-memory-single-writer-and-write-lint-split.md) | fn-38 memory is single-writer (atomic-rename, no txn/recovery); split into fn-38 (write) + fn-39 (lint); re-plan via flow-next with triple-backend review | accepted | 2026-06-09 |
+| [adr-14](adr-14-fn40-guard-fail-closed-full-required-manifest.md) | Guard degraded fallback fails closed to the full required manifest (integrity not coverage); floor beneath, never empty | accepted | 2026-06-10 |
+| [adr-15](adr-15-abstraction-boundary-warn-not-block.md) | Abstraction boundary warns, never blocks — argv-sentinel live discriminator (fn-37.3), artifact-only static detection, PreToolUse hook deferred | accepted | 2026-06-11 |
+| [adr-16](adr-16-fn43-autodrain-boundary-and-gate-defaults.md) | Autodrain fires at the Ralph post-iteration edge only (no Claude Code hook); the gate reports, never blocks; drain cost-bounded by processed entries | accepted | 2026-06-11 |
+| [adr-17](adr-17-rp-chat-send-override-supersedes-acj1-env-skip.md) | `rp chat-send` becomes a declared abcd override (scoped supersession of fn-33 AC-J1's env-skip) — fixed budget pre-flight on every path, driven-path reversal, durable `--selected-paths`, vestigial SKIP export as rollback path | accepted | 2026-06-11 |
+| [adr-18](adr-18-launch-payload-excludes-memory-gate-scoped-to-lifeboat.md) | The public launch payload excludes `.abcd/memory/**` as policy; the restrictive-licence gate is scoped to the lifeboat, future/inert at launch (no override may re-include memory) | accepted | 2026-06-13 |
+| [adr-19](adr-19-plugin-json-version-carve-out.md) | The plugin version lives only in the published snapshot; dev files stay unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
+| [adr-20](adr-20-manifest-version-lockstep.md) | The two published manifests stay version-consistent via a read-only anti-drift checker over a pinned per-tree path list; dev stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |

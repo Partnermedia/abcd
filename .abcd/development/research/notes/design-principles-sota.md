@@ -26,7 +26,7 @@ frameworks abcd shares DNA with — PAUL, CARL, Karpathy, Naur, Dell'Acqua);
 > **What this note is not.** It is not a decision (those are ADRs) and not
 > forward scope (those are intents). It is the evidence layer under the
 > principles — why they are defensible, and where they knowingly diverge from
-> consensus. Per [`README.md`](./README.md), a note may *inform* an ADR or
+> consensus. Per [`README.md`](README.md), a note may *inform* an ADR or
 > intent; it is not one.
 
 ---
@@ -516,4 +516,4 @@ project, and the one abcd most visibly applies to itself.
 - [`_references.md`](../_references.md) — canonical bibliography registry; the prior-art and methodology entries cited here are appended there.
 - [`../../brief/01-product/03-mental-model.md`](../../brief/01-product/03-mental-model.md) — the four-layer model Principle 1 grounds, including the Naurian-gap section Principle 6 extends.
 - [`../../brief/05-internals/04-universal-patterns.md`](../../brief/05-internals/04-universal-patterns.md) — the MCP-preferred/structural-fallback, plugin-preferred, vendor-agnostic-adapter, JSON-internal/MD-render, and artefact-lifecycle-taxonomy patterns that Principles 3 and 4 implement.
-- [`../../decisions/adrs/`](../../decisions/adrs/) — the settled decisions these principles emerged from; a principle here may inform a future ADR.
+- [`../../decisions/adrs/`](../../decisions/adrs) — the settled decisions these principles emerged from; a principle here may inform a future ADR.

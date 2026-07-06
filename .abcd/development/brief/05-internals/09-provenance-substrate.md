@@ -49,7 +49,7 @@ Citation is read-only after creation; updates require a new ingest pass (`/abcd:
 
 ## 3. Source-hash registry
 
-`.abcd/memory/.sources_index.json` — DURABLE source metadata, only PARTIALLY regenerable (ADR-13; this supersedes the blanket "regenerable" classification of [`04-universal-patterns.md § 8`](./04-universal-patterns.md#8-artefact-lifecycle-taxonomy) for this file): fields about a DISCARDED original (`source_token_count`, `token_count_version`) cannot be rebuilt by crawling the retained pages, so the registry is authoritative for them; only the crawl-derivable subset (the `source_hash` set) is fingerprint-validated against the pages. The key is `sha256(normalised-source-text)` (line endings + trailing whitespace normalised before encoding).
+`.abcd/memory/.sources_index.json` — DURABLE source metadata, only PARTIALLY regenerable (ADR-13; this supersedes the blanket "regenerable" classification of [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy) for this file): fields about a DISCARDED original (`source_token_count`, `token_count_version`) cannot be rebuilt by crawling the retained pages, so the registry is authoritative for them; only the crawl-derivable subset (the `source_hash` set) is fingerprint-validated against the pages. The key is `sha256(normalised-source-text)` (line endings + trailing whitespace normalised before encoding).
 
 ```json
 {
@@ -104,7 +104,7 @@ Lint codes referenced below (`ML*`, `MQ*`) ship with fn-39 (the write/lint split
 
 ## 6. Composition with adjacent surfaces
 
-- **`memory.py` adapter** ([`02-adapters.md`](./02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
+- **`memory.py` adapter** ([`02-adapters.md`](02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
 - **`/abcd:memory ingest`** (this substrate's primary consumer) consumes for: licence detection on every external source, citation generation on every page, registry update on every ingest.
 - **`/abcd:loot`** (later-phase consumer) consumes for: licence detection on vendored repos, citation generation in `.abcd/development/activity/loot/<source>.md`, registry update on every vendor pass.
 - **`/abcd:disembark` (lifeboat)** is the gate's real consumer (adr-18): it reads the registry for restrictive-licence enforcement over the curated memory/provenance it publishes; does not write to it. At launch the gate is future/inert — `/abcd:launch` excludes `.abcd/` wholesale and is not the gate's consumer (the launch dry-run only renders the gate's verdicts diagnostically).
@@ -119,7 +119,7 @@ The substrate ships alongside itd-36. The `ML*`/`MQ*` lint family is NOT part of
 
 ## References
 
-- [`07-memory.md`](./07-memory.md) — primary consumer of this substrate
-- [`02-adapters.md`](./02-adapters.md) — adapter dispatcher pattern (provenance substrate is NOT a dispatcher; it's a flat library used by ingest + loot)
-- [`04-universal-patterns.md § 8`](./04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — source-hash registry is regenerable per the lifecycle taxonomy
-- [`itd-26-loot-oss-vendor.md`](../../roadmap/intents/drafts/itd-26-loot-oss-vendor.md) — later-phase consumer; verb lands in a later phase but substrate ships early
+- [`07-memory.md`](07-memory.md) — primary consumer of this substrate
+- [`02-adapters.md`](02-adapters.md) — adapter dispatcher pattern (provenance substrate is NOT a dispatcher; it's a flat library used by ingest + loot)
+- [`04-universal-patterns.md § 8`](04-universal-patterns.md#8-artefact-lifecycle-taxonomy) — source-hash registry is regenerable per the lifecycle taxonomy
+- [`itd-26-loot-oss-vendor.md`](../../intents/drafts/itd-26-loot-oss-vendor.md) — later-phase consumer; verb lands in a later phase but substrate ships early

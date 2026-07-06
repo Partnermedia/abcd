@@ -302,10 +302,10 @@ responsibility, not the bridge's.
 
 ## Related ADRs
 
-- [ADR-01: Harness Interface Design](./01-harness-interface.md) — Phase 0 lock
+- [ADR-01: Harness Interface Design](01-harness-interface.md) — Phase 0 lock
   on the `Harness` Protocol and `mcp_call` signature. This ADR extends ADR-01's
   `MCPBridge` to a second caller shape (host-injected) without changing its
   signature.
-- [ADR-02: MCPBridge Implementation Contract](./02-mcpbridge-implementation-contract.md)
+- [ADR-02: MCPBridge Implementation Contract](02-mcpbridge-implementation-contract.md)
   — the spawn-mode contract. This ADR extends ADR-02 additively; the spawn-mode
   contract is unchanged.

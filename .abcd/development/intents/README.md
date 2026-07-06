@@ -22,7 +22,7 @@ Intent IDs follow the pattern `itd-N` (unpadded, mirrors flow-next's `fn-N` conv
 
 `itd` reads as "intent" and pairs visually with flow-next's `fn-N` (spec).
 
-**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../phases/), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md)).
+**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)).
 
 **Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `fn-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint.py`, registries, dashboards) rather than via filename padding.
 
@@ -30,7 +30,7 @@ Intent IDs follow the pattern `itd-N` (unpadded, mirrors flow-next's `fn-N` conv
 
 ## Three Intent Kinds
 
-Every intent has a `kind` declared in frontmatter, set at `/abcd:intent plan` time. Three kinds exist (see [`brief/04-surfaces/05-intent.md § 1`](../../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) for the canonical reference):
+Every intent has a `kind` declared in frontmatter, set at `/abcd:intent plan` time. Three kinds exist (see [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) for the canonical reference):
 
 | `kind` | Has press release? | Lives in | Maps to | Examples |
 |---|---|---|---|---|
@@ -233,7 +233,7 @@ This is also a codified abcd principle: never use real names in press releases (
 
 ## Sequencing — see `phases/`
 
-Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../phases/) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — a `drafts/` bench item, captured but not yet sequenced.
+Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — a `drafts/` bench item, captured but not yet sequenced.
 
 This README describes the intent corpus by *lifecycle state* (the directory listings below); it deliberately does not duplicate the phase→intent mapping.
 
@@ -249,13 +249,13 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 
 Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint.py`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
 
-**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../../decisions/adrs/adr-9-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
+**Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`fn-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `fn-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
 
 ---
 
 ## Drafts
 
-Captured intents that haven't been promoted to flow-next specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../phases/); this directory listing is the raw filesystem view.
+Captured intents that haven't been promoted to flow-next specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases); this directory listing is the raw filesystem view.
 
 ```
 drafts/
@@ -310,7 +310,7 @@ disciplines/
 └── itd-37-modification-grammar.md    (## Modification Grammar gate on every spec — Naur's Modification axis + Ripple sub-axis)
 ```
 
-See [`brief/04-surfaces/05-intent.md § 1`](../../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) "Discipline format" for the template (no press release; uses `## Rule` + `## Why` + `## Acceptance Criteria` instead; no `status` field).
+See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) "Discipline format" for the template (no press release; uses `## Rule` + `## Why` + `## Acceptance Criteria` instead; no `status` field).
 
 **Discipline subtypes** (e.g. methodology / documentation / audit) are deferred — see the revisit triggers in the brief. For now each discipline declares a free-text `kind_notes` field describing what kind of rule it is.
 

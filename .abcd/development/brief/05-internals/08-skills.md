@@ -16,7 +16,7 @@ A **command** is a stateful operation that creates, modifies, or moves artefacts
 - A **logbook subdirectory** (`.abcd/logbook/<verb>/<timestamp>/`) for per-invocation reports.
 - A **status + help** mode when called bare (the universal abcd convention).
 
-abcd ships **six top-level commands**: `/abcd:ahoy`, `/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent`, `/abcd:capture`. The `intent` parent has the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"`. See [`04-surfaces/`](../04-surfaces/) for per-command detail.
+abcd ships **six top-level commands**: `/abcd:ahoy`, `/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent`, `/abcd:capture`. The `intent` parent has the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"`. See [`04-surfaces/`](../04-surfaces) for per-command detail.
 
 ## Skill vs command — decision criteria
 

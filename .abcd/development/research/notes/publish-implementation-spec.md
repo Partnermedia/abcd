@@ -7,7 +7,7 @@
 >
 > **Read first:** `04-surfaces/04-launch.md` (the brief's full launch design),
 > `idelphiDev/scripts/sync-to-public.sh` (the working precedent), and
-> [`publish-prior-art-sync-script.md`](./publish-prior-art-sync-script.md)
+> [`publish-prior-art-sync-script.md`](publish-prior-art-sync-script.md)
 > (a divergent port of that script, harvested out of `abcdDev/scripts/` —
 > records which mechanics are reusable and which are superseded).
 

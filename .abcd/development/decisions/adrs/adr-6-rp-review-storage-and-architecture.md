@@ -14,7 +14,7 @@ related_adrs: [adr-5]
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's prose
 > was updated by the spec-terminology-rename ADR
-> ([adr-11](./adr-11-spec-terminology-rename.md)).
+> ([adr-11](adr-11-spec-terminology-rename.md)).
 
 ## Context
 

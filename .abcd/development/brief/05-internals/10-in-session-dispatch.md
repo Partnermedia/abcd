@@ -6,7 +6,7 @@ settled wire-protocol contract that the `dispatch_agent(…, backend="in_session
 implementation and the command-markdown host instructions are built against.
 
 The cascade and backend-selection context lives in
-[`01-agents.md § Oracle backend resolution`](./01-agents.md#oracle-backend-resolution);
+[`01-agents.md § Oracle backend resolution`](01-agents.md#oracle-backend-resolution);
 this file specifies only the in-session transport.
 
 ## 1. Why two phases
@@ -296,9 +296,9 @@ test never bypasses the file by passing the result in memory.
 
 ## Related Documentation
 
-- [`01-agents.md`](./01-agents.md) — agent catalog and the oracle backend
+- [`01-agents.md`](01-agents.md) — agent catalog and the oracle backend
   resolution cascade this leg sits at the bottom of.
-- [`04-universal-patterns.md`](./04-universal-patterns.md) — the
+- [`04-universal-patterns.md`](04-universal-patterns.md) — the
   vendor-agnostic adapter / environment-branching pattern (§ 7).
 - `.flow/specs/fn-10-in-session-subagent-dispatch-oracle.md` — the spec this
   protocol is specified for.

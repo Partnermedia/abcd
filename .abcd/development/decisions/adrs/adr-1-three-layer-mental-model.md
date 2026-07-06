@@ -14,7 +14,7 @@ related_adrs: [adr-2, adr-4, adr-5, adr-9, adr-11]
 
 > **Terminology note.** The *how* layer is named the **spec**. This ADR's title
 > and body were updated by the spec-terminology-rename ADR
-> ([adr-11](./adr-11-spec-terminology-rename.md)), which records the rename
+> ([adr-11](adr-11-spec-terminology-rename.md)), which records the rename
 > decision and its rationale.
 
 ## Context

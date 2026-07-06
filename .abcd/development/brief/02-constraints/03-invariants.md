@@ -16,7 +16,7 @@ The following are non-negotiable invariants — any architectural choice that vi
 
 5. **Visibility is one switch** — `repo.visibility` (private | public) is the single switch governing what gets committed. No per-subdirectory exceptions. If sensitivity is a concern, set visibility=public (which gitignores the entire `.abcd/` namespace). See [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
 
-6. **Lifeboat is always *output*** — `.abcd/lifeboat/` is regenerable, overwritten by each disembark. History lives in `.abcd/development/voyage/`, not as accumulated snapshots. See [`02-constraints/01-platform.md § Lifeboat path`](./01-platform.md#lifeboat-path) and [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history).
+6. **Lifeboat is always *output*** — `.abcd/lifeboat/` is regenerable, overwritten by each disembark. History lives in `.abcd/development/voyage/`, not as accumulated snapshots. See [`02-constraints/01-platform.md § Lifeboat path`](01-platform.md#lifeboat-path) and [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history).
 
 7. **abcd never picks the model** — when the oracle backend is RP MCP, RepoPrompt routes models internally based on the user's UI configuration. abcd issues an MCP call and consumes the result. Cross-model perspective lives in RP, not in abcd. See [`05-internals/01-agents.md` § Oracle backend resolution](../05-internals/01-agents.md#oracle-backend-resolution).
 

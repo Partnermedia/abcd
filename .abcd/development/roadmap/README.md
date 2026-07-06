@@ -14,7 +14,7 @@ they replace plugin-version language (`v1`, `v2`). See
 - **Brief**: lives at `.abcd/development/brief/README.md` (canonical, current).
   It reflects the project's *current* state — not versioned, not archived;
   history lives in `git log`, inflection-point rationale in
-  [`../decisions/adrs/`](../decisions/adrs/) (see
+  [`../decisions/adrs/`](../decisions/adrs) (see
   [adr-5](../decisions/adrs/adr-5-brief-is-current-state.md)).
 - **Phases**: `phases/phase-N-<slug>.md` — the ordered build plan. Each phase
   doc opens with the product Expectation, then its milestone, scope, and
@@ -75,18 +75,18 @@ done
 
 | Bucket | Location | Lifecycle stage |
 |---|---|---|
-| Drafts | [intents/drafts/](intents/drafts/) | Captured (press release written), no flow-next plan yet |
-| Planned | [intents/planned/](intents/planned/) | `/abcd:intent plan` has linked an in-flight flow-next spec |
-| Shipped | [intents/shipped/](intents/shipped/) | Linked spec closed; fidelity audit queued/appended (fn-48 backfilled the lifecycle state across closed specs; the RC006/RC007 spec-side guard keeps it from re-drifting) |
-| Disciplines | [intents/disciplines/](intents/disciplines/) | Active cross-cutting rules (itd-1, itd-5, itd-37) |
-| Superseded | [intents/superseded/](intents/superseded/) | Killed by reclassification |
+| Drafts | [intents/drafts/](../intents/drafts) | Captured (press release written), no flow-next plan yet |
+| Planned | [intents/planned/](../intents/planned) | `/abcd:intent plan` has linked an in-flight flow-next spec |
+| Shipped | [intents/shipped/](../intents/shipped) | Linked spec closed; fidelity audit queued/appended (fn-48 backfilled the lifecycle state across closed specs; the RC006/RC007 spec-side guard keeps it from re-drifting) |
+| Disciplines | [intents/disciplines/](../intents/disciplines) | Active cross-cutting rules (itd-1, itd-5, itd-37) |
+| Superseded | [intents/superseded/](../intents/superseded) | Killed by reclassification |
 
 **Phase membership** is editorial, not counted here — each phase doc's `## Scope`
 is the single source for which intents it bundles (per
 [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md)). The later-phase
 (not-yet-scoped) set is enumerated stale-proof in
 [`../brief/06-delivery/03-out-of-scope.md`](../brief/06-delivery/03-out-of-scope.md).
-See [intents/README.md](intents/README.md) for the full intent index.
+See [intents/README.md](../intents/README.md) for the full intent index.
 
 **Phase audit.** A phase's delivered reality is reviewed against its structured
 `## Phase Acceptance` by the **phase-audit reviewer**
@@ -98,7 +98,7 @@ verdicts, and writes a receipt to `.abcd/logbook/audit/phase-<ts>/` without
 mutating the phase doc. The companion `PA001` lint verifies any `phase:` anchor
 names a real phase. (fn-66; see [adr-9](../decisions/adrs/adr-9-phase-as-product-layer.md).)
 
-There is no `intents/active/` directory — "active" is implicit (a planned intent's linked spec is currently in flight under `.flow/specs/`). See [intents/README.md](intents/README.md) for full lifecycle details.
+There is no `intents/active/` directory — "active" is implicit (a planned intent's linked spec is currently in flight under `.flow/specs/`). See [intents/README.md](../intents/README.md) for full lifecycle details.
 
 The first public release is cut when Phase 5 completes (see [phases/phase-5-roundtrip.md](phases/phase-5-roundtrip.md)). Each major capability defined in the brief gets a corresponding shipped intent as its phase closes, so the intent registry remains the canonical "what abcd does" record.
 
@@ -110,14 +110,14 @@ abcd uses the **press release format** (Amazon working-backwards inspired) for c
 
 **Why press releases instead of feature specs:** Feature specs are engineering-shaped from the start (Problem → Design → Tasks). Press releases are user-experience-shaped (what *exists for the user* once shipped). Forcing intent capture in user-facing language disciplines product clarity before engineering scope.
 
-See [intents/README.md](intents/README.md) for the format guide and the planned-intent index.
+See [intents/README.md](../intents/README.md) for the format guide and the planned-intent index.
 
 ---
 
 ## Related Documentation
 
 - [Brief](../brief/README.md) — canonical plugin v1 design specification
-- [intents/](intents/) — intents (drafts / planned / shipped / disciplines / superseded)
-- [phases/](phases/) — the ordered build plan; one doc per phase, each ending in a milestone
-- [research/](../research/) — SOTA research baseline + per-agent prompting research
+- [intents/](../intents) — intents (drafts / planned / shipped / disciplines / superseded)
+- [phases/](phases) — the ordered build plan; one doc per phase, each ending in a milestone
+- [research/](../research) — SOTA research baseline + per-agent prompting research
 - [activity/](../activity/) — curated-from-volatile-sources artefacts (reviews, issues, notes)
