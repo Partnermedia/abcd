@@ -61,7 +61,7 @@ that backend is attached) via the Go CLI.
 | Phase 2 — History, capture, and memory | Native transcript store, `/abcd:capture` ledger, and `/abcd:memory` substrate | [phase-2-capture.md](phase-2-capture.md) |
 | Phase 3 — Intent, brief, and review | `/abcd:intent` + `grill` harden an intent; review runs via the host-delegated oracle; MCP front door opens | [phase-3-intent.md](phase-3-intent.md) |
 | Phase 4 — Native spec and task engine | `intent → plan → ship` over the native store, with the companion harness `ccpm` as the deeper backend | [phase-4-spec-engine.md](phase-4-spec-engine.md) |
-| Phase 5 — Autonomous run seam | A pluggable run seam (native loop / Workflows / the companion harness loop) drives specs unattended | [phase-5-run-seam.md](phase-5-run-seam.md) |
+| Phase 5 — Autonomous run seam | A pluggable run seam (native loop / Workflows / the companion harness's loop) drives specs unattended | [phase-5-run-seam.md](phase-5-run-seam.md) |
 | Phase 6 — Lifeboat round-trip | `/abcd:disembark` + `/abcd:embark`; a faithful lifeboat round-trips | [phase-6-lifeboat.md](phase-6-lifeboat.md) |
 
 Phases 1–6 are organised by **user-capability moment** — each one ends in a

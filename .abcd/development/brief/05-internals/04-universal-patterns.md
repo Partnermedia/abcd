@@ -131,7 +131,7 @@ This is the core internals story. **Every capability abcd could take from an ext
 | **oracle** | host-delegated LLM (adr-25) | native / CLI / API / MCP oracle backends (RepoPrompt, codex, …) |
 | **history** | native local redacted transcript store (adr-29) | specstory capture source |
 | **spec** | native minimal spec/task store (adr-26) | the companion harness `ccpm` over conventions (adr-24) |
-| **run** | thin native Go loop (adr-27) | Claude Workflows, the companion harness agent loop |
+| **run** | thin native Go loop (adr-27) | Claude Workflows, the companion harness's agent loop |
 | **scanner** | native secret/PII scan | gitleaks, Presidio, TruffleHog, … |
 
 Each seam is a Go interface in `internal/adapter/<seam>` with a native implementation that ships in the binary; concrete external backends live behind the same interface, selected by config. Consumers in `internal/core` depend on the **interface**, never on a vendor — they consume "an oracle", "a transcript store", "a spec store", not "RepoPrompt" or "specstory". Adding a backend = implement the interface and register it in `internal/registry`; no edits to consumers.

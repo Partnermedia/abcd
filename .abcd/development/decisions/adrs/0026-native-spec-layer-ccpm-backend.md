@@ -21,18 +21,18 @@ needing a spec/task store of its own — but abcd already owns a lightweight,
 proven pattern for lifecycle state (directory location is the source of truth,
 [ADR-3](0003-directory-as-truth-for-lifecycle.md)), and the companion harness's `ccpm` is a
 capable deeper store abcd can reach at the convention level without linking to
-it ([ADR-24](0024-the companion harness-peer-via-conventions-and-mcp.md)).
+it ([ADR-24](0024-companion-harness-peer-via-conventions-and-mcp.md)).
 
 ## Decision
 
-The spec/task layer is a **native minimal store as the MVP**, with **the companion harness
-`ccpm` as the primary deeper backend**, and **flow-next is not built**.
+The spec/task layer is a **native minimal store as the MVP**, with **the companion
+harness `ccpm` as the primary deeper backend**, and **flow-next is not built**.
 
 - **Native minimal (MVP).** Specs and tasks are directories whose location
   encodes status ([ADR-3](0003-directory-as-truth-for-lifecycle.md)), plus a
   **dependency graph** over them. This is enough to plan, sequence, and track
   work with no external tool, and it ships in the first milestone.
-- **the companion harness `ccpm` (primary deeper backend).** When an operator wants a richer
+- **The companion harness `ccpm` (primary deeper backend).** When an operator wants a richer
   store, abcd reads and writes the `ccpm` markdown layout at the **convention
   level** — a shared on-disk shape, no binary or library dependency on the companion harness.
 - **flow-next: not built.** Its role is covered by the native store below and

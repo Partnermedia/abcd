@@ -1,6 +1,6 @@
 ---
 id: adr-24
-slug: the companion harness-peer-via-conventions-and-mcp
+slug: companion-harness-peer-via-conventions-and-mcp
 status: accepted
 date: 2026-07-06
 supersedes: null
@@ -36,7 +36,7 @@ builds against the other's internals.
   ([ADR-23](0023-transport-agnostic-core.md)).
 
 Interoperation is a capability, never a prerequisite: abcd runs fully with no
-the companion harness present, and the companion harness owes abcd no build-time symbol.
+companion harness present, and the companion harness owes abcd no build-time symbol.
 
 ## Alternatives Considered
 

@@ -50,7 +50,7 @@ native spec store reports right now.
 The delivery order is **MVP → the companion harness → Claude Code** (per
 [adr-28](../decisions/adrs/0028-single-repo-curated-release.md) and
 [adr-26](../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)): the native
-MVP surface first, the the companion harness-backed deepening next, the Claude Code surface
+MVP surface first, the companion-harness-backed deepening next, the Claude Code surface
 last.
 
 **Phase progress.** Phases run in spec-dependency order, not lockstep; the

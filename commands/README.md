@@ -1,6 +1,6 @@
 # commands/
 
-The plugin command surface, auto-loaded by Claude Code and the companion harness. Each markdown
+The plugin command surface, auto-loaded by compatible agent harnesses. Each markdown
 file is a slash command whose body instructs the host agent to invoke the `abcd`
 binary and present the result — the markdown is the surface, the binary is the
 engine.

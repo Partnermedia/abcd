@@ -9,8 +9,8 @@ Short and pointer-heavy; durable design truth lives in
 
 `abcd-cli` is the from-scratch **Go** rebuild of abcd as a host-agnostic
 configuration layer for development — a single `abcd` binary with a
-transport-agnostic core, usable as a Claude Code plugin and in the the companion harness
-ecosystem, depending on no external tools. It supersedes the Python
+transport-agnostic core, usable as a Claude Code plugin and in the companion
+harness's ecosystem, depending on no external tools. It supersedes the Python
 implementation (frozen, read-only, in the sibling `abcdDev` repo).
 
 ## Current phase

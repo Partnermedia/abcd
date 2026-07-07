@@ -22,7 +22,7 @@ Each dropped hard dependency maps to exactly one seam under `internal/adapter/`:
 | **oracle** | hand a prompt to a model, receive a structured verdict/result | host-delegated LLM — abcd emits the prompt, the host's subagent dispatch runs it (adr-25) | `native` (abcd calls a local model), `cli` (e.g. `codex exec`), `api` (direct provider API), `mcp` (RepoPrompt / codex over MCP) |
 | **history** | capture and read session transcripts | native local redacted transcript store — root-SHA-keyed, gitignored, redacted on capture (adr-29) | specstory capture source (imported over the same store) |
 | **spec** | store and query specs/tasks + their dependency graph | native minimal store — directory-as-truth (adr-3) + dependency graph (adr-26) | the companion harness `ccpm`, read/written at the convention level (adr-24) |
-| **run** | iterate ready work, gate each step on a receipt, enforce a safety guard | thin native Go loop (adr-27) | Claude Workflows, the companion harness agent loop |
+| **run** | iterate ready work, gate each step on a receipt, enforce a safety guard | thin native Go loop (adr-27) | Claude Workflows, the companion harness's agent loop |
 | **scanner** | scan content for secrets/PII, return findings | native secret/PII scan (built-in patterns) | gitleaks, Presidio, TruffleHog |
 
 **Backend resolution.** `.abcd/config.json` → `<seam>.backend` selects the backend;

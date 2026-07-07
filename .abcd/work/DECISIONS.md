@@ -20,4 +20,4 @@ parallel-agent merge contention bites.
 - 2026-07-06 — Three-tier `.abcd/` layout: development (durable) / work (shared) /
   .work.local (local). `docs/` user-facing only.
 - 2026-07-06 — Module path `github.com/REPPL/abcd-cli`; Cobra approved as the CLI
-  framework (matches ferry + the companion harness).
+  framework (matches ferry and the companion harness).

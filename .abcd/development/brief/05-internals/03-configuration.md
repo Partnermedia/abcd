@@ -48,7 +48,7 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
                                         //   (the companion harness over conventions, adr-24)
   },
   "run": {                              // run seam — internal/adapter/run
-    "backend": "native"                 // "native" (thin Go loop, adr-27) | "workflows" | "the companion harness"
+    "backend": "native"                 // "native" (thin Go loop, adr-27) | "workflows" | "companion"
                                         //   each iteration gates on a receipt and enforces the safety guard
   },
   "history": {                          // history seam — internal/adapter/history
@@ -311,7 +311,7 @@ abcd/
 │   │   ├── oracle/                     # host-delegated default; native | cli | api | mcp backends (adr-25)
 │   │   ├── history/                    # native transcript store; specstory import (adr-29)
 │   │   ├── spec/                       # native minimal store; the companion harness ccpm over conventions (adr-26)
-│   │   ├── run/                        # thin native loop; Claude Workflows / the companion harness loop (adr-27)
+│   │   ├── run/                        # thin native loop; Claude Workflows / the companion harness's loop (adr-27)
 │   │   └── scanner/                    # native secret/PII scan; gitleaks / TruffleHog
 │   ├── registry/                       # wired-adapter registry — resolves <seam>.backend to an implementation
 │   └── surface/

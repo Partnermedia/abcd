@@ -30,8 +30,8 @@ what an autonomous run *is* — iterate over ready work, gate each step on a
 an adapter:
 
 - **Claude Workflows** — delegate the loop to the host's workflow engine.
-- **the companion harness agent loop** — drive the companion harness's loop as a peer over conventions/MCP
-  ([ADR-24](0024-the companion harness-peer-via-conventions-and-mcp.md)).
+- **The companion harness's agent loop** — drive the companion harness's loop as a peer over conventions/MCP
+  ([ADR-24](0024-companion-harness-peer-via-conventions-and-mcp.md)).
 - **Thin native Go loop** — a minimal built-in fallback that iterates,
   gates on receipts, and enforces the safety guard, so abcd can run
   autonomously with no external loop present.

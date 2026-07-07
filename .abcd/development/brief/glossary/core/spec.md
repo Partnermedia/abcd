@@ -18,8 +18,8 @@ versions: null
 A **spec** is the implementation unit in abcd's workflow. Where an intent
 describes *what* and *why* in human/customer terms, a spec describes *how* in
 technical terms. Each spec lives in the **native spec store** as a directory
-whose location encodes its status, decomposed into numbered tasks; the companion harness
-`ccpm` is the primary deeper backend
+whose location encodes its status, decomposed into numbered tasks; the companion
+harness `ccpm` is the primary deeper backend
 ([adr-26](../../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)).
 
 ## When to use

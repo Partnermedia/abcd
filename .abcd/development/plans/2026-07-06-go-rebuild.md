@@ -21,7 +21,7 @@ rebuilds abcd from scratch in **Go**, depending on **no external tools**
 (transcript capture, an independent reviewer, a context-assembly tool, an
 autonomous loop, a planning pipeline), so abcd becomes a portable, open-source
 **configuration layer for development** — useful as a Claude Code plugin, inside
-the the companion harness ecosystem, and later in any MCP host.
+the companion harness's ecosystem, and later in any MCP host.
 
 This is a from-scratch rebuild guided by the existing brief/intents/ADRs (the
 design record *is* the spec), not a line-by-line port. It is the disembark/embark
@@ -36,10 +36,10 @@ Each row is ratified in an ADR; see [`../decisions/`](../decisions).
 | Rebuild | Rebuild abcd as a single Go binary; retire the Python plugin machinery. | [ADR-21](../decisions/adrs/0021-rebuild-in-go.md) |
 | Adapters | Every bundled dependency becomes a **pluggable adapter over a native default** — "basic built-in, plug in for power". | [ADR-22](../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md) |
 | Core shape | A **transport-agnostic Go core**: capabilities are functions taking a structured request, returning a structured result — no stdout/prompt/transport coupling. Thin front doors (CLI, markdown plugin, MCP) call the same core. | [ADR-23](../decisions/adrs/0023-transport-agnostic-core.md) |
-| the companion harness | **Peer via conventions + MCP.** No Go dependency either direction; integrate through auto-load conventions and (later) an MCP server. | [ADR-24](../decisions/adrs/0024-the companion harness-peer-via-conventions-and-mcp.md) |
+| the companion harness | **Peer via conventions + MCP.** No Go dependency either direction; integrate through auto-load conventions and (later) an MCP server. | [ADR-24](../decisions/adrs/0024-companion-harness-peer-via-conventions-and-mcp.md) |
 | LLM path | **Host-delegated by default.** The core does deterministic work (parsing, gates, file ops) and hands prompts back to the host's subagent dispatch. Native/CLI/API/MCP oracles are opt-in adapters. | [ADR-25](../decisions/adrs/0025-host-delegated-llm-default.md) |
 | Spec/task | **Native minimal MVP**, with the companion harness `ccpm` as the primary deeper backend (convention-level, no binary dep). The prior bundled planning pipeline is **dropped** from the default plan. | [ADR-26](../decisions/adrs/0026-native-spec-layer-ccpm-backend.md) |
-| Autonomous run | **A pluggable seam, not a native port** of the prior autonomous loop: Claude Workflows on Claude Code, the the companion harness agent loop on the companion harness, a thin native Go loop as the headless fallback. | [ADR-27](../decisions/adrs/0027-autonomous-run-pluggable-seam.md) |
+| Autonomous run | **A pluggable seam, not a native port** of the prior autonomous loop: Claude Workflows on Claude Code, the companion harness's agent loop on the companion harness, a thin native Go loop as the headless fallback. | [ADR-27](../decisions/adrs/0027-autonomous-run-pluggable-seam.md) |
 | Repo topology | **Single repo, curated release** (no dev→public mirror). `.abcd/**` stays in-tree but is excluded from the release artifact by packaging; the repo *is* the marketplace. | [ADR-28](../decisions/adrs/0028-single-repo-curated-release.md) |
 | Transcripts | **Native local store by default** (redacted, gitignored, private); a private companion/remote is optional for a shared corpus; hosted transcript cloud is an optional convenience, never the MVP default. | [ADR-29](../decisions/adrs/0029-native-transcript-corpus.md) |
 | Record IA | **Flat artefact-type folders** under `.abcd/development/`; Diátaxis for user docs; generated CLI reference. | [ADR-30](../decisions/adrs/0030-record-information-architecture.md) |
@@ -56,7 +56,7 @@ lives in the core. Three thin front doors call the same core:
 
 ```
                  ┌── surface/cli   (Cobra)      → default, reliable, no daemon
-internal/core ───┼── plugin surface (markdown)  → auto-loaded by Claude Code + the companion harness; shells to `abcd <verb> --json`
+internal/core ───┼── plugin surface (markdown)  → auto-loaded by Claude Code and the companion harness; shells to `abcd <verb> --json`
                  └── surface/mcp   (MCP server)  → added anytime; exposes core verbs as mcp:abcd:* tools
 ```
 
@@ -78,7 +78,7 @@ internal/adapter/             # pluggable seams (interface + native impl + exter
   oracle/     # HostDelegated (default) | ClaudeCLI | AnthropicAPI | MCPOracle
   history/    # native store (default) | hosted transcript adapter
   spec/       # native store (default) | the companion harness ccpm (primary deeper backend)
-  run/        # native thin loop (fallback) | ClaudeWorkflows (CC) | The companion harnessLoop
+  run/        # native thin loop (fallback) | ClaudeWorkflows (CC) | the companion harness's loop
   scanner/    # native secret/PII (default) | gitleaks | trufflehog
 internal/surface/cli/         # Cobra tree → core
 internal/surface/mcp/         # MCP server → core (added once a surface is worth exposing)
@@ -86,7 +86,7 @@ internal/config/  internal/registry/   # declarative adapter registry
 # Plugin surface (shipped in the CC plugin, auto-loaded by the companion harness too):
 commands/abcd/*.md            # each shells to `abcd <verb> --json`
 agents/*.md                   # markdown host-delegated reviewers
-skills/**  +  .the companion harness/skills/ mirror   # the companion harness does NOT read .claude/skills
+skills/**  +  the companion harness's skills-directory mirror   # the companion harness does NOT read .claude/skills
 hooks/                        # prompt-router + guard hooks (Go binaries or thin shims)
 .claude-plugin/{plugin.json,marketplace.json}
 ```
@@ -231,7 +231,7 @@ easiest → hardest.
 | 1 | **Transcript capture** | Structured file writes to a native, redacted, machine-local history store keyed on root-commit SHA (gitignored). Optional sync to a private companion for a shared corpus. | **Trivial** | Hosted transcript storage/sharing as an optional convenience — never the MVP default. |
 | 2 | **Independent reviewer** | The oracle basic already exists: host-delegated review (default). An independent local reviewer is a subprocess LLM call behind the `oracle` interface. | **Easy** | A genuinely independent second-model adversarial review (breaks host echo-chamber). Plug via a subprocess adapter. |
 | 3 | **Context-assembly tool** | Host-delegated review + simple deterministic context assembly (glob/rank files). Review-tab lifecycle becomes plain records in abcd's store. | **Moderate** | Strong context selection + an independent MCP oracle. Plug via an MCP-client adapter — the case that justifies the MCP front door. |
-| 4 | **Autonomous loop** | A thin Go loop that spawns host workers per ready task with receipt gating + a safety guard hook — a *fallback only*. Real orchestration is delegated to the host. | **Low** (fallback only) | Battle-tested unattended resilience — but the host now provides it. Claude Workflows on Claude Code; the the companion harness agent loop on the companion harness. |
+| 4 | **Autonomous loop** | A thin Go loop that spawns host workers per ready task with receipt gating + a safety guard hook — a *fallback only*. Real orchestration is delegated to the host. | **Low** (fallback only) | Battle-tested unattended resilience — but the host now provides it. Claude Workflows on Claude Code; the companion harness's agent loop on the companion harness. |
 | 5 | **Planning pipeline** | A native minimal spec/task engine: specs, tasks, dependency graph, status-by-directory. The data model is tractable; the full plan/work/interview pipeline is large. | **Moderate** (minimal only) | A mature planning pipeline. Plug the **primary** deeper backend = the companion harness `ccpm` at the markdown-convention level (epics/PRDs, no binary dep). The prior bundled pipeline is **not** in the default plan. |
 
 **Design consequence:** the two former "hard" cases collapse. The autonomous loop
@@ -261,9 +261,9 @@ implementation (repo-relative paths within that codebase):
 - **Behaviour spec** = the brief's per-command contracts under
   `brief/04-surfaces/` (one per verb), the mental model in
   `brief/01-product/03-mental-model.md`, and the ADRs in `decisions/adrs/`.
-- **the companion harness auto-load targets** (so the plugin surface lands correctly): the
-  the companion harness ecosystem's command discovery, subagent definition, memory loader, and
-  skill discovery surfaces (skills must be mirrored to `.the companion harness/skills/` — the companion harness
+- **The companion harness's auto-load targets** (so the plugin surface lands correctly): the
+  companion harness's command discovery, subagent definition, memory loader, and
+  skill discovery surfaces (skills must be mirrored to the companion harness's skills directory — the companion harness
   does not read `.claude/skills`), plus its MCP surface for the MCP front door.
 
 ## Implementation phasing
@@ -309,7 +309,7 @@ ships a compiled binary and per-line retention is already wanted.
 skeleton + `internal/registry` + `internal/adapter/*` interfaces (oracle, history,
 spec, scanner) with **native default** stubs; plugin-surface scaffolding
 (`commands/abcd/*.md` shelling to `abcd <verb> --json`;
-`.claude-plugin/{plugin.json,marketplace.json}`; the `.the companion harness/skills/` mirror).
+`.claude-plugin/{plugin.json,marketplace.json}`; the companion harness's skills-directory mirror).
 
 **Exit:** `make preflight` green; `abcd --help` runs; a trivial verb round-trips
 CLI → core → JSON, invoked from a markdown command in a real host; CI green on a
@@ -375,7 +375,7 @@ host.
 Define the `run` adapter interface; **do not port the prior autonomous loop.**
 Backends: **Claude Workflows** under Claude Code (the abcd command emits/hands off
 a workflow script for the host to run — deterministic, budget-aware); the
-**the companion harness agent loop / ccpm** under the companion harness; and a **thin native Go loop** (receipt
+**the companion harness's agent loop / ccpm** under the companion harness; and a **thin native Go loop** (receipt
 gating + a safety guard hook: block `git push`, protected-path writes) as the
 headless fallback.
 
@@ -397,7 +397,7 @@ substrate being native.
   3. `abcd launch dry-run` → assert the rendered release bundle contains zero
      `.abcd/**` paths and the secret/PII gates run for real.
   4. Load the plugin in **Claude Code** (`/abcd:ahoy`) and in **the companion harness**
-     (auto-load of commands + agents; skills via `.the companion harness/skills/`) → both invoke
+     (auto-load of commands + agents; skills via the companion harness's skills directory) → both invoke
      the same `abcd` binary and produce identical results.
 - **MCP front door (Phase 3):** start `abcd mcp`, register the abcd MCP server in
   the host, confirm the host calls `mcp:abcd:*` and gets the same core results as

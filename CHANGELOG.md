@@ -13,7 +13,7 @@ called out in a **Breaking** section.
 ## [v0.1.0] - 2026-07-07
 
 First tagged milestone: the Go rebuild through Phase 2. abcd is a single,
-host-agnostic Go binary that is also a Claude Code and the companion harness plugin, holding all
+host-agnostic Go binary that is also a plugin for compatible agent harnesses, holding all
 behaviour in a transport-agnostic `internal/core` behind a Cobra CLI front door and
 a markdown plugin surface that shells out to it.
 

@@ -5,7 +5,7 @@
 By the end of this phase, abcd can drive work autonomously through a **pluggable
 run seam** rather than a single hard-wired loop. A user can hand abcd a set of
 planned specs and have them worked to completion unattended, and the engine
-behind that run is a choice: a host **Workflows** backend, a **the companion harness loop**,
+behind that run is a choice: a host **Workflows** backend, the **companion harness's loop**,
 or abcd's own **native loop** as the always-available fallback (per
 [adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)). The seam
 presents one contract — take specs, make progress, report honestly, stop on a
@@ -21,7 +21,7 @@ engine a project chooses.
 - A run drives planned specs (Phase 4's native spec/task engine) to completion,
   recording progress and stopping on a declared STOP condition rather than
   pushing through it.
-- The Workflows and the companion harness-loop backends attach at the seam as opt-in
+- The Workflows and companion-harness-loop backends attach at the seam as opt-in
   alternatives: selecting one changes the run engine without changing the
   user-facing surface.
 - A run's output is auditable — each pass's progress is recorded so a
@@ -36,7 +36,7 @@ engine a project chooses.
   no external run engine installed, **then** the native loop drives the specs to
   completion and stops on a declared STOP condition — the run seam is whole on
   its own backend, per adr-27.
-- **Given** a project that selects the Workflows or the companion harness-loop backend, **when**
+- **Given** a project that selects the Workflows or companion-harness-loop backend, **when**
   the same run starts, **then** it drives the same specs through the chosen
   engine with the same user-facing surface — the swappable-backend property
   adr-27 guarantees.
@@ -47,14 +47,14 @@ engine a project chooses.
 ## Scope
 
 **Autonomous run seam** (per adr-27): the run adapter contract, the native loop
-as the default backend, and the Workflows and the companion harness-loop backends as opt-in
+as the default backend, and the Workflows and companion-harness-loop backends as opt-in
 alternatives at the seam. The seam is engine-neutral by construction — no single
 run engine is a hard dependency, and the run is not a port of any one upstream
 loop.
 
 **Native loop is the floor.** The default backend is abcd's own loop, so a
 project can run autonomously with nothing external installed. Workflows and the
-the companion harness loop are deepenings a project opts into.
+companion harness's loop are deepenings a project opts into.
 
 **STOP conditions are first-class.** A run declares its STOP conditions up front;
 hitting one stops the run and reports, rather than pushing through — the same
@@ -82,13 +82,13 @@ discipline the playbook applies to human-driven work.
   the lifeboat round-trip captures the result; the run seam is the last engine
   substrate the lifeboat depends on being native.
 - **Backends attach, they do not gate** — the native loop is whole on its own;
-  Workflows and the the companion harness loop can land in parallel and be wired when a
+  Workflows and the companion harness's loop can land in parallel and be wired when a
   project opts into them.
 
 ## Open questions
 
 - Confirm the run seam's STOP-condition contract is uniform across the native,
-  Workflows, and the companion harness-loop backends, so a STOP means the same thing whichever
+  Workflows, and companion-harness-loop backends, so a STOP means the same thing whichever
   engine runs.
 - Confirm the recorded per-pass progress shape is what the opt-in oracle audit
   reads, so no run-specific audit adapter is needed.

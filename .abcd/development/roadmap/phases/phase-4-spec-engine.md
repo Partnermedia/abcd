@@ -23,7 +23,7 @@ intent stops being a spec-ready PRD and becomes tracked, executable work.
   progress in the native store.
 - The native store reports true per-spec, per-task status live — no
   hand-maintained counts (the stale-proof pattern the roadmap dashboard reads).
-- The the companion harness `ccpm` adapter is wired as the opt-in deeper backend: when
+- The companion harness `ccpm` adapter is wired as the opt-in deeper backend: when
   attached, plan/ship route through ccpm and status reflects it; when absent,
   the native engine handles the whole flow (per adr-26 and
   [adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)).
@@ -47,7 +47,7 @@ intent stops being a spec-ready PRD and becomes tracked, executable work.
 ## Scope
 
 **Native spec/task engine** (per adr-26): the minimal native spec model, the
-`intent → plan → ship` flow over it, and the the companion harness `ccpm` adapter as the
+`intent → plan → ship` flow over it, and the companion harness `ccpm` adapter as the
 primary deeper backend. The engine is engine-neutral in the sense that no
 external planner is a hard dependency; ccpm attaches at the spec adapter seam.
 

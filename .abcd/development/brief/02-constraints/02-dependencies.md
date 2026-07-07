@@ -25,7 +25,7 @@ adapter degrades to the native path rather than breaking abcd.
   **flow-next is not a dependency and is not built.**
 - **Autonomous run** — a **pluggable `run` seam**
   ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)): Claude
-  Workflows, the the companion harness agent loop, or a thin native Go loop behind one
+  Workflows, the companion harness's agent loop, or a thin native Go loop behind one
   contract. Not a Ralph port; the native loop is the always-available fallback.
 - **Transcript capture** — a **native local redacted store**
   ([adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) is the
@@ -45,7 +45,7 @@ installed.
 ## Plugin interop
 
 abcd interoperates with peer tools — notably the companion harness
-([adr-24](../../decisions/adrs/0024-the companion harness-peer-via-conventions-and-mcp.md)) —
+([adr-24](../../decisions/adrs/0024-companion-harness-peer-via-conventions-and-mcp.md)) —
 over shared conventions and MCP, with **no code dependency in either
 direction**. Interop is a capability, never a prerequisite: abcd runs fully with
 no peer present.

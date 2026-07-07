@@ -79,7 +79,7 @@ the packaging boundary holds.
   track work with no external tool.
 - **ccpm backend** — the companion harness `ccpm` as the primary deeper backend, read and
   written at the **convention level**
-  ([adr-24](../../decisions/adrs/0024-the companion harness-peer-via-conventions-and-mcp.md)) —
+  ([adr-24](../../decisions/adrs/0024-companion-harness-peer-via-conventions-and-mcp.md)) —
   a peer over conventions + MCP, never a code dependency. **flow-next is not
   built.**
 
@@ -88,7 +88,7 @@ the packaging boundary holds.
 The `run` seam
 ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)): iterate
 ready work, gate each step on a **receipt**, enforce a **safety guard**. The thin
-native Go loop is the always-available fallback; Claude Workflows and the the companion harness
+native Go loop is the always-available fallback; Claude Workflows and the companion harness's
 agent loop are opt-in adapter loops behind the same seam contract. It is **not a
 Ralph port** — the receipt-gated, report-not-block iteration boundary is the seam
 contract every adapter loop inherits.

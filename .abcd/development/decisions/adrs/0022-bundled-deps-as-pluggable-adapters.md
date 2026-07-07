@@ -40,8 +40,8 @@ operator can plug in, never a floor abcd stands on:
   ([ADR-25](0025-host-delegated-llm-default.md)) is the default oracle;
   native/CLI/API/MCP backends are opt-in adapters.
 - **flow-next** → native minimal spec/task store
-  ([ADR-26](0026-native-spec-layer-ccpm-backend.md)) is the default; the companion harness
-  `ccpm` is the primary deeper backend. flow-next is **not** built.
+  ([ADR-26](0026-native-spec-layer-ccpm-backend.md)) is the default; the companion
+  harness `ccpm` is the primary deeper backend. flow-next is **not** built.
 - **Ralph** → the autonomous run is a pluggable seam
   ([ADR-27](0027-autonomous-run-pluggable-seam.md)), not a Ralph port.
 
