@@ -137,3 +137,22 @@ jobs:
           persist-credentials: false
       - name: Reviews-charter discipline (RD001-RD003)
         run: bash scripts/check-reviews.sh
+
+  # Self-discovering smoke harness (evals/): builds the binary, walks the Cobra
+  # command tree in-process, and runs every command's --help plus the read-only
+  # verbs against the built binary. Catches a command that compiles but panics when
+  # actually invoked — which the unit lane (go test ./...) misses, because the
+  # harness is behind the `smoke` build tag.
+  smoke:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25'
+      - name: Smoke every command
+        run: make smoke

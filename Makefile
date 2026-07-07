@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/REPPL/abcd-cli/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint
+.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint smoke
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
 # Pass VERSION=vX.Y.Z to stamp the version (release builds); omit for a dev build.
@@ -25,6 +25,13 @@ build:
 
 test:
 	go test ./...
+
+# Self-discovering smoke harness (evals/): build the binary, walk the Cobra tree,
+# run every command's --help + the read-only verbs. Behind the `smoke` build tag so
+# it stays out of the unit-test lane; run explicitly here, in CI's smoke job, and in
+# the release verify gate.
+smoke:
+	go test -tags smoke ./evals/...
 
 vet:
 	go vet ./...
