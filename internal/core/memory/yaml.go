@@ -1,0 +1,926 @@
+package memory
+
+import (
+	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// yaml.go — a stdlib-only YAML frontmatter parser/producer scoped to the shapes
+// the memory store uses (mirrors scripts/abcd/_yaml.py). It is a reader/writer
+// pair: parseFrontmatter(joinFileFrontmatter(dumpFrontmatter(D), "")) round-trips
+// any map D the producer admits. Supported shapes: scalars, inline flow-lists
+// [a, b], inline flow-maps { k: v }, one-level nested dicts, and a block list of
+// bare-dash flow-map/dict items (the multi-source source.sources shape).
+
+type yamlError struct{ Msg string }
+
+func (e *yamlError) Error() string { return e.Msg }
+
+func yamlErrf(format string, a ...any) *yamlError {
+	return &yamlError{Msg: fmt.Sprintf(format, a...)}
+}
+
+var keyRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)`)
+
+// ---------------------------------------------------------------------------
+// Parse
+// ---------------------------------------------------------------------------
+
+// parseFrontmatter extracts and parses the YAML frontmatter at the top of text
+// (between --- delimiters, tolerating leading HTML-comment / blank lines).
+func parseFrontmatter(text string) (map[string]any, error) {
+	lines := strings.Split(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n"), "\n")
+	start := 0
+	for start < len(lines) {
+		s := strings.TrimSpace(lines[start])
+		if s == "---" {
+			break
+		}
+		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
+			start++
+			continue
+		}
+		return nil, yamlErrf("line %d: unexpected content before frontmatter '---': %q", start+1, lines[start])
+	}
+	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
+		return nil, yamlErrf("document must start with '---'")
+	}
+	// Extract inner lines up to closing ---.
+	var fm []string
+	i := start + 1
+	found := false
+	for i < len(lines) {
+		if lines[i] == "---" {
+			found = true
+			break
+		}
+		fm = append(fm, lines[i])
+		i++
+	}
+	if !found {
+		return nil, yamlErrf("frontmatter not terminated: missing closing '---'")
+	}
+	return parseYAMLLines(fm)
+}
+
+func parseYAMLLines(lines []string) (map[string]any, error) {
+	result := map[string]any{}
+	i := 0
+	n := len(lines)
+	for i < n {
+		raw := lines[i]
+		stripped := strings.TrimSpace(raw)
+		if stripped == "" || strings.HasPrefix(stripped, "#") {
+			i++
+			continue
+		}
+		if indentOf(raw) != 0 {
+			return nil, yamlErrf("top-level key must have zero indent: %q", raw)
+		}
+		key, rest, ok := splitKeyValue(raw)
+		if !ok {
+			return nil, yamlErrf("unexpected content: %q", raw)
+		}
+		restT := strings.TrimSpace(rest)
+		if restT == "|" {
+			block, ni := collectBlockScalar(lines, i+1)
+			result[key] = strings.Join(block, "\n")
+			i = ni
+			continue
+		}
+		if restT != "" {
+			v, err := parseScalarOrInline(restT)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = v
+			i++
+			continue
+		}
+		// No inline value — look ahead.
+		if i+1 >= n {
+			result[key] = nil
+			i++
+			continue
+		}
+		next := lines[i+1]
+		nextS := strings.TrimSpace(next)
+		if nextS == "" || strings.HasPrefix(nextS, "#") {
+			result[key] = nil
+			i++
+			continue
+		}
+		nextIndent := indentOf(next)
+		if strings.HasPrefix(nextS, "- ") || nextS == "-" {
+			items, ni, err := collectBlockList(lines, i+1, nextIndent)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = items
+			i = ni
+			continue
+		}
+		if nextIndent > 0 {
+			nested, ni, err := collectNestedDict(lines, i+1, nextIndent)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = nested
+			i = ni
+			continue
+		}
+		result[key] = nil
+		i++
+	}
+	return result, nil
+}
+
+func collectBlockScalar(lines []string, start int) ([]string, int) {
+	blockIndent := -1
+	var collected []string
+	i := start
+	for i < len(lines) {
+		raw := lines[i]
+		if strings.TrimSpace(raw) == "" {
+			collected = append(collected, "")
+			i++
+			continue
+		}
+		indent := indentOf(raw)
+		if blockIndent < 0 {
+			blockIndent = indent
+		}
+		if indent < blockIndent {
+			break
+		}
+		if blockIndent > 0 && len(raw) >= blockIndent {
+			collected = append(collected, raw[blockIndent:])
+		} else {
+			collected = append(collected, raw)
+		}
+		i++
+	}
+	for len(collected) > 0 && collected[len(collected)-1] == "" {
+		collected = collected[:len(collected)-1]
+	}
+	return collected, i
+}
+
+func collectBlockList(lines []string, start, expectedIndent int) ([]any, int, error) {
+	var items []any
+	i := start
+	n := len(lines)
+	for i < n {
+		raw := lines[i]
+		stripped := strings.TrimSpace(raw)
+		if stripped == "" || strings.HasPrefix(stripped, "#") {
+			i++
+			continue
+		}
+		indent := indentOf(raw)
+		if indent < expectedIndent {
+			break
+		}
+		if indent > expectedIndent {
+			return nil, 0, yamlErrf("unexpected indent in block list (expected %d, got %d)", expectedIndent, indent)
+		}
+		if !(strings.HasPrefix(stripped, "- ") || stripped == "-") {
+			break
+		}
+		itemText := ""
+		if strings.HasPrefix(stripped, "- ") {
+			itemText = strings.TrimSpace(stripped[2:])
+		}
+		switch {
+		case strings.HasPrefix(itemText, "{"):
+			m, err := parseFlowMap(itemText)
+			if err != nil {
+				return nil, 0, err
+			}
+			items = append(items, m)
+			i++
+		case strings.HasPrefix(itemText, "["):
+			l, err := parseFlowList(itemText)
+			if err != nil {
+				return nil, 0, err
+			}
+			items = append(items, l)
+			i++
+		case itemText != "":
+			v, err := parseScalar(itemText)
+			if err != nil {
+				return nil, 0, err
+			}
+			items = append(items, v)
+			i++
+		default:
+			// Bare dash — a nested dict follows at deeper indent.
+			if i+1 < n {
+				next := lines[i+1]
+				nextS := strings.TrimSpace(next)
+				nextIndent := indentOf(next)
+				if nextIndent > expectedIndent && nextS != "" {
+					nested, ni, err := collectNestedDict(lines, i+1, nextIndent)
+					if err != nil {
+						return nil, 0, err
+					}
+					items = append(items, nested)
+					i = ni
+					continue
+				}
+			}
+			items = append(items, nil)
+			i++
+		}
+	}
+	return items, i, nil
+}
+
+func collectNestedDict(lines []string, start, expectedIndent int) (map[string]any, int, error) {
+	result := map[string]any{}
+	i := start
+	n := len(lines)
+	for i < n {
+		raw := lines[i]
+		stripped := strings.TrimSpace(raw)
+		if stripped == "" || strings.HasPrefix(stripped, "#") {
+			i++
+			continue
+		}
+		indent := indentOf(raw)
+		if indent < expectedIndent {
+			break
+		}
+		if indent > expectedIndent {
+			return nil, 0, yamlErrf("deeper nesting not supported (indent %d > %d)", indent, expectedIndent)
+		}
+		key, rest, ok := splitKeyValue(raw)
+		if !ok {
+			return nil, 0, yamlErrf("expected key: value in nested dict: %q", raw)
+		}
+		if strings.TrimSpace(rest) != "" {
+			v, err := parseScalarOrInline(strings.TrimSpace(rest))
+			if err != nil {
+				return nil, 0, err
+			}
+			result[key] = v
+			i++
+			continue
+		}
+		// Key with no inline value — look ahead for a block list nested under it.
+		if i+1 < n {
+			next := lines[i+1]
+			nextS := strings.TrimSpace(next)
+			nextIndent := indentOf(next)
+			if nextS != "" && !strings.HasPrefix(nextS, "#") &&
+				(strings.HasPrefix(nextS, "- ") || nextS == "-") && nextIndent > expectedIndent {
+				items, ni, err := collectBlockList(lines, i+1, nextIndent)
+				if err != nil {
+					return nil, 0, err
+				}
+				result[key] = items
+				i = ni
+				continue
+			}
+		}
+		result[key] = nil
+		i++
+	}
+	return result, i, nil
+}
+
+// ---------------------------------------------------------------------------
+// Inline flow parsers
+// ---------------------------------------------------------------------------
+
+func parseFlowList(text string) ([]any, error) {
+	text = strings.TrimSpace(text)
+	if !(strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]")) {
+		return nil, yamlErrf("invalid flow-list: %q", text)
+	}
+	inner := strings.TrimSpace(text[1 : len(text)-1])
+	if inner == "" {
+		return []any{}, nil
+	}
+	toks, err := splitFlowSequence(inner)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]any, 0, len(toks))
+	for _, tok := range toks {
+		t := strings.TrimSpace(tok)
+		switch {
+		case strings.HasPrefix(t, "{"):
+			m, err := parseFlowMap(t)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, m)
+		case strings.HasPrefix(t, "["):
+			return nil, yamlErrf("deeper inline nesting not supported (nested [] inside flow-list)")
+		default:
+			v, err := parseScalar(t)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, v)
+		}
+	}
+	return items, nil
+}
+
+func parseFlowMap(text string) (map[string]any, error) {
+	text = strings.TrimSpace(text)
+	if !(strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}")) {
+		return nil, yamlErrf("invalid flow-map: %q", text)
+	}
+	inner := strings.TrimSpace(text[1 : len(text)-1])
+	if inner == "" {
+		return map[string]any{}, nil
+	}
+	result := map[string]any{}
+	pairs, err := splitFlowSequence(inner)
+	if err != nil {
+		return nil, err
+	}
+	for _, pair := range pairs {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		cp := findUnquotedColon(pair)
+		if cp < 0 {
+			return nil, yamlErrf("missing ':' in flow-map pair: %q", pair)
+		}
+		k := strings.TrimSpace(pair[:cp])
+		v := strings.TrimSpace(pair[cp+1:])
+		if strings.HasPrefix(v, "{") || strings.HasPrefix(v, "[") {
+			return nil, yamlErrf("deeper inline nesting not supported for key %q", k)
+		}
+		sv, err := parseScalar(v)
+		if err != nil {
+			return nil, err
+		}
+		result[k] = sv
+	}
+	return result, nil
+}
+
+var bracketPair = map[byte]byte{'}': '{', ']': '['}
+
+func splitFlowSequence(inner string) ([]string, error) {
+	var tokens []string
+	var stack []byte
+	inSingle, inDouble, escapeNext := false, false, false
+	var current []byte
+	for i := 0; i < len(inner); i++ {
+		ch := inner[i]
+		if escapeNext {
+			current = append(current, ch)
+			escapeNext = false
+			continue
+		}
+		if ch == '\\' && inDouble {
+			current = append(current, ch)
+			escapeNext = true
+			continue
+		}
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			current = append(current, ch)
+		} else if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			current = append(current, ch)
+		} else if !inSingle && !inDouble {
+			switch {
+			case ch == '{' || ch == '[':
+				stack = append(stack, ch)
+				current = append(current, ch)
+			case ch == '}' || ch == ']':
+				if len(stack) == 0 {
+					return nil, yamlErrf("unexpected closing bracket %q in flow sequence", string(ch))
+				}
+				if stack[len(stack)-1] != bracketPair[ch] {
+					return nil, yamlErrf("mismatched brackets in flow sequence")
+				}
+				stack = stack[:len(stack)-1]
+				current = append(current, ch)
+			case ch == ',' && len(stack) == 0:
+				tokens = append(tokens, string(current))
+				current = nil
+			default:
+				current = append(current, ch)
+			}
+		} else {
+			current = append(current, ch)
+		}
+	}
+	if inSingle {
+		return nil, yamlErrf("unterminated single-quoted string in flow sequence")
+	}
+	if inDouble {
+		return nil, yamlErrf("unterminated double-quoted string in flow sequence")
+	}
+	if len(stack) > 0 {
+		return nil, yamlErrf("unclosed bracket in flow sequence")
+	}
+	if len(current) > 0 {
+		tokens = append(tokens, string(current))
+	}
+	return tokens, nil
+}
+
+func findUnquotedColon(text string) int {
+	inSingle, inDouble := false, false
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
+		switch {
+		case ch == '\'' && !inDouble:
+			inSingle = !inSingle
+		case ch == '"' && !inSingle:
+			inDouble = !inDouble
+		case ch == ':' && !inSingle && !inDouble:
+			return i
+		}
+	}
+	return -1
+}
+
+// ---------------------------------------------------------------------------
+// Scalars
+// ---------------------------------------------------------------------------
+
+var (
+	intRe   = regexp.MustCompile(`^-?\d+$`)
+	floatRe = regexp.MustCompile(`^-?\d+\.\d*$`)
+)
+
+func parseScalarOrInline(text string) (any, error) {
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "[") {
+		return parseFlowList(text)
+	}
+	if strings.HasPrefix(text, "{") {
+		return parseFlowMap(text)
+	}
+	return parseScalar(text)
+}
+
+func parseScalar(text string) (any, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, nil
+	}
+	switch text {
+	case "null", "~", "Null", "NULL":
+		return nil, nil
+	case "true", "True", "TRUE":
+		return true, nil
+	case "false", "False", "FALSE":
+		return false, nil
+	}
+	if text[0] == '"' {
+		if len(text) < 2 || text[len(text)-1] != '"' {
+			return nil, yamlErrf("unterminated double-quoted string: %q", text)
+		}
+		return unescapeDoubleQuoted(text[1 : len(text)-1])
+	}
+	if text[0] == '\'' {
+		if len(text) < 2 || text[len(text)-1] != '\'' {
+			return nil, yamlErrf("unterminated single-quoted string: %q", text)
+		}
+		return strings.ReplaceAll(text[1:len(text)-1], "''", "'"), nil
+	}
+	if intRe.MatchString(text) {
+		if v, err := strconv.Atoi(text); err == nil {
+			return v, nil
+		}
+	}
+	if floatRe.MatchString(text) {
+		if v, err := strconv.ParseFloat(text, 64); err == nil {
+			return v, nil
+		}
+	}
+	return text, nil
+}
+
+func unescapeDoubleQuoted(s string) (string, error) {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' {
+			if i+1 >= len(s) {
+				return "", yamlErrf("dangling backslash at end of double-quoted string")
+			}
+			switch s[i+1] {
+			case 'n':
+				b.WriteByte('\n')
+			case 't':
+				b.WriteByte('\t')
+			case 'r':
+				b.WriteByte('\r')
+			case '"':
+				b.WriteByte('"')
+			case '\\':
+				b.WriteByte('\\')
+			default:
+				return "", yamlErrf("unsupported escape sequence '\\%c'", s[i+1])
+			}
+			i++
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String(), nil
+}
+
+func splitKeyValue(raw string) (string, string, bool) {
+	m := keyRe.FindStringSubmatch(strings.TrimSpace(raw))
+	if m == nil {
+		return "", "", false
+	}
+	return m[1], m[2], true
+}
+
+func indentOf(s string) int {
+	return len(s) - len(strings.TrimLeft(s, " \t"))
+}
+
+// ---------------------------------------------------------------------------
+// File-level split / join
+// ---------------------------------------------------------------------------
+
+// splitFileFrontmatter splits full file text into (yaml region, body). The
+// region is the text between the --- delimiters (each inner line
+// newline-terminated); body is everything after the closing --- verbatim.
+func splitFileFrontmatter(text string) (string, string, error) {
+	lines := strings.Split(text, "\n")
+	start := 0
+	for start < len(lines) {
+		s := strings.TrimSpace(lines[start])
+		if s == "---" {
+			break
+		}
+		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
+			start++
+			continue
+		}
+		return "", "", yamlErrf("unexpected content before frontmatter '---': %q", lines[start])
+	}
+	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
+		return "", "", yamlErrf("document must start with '---' frontmatter")
+	}
+	var fm []string
+	i := start + 1
+	for i < len(lines) {
+		if lines[i] == "---" {
+			var region strings.Builder
+			for _, l := range fm {
+				region.WriteString(l)
+				region.WriteByte('\n')
+			}
+			body := strings.Join(lines[i+1:], "\n")
+			return region.String(), body, nil
+		}
+		fm = append(fm, lines[i])
+		i++
+	}
+	return "", "", yamlErrf("frontmatter not terminated: missing closing '---'")
+}
+
+// joinFileFrontmatter is the inverse of splitFileFrontmatter.
+func joinFileFrontmatter(region, body string) string {
+	if region != "" && !strings.HasSuffix(region, "\n") {
+		region += "\n"
+	}
+	return "---\n" + region + "---\n" + body
+}
+
+// frontmatterKeyLine returns the 1-based file line of top-level key, or 1 when
+// absent — a best-effort positional helper for lint findings (never errors).
+func frontmatterKeyLine(text, key string) int {
+	lines := strings.Split(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n"), "\n")
+	start := 0
+	for start < len(lines) {
+		s := strings.TrimSpace(lines[start])
+		if s == "---" {
+			break
+		}
+		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
+			start++
+			continue
+		}
+		return 1
+	}
+	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
+		return 1
+	}
+	out := 0
+	for i := start + 1; i < len(lines); i++ {
+		raw := lines[i]
+		if raw == "---" {
+			break
+		}
+		if raw != "" && raw[0] != ' ' && raw[0] != '\t' {
+			if m := keyRe.FindStringSubmatch(raw); m != nil && m[1] == key {
+				out = i + 1
+			}
+		}
+	}
+	if out == 0 {
+		return 1
+	}
+	return out
+}
+
+// ---------------------------------------------------------------------------
+// Dump — deterministic (keys sorted at every level)
+// ---------------------------------------------------------------------------
+
+var needsQuoteChars = ":#[]{}&*!|>'\"%@`,"
+
+// dumpFrontmatter serialises fm to a deterministic block-style YAML region (no
+// --- delimiters, trailing \n). Keys are sorted so output is stable regardless
+// of Go map iteration order. Round-trips through parseFrontmatter.
+func dumpFrontmatter(fm map[string]any) (string, error) {
+	var lines []string
+	for _, key := range sortedKeys(fm) {
+		l, err := dumpValueLines(key, fm[key])
+		if err != nil {
+			return "", err
+		}
+		lines = append(lines, l...)
+	}
+	var b strings.Builder
+	for _, l := range lines {
+		b.WriteString(l)
+		b.WriteByte('\n')
+	}
+	return b.String(), nil
+}
+
+func dumpValueLines(key string, value any) ([]string, error) {
+	switch v := value.(type) {
+	case []any:
+		if len(v) == 0 {
+			return []string{key + ": []"}, nil
+		}
+		lines := []string{key + ":"}
+		for _, item := range v {
+			switch it := item.(type) {
+			case map[string]any:
+				fm, err := dumpFlowMap(it)
+				if err != nil {
+					return nil, err
+				}
+				lines = append(lines, "- "+fm)
+			case []any:
+				return nil, yamlErrf("nested lists not supported in block list for key %q", key)
+			default:
+				s, err := dumpScalar(item)
+				if err != nil {
+					return nil, err
+				}
+				lines = append(lines, "- "+s)
+			}
+		}
+		return lines, nil
+	case []string:
+		return dumpValueLines(key, toAnySlice(v))
+	case map[string]any:
+		if len(v) == 0 {
+			return []string{key + ": {}"}, nil
+		}
+		lines := []string{key + ":"}
+		for _, k := range sortedKeys(v) {
+			l, err := dumpNestedPairLines(key, k, v[k])
+			if err != nil {
+				return nil, err
+			}
+			lines = append(lines, l...)
+		}
+		return lines, nil
+	default:
+		s, err := dumpScalar(value)
+		if err != nil {
+			return nil, err
+		}
+		return []string{key + ": " + s}, nil
+	}
+}
+
+func dumpNestedPairLines(parentKey, k string, v any) ([]string, error) {
+	switch val := v.(type) {
+	case map[string]any:
+		if len(val) == 0 {
+			return []string{"  " + k + ": {}"}, nil
+		}
+		fm, err := dumpFlowMap(val)
+		if err != nil {
+			return nil, err
+		}
+		return []string{"  " + k + ": " + fm}, nil
+	case []string:
+		return dumpNestedPairLines(parentKey, k, toAnySlice(val))
+	case []any:
+		if len(val) == 0 {
+			return []string{"  " + k + ": []"}, nil
+		}
+		allScalar := true
+		allDict := true
+		for _, item := range val {
+			if _, ok := item.(map[string]any); ok {
+				allScalar = false
+			} else {
+				allDict = false
+			}
+		}
+		if allScalar {
+			fl, err := dumpFlowList(val)
+			if err != nil {
+				return nil, err
+			}
+			return []string{"  " + k + ": " + fl}, nil
+		}
+		if !allDict {
+			return nil, yamlErrf("block list under %q.%q must be all-scalar or all-dict items", parentKey, k)
+		}
+		lines := []string{"  " + k + ":"}
+		for _, item := range val {
+			m := item.(map[string]any)
+			if len(m) == 0 {
+				return nil, yamlErrf("empty dict item not serialisable in block list under %q.%q", parentKey, k)
+			}
+			lines = append(lines, "    -")
+			for _, ik := range sortedKeys(m) {
+				iv := m[ik]
+				switch inner := iv.(type) {
+				case map[string]any:
+					fm, err := dumpFlowMap(inner)
+					if err != nil {
+						return nil, err
+					}
+					lines = append(lines, "      "+ik+": "+fm)
+				case []string:
+					fl, err := dumpFlowList(toAnySlice(inner))
+					if err != nil {
+						return nil, err
+					}
+					lines = append(lines, "      "+ik+": "+fl)
+				case []any:
+					fl, err := dumpFlowList(inner)
+					if err != nil {
+						return nil, err
+					}
+					lines = append(lines, "      "+ik+": "+fl)
+				default:
+					s, err := dumpScalar(iv)
+					if err != nil {
+						return nil, err
+					}
+					lines = append(lines, "      "+ik+": "+s)
+				}
+			}
+		}
+		return lines, nil
+	default:
+		s, err := dumpScalar(v)
+		if err != nil {
+			return nil, err
+		}
+		return []string{"  " + k + ": " + s}, nil
+	}
+}
+
+func dumpFlowMap(d map[string]any) (string, error) {
+	if len(d) == 0 {
+		return "{}", nil
+	}
+	var parts []string
+	for _, k := range sortedKeys(d) {
+		v := d[k]
+		if _, ok := v.(map[string]any); ok {
+			return "", yamlErrf("deeper nesting not supported in flow-map value for key %q", k)
+		}
+		if _, ok := v.([]any); ok {
+			return "", yamlErrf("deeper nesting not supported in flow-map value for key %q", k)
+		}
+		s, err := dumpScalar(v)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, k+": "+s)
+	}
+	return "{ " + strings.Join(parts, ", ") + " }", nil
+}
+
+func dumpFlowList(items []any) (string, error) {
+	var parts []string
+	for _, item := range items {
+		if _, ok := item.(map[string]any); ok {
+			return "", yamlErrf("deeper nesting not supported in flow-list item")
+		}
+		if _, ok := item.([]any); ok {
+			return "", yamlErrf("deeper nesting not supported in flow-list item")
+		}
+		s, err := dumpScalar(item)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, s)
+	}
+	return "[" + strings.Join(parts, ", ") + "]", nil
+}
+
+func dumpScalar(value any) (string, error) {
+	switch v := value.(type) {
+	case nil:
+		return "null", nil
+	case bool:
+		if v {
+			return "true", nil
+		}
+		return "false", nil
+	case int:
+		return strconv.Itoa(v), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
+	case float64:
+		if v == float64(int64(v)) {
+			return strconv.FormatInt(int64(v), 10), nil
+		}
+		return strconv.FormatFloat(v, 'g', -1, 64), nil
+	case string:
+		return dumpString(v), nil
+	default:
+		return "", yamlErrf("unsupported scalar type for YAML dump: %T", value)
+	}
+}
+
+func dumpString(s string) string {
+	if s == "" {
+		return `""`
+	}
+	switch s {
+	case "null", "~", "Null", "NULL", "true", "True", "TRUE", "false", "False", "FALSE":
+		return doubleQuote(s)
+	}
+	if intRe.MatchString(s) || floatRe.MatchString(s) {
+		return doubleQuote(s)
+	}
+	if s != strings.TrimSpace(s) {
+		return doubleQuote(s)
+	}
+	if strings.ContainsAny(s, needsQuoteChars) {
+		return doubleQuote(s)
+	}
+	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "?") {
+		return doubleQuote(s)
+	}
+	if strings.ContainsAny(s, "\n\t") {
+		return doubleQuote(s)
+	}
+	return s
+}
+
+func doubleQuote(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, ch := range s {
+		switch ch {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			b.WriteRune(ch)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func toAnySlice(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
+}

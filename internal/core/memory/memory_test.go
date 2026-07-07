@@ -1,0 +1,360 @@
+package memory
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+var fixedNow = time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+
+// oneTopicDistiller emits a single page (omitting source — the ingest path
+// injects the computed single-source block that cites the ingested hash).
+func oneTopicDistiller(typ, domain, slug, body string) Distiller {
+	return func(_ string, _ map[string]any) ([]map[string]any, error) {
+		return []map[string]any{{
+			"type": typ, "domain": domain, "slug": slug, "body": body,
+		}}, nil
+	}
+}
+
+func writeSource(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	return p
+}
+
+// ---------------------------------------------------------------------------
+// YAML round-trip
+// ---------------------------------------------------------------------------
+
+func TestYAMLRoundTripSourceBlocks(t *testing.T) {
+	cases := []map[string]any{
+		{
+			"source": map[string]any{
+				"class":       "external_pdf",
+				"citation":    map[string]any{"type": "knowledge", "title": "T", "year": 2026},
+				"licence":     "MIT",
+				"source_hash": strings.Repeat("a", 64),
+				"ingested_at": "2026-07-06",
+			},
+			"topic_hash":  strings.Repeat("b", 64),
+			"contradicts": []any{"topic_auth_other"},
+		},
+		{
+			"source": map[string]any{
+				"classes":        []any{"external_pdf", "external_transcript"},
+				"weighting_note": "pdf outweighs transcript",
+				"sources": []any{
+					map[string]any{"class": "external_pdf", "citation": map[string]any{"type": "knowledge"}, "licence": "MIT", "source_hash": strings.Repeat("c", 64), "ingested_at": "2026-07-06"},
+					map[string]any{"class": "external_transcript", "citation": map[string]any{"type": "knowledge"}, "licence": "MIT", "source_hash": strings.Repeat("d", 64), "ingested_at": "2026-07-06"},
+				},
+			},
+			"topic_hash": strings.Repeat("e", 64),
+		},
+	}
+	for i, in := range cases {
+		region, err := dumpFrontmatter(in)
+		if err != nil {
+			t.Fatalf("case %d dump: %v", i, err)
+		}
+		out, err := parseFrontmatter("---\n" + region + "---\n")
+		if err != nil {
+			t.Fatalf("case %d parse: %v\n%s", i, err, region)
+		}
+		// The source block must survive validation after the round trip.
+		if err := validateSourceBlock(out["source"]); err != nil {
+			t.Fatalf("case %d round-trip source invalid: %v\n%s", i, err, region)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Ingest -> Ask -> re-ingest
+// ---------------------------------------------------------------------------
+
+func TestIngestAskLintFlow(t *testing.T) {
+	repo := t.TempDir()
+	src := writeSource(t, repo, "article.txt", "Token rotation policy: rotate tokens every 24 hours.")
+
+	// --- ingest ---
+	res, err := Ingest(IngestRequest{
+		RepoRoot:  repo,
+		Source:    src,
+		Distiller: oneTopicDistiller("topic", "auth", "tokens", "# Token rotation\nRotate tokens every 24 hours."),
+		Now:       fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if res.Status != "ingested" {
+		t.Fatalf("status = %q, want ingested", res.Status)
+	}
+	if len(res.Pages) != 1 || res.Pages[0] != "topic_auth_tokens.md" {
+		t.Fatalf("pages = %v, want [topic_auth_tokens.md]", res.Pages)
+	}
+	pagePath := filepath.Join(Dir(repo), "topic_auth_tokens.md")
+	if _, err := os.Stat(pagePath); err != nil {
+		t.Fatalf("page not written: %v", err)
+	}
+	if res.SourceTokenCount == 0 {
+		t.Fatalf("source token count not persisted")
+	}
+	// Registry records the page under consumers.memory.pages for the hash.
+	reg, err := LoadRegistry(SourcesIndexPath(repo))
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	entry := reg[res.ContentHash].(map[string]any)
+	pages := anyToStrings(entry["consumers"].(map[string]any)["memory"].(map[string]any)["pages"])
+	if len(pages) != 1 || pages[0] != "topic_auth_tokens.md" {
+		t.Fatalf("registry pages = %v", pages)
+	}
+
+	// --- ask: deterministic recall returns the relevant fact ---
+	ask, err := Ask(AskRequest{RepoRoot: repo, Question: "how does token rotation work?", Now: fixedNow})
+	if err != nil {
+		t.Fatalf("ask: %v", err)
+	}
+	if len(ask.Matches) != 1 || ask.Matches[0].Filename != "topic_auth_tokens.md" {
+		t.Fatalf("ask matches = %+v", ask.Matches)
+	}
+	if ask.Matches[0].Score < 1 {
+		t.Fatalf("ask score = %d, want >=1", ask.Matches[0].Score)
+	}
+	if !strings.Contains(ask.Answer, res.ContentHash) {
+		t.Fatalf("answer omits the source hash:\n%s", ask.Answer)
+	}
+	if !strings.Contains(ask.Answer, "external_pdf") && !strings.Contains(ask.Answer, "external_article") {
+		t.Fatalf("answer omits the source class:\n%s", ask.Answer)
+	}
+
+	// A class filter that excludes the only page returns nothing.
+	empty, err := Ask(AskRequest{RepoRoot: repo, Question: "class:external_pdf tokens", Now: fixedNow})
+	if err != nil {
+		t.Fatalf("ask filtered: %v", err)
+	}
+	if len(empty.Matches) != 0 {
+		t.Fatalf("class:external_pdf should exclude an external_article page, got %d", len(empty.Matches))
+	}
+
+	// --- re-ingest the identical source: registry-only, no distillation ---
+	res2, err := Ingest(IngestRequest{
+		RepoRoot: repo,
+		Source:   src,
+		Distiller: func(_ string, _ map[string]any) ([]map[string]any, error) {
+			t.Fatalf("distiller must not run on a valid registry hit")
+			return nil, nil
+		},
+		Now: fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("re-ingest: %v", err)
+	}
+	if res2.Status != "registry_only" {
+		t.Fatalf("re-ingest status = %q, want registry_only", res2.Status)
+	}
+
+	// --- lint: a clean store has no blockers (exit 0) ---
+	lr, err := Lint(LintRequest{RepoRoot: repo, Now: fixedNow})
+	if err != nil {
+		t.Fatalf("lint: %v", err)
+	}
+	if lr.Summary.Blockers != 0 || lr.ExitCode != 0 {
+		t.Fatalf("clean lint: blockers=%d exit=%d findings=%+v", lr.Summary.Blockers, lr.ExitCode, lr.Findings)
+	}
+	if _, err := os.Stat(filepath.Join(lr.ReportDir, "report.json")); err != nil {
+		t.Fatalf("lint report.json not written: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lint rejects a malformed memory file
+// ---------------------------------------------------------------------------
+
+func TestLintRejectsMalformed(t *testing.T) {
+	cases := []struct {
+		name     string
+		page     string
+		wantCode string
+	}{
+		{
+			name: "external_missing_licence",
+			// external_pdf single-source page with no licence -> ML001 blocker.
+			page: "---\nsource:\n  class: external_pdf\n  source_hash: " + strings.Repeat("a", 64) +
+				"\ntopic_hash: " + strings.Repeat("b", 64) + "\n---\n\n# A quoted claim\n",
+			wantCode: "ML001",
+		},
+		{
+			name: "mixed_classes_no_weighting_note",
+			page: "---\nsource:\n  classes: [external_pdf, external_transcript]\n  sources:\n" +
+				"    -\n      class: external_pdf\n      citation: { type: knowledge }\n      licence: MIT\n      source_hash: " + strings.Repeat("c", 64) + "\n      ingested_at: 2026-07-06\n" +
+				"    -\n      class: external_transcript\n      citation: { type: knowledge }\n      licence: MIT\n      source_hash: " + strings.Repeat("d", 64) + "\n      ingested_at: 2026-07-06\n" +
+				"topic_hash: " + strings.Repeat("e", 64) + "\n---\n\n# A fused claim\n",
+			wantCode: "MS002",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			mem := Dir(repo)
+			if err := os.MkdirAll(mem, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(mem, "topic_auth_bad.md"), []byte(tc.page), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			lr, err := Lint(LintRequest{RepoRoot: repo, Now: fixedNow})
+			if err != nil {
+				t.Fatalf("lint: %v", err)
+			}
+			if lr.ExitCode != 1 || lr.Summary.Blockers < 1 {
+				t.Fatalf("expected a blocker (exit 1); got exit=%d summary=%+v findings=%+v", lr.ExitCode, lr.Summary, lr.Findings)
+			}
+			found := false
+			for _, f := range lr.Findings {
+				if f.Code == tc.wantCode && f.Severity == "blocker" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("want a %s blocker; findings=%+v", tc.wantCode, lr.Findings)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Single-writer lock
+// ---------------------------------------------------------------------------
+
+func TestStoreLockFailsClosed(t *testing.T) {
+	repo := t.TempDir()
+	err := WithStoreLock(repo, func() error {
+		// A nested acquisition while the lock is held must fail closed.
+		_, err := WritePages(repo, nil, nil, fixedNow)
+		if _, ok := err.(*StoreLockHeldError); !ok {
+			t.Fatalf("nested WritePages error = %v, want *StoreLockHeldError", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("outer WithStoreLock: %v", err)
+	}
+}
+
+// TestWritePagesRegistryMergeNoLostUpdate is the Finding-C regression: the
+// registry mutation must be recomputed against the registry read fresh under the
+// store lock, not a pre-lock snapshot. It seeds hash A, then applies a second
+// merge (as a concurrent ingest whose basis predates A's write would) that adds
+// hash B. Both entries must survive — a wholesale write from a stale basis would
+// silently drop A (and orphan its pages).
+func TestWritePagesRegistryMergeNoLostUpdate(t *testing.T) {
+	repo := t.TempDir()
+	hashA := strings.Repeat("a", 64)
+	hashB := strings.Repeat("b", 64)
+	event := func(h string) IngestEvent {
+		return IngestEvent{
+			ContentHash: h, Consumer: "memory", SourceClass: "external_article",
+			Citation: map[string]any{}, Origin: "https://example.test/" + h[:8],
+			Licence: "MIT", IngestedAt: "2026-07-06",
+		}
+	}
+
+	if _, err := WritePages(repo, nil, func(cur map[string]any) (map[string]any, error) {
+		return MergeIngest(cur, event(hashA))
+	}, fixedNow); err != nil {
+		t.Fatalf("first ingest: %v", err)
+	}
+	// The second merge closure is applied to the registry loaded fresh under the
+	// lock (which now holds A), so A must not be lost when B is added.
+	if _, err := WritePages(repo, nil, func(cur map[string]any) (map[string]any, error) {
+		return MergeIngest(cur, event(hashB))
+	}, fixedNow); err != nil {
+		t.Fatalf("second ingest: %v", err)
+	}
+
+	reg, err := LoadRegistry(SourcesIndexPath(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []string{hashA, hashB} {
+		if _, ok := reg[h]; !ok {
+			t.Errorf("registry entry %s… lost (concurrent-ingest lost update)", h[:8])
+		}
+	}
+}
+
+// TestIngestRefusesSSRFTargets is the Finding-E regression: memory URL ingest
+// must refuse to fetch link-local, loopback, private, and internal/metadata
+// targets (cloud metadata at 169.254.169.254 must be unreachable). Every case
+// resolves offline (IP literals, localhost, and the *.internal name-based guard).
+func TestIngestRefusesSSRFTargets(t *testing.T) {
+	repo := t.TempDir()
+	distiller := func(_ string, _ map[string]any) ([]map[string]any, error) {
+		return nil, nil // never reached — the fetch must be refused first
+	}
+	cases := []string{
+		"http://169.254.169.254/latest/meta-data/", // cloud metadata (link-local)
+		"http://127.0.0.1/x",                       // loopback
+		"http://localhost/x",                       // loopback by name
+		"http://[::1]/x",                           // IPv6 loopback
+		"http://10.0.0.1/x",                        // private
+		"http://192.168.1.1/x",                     // private
+		"http://172.16.5.5/x",                      // private
+		"http://metadata.google.internal/x",        // metadata name
+		"http://svc.internal/x",                    // .internal name
+	}
+	for _, target := range cases {
+		t.Run(target, func(t *testing.T) {
+			_, err := Ingest(IngestRequest{RepoRoot: repo, Source: target, Distiller: distiller})
+			if err == nil {
+				t.Fatalf("expected refusal for SSRF target %s", target)
+			}
+			// The guard must REFUSE before dialling — distinct from a mere
+			// "connection refused" transport error (which would still reach the
+			// target). "refusing to" / "cannot resolve host" are only produced by
+			// the SSRF guard, never by a failed connection.
+			msg := err.Error()
+			if !strings.Contains(msg, "refusing to") && !strings.Contains(msg, "cannot resolve host") {
+				t.Errorf("want an SSRF-guard refusal, got a different error: %v", err)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Schema boundary
+// ---------------------------------------------------------------------------
+
+func TestValidateDistilledPageRejectsSuppliedTopicHash(t *testing.T) {
+	_, err := ValidateDistilledPage(map[string]any{
+		"type": "topic", "domain": "auth", "slug": "x", "body": "# b",
+		"source":     map[string]any{"class": "session_memory"},
+		"topic_hash": strings.Repeat("a", 64),
+	})
+	if err == nil {
+		t.Fatal("supplied topic_hash must be rejected")
+	}
+}
+
+func TestValidateDistilledPageComputesTopicHash(t *testing.T) {
+	p, err := ValidateDistilledPage(map[string]any{
+		"type": "topic", "domain": "auth", "slug": "x", "body": "# Subject line",
+		"source": map[string]any{"class": "session_memory"},
+	})
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if !hex64Re.MatchString(p.TopicHash) {
+		t.Fatalf("topic hash = %q", p.TopicHash)
+	}
+	if p.Filename() != "topic_auth_x.md" {
+		t.Fatalf("filename = %q", p.Filename())
+	}
+}

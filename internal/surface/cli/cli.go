@@ -12,14 +12,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
+	"github.com/REPPL/abcd-cli/internal/core/capture"
+	"github.com/REPPL/abcd-cli/internal/core/history"
 	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
+	"github.com/REPPL/abcd-cli/internal/core/memory"
 	"github.com/spf13/cobra"
 )
+
+// exitError carries a specific process exit code out of a command. The root
+// command sets SilenceErrors, so main inspects this to choose the exit code and
+// (when Msg is non-empty) print a single diagnostic line. An empty Msg means the
+// command already rendered its output and only the exit code should propagate.
+type exitError struct {
+	Code int
+	Msg  string
+}
+
+func (e *exitError) Error() string { return e.Msg }
+func (e *exitError) ExitCode() int { return e.Code }
 
 // NewRootCommand builds the abcd command tree. Bare `abcd` renders a read-only
 // status board (abcd's convention: bare invocation never mutates); subcommands
@@ -97,6 +113,9 @@ func NewRootCommand() *cobra.Command {
 	launchCmd.Flags().BoolVar(&launchDryRun, "dry-run", false, "preview the launch bundle and gates without publishing")
 	root.AddCommand(launchCmd)
 
+	root.AddCommand(newCaptureCommand(&asJSON))
+	root.AddCommand(newMemoryCommand(&asJSON))
+	root.AddCommand(newHistoryCommand(&asJSON))
 	root.AddCommand(newDocsCommand(&asJSON))
 
 	return root
@@ -421,6 +440,542 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 		return def
 	}
 	return line
+}
+
+// newCaptureCommand builds the `capture` sub-tree — the write side of the issue
+// ledger. Bare `capture` renders read-only status; a free-text positional
+// appends an issue; list/resolve/wontfix are thin consumers of capture core.
+// (promote is skill-orchestrated, never a CLI sub-verb — brief 04-surfaces/06.)
+func newCaptureCommand(asJSON *bool) *cobra.Command {
+	var severity, category, source, slug, foundDuring, foundAt string
+
+	captureCmd := &cobra.Command{
+		Use:   "capture [text]",
+		Short: "Capture issues to the ledger; bare invocation is read-only status",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			// Bare invocation: read-only status render (never mutates).
+			if len(args) == 0 {
+				st, err := capture.Status(capture.StatusRequest{RepoRoot: cwd})
+				if err != nil {
+					return err
+				}
+				return render(cmd.OutOrStdout(), *asJSON, st, func(w io.Writer) {
+					fmt.Fprintf(w, "abcd capture — open %d · resolved %d · wontfix %d\n",
+						st.OpenCount, st.ResolvedCount, st.WontfixCount)
+					if len(st.RecentOpen) > 0 {
+						fmt.Fprintf(w, "recent open:\n")
+						for _, iss := range st.RecentOpen {
+							fmt.Fprintf(w, "  %s  %s  %s\n", iss.ID, iss.Severity, iss.Slug)
+						}
+					}
+				})
+			}
+			// Fast path: append a structured issue from the free-form text.
+			text := strings.Join(args, " ")
+			sl := slug
+			if sl == "" {
+				sl = deriveSlug(text)
+			}
+			req := capture.CaptureRequest{
+				RepoRoot:    cwd,
+				Text:        text,
+				Severity:    capture.Severity(orDefault(severity, "minor")),
+				Category:    capture.Category(orDefault(category, "observation")),
+				Source:      capture.Source(orDefault(source, "user-observation")),
+				Slug:        sl,
+				FoundDuring: orDefault(foundDuring, "manual-capture"),
+				FoundAt:     foundAt,
+			}
+			res, err := capture.Capture(req)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, res.Path)
+			})
+		},
+	}
+	captureCmd.Flags().StringVar(&severity, "severity", "", "severity: nitpick | minor | major | critical (default minor)")
+	captureCmd.Flags().StringVar(&category, "category", "", "issue category (default observation)")
+	captureCmd.Flags().StringVar(&source, "source", "", "surfacing channel (default user-observation)")
+	captureCmd.Flags().StringVar(&slug, "slug", "", "override the slug derived from the text")
+	captureCmd.Flags().StringVar(&foundDuring, "found-during", "", "session/command context (default manual-capture)")
+	captureCmd.Flags().StringVar(&foundAt, "found-at", "", "optional repo-relative path or conceptual location")
+
+	// list — the earned SD001 exception: a filter flag is REQUIRED.
+	var lsOpen, lsResolved, lsWontfix, lsAll bool
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List issues by state (one of --open/--resolved/--wontfix/--all required)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			state, err := listState(lsOpen, lsResolved, lsWontfix, lsAll)
+			if err != nil {
+				return err
+			}
+			res, err := capture.List(capture.ListRequest{RepoRoot: cwd, State: state})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				for _, iss := range res.Issues {
+					fmt.Fprintf(w, "%s  %s  %s  %s\n", iss.ID, iss.Status, iss.Severity, iss.Slug)
+				}
+				for _, sk := range res.Skipped {
+					fmt.Fprintf(w, "  skipped %s: %s\n", sk.Path, sk.Error)
+				}
+			})
+		},
+	}
+	listCmd.Flags().BoolVar(&lsOpen, "open", false, "issues currently in open/")
+	listCmd.Flags().BoolVar(&lsResolved, "resolved", false, "issues currently in resolved/")
+	listCmd.Flags().BoolVar(&lsWontfix, "wontfix", false, "issues currently in wontfix/")
+	listCmd.Flags().BoolVar(&lsAll, "all", false, "issues across all three states")
+	captureCmd.AddCommand(listCmd)
+
+	// resolve — open -> resolved with a note.
+	captureCmd.AddCommand(&cobra.Command{
+		Use:   "resolve <iss-N> <note>",
+		Short: "Mark an open issue resolved (open/ -> resolved/)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := capture.Resolve(capture.ResolveRequest{RepoRoot: cwd, ID: args[0], Resolution: args[1]})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, res.Path)
+			})
+		},
+	})
+
+	// wontfix — open -> wontfix with a reason.
+	captureCmd.AddCommand(&cobra.Command{
+		Use:   "wontfix <iss-N> <reason>",
+		Short: "Record an explicit non-action decision (open/ -> wontfix/)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := capture.Wontfix(capture.WontfixRequest{RepoRoot: cwd, ID: args[0], Reason: args[1]})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, res.Path)
+			})
+		},
+	})
+
+	return captureCmd
+}
+
+// listState maps the mutually-exclusive filter flags to a capture.State, or
+// returns the exit-2 "choose a filter" usage error the brief mandates for the
+// unfiltered `abcd capture list` form (04-surfaces/06 § 1).
+func listState(open, resolved, wontfix, all bool) (capture.State, error) {
+	var chosen capture.State
+	n := 0
+	if open {
+		chosen, n = capture.StateOpen, n+1
+	}
+	if resolved {
+		chosen, n = capture.StateResolved, n+1
+	}
+	if wontfix {
+		chosen, n = capture.StateWontfix, n+1
+	}
+	if all {
+		chosen, n = capture.StateAll, n+1
+	}
+	if n == 0 {
+		return "", &exitError{Code: 2, Msg: "capture list: choose a filter: --open / --resolved / --wontfix / --all"}
+	}
+	if n > 1 {
+		return "", &exitError{Code: 2, Msg: "capture list: the filter flags are mutually exclusive"}
+	}
+	return chosen, nil
+}
+
+// deriveSlug ports scripts/abcd/_slug._normalize_core: lowercase, collapse every
+// non-[a-z0-9] run to a single hyphen, trim, then truncate to 60 chars.
+func deriveSlug(text string) string {
+	lowered := strings.ToLower(text)
+	collapsed := strings.Trim(slugNonAlnumRe.ReplaceAllString(lowered, "-"), "-")
+	if len(collapsed) > 60 {
+		collapsed = strings.Trim(collapsed[:60], "-")
+	}
+	return collapsed
+}
+
+var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// newMemoryCommand builds the `memory` sub-tree over internal/core/memory. Bare
+// `memory` renders read-only store status; ingest/ask/lint are the mutating and
+// diagnostic verbs (04-surfaces/07). The distiller (ingest) and synthesizer
+// (ask) are host-delegated seams: the .5 skill emits validated DistilledPage
+// JSON, which this surface feeds through --pages-json / --page-json.
+func newMemoryCommand(asJSON *bool) *cobra.Command {
+	memoryCmd := &cobra.Command{
+		Use:   "memory",
+		Short: "Curated knowledge substrate; bare invocation is read-only status",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			st, err := memory.Bare(cwd)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, st, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd memory — %d page(s)", st.Pages)
+				if !st.StorePresent {
+					fmt.Fprintf(w, " (store not present)")
+				}
+				fmt.Fprintln(w)
+				for _, c := range st.ByClass {
+					fmt.Fprintf(w, "  %s: %d\n", c.Class, c.Count)
+				}
+				if st.LastIngest != "" {
+					fmt.Fprintf(w, "  last ingest: %s\n", st.LastIngest)
+				}
+				for _, line := range st.Contradictions {
+					fmt.Fprintf(w, "  contradiction: %s\n", line)
+				}
+				for _, line := range st.Headroom {
+					fmt.Fprintf(w, "  %s\n", line)
+				}
+			})
+		},
+	}
+
+	// ingest <path-or-url> [--keep-original] [--pages-json <file|->]
+	var pagesJSON string
+	var keepOriginalFlag bool
+	ingestCmd := &cobra.Command{
+		Use:   "ingest <path-or-url>",
+		Short: "Distil an external source into cited memory pages",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := memory.Ingest(memory.IngestRequest{
+				RepoRoot:     cwd,
+				Source:       args[0],
+				KeepOriginal: keepOriginalFlag,
+				Distiller:    pagesJSONDistiller(cmd, pagesJSON),
+			})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd memory ingest — %s\n", res.Status)
+				fmt.Fprintf(w, "  content hash: %s\n", res.ContentHash)
+				fmt.Fprintf(w, "  licence:      %s\n", res.Licence)
+				if len(res.Pages) > 0 {
+					fmt.Fprintf(w, "  pages:        %s\n", strings.Join(res.Pages, ", "))
+				}
+				if res.KeptOriginal != "" {
+					fmt.Fprintf(w, "  kept original: %s\n", res.KeptOriginal)
+				}
+			})
+		},
+	}
+	ingestCmd.Flags().BoolVar(&keepOriginalFlag, "keep-original", false, "store the original at .abcd/memory/sources/<sha256>.<ext>")
+	ingestCmd.Flags().StringVar(&pagesJSON, "pages-json", "", "DistilledPage JSON array (file path, or - for stdin)")
+	memoryCmd.AddCommand(ingestCmd)
+
+	// ask <question> [--top-n N] [--file-back] [--page-json <file|->]
+	var topN int
+	var fileBack bool
+	var pageJSON string
+	askCmd := &cobra.Command{
+		Use:   "ask <question>",
+		Short: "Query memory and synthesise a cited answer",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			req := memory.AskRequest{RepoRoot: cwd, Question: strings.Join(args, " "), TopN: topN}
+			if fileBack {
+				page, err := readPageJSON(cmd, pageJSON)
+				if err != nil {
+					return err
+				}
+				req.FileBackPage = page
+				req.DecideFileBack = func(memory.DistilledPage) bool { return true }
+			}
+			res, err := memory.Ask(req)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintln(w, res.Answer)
+				if res.FileBack != nil {
+					fmt.Fprintf(w, "\nfiled back (%s): %s\n", res.FileBack.Status, strings.Join(res.FileBack.Pages, ", "))
+				}
+			})
+		},
+	}
+	askCmd.Flags().IntVar(&topN, "top-n", 0, "retrieval depth (0 uses the pinned default)")
+	askCmd.Flags().BoolVar(&fileBack, "file-back", false, "file the synthesised answer back as a new memory page")
+	askCmd.Flags().StringVar(&pageJSON, "page-json", "", "the answer page dict as JSON (file path, or - for stdin)")
+	memoryCmd.AddCommand(askCmd)
+
+	// lint — full-store curator health-check; blockers exit nonzero.
+	memoryCmd.AddCommand(&cobra.Command{
+		Use:   "lint",
+		Short: "Curator health-check over the whole memory store",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := memory.Lint(memory.LintRequest{RepoRoot: cwd})
+			if err != nil {
+				return err
+			}
+			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd memory lint — %d blocker(s), %d warning(s), %d info(s)\n",
+					res.Summary.Blockers, res.Summary.Warnings, res.Summary.Infos)
+				for _, f := range res.Findings {
+					fmt.Fprintf(w, "  %s [%s] %s:%d %s\n", f.Code, f.Severity, f.File, f.Line, f.Message)
+				}
+				fmt.Fprintf(w, "  report: %s\n", res.ReportDir)
+			}); err != nil {
+				return err
+			}
+			// Propagate the curator exit contract: blockers -> nonzero.
+			if res.ExitCode != 0 {
+				return &exitError{Code: res.ExitCode}
+			}
+			return nil
+		},
+	})
+
+	return memoryCmd
+}
+
+// pagesJSONDistiller is the ingest transport seam: it lazily reads the
+// DistilledPage JSON array from --pages-json (a file, or - for stdin) only when
+// distillation is actually needed. A registry-only hit never invokes it, so an
+// already-known source re-ingests with no payload.
+func pagesJSONDistiller(cmd *cobra.Command, pagesJSON string) memory.Distiller {
+	return func(_ string, _ map[string]any) ([]map[string]any, error) {
+		if pagesJSON == "" {
+			return nil, fmt.Errorf("no distiller output supplied: pass --pages-json <file|-> with the DistilledPage JSON array")
+		}
+		raw, err := readSource(cmd, pagesJSON)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read --pages-json: %w", err)
+		}
+		var arr []map[string]any
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			return nil, fmt.Errorf("--pages-json must be a JSON array of page dicts: %w", err)
+		}
+		return arr, nil
+	}
+}
+
+// readPageJSON reads ONE DistilledPage dict for ask file-back from --page-json.
+func readPageJSON(cmd *cobra.Command, pageJSON string) (map[string]any, error) {
+	if pageJSON == "" {
+		return nil, fmt.Errorf("--file-back requires --page-json <file|-> with the answer page dict")
+	}
+	raw, err := readSource(cmd, pageJSON)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read --page-json: %w", err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, fmt.Errorf("--page-json must be one JSON object (a DistilledPage dict): %w", err)
+	}
+	return obj, nil
+}
+
+// readSource reads a JSON payload from a file path, or from stdin when spec is
+// "-" (the streaming transport the .5 skill uses).
+func readSource(cmd *cobra.Command, spec string) ([]byte, error) {
+	if spec == "-" {
+		return io.ReadAll(cmd.InOrStdin())
+	}
+	return os.ReadFile(spec)
+}
+
+// newHistoryCommand builds the `history` sub-tree over internal/core/history —
+// the native session-transcript store (adr-29). `list`/`show` read; `capture`
+// is the redacting write path. The per-repo store is keyed on the root-commit
+// SHA resolved from cwd.
+func newHistoryCommand(asJSON *bool) *cobra.Command {
+	historyCmd := &cobra.Command{
+		Use:   "history",
+		Short: "Manage the native session-transcript store",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+
+	// capture — the redacting write path: read a raw transcript from a file
+	// argument (or stdin with "-"/no arg), sanitise it through the scanner
+	// (two-stage, fail-closed), and store the record. This is the ONLY path that
+	// writes to the store; list/show never mutate.
+	var session, kind string
+	captureCmd := &cobra.Command{
+		Use:   "capture [<transcript-file>|-]",
+		Short: "Redact and store a raw session transcript (reads a file or stdin)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			src := "-"
+			if len(args) == 1 {
+				src = args[0]
+			}
+			raw, err := readSource(cmd, src)
+			if err != nil {
+				return fmt.Errorf("history capture: cannot read transcript: %w", err)
+			}
+			sess := session
+			if sess == "" && src != "-" {
+				// Derive a session id from the file basename (sans extension).
+				base := filepath.Base(src)
+				sess = strings.TrimSuffix(base, filepath.Ext(base))
+			}
+			if sess == "" {
+				return fmt.Errorf("history capture: --session <id> is required when reading from stdin")
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := history.Capture(cwd, rootSHA, sess, raw, orDefault(kind, "native"))
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				if !res.Wrote {
+					fmt.Fprintf(w, "abcd history capture — %s already stored (no-op); redacted secrets=%d home=%d\n",
+						res.Record.SessionID, res.Record.Secrets, res.Record.HomePaths)
+					return
+				}
+				fmt.Fprintf(w, "abcd history capture — stored %s (%s)\n", res.Record.SessionID, res.Record.SourceKind)
+				fmt.Fprintf(w, "  path:     %s\n", res.Record.Path)
+				fmt.Fprintf(w, "  redacted: secrets=%d home=%d\n", res.Record.Secrets, res.Record.HomePaths)
+			})
+		},
+	}
+	captureCmd.Flags().StringVar(&session, "session", "", "session id for the record (default: transcript filename; required for stdin)")
+	captureCmd.Flags().StringVar(&kind, "kind", "", "source kind: native | specstory-import (default native)")
+	historyCmd.AddCommand(captureCmd)
+
+	// list — records newest-first for this repo.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List stored transcripts for this repo, newest first",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			records, err := history.List(rootSHA)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, records, func(w io.Writer) {
+				if len(records) == 0 {
+					fmt.Fprintln(w, "abcd history — no transcripts stored for this repo")
+					return
+				}
+				for _, r := range records {
+					fmt.Fprintf(w, "%s  %s  %s  redacted secrets=%d home=%d\n",
+						r.CapturedAt.Format("2006-01-02T15:04:05Z"), r.SessionID, r.SourceKind, r.Secrets, r.HomePaths)
+				}
+			})
+		},
+	})
+
+	// show <session-id-or-filename> — metadata + redacted body of one record.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "show <session-id-or-filename>",
+		Short: "Show one stored transcript's metadata and redacted body",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			rec, body, err := history.Read(rootSHA, args[0])
+			if err != nil {
+				return err
+			}
+			out := struct {
+				history.Record
+				Body string `json:"body"`
+			}{Record: rec, Body: string(body)}
+			return render(cmd.OutOrStdout(), *asJSON, out, func(w io.Writer) {
+				fmt.Fprintf(w, "session:    %s\n", rec.SessionID)
+				fmt.Fprintf(w, "captured:   %s\n", rec.CapturedAt.Format("2006-01-02T15:04:05Z"))
+				fmt.Fprintf(w, "source:     %s\n", rec.SourceKind)
+				fmt.Fprintf(w, "path:       %s\n", rec.Path)
+				fmt.Fprintf(w, "redacted:   secrets=%d home=%d\n", rec.Secrets, rec.HomePaths)
+				fmt.Fprintln(w, "---")
+				fmt.Fprint(w, string(body))
+			})
+		},
+	})
+
+	return historyCmd
+}
+
+// repoRootSHA resolves the current repo's root-commit SHA (the history store
+// key) via the ahoy detection pass. An empty SHA means cwd is not a git repo
+// with commits, which the history verbs cannot key on.
+func repoRootSHA() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	det, err := ahoy.Detect(cwd)
+	if err != nil {
+		return "", err
+	}
+	if det.RootSHA == "" {
+		return "", fmt.Errorf("history: cannot resolve the repo's root-commit SHA (not a git repo with commits)")
+	}
+	return det.RootSHA, nil
 }
 
 // Execute runs the root command; main sets the process exit code on error.

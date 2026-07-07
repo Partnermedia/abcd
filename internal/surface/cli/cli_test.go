@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,15 +132,94 @@ func TestAhoyInstallWiredAndIdempotent(t *testing.T) {
 
 func runCLI(t *testing.T, args ...string) []byte {
 	t.Helper()
+	return runCLIStdin(t, "", args...)
+}
+
+// runCLIStdin runs the CLI with stdin bound to `stdin`, so commands that read a
+// payload from "-" (e.g. `history capture -`) can be exercised end-to-end.
+func runCLIStdin(t *testing.T, stdin string, args ...string) []byte {
+	t.Helper()
 	cmd := NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader(stdin))
 	cmd.SetArgs(args)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute %v: %v\n%s", args, err, out.String())
 	}
 	return out.Bytes()
+}
+
+func gitCmd(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	full := append([]string{"-C", repo}, args...)
+	out, err := exec.Command("git", full...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestHistoryCaptureWiredAndRedacts proves the Finding-B wiring: `abcd history
+// capture` reaches history.Capture from the CLI front door, redacts a planted
+// secret, and stores the record on disk. Before this change history.Capture was
+// dead scaffolding — no CLI subverb reached it.
+func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := t.TempDir()
+	gitCmd(t, repo, "init")
+	gitCmd(t, repo, "config", "user.email", "test@example.com")
+	gitCmd(t, repo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, repo, "add", ".")
+	gitCmd(t, repo, "commit", "-m", "init")
+	t.Chdir(repo)
+
+	// Create the store dir exactly as `abcd install` would (Capture never
+	// bootstraps it).
+	rootSHA := gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
+	tdir := filepath.Join(home, ".abcd", "history", rootSHA, "transcripts")
+	if err := os.MkdirAll(tdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	pat := "ghp_" + strings.Repeat("b", 40)
+	transcript := "user: deploy with token " + pat + "\nassistant: done\n"
+
+	out := runCLIStdin(t, transcript, "history", "capture", "--session", "sess-wired", "--json")
+
+	var res struct {
+		Record struct {
+			Path      string `json:"path"`
+			SessionID string `json:"session_id"`
+			Secrets   int    `json:"redacted_secrets"`
+		} `json:"record"`
+		Wrote bool `json:"wrote"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("capture output not JSON: %v\n%s", err, out)
+	}
+	if !res.Wrote {
+		t.Fatalf("expected Wrote=true on first capture\n%s", out)
+	}
+	if res.Record.SessionID != "sess-wired" {
+		t.Errorf("session id = %q, want sess-wired", res.Record.SessionID)
+	}
+	if res.Record.Secrets < 1 {
+		t.Errorf("expected >=1 secret redaction counted, got %d", res.Record.Secrets)
+	}
+	body, err := os.ReadFile(res.Record.Path)
+	if err != nil {
+		t.Fatalf("stored record unreadable: %v", err)
+	}
+	if bytes.Contains(body, []byte(pat)) {
+		t.Errorf("planted secret leaked into the stored record:\n%s", body)
+	}
 }
 
 // runCLIErr executes the command tree and returns its stdout/stderr plus the

@@ -177,12 +177,14 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 
 	urls := urlSpans(line)
 
-	// home_path_self — accept only when the trailing rune is a boundary/EOL.
+	// home_path_self — the caller's OWN home path (hard_fail). Detected
+	// regardless of the trailing rune: the trailing-boundary heuristic exists
+	// only to avoid over-flagging a DIFFERENT user's path (home_path_other),
+	// never to license leaving the caller's own home path unredacted. A home
+	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is
+	// still the caller's home and must be redacted.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
-			if !trailingBoundaryOK(line, loc[1]) {
-				continue
-			}
 			add(kindHomeSelf, loc[0]+1, line[loc[0]:loc[1]], "~")
 		}
 	}
@@ -248,7 +250,12 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 }
 
 // localSuppressionSpans returns spans where a local-username match is not a
-// standalone leak (own home path, any generic home path, the exact email, URLs).
+// standalone leak (own home path, any redacted generic home path, the exact
+// email, URLs). A local-username is only suppressed over a span that is itself
+// redacted: home_path_self is now always redacted, but a home_path_other span
+// whose trailing rune fails trailingBoundaryOK is DROPPED (never redacted), so
+// masking a username over it would leave both the path and the username verbatim
+// on disk. Such dropped spans are therefore excluded from suppression.
 func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span {
 	spans := append([]span(nil), urls...)
 	if m.homeSelf != nil {
@@ -257,6 +264,9 @@ func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span
 		}
 	}
 	for _, loc := range genericHomeRe.FindAllStringIndex(line, -1) {
+		if !trailingBoundaryOK(line, loc[1]) {
+			continue // dropped home_path_other — not redacted, so do not suppress
+		}
 		spans = append(spans, span{loc[0], loc[1]})
 	}
 	if m.email != nil {
