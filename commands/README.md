@@ -6,7 +6,8 @@ binary and present the result — the markdown is the surface, the binary is the
 engine.
 
 - `abcd.md` → `/abcd` — the read-only where-am-i status board (`abcd --json`).
-- `abcd/<verb>.md` → `/abcd:<verb>` — one file per verb. Currently `version`.
+- `abcd/<verb>.md` → `/abcd:<verb>` — one file per verb: `version`, `ahoy`
+  (read-only install/update detector), `launch` (read-only release preview).
 
 Commands stay thin: they call `abcd <verb> --json` and format the result; they
 never reimplement behaviour that belongs in the core.

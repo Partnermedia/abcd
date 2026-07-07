@@ -1,0 +1,188 @@
+package launch
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func writeFile(t *testing.T, root, rel, content string) {
+	t.Helper()
+	abs := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func included(b Bundle, logical string) bool {
+	for _, f := range b.Included {
+		if f.LogicalPath == logical {
+			return true
+		}
+	}
+	return false
+}
+
+func excludedReason(b Bundle, logical string) (ExcludedReason, bool) {
+	for _, f := range b.Excluded {
+		if f.LogicalPath == logical {
+			return f.Reason, true
+		}
+	}
+	return "", false
+}
+
+// TestDefaultDenyNewTopLevel proves the include list is a default-deny
+// allowlist: a new top-level path not named by any include never enters the
+// bundle, and no .abcd/** path is ever Included.
+func TestDefaultDenyNewTopLevel(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "commands/a.md", "ok")
+	writeFile(t, root, "docs/b.md", "ok")
+	writeFile(t, root, "README.md", "ok")
+	writeFile(t, root, ".abcd/secret.md", "SECRET")
+	writeFile(t, root, ".work/scratch.txt", "junk")
+	writeFile(t, root, "surprise/c.md", "new top-level dir")
+
+	b, err := ResolveBundle(root, []string{"commands", "docs", "README.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !included(b, "commands/a.md") || !included(b, "docs/b.md") || !included(b, "README.md") {
+		t.Fatalf("expected allowlisted files included: %+v", b.Included)
+	}
+	// Default-deny: a new top-level dir not in the includes must not be included.
+	if included(b, "surprise/c.md") {
+		t.Errorf("default-deny violated: unlisted top-level dir was included")
+	}
+	// The .abcd namespace must NEVER appear in Included under any circumstances.
+	for _, f := range b.Included {
+		if firstSegment(f.LogicalPath) == ".abcd" {
+			t.Errorf(".abcd path entered the bundle: %s", f.LogicalPath)
+		}
+	}
+}
+
+// TestAbcdNamespaceStructurallyExcluded proves that even a broad include that
+// reaches everything classifies .abcd/** as excluded(denied_namespace) and never
+// Included — the load-bearing structural deny (adr-18/adr-28).
+func TestAbcdNamespaceStructurallyExcluded(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "commands/a.md", "ok")
+	writeFile(t, root, "README.md", "ok")
+	writeFile(t, root, ".abcd/development/brief.md", "DESIGN RECORD")
+	writeFile(t, root, ".work/x", "junk")
+	writeFile(t, root, ".flow/y", "junk")
+
+	b, err := ResolveBundle(root, []string{"."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Broad include still ships the real content.
+	if !included(b, "commands/a.md") || !included(b, "README.md") {
+		t.Fatalf("broad include dropped real content: %+v", b.Included)
+	}
+	// Every denied namespace is excluded(denied_namespace), never Included.
+	for _, ns := range []string{".abcd", ".work", ".flow"} {
+		if reason, ok := excludedReason(b, ns); !ok || reason != ExcludedDeniedNamespace {
+			t.Errorf("%s not excluded(denied_namespace): reason=%q ok=%v", ns, reason, ok)
+		}
+	}
+	for _, f := range b.Included {
+		if _, denied := DenyNamespaces[firstSegment(f.LogicalPath)]; denied {
+			t.Errorf("denied namespace path entered the bundle: %s", f.LogicalPath)
+		}
+	}
+}
+
+// TestMissingLiteralRejected proves a literal include with no on-disk entry is a
+// rejection.
+func TestMissingLiteralRejected(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "README.md", "ok")
+	b, err := ResolveBundle(root, []string{"README.md", "LICENSE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range b.Rejected {
+		if r.LogicalPath == "LICENSE" && r.Reason == RejectedMissingLiteral {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing literal LICENSE not rejected: %+v", b.Rejected)
+	}
+	if b.HasViolation() != true {
+		t.Errorf("HasViolation should be true with a rejection")
+	}
+}
+
+// TestSymlinkEscapeRejected proves a symlink whose target escapes the repo is
+// rejected, and a symlink into a denied namespace is rejected(deny).
+func TestSymlinkEscapeRejected(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeFile(t, outside, "leak.txt", "external")
+	writeFile(t, root, ".abcd/secret.txt", "SECRET")
+	writeFile(t, root, "commands/keep.md", "ok")
+
+	// commands/escape -> outside/leak.txt (escape)
+	if err := os.Symlink(filepath.Join(outside, "leak.txt"), filepath.Join(root, "commands", "escape")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	// commands/smuggle -> ../.abcd/secret.txt (denied target)
+	if err := os.Symlink(filepath.Join(root, ".abcd", "secret.txt"), filepath.Join(root, "commands", "smuggle")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	b, err := ResolveBundle(root, []string{"commands"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var escape, deny bool
+	for _, r := range b.Rejected {
+		if r.LogicalPath == "commands/escape" && r.Reason == RejectedSymlinkEscape {
+			escape = true
+		}
+		if r.LogicalPath == "commands/smuggle" && r.Reason == RejectedDeny {
+			deny = true
+		}
+	}
+	if !escape {
+		t.Errorf("symlink escape not rejected: %+v", b.Rejected)
+	}
+	if !deny {
+		t.Errorf("symlink into denied namespace not rejected(deny): %+v", b.Rejected)
+	}
+	// The real file still ships; no denied content leaked in.
+	if !included(b, "commands/keep.md") {
+		t.Errorf("real file dropped: %+v", b.Included)
+	}
+}
+
+// TestGlobMatchSegmentAware proves ** crosses separators but a single * stays
+// in-segment.
+func TestGlobMatchSegmentAware(t *testing.T) {
+	cases := []struct {
+		rel, pattern string
+		want         bool
+	}{
+		{"docs/a.md", "docs/**", true},
+		{"docs/sub/a.md", "docs/**", true},
+		{"docs", "docs/**", true},
+		{"a.md", "*.md", true},
+		{"sub/a.md", "*.md", false}, // single * must not cross /
+		{"sub/a.md", "**/*.md", true},
+		{"README.md", "**/*.md", true},
+		{"x.txt", "*.md", false},
+	}
+	for _, c := range cases {
+		if got := matchesInclude(c.rel, c.pattern); got != c.want {
+			t.Errorf("matchesInclude(%q,%q)=%v want %v", c.rel, c.pattern, got, c.want)
+		}
+	}
+}

@@ -1,0 +1,11 @@
+{
+  "includes": [
+    ".claude-plugin",
+    "commands",
+    "scripts",
+    "docs",
+    "README.md",
+    "LICENSE",
+    ".gitignore"
+  ]
+}
