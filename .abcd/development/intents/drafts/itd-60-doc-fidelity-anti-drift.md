@@ -35,8 +35,10 @@ This is the **forward** direction: built reality drives the brief and the docs. 
 
 ## What's In Scope
 
-- A doc-fidelity pass that grades, in the forward direction: (1) built reality against the brief (is the brief accurate?), and (2) the brief against the public docs (do the docs honestly explain the brief for their audience, without over- or under-claiming?).
-- A tiered enforcement weight, mirroring abcd's existing pre-commit → CI → runtime tiering: **per task**, the pass advises and flags possible drift, non-blocking; **per spec**, the pass is a hard gate that must resolve before the spec closes.
+- **Two layers, one gate — a deterministic floor beneath a semantic pass.** The pass is not one mechanism but two, stacked. Layer 1 grades *mechanics*; layer 2 (everything below) grades *meaning*.
+- **Layer 1 — a deterministic doc-currency lint.** A language-agnostic check family in abcd's native lint engine (the same engine as the record and launch gates, config-driven per repo), it mechanically enforces the present-tense discipline — no change-narration in doc bodies ("previously X, now Y", "deprecated", "to be implemented") — plus resolvable cross-links and no stray or misplaced top-level documents. It needs no oracle, so it is cheap enough to run every commit on *any* abcd-managed repo whatever the language. This is the always-on floor: it catches the drift that is decidable without reading the code.
+- **Layer 2 — the semantic doc-fidelity pass.** A doc-fidelity pass that grades, in the forward direction: (1) built reality against the brief (is the brief accurate?), and (2) the brief against the public docs (do the docs honestly explain the brief for their audience, without over- or under-claiming?). This is where meaning — not mechanics — must be judged, so it is host-delegated, not deterministic.
+- A tiered enforcement weight, mirroring abcd's existing pre-commit → CI → runtime tiering. Layer 1 (deterministic) is the **pre-commit** floor: it blocks cheaply and always. Layer 2 (semantic) is tiered above it — **per task** it advises and flags possible drift, non-blocking; **per spec** it is a hard gate that must resolve before the spec closes.
 - Auto-drafting of the corrective delta: when drift is found, the pass drafts the brief change and the audience-adapted public-doc change(s) and surfaces them for human review (approve / edit), reusing the "thin LLM core inside a deterministic shell, never auto-commit" posture of the fidelity reviewer.
 - Audience separation in the drafted public docs: an **end-user** view (applying/using what was built) and an optional **developer** view (extending what was built), both derived from the brief — adapting content per audience is permitted; duplicating specification is not (single source of truth).
 - Fail-closed behavior consistent with the existing reviewers: no backend / no reliable comparison → the gate refuses rather than passing silently.
@@ -52,7 +54,8 @@ This is the **forward** direction: built reality drives the brief and the docs. 
 
 > _Given-When-Then per the itd-1 discipline._
 
-- **Given** a task has completed, **when** the doc-fidelity pass runs, **then** it reports (non-blocking) any place the brief or public docs may now lag the built reality, with evidence pointing at the divergence.
+- **Given** a doc body carries change-narration ("previously X, now Y", "deprecated"), an unresolvable cross-link, or a stray top-level document, **when** the deterministic doc-currency lint (layer 1) runs at pre-commit, **then** it flags each one deterministically and blocks — with no oracle call — independently of, and without waiting for, the semantic pass.
+- **Given** a task has completed, **when** the semantic doc-fidelity pass (layer 2) runs, **then** it reports (non-blocking) any place the brief or public docs may now lag the built reality, with evidence pointing at the divergence.
 - **Given** a spec is about to close, **when** the doc-fidelity pass runs as a hard gate, **then** the spec cannot close while an unresolved brief-or-docs drift remains.
 - **Given** drift is found, **when** the pass produces its output, **then** it auto-drafts the brief delta and the audience-adapted public-doc delta(s) and surfaces them for human approve/edit — it never commits a documentation change silently.
 - **Given** the brief is the single source of truth, **when** the public-doc delta is drafted, **then** it adapts the brief's content for its audience (end-user applying; optionally developer extending) without duplicating specification text.
