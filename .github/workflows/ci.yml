@@ -69,6 +69,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go run ./cmd/record-lint
 
+      # Docs-currency gate (itd-60): the internal/core/lint engine over docs/ and
+      # the repo root, driven via the `abcd docs lint` verb. Blocking — a doc-body
+      # change-narration, broken relative link, or stray root markdown fails CI.
+      - name: Docs-lint (currency gate)
+        if: matrix.os == 'ubuntu-latest'
+        run: go run ./cmd/abcd docs lint
+
   # Secrets never land in history: full-history scan on every push/PR. Run as a
   # pinned, checksum-verified CLI (no PR-comment / SARIF GitHub-API integration),
   # so it works on a private repo and survives the private->public flip. A

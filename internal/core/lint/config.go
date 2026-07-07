@@ -56,6 +56,9 @@ type RuleConfig struct {
 	Exempt []string `json:"exempt"`
 	// IntentsDir is the intent_lifecycle intents subdirectory (relative to a root).
 	IntentsDir string `json:"intents_dir"`
+	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
+	// extension-stripped) for top-level markdown files.
+	Allowlist []string `json:"allowlist"`
 }
 
 // LoadConfig reads and decodes a record-lint config file.

@@ -314,6 +314,189 @@ func TestExemptions(t *testing.T) {
 	}
 }
 
+// presentTenseTokens mirrors the change-narration phrase list shipped in
+// .abcd/docs-lint.json (word-boundary, case-insensitive, inline-escape).
+func presentTenseTokens() []BannedToken {
+	allow := []string{`(?i)<!--\s*docs-lint:\s*allow\b`}
+	msg := "change-narration in a doc body; docs state present reality only."
+	mk := func(id, pat, sev string) BannedToken {
+		return BannedToken{ID: id, Pattern: pat, Severity: sev, AllowContext: allow, Message: msg}
+	}
+	return []BannedToken{
+		mk("present_tense/previously", `(?i)\bpreviously\b`, "blocker"),
+		mk("present_tense/formerly", `(?i)\bformerly\b`, "blocker"),
+		mk("present_tense/to-be-implemented", `(?i)\bto be implemented\b`, "blocker"),
+		mk("present_tense/has-been-replaced", `(?i)\b(has|have|had)\s+been\s+replaced\b`, "blocker"),
+		mk("present_tense/we-switched", `(?i)\bwe switched\b`, "blocker"),
+		mk("present_tense/renamed-from", `(?i)\brenamed from\b`, "blocker"),
+		// Ambiguous with legitimate present-state prose -> advisory (warn), never block.
+		mk("present_tense/no-longer", `(?i)\bno longer\b`, "warn"),
+		mk("present_tense/deprecated", `(?i)\bdeprecated\b`, "warn"),
+		mk("present_tense/migrated-from", `(?i)\bmigrated from\b`, "warn"),
+		// NB: "used to" is intentionally absent — RE2 has no lookbehind to tell
+		// change-narration ("used to be X") from passive present ("is used to X").
+	}
+}
+
+func TestPresentTense(t *testing.T) {
+	root := t.TempDir()
+	// Unambiguous change-narration -> each phrase is a BLOCKER finding.
+	writeFile(t, root, "docs/history.md",
+		"The flag was previously named --old.\n"+ // previously
+			"It was formerly a shell script.\n"+ // formerly
+			"The engine has been replaced by a Go port.\n"+ // has been replaced
+			"We switched to TOML for config.\n"+ // we switched
+			"The type was renamed from Foo.\n"+ // renamed from
+			"The MCP surface is to be implemented.\n") // to be implemented
+	// Ambiguous phrasing that also states present reality -> WARN, never blocks.
+	writeFile(t, root, "docs/ambiguous.md",
+		"The upstream token is deprecated.\n"+ // deprecated (present-state)
+			"Records migrated from the legacy store are validated on read.\n") // migrated from (provenance)
+	// Legitimate present tense, incl. passive "is used to" -> NO finding at all
+	// (this is the regression that broke a blocking gate before "used to" was dropped).
+	writeFile(t, root, "docs/clean.md",
+		"The --config flag is used to override defaults.\n"+
+			"This directory is used to store build output.\n"+
+			"Run the command now.\nFirst do X, then do Y.\nThe engine currently reads config.json.\n")
+	// The inline escape suppresses an otherwise-flagged line.
+	writeFile(t, root, "docs/escaped.md",
+		"The API was previously named --old. <!-- docs-lint: allow -->\n")
+	// Inside a fenced code block -> skipped by default.
+	writeFile(t, root, "docs/fenced.md",
+		"prose\n```\nthis was previously broken\n```\nmore\n")
+
+	cfg := Config{Roots: []string{"docs"}, BannedTokens: presentTenseTokens()}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sevOf := func(base, rule string, line int) (string, bool) {
+		for _, f := range fs {
+			if filepath.Base(f.File) == base && f.RuleID == rule && f.Line == line {
+				return f.Severity, true
+			}
+		}
+		return "", false
+	}
+
+	// history.md: the six unambiguous phrases each fire as a BLOCKER, one per line.
+	for _, w := range []struct {
+		rule string
+		line int
+	}{
+		{"present_tense/previously", 1},
+		{"present_tense/formerly", 2},
+		{"present_tense/has-been-replaced", 3},
+		{"present_tense/we-switched", 4},
+		{"present_tense/renamed-from", 5},
+		{"present_tense/to-be-implemented", 6},
+	} {
+		if sev, ok := sevOf("history.md", w.rule, w.line); !ok || sev != "blocker" {
+			t.Errorf("expected blocker %s on history.md:%d; got sev=%q ok=%v; all=%+v", w.rule, w.line, sev, ok, fs)
+		}
+	}
+
+	// ambiguous.md: deprecated + migrated-from fire, but only as WARN (gate stays satisfiable).
+	for _, w := range []struct {
+		rule string
+		line int
+	}{
+		{"present_tense/deprecated", 1},
+		{"present_tense/migrated-from", 2},
+	} {
+		if sev, ok := sevOf("ambiguous.md", w.rule, w.line); !ok || sev != "warn" {
+			t.Errorf("expected warn %s on ambiguous.md:%d; got sev=%q ok=%v", w.rule, w.line, sev, ok)
+		}
+	}
+
+	// clean/escaped/fenced docs produce NO finding; nothing in ambiguous.md may block.
+	for _, f := range fs {
+		switch filepath.Base(f.File) {
+		case "clean.md", "escaped.md", "fenced.md":
+			t.Errorf("unexpected present-tense finding on %s: %+v", f.File, f)
+		case "ambiguous.md":
+			if f.Severity == "blocker" {
+				t.Errorf("ambiguous present-state prose must not block the gate: %+v", f)
+			}
+		}
+	}
+}
+
+func TestStrayRootDocs(t *testing.T) {
+	root := t.TempDir()
+	// Allowlisted regular files at root -> exempt.
+	writeFile(t, root, "README.md", "# readme\n")
+	writeFile(t, root, "AGENTS.md", "# agents\n")
+	// A stray, non-allowlisted root markdown -> finding.
+	writeFile(t, root, "NOTES.md", "# stray\n")
+	// Markdown under a subdirectory is never touched (non-recursive).
+	writeFile(t, root, "docs/guide.md", "# guide\n")
+	// A symlink whose target stem is allowlisted -> exempt (the CLAUDE.md ->
+	// AGENTS.md case). Judged by the resolved target, not the link name.
+	if err := os.Symlink("AGENTS.md", filepath.Join(root, "CLAUDE.md")); err != nil {
+		t.Fatal(err)
+	}
+	// A symlink with a missing target -> finding.
+	if err := os.Symlink("GONE.md", filepath.Join(root, "BROKEN.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Config{
+		Rules: map[string]RuleConfig{
+			"stray_root_docs": {Enabled: true, Severity: "blocker",
+				Allowlist: []string{"README", "AGENTS", "CHANGELOG", "CONTRIBUTING", "SECURITY", "LICENSE"}},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !hasFinding(fs, "NOTES.md", "stray_root_docs", 0) {
+		t.Errorf("expected stray finding on NOTES.md: %+v", fs)
+	}
+	if !hasFinding(fs, "BROKEN.md", "stray_root_docs", 0) {
+		t.Errorf("expected broken-symlink finding on BROKEN.md: %+v", fs)
+	}
+	// README, AGENTS, the CLAUDE.md symlink, and docs/guide.md must not fire.
+	for _, f := range fs {
+		switch f.File {
+		case "README.md", "AGENTS.md", "CLAUDE.md", filepath.Join("docs", "guide.md"):
+			t.Errorf("unexpected stray finding on %s: %+v", f.File, f)
+		}
+	}
+	if n := countRule(fs, "stray_root_docs"); n != 2 {
+		t.Fatalf("expected exactly 2 stray_root_docs findings, got %d: %+v", n, fs)
+	}
+}
+
+func TestDocsLinkResolveInDocs(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "docs/target.md", "# target\n")
+	writeFile(t, root, "docs/doc.md",
+		"good: [t](target.md)\n"+
+			"dir ok: [d](../docs/)\n"+
+			"broken: [t](missing.md)\n")
+
+	cfg := Config{
+		Roots: []string{"docs"},
+		Rules: map[string]RuleConfig{
+			"links_resolve": {Enabled: true, Severity: "blocker"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "links_resolve"); n != 1 {
+		t.Fatalf("expected 1 link finding, got %d: %+v", n, fs)
+	}
+	if !hasFinding(fs, filepath.Join("docs", "doc.md"), "links_resolve", 3) {
+		t.Errorf("expected broken-link finding on docs/doc.md:3: %+v", fs)
+	}
+}
+
 func TestCleanRecordProducesNoFindings(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "rec/README.md", "# rec\n")

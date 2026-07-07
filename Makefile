@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/REPPL/abcd-cli/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews record-lint
+.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
 # Pass VERSION=vX.Y.Z to stamp the version (release builds); omit for a dev build.
@@ -41,11 +41,18 @@ lint-reviews:
 record-lint:
 	@go run ./cmd/record-lint
 
+# Deterministic docs-currency gate (itd-60): the same internal/core/lint engine,
+# driven over docs/ and the repo root via the transport-agnostic `abcd docs lint`
+# verb. Blocking: change-narration in a doc body, a broken relative link, or a
+# stray root markdown file fails preflight and CI.
+docs-lint:
+	@go run ./cmd/abcd docs lint
+
 # Pre-push gate (invoked by .githooks/pre-push): the same steps CI's check job
 # runs — build, vet, test, and race-enabled internal tests — natively, plus the
 # reviews-charter discipline. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews record-lint
+preflight: lint-reviews record-lint docs-lint
 	go build ./...
 	go vet ./...
 	go test ./...

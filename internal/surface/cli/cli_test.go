@@ -141,3 +141,110 @@ func runCLI(t *testing.T, args ...string) []byte {
 	}
 	return out.Bytes()
 }
+
+// runCLIErr executes the command tree and returns its stdout/stderr plus the
+// error, so a gate's non-zero exit can be asserted rather than fataled on.
+func runCLIErr(t *testing.T, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+	return out.Bytes(), err
+}
+
+const docsLintConfig = `{
+  "roots": ["docs"],
+  "banned_tokens": [
+    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","message":"change-narration"}
+  ],
+  "rules": {
+    "links_resolve": {"enabled": true, "severity": "blocker"},
+    "stray_root_docs": {"enabled": true, "severity": "blocker",
+      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE"]}
+  }
+}`
+
+// TestDocsLintRootFlagFlagsDrift proves `docs lint --root/--config` runs layer 1
+// over an arbitrary tree: a change-narration token, a broken cross-link, and a
+// stray top-level markdown each surface as a blocker and drive a non-zero exit.
+func TestDocsLintRootFlagFlagsDrift(t *testing.T) {
+	root := t.TempDir()
+	cfg := filepath.Join(root, "docs-lint.json")
+	if err := os.WriteFile(cfg, []byte(docsLintConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "bad.md"),
+		[]byte("# Bad\n\nThis was previously X, now Y.\n\nSee [gone](./missing.md).\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "FOO.md"), []byte("# Stray\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runCLIErr(t, "docs", "lint", "--json", "--config", cfg, "--root", root)
+	if err == nil {
+		t.Fatalf("expected non-zero exit on blockers, got nil\n%s", out)
+	}
+	var res struct {
+		Findings []struct {
+			RuleID   string `json:"RuleID"`
+			Severity string `json:"Severity"`
+		} `json:"findings"`
+		Blockers int `json:"blockers"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, out)
+	}
+	if res.Blockers < 3 {
+		t.Fatalf("blockers = %d, want >= 3\n%s", res.Blockers, out)
+	}
+	rules := map[string]bool{}
+	for _, f := range res.Findings {
+		rules[f.RuleID] = true
+	}
+	for _, want := range []string{"present_tense/previously", "links_resolve", "stray_root_docs"} {
+		if !rules[want] {
+			t.Fatalf("expected a %s blocker, got findings %v", want, rules)
+		}
+	}
+}
+
+// TestDocsLintCleanTreePasses proves a present-tense, well-linked tree with no
+// stray root docs exits zero under the same layer-1 config.
+func TestDocsLintCleanTreePasses(t *testing.T) {
+	root := t.TempDir()
+	cfg := filepath.Join(root, "docs-lint.json")
+	if err := os.WriteFile(cfg, []byte(docsLintConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "peer.md"), []byte("# Peer\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "good.md"),
+		[]byte("# Good\n\nThe pass grades docs against reality.\n\nSee [peer](./peer.md).\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runCLIErr(t, "docs", "lint", "--json", "--config", cfg, "--root", root)
+	if err != nil {
+		t.Fatalf("clean tree should pass, got error: %v\n%s", err, out)
+	}
+	var res struct {
+		Blockers int `json:"blockers"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, out)
+	}
+	if res.Blockers != 0 {
+		t.Fatalf("clean tree blockers = %d, want 0\n%s", res.Blockers, out)
+	}
+}

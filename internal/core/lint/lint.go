@@ -116,8 +116,83 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 		}
 	}
 
+	// stray_root_docs is repo-root scoped and non-recursive — independent of
+	// cfg.Roots, so it runs once, outside the per-root loop.
+	if strayCfg, ok := cfg.Rules["stray_root_docs"]; ok && strayCfg.Enabled {
+		sr, err := checkStrayRootDocs(repoRoot, strayCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, sr...)
+	}
+
 	sortFindings(findings)
 	return findings, nil
+}
+
+// checkStrayRootDocs flags top-level markdown files whose basename stem is not
+// in the configured allowlist. It is non-recursive (os.ReadDir on the repo root
+// only) — subdirectories such as docs/ and .abcd/ are never touched. A root
+// markdown file that is a symlink is judged by its resolved target's stem, so
+// bridge links like CLAUDE.md -> AGENTS.md and GEMINI.md -> AGENTS.md are exempt
+// without allowlisting the link name; a symlink with an unresolvable target is a
+// finding.
+func checkStrayRootDocs(repoRoot string, cfg RuleConfig) ([]Finding, error) {
+	allow := make(map[string]bool, len(cfg.Allowlist))
+	for _, a := range cfg.Allowlist {
+		allow[strings.ToUpper(a)] = true
+	}
+
+	entries, err := os.ReadDir(repoRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var out []Finding
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		// A root markdown symlink is judged by its resolved target's stem, not
+		// its own name — this is what lets the CLAUDE.md / GEMINI.md bridges
+		// (symlinks to the allowlisted AGENTS.md) pass. Known tradeoff: a stray
+		// name pointed at an allowlisted target (e.g. NOTES.md -> AGENTS.md) is
+		// also exempt. Acceptable here — creating such a symlink is a deliberate
+		// act with the same trust level as adding the allowlisted file itself.
+		stemName := name
+		info, err := os.Lstat(filepath.Join(repoRoot, name))
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := filepath.EvalSymlinks(filepath.Join(repoRoot, name))
+			if err != nil {
+				out = append(out, Finding{
+					File: name, Line: 0, RuleID: "stray_root_docs",
+					Severity: cfg.Severity,
+					Message:  "top-level markdown symlink '" + name + "' has an unresolvable target",
+				})
+				continue
+			}
+			stemName = filepath.Base(resolved)
+		}
+
+		stem := strings.ToUpper(strings.TrimSuffix(stemName, filepath.Ext(stemName)))
+		if allow[stem] {
+			continue
+		}
+		out = append(out, Finding{
+			File: name, Line: 0, RuleID: "stray_root_docs",
+			Severity: cfg.Severity,
+			Message:  "top-level markdown '" + name + "' is not in the root allowlist; documentation belongs under docs/",
+		})
+	}
+	return out, nil
 }
 
 // tokenCheck is a compiled BannedToken ready for line matching.

@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/launch"
+	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/spf13/cobra"
 )
 
@@ -95,7 +97,87 @@ func NewRootCommand() *cobra.Command {
 	launchCmd.Flags().BoolVar(&launchDryRun, "dry-run", false, "preview the launch bundle and gates without publishing")
 	root.AddCommand(launchCmd)
 
+	root.AddCommand(newDocsCommand(&asJSON))
+
 	return root
+}
+
+// docsLintResult is the machine-readable envelope for `abcd docs lint`: the
+// findings plus the blocker count that decides the exit status.
+type docsLintResult struct {
+	Findings []lint.Finding `json:"findings"`
+	Blockers int            `json:"blockers"`
+}
+
+// newDocsCommand builds the `docs` sub-tree. Its `lint` verb is the docs-currency
+// drift gate: it loads .abcd/docs-lint.json (or --config), runs the shared
+// internal/core/lint engine over the repo, renders the findings (text or --json),
+// and exits non-zero when any blocker survives — the same engine record-lint uses.
+func newDocsCommand(asJSON *bool) *cobra.Command {
+	docsCmd := &cobra.Command{
+		Use:   "docs",
+		Short: "Documentation-currency checks for this repo",
+		Args:  cobra.NoArgs,
+	}
+
+	var configPath string
+	var rootDir string
+	lintCmd := &cobra.Command{
+		Use:   "lint",
+		Short: "Lint docs for change-narration, broken links, and stray root markdown",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := rootDir
+			if root == "" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				root = cwd
+			}
+			root, err := filepath.Abs(root)
+			if err != nil {
+				return err
+			}
+			cfgPath := configPath
+			if cfgPath == "" {
+				cfgPath = filepath.Join(root, ".abcd", "docs-lint.json")
+			}
+			cfg, err := lint.LoadConfig(cfgPath)
+			if err != nil {
+				return err
+			}
+			findings, err := lint.Lint(cfg, root)
+			if err != nil {
+				return err
+			}
+			blockers := 0
+			for _, f := range findings {
+				if f.Severity == "blocker" {
+					blockers++
+				}
+			}
+			res := docsLintResult{Findings: findings, Blockers: blockers}
+			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				for _, f := range findings {
+					fmt.Fprintf(w, "%s:%d: [%s %s] %s\n",
+						f.File, f.Line, strings.ToUpper(f.Severity), f.RuleID, f.Message)
+				}
+				fmt.Fprintf(w, "abcd docs lint — %d finding(s), %d blocker(s)\n", len(findings), blockers)
+			}); err != nil {
+				return err
+			}
+			if blockers > 0 {
+				return fmt.Errorf("docs lint: %d blocker finding(s)", blockers)
+			}
+			return nil
+		},
+	}
+	lintCmd.Flags().StringVar(&configPath, "config", "", "path to docs-lint.json (default: <root>/.abcd/docs-lint.json)")
+	lintCmd.Flags().StringVar(&rootDir, "root", "", "repo root to lint (default: current working directory)")
+	docsCmd.AddCommand(lintCmd)
+
+	return docsCmd
 }
 
 // newAhoyCommand builds the `ahoy` sub-tree. Bare `ahoy` runs the read-only
