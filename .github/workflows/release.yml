@@ -94,6 +94,9 @@ jobs:
       - name: Reviews-charter discipline (RD001-RD003)
         run: bash scripts/check-reviews.sh
 
+      - name: Smoke every command (self-discovering harness)
+        run: make smoke
+
   # Build and publish ONLY after verify is green. Binaries are cross-compiled from
   # the same pushed commit (github.sha) that verify just gated, so the shipped
   # artefacts match the code that passed — even if the tag were re-pointed since.
