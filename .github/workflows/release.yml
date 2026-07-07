@@ -1,0 +1,226 @@
+name: release
+
+# Pushing a version tag (vX.Y.Z) first re-runs the full verification gate (gofmt,
+# build, vet, the race leg, and the deterministic record/docs/reviews gates)
+# against the PUSHED COMMIT; only if that gate is green does it cross-compile the
+# four binaries FROM THAT SAME COMMIT, generate a checksums.txt manifest over them,
+# and publish a GitHub Release with the binaries + checksums.txt attached (plus
+# their SLSA build-provenance attestations once the repo is public — attestation is
+# not offered on a user-owned private repo, so it is skipped there and re-enables
+# automatically on the public flip).
+# Nothing is pushed to any branch. Both jobs check out `github.sha` — the commit the
+# pushed tag pointed at, fixed for the whole run — never the tag NAME (which could be
+# re-pointed between jobs to swap unverified code into the build) and never the
+# default-branch tip. Net effect: a tag push yields a verified release whose binaries,
+# checksums, and reported version all come from the pushed commit.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Never run two releases of the same tag concurrently, and never cancel a release
+# mid-flight — a half-published release is worse than a queued one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Floor for the workflow: read-only. The release job elevates itself to
+# contents: write only to create the Release and upload its assets; verify stays
+# read-only. No job pushes to any branch.
+permissions:
+  contents: read
+
+jobs:
+  # Gate the release on the pushed commit, mirroring ci.yml's check + record-lint
+  # jobs (gofmt, build, vet, test, the race leg, the record/docs drift gates, and
+  # the reviews-charter discipline). A red step here aborts before anything is built
+  # or published. Checked out at github.sha — the commit the pushed tag pointed at,
+  # never the default-branch tip or the re-resolvable tag name — so the gate
+  # exercises exactly the commit whose binaries will ship.
+  verify:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # github.sha, not the tag ref: checkout re-resolves a NAMED ref at each
+          # job's start, so a tag moved after the push could differ here. The sha is
+          # the commit the pushed tag pointed at, immutable for this run.
+          ref: ${{ github.sha }}
+          # Full history: the reviews-charter check (RD002, append-only) inspects
+          # committed history for post-creation edits, which a shallow checkout misses.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25'
+          # cache: false — this workflow is tag-triggered; module caching in a
+          # release-triggering workflow is a cache-poisoning vector (zizmor).
+          cache: false
+
+      - name: Format (gofmt)
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt: these files are not formatted (run gofmt -w .):" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Test (race, internal)
+        run: go test -race ./internal/...
+
+      - name: Record-lint (design-record drift gate)
+        run: go run ./cmd/record-lint
+
+      - name: Docs-lint (docs-currency gate)
+        run: go run ./cmd/abcd docs lint
+
+      - name: Reviews-charter discipline (RD001-RD003)
+        run: bash scripts/check-reviews.sh
+
+  # Build and publish ONLY after verify is green. Binaries are cross-compiled from
+  # the same pushed commit (github.sha) that verify just gated, so the shipped
+  # artefacts match the code that passed — even if the tag were re-pointed since.
+  release:
+    needs: verify
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the Release and upload its assets (no branch push)
+      id-token: write       # mint the OIDC token attest-build-provenance signs with
+      attestations: write   # publish the build-provenance attestations (public repo)
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # github.sha (the commit the pushed tag pointed at), not the tag NAME and
+          # not the default-branch tip, so the binaries below are built from the exact
+          # commit verify gated.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Record the default-branch tip (no-branch-commit tripwire)
+        # This release job must push NOTHING to any branch. Record the remote
+        # default-branch tip now; the closing step re-reads it and fails the run if
+        # the branch moved because of this job. Read the ref through the API with
+        # GH_TOKEN: an anonymous `git ls-remote` cannot authenticate to a private repo,
+        # and checkout ran with persist-credentials: false.
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${DEFAULT_BRANCH}" --jq '.object.sha')"
+          test -n "$sha"
+          echo "DEFAULT_BRANCH_START_SHA=$sha" >> "$GITHUB_ENV"
+          echo "default-branch tip at job start: $sha"
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Cross-compile the four binaries (version-stamped from the tag)
+        # VERSION=<tag> stamps `abcd version` via -ldflags -X …internal/core.Version.
+        # The binaries built here are the ones checksummed, attested, and uploaded
+        # below, so the manifest, the published assets, and the reported version are
+        # all in sync.
+        run: make build VERSION="${GITHUB_REF_NAME}"
+
+      - name: Generate checksums.txt over the four binaries
+        # Hash the exact binaries built above into a sha256sum-format manifest,
+        # uploaded as a release asset. No rebuild — the bytes hashed here are the
+        # bytes uploaded below.
+        run: |
+          set -euo pipefail
+          cd bin
+          sha256sum abcd-* > checksums.txt
+          cat checksums.txt
+
+      - name: Attest build provenance for the binaries and checksums.txt
+        # Signed SLSA build-provenance over the exact files uploaded below. Runs
+        # BEFORE the Release so a failed attestation aborts before publishing.
+        # Skipped on a user-owned private repo (GitHub gates the feature by repo
+        # visibility); the release still ships binaries + checksums.txt, and
+        # attestation re-enables automatically on the public flip. A skipped step is
+        # not a failure, so the publish steps still run.
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            bin/abcd-*
+            bin/checksums.txt
+
+      - name: Create the GitHub Release and upload the binaries + checksums.txt
+        # --verify-tag: the tag must already exist (it triggered this run) and point
+        # at the checked-out commit. --generate-notes lists the merged PRs since the
+        # previous tag; CHANGELOG.md remains the durable, hand-curated record.
+        run: gh release create "${GITHUB_REF_NAME}" bin/abcd-* bin/checksums.txt --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the published attestation against a freshly downloaded binary
+        # Post-release gate: prove the attestation is real and retrievable. Download
+        # one binary FRESH from the just-created Release and verify it against a
+        # provenance signed BY THIS release workflow. Skipped on a private repo (no
+        # attestation was produced above); re-enables alongside attestation on the flip.
+        if: ${{ !github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          DL="$RUNNER_TEMP/attest-verify"
+          mkdir -p "$DL"
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'abcd-linux-amd64' \
+            --dir "$DL"
+          gh attestation verify "$DL/abcd-linux-amd64" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert the release job pushed nothing to the default branch
+        # Close the no-branch-commit tripwire opened at job start. Runs last so it
+        # covers every preceding step. !cancelled(): the tripwire must still run when
+        # an earlier step FAILED — an abnormal run is exactly when an unexpected push
+        # most needs catching. If the tip is unchanged, done. If it moved, a push from
+        # this job would land as github-actions[bot], so a bot commit in the moved
+        # range fails the run, while an unrelated concurrent human merge is tolerated.
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          end="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${DEFAULT_BRANCH}" --jq '.object.sha')"
+          if [ "$end" = "${DEFAULT_BRANCH_START_SHA}" ]; then
+            echo "default branch unchanged across the release job (${end}); the job pushed nothing."
+            exit 0
+          fi
+          committers="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${DEFAULT_BRANCH_START_SHA}...${end}" \
+            --jq '[.commits[].committer.login // "unknown"] | unique | join(" ")')"
+          echo "default branch moved during the release job: ${DEFAULT_BRANCH_START_SHA} -> ${end} (committers: ${committers})"
+          case " ${committers} " in
+            *" github-actions[bot] "*)
+              echo "a github-actions[bot] commit landed on the default branch during this job — the release workflow must never push to a branch" >&2
+              exit 1
+              ;;
+          esac
+          echo "movement attributed to commits outside this job; the release job itself pushed nothing."
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
