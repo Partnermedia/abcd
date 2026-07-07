@@ -59,3 +59,21 @@ Development material lives under `.abcd/`; `docs/` is user-facing only.
   `go test ./...`, and `go test -race ./internal/...`).
 - Every new behaviour has a test watched fail before the change and pass after.
 - A CHANGELOG entry accompanies any user-facing change.
+
+## Attribution and acknowledgements
+
+- **AI-assisted commits carry an `Assisted-by:` trailer**, kernel format
+  (`Assisted-by: Claude:claude-opus-4-8`) — disclosure, not authorship. Never
+  `Co-Authored-By:` for AI (it asserts an authorship the tool does not hold and
+  inflates the contributor graph). A human-only `Signed-off-by:` (DCO) is deferred
+  to the public flip or the first outside contribution. The human is the author of
+  record, responsible for all AI-assisted output. See `CONTRIBUTING.md`.
+- **Naming a tool is confined to credit.** User-facing prose (`README.md`,
+  `docs/`) stays host-agnostic — the `harness/*` docs-lint rules enforce it. The
+  one sanctioned place to name a tool is attribution: the README badge and
+  `ACKNOWLEDGEMENTS.md`, using the `<!-- docs-lint: allow -->` escape where a lint
+  root is involved. Private, unpublished tool names never appear in any committed
+  file.
+- **`ACKNOWLEDGEMENTS.md`** credits ideas, tools, and writing in three parts —
+  development, inspirations, references. Add an entry in the same change that lands
+  it (adopts a pattern, cites a source in an ADR, integrates a tool), never later.

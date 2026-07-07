@@ -22,7 +22,7 @@
   "rules": {
     "links_resolve": {"enabled": true, "severity": "blocker"},
     "stray_root_docs": {"enabled": true, "severity": "blocker",
-      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE"]}
+      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE","ACKNOWLEDGEMENTS"]}
   },
   "exempt_paths": [],
   "exempt_if_status": []

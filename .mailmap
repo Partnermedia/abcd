@@ -1,0 +1,7 @@
+# Consolidate author identities for display in `git shortlog`, `git log`, and the
+# GitHub contributor graph. This is display-only — it does not rewrite history.
+#
+#   Canonical <canonical-email>  <commit-email>              — fold by email
+#   Canonical <canonical-email>  Commit Name <commit-email>  — fold a specific author
+Alex Reppel <77722411+REPPL@users.noreply.github.com> <77722411+REPPL@users.noreply.github.com>
+Alex Reppel <77722411+REPPL@users.noreply.github.com> t <t@t>

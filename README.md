@@ -6,14 +6,16 @@
 
   <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a>.</p>
 
-  <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
-  <a href="https://github.com/REPPL/abcd-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/REPPL/abcd-cli?cacheSeconds=300" alt="License"></a>
-  <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
+  <!-- Static badges only: shields.io cannot read a private repo's API, so dynamic
+       github/* badges (release, last-commit) render as errors while private. Re-add
+       them at the public flip, when the API is readable. -->
+  <a href="https://github.com/REPPL/abcd-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
+  <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow — attribution names the tool by design (see ACKNOWLEDGEMENTS.md) -->
   <br />
   <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
   <img src="https://img.shields.io/badge/Linux-core%20CI--tested-FCC624?logo=linux&logoColor=black" alt="Linux: core CI-tested">
-  <br />
-  <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
 
 </div>
 
