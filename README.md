@@ -4,7 +4,7 @@
 
   <h1>Agent-Based Configuration for Development</h1>
 
-  <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a> — one Go binary that is also a Claude Code and the companion harness plugin.</p>
+  <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a>.</p>
 
   <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
   <a href="https://github.com/REPPL/abcd-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/REPPL/abcd-cli?cacheSeconds=300" alt="License"></a>
@@ -20,8 +20,7 @@
 ---
 
 **Agent-Based Configuration for Development** — a host-agnostic configuration
-layer for development, delivered as a single Go binary that is also a Claude Code
-and the companion harness plugin.
+layer for development, delivered as a single Go binary.
 
 abcd holds all behaviour in a transport-agnostic core; the CLI is the reliable
 default front door, the markdown plugin surface shells out to it, and an MCP
@@ -54,7 +53,7 @@ make build                   # cross-compile bin/abcd-<goos>-<arch>
 - [`internal/`](internal/) — the engine (`core/`) and front doors (`surface/`);
   see [`internal/README.md`](internal/README.md).
 - [`commands/`](commands/), [`.claude-plugin/`](.claude-plugin/) — the plugin
-  surface (auto-loaded by Claude Code and the companion harness).
+  surface (auto-loaded).
 - [`.abcd/`](.abcd/) — the development record and working files (never shipped).
 
 Contributor guidance: [`AGENTS.md`](AGENTS.md).
