@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Local name guard — run on every clone via the global ~/.githooks dispatcher
+# (which chains the repo's committed .githooks/<name>).
+#
+# Refuses to commit any name listed in an UNTRACKED banlist. The banlist lives
+# only on this machine (.abcd/.work.local/ is gitignored), so a name that must
+# never enter tracked or public content — e.g. a private repo/project name — is
+# enforced here WITHOUT the name ever appearing in a committed file or in public
+# CI config (which a repo may be, or become). No-op when the banlist is absent
+# (fresh clones, CI), so it never blocks a machine that has not opted in.
+#
+# One pattern (extended-regex, case-insensitive) per line; blank lines and lines
+# beginning with '#' are ignored. Companion to the public docs-lint harness-name
+# gate: that one bans *public* harness names in CI; this one bans *private* names
+# locally, keeping their literal string out of every published artifact.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+banlist=".abcd/.work.local/private-names.txt"
+[ -f "$banlist" ] || exit 0
+
+# Only added lines of staged content matter (skip the +++ file headers).
+added="$(git diff --cached --unified=0 --diff-filter=ACM | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+[ -n "$added" ] || exit 0
+
+rc=0
+while IFS= read -r pat; do
+  case "$pat" in '' | \#*) continue ;; esac
+  if printf '%s\n' "$added" | grep -iqE -- "$pat"; then
+    echo "pre-commit: blocked — staged content matches a banned name (pattern in $banlist)." >&2
+    echo "            reword to a generic term before committing; the banlist is untracked and local." >&2
+    rc=1
+  fi
+done < "$banlist"
+
+exit $rc

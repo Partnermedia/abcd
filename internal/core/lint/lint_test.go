@@ -93,6 +93,40 @@ func TestBannedTokens(t *testing.T) {
 	}
 }
 
+// TestDocsLintHarnessNameGate guards the real .abcd/docs-lint.json harness-name
+// family (the prevention gate): a specific agent-harness name in user-facing
+// content is a blocker, and the docs-lint:allow comment on the same line
+// suppresses it. Loading the actual config means deleting the family (or dropping
+// its blocker severity) fails this test.
+func TestDocsLintHarnessNameGate(t *testing.T) {
+	cfg, err := LoadConfig(filepath.Join("..", "..", "..", ".abcd", "docs-lint.json"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	root := t.TempDir()
+	writeFile(t, root, "docs/named.md", "# t\n\nRun this in Claude Code.\n")
+	writeFile(t, root, "docs/allowed.md", "# t\n\n<!-- docs-lint: allow --> Claude Code is named deliberately.\n")
+	writeFile(t, root, "docs/clean.md", "# t\n\nUse the agent harness.\n")
+
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasFinding(fs, filepath.Join("docs", "named.md"), "harness/claude-code", 3) {
+		t.Fatalf("expected harness/claude-code blocker on docs/named.md:3: %+v", fs)
+	}
+	for _, f := range fs {
+		if f.RuleID == "harness/claude-code" {
+			if f.Severity != "blocker" {
+				t.Errorf("harness/claude-code severity = %q, want blocker", f.Severity)
+			}
+			if f.File != filepath.Join("docs", "named.md") {
+				t.Errorf("harness gate fired outside named.md (allow-context/clean leaked): %+v", f)
+			}
+		}
+	}
+}
+
 func TestNoGitMetadata(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "rec/bad.md", "---\nid: x\nupdated: 2026-01-01\nauthor: someone\n---\n# Title\n")
