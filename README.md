@@ -1,4 +1,23 @@
-# abcd
+<div align="center">
+
+  <img src="docs/assets/img/logo.png" alt="abcd logo" width="150">
+
+  <h1>Agent-Based Configuration for Development</h1>
+
+  <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a> — one Go binary that is also a Claude Code and the companion harness plugin.</p>
+
+  <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
+  <a href="https://github.com/REPPL/abcd-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/REPPL/abcd-cli?cacheSeconds=300" alt="License"></a>
+  <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
+  <br />
+  <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
+  <img src="https://img.shields.io/badge/Linux-core%20CI--tested-FCC624?logo=linux&logoColor=black" alt="Linux: core CI-tested">
+  <br />
+  <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
+
+</div>
+
+---
 
 **Agent-Based Configuration for Development** — a host-agnostic configuration
 layer for development, delivered as a single Go binary that is also a Claude Code
@@ -10,6 +29,10 @@ server can be added on the same core. It depends on no external tools — the
 capabilities it once borrowed (transcript capture, review oracle, spec/task
 engine, autonomous run) each ship as a native default with an optional external
 plug-in for more power.
+
+<div align="center">
+  <img src="docs/assets/img/intro.png" alt="abcd — a product thinker holds the why; a facilitator translates it into work AI agents can act on">
+</div>
 
 ## Status
 
