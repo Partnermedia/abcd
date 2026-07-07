@@ -222,6 +222,66 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 	}
 }
 
+// TestCaptureBlockedByWiredAndAnnotated proves the --blocked-by flag reaches
+// capture.Capture from the CLI (writing the dependency edge), that an invalid
+// token is rejected at the boundary, and that the derived-priority view renders
+// unblocked-first with a [blocked-by …] annotation on the blocked row.
+func TestCaptureBlockedByWiredAndAnnotated(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	// iss-1: the blocker target (minor, unblocked).
+	out := runCLI(t, "capture", "root cause", "--slug", "root", "--json")
+	var r1 struct {
+		ID   string `json:"id"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r1); err != nil {
+		t.Fatalf("capture output not JSON: %v\n%s", err, out)
+	}
+	if r1.ID != "iss-1" {
+		t.Fatalf("first id = %q want iss-1", r1.ID)
+	}
+
+	// iss-2: critical but blocked by the still-open iss-1.
+	out2 := runCLI(t, "capture", "dependent thing", "--slug", "dep",
+		"--severity", "critical", "--blocked-by", "iss-1", "--json")
+	var r2 struct {
+		ID   string `json:"id"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out2, &r2); err != nil {
+		t.Fatalf("blocked capture output not JSON: %v\n%s", err, out2)
+	}
+	if r2.ID != "iss-2" {
+		t.Fatalf("second id = %q want iss-2", r2.ID)
+	}
+	// The edge reached disk.
+	body, err := os.ReadFile(r2.Path)
+	if err != nil {
+		t.Fatalf("iss-2 unreadable: %v", err)
+	}
+	if !strings.Contains(string(body), "blocked_by: [iss-1]") {
+		t.Fatalf("blocked_by not written to iss-2:\n%s", body)
+	}
+
+	// Derived view: unblocked iss-1 ahead of the blocked, annotated iss-2.
+	list := string(runCLI(t, "capture", "list", "--open"))
+	i1 := strings.Index(list, "iss-1")
+	i2 := strings.Index(list, "iss-2")
+	if i1 < 0 || i2 < 0 || i1 > i2 {
+		t.Fatalf("expected iss-1 before iss-2 (unblocked-first):\n%s", list)
+	}
+	if !strings.Contains(list, "[blocked-by iss-1]") {
+		t.Fatalf("expected [blocked-by iss-1] annotation:\n%s", list)
+	}
+
+	// An invalid --blocked-by token is rejected at the boundary.
+	if _, err := runCLIErr(t, "capture", "bad edge", "--blocked-by", "bogus"); err == nil {
+		t.Fatalf("expected error for invalid --blocked-by token")
+	}
+}
+
 // runCLIErr executes the command tree and returns its stdout/stderr plus the
 // error, so a gate's non-zero exit can be asserted rather than fataled on.
 func runCLIErr(t *testing.T, args ...string) ([]byte, error) {

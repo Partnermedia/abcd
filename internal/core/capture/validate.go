@@ -15,12 +15,17 @@ var knownFields = map[string]bool{
 	"details": true, "suggested_fix": true, "related_intents": true,
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
-	"resolved_by": true, "created": true, "updated": true,
+	"resolved_by": true, "blocked_by": true,
+	// created/updated are no longer written, but legacy ledgers still carry
+	// them. Tolerate (accept, then drop) them on read so an existing committed
+	// ledger is not rejected as an unknown property; the reader ignores their
+	// values entirely.
+	"created": true, "updated": true,
 }
 
 // uniqueItemsFields are the array properties issue.schema.json flags
 // uniqueItems:true.
-var uniqueItemsFields = []string{"related_intents", "related_specs", "related_issues", "synthesis_clusters"}
+var uniqueItemsFields = []string{"related_intents", "related_specs", "related_issues", "synthesis_clusters", "blocked_by"}
 
 // validateStrict validates a frontmatter map against the issue schema. It
 // special-cases schema_version first (mirrors _validate_strict) and rejects
@@ -41,7 +46,7 @@ func validateStrict(fm map[string]any) error {
 	}
 
 	// Required strings.
-	for _, req := range []string{"id", "slug", "severity", "category", "source", "found_during", "created"} {
+	for _, req := range []string{"id", "slug", "severity", "category", "source", "found_during"} {
 		v, present := fm[req]
 		if !present {
 			return fmt.Errorf("%w: missing required property %q", ErrMissingRequiredField, req)
@@ -70,21 +75,13 @@ func validateStrict(fm map[string]any) error {
 	if strings.TrimSpace(fm["found_during"].(string)) == "" {
 		return fmt.Errorf("%w: found_during must be non-empty", ErrMalformedFrontmatter)
 	}
-	if !reCreated.MatchString(fm["created"].(string)) {
-		return fmt.Errorf("%w: created %q is not YYYY-MM-DD", ErrMalformedFrontmatter, fm["created"])
-	}
 
 	// Optional scalar strings.
-	for _, opt := range []string{"found_at", "details", "suggested_fix", "updated", "wontfix_reason", "resolution", "promoted_to"} {
+	for _, opt := range []string{"found_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
 		if v, present := fm[opt]; present {
 			if _, isStr := v.(string); !isStr {
 				return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, opt)
 			}
-		}
-	}
-	if v, present := fm["updated"]; present {
-		if !reCreated.MatchString(v.(string)) {
-			return fmt.Errorf("%w: updated %q is not YYYY-MM-DD", ErrMalformedFrontmatter, v)
 		}
 	}
 	if v, present := fm["promoted_to"]; present {
@@ -102,6 +99,7 @@ func validateStrict(fm map[string]any) error {
 		{"related_intents", reItdID, "itd-N"},
 		{"related_specs", reFnID, "fn-N"},
 		{"related_issues", reIssID, "iss-N"},
+		{"blocked_by", reIssID, "iss-N"},
 	}
 	for _, f := range idListFields {
 		v, present := fm[f.field]
@@ -223,8 +221,6 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		Source:        Source(asString(fm["source"])),
 		FoundDuring:   asString(fm["found_during"]),
 		FoundAt:       asString(fm["found_at"]),
-		Created:       asString(fm["created"]),
-		Updated:       asString(fm["updated"]),
 		PromotedTo:    asString(fm["promoted_to"]),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),
@@ -235,6 +231,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 	iss.RelatedIntents = asStrList(fm["related_intents"])
 	iss.RelatedSpecs = asStrList(fm["related_specs"])
 	iss.RelatedIssues = asStrList(fm["related_issues"])
+	iss.BlockedBy = asStrList(fm["blocked_by"])
 	if rb, ok := fm["resolved_by"].(map[string]any); ok {
 		iss.ResolvedBy = &ResolvedBy{
 			Intent: asString(rb["intent"]),

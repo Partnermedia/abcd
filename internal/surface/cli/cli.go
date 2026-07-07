@@ -447,7 +447,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 // appends an issue; list/resolve/wontfix are thin consumers of capture core.
 // (promote is skill-orchestrated, never a CLI sub-verb — brief 04-surfaces/06.)
 func newCaptureCommand(asJSON *bool) *cobra.Command {
-	var severity, category, source, slug, foundDuring, foundAt string
+	var severity, category, source, slug, foundDuring, foundAt, blockedBy string
 
 	captureCmd := &cobra.Command{
 		Use:   "capture [text]",
@@ -470,7 +470,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					if len(st.RecentOpen) > 0 {
 						fmt.Fprintf(w, "recent open:\n")
 						for _, iss := range st.RecentOpen {
-							fmt.Fprintf(w, "  %s  %s  %s\n", iss.ID, iss.Severity, iss.Slug)
+							fmt.Fprintf(w, "  %s  %s  %s%s\n", iss.ID, iss.Severity, iss.Slug, blockedNote(iss))
 						}
 					}
 				})
@@ -481,6 +481,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if sl == "" {
 				sl = deriveSlug(text)
 			}
+			blocked, err := parseBlockedBy(blockedBy)
+			if err != nil {
+				return err
+			}
 			req := capture.CaptureRequest{
 				RepoRoot:    cwd,
 				Text:        text,
@@ -490,6 +494,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				Slug:        sl,
 				FoundDuring: orDefault(foundDuring, "manual-capture"),
 				FoundAt:     foundAt,
+				BlockedBy:   blocked,
 			}
 			res, err := capture.Capture(req)
 			if err != nil {
@@ -506,6 +511,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	captureCmd.Flags().StringVar(&slug, "slug", "", "override the slug derived from the text")
 	captureCmd.Flags().StringVar(&foundDuring, "found-during", "", "session/command context (default manual-capture)")
 	captureCmd.Flags().StringVar(&foundAt, "found-at", "", "optional repo-relative path or conceptual location")
+	captureCmd.Flags().StringVar(&blockedBy, "blocked-by", "", "comma-separated iss-ids this issue is blocked by")
 
 	// list — the earned SD001 exception: a filter flag is REQUIRED.
 	var lsOpen, lsResolved, lsWontfix, lsAll bool
@@ -528,7 +534,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				for _, iss := range res.Issues {
-					fmt.Fprintf(w, "%s  %s  %s  %s\n", iss.ID, iss.Status, iss.Severity, iss.Slug)
+					fmt.Fprintf(w, "%s  %s  %s  %s%s\n", iss.ID, iss.Status, iss.Severity, iss.Slug, blockedNote(iss))
 				}
 				for _, sk := range res.Skipped {
 					fmt.Fprintf(w, "  skipped %s: %s\n", sk.Path, sk.Error)
@@ -624,6 +630,40 @@ func deriveSlug(text string) string {
 }
 
 var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+// issIDRe validates a --blocked-by token at the CLI boundary (mirrors the core
+// ^iss-[0-9]+$ schema constraint).
+var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
+
+// parseBlockedBy splits the comma-separated --blocked-by value into iss-ids,
+// dropping blanks and rejecting any token that is not ^iss-[0-9]+$. An empty
+// input yields a nil slice (the field is omitted).
+func parseBlockedBy(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var ids []string
+	for _, tok := range strings.Split(raw, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" {
+			continue
+		}
+		if !issIDRe.MatchString(tok) {
+			return nil, fmt.Errorf("capture: --blocked-by token %q must match iss-N", tok)
+		}
+		ids = append(ids, tok)
+	}
+	return ids, nil
+}
+
+// blockedNote renders the derived-priority annotation for a row: when the issue
+// has blocked_by targets still open, " [blocked-by iss-1,iss-2]"; otherwise "".
+func blockedNote(iss capture.Issue) string {
+	if len(iss.BlockedByOpen) == 0 {
+		return ""
+	}
+	return " [blocked-by " + strings.Join(iss.BlockedByOpen, ",") + "]"
+}
 
 func orDefault(v, def string) string {
 	if v == "" {

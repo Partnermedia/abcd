@@ -5,7 +5,7 @@
 // or prompt surface. The front doors under internal/surface/* marshal these
 // results for their transport.
 //
-// The ledger lives at <repoRoot>/.abcd/development/activity/issues with three
+// The ledger lives at <repoRoot>/.abcd/work/issues with three
 // status directories (open/, resolved/, wontfix/) whose folder membership IS
 // the status signal — there is no status: frontmatter field. Each issue is a
 // YAML-frontmatter + Markdown-body file named iss-<N>-<slug>.md with an
@@ -20,7 +20,7 @@ import (
 )
 
 // LedgerRelPath is the ledger root relative to the repo worktree.
-const LedgerRelPath = ".abcd/development/activity/issues"
+const LedgerRelPath = ".abcd/work/issues"
 
 // Enumerated field types (validated at the boundary; values mirror
 // scripts/abcd/schemas/issue.schema.json).
@@ -85,11 +85,10 @@ type Issue struct {
 	Source         Source      `json:"source"`
 	FoundDuring    string      `json:"found_during"`
 	FoundAt        string      `json:"found_at,omitempty"`
-	Created        string      `json:"created"` // YYYY-MM-DD
-	Updated        string      `json:"updated,omitempty"`
 	RelatedIntents []string    `json:"related_intents,omitempty"`
 	RelatedSpecs   []string    `json:"related_specs,omitempty"`
 	RelatedIssues  []string    `json:"related_issues,omitempty"`
+	BlockedBy      []string    `json:"blocked_by,omitempty"` // iss-N dependency edges
 	PromotedTo     string      `json:"promoted_to,omitempty"`
 	Resolution     string      `json:"resolution,omitempty"`
 	WontfixReason  string      `json:"wontfix_reason,omitempty"`
@@ -97,6 +96,10 @@ type Issue struct {
 	Status         State       `json:"status"` // derived from folder
 	Path           string      `json:"path"`   // absolute
 	Body           string      `json:"body"`
+	// BlockedByOpen is the derived subset of BlockedBy whose targets are still in
+	// open/ (the priority projection populated by List/Status). Not a stored
+	// field: an empty slice means the issue is unblocked.
+	BlockedByOpen []string `json:"blocked_by_open,omitempty"`
 }
 
 // CaptureRequest is the input to Capture (append a new issue).
@@ -112,7 +115,8 @@ type CaptureRequest struct {
 	FoundAt        string // optional; "" omits the field
 	RelatedIntents []string
 	RelatedSpecs   []string
-	ForceID        string // migrator-only; "" = auto-allocate
+	BlockedBy      []string // iss-N dependency edges; each must match ^iss-[0-9]+$
+	ForceID        string   // migrator-only; "" = auto-allocate
 }
 
 // CaptureResult is the outcome of a successful Capture.
@@ -214,7 +218,6 @@ var (
 	reItdID       = regexp.MustCompile(`^itd-[0-9]+$`)
 	reFnID        = regexp.MustCompile(`^fn-[0-9]+$`)
 	reSlug        = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	reCreated     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	reFilenameID  = regexp.MustCompile(`^(iss-[0-9]+)(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$`)
 	reAbcdListID  = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
 	reSortIssID   = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)

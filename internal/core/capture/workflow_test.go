@@ -17,15 +17,7 @@ func ledger(t *testing.T) (string, string) {
 	return repo, filepath.Join(repo, LedgerRelPath)
 }
 
-func pinDate(t *testing.T, d string) {
-	t.Helper()
-	prev := nowDate
-	nowDate = func() string { return d }
-	t.Cleanup(func() { nowDate = prev })
-}
-
 func TestCaptureAppendAndReadBack(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	tests := []struct {
 		name string
 		req  CaptureRequest
@@ -41,8 +33,8 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 			want: Issue{
 				SchemaVersion: 1, ID: "iss-1", Slug: "something-off",
 				Severity: SeverityMinor, Category: "bug", Source: "manual-test",
-				FoundDuring: "manual smoke", Created: "2026-07-07",
-				Status: StateOpen, Body: "Something is off.\n",
+				FoundDuring: "manual smoke",
+				Status:      StateOpen, Body: "Something is off.\n",
 			},
 		},
 		{
@@ -57,8 +49,8 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 				SchemaVersion: 1, ID: "iss-1", Slug: "drifted",
 				Severity: SeverityMajor, Category: "drift", Source: "agent-finding",
 				FoundDuring: "fn-3 review", FoundAt: "internal/x.go",
-				Created: "2026-07-07", RelatedIntents: []string{"itd-4"},
-				RelatedSpecs: []string{"fn-12"}, Status: StateOpen, Body: "b",
+				RelatedIntents: []string{"itd-4"},
+				RelatedSpecs:   []string{"fn-12"}, Status: StateOpen, Body: "b",
 			},
 		},
 	}
@@ -97,16 +89,16 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 func issueEqual(a, b Issue) bool {
 	return a.SchemaVersion == b.SchemaVersion && a.ID == b.ID && a.Slug == b.Slug &&
 		a.Severity == b.Severity && a.Category == b.Category && a.Source == b.Source &&
-		a.FoundDuring == b.FoundDuring && a.FoundAt == b.FoundAt && a.Created == b.Created &&
-		a.Updated == b.Updated && a.PromotedTo == b.PromotedTo && a.Resolution == b.Resolution &&
+		a.FoundDuring == b.FoundDuring && a.FoundAt == b.FoundAt &&
+		a.PromotedTo == b.PromotedTo && a.Resolution == b.Resolution &&
 		a.WontfixReason == b.WontfixReason && a.Status == b.Status && a.Body == b.Body &&
 		strings.Join(a.RelatedIntents, ",") == strings.Join(b.RelatedIntents, ",") &&
 		strings.Join(a.RelatedSpecs, ",") == strings.Join(b.RelatedSpecs, ",") &&
+		strings.Join(a.BlockedBy, ",") == strings.Join(b.BlockedBy, ",") &&
 		a.Path == b.Path
 }
 
 func TestCaptureAllocatesIncrementingIDs(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	for i := 1; i <= 3; i++ {
 		res, err := Capture(CaptureRequest{
@@ -123,7 +115,6 @@ func TestCaptureAllocatesIncrementingIDs(t *testing.T) {
 }
 
 func TestCaptureForceIDAndDuplicate(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	base := CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "x", Severity: SeverityMinor,
@@ -160,7 +151,6 @@ func TestCaptureRejectsEmptyFoundDuring(t *testing.T) {
 }
 
 func TestCaptureRejectsBadEnumAndSweepsPlaceholder(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	_, err := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "x", Severity: "bogus",
@@ -178,7 +168,6 @@ func TestCaptureRejectsBadEnumAndSweepsPlaceholder(t *testing.T) {
 }
 
 func TestResolveTransition(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	res, err := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "body", Severity: SeverityMajor,
@@ -198,13 +187,12 @@ func TestResolveTransition(t *testing.T) {
 		t.Errorf("source still present at %s", res.Path)
 	}
 	lr, _ := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateResolved})
-	if len(lr.Issues) != 1 || lr.Issues[0].Resolution != "patched in fn-9" || lr.Issues[0].Updated != "2026-07-07" {
+	if len(lr.Issues) != 1 || lr.Issues[0].Resolution != "patched in fn-9" {
 		t.Fatalf("resolved issue = %+v (skipped=%v)", lr.Issues, lr.Skipped)
 	}
 }
 
 func TestResolveConflictAndUnknown(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	res, _ := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
@@ -224,7 +212,6 @@ func TestResolveConflictAndUnknown(t *testing.T) {
 }
 
 func TestWontfixTransition(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	res, _ := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
@@ -240,7 +227,6 @@ func TestWontfixTransition(t *testing.T) {
 }
 
 func TestListSortsNumericallyAndAll(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	// Force ids out of lexical order: iss-2, iss-10, iss-1.
 	for _, id := range []string{"iss-2", "iss-10", "iss-1"} {
@@ -279,7 +265,6 @@ func TestListToleratesVirginLedgerAndStrayFiles(t *testing.T) {
 		t.Errorf("List must not create the ledger dir")
 	}
 	// Stray README is ignored; corrupt iss file is surfaced in Skipped.
-	pinDate(t, "2026-07-07")
 	if _, err := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "bug", Source: "manual-test", Slug: "ok", FoundDuring: "t",
@@ -302,7 +287,6 @@ func TestListToleratesVirginLedgerAndStrayFiles(t *testing.T) {
 }
 
 func TestStatusCountsAndRecentOpen(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo, ir := ledger(t)
 	var ids []string
 	for i := 0; i < 3; i++ {
@@ -329,6 +313,67 @@ func TestStatusCountsAndRecentOpen(t *testing.T) {
 	}
 }
 
+// TestStatusRecentOpenDerivedPriority proves the status board applies the same
+// derived-priority projection as List over its recent-open slice: unblocked
+// issues first (highest severity first), blocked ones last regardless of
+// severity, each annotated with its still-open blockers. The seed's newest-first
+// pre-sort order differs from the priority order, so removing the prioritise()
+// call in Status would leave this test red.
+func TestStatusRecentOpenDerivedPriority(t *testing.T) {
+	repo, ir := ledger(t)
+	seed := []struct {
+		id  string
+		sev Severity
+		by  []string
+	}{
+		{"iss-1", SeverityMinor, nil},                  // unblocked, blocker target
+		{"iss-2", SeverityCritical, []string{"iss-1"}}, // blocked by open iss-1
+		{"iss-3", SeverityMajor, nil},                  // unblocked
+		{"iss-4", SeverityNitpick, nil},                // unblocked
+	}
+	for _, s := range seed {
+		if _, err := Capture(CaptureRequest{
+			RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: s.sev,
+			Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
+			ForceID: s.id, BlockedBy: s.by,
+		}); err != nil {
+			t.Fatalf("seed %s: %v", s.id, err)
+		}
+	}
+	st, err := Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unblocked by severity desc (iss-3 major, iss-1 minor, iss-4 nitpick), then
+	// the blocked iss-2 last despite its critical severity. A pure newest-first
+	// ordering would be iss-4, iss-3, iss-2, iss-1.
+	want := []string{"iss-3", "iss-1", "iss-4", "iss-2"}
+	if got := recentIDs(st.RecentOpen); !equalStrs(got, want) {
+		t.Fatalf("recent-open order = %v want %v", got, want)
+	}
+	for _, iss := range st.RecentOpen {
+		if iss.ID == "iss-2" {
+			if strings.Join(iss.BlockedByOpen, ",") != "iss-1" {
+				t.Fatalf("iss-2 blocked_by_open = %v want [iss-1]", iss.BlockedByOpen)
+			}
+		} else if len(iss.BlockedByOpen) != 0 {
+			t.Fatalf("%s wrongly blocked: %v", iss.ID, iss.BlockedByOpen)
+		}
+	}
+}
+
+func equalStrs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func recentIDs(issues []Issue) []string {
 	out := make([]string, len(issues))
 	for i, is := range issues {
@@ -348,7 +393,6 @@ func TestStatusAndListAreReadOnly(t *testing.T) {
 }
 
 func TestPathUnsafeSymlinkedLedger(t *testing.T) {
-	pinDate(t, "2026-07-07")
 	repo := t.TempDir()
 	real := filepath.Join(repo, "real-issues")
 	if err := os.MkdirAll(real, 0o755); err != nil {
@@ -364,5 +408,111 @@ func TestPathUnsafeSymlinkedLedger(t *testing.T) {
 	})
 	if !errors.Is(err, ErrPathUnsafe) {
 		t.Fatalf("want ErrPathUnsafe, got %v", err)
+	}
+}
+
+func TestCaptureWritesBlockedByAndReadsBack(t *testing.T) {
+	repo, ir := ledger(t)
+	if _, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "root cause", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "root", FoundDuring: "t",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "dependent", Severity: SeverityMajor,
+		Category: "bug", Source: "manual-test", Slug: "dep", FoundDuring: "t",
+		BlockedBy: []string{"iss-1"},
+	})
+	if err != nil {
+		t.Fatalf("Capture with blocked_by: %v", err)
+	}
+	if res.ID != "iss-2" {
+		t.Fatalf("id = %s want iss-2", res.ID)
+	}
+	lr, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dep *Issue
+	for i := range lr.Issues {
+		if lr.Issues[i].ID == "iss-2" {
+			dep = &lr.Issues[i]
+		}
+	}
+	if dep == nil {
+		t.Fatalf("iss-2 not read back: %+v", lr.Issues)
+	}
+	if strings.Join(dep.BlockedBy, ",") != "iss-1" {
+		t.Fatalf("blocked_by = %v want [iss-1]", dep.BlockedBy)
+	}
+}
+
+// TestDerivedPriorityUnblockedFirstThenSeverity proves the read-time projection:
+// List orders unblocked issues (highest severity first) ahead of blocked ones,
+// annotates each blocked row with its still-open blockers, and re-derives once a
+// blocker is resolved out of open/.
+func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
+	repo, ir := ledger(t)
+	seed := []struct {
+		id  string
+		sev Severity
+		by  []string
+	}{
+		{"iss-1", SeverityMinor, nil},                  // blocker target, unblocked
+		{"iss-2", SeverityCritical, []string{"iss-1"}}, // blocked by open iss-1
+		{"iss-3", SeverityMajor, nil},                  // unblocked
+		{"iss-4", SeverityNitpick, nil},                // unblocked
+	}
+	for _, s := range seed {
+		if _, err := Capture(CaptureRequest{
+			RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: s.sev,
+			Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
+			ForceID: s.id, BlockedBy: s.by,
+		}); err != nil {
+			t.Fatalf("seed %s: %v", s.id, err)
+		}
+	}
+
+	lr, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unblocked by severity desc (iss-3 major, iss-1 minor, iss-4 nitpick), then
+	// the blocked iss-2 last despite its critical severity.
+	wantOrder := []string{"iss-3", "iss-1", "iss-4", "iss-2"}
+	gotOrder := recentIDs(lr.Issues)
+	for i := range wantOrder {
+		if gotOrder[i] != wantOrder[i] {
+			t.Fatalf("order = %v want %v", gotOrder, wantOrder)
+		}
+	}
+	// iss-2 is annotated with its still-open blocker; the rest are clear.
+	for _, iss := range lr.Issues {
+		if iss.ID == "iss-2" {
+			if strings.Join(iss.BlockedByOpen, ",") != "iss-1" {
+				t.Fatalf("iss-2 blocked_by_open = %v want [iss-1]", iss.BlockedByOpen)
+			}
+		} else if len(iss.BlockedByOpen) != 0 {
+			t.Fatalf("%s wrongly blocked: %v", iss.ID, iss.BlockedByOpen)
+		}
+	}
+
+	// Resolve the blocker: iss-2 becomes unblocked and sorts to the front by its
+	// critical severity.
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed"}); err != nil {
+		t.Fatal(err)
+	}
+	lr2, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := recentIDs(lr2.Issues); got[0] != "iss-2" {
+		t.Fatalf("after resolve, head = %v want iss-2 first", got)
+	}
+	for _, iss := range lr2.Issues {
+		if iss.ID == "iss-2" && len(iss.BlockedByOpen) != 0 {
+			t.Fatalf("iss-2 still blocked after resolving iss-1: %v", iss.BlockedByOpen)
+		}
 	}
 }

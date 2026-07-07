@@ -9,11 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 )
-
-// nowDate returns today's date as YYYY-MM-DD. A package var so tests can pin it.
-var nowDate = func() string { return time.Now().Format("2006-01-02") }
 
 // resolveRoots resolves (repoRoot, issuesRoot) from the request fields plus git
 // discovery, mirroring _issue_lib._resolve_roots (contracts A–D). repoRoot is

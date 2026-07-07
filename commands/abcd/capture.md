@@ -7,9 +7,9 @@ argument-hint: "[text] | list --open|--resolved|--wontfix|--all | resolve <iss-N
 # `/abcd:capture` — issue ledger
 
 The lightweight write side of the structured issue ledger under
-`.abcd/development/activity/issues/`. Every issue gets a stable `iss-N` id,
-schema-checked frontmatter, and folder-as-status (`open/`, `resolved/`,
-`wontfix/`). Bare invocation **performs zero writes**.
+`.abcd/work/issues/`. Every issue gets a stable `iss-N` id, schema-checked
+frontmatter, and folder-as-status (`open/`, `resolved/`, `wontfix/`). Bare
+invocation **performs zero writes**.
 
 ## Status (bare)
 
@@ -36,7 +36,12 @@ default): `--severity` (`nitpick|minor|major|critical`, default `minor`),
 `--category` (default `observation`), `--source` (default `user-observation`),
 `--found-during` (session/command context, default `manual-capture`),
 `--found-at` (optional repo-relative path), `--slug` (overrides the slug derived
-from the text). Report the new `id`, `status`, and `path` from the JSON.
+from the text), `--blocked-by` (comma-separated `iss-N` ids this issue depends
+on). Report the new `id`, `status`, and `path` from the JSON.
+
+Priority is **derived, never stored**: an issue is ranked lower while any of its
+`--blocked-by` targets is still open, and `blocked_by` records the dependency in
+one direction only (the inverse is computed).
 
 ## Query the ledger
 
@@ -48,7 +53,9 @@ abcd capture list --open --json      # or --resolved / --wontfix / --all
 
 The unfiltered form `abcd capture list` exits 2 with a "choose a filter"
 message; there is no implicit default. Summarise each issue's `id`, `status`,
-`severity`, and `slug`, sorted numerically by `iss-N`.
+`severity`, and `slug`. The list is returned in **derived-priority order**:
+unblocked issues first, then by severity (`critical` → `nitpick`); rows still
+blocked by an open dependency are demoted and annotated `[blocked-by iss-N,…]`.
 
 ## Resolve / wontfix
 

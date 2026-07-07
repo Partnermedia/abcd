@@ -10,6 +10,26 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- `abcd capture --blocked-by <iss-N,…>` records typed dependency edges on a new
+  issue, and `capture list` / the status board now render a derived-priority
+  view: unblocked issues first, then by severity, with blocked rows annotated
+  `[blocked-by iss-N,…]`. There is no stored priority — the ordering is a
+  read-time projection, so resolving a blocker re-prioritises its dependents
+  automatically.
+- A store-contract README for the issue ledger (`.abcd/work/issues/README.md`).
+
+### Changed
+
+- The issue ledger moved from `.abcd/development/activity/issues` to
+  `.abcd/work/issues` (the committed shared-working tier).
+
+### Removed
+
+- The `created` and `updated` frontmatter fields on issues. Git is the canonical
+  source of an issue's timeline; the ledger no longer duplicates it.
+
 ## [v0.1.0] - 2026-07-07
 
 First tagged milestone: the Go rebuild through Phase 2. abcd is a single,

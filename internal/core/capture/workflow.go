@@ -54,7 +54,6 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 }
 
 func commitCapture(req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
-	created := nowDate()
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", issID},
@@ -63,7 +62,6 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 		{"category", string(req.Category)},
 		{"source", string(req.Source)},
 		{"found_during", req.FoundDuring},
-		{"created", created},
 	}
 	fm := map[string]any{
 		"schema_version": 1,
@@ -73,7 +71,6 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 		"category":       string(req.Category),
 		"source":         string(req.Source),
 		"found_during":   req.FoundDuring,
-		"created":        created,
 	}
 	if req.FoundAt != "" {
 		fields = append(fields, kv{"found_at", req.FoundAt})
@@ -86,6 +83,10 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 	if req.RelatedSpecs != nil {
 		fields = append(fields, kv{"related_specs", req.RelatedSpecs})
 		fm["related_specs"] = req.RelatedSpecs
+	}
+	if req.BlockedBy != nil {
+		fields = append(fields, kv{"blocked_by", req.BlockedBy})
+		fm["blocked_by"] = req.BlockedBy
 	}
 
 	if err := validateStrict(fm); err != nil {
@@ -115,12 +116,12 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 	return CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}, nil
 }
 
-// Resolve moves an open issue to resolved/, writing resolution + updated.
+// Resolve moves an open issue to resolved/, writing the resolution note.
 func Resolve(req ResolveRequest) (TransitionResult, error) {
 	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution, StateResolved)
 }
 
-// Wontfix moves an open issue to wontfix/, writing wontfix_reason + updated.
+// Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
 	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, StateWontfix)
 }
@@ -153,11 +154,7 @@ func transition(repoRoot, issuesRoot, issID, field, note string, target State) (
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	withField, err := setScalarField(content, field, note)
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	newContent, err := setScalarField(withField, "updated", nowDate())
+	newContent, err := setScalarField(content, field, note)
 	if err != nil {
 		return TransitionResult{}, err
 	}
@@ -220,6 +217,7 @@ func List(req ListRequest) (ListResult, error) {
 	}
 	issues, skipped := scanLedger(ir, state)
 	sortIssues(issues)
+	prioritise(issues, openIDSet(ir))
 	return ListResult{Issues: issues, Skipped: skipped}, nil
 }
 
@@ -239,13 +237,63 @@ func Status(req StatusRequest) (StatusResult, error) {
 	res.WontfixCount = len(wontfix)
 	res.Skipped = append(append(append([]SkipRecord{}, skOpen...), skRes...), skWf...)
 
+	openIDs := idSet(open)
 	// Newest first: higher N is newer (ids are monotonic with creation).
 	sort.SliceStable(open, func(i, j int) bool { return issNumber(open[i].ID) > issNumber(open[j].ID) })
 	if len(open) > 10 {
 		open = open[:10]
 	}
+	// Derived-priority view over the recent slice: unblocked first, then severity.
+	prioritise(open, openIDs)
 	res.RecentOpen = open
 	return res, nil
+}
+
+// severityRank orders severities for the derived-priority view: higher rank
+// sorts earlier (critical is most urgent, nitpick least).
+var severityRank = map[Severity]int{
+	SeverityCritical: 4, SeverityMajor: 3, SeverityMinor: 2, SeverityNitpick: 1,
+}
+
+// prioritise applies the read-time priority projection in place: it fills each
+// issue's BlockedByOpen with the blocked_by targets still in open/ (openIDs),
+// then stably orders unblocked issues ahead of blocked ones and, within each
+// group, higher severity first. There is no stored priority — this is a derived
+// view so the CLI and any future front door share one ordering. The caller is
+// expected to have pre-sorted issues into a deterministic tiebreak order.
+func prioritise(issues []Issue, openIDs map[string]bool) {
+	for i := range issues {
+		var stillOpen []string
+		for _, dep := range issues[i].BlockedBy {
+			if openIDs[dep] {
+				stillOpen = append(stillOpen, dep)
+			}
+		}
+		issues[i].BlockedByOpen = stillOpen
+	}
+	sort.SliceStable(issues, func(i, j int) bool {
+		bi, bj := len(issues[i].BlockedByOpen) > 0, len(issues[j].BlockedByOpen) > 0
+		if bi != bj {
+			return !bi // unblocked (false) sorts first
+		}
+		return severityRank[issues[i].Severity] > severityRank[issues[j].Severity]
+	})
+}
+
+// openIDSet returns the set of ids currently in open/ — the predicate a
+// blocked_by target must satisfy to still count as blocking. Read-only.
+func openIDSet(issuesRoot string) map[string]bool {
+	open, _ := scanLedger(issuesRoot, StateOpen)
+	return idSet(open)
+}
+
+// idSet collects the ids of a slice of issues into a set.
+func idSet(issues []Issue) map[string]bool {
+	set := make(map[string]bool, len(issues))
+	for _, iss := range issues {
+		set[iss.ID] = true
+	}
+	return set
 }
 
 // scanLedger reads issues from the requested state(s). Stray/non-matching .md
