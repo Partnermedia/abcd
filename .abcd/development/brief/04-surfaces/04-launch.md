@@ -1,13 +1,13 @@
 # `/abcd:launch` — Curated Release
 
-> **Status:** design target — builds in Phase 5 (round-trip and ship). Today only the probe / dry-run stubs ship (spc-17); the full pre-flight gate suite and release flow below are not yet built.
+> **Phase ownership** ([adr-33](../../decisions/adrs/0033-launch-phase-ownership-tiered.md)): the curated-release cut — packaging with `.abcd/**` excluded plus the secret/PII scan — ships in [Phase 1](../../roadmap/phases/phase-1-ahoy.md). The full pre-flight gate suite and release automation below are separately scheduled intents (itd-65 gate suite, itd-66 render parity, itd-70 retention, itd-72 tier-b publishing, itd-73 derived versioning).
 
 ## Sub-verbs
 
 Bare `/abcd:launch` shows status + help only — never mutates state. Current sub-verbs:
 
-- **`/abcd:launch ship`** — cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers: `--version <x.y.z>`, `--allow-dirty`, `--allow-doc-warnings`.
-- **`/abcd:launch dry-run`** — **report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the remaining gates (marker-block, `plugin.json` parse, documentation-auditor) are Phase-5 and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the Phase-5 `ship` verb's behaviour, not dry-run's.
+- **`/abcd:launch ship`** — cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers: `--allow-dirty`, `--allow-doc-warnings`. There is no version flag — the version is derived, never authored ([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md), see [§ 3](#3-versioning--marketplace)).
+- **`/abcd:launch dry-run`** — **report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the remaining gates (marker-block, `plugin.json` parse, documentation-auditor) are the gate-suite intent's (itd-65) and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the full `ship` verb's behaviour (itd-65 + itd-72), not dry-run's.
 
 ## 1. Pre-flight gates
 
@@ -22,7 +22,7 @@ Bare `/abcd:launch` shows status + help only — never mutates state. Current su
 - **OWASP / vulnerability check** (folded into the pre-flight suite) — warn-fail
 - **Documentation auditor** (subagent) — runs over `docs/` to verify user-facing documentation is well-formed before release — warn-fail
 
-Pre-flight report written to `.abcd/logbook/launch/<timestamp>/preflight.{json,md}` — **Phase-5 `ship` behaviour**. The spc-64 secret/PII gate is itself side-effect-free w.r.t. the repo (its only writes are to a private temp tree it removes), and `dry-run` renders the gate result inline rather than writing a report file.
+Pre-flight report written to `.abcd/logbook/launch/<timestamp>/preflight.{json,md}` — **full-`ship` behaviour (itd-65)**. The spc-64 secret/PII gate is itself side-effect-free w.r.t. the repo (its only writes are to a private temp tree it removes), and `dry-run` renders the gate result inline rather than writing a report file.
 
 ## 2. Curated release artefact (default-deny)
 
@@ -43,37 +43,35 @@ Versioning is **strict SemVer**: the version string is `MAJOR.MINOR.PATCH` (no
 leading `v`) at the selected version location, and the release's git tag is
 `v<version>`. While the version is `0.y.z` the operator surface may still change
 between minor versions (pre-1.0 = not yet surface-stable); `1.0.0` marks the
-first stable `/abcd:*` surface and is a manual, maintainer-declared bump like
-every other major. The tag drives identification: what is installed vs what is
-available is compared through the tagged, released artefact — the working tree
-carries no version at all (adr-19, adr-28).
+first stable `/abcd:*` surface. The tag drives identification: what is installed
+vs what is available is compared through the tagged, released artefact — the
+working tree carries no version at all (adr-19, adr-28).
 
 ### Bump-tier rule
 
-`launch ship` selects the bump tier automatically; the tier is recorded in the
-launch report and the commit message so every published version is traceable
-to *why* it bumped.
+The version is **derived, never authored**
+([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md)):
+`launch ship` selects the bump tier from the intents shipped since the previous
+release; the tier and its reason are recorded in the launch report and the
+commit message so every published version is traceable to *why* it bumped.
 
-| Tier | Trigger | Selected by |
-|---|---|---|
-| **Patch** (`v0.0.x`) | Any release cut that is not a phase completion — a routine snapshot of in-progress work. | Default — every `ship` that isn't one of the rows below. |
-| **Minor** (`v0.x.0`) | A phase completed since the last release: every spec carrying that phase's `phase:` anchor is closed, and the phase's `## Phase Acceptance` has been reviewed. | Auto-detected (see below). |
-| **Major** (`vx.0.0`) | A deliberate milestone the maintainer declares. | **Manual only** — `launch ship --version <x.0.0>`. Never auto-selected. |
+| Tier | Trigger |
+|---|---|
+| **Major** (`vx.0.0`) | Any shipped intent since the last release carries `impact: breaking`. |
+| **Minor** (`v0.x.0`) | No `breaking`, at least one `impact: additive`. |
+| **Patch** (`v0.0.x`) | Only `impact: fix` intents (or a release with no intent-tied change). |
 
-**Phase-completion detection.** Before choosing a tier, `launch ship` reads
-`.abcd/development/roadmap/phases/` and, for each phase, checks whether every
-spec anchored to it (`phase:` frontmatter, per adr-9) is closed in the native
-spec store. The `phase:` anchor is deferred today (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md));
-it activates with this launch surface, so until then the phase set this
-detection reads is the editorial `## Scope` membership, not a frontmatter field. If
-a phase became fully-closed since the version recorded in the last
-`launch-report.json`, the bump is **minor** and the report names the completed
-phase. If more than one phase completed since the last launch, it is still a
-single minor bump; the report lists all of them. If none did, the bump is
-**patch**.
+**Impact derivation.** Every intent carries `impact: additive | breaking | fix`,
+set when the intent is shaped and enforced by `internal/core/lint` (adr-31, tracked
+by itd-73). At release, `launch ship` gathers the intents shipped since the
+previous release and takes the highest-severity impact. A change not tied to any
+intent falls back to conventional-commit derivation (`feat:` / `fix:` /
+`feat!:` prefixes since the last tag).
 
-`--version <x.y.z>` overrides the auto-selected tier entirely (the only way to
-trigger a major bump, and an escape hatch if detection is wrong).
+**Surface-diff guardrail.** `launch ship` snapshots the `/abcd:*` command, flag,
+and manifest surface and compares it to the previous release. A removed or
+altered surface with no `breaking` intent in the release **fails the launch** —
+a mislabelled impact cannot ship a compatibility lie.
 
 `launch ship` is responsible for writing the version into **the selected
 version location**, never a hard-coded `plugin.json`. That location is recorded
@@ -113,7 +111,7 @@ The checker has no bypass flag, and adr-20 records that `--allow-dirty` must not
 bypass manifest consistency (wiring policy, enforced by the pre-flight suite).
 
 Commit message: `chore(release): launch abcd v<version> (<tier>: <reason>) from <source-sha>`
-— e.g. `chore(release): launch abcd v0.3.0 (minor: phase-2-ahoy complete) from a1b2c3d`.
+— e.g. `chore(release): launch abcd v0.3.0 (minor: additive itd-40 shipped) from a1b2c3d`.
 
 ### Release cut + retention
 
@@ -154,13 +152,13 @@ The first release cut of abcd itself is a manual `v*` tag + GitHub Release; docu
 ## 6. Acceptance
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:launch`, **then** the dispatcher shows current launch readiness (pre-flight gate state, last launch attempt timestamp), the available sub-verbs (`ship`, `dry-run`), and suggested next actions — bare invocation never mutates state.
-- **Given** a clean tree with a deliberate PII fixture (e.g., a real email in a comment) inside the resolved artefact, **when** `/abcd:launch dry-run` runs, **then** the report-only gate (spc-64) PRINTS that it *would* refuse on that finding (the offending file/line in the gate result), still **exits 0**, and writes no artefact. (The **hard-fail** on that finding — exit non-zero plus a `preflight.{json,md}` report under `.abcd/logbook/launch/<timestamp>/` — is the Phase-5 `ship` verb's behaviour, not dry-run's.)
+- **Given** a clean tree with a deliberate PII fixture (e.g., a real email in a comment) inside the resolved artefact, **when** `/abcd:launch dry-run` runs, **then** the report-only gate (spc-64) PRINTS that it *would* refuse on that finding (the offending file/line in the gate result), still **exits 0**, and writes no artefact. (The **hard-fail** on that finding — exit non-zero plus a `preflight.{json,md}` report under `.abcd/logbook/launch/<timestamp>/` — is the full `ship` verb's behaviour (itd-65), not dry-run's.)
 - **Given** a clean tree, **when** `/abcd:launch dry-run` runs, **then** the report lists exactly the include/exclude artefact manifest in [§ 2](#2-curated-release-artefact-default-deny) with no surprises and no artefact is written.
-- **Given** no phase completed since the last launch, **when** `launch ship` runs without `--version`, **then** the bump tier is **patch** (`v0.0.x`) and the next patch version is written into the **selected version location** (from `.abcd/config/version-location.json`, per [§ 3](#3-versioning--marketplace)) in the **release artefact** only — the working-tree manifests stay unversioned (adr-19, adr-28) — plus the canonical `.claude-plugin/marketplace.json`, never a hard-coded `plugin.json`.
-- **Given** every spec anchored to a phase (`phase:` frontmatter) is closed and that phase was not yet complete at the last recorded launch, **when** `launch ship` runs without `--version`, **then** the bump tier is **minor** (`v0.x.0`) and the launch report names the completed phase.
-- **Given** two or more phases completed since the last launch, **when** `launch ship` runs without `--version`, **then** a single **minor** bump is applied and the report lists every completed phase.
-- **Given** the user passes `launch ship --version <x.y.z>`, **when** the command runs, **then** the explicit version overrides the auto-selected tier — this is the only path to a major (`vx.0.0`) bump.
-- **Given** any `launch ship` run, **when** the release commit is written, **then** the commit message records the bump tier and its reason (e.g. `(minor: phase-2-ahoy complete)`).
+- **Given** only `impact: fix` intents (or no intent-tied change) shipped since the last release, **when** `launch ship` runs, **then** the bump tier is **patch** (`v0.0.x`) and the next patch version is written into the **selected version location** (from `.abcd/config/version-location.json`, per [§ 3](#3-versioning--marketplace)) in the **release artefact** only — the working-tree manifests stay unversioned (adr-19, adr-28) — plus the canonical `.claude-plugin/marketplace.json`, never a hard-coded `plugin.json`.
+- **Given** at least one `impact: additive` intent and no `breaking` intent shipped since the last release, **when** `launch ship` runs, **then** the bump tier is **minor** (`v0.x.0`) and the launch report names the intents that drove it.
+- **Given** any `impact: breaking` intent shipped since the last release, **when** `launch ship` runs, **then** the bump tier is **major** (`vx.0.0`) and the launch report names the breaking intent(s).
+- **Given** a command, flag, or manifest surface removed or altered since the previous release with no `breaking` intent in the release, **when** `launch ship` runs, **then** the surface-diff guardrail **fails the launch** (adr-31) — the mislabel is reported, nothing is published.
+- **Given** any `launch ship` run, **when** the release commit is written, **then** the commit message records the bump tier and its reason (e.g. `(minor: additive itd-40 shipped)`).
 - **Given** a documentation-auditor warn-fail, **when** `launch ship` runs without `--allow-doc-warnings`, **then** the user is shown the warnings and asked transparently whether to proceed.
 - **Given** a prior release of the same line (`vX.Y.(Z-1)`) exists, **when** `launch ship` publishes `vX.Y.Z`, **then** the superseded release's tag and GitHub Release + assets are removed, the removal is named in the launch report, and the last release of every *other* line is untouched.
 - **Given** a release newer than the just-published version already exists, **when** the retention step runs, **then** it refuses to prune anything and the launch report records the refusal reason.

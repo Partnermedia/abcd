@@ -47,7 +47,7 @@ provides narrative context, examples, and cross-references.
 ## Directory Layout
 
 ```
-terminology/
+glossary/              ← .abcd/development/brief/glossary/ (the home, per adr-30)
 ├── README.md          ← this file (format spec + index)
 ├── _template.md       ← copy this when adding new terms
 ├── core/              ← terms that apply across all abcd bounded contexts

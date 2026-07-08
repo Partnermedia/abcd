@@ -23,9 +23,12 @@ they replace plugin-version language (`v1`, `v2`). See
   format under `intents/{drafts,planned,shipped,disciplines,superseded}/`. An
   intent's phase membership is recorded editorially in the owning phase doc's
   `## Scope`, not in intent frontmatter.
-- **Plugin releases**: tracked by `.claude-plugin/plugin.json` `version`. A
-  release version is an *output* of completing a phase, never an input that
-  organises work.
+- **Plugin releases**: tracked by the `v*` tag on the released artefact — the
+  working tree carries no version
+  ([adr-19](../decisions/adrs/0019-plugin-json-version-carve-out.md)). The
+  number is *derived* from the intents shipped since the previous release
+  ([adr-31](../decisions/adrs/0031-derived-versioning-from-intents.md)): an
+  output of cutting a release, never an input that organises work.
 
 The brief is not re-versioned per release; it stays the canonical current-state
 record. What has shipped is defined by which phases are complete and which
@@ -35,7 +38,7 @@ intents are in `shipped/`.
 
 ## Current State
 
-**Plugin v1** — in active design and implementation. The brief at [`../brief/README.md`](../brief/README.md) is the source of truth.
+**In active design and implementation** — phases, not version numbers, are the sequencing axis. The brief at [`../brief/README.md`](../brief/README.md) is the source of truth.
 
 This dashboard does **not** hand-maintain spec or intent counts — they drift the
 moment work ships. Status is read live from the **native spec store** (specs, via

@@ -67,8 +67,11 @@ that backend is attached) via the Go CLI.
 Phases 1–6 are organised by **user-capability moment** — each one ends in a
 milestone a contributor can demo. **Install and launch (Phase 1) is the first
 milestone**, and the delivery order is MVP → the companion harness → Claude Code. Phase 0 is
-the exception: it has no user-facing command, and is numbered 0 to say so
-honestly — it is the floor the capability phases stand on. Phases are sequenced
+the exception: it delivers no product-capability user moment, and is numbered 0
+to say so honestly — it is the floor the capability phases stand on. (It does
+carry one user-typed verb, the `/abcd:intent review` discipline-audit sub-verb —
+the substrate inspecting itself, not a product capability; see
+[phase-0-substrate.md](phase-0-substrate.md) for the qualifier.) Phases are sequenced
 but their *contents* may run in any dependency-respecting order — see each
 phase's `## Dependency rationale`.
 

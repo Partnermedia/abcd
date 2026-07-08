@@ -51,7 +51,7 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 | Directory | Status / role | Meaning |
 |---|---|---|
 | `drafts/` | 📝 Draft | Press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard. |
-| `planned/` | 📅 Planned | A committed capability, scoped into a roadmap phase and awaiting its Go build. `spec_id` is `null` until the native spec layer schedules it (Phase 4), then points at a `spc-N`; bundle-member intents share a `spec_id` with their bundle-mates. |
+| `planned/` | 📅 Planned | A committed capability awaiting its Go build — scheduled into a roadmap phase, or committed-but-unscheduled awaiting sequencing (the two axes are orthogonal, per [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). `spec_id` is `null` until the native spec layer schedules it (Phase 4), then points at a `spc-N`; bundle-member intents share a `spec_id` with their bundle-mates. |
 | `shipped/` | ✅ Shipped | Linked spec closed; `intent-fidelity-reviewer` ran. The intent's "Audit Notes" section contains per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
 | `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
 | `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <itd-N>` (the successor) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). Preserved as historical record. |
@@ -231,7 +231,7 @@ This is also a codified abcd principle: never use real names in press releases (
 
 ## Sequencing — see `phases/`
 
-Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — a `drafts/` bench item, captured but not yet sequenced.
+Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — valid for `drafts/` and `planned/` alike: a draft is uncommitted, an unscheduled planned intent is committed but awaiting sequencing. The invariant runs one way only: any intent a phase `## Scope` names is committed by definition and lives in `planned/` (or `disciplines/`) — see [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md).
 
 This README describes the intent corpus by *lifecycle state* (the directory listings below); it deliberately does not duplicate the phase→intent mapping.
 
@@ -257,7 +257,6 @@ Captured intents that haven't been promoted to native specs yet. Each standalone
 
 ```
 drafts/
-├── itd-7-rp-workspace-portability.md
 ├── itd-8-with-code-bundling.md
 ├── itd-9-schema-migration.md
 ├── itd-10-purge-uninstall.md
@@ -282,7 +281,6 @@ drafts/
 ├── itd-35-lifeboat-integrity-audit.md           (sibling to itd-16)
 ├── itd-39-scope-aware-memory-retrieval.md        (extends itd-3 recall hook to memory)
 ├── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
-├── itd-43-epic-to-spec-terminology.md
 ├── itd-44-fourth-intent-kind-decision.md
 ├── itd-47-oracle-gates-autonomous-mode.md
 ├── itd-51-harness-adoption-readiness-rubric.md
@@ -294,7 +292,9 @@ drafts/
 ├── itd-62-pluggable-safety-gate.md
 ├── itd-64-benchmark-driven-config-optimization.md
 ├── itd-70-launch-release-retention-newest-per-line.md
-└── itd-73-derived-versioning.md
+├── itd-73-derived-versioning.md
+├── itd-74-name-banlist.md
+└── itd-75-cli-eval-harness.md
 ```
 
 ---
@@ -318,7 +318,7 @@ See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-
 
 ## Planned
 
-`planned/` holds the committed capabilities — the intents scoped into the roadmap phases and awaiting their Go build. Their `spec_id` is `null` until the spec layer schedules them (Phase 4).
+`planned/` holds the committed capabilities awaiting their Go build — some scheduled into a roadmap phase, others committed but not yet sequenced (per [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). Their `spec_id` is `null` until the spec layer schedules them (Phase 4).
 
 ```
 planned/
@@ -326,6 +326,7 @@ planned/
 ├── itd-3-modular-rules-loader.md
 ├── itd-4-issue-capture.md
 ├── itd-6-rp-mcp-only-integration.md
+├── itd-7-rp-workspace-portability.md
 ├── itd-20-top-level-abcd-dispatcher.md
 ├── itd-24-reflect-command.md
 ├── itd-27-grill-skill-and-glossary.md
@@ -335,6 +336,7 @@ planned/
 ├── itd-36-memory-unification.md
 ├── itd-40-folder-classification.md
 ├── itd-42-coherence-aware-grill.md
+├── itd-43-epic-to-spec-terminology.md
 ├── itd-46-abcd-intent-quoted-text-create-symmetric.md
 ├── itd-48-intent-fidelity-reviewer-roles-2-3.md
 ├── itd-49-flow-state-drift-detector.md

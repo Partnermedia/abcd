@@ -2,8 +2,8 @@
 id: itd-43
 slug: epic-to-spec-terminology
 spec_id: null
-kind: null
-suggested_kind: standalone
+kind: standalone
+suggested_kind: null
 reclassification_history: []
 related_adrs: [adr-26]
 prd_path: null

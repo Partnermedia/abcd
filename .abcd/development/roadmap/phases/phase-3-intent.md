@@ -28,8 +28,9 @@ is one the planner can consume without re-interrogating it.
   Phase 1 Socratic vagueness interrogation, Phase 2 silent PRD synthesis. The
   PRD is frozen at `.abcd/intents/<itd-N>/prd.md` on promotion.
 - The emergent glossary is written under
-  `.abcd/development/foundation/terminology/`; grill's lint codes
-  (GL001–GL005, GR001–GR005) are live as Go lints.
+  `.abcd/development/brief/glossary/` (the bounded-context glossary home, per
+  [adr-30](../../decisions/adrs/0030-record-information-architecture.md));
+  grill's lint codes (GL001–GL005, GR001–GR005) are live as Go lints.
 - The coherence-aware grill tiers work: Tier 2 (brief-coherence) and Tier 3
   (sibling-intent index) run; light vs. full grill is selected by lifecycle
   position.

@@ -71,7 +71,7 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 ## Open Questions
 
 - **Lint strictness on existing drafts** — pre-discipline drafts (already grandfathered above) may have malformed AC sections rather than missing ones. Should `/abcd:intent plan` warn-and-prompt or hard-block in that case? (Recommend: hard-block. The whole point is to force the discipline. Backfill happens at the user's own pace via `/abcd:intent refine`.)
-- **Verdict-rollup logic** — lives in [`brief/04-surfaces/05-intent.md § 6`](../../brief/04-surfaces/05-intent.md#6-the-intent-fidelity-reviewer-agent-three-roles) (SSOT). Don't duplicate here.
+- **Verdict-rollup logic** — lives in [`brief/04-surfaces/05-intent.md § 7`](../../brief/04-surfaces/05-intent.md#7-the-intent-fidelity-reviewer-agent-three-roles-three-verbs) (SSOT). Don't duplicate here.
 - **How many criteria are too many?** — 1 minimum is enforced; 5+ may indicate the intent is too big and should split. Document as a soft guideline, not a lint.
 - **Criterion language** — strict Given-When-Then only, or allow plain bullet criteria as a fallback? (Recommend: strict. Plain bullets are what scope sections already provide; criteria need to be observable, not aspirational.)
 - **Discipline-specific AC shape** — disciplines describe rules, not deliverables. Should their `## Acceptance Criteria` describe how the *rule* is verified (e.g., "Given an intent without AC, when plan runs, then it fails") rather than what the deliverable is? (Recommend: yes, explicit in the discipline template; this discipline's own AC above is a worked example.)

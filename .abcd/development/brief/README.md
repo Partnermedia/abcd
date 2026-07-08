@@ -4,6 +4,15 @@ This is the canonical design brief for the abcd plug-in. The brief reflects the 
 
 It is split across numbered folders for concurrent editing, diff legibility, and agent-context-budget friendliness.
 
+> **Delivery-state provenance.** `spc-N` references throughout the brief trace
+> the predecessor implementation's spec store, carried as design input for this
+> from-scratch Go rebuild. They attribute *which spec owns which behaviour*;
+> they are not delivery claims. In this repo nothing is shipped until its
+> intent reaches `intents/shipped/` (see
+> [`intents/README.md`](../intents/README.md)), and current delivery state
+> lives in the roadmap dashboard, never in brief prose (per
+> [adr-5](../decisions/adrs/0005-brief-is-current-state.md)).
+
 > **Naming and structural conventions:** see [`00-meta.md`](00-meta.md). It explains why this directory uses numbered folders and the brief↔lifeboat shape contract.
 
 ## Navigation

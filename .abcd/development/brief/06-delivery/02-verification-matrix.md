@@ -32,7 +32,7 @@
 | Launch curated release (single repo) | Packaging **excludes `.abcd/**`** from the release artifact; a `/abcd:launch dry-run` proves nothing under `.abcd/` appears in the artifact manifest (adr-28). There is no second repo — the cut is a build-time filter over one tree |
 | Launch manifest | Correct include/exclude; `.abcd/launch.allow` honoured |
 | Launch branch mode | `--mode=branch` → `launch/<version>` branch; main untouched |
-| Launch version stamp | Default patch bump; `--version` override; the version is stamped into the **curated release artifact** at cut time (the working tree stays unversioned — adr-19/adr-20 polarity on one tree); `marketplace.json` updated |
+| Launch version stamp | Bump tier derived from shipped intents' `impact` with the surface-diff guardrail (adr-31); the version is stamped into the **curated release artifact** at cut time (the working tree stays unversioned — adr-19/adr-20 polarity on one tree); `marketplace.json` updated |
 | Launch documentation-auditor | docs/ inspected; warn-fail surfaces user prompt before proceeding |
 | Asset discovery | Prompt fires when assets found; user-supplied paths merged into curator input; `_provenance.json` records origin |
 | Intent capture | `/abcd:intent "<text>"` (canonical bare quoted create, per spc-30/itd-46) runs interview → writes `intents/drafts/itd-N-<slug>.md` with press-release content + persona quote + acceptance criteria (per itd-1) |

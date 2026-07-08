@@ -1,6 +1,6 @@
 # `/abcd:embark` — Unpack a Lifeboat
 
-> **Status:** design target — builds in Phase 5 (round-trip and ship). Today only the probe / scan stubs ship (spc-17); the full flow below is not yet built.
+> **Phase ownership** ([adr-33](../../decisions/adrs/0033-launch-phase-ownership-tiered.md)): the lifeboat round-trip — disembark packing and embark unpacking — ships in [Phase 6](../../roadmap/phases/phase-6-lifeboat.md).
 
 > **Recovery humility.** Embark unpacks the lifeboat into a working repo. The lifeboat is the highest-fidelity floor the originating session could leave behind; it is not the activity that produced it. **When something here doesn't make sense, hunt the originating session before trusting the lifeboat blindly** — ask the prior author, surface the chat where the decision happened, look at the rejected alternatives. The lifeboat is a starting point, not an oracle. See [`01-product/03-mental-model.md § The Naurian gap`](../01-product/03-mental-model.md#the-naurian-gap) for the framing.
 

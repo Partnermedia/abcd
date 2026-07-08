@@ -1,6 +1,6 @@
 # `/abcd:memory` — Multi-Upstream Curated Knowledge Substrate
 
-User-facing command for the per-project compounding-curated knowledge substrate at `.abcd/memory/`. Design target per itd-36 (idea-1 final shape after 5-round adversarial oracle review); the write core (ingest/ask/bare) shipped via spc-38 (the memory write core) and the lint family via spc-39 (the memory-coverage lints + the `MQ`/`MS`/`ML` codes).
+User-facing command for the per-project compounding-curated knowledge substrate at `.abcd/memory/`. Design target per itd-36 (idea-1 final shape after 5-round adversarial oracle review); the write core (ingest/ask/bare) is spc-38's (the memory write core) and the lint family spc-39's (the memory-coverage lints + the `MQ`/`MS`/`ML` codes). itd-36 sits in `intents/planned/` — delivery state is the intent lifecycle's, not this page's (see the [brief README's provenance note](../README.md)).
 
 For the **substrate spec** (page-class enum, source-class taxonomy, curator behaviour, lifecycle class, integration with itd-26 loot), see [`05-internals/07-memory.md`](../05-internals/07-memory.md). This file is the surface contract: what the user types and what happens.
 
@@ -11,7 +11,7 @@ Bare `/abcd:memory` shows status + help + render of current memory state — nev
 - **Bare `/abcd:memory`** — render: page count by class (e.g., "23 session_memory + 8 external_pdf + 4 oracle_review + 2 spec_modification_grammar"), last-ingest timestamp, recent contradictions surface, suggested next actions. No mutation. Quotation-budget headroom per source renders READ-ONLY from the spc-39 `.coverage_index.json`: when the index is present AND fingerprint-fresh (a read-only crawl recomputes the current fingerprint and matches the stored one) it shows per-source warn/block headroom; fingerprint drift shows a "stale — run /abcd:memory lint" hint; an absent index an info line; a malformed index or crawl failure a non-fatal "headroom unavailable" line. The bare render never rebuilds or mutates the index.
 - **`/abcd:memory ingest <path-or-url>`** — read external source (PDF / transcript / article / URL), distil into typed entity/topic pages with citation frontmatter, append to ingest log. **Default: do NOT store original.** Flag-shaped modifier: `--keep-original` (opt-in storage at `.abcd/memory/sources/<sha256>.<ext>`; the lifeboat licence gate — `/abcd:disembark`, NOT launch, per adr-18 — refuses publish without an explicit allowlist entry; launch excludes `.abcd/**` wholesale per [`04-launch.md § 2`](04-launch.md#2-curated-release-artefact-default-deny)).
 - **`/abcd:memory ask <question>`** — query memory by domain + class; synthesise an answer with citations (every citation references `source.class` + `citation` + `source_hash`); optionally file the result back as a new memory page (interactive prompt).
-- **`/abcd:memory lint` (spc-39 — shipped)** — full-store curator health-check: per-page quotation budgets (`MQ001`), cumulative source coverage (`MQ002`), coverage-unavailable diagnostic (`MQ003`, info), source-class single-class advisory (`MS001`), cross-class without weighting note (`MS002`), missing licence on `external_*` (`ML001`). ALWAYS crawls the full repo store, rebuilds the regenerable `.coverage_index.json`, emits findings to `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Exit: blockers → nonzero; warn-only → 0 (curator advisory — see [`06-lint.md §2`](../05-internals/06-lint.md#2-severity-model)). Mutates no memory-store state (coverage index + logbook report are its only writes). Per ADR-13's write/lint split, the spc-38 write core ships ingest/ask/bare; spc-39 ships this lint family ONLY — contradictions are rendered by spc-38's reconciliation (surfaced by the bare render), orphan/stale-claim audits are deferred.
+- **`/abcd:memory lint` (spc-39)** — full-store curator health-check: per-page quotation budgets (`MQ001`), cumulative source coverage (`MQ002`), coverage-unavailable diagnostic (`MQ003`, info), source-class single-class advisory (`MS001`), cross-class without weighting note (`MS002`), missing licence on `external_*` (`ML001`). ALWAYS crawls the full repo store, rebuilds the regenerable `.coverage_index.json`, emits findings to `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Exit: blockers → nonzero; warn-only → 0 (curator advisory — see [`06-lint.md §2`](../05-internals/06-lint.md#2-severity-model)). Mutates no memory-store state (coverage index + logbook report are its only writes). Per ADR-13's write/lint split, the spc-38 write core ships ingest/ask/bare; spc-39 ships this lint family ONLY — contradictions are rendered by spc-38's reconciliation (surfaced by the bare render), orphan/stale-claim audits are deferred.
 
 ## 1. Default flow — distil, cite, discard
 
@@ -22,7 +22,7 @@ Bare `/abcd:memory` shows status + help + render of current memory state — nev
 PROBE
   - Compute sha256 of source content
   - Look up in .abcd/memory/.sources_index.json (the provenance substrate per
-    itd-36 — shipped via spc-38, the provenance capability; distinct from the
+    itd-36/spc-38, the provenance capability; distinct from the
     ahoy history store that keys session transcripts on the root-commit SHA)
   - If found: bump ingest_count, update last_ingest, return cached citation
   - If new: continue
@@ -68,9 +68,9 @@ See [the full acceptance criteria](../../intents/planned/itd-36-memory-unificati
 - **Ingest default-no-original**: original NOT stored unless `--keep-original`; citation + source_hash recorded; quotation budget applied per page (enforced at lint time by spc-39's `MQ001`, never at ingest).
 - **Ingest with `--keep-original`**: original stored at `.abcd/memory/sources/<sha256>.<ext>`; the lifeboat licence gate (`/abcd:disembark`, not launch — adr-18) refuses publish without allowlist.
 - **Ask**: synthesises answer with per-citation provenance (class + citation + source_hash); optionally files result back.
-- **Lint (spc-39 — shipped; not spc-38 behaviour)**: emits `MQ001` / `MQ002` / `MQ003` / `MS001` / `MS002` / `ML001` codes; cumulative coverage uses span-level dedup. spc-38 writes `licence: unknown` explicitly; spc-39's `ML001` is what lints it.
+- **Lint (spc-39, not spc-38 behaviour)**: emits `MQ001` / `MQ002` / `MQ003` / `MS001` / `MS002` / `ML001` codes; cumulative coverage uses span-level dedup. spc-38 writes `licence: unknown` explicitly; spc-39's `ML001` is what lints it.
 - **Schema extension on existing**: existing flat-named pages preserved; `index.md` generated over them; `source.class: session_memory` backfilled as default.
-- **Cross-consumer registry**: the provenance substrate's `.abcd/memory/.sources_index.json` (per itd-36 — shipped via spc-38, the provenance capability; not to be confused with the ahoy history store) is shared with itd-26 loot (a later phase, not yet built); same hash → same registry entry.
+- **Cross-consumer registry**: the provenance substrate's `.abcd/memory/.sources_index.json` (per itd-36/spc-38, the provenance capability; not to be confused with the ahoy history store) is shared with itd-26 loot (a later phase, not yet built); same hash → same registry entry.
 
 ## 3. Logbook layout
 

@@ -1,26 +1,18 @@
 # Out of Phase Scope
 
-This brief describes the work bundled into the six planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **All later-phase items live as press-release intents** in `.abcd/development/intents/drafts/` — see [intents/README.md](../../intents/README.md) for the full index.
+This brief describes the work bundled into the seven planned phases (see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)). **Later-phase items live as press-release intents**: the uncommitted bench in `.abcd/development/intents/drafts/` (enumerated below), and the committed-but-unscheduled intents in `planned/` — valid per [adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md), listed in [intents/README.md](../../intents/README.md) § Planned, and scheduled when a phase doc's `## Scope` names them.
 
-**In a later phase.** The set below is the live `drafts/` corpus minus the
-intents already scoped into a planned phase (a phase doc's `## Scope` section is
-the single source of truth for which intents a phase bundles — see
-[adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)). It is **not**
-hand-counted: derive set membership from the filesystem and subtract the
-phased-in IDs, rather than maintaining a total that re-drifts —
+**In a later phase.** The set below is the live `drafts/` corpus — the
+uncommitted bench. Per
+[adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md) no
+phase-scoped intent lives in `drafts/` (scheduled ⇒ `planned/`), so there is
+nothing to subtract: the filesystem is the list, and it is **not**
+hand-counted —
 
 ```sh
-# Live later-phase IDs = drafts minus phased-in.
-# The command globs ONLY drafts/, so intents that have already left drafts/ for
-# planned/ | shipped/ | disciplines/ (e.g. itd-6 planned, itd-27/28 planned,
-# itd-37 a discipline, and itd-20/24/63/69 planned under spc-83) are excluded by
-# the filesystem itself — they can never appear in the output. The exclusion list
-# below is therefore ONLY the phased-in IDs that are STILL physically in drafts/
-# (lifecycle move pending): itd-2,3,4,7
-# (phase-0/1/2 scoped) and itd-34,36,40,42 (later phased-in, captured post-brief).
+# Live later-phase (uncommitted bench) IDs = the drafts/ corpus, no exclusions.
 ls .abcd/development/intents/drafts/itd-*.md \
-  | sed -E 's#.*/(itd-[0-9]+).*#\1#' | sort -V -u \
-  | grep -vxE 'itd-(2|3|4|7|34|36|40|42)'
+  | sed -E 's#.*/(itd-[0-9]+).*#\1#' | sort -V -u
 ```
 
 Intents that have left `drafts/` (moved to `planned/`, `shipped/`, `superseded/`,
@@ -51,15 +43,24 @@ in the historical note at the end of this section, not here.)
 - itd-35 — `/abcd:audit lifeboat <path>` lifeboat-integrity verification (sibling sub-verb under itd-16's umbrella; captured 2026-05-08)
 - itd-39 — Scope-aware memory retrieval (extends itd-3's recall hook to the memory store)
 - itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
-- itd-43 — Spec-terminology rename (one canonical word for a specced block of work) — the remaining surface/prose/glossary sweep (lint enforcement + prose sweep); the atomic `epic_id`→`spec_id` field rename ([adr-11](../../decisions/adrs/0011-spec-terminology-rename.md)) is a separate concern.
 - itd-44 — A fourth intent kind for infrastructure choices the product thinker wants to record
 - `.work/issues.md` cleanup bundle (sweep the workshop before a later phase)
-- itd-47 — oracle-backed gates pass honestly without a human in the loop (not yet shipped)
+- itd-47 — oracle-backed gates pass honestly without a human in the loop
 - itd-51 — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
 - abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired
 - abcd's largest source files become navigable packages without changing behavior
 - itd-55 — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
 - One command re-vendors upstream and restores the abcd overlay in a single guarded step — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: no external tool re-vendors itself onto abcd's state, so there is no overlay to re-apply
+- itd-57 — Manual-hold sentinel blocking a spec from autonomous pickup until a human lifts it
+- itd-59 — Autonomous-run passes leave the same durable, queryable transcript an interactive session does
+- itd-60 — Doc-fidelity anti-drift: a spec cannot close until the brief and public docs reflect what was built
+- itd-61 — Brief-change derivation: a human brief edit reconciles its implied intents and principles before commit
+- itd-62 — Pluggable fail-closed safety gate wrapping a trusted scanner
+- itd-64 — Benchmark-driven configuration optimisation from abcd's own runs
+- itd-70 — Launch release retention (newest-per-line prune of superseded releases)
+- itd-73 — Derived versioning: the release number is computed, never typed (per [adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md))
+- itd-74 — Name banlist: banned names kept out of everything published
+- itd-75 — CLI eval harness: fixture-driven proof the CLI actually runs
 
 **Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied reviews in the native spec review store), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
 

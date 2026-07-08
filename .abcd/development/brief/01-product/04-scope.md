@@ -1,6 +1,6 @@
 # Scope
 
-The scope this brief covers is bounded by what is bundled into the six planned phases (Phase 0 — Substrate & disciplines through Phase 5 — round-trip; see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)) plus what is explicitly slated for a later phase.
+The scope this brief covers is bounded by what is bundled into the seven planned phases (Phase 0 — Foundations through Phase 6 — Lifeboat round-trip; see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)) plus what is explicitly slated for a later phase.
 
 ## What the phases deliver
 
@@ -13,22 +13,32 @@ The scope this brief covers is bounded by what is bundled into the six planned p
 - `/abcd:intent` — press-release intent capture — see [`04-surfaces/05-intent.md`](../04-surfaces/05-intent.md)
 - `/abcd:capture` — issue ledger — see [`04-surfaces/06-capture.md`](../04-surfaces/06-capture.md)
 - `/abcd:memory` — multi-upstream curated knowledge substrate (per itd-36) — see [`05-internals/07-memory.md`](../05-internals/07-memory.md)
+- `/abcd` — top-level where-am-i status board (per itd-20) — see [`04-surfaces/08-abcd.md`](../04-surfaces/08-abcd.md)
+- `/abcd:reflect` — phase retrospective (per itd-24) — see [`04-surfaces/09-reflect.md`](../04-surfaces/09-reflect.md)
 
 **Operator-internal commands** (wiring under `commands/abcd/`, NOT part of the user-facing surface above): `/abcd:run` — the itd-29 autonomous-run operator surface (`status`/`pause`/`resume`/`preflight`; read-mostly over the pluggable autonomous-run seam ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)), v1 never starts or kills the loop). See [`04-surfaces/README.md`](../04-surfaces/README.md) for the user-facing-vs-operator-internal boundary.
 
-**Thirteen phased intents — ten standalone plus three disciplines:**
-- **Standalone (10):** itd-2, itd-3, itd-4, itd-6, itd-7, itd-27, itd-28, itd-34, itd-36, itd-40.
-- **Disciplines (3):** itd-1 (acceptance gates), itd-5 (prompt-quality + capability_scope per idea-4), itd-37 (modification grammar per ideas 2+3). Disciplines have no user moment; they impose acceptance gates on every other spec per the three-kinds taxonomy in [`01-product/03-mental-model.md`](03-mental-model.md) and itd-34.
+**Phased intents — derived, never hand-counted here.** The intents each phase
+bundles are named in that phase doc's `## Scope` section — the single source of
+the mapping ([adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)); the
+phased set is the union across the seven phase docs, and this page keeps no
+static copy of it (a hand-kept count re-drifts the moment a phase doc changes,
+the same failure the roadmap dashboard avoids by deriving counts from disk).
+The set spans two of the three kinds: standalone capabilities, plus the three
+disciplines (itd-1 acceptance gates, itd-5 prompt-quality + capability_scope,
+itd-37 modification grammar) — disciplines have no user moment; they impose
+acceptance gates on every other spec per the three-kinds taxonomy in
+[`01-product/03-mental-model.md`](03-mental-model.md) and itd-34.
 
-See [`phases/README.md`](../../roadmap/phases/README.md) for the phase plan and each phase's intent scope, and [`intents/README.md`](../../intents/README.md) for the intent index. itd-27 (`/abcd:intent grill` sub-verb), itd-28 (spec-tied RP reviews), and itd-34 (three intent kinds) were captured post-brief on 2026-05-07. itd-36 (memory unification) and itd-37 (modification grammar) were captured on 2026-05-08 following adversarial RP review of four candidate ideas (LLM Wiki, Naur theory-building, systems thinking, jagged frontier); itd-40 (folder classification) was captured 2026-05-16.
+See [`phases/README.md`](../../roadmap/phases/README.md) for the phase plan and each phase's intent scope, and [`intents/README.md`](../../intents/README.md) for the intent index. Capture history lives in `git log` and each intent file's own provenance, never in this page (per [adr-5](../../decisions/adrs/0005-brief-is-current-state.md)).
 
-**Plumbing infrastructure** (15 agents, 11 adapters, harness shim, prompt-quality stack, hooks): see [`05-internals/`](../05-internals).
+**Plumbing infrastructure** (16 agents — the canonical roster is the catalog in [`05-internals/01-agents.md`](../05-internals/01-agents.md) — 11 adapters, harness shim, prompt-quality stack, hooks): see [`05-internals/`](../05-internals).
 
 ## What comes in a later phase
 
-**All later-phase items live as press-release intents** in `.abcd/development/intents/drafts/`. The canonical out-of-scope list is at [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md).
+**Later-phase items live as press-release intents** — the uncommitted bench in `.abcd/development/intents/drafts/`, plus the committed-but-unscheduled intents in `planned/` (per [adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). The canonical out-of-scope list is at [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md).
 
-The later-phase set is the live `drafts/` corpus minus the intents already scoped into a planned phase; it is enumerated — and kept non-drifting via a filesystem-derived command rather than a hand-count — in the canonical [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md). itd-31 and itd-32 are superseded (preserved as historical record in `intents/superseded/`).
+The later-phase bench is the live `drafts/` corpus (per adr-34 no phase-scoped intent lives there, so nothing is subtracted); it is enumerated — and kept non-drifting via a filesystem-derived command rather than a hand-count — in the canonical [`06-delivery/03-out-of-scope.md`](../06-delivery/03-out-of-scope.md). itd-31 and itd-32 are superseded (preserved as historical record in `intents/superseded/`).
 
 Each intent captures the press-release-shaped scope and acceptance criteria. A later-phase intent enters work by being scoped into a phase, then promoted to `planned/` via `/abcd:intent plan <itd-N>` and to `shipped/` via `/abcd:intent ship <itd-N>` (or automatically when the linked spec closes).
 

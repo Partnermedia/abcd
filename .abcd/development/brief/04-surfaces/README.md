@@ -8,7 +8,7 @@ The brief's user-facing command surface is the set enumerated below (not all are
 | 2 | `/abcd:disembark` | Pack a lifeboat from the current project | [`02-disembark.md`](02-disembark.md) |
 | 3 | `/abcd:embark` | Unpack a lifeboat into a (typically empty) target | [`03-embark.md`](03-embark.md) |
 | 4 | `/abcd:launch` | Cut a curated release artefact from the repo | [`04-launch.md`](04-launch.md) |
-| 5 | `/abcd:intent` | Capture / refine / grill / plan / ship / review / consistency / shape / reclassify / link intents (press-release format; three review roles, three verbs per [`05-intent.md § 6`](05-intent.md#6-the-intent-fidelity-reviewer-agent-three-roles-three-verbs)) | [`05-intent.md`](05-intent.md) |
+| 5 | `/abcd:intent` | Capture / refine / grill / plan / ship / review / consistency / shape / reclassify / link intents (press-release format; three review roles, three verbs per [`05-intent.md § 7`](05-intent.md#7-the-intent-fidelity-reviewer-agent-three-roles-three-verbs)) | [`05-intent.md`](05-intent.md) |
 | 6 | `/abcd:capture` | Issue ledger (capture / list / promote / resolve / wontfix) | [`06-capture.md`](06-capture.md) |
 | 7 | `/abcd:memory` | Multi-upstream curated knowledge substrate (per itd-36) — `ingest` external sources / `ask` queries / `lint` health-checks. Component spec: [`05-internals/07-memory.md`](../05-internals/07-memory.md). | [`07-memory.md`](07-memory.md) |
 | 8 | `/abcd` | Top-level where-am-i status board (per itd-20) — cross-command re-orientation: project + visibility, lifeboat, dev-sync, recent logbook, active intents, next actions. `status` / `help` are byte-identical aliases. Read-only. | [`08-abcd.md`](08-abcd.md) |

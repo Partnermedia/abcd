@@ -1,8 +1,8 @@
 # Prompt Quality Infrastructure
 
-15 agents = 15 prompt `.md` files. Static prompts rot as models evolve and prompting best practices shift. abcd ships three layers (B+C+D) plus the itd-5 additions:
+16 agents = 16 prompt `.md` files (the canonical roster is [`01-agents.md`](01-agents.md)). Static prompts rot as models evolve and prompting best practices shift. abcd ships three layers (B+C+D) plus the itd-5 additions:
 
-**B — Per-agent golden-test fixtures.** Each agent spec ships 2–3 fixture inputs with expected output structure (JSON schema validation + oracle-judged "is this output good enough"). Fixtures live in `agents/<name>/fixtures/`. **Shipped so far:** fixtures for `intent-fidelity-reviewer` only (the one agent that exists). The generic `internal/core/prompttest` harness that runs fixtures in CI is **design target** — it lands with the first Pass-A agent spec (Phase 4), the point at which a second agent exists to generalize the runner over. Catches regressions when models change.
+**B — Per-agent golden-test fixtures.** Each agent spec ships 2–3 fixture inputs with expected output structure (JSON schema validation + oracle-judged "is this output good enough"). Fixtures live in `agents/<name>/fixtures/`. The `intent-fidelity-reviewer` fixtures are spc-12's; the generic `internal/core/prompttest` harness that runs fixtures in CI lands with the first Pass-A agent spec ([Phase 6](../../roadmap/phases/phase-6-lifeboat.md), the lifeboat pipeline), the point at which a second agent exists to generalize the runner over. Catches regressions when models change.
 
 **C — Prompt linter.** the prompt-lint checks in `internal/core/lint` — static analysis of agent prompt files (`agents/<name>.md`, excluding `CHANGELOG.md`, `README.md`, and `*_template.md` / `*.template` files, which are not prompts).
 

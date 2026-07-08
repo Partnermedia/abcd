@@ -98,7 +98,7 @@ Every command emits `<command>-report.json` (full structured detail) and `<comma
     └── <test-name>.{json,md}
 ```
 
-**Note: `.abcd/logbook/` is for reports only.** Coordination state (file locks like `shape.lock`, multi-agent claims per itd-33) lives at `.abcd/coordination/` — a *sibling* of `logbook/` under `.abcd/`, not a subdirectory. See `04-surfaces/05-intent.md § 6` for the canonical lock-path contract (`.abcd/coordination/shape.lock`).
+**Note: `.abcd/logbook/` is for reports only.** Coordination state (file locks like `shape.lock`, multi-agent claims per itd-33) lives at `.abcd/coordination/` — a *sibling* of `logbook/` under `.abcd/`, not a subdirectory. See `04-surfaces/05-intent.md § 7` for the canonical lock-path contract (`.abcd/coordination/shape.lock`).
 
 **Later-phase additions to `.abcd/logbook/`** (appear when their parent intent ships):
 - `dredge/<timestamp>/` — cross-corpus synthesis output (itd-25)

@@ -134,3 +134,5 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-30](0030-record-information-architecture.md) | Design-record information architecture — flat artefact-type folders | accepted | 2026-07-06 |
 | [adr-31](0031-derived-versioning-from-intents.md) | The release version is derived from the intents in it, never authored (extends adr-19, adr-20) | accepted | 2026-07-07 |
 | [adr-32](0032-issue-ledger-is-working-tier-data.md) | The issue ledger is working-tier data, not authored record — move to `.abcd/work/issues/`, drop git-inferable timestamps, derive priority | accepted | 2026-07-08 |
+| [adr-33](0033-launch-phase-ownership-tiered.md) | Launch phase ownership is tiered — Phase 1 owns the curated-release cut; deepenings are separately scheduled intents; the phase index is the sole ownership source | accepted | 2026-07-08 |
+| [adr-34](0034-lifecycle-and-scheduling-orthogonal.md) | Intent lifecycle and phase scheduling are orthogonal axes — scheduled ⇒ committed (`planned/`), but planned intents may be unscheduled | accepted | 2026-07-08 |
