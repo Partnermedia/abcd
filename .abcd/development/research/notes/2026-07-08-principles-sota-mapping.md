@@ -29,11 +29,15 @@ found):
   guideline mandates a per-mutating-verb test that malformed input produced
   no write. The guides cover unknown flags; the payload-absorption seam that
   bit this repo is under-covered everywhere.
-- **one-canonical-primitive's boundary statement** — the literature implies
-  but never crisply states the infrastructure/domain split; the derived
-  litmus is worth adopting: *if two copies must change together to stay
-  correct, it is one piece of knowledge — infrastructure; if they may
-  legitimately diverge, it is domain.*
+- **one-canonical-primitive's boundary statement** — the derived litmus is
+  worth adopting: *if two copies must change together to stay correct, it is
+  one piece of knowledge — infrastructure; if they may legitimately diverge,
+  it is domain.* Originality corrected by the lineage review (see
+  [lineage note](2026-07-08-lineage-sources-vs-principles.md)): the
+  may-legitimately-diverge half is bounded contexts (Evans 2003) in
+  substance, the must-change-together half is DRY-as-knowledge (Hunt &
+  Thomas); what is original is the conjunction as a copy/consolidate
+  decision rule.
 
 ## Per-principle verdicts and refinements
 
