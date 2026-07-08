@@ -24,6 +24,9 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Citation Style Language (CSL-JSON)** — the bibliography format of the
   confidential-sources design (itd-76), whose reserved `custom` field carries
   the confidentiality metadata.
+- **DITA subject scheme maps** — the controlled-vocabulary pattern behind the
+  persona registry: a field's legal values live in a dedicated registry file
+  and a processor flags unbound values (the `persona_registry` lint rule).
 - **Diátaxis** — the four-type model behind the user documentation.
 - **Domain-Driven Design (bounded contexts)** — the surface boundaries.
 - **Doorstop** — the suspect-link fingerprint mechanism adopted for intent

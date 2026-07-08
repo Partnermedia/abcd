@@ -59,6 +59,9 @@ type RuleConfig struct {
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.
 	Allowlist []string `json:"allowlist"`
+	// Registry is the persona_registry roster file, repo-relative
+	// (.abcd/development/personas.json).
+	Registry string `json:"registry"`
 }
 
 // LoadConfig reads and decodes a record-lint config file.

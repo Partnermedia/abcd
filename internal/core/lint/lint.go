@@ -50,8 +50,9 @@ var (
 
 // Lint runs every enabled check family against the record under repoRoot and
 // returns the findings sorted deterministically. An error is returned only for
-// malformed configuration (e.g. an uncompilable regexp); a walkable-but-missing
-// root is skipped, not an error.
+// malformed configuration (e.g. an uncompilable regexp, or a persona_registry
+// roster that is missing, unparsable, or empty); a walkable-but-missing root
+// is skipped, not an error.
 func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 	var findings []Finding
 
@@ -66,6 +67,16 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 	linksOn = linksOn && linksCfg.Enabled
 	gitMetaOn = gitMetaOn && gitMetaCfg.Enabled
 	brittleOn = brittleOn && brittleCfg.Enabled
+
+	personaCfg, personaOn := cfg.Rules["persona_registry"]
+	personaOn = personaOn && personaCfg.Enabled
+	var personaRoster map[string]bool
+	if personaOn {
+		personaRoster, err = loadPersonaRoster(repoRoot, personaCfg.Registry)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	for _, root := range cfg.Roots {
 		rootAbs := filepath.Join(repoRoot, root)
@@ -87,6 +98,9 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 
 			if len(tokenChecks) > 0 && !exempt {
 				findings = append(findings, checkBannedTokens(rel, lines, mask, tokenChecks)...)
+			}
+			if personaOn && !exempt {
+				findings = append(findings, checkPersonaRegistry(rel, lines, mask, personaRoster, personaCfg)...)
 			}
 			if gitMetaOn {
 				findings = append(findings, checkGitMetadata(rel, lines, gitMetaCfg)...)

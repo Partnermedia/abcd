@@ -233,7 +233,7 @@ The freeze is **non-self-referential**: re-computing the hash on the frozen PRD 
 
 Customer quotes use placeholder personas from `.abcd/development/personas.json` (Alice, Bob, Carol, ... — a fixed alphabetical sequence). Selection is **by role, never by name**: the intent's audience picks the role; the role's registered name is used. Every persona is they/them.
 
-This is also a codified abcd principle ([`principles/personas-alice-bob-carol.md`](../principles/personas-alice-bob-carol.md)): never use real names in press releases (PII), but never use generic "a hypothetical user" language (loses voice). Named personas keep quotes grounded without leaking real-world identifiers.
+This is a discipline ([`disciplines/itd-79-persona-registry.md`](disciplines/itd-79-persona-registry.md), enforced by the `persona_registry` record-lint rule): never use real names in press releases (PII), but never use generic "a hypothetical user" language (loses voice). Named personas keep quotes grounded without leaking real-world identifiers.
 
 ---
 
@@ -315,7 +315,8 @@ Active discipline-kind intents (cross-cutting rules with no user moment of their
 disciplines/
 ├── itd-1-acceptance-gates.md         (## Acceptance Criteria gate on every intent + spec)
 ├── itd-5-prompt-quality-additions.md (prompt_version + self-improvement + injection canaries + capability_scope static)
-└── itd-37-modification-grammar.md    (## Modification Grammar gate on every spec — Naur's Modification axis + Ripple sub-axis)
+├── itd-37-modification-grammar.md    (## Modification Grammar gate on every spec — Naur's Modification axis + Ripple sub-axis)
+└── itd-79-persona-registry.md        (persona names from personas.json, selected by role — persona_registry lint gate)
 ```
 
 See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) "Discipline format" for the template (no press release; uses `## Rule` + `## Why` + `## Acceptance Criteria` instead; no `status` field).

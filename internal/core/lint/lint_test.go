@@ -557,3 +557,102 @@ func TestCleanRecordProducesNoFindings(t *testing.T) {
 		t.Fatalf("expected no findings on clean record, got %d: %+v", len(fs), fs)
 	}
 }
+
+func TestPersonaRegistry(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".abcd/development/personas.json",
+		`{"schema_version":2,"personas":[{"name":"Alice","role_hints":["solo founder"]},{"name":"Bob","role_hints":["staff engineer"]}]}`)
+	writeFile(t, root, "rec/ok.md", "# ok\n\n> \"Fine,\" said Alice, solo founder.\n")
+	writeFile(t, root, "rec/bad.md", "# bad\n\n> \"Nope,\" said Zorro, pirate captain.\n")
+	writeFile(t, root, "rec/fenced.md", "# fenced\n\n```\nsaid Zorro, pirate captain.\n```\n")
+	writeFile(t, root, "rec/hist/old.md", "# old\n\n> \"Old,\" said Zorro, pirate captain.\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"persona_registry": {Enabled: true, Severity: "blocker", Registry: ".abcd/development/personas.json"},
+		},
+		ExemptPaths: []string{"rec/hist/"},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "persona_registry"); n != 1 {
+		t.Fatalf("expected exactly 1 persona finding, got %d: %+v", n, fs)
+	}
+	if !hasFinding(fs, "rec/bad.md", "persona_registry", 3) {
+		t.Errorf("expected finding on rec/bad.md:3: %+v", fs)
+	}
+}
+
+func TestPersonaRegistryMissingFileErrors(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/ok.md", "# ok\n")
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"persona_registry": {Enabled: true, Severity: "blocker", Registry: "nope/personas.json"},
+		},
+	}
+	if _, err := Lint(cfg, root); err == nil {
+		t.Fatal("expected error for enabled rule with missing registry")
+	}
+}
+
+func TestPersonaRegistryEdgeCases(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "reg.json",
+		`{"personas":[{"name":"Alice"},{"name":"Zoë"}]}`)
+	writeFile(t, root, "rec/multi.md",
+		"# m\n\n> \"A,\" said Alice, founder. \"B,\" said Zorro, pirate. And said Anne-Marie, sailor.\n")
+	writeFile(t, root, "rec/unicode.md", "# u\n\n> \"Fine,\" said Zoë, designer.\n")
+	writeFile(t, root, "rec/nocomma.md", "# n\n\n> as Zorro said before, nothing here attributes a quote.\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"persona_registry": {Enabled: true, Severity: "blocker", Registry: "reg.json"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "persona_registry"); n != 2 {
+		t.Fatalf("expected 2 findings (Zorro + Anne-Marie on one line), got %d: %+v", n, fs)
+	}
+	if !hasFinding(fs, "rec/multi.md", "persona_registry", 3) {
+		t.Errorf("expected findings on rec/multi.md:3: %+v", fs)
+	}
+}
+
+func TestPersonaRegistryConfigGuards(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/ok.md", "# ok\n")
+	writeFile(t, root, "empty.json", `{"personas":[]}`)
+
+	// Enabled with empty registry path: loud error, not a directory read.
+	cfg := Config{Roots: []string{"rec"}, Rules: map[string]RuleConfig{
+		"persona_registry": {Enabled: true, Severity: "blocker"},
+	}}
+	if _, err := Lint(cfg, root); err == nil {
+		t.Fatal("expected error for enabled rule with empty registry path")
+	}
+
+	// Enabled with zero-persona roster: loud error, not whole-record flagging.
+	cfg.Rules["persona_registry"] = RuleConfig{Enabled: true, Severity: "blocker", Registry: "empty.json"}
+	if _, err := Lint(cfg, root); err == nil {
+		t.Fatal("expected error for zero-persona roster")
+	}
+
+	// Disabled rule with missing registry: no error, no findings.
+	cfg.Rules["persona_registry"] = RuleConfig{Enabled: false, Registry: "nope.json"}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatalf("disabled rule must not touch the registry: %v", err)
+	}
+	if n := countRule(fs, "persona_registry"); n != 0 {
+		t.Fatalf("disabled rule produced findings: %+v", fs)
+	}
+}

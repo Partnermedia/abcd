@@ -12,6 +12,11 @@ called out in a **Breaking** section.
 
 ### Added
 
+- A `persona_registry` record-lint rule: press-release quote attributions
+  (`said <Name>,`) must name a persona from the registry file the rule's
+  `registry` key points at; unknown names are blocker findings. Configured
+  per repo in `record-lint.json`; the historical record is skipped via the
+  standard content-drift exemptions.
 - `abcd capture --blocked-by <iss-N,…>` records typed dependency edges on a new
   issue, and `capture list` / the status board now render a derived-priority
   view: unblocked issues first, then by severity, with blocked rows annotated

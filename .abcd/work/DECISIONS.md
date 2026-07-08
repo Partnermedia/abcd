@@ -35,6 +35,10 @@ parallel-agent merge contention bites.
   registry lint ships). Coverage vocabulary (uncovered / covered-shallow /
   covered-deep / orphaned / unwanted) lands as itd-53's gate reporting
   language; "done" = covered-deep AND the intent's own criteria MET.
+- 2026-07-08 — persona_registry lint shipped (record-lint blocker: quote
+  attributions must name registry personas); the personas principle promoted
+  to discipline itd-79 the same change, per the promotion path — first test
+  case of enforced-principle ⇒ discipline. principles/ file retired.
 - 2026-07-08 — Persona SSOTs reconciled: `personas.json` is the single registry
   (13, expandable, alphabetical sequence); selection is BY ROLE, the role's
   registered name is used, never a name picked directly; all personas and the
