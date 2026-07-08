@@ -119,10 +119,11 @@ Phase 1 is joined here by the real `grill` sub-verb.
 - **Runs after Phase 1** — `/abcd:intent` is a command; a command needs the ahoy
   install flow and the rules loader live before its sub-verbs are wired, and the
   MCP front door builds on the same core the CLI front door already exposes.
-- **itd-27 depends on itd-42** — the coherence-aware tiers are the grill
-  machinery itd-27's sub-verb invokes; itd-42 lands the tier system, itd-27
-  lands the user-facing sub-verb and glossary on top of it. itd-27 also depends
-  on itd-1 (its own acceptance criteria pass the gate).
+- **itd-42 depends on itd-27** — itd-27 lands the `/abcd:intent grill` sub-verb
+  and the glossary tier; itd-42 extends that grill with the coherence-aware
+  tiers (and renames `--with-docs` to `--glossary`). Both intents declare this
+  direction (itd-42 `blocked_by: [itd-27]`; itd-27 "Extended by: itd-42").
+  itd-27 also depends on itd-1 (its own acceptance criteria pass the gate).
 - **itd-28 depends on the oracle seam** (Phase 0's itd-6) — spec-tied reviews are
   post-processed from what the oracle emits; itd-28 lands them in the native
   store. It is grouped here because the reviews this phase runs are the first
@@ -135,5 +136,5 @@ Phase 1 is joined here by the real `grill` sub-verb.
 - Confirm the native review store's on-disk shape is settled here so Phase 4's
   spec engine and Phase 6's disembark can both read review artefacts without a
   later migration.
-- itd-42 must be planned (and likely grilled) before itd-27's spec can depend on
-  it. Confirm the itd-42 → itd-27 ordering holds once both have specs.
+- itd-27 must be planned (and likely grilled) before itd-42's spec can depend on
+  it. Confirm the itd-27 → itd-42 ordering holds once both have specs.

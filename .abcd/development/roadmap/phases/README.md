@@ -87,6 +87,16 @@ land in which future phase before the phase is planned would only go stale. See
 [intents/README.md](../../intents/README.md) for the full corpus; an intent moves
 into a phase's `## Scope` when the phase that bundles it is written.
 
+One unscheduled cluster is deliberate rather than pending, and is recorded as
+such: the **launch deepenings** — the pre-flight gate suite (itd-65), payload
+render parity (itd-66), the installable versioned plugin (itd-67), release
+retention (itd-70), tier-b publishing (itd-72), and derived versioning
+(itd-73). Phase 1 owns only the curated-release cut; the deepenings enter a
+phase's `## Scope` when sequenced, per
+[adr-33](../../decisions/adrs/0033-launch-phase-ownership-tiered.md). Their
+critical/major severities keep them at the top of the derived-priority queue
+(itd-78) without a phase anchor.
+
 ## Related Documentation
 
 - [Roadmap](../README.md) — status dashboard

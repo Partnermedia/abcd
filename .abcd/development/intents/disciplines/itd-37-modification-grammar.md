@@ -6,8 +6,7 @@ kind_notes: "Cross-cutting modification-grammar gate; applied at every spec plan
 suggested_kind: null
 spec_id: null
 reclassification_history: []
-blocked_by: [itd-36]
-builds_on: [itd-1]
+builds_on: [itd-1, itd-36]
 severity: major
 ---
 
@@ -49,7 +48,7 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 
 **Why all specs, no "trivial" carve-out.** "Trivial" cannot be cleanly specified without inviting loophole-driven exemptions. A `## Modification Grammar` section that says *"this spec adds a config flag with no extension surface; modifications are limited to renaming the flag; the rule is: never bind config-flag names to public API"* is **valuable** — documenting absence-of-extension-points IS modification grammar. Required for all; trivial specs produce short Modification Grammar sections, not absent ones.
 
-**Why memory routing as secondary index, not primary store.** The dominant access pattern is "I'm modifying spec spc-N, give me spc-N's modification grammar" — that's a lookup the spec file already serves trivially. Memory routing earns its keep on the long-tail: *"how has our modification grammar of dispatch evolved across spc-1, spc-3, spc-7?"* Cheap to add (`principle-distiller` already exists post-itd-36); worth it; not load-bearing for the common case. In-spec capture is the primary store.
+**Why memory routing as secondary index, not primary store.** The dominant access pattern is "I'm modifying spec spc-N, give me spc-N's modification grammar" — that's a lookup the spec file already serves trivially. Memory routing earns its keep on the long-tail: *"how has our modification grammar of dispatch evolved across spc-1, spc-3, spc-7?"* Cheap to add (`principle-distiller` already exists post-itd-36); worth it; not load-bearing for the common case. In-spec capture is the primary store. This is also why itd-36 is a `builds_on` edge, not a blocker: the capture + enforcement half (`MG001`-`MG004`, the Phase 0 discipline registration) ships independently of itd-36, and only the extraction-to-memory trigger waits on its substrate — the partial-ship fallback below is the designed behaviour, not a contingency.
 
 ## What's In Scope
 

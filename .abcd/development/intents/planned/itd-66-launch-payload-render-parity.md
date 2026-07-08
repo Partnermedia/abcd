@@ -24,13 +24,6 @@ severity: critical
 
 # abcd Renders The Exact Public Payload, Proves The Excludes Never Leak, And Smoke-Tests The Installed Surface Before Any Snapshot
 
-> **⚠️ HISTORICAL / NON-CANONICAL.** This is the itd-66 intent draft (press-release + acceptance sketch). The
-> CANONICAL, implementation-authoritative contract for spc-78 is the native spec
-> **`spc-78-launch-payload-render-parity-smoke`**. This draft still names `.abcd/launch.allow` as
-> honored by render and describes manifest-declared smoke surfaces; both are SUPERSEDED (render consumes
-> `.abcd/config/launch-payload.json`, not `launch.allow`; smoke discovers surfaces by directory convention).
-> Where this draft and the spec disagree, the spec wins. Do NOT implement from this draft.
-
 ## Press Release
 
 > **`/abcd:launch` gains a real payload render with a leak-proof default-deny filter, a parity diff against the previously published release, and an installed-surface smoke test — so a maintainer sees EXACTLY what would be published, provably without `.abcd/` / `.flow/` / `.work/` leaking, and with every shipped `/abcd:*` command, skill, and hook confirmed to resolve and import from the rendered snapshot.** The payload is the curated release excluding `.abcd/**` ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)); the brief's § 2 payload manifest is default-deny (include-list + hard `.abcd/**` exclusion), but nothing yet MATERIALISES that manifest and proves the exclusions hold, diffs it against the last published release, or verifies the rendered plugin actually loads. This intent builds that: render → prove-no-leak → parity-diff → consumer-surface smoke, all read-only, so the release is trustworthy before promotion.
@@ -73,8 +66,15 @@ The pre-flight gate suite ([[itd-65-launch-preflight-gate-suite]]) decides wheth
 - **Given** no previously published release (or an empty one), **when** parity runs, **then** it produces an all-added diff (first-launch) rather than refusing; given a wrong configured baseline, it errors clearly.
 - **Given** the resolved payload manifest, **when** itd-65's gate suite runs, **then** it consumes THIS render's resolution and does not independently re-resolve the payload.
 
+## Prior Art
+
+- [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) — the packaging policy (`.abcd/**` never ships) this intent turns from policy into a proved assertion.
+- [[itd-65-launch-preflight-gate-suite]] — sibling: its gate suite consumes this render's resolved payload and never re-resolves (render → gate).
+- `spc-78-launch-payload-render-parity-smoke` — the predecessor implementation's spec for this contract, carried as design input per the brief's delivery-state provenance note. Two of its implementation decisions diverge from this repo's brief: its render consumed a `.abcd/config/launch-payload.json` config rather than the `.abcd/launch.allow` allowlist, and its smoke discovered surfaces by directory convention rather than manifest declaration. The brief (`04-surfaces/04-launch.md`) remains canonical here; the deltas are weighed at spec time (see Open Questions).
+
 ## Open Questions
 
+- Predecessor delta (spc-78): adopt a config-file payload override (`.abcd/config/launch-payload.json`) and directory-convention smoke discovery, or keep the brief's `.abcd/launch.allow` + manifest-declared surfaces? Adjudicate at spec time; a brief change needs its own edit, not a silent divergence.
 - Does the render reuse the walk/filter logic already in the native launch capability (its walk-root routine and the include/exclude sets), promoting it from preview-only to a real materialiser, or is it a fresh module the dry-run then reuses?
 - What is the parity baseline when there is no previously published release or it is on a different ref — treat all-added, or require a configured baseline?
 - How deep does the smoke test go — manifest resolution + import only, or also a minimal invocation of each command's help surface?

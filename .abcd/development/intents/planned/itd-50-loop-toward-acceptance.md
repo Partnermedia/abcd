@@ -99,9 +99,13 @@ The 2026-06-02 grill (5 questions across Dialectic / Definition / Counterfactual
 - **itd-44** (fourth intent kind / decision) and **itd-43** (terminology) — the product-thinker / facilitator two-vocabulary split this intent leans on.
 - **`.work/issues.md` 2026-06-02** — the `[Design/Spec-candidate]` entry and the upstream `[Design/Decision-needed]` auto-drain recommendation that produced this intent; the auto-drainer is this intent's substrate.
 
-## AC reconciliation (spc-52 — implementation complete)
+## Prior Art
 
-itd-50 was implemented by `spc-52-audit-loop-to-acceptance-modes` (tasks .1–.3). Each acceptance criterion above is **satisfied**; the open questions are **resolved** at plan + build time. No AC is deferred.
+- `spc-52-audit-loop-to-acceptance-modes` — the predecessor implementation delivered this intent (tasks .1–.3); its AC reconciliation below is carried as design input per the brief's delivery-state provenance note. In this repo itd-50 is undelivered (nothing in the Go tree implements the audit loop) and ships only when this intent reaches `shipped/` with its own audit notes.
+
+### Predecessor AC reconciliation (spc-52)
+
+In the predecessor implementation each acceptance criterion above is satisfied and the open questions are resolved at its plan + build time; the table attributes which spc-52 task owns which behaviour.
 
 | itd-50 Acceptance Criterion | Status | Where delivered |
 |---|---|---|
@@ -115,4 +119,4 @@ itd-50 was implemented by `spc-52-audit-loop-to-acceptance-modes` (tasks .1–.3
 | `UNACHIEVABLE` / rejection seeds `/abcd:intent grill` | Satisfied | spc-52.2 / .3 — both replan blocks name the grill seed |
 | on-close hook stays a pure data function (no subprocess / oracle) | Satisfied | The mode logic rides the spc-43 drainer / policy layer; `intent_lifecycle` is untouched by the loop |
 
-**Open questions (now resolved):** loop budget = one re-open+re-review cycle per iteration, default `3` (spc-52.1 § Decision context); replan surface = no `drafts/` move, a `why-unachievable` + replan block in `## Audit Notes` with the intent kept in `shipped/` (spc-52.2 R4); manual-verification sign-off = the receipt schema `{intent_id, machine_rollup, state, justification?, recorded_by_role, ts}` with the `rejected_wrong_criteria` state carrying the justification to the shared replan surface (spc-52.3 R5).
+**Open questions (predecessor answers, to re-adjudicate at spec time):** loop budget = one re-open+re-review cycle per iteration, default `3` (spc-52.1 § Decision context); replan surface = no `drafts/` move, a `why-unachievable` + replan block in `## Audit Notes` with the intent kept in `shipped/` (spc-52.2 R4); manual-verification sign-off = the receipt schema `{intent_id, machine_rollup, state, justification?, recorded_by_role, ts}` with the `rejected_wrong_criteria` state carrying the justification to the shared replan surface (spc-52.3 R5).

@@ -51,7 +51,7 @@ abcd doesn't need to host a separate audit service: the chain lives in `.abcd/lo
 - **`audit.schema.json`** — the public format for chain segments and the verification report.
 - **Disembark integration**: `/abcd:disembark` includes the latest chain segments in the lifeboat under `_provenance.json` `audit_chain_root`. The chain root hash anchors the lifeboat's authenticity.
 - **Embark integration**: `/abcd:embark` verifies the lifeboat's chain root before unpacking; mismatch aborts the unpack with the offending segment named.
-- **Launch integration** (per itd-launch): launch payload manifest excludes the chain by default (sensitive); explicit opt-in via `.abcd/launch.allow` if a release should ship its own chain.
+- **Launch integration** (per itd-66): launch payload manifest excludes the chain by default (sensitive); explicit opt-in via `.abcd/launch.allow` if a release should ship its own chain.
 - **Opt-in via `.abcd/config.json`** — `oracle.audit.chain.enabled = true | false` (default `false` to avoid surprising users; flip to `true` for compliance-sensitive projects).
 
 ## What's Out of Scope

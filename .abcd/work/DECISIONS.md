@@ -83,3 +83,14 @@ parallel-agent merge contention bites.
   stored — a minor blocker of a major intent jumps the queue while staying
   minor. Phases keep sequencing authority (adr-9); lint makes contradictory
   schedules fail. Recorded as itd-78; piloted on itd-76/77.
+- 2026-07-08 — Predecessor spc-N artefacts inside intents (do-not-implement
+  banners, implementation-complete AC tables) are demoted to Prior Art design
+  input per the delivery-state provenance doctrine — never implementation
+  authority, never a delivery claim (iss-16 itd-66, iss-17 itd-50); their
+  deltas become spec-time Open Questions.
+- 2026-07-08 — itd-37's itd-36 edge downgraded blocked_by → builds_on: the
+  capture + enforcement half ships independently (Phase 0 registration) and
+  only extraction-to-memory waits on itd-36 (iss-18); the launch deepenings'
+  unscheduled state is recorded in the phase index pointing at adr-33
+  (iss-20); itd-6 stays planned/ — ADR-25 superseded its framing only, and
+  scheduled implies planned per adr-34 (iss-22).

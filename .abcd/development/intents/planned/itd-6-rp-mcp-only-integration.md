@@ -9,7 +9,7 @@ builds_on: [itd-2]
 severity: minor
 ---
 
-> **⚠️ Superseded by [ADR-25](../../decisions/adrs/0025-host-delegated-llm-default.md)** (host-delegated LLM is the default; RepoPrompt is one optional oracle adapter among many, not abcd's single integration — see also [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). Preserved as historical record per the supersession lifecycle.
+> **⚠️ Framing superseded by [ADR-25](../../decisions/adrs/0025-host-delegated-llm-default.md)** (host-delegated LLM is the default; RepoPrompt is one optional oracle adapter among many, not abcd's single integration — see also [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). The intent itself stays live and is scheduled in Phase 0's `## Scope` as the oracle adapter seam: read "abcd's only RP integration is MCP" below as the contract of the *RP adapter*, not of abcd — the RP-specific mechanics (MCP bridge, cascade position, `chat_id` semantics) are adapted to the adapter seam at spec time.
 
 # RP-Only Integration: abcd Talks to RepoPrompt via MCP, Period
 
