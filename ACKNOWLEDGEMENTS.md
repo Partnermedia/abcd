@@ -21,6 +21,10 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 
 - **Amazon "Working Backwards"** — the press-release format of abcd's intents.
 - **Architecture Decision Records (MADR)** — the shape of the decision record.
+- **ccpm (Claude Code PM, Automaze)** — the markdown spec/task conventions
+  (PRD → epic → issue, directory-as-store) that abcd's native spec layer is
+  convention-compatible with, and the designated deeper backend of the spec
+  seam (ADR-24, ADR-26). <https://github.com/automazeio/ccpm>
 - **Citation Style Language (CSL-JSON)** — the bibliography format of the
   confidential-sources design (itd-76), whose reserved `custom` field carries
   the confidentiality metadata.
