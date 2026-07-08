@@ -12,6 +12,11 @@ called out in a **Breaking** section.
 
 ### Added
 
+- `/abcd:consult` and `/abcd:ingest` skills — consult the user-level sources
+  corpus (confidential entries are never cited or named in public artifacts)
+  and ingest a URL or document into it with extracted reference metadata,
+  keywords, and a text-quality check. Both are thin fronts on the corpus's own
+  tooling and stop gracefully when no corpus exists.
 - A `persona_registry` record-lint rule: press-release quote attributions
   (`said <Name>,`) must name a persona from the registry file the rule's
   `registry` key points at; unknown names are blocker findings. Configured
