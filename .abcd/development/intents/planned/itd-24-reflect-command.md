@@ -12,6 +12,8 @@ grilled_at: 2026-05-16T15:37:17Z
 grilled_intent_hash: 8412a59b575df882fc4a370ab01404796cad4dd9e120d0519e9918d3ea891c61
 prd_path: null
 prd_grandfathered: true
+severity: minor
+builds_on: [itd-27]
 ---
 
 # Completed Phases Get A Retrospective

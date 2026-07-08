@@ -1,20 +1,21 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "purpose": "Personas used by press-release composers to attribute customer quotes. Avoids PII while keeping quotes grounded.",
-  "convention": "When generating a press release with a customer quote, pick a persona at random. Optionally bias selection by role to match the intent's audience.",
+  "convention": "The intent's audience picks the ROLE; the role determines the name — never pick a name directly. Names form a fixed alphabetical sequence (Alice, Bob, Carol, ...); when the roster grows, new personas continue the sequence (Nia, Omar, ...). Every persona is referred to as they/them, as is the real user.",
   "personas": [
     { "name": "Alice", "role_hints": ["solo founder", "product engineer"] },
-    { "name": "Bob", "role_hints": ["staff engineer", "platform team"] },
+    { "name": "Bob", "role_hints": ["staff engineer", "platform team", "full-stack engineer"] },
     { "name": "Carol", "role_hints": ["engineering manager", "tech lead"] },
     { "name": "Dave", "role_hints": ["security engineer", "compliance lead"] },
     { "name": "Eve", "role_hints": ["data scientist", "ML engineer"] },
     { "name": "Frank", "role_hints": ["DevOps engineer", "SRE"] },
     { "name": "Grace", "role_hints": ["CTO", "VP Engineering"] },
     { "name": "Henry", "role_hints": ["junior developer", "new hire"] },
-    { "name": "Iris", "role_hints": ["product manager", "designer"] },
+    { "name": "Iris", "role_hints": ["product manager", "designer", "product lead", "product thinker"] },
     { "name": "Jack", "role_hints": ["consultant", "agency lead"] },
-    { "name": "Kira", "role_hints": ["open-source maintainer", "DX engineer"] },
+    { "name": "Kira", "role_hints": ["open-source maintainer", "DX engineer", "framework author"] },
     { "name": "Liam", "role_hints": ["mobile developer", "iOS/Android lead"] },
-    { "name": "Maya", "role_hints": ["AI/agent researcher", "prompt engineer"] }
+    { "name": "Maya", "role_hints": ["AI/agent researcher", "prompt engineer", "researcher-developer", "autonomous-development practitioner"] },
+    { "name": "Nia", "role_hints": ["facilitator", "scrum master"] }
   ]
 }

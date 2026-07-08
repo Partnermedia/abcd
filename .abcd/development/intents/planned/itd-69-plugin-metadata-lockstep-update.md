@@ -13,6 +13,8 @@ grandfathered_at_phase: phase-6-launch
 glossary_terms_used:
   - core/brief
   - distribution/version
+severity: minor
+builds_on: [itd-67]
 ---
 
 # Plugin Metadata Stays Consistent Across Every Duplicated Surface
@@ -30,7 +32,7 @@ glossary_terms_used:
 >
 > "A half-bumped plugin is worse than an un-bumped one — the marketplace says one
 > thing and the plugin says another, and nobody notices until an install breaks,"
-> said a maintainer publishing a new build. "The lockstep check catches the
+> said Kira, a maintainer publishing a new build. "The lockstep check catches the
 > disagreement before it publishes."
 
 _Drawn out from a human brief edit by the brief-change derivation gate

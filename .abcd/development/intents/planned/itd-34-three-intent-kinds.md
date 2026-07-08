@@ -6,6 +6,8 @@ suggested_kind: standalone
 bundle: null
 spec_id: null
 reclassification_history: []
+builds_on: [itd-1]
+severity: major
 ---
 
 # Intents Promote In Three Flavours — Standalone, Bundle-Member, Discipline
@@ -14,7 +16,7 @@ reclassification_history: []
 
 > **abcd ships three intent kinds, each with its own lifecycle path through `/abcd:intent plan`.** A standalone intent maps 1:1 to a flow-next `spec` — the default for ~60% of intents, and the only path the prior brief recognised. A bundle-member intent shares a `spec` with its bundle-mates: the persona runs `/abcd:intent plan itd-A itd-B`, abcd creates one shared `spec` with both intents listed, and both files move from `drafts/` to `planned/` together. A discipline intent has no persona moment of its own — it's a cross-cutting rule (every `spec` must carry acceptance criteria, every agent `prompt` must declare a `version`) that lives in `disciplines/` instead of `drafts/`, never gets its own `spec`, but applies to every other `spec` as an inherited acceptance gate. Capture stays format-neutral; the binding `kind` field is set at plan time, with an `oracle` classifier writing an advisory hint at capture time. The discipline shape is `voyage`-agnostic — an application `voyage` (e.g., a macOS app under abcd) produces its own disciplines around privacy-impact review or accessibility passes with the same lifecycle as abcd's own discipline intents.
 >
-> "I had an intent that didn't fit the standard mould — it was a rule about every future `spec`, not a `feature` being built — and I'd been forcing it through the `press-release` format anyway, ending up with prose that read awkwardly because there was no real persona moment to describe," said Carol, product lead. "The discipline kind let me write `## Rule` instead of `## Press Release` and have the system understand what it was looking at. Two of my intents reclassified from standalone to discipline; the lifecycle paths matched the actual shape of the work for the first time."
+> "I had an intent that didn't fit the standard mould — it was a rule about every future `spec`, not a `feature` being built — and I'd been forcing it through the `press-release` format anyway, ending up with prose that read awkwardly because there was no real persona moment to describe," said Iris, product lead. "The discipline kind let me write `## Rule` instead of `## Press Release` and have the system understand what it was looking at. Two of my intents reclassified from standalone to discipline; the lifecycle paths matched the actual shape of the work for the first time."
 
 ## Why This Matters
 

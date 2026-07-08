@@ -5,6 +5,9 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+blocked_by: [itd-27]
+builds_on: [itd-28]
+severity: major
 ---
 
 # Domain Experts Run A Spec Autonomously And Recover From Anything Without Touching Git
@@ -13,7 +16,7 @@ reclassification_history: []
 
 > **abcd collapses autonomous-run safety to a six-verb operating surface a domain expert can use without ever opening git.** Before `abcd spec start spc-X` kicks off the autonomous run through the pluggable run seam, a pre-flight budget check estimates token cost against remaining quota and refuses to start if the math doesn't add up. Mid-run telemetry surfaces "X% of daily budget consumed, Y tasks remaining" via spc-29-42i (telemetry spec). On a 429 rate-limit response the run catches it cleanly, writes a `RESUME-FROM` checkpoint to the native spec store, and exits. `abcd spec resume spc-X` picks up exactly where it stopped. `abcd spec rewind spc-X --to-task 3` undoes a wrong turn — soft by default (lets the user edit the task spec and re-run; keeps reviews visible for context), hard with `--hard` (full discard). Completed specs auto-merge to a `dev` trunk branch only when all reviews verdict `SHIP` and lint/smoke pass; promotion to `main` requires explicit `abcd spec ship spc-X`. When auto-rebase hits a conflict, the spec suspends and emits a single concrete next-step: `abcd spec resolve spc-X` walks the user through resolution. The domain expert never types `git reset`, never sees a branch name, never decides whether a 429 means "retry" or "give up."
 >
-> "I'd kicked off an autonomous run, gone to lunch, come back to find it had burned through my Opus budget on iteration 7 of a task that was already wrong," said Carol, product lead. "abcd's pre-flight check would have flagged the budget; the rewind would have undone iteration 6; resume would have picked up Sonnet for the rest. Instead I spent two hours with git and a model bill. Never again."
+> "I'd kicked off an autonomous run, gone to lunch, come back to find it had burned through my Opus budget on iteration 7 of a task that was already wrong," said Iris, product lead. "abcd's pre-flight check would have flagged the budget; the rewind would have undone iteration 6; resume would have picked up Sonnet for the rest. Instead I spent two hours with git and a model bill. Never again."
 
 ## Scope Reconciliation
 

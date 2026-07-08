@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
+severity: nitpick
 ---
 
 > **⚠️ Superseded by [ADR-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)** (flow-next is dropped; its runtime `.flow/` state store no longer exists, so there is no flow-state to drift against). Preserved as historical record per the supersession lifecycle.

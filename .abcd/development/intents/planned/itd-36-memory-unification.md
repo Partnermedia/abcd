@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: null
 reclassification_history: []
 related_adrs: [adr-28]
+severity: major
 ---
 
 # Knowledge That Compounds, Not Knowledge That Re-Derives

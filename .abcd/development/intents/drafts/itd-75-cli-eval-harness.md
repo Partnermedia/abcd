@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
 ---
 
 # abcd Proves Your CLI Actually Runs — From Fixtures You Drop In
@@ -13,7 +14,7 @@ reclassification_history: []
 
 > **Every command a repo exposes gets exercised, and you extend the coverage by dropping a folder — never by writing test plumbing.** abcd builds the binary, discovers the whole command surface by walking it (no hand-kept list), and smokes each command: help renders, nothing panics, read-only verbs run. Then it goes further — a fixtures folder of user-specified and synthetic inputs is auto-discovered and replayed against the matching commands, asserting the *shape* of what comes back. Adding a scenario is dropping an input and an expected-shape file into `evals/data/<command>/`; the harness picks it up on the next run, in local dev, in CI, and in the release gate against the very binary about to ship.
 >
-> "I used to find out a command crashed only when a user hit it," said Dev, a maintainer. "Now every command is smoked on every push, and when I want a real scenario I drop a sample corpus in a folder and abcd runs my tool against it. My confidence in a release stopped being a feeling."
+> "I used to find out a command crashed only when a user hit it," said Kira, a maintainer. "Now every command is smoked on every push, and when I want a real scenario I drop a sample corpus in a folder and abcd runs my tool against it. My confidence in a release stopped being a feeling."
 
 ## Why This Matters
 

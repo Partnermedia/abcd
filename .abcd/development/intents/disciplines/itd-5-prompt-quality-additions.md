@@ -7,6 +7,8 @@ suggested_kind: null
 spec_id: null
 reclassification_history:
   - { date: 2026-05-07, from: standalone, to: discipline, reason: "Reclassified per the three-intent-kinds change: itd-5 is a rule that applies to every agent spec — `prompt_version` frontmatter, one-shot pre-flight at lock-time, injection canaries — not a feature with a user moment of its own. Discipline shape (## Rule + ## Why) fits." }
+blocked_by: [itd-1]
+severity: major
 ---
 
 # Every Agent Prompt Carries Its Version, Earns Its Lock, And Survives Injection

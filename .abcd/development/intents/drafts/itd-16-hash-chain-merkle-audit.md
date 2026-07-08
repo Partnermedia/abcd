@@ -5,6 +5,8 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+builds_on: [itd-9]
+severity: major
 ---
 
 <!-- 2026-05-08: scope rewritten and split. /abcd:audit is positioned as the umbrella verb;

@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
+severity: major
 ---
 
 # abcd Knows What Kind of Folder You're In

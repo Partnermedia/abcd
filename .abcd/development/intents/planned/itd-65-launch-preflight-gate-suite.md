@@ -21,6 +21,9 @@ glossary_terms_used:
 warrants_assumed:
 - "An oracle/LLM backend may or may not be available on the ship host; the doc-history gate degrades to deterministic patterns without failing open."
 - "The public org handle is a known allowlistable constant distinct from the maintainer's personal git identity."
+blocked_by: [itd-66]
+builds_on: [itd-67]
+severity: critical
 ---
 
 # abcd Refuses To Publish A Payload Until The Full Ship-Time Pre-Flight Gate Suite Passes, Not Just The Secret Scan

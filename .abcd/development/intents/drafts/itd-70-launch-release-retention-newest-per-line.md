@@ -1,6 +1,7 @@
 ---
 id: itd-70
 slug: launch-release-retention-newest-per-line
+severity: minor
 ---
 
 # Drawn-out intent

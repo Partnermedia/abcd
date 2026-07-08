@@ -15,6 +15,7 @@ glossary_terms_used:
 - core/oracle
 grilled_intent_hash: bfaa672163edddb5d859bbdfc50169512349da38405c295729ce42c04b894401
 prd_grandfathered: false
+severity: major
 ---
 
 # When Something Is Built, The Brief And The Public Docs Reflect It — Or The Spec Cannot Close
@@ -23,7 +24,7 @@ prd_grandfathered: false
 
 > **abcd gains a doc-fidelity pass: a forward-direction check that grades built reality against the brief, and the brief against the audience-adapted public docs, so a shipped capability is never left undocumented and the public framing never out-promises what the code actually does.** abcd already grades delivery against intention (the fidelity reviewer). It does not yet grade documentation against delivery. This pass closes that loop. After each task it advises (soft, non-blocking) where the brief or public docs may now lag the code; before a spec closes it becomes a hard gate. When drift is found it auto-drafts the brief delta and the audience-adapted public-doc delta — one view for end-users *applying* what was built, optionally one for developers *extending* it — and surfaces them for the product thinker to approve or edit. The brief stays the single source of truth; the public docs are derived, audience-specific explanations of it.
 
-> "The gap that scares me isn't a bug — it's a README that quietly describes a capability we never shipped, or a brief that's six specs behind the code," said Mara, a product thinker shipping with abcd. "I read the verdict, not the source. If the docs drift, my whole picture of what I've built is wrong. I want the framework to refuse to call a spec done until the brief and the docs say what's actually true — and to hand me a draft of the change so I'm reviewing, not writing."
+> "The gap that scares me isn't a bug — it's a README that quietly describes a capability we never shipped, or a brief that's six specs behind the code," said Iris, a product thinker shipping with abcd. "I read the verdict, not the source. If the docs drift, my whole picture of what I've built is wrong. I want the framework to refuse to call a spec done until the brief and the docs say what's actually true — and to hand me a draft of the change so I'm reviewing, not writing."
 
 ## Why This Matters
 

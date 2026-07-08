@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
 ---
 
 # Working Notes Don't Outrank Settled Decisions

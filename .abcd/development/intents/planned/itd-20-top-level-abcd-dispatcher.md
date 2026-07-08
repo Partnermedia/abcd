@@ -21,6 +21,8 @@ glossary_terms_used:
   - distribution/end-user
   - distribution/release
   - interview/embark
+severity: minor
+builds_on: [itd-4]
 ---
 
 # `/abcd` Tells You Where You Are

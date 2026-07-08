@@ -5,6 +5,8 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+builds_on: [itd-2]
+severity: minor
 ---
 
 > **⚠️ Superseded by [ADR-25](../../decisions/adrs/0025-host-delegated-llm-default.md)** (host-delegated LLM is the default; RepoPrompt is one optional oracle adapter among many, not abcd's single integration — see also [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)). Preserved as historical record per the supersession lifecycle.

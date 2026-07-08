@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
 ---
 
 # abcd Keeps the Names You Ban Out of Everything You Publish
@@ -13,7 +14,7 @@ reclassification_history: []
 
 > **Name a thing once as off-limits; abcd keeps it out of every published surface — and keeps the truly private ones off the machine's commits entirely.** A repo abcd configures often must not name certain things in what it publishes: a specific agent harness (so the surface stays host-agnostic), a partner's product, or — most sensitively — a *private* project whose very name is confidential. abcd manages this as a two-layer banlist. The **public banlist** is enforced deterministically in CI: named tokens in user-facing content (README, `docs/`, the shipped artefact) fail the build, with a per-line escape hatch for the rare deliberate mention. The **private banlist** is enforced by a **local, untracked guard** — because a name that must never appear *anywhere public* cannot be written into public CI config to ban it there. Its patterns live only on the developer's machine; a pre-commit guard refuses to stage any content that matches, so the string never enters tracked history in the first place.
 >
-> "The names I can't afford to leak are exactly the ones I can't put in a public linter rule," said Dev, a maintainer. "abcd solved that by splitting it: public names get a CI gate, private names get a local guard whose list never leaves my machine. I stopped worrying that a stray paste would ship a name I'd promised to keep quiet."
+> "The names I can't afford to leak are exactly the ones I can't put in a public linter rule," said Kira, a maintainer. "abcd solved that by splitting it: public names get a CI gate, private names get a local guard whose list never leaves my machine. I stopped worrying that a stray paste would ship a name I'd promised to keep quiet."
 
 ## Why This Matters
 

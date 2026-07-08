@@ -8,6 +8,7 @@ reclassification_history: []
 related_adrs: [adr-16]
 routed_from: ["spc-33:I-D2"]
 prd_path: null
+severity: major
 ---
 
 # A Shipped Intent No Longer Drifts Out Of Audit Just Because Nobody Ran The Review
@@ -16,7 +17,7 @@ prd_path: null
 
 > **abcd closes the audit back-edge: when a specced block of work ships, its owed fidelity review actually gets run at a safe moment, and a standing gate surfaces any shipped intent whose review is missing or unmet — without ever blocking the autonomous loop.** Today abcd does the honest half: closing a spec moves its intent to shipped and enqueues a fidelity-review entry. But the review itself only runs when someone manually invokes it, so the queue can quietly accumulate owed reviews that nobody drains, and a shipped intent can sit with its acceptance never machine-checked. This intent adds an opt-in drainer that runs queued reviews at a safe boundary (after a loop, at a session edge, in a pre-commit or CI step — never inside the pure close hook), leaving entries deferred rather than failed when no review backend is reachable, plus a consistency gate that lists shipped intents whose latest review is absent or not-met. Enforcement, not just bookkeeping — and loop purity preserved.
 
-> "We shipped a dozen specs and only later found half their intents had never actually been audited against what we built," said Grace, a product manager leaning on abcd's intent discipline. "The queue was doing its job recording that a review was owed. Nothing was paying the queue down. I want the owed reviews to drain themselves when a backend is around, and I want a single list of 'shipped but not really verified' so nothing slips."
+> "We shipped a dozen specs and only later found half their intents had never actually been audited against what we built," said Iris, a product manager leaning on abcd's intent discipline. "The queue was doing its job recording that a review was owed. Nothing was paying the queue down. I want the owed reviews to drain themselves when a backend is around, and I want a single list of 'shipped but not really verified' so nothing slips."
 
 ## Why This Matters
 
@@ -29,6 +30,7 @@ The fix is not to make the close hook run the review — that would break loop p
 - An opt-in `review.autodrain` configuration (default off) that, at a safe boundary (after an autonomous turn, at a session edge, or in a pre-commit/CI step — never in the pure close hook), drains pending fidelity-review queue entries by running them when a backend is reachable.
 - No-backend behavior: entries stay `deferred` (not failed), so a headless run never blocks on an unreachable backend.
 - A consistency gate / report that lists shipped intents whose latest fidelity review is missing or not-met — turning the back-edge from trigger-and-record into a surfaced gate.
+- **Coverage vocabulary.** The gate reports each intent's consumption state in five words: **uncovered** (scheduled, no spec claims it), **covered-shallow** (a spec claims it but that spec's own obligations — implementation, tests, validation — are not all green), **covered-deep** (claimed and transitively green; the only state that may combine with the intent's own MET criteria into "done"), **orphaned** (a spec claims an intent that does not exist), and **unwanted** (a spec claims an intent that never asked for coverage: a draft, a superseded intent, or a discipline — disciplines are complied with, never consumed).
 - Preservation of the close hook's purity: the hook still only enqueues; the drainer and gate are separate surfaces.
 
 ## What's Out of Scope

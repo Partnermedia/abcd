@@ -5,6 +5,9 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+blocked_by: [itd-4]
+builds_on: [itd-13, itd-36]
+severity: minor
 ---
 
 # Patterns Surface Themselves
@@ -13,7 +16,7 @@ reclassification_history: []
 
 > **abcd ships `/abcd:dredge` — the cross-corpus synthesist that turns the issue ledger into systemic insight.** Run it after months of captures have accumulated, and abcd's `issue-synthesist` agent clusters open issues across every repo in `.abcd/corpus.json`, surfacing recurring themes as candidate intent drafts. Three months of captured nitpicks and review findings becomes "nine of your open issues across four repos all touch the same dev-sync race conditions — promote as a single intent?". The thing you were doing in your head is now something the system does for you.
 >
-> "abcd gave me a structured ledger but I had to scan it manually to spot patterns," said Alex, autonomous-development practitioner. "Dredge looks at every repo's open ledger together, finds the clusters I'd otherwise miss, and offers each as a candidate intent. The first dredge after six months of captures showed me three systemic patterns I'd been working around individually instead of fixing structurally."
+> "abcd gave me a structured ledger but I had to scan it manually to spot patterns," said Maya, autonomous-development practitioner. "Dredge looks at every repo's open ledger together, finds the clusters I'd otherwise miss, and offers each as a candidate intent. The first dredge after six months of captures showed me three systemic patterns I'd been working around individually instead of fixing structurally."
 
 ## Why This Matters
 

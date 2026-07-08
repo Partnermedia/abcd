@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-10]
+severity: minor
 ---
 
 # abcd Tells You, Honestly, What a Phasing Choice Costs
@@ -14,7 +15,7 @@ related_adrs: [adr-10]
 
 > **abcd proposes how to phase your roadmap and shows you the real trade-offs before you commit.** Ask abcd to phase a set of intents and it works backwards from what each phase should make true, proposes an ordered set of phases, and then — instead of letting your wish-list go unchallenged — it interrogates the plan with you. Pull an intent forward and it asks which phase's expectation now slips; defer one and it names, from the dependency graph, exactly what else waits. Every cost it states is traced to a real dependency edge or a real phase-acceptance bullet — it never invents a trade-off to sound thorough. You still decide; abcd makes sure you decide knowing the price.
 >
-> "I always want everything in phase one," said Carol, product lead. "abcd asked me — move `itd-3` later and what in phase two stops working? I hadn't thought about the rules loader. It didn't lecture me; it asked the question the dependency graph already implied, and then it showed me the one phase-acceptance bullet I'd quietly broken. I re-scoped in five minutes, with my eyes open."
+> "I always want everything in phase one," said Iris, product lead. "abcd asked me — move `itd-3` later and what in phase two stops working? I hadn't thought about the rules loader. It didn't lecture me; it asked the question the dependency graph already implied, and then it showed me the one phase-acceptance bullet I'd quietly broken. I re-scoped in five minutes, with my eyes open."
 
 ## Why This Matters
 

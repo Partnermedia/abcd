@@ -8,3 +8,9 @@ pitfalls, and the spine*, so principles live here — distinct from `../decision
 matters*).
 
 One principle per file. Populated during the Phase 0.5 content reconciliation.
+
+**Promotion path.** A principle here holds a value or convention *without* an
+enforcement hook. The moment a principle gains a mechanical gate (a lint code,
+a hook, a CI check), it is promoted to a **discipline-kind intent** — the
+lifecycle'd, spec-inherited form (see [`../intents/disciplines/`](../intents/disciplines)).
+Enforced principle ⇒ discipline; this directory is the not-yet-enforced layer.

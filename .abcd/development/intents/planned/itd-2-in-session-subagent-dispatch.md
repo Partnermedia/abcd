@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: critical
 ---
 
 # In-Session Subagent Dispatch — the Default Host-Delegated Oracle

@@ -7,6 +7,7 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: ["adr-8", "adr-27"]
 prd_path: null
+severity: major
 ---
 
 # A Real Reviewer's SHIP Verdict Reaches The Session Gate Through A Channel The Worker Cannot Forge

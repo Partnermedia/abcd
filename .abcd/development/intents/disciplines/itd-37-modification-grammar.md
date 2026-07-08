@@ -6,6 +6,9 @@ kind_notes: "Cross-cutting modification-grammar gate; applied at every spec plan
 suggested_kind: null
 spec_id: null
 reclassification_history: []
+blocked_by: [itd-36]
+builds_on: [itd-1]
+severity: major
 ---
 
 # Every Spec Externalises How It Should And Shouldn't Be Modified

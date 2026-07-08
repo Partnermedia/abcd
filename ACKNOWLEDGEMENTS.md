@@ -21,10 +21,21 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 
 - **Amazon "Working Backwards"** — the press-release format of abcd's intents.
 - **Architecture Decision Records (MADR)** — the shape of the decision record.
+- **Citation Style Language (CSL-JSON)** — the bibliography format of the
+  confidential-sources design (itd-76), whose reserved `custom` field carries
+  the confidentiality metadata.
 - **Diátaxis** — the four-type model behind the user documentation.
 - **Domain-Driven Design (bounded contexts)** — the surface boundaries.
+- **Doorstop** — the suspect-link fingerprint mechanism adopted for intent
+  dependency edges (itd-78), and the store-one-direction/derive-the-reverse
+  link model the edge schema follows (shared with OpenFastTrace and
+  Sphinx-Needs).
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
+- **Priority inheritance (real-time scheduling)** — the derived-priority rule
+  of the intent dependency graph (itd-78): a minor blocker of a major intent
+  computes to major.
+- **The Rust RFC process** — the required "Prior Art" section on intents.
 
 ## References & sources
 

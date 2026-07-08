@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
 ---
 
 # Disembark Survives Noisy Transcripts

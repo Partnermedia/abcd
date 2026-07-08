@@ -19,6 +19,7 @@ glossary_terms_used:
 warrants_assumed:
 - "Shipped Python modules may have import-time side effects; the smoke cannot assume import purity."
 - "The previously published release may be absent at first launch; parity treats that as all-added, not an error."
+severity: critical
 ---
 
 # abcd Renders The Exact Public Payload, Proves The Excludes Never Leak, And Smoke-Tests The Installed Surface Before Any Snapshot

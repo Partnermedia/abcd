@@ -6,6 +6,8 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
+builds_on: [itd-4]
+severity: minor
 ---
 
 # `/abcd:intent "<text>"` And `/abcd:capture "<text>"` Become Symmetric Create Paths
@@ -14,7 +16,7 @@ related_adrs: []
 
 > **abcd's two ledger commands gain a symmetric, sub-verb-free create path.** Typing `/abcd:intent "I want users to feel the loyalty card respects their time"` files the new intent directly — no `new` sub-verb required. Typing `/abcd:capture "the export button looks dead-on dark mode"` works the same way for a quick observation. The bare command (zero arguments) keeps doing what the universal abcd convention says it must: shows status and help, never mutates state. The three invocation shapes are crisp: bare → status, quoted text → create, sub-verb [+ID] → act on existing. The product thinker reaches for the same shape no matter which ledger they want.
 >
-> "I stopped having to remember `new`," said Carol, product lead. "Quotes mean create. That's the whole rule for both commands. The cognitive overhead of `/abcd:intent new "…"` vs `/abcd:capture "…"` was tiny, but it was the difference between a flow that felt designed and a flow that felt grown — and now it feels designed."
+> "I stopped having to remember `new`," said Iris, product lead. "Quotes mean create. That's the whole rule for both commands. The cognitive overhead of `/abcd:intent new "…"` vs `/abcd:capture "…"` was tiny, but it was the difference between a flow that felt designed and a flow that felt grown — and now it feels designed."
 
 ## Why This Matters
 

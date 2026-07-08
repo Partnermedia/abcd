@@ -14,6 +14,8 @@ glossary_terms_used:
 - core/oracle
 grilled_intent_hash: 07b637b032a89ea870fbf6d78d9f6dc88d0ec1a40e124811d6ac4e3d62c7ae2d
 prd_grandfathered: false
+builds_on: [itd-60, itd-61]
+severity: major
 ---
 
 # abcd Routes The Invisible Risks An Amateur Cannot See To A Real, Fail-Closed Gate That Wraps A Trusted Scanner
@@ -22,7 +24,7 @@ prd_grandfathered: false
 
 > **abcd gains a pluggable validation-gate framework: a new kind of discipline that wraps an unmodified external scanner, fails closed, and emits the same four-verdict result as the fidelity reviewer — shipped with security/dependency/secret scanning as its first instance, validating the *downstream app the product thinker builds*, not abcd's own pipeline.** The amateur-coder thesis says the risks a non-expert cannot see — most acutely security — must be routed to a gate whose own reliability is validated. abcd has built the intent→verdict spine but left this safety pillar as an extension point. This intent fills it without violating abcd's core rule: it does not fork or reimplement a scanner, it *configures and wraps* a trusted one. The wrapping machinery is generic; a11y, privacy, and architecture become later instances of the same pluggable pattern. It runs as a standalone CLI across CI, pre-commit, and runtime hooks — no Claude Code dependency — so it works on a local machine.
 
-> "I can judge whether the app does what I asked. I cannot judge whether it just shipped an XSS hole or a leaking dependency — that's exactly the part I'm blind to," said Priya, a product thinker building a real app on abcd. "I don't want abcd to *describe* a safety gate. I want it to actually run a scanner on what I built and refuse to call it safe when it can't tell. And I want that to keep working when I'm not in Claude Code."
+> "I can judge whether the app does what I asked. I cannot judge whether it just shipped an XSS hole or a leaking dependency — that's exactly the part I'm blind to," said Iris, a product thinker building a real app on abcd. "I don't want abcd to *describe* a safety gate. I want it to actually run a scanner on what I built and refuse to call it safe when it can't tell. And I want that to keep working when I'm not in Claude Code."
 
 ## Why This Matters
 

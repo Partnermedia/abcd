@@ -13,6 +13,8 @@ glossary_terms_used:
 - core/intent
 grilled_intent_hash: 11a0d2ede357a7c853ae7703b194b54431167e3d634b52426e09ed0db8088e9c
 prd_grandfathered: false
+builds_on: [itd-60]
+severity: minor
 ---
 
 # A Human Edit To The Brief Cannot Commit Until Its Implied Intents And Principles Are Drawn Out And Reconciled
@@ -21,7 +23,7 @@ prd_grandfathered: false
 
 > **abcd gains a brief-change derivation: when a human edits the brief directly, a grill-style pass draws out what that edit implies — new or changed intents, and new or changed cross-cutting principles (disciplines) — and the edit is blocked until each drawn-out item is accepted or dismissed.** abcd already carries built reality forward into the brief and docs ([[itd-60-doc-fidelity-anti-drift]]). This is the reverse: a person changes the brief — adds a capability, tightens a rule, shifts the mental map — and the framework refuses to let the roadmap silently lag behind. It interrogates the edit the way the grill interrogates an intent, surfaces the implied `itd-N` intents and the implied disciplines, and reconciles each. Any change fires the pass; if an implied item is already captured (because the forward path authored it), the dedup recognizes it and no-ops.
 
-> "I edit the brief when my thinking moves — that's the whole point of it being a living canvas," said Theo, a product thinker steering abcd. "But an edit to the brief is a promise about the product, and promises imply work. If I write 'every surface must survive a restart' into the brief, that's a new discipline, and I shouldn't be able to walk away pretending it isn't. Make me reckon with what I just committed to — draw it out, let me accept or drop it — before the edit lands."
+> "I edit the brief when my thinking moves — that's the whole point of it being a living canvas," said Iris, a product thinker steering abcd. "But an edit to the brief is a promise about the product, and promises imply work. If I write 'every surface must survive a restart' into the brief, that's a new discipline, and I shouldn't be able to walk away pretending it isn't. Make me reckon with what I just committed to — draw it out, let me accept or drop it — before the edit lands."
 
 ## Why This Matters
 

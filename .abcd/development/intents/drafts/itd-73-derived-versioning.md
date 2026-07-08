@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
 ---
 
 # abcd Cuts the Version — You Never Type One
@@ -13,7 +14,7 @@ reclassification_history: []
 
 > **Ship intents; abcd derives the version.** You work in features and intents, never in `vX.Y.Z`. Each intent declares one thing about itself — whether it *adds*, *breaks*, or *fixes* — and when `/abcd:launch` cuts a release, abcd reads the intents that shipped since the last release and computes the SemVer for you: any breaking change is a major bump, any new capability a minor, a fix-only release a patch. The working tree stays unversioned (ADR-19); the number appears only on the release artefact, generated, never edited.
 >
-> "I stopped thinking about version numbers entirely," said Dev, a maintainer. "I write intents and mark each one additive, breaking, or fix. abcd cuts `v2.0.0` when something actually breaks — and it will not let me ship a minor that quietly removed a command. The version finally means what SemVer promises, without anyone choosing it."
+> "I stopped thinking about version numbers entirely," said Kira, a maintainer. "I write intents and mark each one additive, breaking, or fix. abcd cuts `v2.0.0` when something actually breaks — and it will not let me ship a minor that quietly removed a command. The version finally means what SemVer promises, without anyone choosing it."
 
 ## Why This Matters
 

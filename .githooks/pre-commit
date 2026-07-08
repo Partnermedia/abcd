@@ -17,6 +17,17 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 banlist=".abcd/.work.local/private-names.txt"
+
+# Refresh the generated block from the user-level sources corpus when present
+# (itd-76 dogfood): keeps the banlist as fresh as the current commit. No-op on
+# machines without the corpus; a failed refresh falls back to the existing
+# (possibly stale) banlist with a warning rather than blocking the commit.
+sync_banlist="$HOME/.abcd/sources/bin/sync-banlist"
+if [ -x "$sync_banlist" ]; then
+  "$sync_banlist" "$(pwd)" >/dev/null 2>&1 \
+    || echo "pre-commit: warning — banlist refresh failed; checking existing banlist." >&2
+fi
+
 [ -f "$banlist" ] || exit 0
 
 # Only added lines of staged content matter (skip the +++ file headers).

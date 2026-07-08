@@ -8,6 +8,7 @@ reclassification_history: []
 related_adrs: [adr-27]
 routed_from: ["spc-33:I-D1-extdep", "spc-33:I-D2-extdep"]
 prd_path: null
+severity: major
 ---
 
 # abcd Knows What "Safe Enough to Adopt" Means Before a New Harness Arrives

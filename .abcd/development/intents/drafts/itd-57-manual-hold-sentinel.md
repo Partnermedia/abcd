@@ -7,6 +7,7 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-26, adr-27]
 prd_path: null
+severity: minor
 ---
 
 # Every abcd Voyage Ships With A Manual-Hold Sentinel That Blocks A Spec From Autonomous Pickup Until A Human Lifts It

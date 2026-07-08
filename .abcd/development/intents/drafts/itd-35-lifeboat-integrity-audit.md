@@ -5,6 +5,9 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+blocked_by: [itd-16]
+builds_on: [itd-9]
+severity: minor
 ---
 
 <!-- 2026-05-08: Captured as a sibling to itd-16. itd-16 owns the /abcd:audit umbrella substrate

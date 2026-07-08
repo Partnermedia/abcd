@@ -8,6 +8,8 @@ reclassification_history:
   - { date: 2026-05-27, from: "null", to: "standalone", reason: "overrode erroneous capture-time `suggested_kind: bundle-member`; formal bundle-member requires multiple intent files sharing an `spec_id` and `bundle:` id per itd-34, and itd-48 is one intent file." }
 related_adrs: []
 routed_from: ["spc-33:A1", "spc-33:A2", "spc-33:A3", "spc-33:A4", "spc-33:G1"]
+builds_on: [itd-34, itd-5]
+severity: major
 ---
 
 # `intent-fidelity-reviewer` Gains Its Cross-Doc And Kind-Classification Roles
@@ -16,7 +18,7 @@ routed_from: ["spc-33:A1", "spc-33:A2", "spc-33:A3", "spc-33:A4", "spc-33:G1"]
 
 > **abcd's `intent-fidelity-reviewer` agent grows from one `role` to three.** `Role 1` (per-intent fidelity) grades a shipped intent's acceptance criteria against delivered reality and writes `MET`/`MET_WITH_CONCERNS`/`NOT_MET`/`INCONCLUSIVE` verdicts back into the intent's `## Audit Notes`. This intent ships `Role 2` (cross-document consistency — surfaces terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts across the brief + intents corpus) and `Role 3` (kind classification — examines whether intents' declared `kind` still fits the corpus and surfaces suggested reclassifications). With all three roles live, `/abcd:intent consistency` and `/abcd:intent shape` move from documented command surface to working command surface. The reviewer becomes the corpus's continuous fidelity auditor.
 >
-> "The corpus had drifted in three places I hadn't noticed," said Fatima, facilitator. "itd-29 still used `epic` throughout its `press release` copy; itd-34's discipline lifecycle said one thing and adr-9's brief amendment said another; itd-37 had been silently bundle-shaped for two intents now without anyone reclassifying. `/abcd:intent consistency` and `/abcd:intent shape` surfaced all three in one pass. None of them were urgent. All of them would have bitten."
+> "The corpus had drifted in three places I hadn't noticed," said Nia, facilitator. "itd-29 still used `epic` throughout its `press release` copy; itd-34's discipline lifecycle said one thing and adr-9's brief amendment said another; itd-37 had been silently bundle-shaped for two intents now without anyone reclassifying. `/abcd:intent consistency` and `/abcd:intent shape` surfaced all three in one pass. None of them were urgent. All of them would have bitten."
 
 ## Why This Matters
 

@@ -8,6 +8,8 @@ reclassification_history: []
 related_adrs: [adr-27, adr-29]
 routed_from: []
 prd_path: null
+severity: minor
+builds_on: [itd-58]
 ---
 
 # Every Autonomous Run Pass Leaves the Same Durable, Queryable Transcript an Interactive Session Does
@@ -16,7 +18,7 @@ prd_path: null
 
 > **abcd captures the instruction-set and reasoning of every autonomous-run pass into the same native transcript corpus it already keeps for interactive sessions — so the work done while no human is watching is exactly as auditable as the work done with one.** There is an asymmetry to close: an operator's interactive session is redirected into the native transcript corpus at `~/.abcd/history/<root_sha>/` (a durable, queryable store). But the autonomous worker on the pluggable run seam — the thing that runs unattended for hours, plans, implements, and self-reviews — emits its instructions and reasoning only to an ephemeral per-pass log that run-dir hygiene prunes. The agent doing the most consequential, least-supervised work leaves the least durable record. This intent closes that gap: every autonomous run pass's instructions + reasoning is captured to the same corpus, with the same queryability, as an interactive session.
 >
-> "abcd's whole promise is that you can trust what the agent did while you were away," said Alex, framework author. "But when I went to audit an autonomous run after the fact, the interactive sessions were all there in the transcript corpus and the autonomous worker — the one I most needed to check — had left only an ephemeral log that the run-dir cleanup had already eaten. The unattended work is exactly the work that most needs a durable trail."
+> "abcd's whole promise is that you can trust what the agent did while you were away," said Kira, framework author. "But when I went to audit an autonomous run after the fact, the interactive sessions were all there in the transcript corpus and the autonomous worker — the one I most needed to check — had left only an ephemeral log that the run-dir cleanup had already eaten. The unattended work is exactly the work that most needs a durable trail."
 
 ## Why This Matters
 

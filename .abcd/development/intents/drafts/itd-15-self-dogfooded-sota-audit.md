@@ -5,6 +5,8 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: minor
+builds_on: [itd-14]
 ---
 
 # abcd Audits Its Own Prompts on Every Self-Disembark

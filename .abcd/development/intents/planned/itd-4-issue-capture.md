@@ -5,6 +5,7 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+severity: major
 ---
 
 # Nothing You Notice Gets Lost
@@ -13,7 +14,7 @@ reclassification_history: []
 
 > **abcd turns the steady drip of nitpicks, review findings, and "huh, that's odd" moments into a queryable ledger.** A new `/abcd:capture` command writes structured `iss-N` entries in seconds; the entries live in a committed `.abcd/development/activity/issues/` ledger with stable IDs (`iss-N`) and folder-as-status (`open/`, `resolved/`, `wontfix/`). The `Mandatory Issue Recording` rule no longer depends on the agent remembering — there's a fast deliberate path with a structured destination, and the ledger is ready for the cross-corpus synthesist (`/abcd:dredge`, see itd-25) to mine once enough data has accumulated.
 >
-> "I do thorough plan and implementation reviews and they always surface nitpicks the agent files away in the transport output but not on disk," said Alex, autonomous-development practitioner. "I'd write 'remember to log this' a dozen times a session and still lose half of them. With abcd, I just say 'capture: T7 cache_ttl_days dead-config alternative' and it's structured, IDed, and queryable. The synthesis layer (itd-25) depends on the ledger having enough volume to be worth synthesising — but the capture surface is there from day one."
+> "I do thorough plan and implementation reviews and they always surface nitpicks the agent files away in the transport output but not on disk," said Maya, autonomous-development practitioner. "I'd write 'remember to log this' a dozen times a session and still lose half of them. With abcd, I just say 'capture: T7 cache_ttl_days dead-config alternative' and it's structured, IDed, and queryable. The synthesis layer (itd-25) depends on the ledger having enough volume to be worth synthesising — but the capture surface is there from day one."
 
 ## Why This Matters
 

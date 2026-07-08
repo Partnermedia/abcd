@@ -5,6 +5,9 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+blocked_by: [itd-20]
+builds_on: [itd-29, itd-2, itd-22]
+severity: major
 ---
 
 # Multiple Agents Coordinate On Intent And Spec Work Without Duplicating Effort Or Producing Competing Artefacts

@@ -5,6 +5,9 @@ spec_id: null
 kind: standalone
 suggested_kind: null
 reclassification_history: []
+blocked_by: [itd-36]
+severity: minor
+builds_on: [itd-25]
 ---
 
 <!-- 2026-05-08: brought forward to align with README's command shape table.

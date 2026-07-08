@@ -7,6 +7,7 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
 prd_path: null
+severity: minor
 ---
 
 # abcd Can Tell Whether Its Own Reasoning Rests On Bedrock Or On An Unexamined Assumption
@@ -15,7 +16,7 @@ prd_path: null
 
 > **abcd gains a foundations auditor: a surface that takes a reasoned document — a brief claim, an ADR rationale, an intent's "Why This Matters" — and reports where its justification actually terminates, flagging the difference between a genuine first principle, an accepted convention, a justification that simply stops, and a circular dependency that smuggles the conclusion into a premise.** abcd already stress-tests acceptance criteria (the grill) and checks whether delivery matches intention (the fidelity reviewer). Neither asks the deeper question: is the *reasoning itself* epistemically honest about where it starts? This auditor adds that lens. It surfaces the claim architecture, excavates the unstated premises, audits the regress terminus, interrogates the causal account through the four causes, and checks that the mode of reasoning fits the kind of claim being made — turning "this feels well-argued" into "here is exactly what this argument is standing on, and whether that ground holds."
 
-> "Our briefs read persuasively, which is exactly the danger," said Iris, a staff engineer who keeps abcd's reasoning honest. "Persuasive prose hides where the justification quietly ran out. I want a pass that says: this claim bottoms out in an unexamined assumption, and this other one is circular — it assumes the thing it's trying to prove. Then I can fix the foundation instead of polishing the surface."
+> "Our briefs read persuasively, which is exactly the danger," said Bob, a staff engineer who keeps abcd's reasoning honest. "Persuasive prose hides where the justification quietly ran out. I want a pass that says: this claim bottoms out in an unexamined assumption, and this other one is circular — it assumes the thing it's trying to prove. Then I can fix the foundation instead of polishing the surface."
 
 ## Why This Matters
 

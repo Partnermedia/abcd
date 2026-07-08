@@ -7,6 +7,8 @@ suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
 prd_path: null
+severity: major
+builds_on: [itd-60, itd-75]
 ---
 
 # abcd Learns From Its Own Runs Which Configurations Work Best, And Tunes Its Configuration Layer Accordingly

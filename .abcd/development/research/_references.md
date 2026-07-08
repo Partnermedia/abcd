@@ -46,6 +46,30 @@ Canonical bibliography for `.abcd/development/` documents. When citing prior art
 [amazon-working-backwards]: https://www.allthingsdistributed.com/2006/11/working_backwards.html "Working Backwards (Vogels) — Amazon press-release-first product design"
 ```
 
+### Citation, provenance, and publishing
+
+```
+[csl-spec]: https://docs.citationstyles.org/en/stable/specification.html "Citation Style Language 1.0.2 specification"
+[csl-schema]: https://github.com/citation-style-language/schema/blob/master/schemas/input/csl-data.json "CSL-JSON input schema (csl-data.json)"
+[pandoc]: https://pandoc.org/MANUAL.html "Pandoc user's guide — citeproc and bibliography formats"
+[better-bibtex]: https://retorque.re/zotero-better-bibtex/exporting/extra-fields/ "Better BibTeX for Zotero — extra fields and custom-field round-tripping"
+[hayagriva]: https://github.com/typst/hayagriva "Hayagriva — Typst bibliography file format"
+[prov-json]: https://www.w3.org/submissions/prov-json/ "PROV-JSON — W3C member submission"
+[adr-org]: https://adr.github.io/ "Architectural Decision Records — homepage and conventions"
+[agent-evidence]: https://arxiv.org/pdf/2606.04990 "Survey of evidence tracing and provenance in LLM agents (arXiv 2606.04990)"
+[finos-mi13]: https://air-governance-framework.finos.org/mitigations/mi-13_providing-citations-and-source-traceability-for-ai-generated-information.html "FINOS AI governance framework — MI-13 citations and source traceability"
+[grep-vs-embeddings]: https://jxnl.co/writing/2025/09/11/why-grep-beat-embeddings-in-our-swe-bench-agent-lessons-from-augment/ "Why grep beat embeddings in a SWE-bench agent (Liu / Augment)"
+[no-indexing]: https://vadim.blog/claude-code-no-indexing/ "Analysis of a major coding agent's grep-over-index retrieval design"
+[grep-nuance]: https://www.nuss-and-bolts.com/p/on-the-lost-nuance-of-grep-vs-semantic "On the lost nuance of grep vs semantic search"
+[sqlite-vec]: https://alexgarcia.xyz/blog/2024/sqlite-vec-hybrid-search/index.html "Hybrid full-text + vector search in SQLite (Garcia)"
+[gitleaks-precommit]: https://m3ssap0.github.io/2023/09/29/pre-commit-gitleaks.html "Custom gitleaks rules in a pre-commit hook"
+[vale]: https://vale.sh/ "Vale — syntax-aware prose linter"
+[quarto-profiles]: https://quarto.org/docs/projects/profiles.html "Quarto project profiles"
+[quarto-conditional]: https://quarto.org/docs/authoring/conditional.html "Quarto conditional content"
+[quarto-typst]: https://quarto.org/docs/output-formats/typst.html "Quarto Typst PDF output"
+[manubot]: https://manubot.org/ "Manubot — git-based manuscripts with automated citation resolution"
+```
+
 ## Adding a new reference
 
 1. Pick a slug — lowercase kebab, ≤ 30 chars, project-name-shaped.

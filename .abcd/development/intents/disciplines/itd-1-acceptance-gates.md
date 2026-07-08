@@ -7,6 +7,7 @@ suggested_kind: null
 spec_id: null
 reclassification_history:
   - { date: 2026-05-07, from: standalone, to: discipline, reason: "Reclassified per the three-intent-kinds change: itd-1 has no user moment of its own (it's a rule that applies to every other epic), so press-release shape was structurally wrong. Discipline shape (## Rule + ## Why) fits." }
+severity: critical
 ---
 
 # Every Intent Has Acceptance Criteria; Every Audit Verifies Them

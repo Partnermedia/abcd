@@ -23,6 +23,8 @@ glossary_terms_used:
   - core/spec
   - core/voyage
   - interview/session
+builds_on: [itd-1]
+severity: major
 ---
 
 # Domain Experts Get Their Intents Grilled Before Anyone Codes Them
@@ -31,7 +33,7 @@ glossary_terms_used:
 
 > **abcd ships `/abcd:intent grill`, a two-phase Socratic-challenger sub-verb: it interrogates an intent for vagueness and hidden assumptions, then silently synthesises a Pocock-shaped PRD that becomes primary context for `/flow-next:plan`.** Phase 1 (interactive) caps at three questions per round, twelve per session, each tagged with a named Socratic move (Definition / Elenchus / Dialectic / Maieutics / Counterfactual / Generalization). Phase 2 (silent, post-grill) writes the seven Pocock sections — Problem, Solution, `User Stories`, Implementation Decisions, Testing Decisions, Out of Scope, Further Notes — to `.abcd/intents/<itd-N>/prd.md`. Template adapted from [mattpocock/skills `to-prd`][pocock-to-prd] (MIT, attributed). With a `terminology/` glossary present, Phase 1 also flags forbidden synonyms and offers inline term additions as they're sharpened. The `press-release` intent and the frozen PRD are both **immutable input artefacts** — frozen at `/abcd:intent plan` time, never edited after promotion. The `press release` is the elevator pitch; the PRD is the `oracle`-consumption contract. `intent-fidelity-reviewer` (paper-only initially) compares delivered reality to both. `internal/core/lint` blocks promotion when no PRD is on disk, when forbidden synonyms appear, or when a frozen PRD is mutated. Sibling of `/abcd:intent refine` — refine is gentle and persona-driven; grill is adversarial, oracle-driven, and uniquely produces the handoff artefact.
 >
-> "I'd write a confident intent, hand it to the engineering loop, and watch it ship something subtly off — 'session' meant one thing in my head and another in the code," said Carol, product lead. "Grill caught the ambiguity in three minutes; the PRD gave the planner thirty `user stories` I'd half-thought-of but never written down. Six intents later, I haven't drifted once."
+> "I'd write a confident intent, hand it to the engineering loop, and watch it ship something subtly off — 'session' meant one thing in my head and another in the code," said Iris, product lead. "Grill caught the ambiguity in three minutes; the PRD gave the planner thirty `user stories` I'd half-thought-of but never written down. Six intents later, I haven't drifted once."
 
 ## Why This Matters
 

@@ -22,6 +22,8 @@ glossary_terms_used:
 warrants_assumed:
 - "The single abcd repo IS the marketplace; packaging excludes .abcd/** from the release artifact (adr-28)."
 - "plugin.json.version as the sole in-file version is compatible with the doc-fidelity gate (a machine manifest field is not prose)."
+builds_on: [itd-66]
+severity: critical
 ---
 
 # abcd Is An Installable, Versioned Claude Code Plugin Whose Repo Is Its Own Marketplace And Whose Every Launch Bumps, Tags, And Publishes A New Version
@@ -30,7 +32,7 @@ warrants_assumed:
 
 > **The abcd repo becomes a real Claude Code marketplace-and-plugin: it carries `.claude-plugin/marketplace.json` (source `./`) and a semver-stamped `plugin.json`, so an end-user runs `/plugin marketplace add REPPL/abcd` then `/plugin install abcd@abcd-marketplace` and gets the full `/abcd:*` command surface. Every `/abcd:launch ship` auto-selects a version bump (patch/minor/major per the brief's bump-tier rule), writes it into `plugin.json` and the marketplace entry, and tags the repo — so end-users update with `/plugin update abcd` and always pull a coherent, versioned release. The development record under `.abcd/**` is excluded from the release artifact by packaging ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)) — one repo is both the marketplace and the workshop.** Today abcd is developed but never CONSUMED as a plugin: there is no `.claude-plugin/` marketplace manifest, `plugin.json` carries no version, and there is no install or update path. This intent makes abcd actually installable and keeps it current — the precondition for anyone (including its own maintainers) to run the `/abcd:*` surface.
 
-> "I've been building abcd but I can't actually install it — the repo has no plugin manifest and no version," said the maintainer. "Before we gate a launch payload, abcd has to BE an installable, updatable plugin. Adding the marketplace should be one command, updating should be one command, and every release should carry a real version number that falls out of the work we shipped."
+> "I've been building abcd but I can't actually install it — the repo has no plugin manifest and no version," said Kira, the maintainer. "Before we gate a launch payload, abcd has to BE an installable, updatable plugin. Adding the marketplace should be one command, updating should be one command, and every release should carry a real version number that falls out of the work we shipped."
 
 ## Why This Matters
 
