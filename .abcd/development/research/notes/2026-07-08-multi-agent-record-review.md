@@ -95,6 +95,53 @@ transport-agnostic-core boundary; hand-kept indexes are adr-5 lacking a gate;
 surface parity is the standing wired-or-it-is-not-done rule, refined by
 loud-staging.
 
+## Independent cross-check (same day)
+
+As a test of a second review channel, the brief and record were re-reviewed
+by an independent single-pass oracle over a workspace-context selection
+(~195k tokens: full brief, decisions/ADRs, index READMEs, principles,
+CONTEXT.md), deliberately blind to the findings above. Outcome:
+
+- **Corroboration.** Every structural cluster above that fell inside its
+  selection was independently re-found: the retired issue-ledger paths
+  (iss-36), the adr-12/adr-32 supersession gap (iss-39; the oracle rates it
+  critical where the review said major), the stale intents/README listings
+  and out-of-scope drift (iss-38, iss-41), the zero-skills and six-commands
+  claims (iss-35), the competing glossaries and the glossary's own stale
+  index (iss-40), and the stale CONTEXT.md trust caveat (iss-42). No
+  confirmed finding was contradicted.
+- **New instances, verified against the filesystem and added to the
+  acceptance corpora of existing clusters** — notably, every one of them
+  falls inside an already-captured detector class, which is itself evidence
+  for the fix-the-detector recording model:
+  - "three disciplines (itd-1, itd-5, itd-37)" in 01-product/04-scope.md and
+    03-mental-model.md, while disciplines/ holds four (itd-79) → iss-38.
+  - development/README.md "issues graduate … rather than a ledger" vs
+    ADR-32's ledger → iss-36/iss-38.
+  - glossary/core/brief.md defines the brief as "immutable once approved"
+    vs ADR-5's living record → iss-40.
+  - adr-7 cites a retired terminology home and carries no ADR frontmatter
+    → iss-39 and iss-36.
+  - 04-surfaces/06-capture.md marks behaviours LIVE via predecessor spc-N
+    provenance, against the brief README's own provenance rule → iss-37.
+  - 04-surfaces/04-launch.md's release include-list names agents/ and
+    hooks/, which do not exist → iss-37/iss-31 corpus.
+  - 04-surfaces/09-reflect.md references commands/abcd/reflect.md and an
+    agents/ roster file, neither of which exists → iss-35 (unshipped
+    surface without staging status).
+  - 05-internals/07-memory.md "agent count stays at 15" vs the 16-agent
+    roster in 01-agents.md → iss-38 (hand-maintained counts).
+- **One refuted claim.** The oracle's other critical — itd-49 present in
+  both planned/ and superseded/ simultaneously — is false; itd-49 exists
+  only in superseded/. Single-pass oracle output requires filesystem
+  verification before recording: of its two criticals, one was real and
+  pre-known, one was fabricated.
+
+Channel verdict: useful as a cheap corpus-expander and corroborator on a
+large single-context selection; not trustworthy unverified, and it found no
+new *class* — the clustered detectors above already cover everything it
+surfaced.
+
 ## Sibling-project practices worth adopting
 
 From a sibling Go CLI project: baseline-diff ratchet lints for architectural
