@@ -72,9 +72,10 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Originating assessment: `~/Desktop/abcd-assessment.html` (2026-06-26) — names
-  the safety pillar as abcd's largest gap against the amateur-coder thesis, and
-  identifies the transplantable mechanisms in the companion harness/amesh.
+- Originating assessment: an internal comparative assessment (2026-06-26,
+  recorded in the sources ledger) — names the safety pillar as abcd's largest
+  gap against the amateur-coder thesis, and identifies the transplantable
+  mechanisms in the companion harness.
 - Governing constraints: abcd never forks/patches/reimplements a dependency
   (wrap + configure only); abcd must run locally, independent of Claude Code.
 - Reuses the fail-closed, four-verdict posture of the spc-12 fidelity reviewer
