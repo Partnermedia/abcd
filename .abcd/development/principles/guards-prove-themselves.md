@@ -19,10 +19,26 @@ mature form of this rule.
 
 - The test exercises the *refusal*, not just the happy path around it: it
   presents the forbidden input and asserts the rejection, its error shape, and
-  that no side effect occurred.
+  that no side effect occurred. The assertion phase is itself side-effect-free:
+  the probe only observes — a check that mutates state on the way to its
+  verdict can manufacture or mask the very condition it asserts.
+- The proof is bidirectional. The guard's acceptance corpus carries negative
+  (`ok:`) cases — permitted inputs it must wave through — asserted alongside
+  the refusals, and any change to the guard reruns both sides; a change that
+  fixes the refusal side while regressing the permitted side is rejected
+  (Weng's harness-engineering essay, Lil'Log, 2026, gives this as the
+  must-flag/must-pass corpus pair). A guard proven only against forbidden
+  input may simply refuse everything, and that failure is as silent as the
+  one this rule exists to catch.
+- The corpus is curated as key examples — minimal, one distinct facet per
+  case, boundary cases included — never every found instance dumped in
+  (Adzic's key-examples discipline). A bloated corpus obscures which
+  behaviour each case pins and makes the negative side unmaintainable.
 - Applies with full force to guards that exist for compliance or trust
   reasons even when no exploit is obvious — those are the ones nobody
   re-checks by hand.
 
 **Promotion.** Pairing each declared invariant with a named test (and a lint
-that checks the pairing) promotes this to a discipline.
+that checks the pairing) promotes this to a discipline; the same lint
+requiring at least one negative (`ok:`) case per guard corpus makes the
+bidirectionality checkable.
