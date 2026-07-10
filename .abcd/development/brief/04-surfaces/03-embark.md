@@ -38,7 +38,7 @@ Hard stop unless only `.git/`, `.gitignore`, `LICENSE*`, `README.md`, `.github/`
 2. Show scaffold summary (referencing the amended press release); transparent confirm to proceed.
 3. Create dirs; copy ADRs, terminology, docs verbatim from lifeboat to canonical target locations.
 4. Create specs from `rescue/spec-plan.md` in the native spec store (via `/abcd:intent plan` / `ship`, per [adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), or create a minimal native spec structure.
-5. Write curated memory files to `.abcd/memory/` — one per principle, grouped by domain, filename `<type>_<domain>_<slug>.md` (e.g., `feedback_ui_full_box_hit_target.md`) with YAML frontmatter matching Claude Code's auto-memory schema (`name`, `description`, `type`). The `<type>_` prefix preserves compatibility with Claude's memory-file convention. The volatile memory backend's source store is left untouched in the new repo's environment — the harness (Claude Code, OpenCode, etc.) will populate it as the user works.
+5. Write curated memory files to `.abcd/memory/` — one per principle, grouped by domain, filename `<type>_<domain>_<slug>.md` (e.g., `feedback_ui_full_box_hit_target.md`) with frontmatter conforming to the shipped memory-page schema — a typed `source:` provenance block (class/classes, licence, source_hash, weighting_note) that memory-lint's ML001 blocker requires; the shipped schema carries no `name`/`description`/`type` keys (`internal/core/memory/schema.go`, `lint.go`). Only the `<type>_<domain>_<slug>.md` filename grammar matches the shipped store (`ParsePageFilename`). The volatile memory backend's source store is left untouched in the new repo's environment — the harness (Claude Code, OpenCode, etc.) will populate it as the user works.
 6. Inject principles into CLAUDE.md/AGENTS.md between BEGIN/END markers (idempotent). The marker block content is the modular-rules-loader block the embark scaffolder (`internal/core/...`) emits (per itd-3) — *not* a verbose copy of every principle. Principles are exposed via the rules-loader's domain rules, surfaced on demand by prompt-keyword recall.
 7. Apply asset curation ([§ 5](#5-asset-curation-per-_manifestjson-classifications)).
 8. **Documentation-auditor** (subagent) runs post-scaffold, before final report, to verify the target's user-facing docs (tutorials, guides, reference, explanation) are well-formed.
@@ -57,7 +57,7 @@ embark detected N conflicts across:
   • 3 native spec store files
   • 1 CLAUDE.md (will inject markers if 'merge')
   • 2 .abcd/memory/ files
-  • 1 docs/development/decisions/adrs/
+  • 1 .abcd/development/decisions/adrs/
   • 1 .abcd/development/brief/README.md (existing brief vs incoming press release)
 
 How to resolve all conflicts?
@@ -115,7 +115,7 @@ Lifeboat *operations* (embark, disembark) write provenance and history to `.abcd
 - `source_path` (the `<path>` argument passed to `embark from <path>`)
 - `source_manifest_sha256` (hash of input lifeboat's `_provenance.json` + file tree)
 - `timestamp`
-- `files_written` (target paths created in `.abcd/development/`, the native spec store, `.abcd/memory/`, `docs/development/decisions/adrs/`, etc.)
+- `files_written` (target paths created in `.abcd/development/` — including ADRs at `.abcd/development/decisions/adrs/` — the native spec store, `.abcd/memory/`, etc.)
 - `press_release_amended_diff` (diff between input lifeboat's `press-release.md` and the brief that landed at `.abcd/development/brief/README.md` after the [§ 3 step 1](#3-scaffold-steps) interview)
 - `audit_drift` (only if `--refresh-audit`: drift vs disembark-time `audit/press-release-oracle-*`)
 

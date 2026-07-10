@@ -1,22 +1,22 @@
 # Skills — Procedural Workflows That Aren't Commands
 
-abcd's surface namespace (`/abcd:`) is **commands only**. The skill/command distinction is documented here for the boundary rules; abcd ships zero skills.
+abcd's surface namespace (`/abcd:`) carries both **commands** and a small set of **skills**. The skill/command distinction is documented here for the boundary rules; abcd ships **three** user-facing skills under `/abcd:` — `consult`, `ingest`, and `prepare-this-repo` (each a `skills/<name>/SKILL.md`).
 
 ## What's a skill?
 
 A **skill** is a procedural-workflow surface — a markdown-encoded interview, audit, or guided pass that runs against existing material in the repo. Skills are auto-registered by Claude Code's plugin system from the plugin's `skills/<skill-name>/` directory; abcd does not maintain a separate skill registry.
 
-**abcd ships zero skills.** An earlier version of this brief proposed `/abcd:grill` as a skill; it has since been promoted to a sub-verb of `/abcd:intent` (per the round-2 command-structure review, see `04-surfaces/05-intent.md § 2`). Grill's mid-session glossary writes and per-session logbook output are command-shaped responsibilities — exactly the trigger for promotion this file describes below.
+**abcd ships three skills** (`consult`, `ingest`, `prepare-this-repo`). An earlier version of this brief proposed `/abcd:grill` as a skill; its **design target** is promotion to a sub-verb of `/abcd:intent` (per the round-2 command-structure review, see `04-surfaces/05-intent.md § 2`) — but neither `grill` nor the `intent` parent is on any shipped surface (no binary verb, no `commands/abcd/` file). Grill's mid-session glossary writes and per-session logbook output are command-shaped responsibilities — exactly the trigger for promotion this file describes below.
 
 ## What's a command?
 
 A **command** is a stateful operation that creates, modifies, or moves artefacts. Commands have:
 
-- A **brief surface file** (`04-surfaces/NN-<verb>.md`) describing acceptance criteria, interaction flow, and side effects (or a sub-verb row in an existing parent's surface file).
+- A **brief surface file** (`04-surfaces/NN-<verb>.md`) describing acceptance criteria, interaction flow, and side effects (or a sub-verb row in an existing parent's surface file). Surface-file coverage is not yet complete: the shipped `docs`, `history`, and `version` verbs have no `04-surfaces/` file.
 - A **logbook subdirectory** (`.abcd/logbook/<verb>/<timestamp>/`) for per-invocation reports.
 - A **status + help** mode when called bare (the universal abcd convention).
 
-abcd ships **six top-level commands**: `/abcd:ahoy`, `/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent`, `/abcd:capture`. The `intent` parent has the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"`. See [`04-surfaces/`](../04-surfaces) for per-command detail.
+abcd ships **seven top-level commands**: `/abcd:ahoy`, `/abcd:capture`, `/abcd:docs`, `/abcd:history`, `/abcd:launch`, `/abcd:memory`, `/abcd:version`. **Design targets — not on any shipped surface (no binary verb, no `commands/abcd/` file):** `/abcd:disembark`, `/abcd:embark`, and `/abcd:intent` (design record in `04-surfaces/02-disembark.md`, `03-embark.md`, `05-intent.md`). The `intent` parent's design gives it the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"` — all design target, none shipped. See [`04-surfaces/`](../04-surfaces) for per-command detail.
 
 ## Skill vs command — decision criteria
 
@@ -43,19 +43,23 @@ When in doubt, ship as a command. The earlier "ship as a skill first; promote on
 
 ## Skill registration
 
-**abcd ships zero user-facing skills under `/abcd:`.** The `skills/` directory in the plugin layout (per `03-configuration.md` § 3) holds **plugin-runtime workflow files** — these are how Claude Code's plugin architecture wires command markdown to its workflow files. They are NOT user-facing skills surfaced under `/abcd:` and are NOT what this document is talking about when it says "skills."
+**abcd ships three user-facing skills under `/abcd:`** — `consult`, `ingest`, and `prepare-this-repo`, each a `skills/<name>/SKILL.md` that the plugin system auto-registers as a slash-invokable skill. (`skills/` ships in the tree but is currently absent from the release payload `.abcd/config/launch-payload.json` includes — tracked as drift in iss-61.)
 
-The plugin layout's `skills/` entries fall into two non-user-facing categories:
+The shipped `skills/` entries are three user-facing workflow skills:
 
-1. **Per-command workflow files** — `skills/abcd-ahoy/`, `skills/abcd-disembark/`, etc. These are the runtime mechanics each command's markdown points at. Not user-invokable in their own right; users invoke the command, the command runtime invokes the workflow.
-2. **Internal hook helpers** — `skills/commit-attribution/`, `skills/secrets-and-pii/`. These are utility shims invoked by hooks (commit attribution, PII/secret scanning) — not surfaced to users via the `/abcd:` namespace.
+1. **`consult`** — consult the local sources corpus (default `~/.abcd/sources`) and record source→decision provenance in its append-only ledger.
+2. **`ingest`** — register a URL or document into the local sources corpus with extracted reference metadata.
+3. **`prepare-this-repo`** — an interim bridge that brings the current repository up to abcd's conventions (three-tier `.abcd/` layout, an AGENTS.md section, commit gates).
+
+There are no per-command workflow directories (`skills/abcd-<verb>/`) and no hook-helper directories in the shipped tree.
 
 ```
-skills/      (no user-facing skills under /abcd:; the skills/ directory holds
-              plugin-runtime workflow files only — see 03-configuration.md § 3)
+skills/      consult/            (consult the sources corpus; record provenance)
+             ingest/             (register a source into the corpus)
+             prepare-this-repo/  (interim repo-onboarding bridge)
 ```
 
-If a later phase introduces user-facing skills under `/abcd:` (i.e., a slash-invokable skill that does NOT have a parent command and is NOT a hook helper), this section gets a per-phase registration list.
+The three skills above ARE the current registration list. If a later phase introduces further user-facing skills under `/abcd:` (a slash-invokable skill that does NOT have a parent command), it is added here.
 
 ## Future skills
 

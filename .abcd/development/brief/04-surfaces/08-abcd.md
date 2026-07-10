@@ -5,8 +5,17 @@ re-orientation surface (itd-20): type `/abcd` and see, at a glance, where you
 left off across the whole abcd setup. It is STRICTLY read-only — the
 status-render module opens files for reading only and never writes.
 
+**Design target (itd-20 — the intent is in `intents/planned/`, `spec_id: null`;
+no such board is on any shipped surface).** The shipped bare `abcd` renders a
+four-field read-only snapshot — the directory, `is_git_repo`, `has_record` (is
+`.abcd/development` present), and the `.abcd/` `work_tiers` that exist
+(`internal/core/core.go`, `StatusInfo`); the plugin invokes it as `abcd --json`
+(`commands/abcd.md`). The six-section board, its per-source known-state lines,
+staleness thresholds, and performance bounds described below are itd-20's
+design, unbuilt.
+
 This is the top-level command (`commands/abcd.md`), distinct from the
-per-verb bare renders (`/abcd:intent`, `/abcd:ahoy`, …). Each per-verb bare
+per-verb bare renders (`/abcd:ahoy`, `/abcd:capture`, …). Each per-verb bare
 render is scoped to its own command's surface; this board is the *cross-verb*
 answer to "what's the state of my abcd project right now?".
 
@@ -19,7 +28,11 @@ hides any bundled dependency behind the wrapper.
 
 Bare `/abcd` renders the six-section board. `status` and `help` are
 POSITIONAL ALIAS tokens that route to the SAME render — their output is
-byte-identical to bare `/abcd`.
+byte-identical to bare `/abcd`. **Design target (itd-20):** no such alias
+routing is on any shipped surface — the plugin command (`commands/abcd.md`)
+documents only `status` as a positional alias, while the CLI itself has no
+alias: `abcd status` is refused as an unknown command and `abcd help` prints
+Cobra usage text, not the render.
 
 | Token | Behaviour |
 |-------|-----------|
@@ -27,7 +40,10 @@ byte-identical to bare `/abcd`.
 | `status` | Alias — byte-identical to bare |
 | `help` | Alias — byte-identical to bare (bare-as-render IS the help) |
 
-Any other token is refused (exit 2); the alias surface is a closed set.
+Any other token is refused; the alias surface is a closed set. **Design target
+(itd-20):** the shipped CLI refuses an unknown token with **exit 1** (Cobra's
+`unknown command`), not exit 2, and applies that same refusal to `status` and
+`help` (neither is a CLI alias today); the exit-2 closed-set is itd-20's design.
 
 ## SD001 alias rationale (investigation-gated)
 
@@ -48,10 +64,13 @@ reconsidered — the gate is real, not a rubber stamp.)
 ## spc-17 stub replacement (investigation-gated)
 
 itd-20 was planned assuming a spc-17 probe stub for the bare top-level command
-would be *replaced*. Investigation found NO such stub: spc-17 shipped
-probe/bare renders for the *sub-verb* surfaces (`/abcd:disembark`,
-`/abcd:embark`, `/abcd:launch`, and a verification of bare `/abcd:intent`) —
-never a top-level `commands/abcd.md`. `git log` confirms `commands/abcd.md`
+would be *replaced*. Investigation found NO such stub: the spc-17 work is
+credited with probe/bare renders for the *sub-verb* surfaces — of which only
+`/abcd:launch` is on a shipped surface today. `/abcd:disembark`, `/abcd:embark`,
+and an `/abcd:intent` surface are design targets with no command file
+(`commands/abcd/` ships `ahoy`, `capture`, `docs`, `history`, `launch`,
+`memory`, `version`) and no CLI verb — and spc-17 never shipped a top-level
+`commands/abcd.md`. `git log` confirms `commands/abcd.md`
 has never existed. This task therefore CREATES the top-level command fresh
 rather than replacing a stub; the "stub replacement" premise is recorded here
 as not-applicable so a later reader does not hunt for a stub that was never
@@ -81,6 +100,12 @@ known-state line (never an exception, never a silent omission).
 
 ## Per-source known-state table
 
+**Design target (itd-20; unbuilt).** None of these known-state lines exist in
+the shipped render — `core.Status` reads only `.git`, `.abcd/development`, and
+the `.abcd/` work tiers (`internal/core/core.go`); it does not read
+`repo.visibility`, `.abcd/lifeboat/`, a dev-sync record, `.abcd/logbook/`,
+linked intents, or any spec store.
+
 | Source | Absent / unreadable → known-state line |
 |--------|----------------------------------------|
 | `.abcd/` directory | outside-abcd guidance message (single line, replaces the whole board) |
@@ -93,6 +118,10 @@ known-state line (never an exception, never a silent omission).
 
 ## Staleness thresholds (decided here)
 
+**Design target (itd-20; unbuilt).** No lifeboat-age, staleness, capping, or
+timeout logic exists in the shipped binary — the status path is four `isDir`
+checks (`internal/core/core.go`) with no directory walks or thresholds.
+
 | Signal | Threshold | Rationale |
 |--------|-----------|-----------|
 | Lifeboat age → `(stale)` | 7 days | A point-in-time rescue snapshot a week old warrants a re-pack cue without nagging on daily work. |
@@ -101,8 +130,10 @@ known-state line (never an exception, never a silent omission).
 ## Dev-sync source (probed, recorded — v1 terminal stub)
 
 The `abcd dev-sync work` migration surface
-(into the structured `.abcd/work/issues/` `iss-N` ledger) is **migration logic,
-not a durable last-run timestamp**: no config field and no history-store
+(into the structured `.abcd/work/issues/` `iss-N` ledger) is a **design target —
+no `dev-sync` verb is on any shipped surface** (`abcd --help` lists no such
+command, and no dev-sync code exists under `internal/` or `cmd/`). Even in that
+design it is **migration logic, not a durable last-run timestamp**: no config field and no history-store
 record captures "when dev-sync last ran". No such artifact exists anywhere in
 the repo.
 
@@ -115,6 +146,10 @@ out-of-scope update).
 
 ## Performance bounds (NFR)
 
+**Design target (itd-20; unbuilt).** These bounds constrain the unbuilt render:
+the shipped status path does no directory walks, last-N sorting, capping, or
+timed spec-store reads (`internal/core/core.go`).
+
 - Bounded directory reads only — `.abcd/logbook/` is read to a depth of two
   (category → entry) and the two named intent directories to a depth of one;
   NO recursive full-tree scans.
@@ -126,9 +161,13 @@ out-of-scope update).
 ## Zero-writes guarantee
 
 The command markdown performs zero writes; the render module performs zero
-writes. This is proven by two tests: a static zero-mutation lint over
-the status-render module and an fs-snapshot test that asserts a render
-over a populated fixture repo mutates nothing at run time.
+writes. **Design target (itd-20):** the two tests that would prove this — a
+static zero-mutation lint over the status-render module and an fs-snapshot test
+that asserts a render over a populated fixture repo mutates nothing at run
+time — are unbuilt. The shipped status path (`internal/core/core.go`, `Status`)
+has only `TestStatusBareDir` and `TestStatusWithRecordAndGit`
+(`internal/core/core_test.go`), which assert field values on temp dirs; there is
+no distinct status-render module yet.
 
 ## Related documentation
 

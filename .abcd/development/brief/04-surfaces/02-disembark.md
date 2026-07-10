@@ -19,16 +19,16 @@ Bare `/abcd:disembark` shows status + help only — never mutates state. Current
 PHASE 0 — DEV-SYNC (see 05-internals/03-configuration.md § 2)
   abcd dev-sync runs per-source enabled flags (each source is an opt-in adapter over a native default):
     • reviews → render reviews via the wired oracle adapter (host-delegated
-                default; native / CLI / API / MCP opt-in)  → .abcd/development/activity/reviews/
+                default; native / CLI / API / MCP opt-in)  → .abcd/work/reviews/
     • memory  → distil memory backend  (Claude / OpenCode / ...) → .abcd/memory/
-    • work    → curate .work/                            → .abcd/development/activity/{issues,notes}/
+    • work    → curate .work/                            → .abcd/work/{issues,notes}/
     • rp      → RP workspace pull (opt-in RP adapter only, per itd-7) → .abcd/rp/workspace.json
   Idempotent (content-hash dedup).
                            │
                            ▼
 PROBE & CONFIRM
   the disembark probe entrypoint (internal/core) runs all adapters' probe() in parallel
-  → ActiveSources list (reads curated .abcd/development/activity/, not raw sources)
+  → ActiveSources list (reads curated .abcd/work/, not raw sources)
   → AskUserQuestion (transparent): confirm assets/docs sources
                            │
                            ▼
@@ -65,7 +65,7 @@ PASS C — distil, compose, audit (sequential)
 
 Hard rule: later structural artefacts supersede earlier ones — spec numbers, ADR `Superseded-By` headers, file mtimes, git log. **Never resolve recency semantically.**
 
-When structure and content disagree (e.g., later spec mentions earlier decision approvingly without restating it), **route to chat-distiller in Pass B**: receives the relevant time-windowed transcripts, emits a finding for the unrecorded-decisions report. (Risk: Pass B becomes load-bearing for correctness; transcript signal density resolved in Phase 0 (`research/phase/0/transcript-sampling.md`); Pass B viability gates encoded in `06-delivery/01-build-sequence.md § 7`.)
+When structure and content disagree (e.g., later spec mentions earlier decision approvingly without restating it), **route to chat-distiller in Pass B**: receives the relevant time-windowed transcripts, emits a finding for the unrecorded-decisions report. (Risk: Pass B becomes load-bearing for correctness; transcript signal density resolved in Phase 0 (`../../research/notes/transcript-sampling.md`); Pass B viability gates are a design target (itd-11, draft) — not yet encoded in the build sequence.)
 
 ## 3. Agent context budget
 
@@ -133,7 +133,7 @@ Each phase passes when **both gates** succeed:
 1. **Oracle gate**: `lifeboat-oracle` audit on phase outputs returns a "sufficient" verdict with specific findings (not vague approval). The oracle is **host-delegated by default** (per [adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)); an opt-in oracle adapter (native / CLI / API / MCP) runs the audit when wired — never blocks.
 2. **Round-trip gate**: phase outputs feed cleanly into the next phase's expected inputs (e.g., Pass A's `spec-essence.json` validates against schema and is consumed by Pass B's chat-distiller without parse errors).
 
-Acceptance is checked across the validation corpus (`.abcd/corpus.json`), with documented per-repo exemptions where a feature genuinely doesn't apply.
+Acceptance is checked across the validation corpus (`.abcd/corpus.json` — a design target; the file is not yet in the tree), with documented per-repo exemptions where a feature genuinely doesn't apply.
 
 ## 7. Acceptance
 

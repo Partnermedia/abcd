@@ -1,5 +1,17 @@
 # `/abcd:reflect` — Phase Retrospective
 
+> **Delivery state**: `/abcd:reflect` is a design-target surface — no `reflect`
+> verb exists on the shipped binary, no `commands/abcd/reflect.md` plugin command
+> exists, and nothing this page describes is shipped: there is no `reflect-writer`
+> capability or `--allow-empty`/`--overwrite` flag in the binary, no
+> `reflection-composer` agent (no `agents/` catalog ships), and no
+> `.abcd/logbook/` phase-audit tree or `.abcd/retrospectives/` output tree in the
+> working tree. The backing intent sits in
+> [`intents/planned/`](../../intents/planned/itd-24-reflect-command.md) (itd-24);
+> delivery state is the intent lifecycle's, not this page's (see the [brief
+> README's provenance note](../README.md)). The prose below records the design
+> contract in present tense as the brief's intents do.
+
 `/abcd:reflect <phase-id>` composes a structured retrospective for a **completed
 phase** of the voyage (itd-24). It is **phase-only grain**: the per-intent form
 was dropped (per-intent reflection is the `intent-fidelity-reviewer`'s Role 1).
@@ -110,7 +122,7 @@ shipped capability.
 - Command file: `commands/abcd/reflect.md`
 - Agent: `agents/reflection-composer.md` (the 16th catalog agent — see
   [`../05-internals/01-agents.md`](../05-internals/01-agents.md))
-- Intent: `itd-24` (`../intents/…/itd-24-reflect-command.md`)
+- Intent: `itd-24` (`../../intents/planned/itd-24-reflect-command.md`)
 - The spc-66 phase-audit contract reflect consumes: the phase-audit report
   schema owned by the Go binary (`internal/core/...`)
 - Naming / VR001 registration: [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md)
