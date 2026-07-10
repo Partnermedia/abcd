@@ -48,3 +48,19 @@ ADJUDICATION QUEUE (docs/history surface-taxonomy ×2; the read-only-skill
 boundary rule vs the three mutating shipped skills). Remaining: re-run the
 cross-check detector to measure the direction-B ratchet, fix true
 direction-B leftovers, then graduate the check to a record-lint rule.
+
+**Detector re-run (2026-07-10, wf_ed4cf12c-231, same 22-checker arg set):
+150 -> 24 discrepancies** (false-claim 10, undocumented-surface 5,
+fictional-layout 3, criterion-violation 4, stale-count 2) — an 84% ratchet.
+Finding: the remaining 24 were mostly **direction-A leftovers the per-doc
+reconciliations had not sampled** — the LLM cross-check is a stochastic
+discovery tool, not a convergent gate; each run surfaces a different subset —
+plus one self-introduced slip and two adjudication clusters. 13 fixes applied
+across 8 docs (6ab1432), each re-verified against the binary; 1 detector
+finding disproved and skipped (repo-scope vs user-scope meta.json). The 2
+adjudication clusters remain the only substantive criterion/direction-B items
+(docs/history taxonomy; read-only-skill rule vs mutating skills) — batched for
+the maintainer, NOT fixed. **Lesson: chasing the stochastic detector to zero
+is the wrong loop; the fix is to graduate the cross-check to a deterministic
+record-lint rule (spec-moves-with-the-surface) so the invariant is enforced
+structurally.** That graduation is the next work item.
