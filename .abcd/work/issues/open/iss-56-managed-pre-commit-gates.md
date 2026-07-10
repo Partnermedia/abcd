@@ -1,0 +1,11 @@
+---
+schema_version: 1
+id: "iss-56"
+slug: "managed-pre-commit-gates"
+severity: "minor"
+category: "future-work-seed"
+source: "agent-finding"
+found_during: "2026-07-10 prepare-this-repo skill grilling"
+---
+
+Managed pre-commit gates: the interim prepare-this-repo skill offers the secrets and absolute-path pre-commit config from a private template directory outside the repo. The gate belongs to the configuration layer itself: a core-owned surface should install and maintain commit gates in managed repos, replacing the template copy. Seeded from the scaffold-repo retirement analysis; relates to the pluggable safety gate draft (itd-62).

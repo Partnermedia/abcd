@@ -12,6 +12,12 @@ called out in a **Breaking** section.
 
 ### Added
 
+- A `/abcd:prepare-this-repo` skill — audits the current repository against
+  the abcd record and adopts the three-tier `.abcd/` layout, a marked
+  working-conventions section in `AGENTS.md`, and the commit gates; an interim
+  bridge until repos are managed directly. Owned repos only (it refuses
+  elsewhere), and it migrates the older root-level `.work/` scaffold layout
+  with explicit sign-off.
 - `/abcd:consult` and `/abcd:ingest` skills — consult the user-level sources
   corpus (confidential entries are never cited or named in public artifacts)
   and ingest a URL or document into it with extracted reference metadata,

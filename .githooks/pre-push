@@ -46,4 +46,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 done
 
+# Git exports its private environment (GIT_DIR et al.) to hooks; anything the
+# gate spawns that runs git — the test suite's throwaway repos above all —
+# would silently operate on THIS repository instead of its own (iss-28).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_PREFIX
+
 make preflight
