@@ -14,7 +14,7 @@ A **command** is a stateful operation that creates, modifies, or moves artefacts
 
 - A **brief surface file** (`04-surfaces/NN-<verb>.md`) describing acceptance criteria, interaction flow, and side effects (or a sub-verb row in an existing parent's surface file). Surface-file coverage is not yet complete: the shipped `docs`, `history`, and `version` verbs have no `04-surfaces/` file.
 - A **logbook subdirectory** (`.abcd/logbook/<verb>/<timestamp>/`) for per-invocation reports.
-- A **status + help** mode when called bare (the universal abcd convention).
+- A **status + help** mode when called bare — the bare-status-board convention holds for `ahoy`, `capture`, and `memory` (and bare `abcd`); it is not universal (`version` prints only the version string, and the `docs`/`history` cobra parents print help/usage with no status board).
 
 abcd ships **seven top-level commands**: `/abcd:ahoy`, `/abcd:capture`, `/abcd:docs`, `/abcd:history`, `/abcd:launch`, `/abcd:memory`, `/abcd:version`. **Design targets — not on any shipped surface (no binary verb, no `commands/abcd/` file):** `/abcd:disembark`, `/abcd:embark`, and `/abcd:intent` (design record in `04-surfaces/02-disembark.md`, `03-embark.md`, `05-intent.md`). The `intent` parent's design gives it the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"` — all design target, none shipped. See [`04-surfaces/`](../04-surfaces) for per-command detail.
 

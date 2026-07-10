@@ -8,7 +8,7 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 
 | Subcommand | Purpose | File movement |
 |---|---|---|
-| `/abcd:capture` (no args) | Help + status: shows recent captures grouped by state, suggests next actions (next-action hints are a design target — a later phase, not yet in the shipped render). Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
+| `/abcd:capture` (no args) | Help + status: shows the most recent open issues, suggests next actions (next-action hints are a design target — a later phase, not yet in the shipped render). Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
 | `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags, each with a default — `--severity`, `--category`, `--source`, `--found-during`, `--found-at`, `--slug`, `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
 | `/abcd:capture list --open` | Query the ledger for currently-open issues (flag immediately adjacent — earned SD001 exception) | — |
 | `/abcd:capture list --resolved` | Query the ledger for resolved issues | — |
@@ -41,9 +41,12 @@ category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|ar
 source: plan-review|impl-review|manual-test|review-followup|agent-finding|user-observation|drift-detection|memory-curation
 found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
+details: "<text>"          # optional structured detail
+suggested_fix: "<text>"    # optional proposed remedy
 related_intents: [itd-N, ...]
-related_specs: [spc-N, ...]
+related_specs: [fn-N, ...]
 related_issues: [iss-N, ...]
+synthesis_clusters: [<label>, ...]  # optional dredge/synthesis grouping
 blocked_by: [iss-N, ...]   # dependency edges; blocked/priority is derived, never stored
 promoted_to: itd-M         # set when the issue is promoted to an intent
 wontfix_reason: "<text>"   # required when in wontfix/

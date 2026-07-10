@@ -318,7 +318,7 @@ abcd/
 │       ├── cli/                        # Cobra front door (ships in the MVP)
 │       └── mcp/                        # MCP front door (later)
 ├── commands/abcd/                      # markdown command surfaces that shell to the binary — canonical list in ../04-surfaces/README.md
-│   ├── ahoy.md / disembark.md / embark.md / launch.md / intent.md / capture.md / memory.md
+│   ├── ahoy.md / capture.md / docs.md / history.md / launch.md / memory.md / version.md
 │   └── …                               # plus operator-internal commands
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command
 │   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.

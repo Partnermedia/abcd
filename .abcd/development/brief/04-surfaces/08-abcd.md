@@ -69,12 +69,11 @@ credited with probe/bare renders for the *sub-verb* surfaces — of which only
 `/abcd:launch` is on a shipped surface today. `/abcd:disembark`, `/abcd:embark`,
 and an `/abcd:intent` surface are design targets with no command file
 (`commands/abcd/` ships `ahoy`, `capture`, `docs`, `history`, `launch`,
-`memory`, `version`) and no CLI verb — and spc-17 never shipped a top-level
-`commands/abcd.md`. `git log` confirms `commands/abcd.md`
-has never existed. This task therefore CREATES the top-level command fresh
-rather than replacing a stub; the "stub replacement" premise is recorded here
-as not-applicable so a later reader does not hunt for a stub that was never
-shipped.
+`memory`, `version`) and no CLI verb. The investigation found no spc-17 probe STUB behind the
+top-level command to replace — the "stub replacement" premise is therefore
+recorded here as not-applicable. The top-level command file itself is present
+today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
+later reader should hunt for neither a stub nor a missing file.
 
 ## The six sections (fixed order)
 
@@ -119,8 +118,9 @@ linked intents, or any spec store.
 ## Staleness thresholds (decided here)
 
 **Design target (itd-20; unbuilt).** No lifeboat-age, staleness, capping, or
-timeout logic exists in the shipped binary — the status path is four `isDir`
-checks (`internal/core/core.go`) with no directory walks or thresholds.
+timeout logic exists in the shipped binary — the status path is five `isDir`
+checks (`.git`, `.abcd/development`, and the three work tiers;
+`internal/core/core.go`) with no directory walks or thresholds.
 
 | Signal | Threshold | Rationale |
 |--------|-----------|-----------|

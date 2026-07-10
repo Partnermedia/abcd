@@ -139,7 +139,7 @@ Steps, run in parallel where independent:
 5. **History-store wiring** — does the `~/.abcd/history/` store (abcd's native
    local redacted transcript corpus, per
    [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) exist at all
-   (bootstrap gap if not)? Does the `<root-sha>/` transcript directory exist? Is
+   (bootstrap gap if not)? Does the `<root-sha>/transcripts/` directory exist? Is
    the registered entry's `path` still accurate (mutable label — refresh if the
    repo moved)?
 6. **Visibility state** — compare current `.gitignore` allowlist entries
@@ -216,11 +216,13 @@ category present, and applies the approved categories' gaps.
    does not exist, bootstrap it: create the directory and write an initial
    `index.json` with its `schema` + `description` header (see
    [`05-internals/03-configuration.md`](../05-internals/03-configuration.md)
-   for the schema). Then create the `~/.abcd/history/<root-sha>/` transcript
-   directory (abcd's native local redacted transcript corpus, per
-   [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) and register
-   the repo in `index.json` by its immutable `root_commit`, refreshing the
-   entry's mutable `path` if the repo moved. The history `index.json` is the
+   for the schema). Then create the `~/.abcd/history/<root-sha>/transcripts/`
+   transcript directory (abcd's native local redacted transcript corpus, per
+   [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)), write the
+   per-repo `<root-sha>/meta.json` (`root_commit`, `name`, `github`, and a
+   `corpus` block pointing at `transcripts/`), and register the repo in
+   `index.json` by its immutable `root_commit`, refreshing the entry's mutable
+   `path` if the repo moved. The history `index.json` is the
    **sole user-scope registry** — there is no `workspaces.json`. Transcript
    capture is native — no external tool and no per-repo redirect shim.
 7. **Marker block** (`plugin-owned`) — inject/refresh the block between
