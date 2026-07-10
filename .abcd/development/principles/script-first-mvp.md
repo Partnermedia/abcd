@@ -30,6 +30,8 @@ absorption into the core is iss-27, converging with the itd-36 provenance
 substrate. The `/abcd:consult` and `/abcd:ingest` skills front it per the
 bounds above.
 
-**Promotion.** No enforcement hook exists; per the promotion path in this
-directory's README, this file becomes a discipline-kind intent the moment one
-does.
+**Promotion.** This principle is the capability-specific instance of the
+MVP → tool edge of the ladder in this directory's [README](README.md): the
+script is the enabling MVP, the Go-core absorption the tool. No enforcement
+hook exists; per the promotion path in this directory's README, this file
+becomes a discipline-kind intent the moment one does.
