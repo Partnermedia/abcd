@@ -28,3 +28,23 @@ docs: 05-intent (17), 07-memory (13), 01-ahoy/04-launch/06-capture/
 Next: reconcile per doc behind this detector (amend criterion or surface,
 never silently), then graduate the check to a record-lint rule
 (spec-moves-with-the-surface).
+---
+
+**Reconciliation batch 1 (2026-07-10, b32cf40):** 60/150 dispositioned
+across the five worst surface chapters (01-ahoy, 04-launch, 05-intent,
+06-capture, 07-memory). Every finding re-verified against the binary
+before editing; 2 rows batched for maintainer adjudication.
+
+**Reconciliation batch 2 (2026-07-10):** the six remaining direction-A
+surface docs (08-abcd, 05-internals/08-skills, 04-surfaces/README,
+09-reflect, 02-disembark, 03-embark) — **43 rows dispositioned: 20 fixed,
+20 staged, 3 adjudication, 0 rejected**. Reconcilers ran on **Opus 4.8
+high** (Fable 5 credit exhaustion this session; see NEXT.md model-gap note)
+and emitted per-row binary evidence; every load-bearing claim independently
+re-verified in the main loop (all held — no invented-home defects, unlike
+the batch-1 Fable sweep that needed a 30-item review pass). record-lint and
+docs lint both clean. 3 new adjudication items batched to NEXT.md's
+ADJUDICATION QUEUE (docs/history surface-taxonomy ×2; the read-only-skill
+boundary rule vs the three mutating shipped skills). Remaining: re-run the
+cross-check detector to measure the direction-B ratchet, fix true
+direction-B leftovers, then graduate the check to a record-lint rule.
