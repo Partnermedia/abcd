@@ -52,8 +52,8 @@ the packaging boundary holds.
   adr-6).
   specstory is an opt-in import over the same store. This is the research and
   benchmark corpus abcd studies its own flows against.
-- **capture** — `/abcd:capture` issue ledger (itd-4) into
-  `.abcd/development/activity/issues/`.
+- **capture** — `/abcd:capture` issue ledger (itd-4) into the
+  `.abcd/work/issues/` ledger.
 - **memory** — the `.abcd/memory/` curated substrate (itd-36); vendor memory
   harvest is an opt-in, read-only source over it.
 

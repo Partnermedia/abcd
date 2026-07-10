@@ -245,17 +245,17 @@ The Python already has clean seams; port the **contracts** to Go interfaces rath
 than reinventing them. References below are to the frozen Python reference
 implementation (repo-relative paths within that codebase):
 
-- `scripts/abcd/harness.py` — `AgentDispatch` / `MCPBridge` protocols →
+- `scripts/abcd/harness.py` (historical) — `AgentDispatch` / `MCPBridge` protocols →
   `internal/adapter/oracle` Go interfaces (the injection seam already proves the
   oracle is replaceable).
-- `scripts/abcd/tools/<tool>/config.json` + `tools/registry.py` + `tools/probes/`
+- `scripts/abcd/tools/<tool>/config.json` (historical) + `tools/registry.py` + `tools/probes/`
   — the declarative tool registry → `internal/registry` + `internal/adapter/*`.
-- `scripts/abcd/oracle.py` cascade → an `oracle` chain with HostDelegated as the
+- `scripts/abcd/oracle.py` (historical) cascade → an `oracle` chain with HostDelegated as the
   default first leg.
 - Launch reference logic: `launch_ship.py`, `launch_preflight.py`,
   `public_manifest.py`, `plugin_payload.py`, `manifest_lockstep.py`,
   `launch_gate_*.py`, `scan.py`, `src/pii.py`.
-- Install reference logic: `scripts/abcd/ahoy/` (`_detect.py` folder-kind,
+- Install reference logic: `scripts/abcd/ahoy/` (historical) (`_detect.py` folder-kind,
   gitignore, marker blocks), `hooks/prompt_router_hook.py`.
 - History reference: `history_store.py`, the transcript-capture shim.
 - **Behaviour spec** = the brief's per-command contracts under
@@ -291,7 +291,7 @@ adjust binary name and `-ldflags -X …version`); `.githooks/pre-push` →
 `exec make preflight`; the `ci.yml` `check` job (gofmt gate + build/vet/test +
 `-race ./internal/...`), replacing the template's eval job with abcd-cli's Phase-1
 install/launch integration tests; the `AGENTS.md` skeleton and `README.md` layout,
-rewritten for abcd-cli. The working-tree layout is **not** the template's `.work/`
+rewritten for abcd-cli. The working-tree layout is **not** the template's layout
 verbatim — use abcd-cli's reformed three-tier `.abcd/` scheme.
 
 **Carry from the reference implementation:** copy `.abcd/development/` (the design

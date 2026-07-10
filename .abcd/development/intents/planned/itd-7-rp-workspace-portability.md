@@ -34,7 +34,7 @@ See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) for the bro
 - **Unpack + reconnect on `/abcd:embark`**:
   - `workspace.json` is read; user is asked "register this workspace with RepoPrompt now?" — if yes, abcd writes a workspace entry under `~/Library/Application Support/RepoPrompt/Workspaces/` on the embarking machine.
   - If RP isn't installed: warn gracefully ("RepoPrompt not detected; .abcd/rp/workspace.json preserved for later sync") and continue without failing.
-- **Schema validation** for `workspace.json`. JSON Schema file in `scripts/abcd/schemas/rp-workspace.schema.json`.
+- **Schema validation** for `workspace.json`. The JSON Schema ships with the RP adapter in the Go binary (`internal/core/...`); `abcd dev-sync` validates against it.
 - **PII scrub on read**: workspace files may include absolute paths (`/Users/<username>/...`). Pre-commit scrub rewrites to `~/`-relative form. Same approach as session-log schema.
 
 ## What's Out of Scope

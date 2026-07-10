@@ -34,7 +34,7 @@ This intent commits abcd to taking lifeboat portability seriously: schemas evolv
 
 - Migrating lifeboat content (principles, press releases) — only structural schema
 - Two-way compatibility (older abcd reading newer-schema lifeboats — not supported)
-- Migration tools for in-flight `.abcd/development/activity/` artefacts (covered separately if needed)
+- Migration tools for in-flight `.abcd/work/` working artefacts (covered separately if needed)
 
 ## Acceptance Criteria
 

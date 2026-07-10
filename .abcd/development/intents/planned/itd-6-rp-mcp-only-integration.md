@@ -17,7 +17,7 @@ severity: minor
 
 > **abcd has exactly one integration with RepoPrompt: the MCP API.** abcd never picks an `oracle`, never reads RP's preset selection, never spawns its own subprocess for code review. It calls RP via MCP and RP uses whatever `oracle` the persona has configured for whatever task — Claude via the persona's subscription, Codex via the persona's subscription, Gemini, any preset RP knows. The persona configures `oracle` backends inside RP once; abcd uses them forever. Zero abcd-side `oracle` logic, zero "which preset?" prompts, zero hard-coded routing.
 >
-> **Status (post-spc-5): the RP MCP bridge/foundation is implemented.** spc-5 declares the typed `RPUnavailable` exception (an `OSError` subclass, in `scripts/abcd/exceptions.py`) and delivers a concrete `MCPBridge` — the ADR-02 spawn implementation shipped, plus the ADR-03 host-reuse hook for host-connected Claude Code. What this intent describes as the *three-step cascade* (RP MCP → Codex CLI → in-session subagent), the one-time ahoy RP setup discovery, and the non-Mac flow are **follow-up work, deferred** beyond spc-5 — see the Implementation status section. This is "the bridge is built and typed", not "the RP MCP path is fully wired end-to-end".
+> **Status (post-spc-5): the RP MCP bridge/foundation is implemented.** spc-5 declares the typed `RPUnavailable` error (in `internal/core/...`) and delivers a concrete `MCPBridge` — the ADR-02 spawn implementation shipped, plus the ADR-03 host-reuse hook for host-connected Claude Code. What this intent describes as the *three-step cascade* (RP MCP → Codex CLI → in-session subagent), the one-time ahoy RP setup discovery, and the non-Mac flow are **follow-up work, deferred** beyond spc-5 — see the Implementation status section. This is "the bridge is built and typed", not "the RP MCP path is fully wired end-to-end".
 >
 > "I had wired up Claude, Codex, and Gemini in RP with task-specific presets," said Bob, staff engineer. "I'd worried abcd would keep asking me which to use. The RP MCP bridge just calls RP; when RP is not reachable it raises a typed `RPUnavailable` so the tooling can react cleanly instead of guessing. RP picks the `oracle`. I don't think about it."
 
@@ -93,7 +93,7 @@ These questions were settled by the spc-5 epic — ADR-02 (`02-mcpbridge-impleme
 ## Implementation status
 
 _Added post-spc-5. The spc-5 epic (`spc-5-rp-mcp-integration-declare`) implemented the RP
-MCP bridge/foundation — the typed `RPUnavailable` exception (`scripts/abcd/exceptions.py`,
+MCP bridge/foundation — the typed `RPUnavailable` error (`internal/core/...`,
 spc-5 `.1`), the concrete `MCPBridge` ADR-02 spawn implementation (spc-5 `.2`/`.5`), and the
 ADR-03 host-reuse code path (spc-5 `.6`/`.7`). Operational availability under host-connected
 Claude Code is still subject to RP's GUI approval gate — an approval denial surfaces as the

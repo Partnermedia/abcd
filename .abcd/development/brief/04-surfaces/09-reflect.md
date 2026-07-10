@@ -111,6 +111,6 @@ shipped capability.
 - Agent: `agents/reflection-composer.md` (the 16th catalog agent — see
   [`../05-internals/01-agents.md`](../05-internals/01-agents.md))
 - Intent: `itd-24` (`../intents/…/itd-24-reflect-command.md`)
-- The spc-66 phase-audit contract reflect consumes:
-  `scripts/abcd/schemas/phase_review_report.schema.json`
+- The spc-66 phase-audit contract reflect consumes: the phase-audit report
+  schema owned by the Go binary (`internal/core/...`)
 - Naming / VR001 registration: [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md)

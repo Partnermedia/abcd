@@ -97,7 +97,7 @@ The 2026-06-02 grill (5 questions across Dialectic / Definition / Counterfactual
 - **itd-47** (Codex leg in `_build_cli_oracle`) — `loop-to-acceptance` needs a reachable oracle to iterate headlessly; dependency, not scope.
 - **spc-31** `HOLD` outcome (`desync_report.run_fn31_gates`) — the one-off "flag-for-follow-up, never rollback" precedent this intent generalises into a first-class loop-exit state.
 - **itd-44** (fourth intent kind / decision) and **itd-43** (terminology) — the product-thinker / facilitator two-vocabulary split this intent leans on.
-- **`.work/issues.md` 2026-06-02** — the `[Design/Spec-candidate]` entry and the upstream `[Design/Decision-needed]` auto-drain recommendation that produced this intent; the auto-drainer is this intent's substrate.
+- **the `.abcd/work/issues/` ledger, 2026-06-02** — the `[Design/Spec-candidate]` entry and the upstream `[Design/Decision-needed]` auto-drain recommendation that produced this intent; the auto-drainer is this intent's substrate.
 
 ## Prior Art
 

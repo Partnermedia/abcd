@@ -2,7 +2,7 @@
 id: itd-1
 slug: acceptance-gates
 kind: discipline
-kind_notes: "Cross-cutting acceptance-criteria gate; applied via intent_lint at /abcd:intent plan time and verified by intent-fidelity-reviewer (single-document role) on every shipped intent."
+kind_notes: "Cross-cutting acceptance-criteria gate; applied via the record lint (internal/core/lint) at /abcd:intent plan time and verified by intent-fidelity-reviewer (single-document role) on every shipped intent."
 suggested_kind: null
 spec_id: null
 reclassification_history:
@@ -14,7 +14,7 @@ severity: critical
 
 ## Rule
 
-Every standalone or bundle-member intent in `drafts/` and `planned/` carries a `## Acceptance Criteria` section with at least one well-formed Given-When-Then bullet. Every discipline intent in `disciplines/` carries the same. `/abcd:intent plan` refuses to promote an intent without it (hard block via `intent_lint`). Every shipped intent's `## Audit Notes` section contains per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) emitted by the `intent-fidelity-reviewer` agent's single-document role.
+Every standalone or bundle-member intent in `drafts/` and `planned/` carries a `## Acceptance Criteria` section with at least one well-formed Given-When-Then bullet. Every discipline intent in `disciplines/` carries the same. `/abcd:intent plan` refuses to promote an intent without it (hard block via the record lint, `internal/core/lint`). Every shipped intent's `## Audit Notes` section contains per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) emitted by the `intent-fidelity-reviewer` agent's single-document role.
 
 ## Why
 
@@ -45,7 +45,7 @@ This is a small schema bump with a large quality return. Every intent gets a mea
   This `## Audit Notes` write is the **verdict of record**; each run also writes a per-run forensic copy at `.abcd/logbook/audit/review-<ts>/report.{json,md}`. **spc-12 ships the manual reviewer** (`/abcd:intent review <itd-N>`) plus the `## Audit Notes` / `review-<ts>` writers; **automatic invocation on the `planned → shipped` transition is deferred to the lifecycle-owning spec** (`spc-6`). Until that lands, a shipped intent's `## Audit Notes` is populated only when `/abcd:intent review` is run by hand.
 - **Escalation states** — four states, lifted from PAUL. Binary pass/fail loses information; four states preserve nuance without exploding.
 - **Verdict family disjointness** (cross-referenced from [`05-internals/01-agents.md § Verdict-tag protocol`](../../brief/05-internals/01-agents.md#verdict-tag-protocol)). The four criterion verdicts above (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) score *promise vs reality on a shipped intent* — they belong to `intent-fidelity-reviewer`'s Role 1 output. They are **deliberately disjoint from review verdicts** (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`) which score *changes/runs* (oracle reviews of plans, implementations, completions; consumed by the native receipt schema validator). The two enums never mix — review verdicts emit on a *change*, criterion verdicts emit on a *promise*. This disjointness was reinforced 2026-05-08 when idea-4's pre-review draft conflated the two families ("NOT_MET on an agent run" — wrong; criterion verdicts apply to intents not agents). Closing-the-loop signals on agents (per Frontier Awareness, idea-4) MUST use canary/golden-test/operator-tagged failure signals, NOT spec-level criterion verdicts.
-- **Intent template update** — `scripts/abcd/templates/intent.md.template` includes the `## Acceptance Criteria` section with one example criterion. The discipline template (separate file) includes the same section.
+- **Intent template update** — the intent template the binary scaffolds (`internal/core`) includes the `## Acceptance Criteria` section with one example criterion. The discipline template (separate file) includes the same section.
 - **Inheritance into every other spec** — every native spec plan-reviewed under abcd inherits the discipline's gate: the spec must reference the parent intent's acceptance criteria as the verification bar, and `intent-fidelity-reviewer` checks delivered reality against them on shipping.
 
 ## What's Out of Scope
@@ -58,7 +58,7 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 
 ## Acceptance Criteria
 
-> _Yes, this discipline eats its own dog food. The criteria below describe how the discipline itself is checked — by `intent_lint` at promotion time and by `intent-fidelity-reviewer`'s single-document role on every shipped intent._
+> _Yes, this discipline eats its own dog food. The criteria below describe how the discipline itself is checked — by the record lint (`internal/core/lint`) at promotion time and by `intent-fidelity-reviewer`'s single-document role on every shipped intent._
 
 - **Given** a draft intent without an `## Acceptance Criteria` section, **when** the user runs `/abcd:intent plan itd-N`, **then** the command refuses to promote the intent and lists the missing section as the reason.
 - **Given** a draft intent with a malformed acceptance section (e.g. no Given-When-Then bullets, or a header but empty body), **when** `/abcd:intent plan` runs, **then** the lint emits a specific error pointing at the malformed line.

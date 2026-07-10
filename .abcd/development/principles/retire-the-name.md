@@ -7,7 +7,7 @@ without a ban is half a retirement.
 
 **Why.** Stale names are the drift that discipline demonstrably cannot hold:
 the 2026-07-08 review found roughly fifty references to retired locations and
-identifiers across the record — thirty-eight to `development/activity` in the
+identifiers across the record — thirty-eight to `development/activity` (historical) in the
 brief alone — and that drift survived a dedicated same-day consistency pass.
 The banlist engine already exists; each ban is configuration, not code, and
 once added it gates every future edit through the already-armed preflight and

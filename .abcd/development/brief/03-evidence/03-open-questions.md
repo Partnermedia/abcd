@@ -27,4 +27,4 @@ For each entry:
 
 - **`.abcd/development/research/adr/`** — Architecture Decision Records. Open questions that get resolved promote into ADRs.
 - **`.abcd/development/roadmap/rfcs/`** — Request for Comments. Multi-stakeholder discussion artefacts (open / resolved-yes / resolved-no).
-- **`.work/issues.md`** entries flagged as open questions or future-work seeds.
+- **`.abcd/work/issues/`** ledger entries flagged as open questions or future-work seeds.

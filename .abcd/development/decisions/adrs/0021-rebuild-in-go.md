@@ -15,7 +15,7 @@ related_adrs: [adr-22, adr-23]
 ## Context
 
 abcd is being rebuilt from scratch. Its implementation is a tree of Python
-scripts (`scripts/abcd/`, `ahoy.py`, the doctor and hook modules), driven
+scripts (`scripts/abcd/`, `ahoy.py`, the doctor and hook modules), driven <!-- (historical) -->
 in-session and glued to the host through slash-commands and pre-commit hooks.
 The design record — brief, intents, ADRs — describes that Python machinery in
 detail, and much of it (the directory-as-truth lifecycle, the intent/spec/phase

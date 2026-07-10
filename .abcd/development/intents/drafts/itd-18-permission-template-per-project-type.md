@@ -28,7 +28,7 @@ abcd's `/abcd:ahoy` doesn't touch `.claude/settings.local.json`. Users start wit
 - Per-type permission templates shipping in the plugin
 - `/abcd:ahoy` step: detect type, show user the proposed `.claude/settings.local.json` content, transparent confirm
 - Conflict handling: if `.claude/settings.local.json` exists, offer merge / replace / skip
-- Templates committed and versioned in `scripts/abcd/templates/permissions/`
+- Templates committed and versioned as plugin assets embedded under `internal/`
 
 ## What's Out of Scope
 

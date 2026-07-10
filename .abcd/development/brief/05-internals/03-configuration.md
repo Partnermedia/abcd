@@ -76,7 +76,7 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
     "reviews": { "enabled": true  },    // oracle-adapter capture → activity/reviews/ — sweeps ad-hoc reviews not tied to a spec only;
                                         // spec-tied reviews land in the native spec review store at write-time (not controlled by this flag)
     "memory":  { "enabled": true  },    // memory harvest → .abcd/memory/
-    "work":    { "enabled": true  },    // .work/issues.md + notes/ → activity/{issues,notes}/
+    "work":    { "enabled": true  },    // .abcd/.work.local/ issues + notes/ → .abcd/work/{issues,notes}/
     "rp":      { "enabled": true  }     // RP workspace pull (per itd-7; opt-in RP adapter) → .abcd/rp/
   },
   "intent": {
@@ -199,7 +199,7 @@ Set by ahoy:
 |---|---|---|
 | `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, activity, voyage, personas), the native spec store, `memory/`, `lifeboat/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
 | `memory/` (legacy snapshot) | gitignored | **committed** if present¹ |
-| `.work/` | gitignored | gitignored (local-only scratch, per global abcd CLAUDE.md) |
+| `.abcd/.work.local/` | gitignored | gitignored (local-only scratch, per global abcd CLAUDE.md) |
 
 The native local transcript store is **always** gitignored (user-scope `~/.abcd/history/`, local working data — adr-29), so it is not a repo directory in this table.
 
@@ -221,7 +221,7 @@ abcd's curated memory exists at **two scopes** (per § The two `.abcd/` scopes),
 
 Which scope a curated page lands in is a routing decision — see [`07-memory.md`](07-memory.md) § scope routing. Retrieval across the two scopes is **not** a flat union (that would overflow context); it is keyword-recall + budget-bracketed injection per itd-39. When the brief says "memory" without qualification, it means the repo-scope `.abcd/memory/`.
 
-**`.work/` is local-only everywhere.** Working notes, drafts, status trackers stay gitignored. abcd consumes them via `dev-sync` ([§ 2](#2-abcddevelopmentactivity-namespace-and-dev-sync)) which promotes useful content into tracked `.abcd/development/activity/` artefacts before disembark.
+**`.abcd/.work.local/` is local-only everywhere.** Working notes, drafts, status trackers stay gitignored. abcd consumes them via `dev-sync` ([§ 2](#2-abcdwork-namespace-and-dev-sync)) which promotes useful content into tracked `.abcd/work/` artefacts before disembark.
 
 **AI transparency level** (separate axis from visibility — set by ahoy via `ai_transparency.level`):
 
@@ -242,18 +242,18 @@ Sanitised export pattern (lifted from `~/.abcd/`'s `/export-transparency`): laun
 
 **Visibility × transparency interaction (added post-audit 2026-05-07):** the two axes are independent. Any combination is valid: `private × none` (paranoid, no captures, no commit), `private × full` (everything captured locally, nothing public), `public × none` (public repo, no AI captures committed), `public × full` (everything captured AND committed — useful for OSS-credibility OSS projects). The launch payload's exclusion rules (per [`04-surfaces/04-launch.md § 2`](../04-surfaces/04-launch.md)) are unconditional regardless of `ai_transparency.level` — launch always ships the visibility-determined payload, and `ai_transparency` only governs what was captured in the first place.
 
-## 2. `.abcd/development/activity/` namespace and `dev-sync`
+## 2. `.abcd/work/` namespace and `dev-sync`
 
-`.abcd/development/activity/` is the **curated-from-volatile-sources** namespace. Volatile inputs (gitignored or external) get analysed and promoted into tracked `.abcd/development/activity/` artefacts via `abcd dev-sync`. This solves three problems: noisy sources stay gitignored; curated lessons get tracked; abcd doesn't have to read volatile sources every time.
+`.abcd/work/` is the **curated-from-volatile-sources** namespace. Volatile inputs (gitignored or external) get analysed and promoted into tracked `.abcd/work/` artefacts via `abcd dev-sync`. This solves three problems: noisy sources stay gitignored; curated lessons get tracked; abcd doesn't have to read volatile sources every time.
 
 **Source → target table:**
 
 | Volatile source (gitignored or external) | Curated abcd target (tracked in private repos) | Adapter |
 |---|---|---|
 | Agent memory (opt-in harvest per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — Claude Code: `~/.claude/projects/<encoded-cwd>/memory/`) | `.abcd/memory/` | memory harvest (`internal/core/memory`) |
-| Ad-hoc reviews not tied to a spec (captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — e.g. RepoPrompt's local chat store; vendor paths in [`02-adapters.md`](02-adapters.md)). **Spec-tied reviews are written directly to the native spec review store at review time — `dev-sync reviews` does NOT sweep those.** | `.abcd/development/activity/reviews/` | oracle-adapter capture (`internal/core/reviews`) |
-| `.work/issues.md` | `.abcd/development/activity/issues/{open,resolved,wontfix}/iss-N-<slug>.md` (per itd-4) | workdir capture (`internal/core/workdir`; migration on first sync after install) |
-| `.work/notes/`, `.work/<feature>/` | `.abcd/development/activity/notes/` | workdir capture (`internal/core/workdir`) |
+| Ad-hoc reviews not tied to a spec (captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — e.g. RepoPrompt's local chat store; vendor paths in [`02-adapters.md`](02-adapters.md)). **Spec-tied reviews are written directly to the native spec review store at review time — `dev-sync reviews` does NOT sweep those.** | `.abcd/work/reviews/` | oracle-adapter capture (`internal/core/reviews`) |
+| `.abcd/.work.local/issues.md` | `.abcd/work/issues/{open,resolved,wontfix}/iss-N-<slug>.md` (per itd-4) | workdir capture (`internal/core/workdir`; migration on first sync after install) |
+| `.abcd/.work.local/notes/`, `.abcd/.work.local/<feature>/` | `.abcd/work/notes/` | workdir capture (`internal/core/workdir`) |
 | RepoPrompt workspace state (opt-in adapter; vendor paths in [`02-adapters.md`](02-adapters.md)) | `.abcd/rp/workspace.json` (per itd-7) | RP workspace adapter (`internal/adapter/oracle`, opt-in) |
 
 **`abcd dev-sync` triggers:**
@@ -274,22 +274,22 @@ Scheduled/cron sync **comes in a later phase** of the plugin (itd-13).
 
 - **Memory (volatile) → `.abcd/memory/` (curated):** Source is an opt-in memory harvest per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — under Claude Code: `~/.claude/projects/<encoded-cwd>/memory/`. The repo-local legacy `memory/` snapshot (the `cp -r` pattern) is the workflow `dev-sync memory` replaces. Output is *not verbatim*: distilled summaries grouped by domain, written as actionable suggestions for future agents (e.g., "When implementing UI hit areas, always use `.contentShape(Rectangle())` — source: `feedback_hit_target_full_box`"). Why curated: raw memories grow unbounded and contain personal phrasing ("user got annoyed when X"). Inputs to `principle-distiller` (Pass C).
 
-- **Reviews (volatile) → `.abcd/development/activity/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — host-delegated by default ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), with **RepoPrompt** as one opt-in adapter. When the RepoPrompt adapter is wired, `dev-sync reviews` harvests **ad-hoc oracle reviews not tied to a spec** from RepoPrompt's local chat store; **spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. See [`02-adapters.md`](02-adapters.md) for the adapter's harvesting detail (vendor paths, the prompt-exports redirect, workspace matching, and the stability/privacy safeguards). `dev-sync reviews` renders its sources → `.abcd/development/activity/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. Inputs to `review-collator` (Pass A).
+- **Reviews (volatile) → `.abcd/work/reviews/` (curated):** Reviews are captured by whichever oracle adapter runs per [`04-universal-patterns.md § 7`](04-universal-patterns.md#7-vendor-agnostic-adapters-with-environment-branching) — host-delegated by default ([adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)), with **RepoPrompt** as one opt-in adapter. When the RepoPrompt adapter is wired, `dev-sync reviews` harvests **ad-hoc oracle reviews not tied to a spec** from RepoPrompt's local chat store; **spec-tied reviews are NOT swept here** — the native spec review store captures them directly at review time. See [`02-adapters.md`](02-adapters.md) for the adapter's harvesting detail (vendor paths, the prompt-exports redirect, workspace matching, and the stability/privacy safeguards). `dev-sync reviews` renders its sources → `.abcd/work/reviews/oracle-{review,chat}-<timestamp>-<description>-<hash>.md` (the format `review-collator` consumes). Dedup by content hash; idempotent. Inputs to `review-collator` (Pass A).
 
-- **`.work/` (volatile, local-only) → `.abcd/development/activity/issues/`, `.abcd/development/activity/notes/` (curated):** `.work/issues.md` (the abcd CLAUDE.md mandatory issue log) gets parsed entry-by-entry; each entry promoted to `.abcd/development/activity/issues/open/iss-N-<slug>.md` (per itd-4 ledger structure). `.work/notes/`, `.work/<feature>/` get distilled into `.abcd/development/activity/notes/`. Files in `.work/` are never moved or deleted — `dev-sync work` is read-and-curate, source stays put. Inputs to `principle-distiller` (Pass C) and `chat-distiller` (Pass B, as auxiliary context).
+- **`.abcd/.work.local/` (volatile, local-only) → `.abcd/work/issues/`, `.abcd/work/notes/` (curated):** `.abcd/.work.local/issues.md` (the abcd CLAUDE.md mandatory issue log) gets parsed entry-by-entry; each entry promoted to `.abcd/work/issues/open/iss-N-<slug>.md` (per itd-4 ledger structure). `.abcd/.work.local/notes/`, `.abcd/.work.local/<feature>/` get distilled into `.abcd/work/notes/`. Files in `.abcd/.work.local/` are never moved or deleted — `dev-sync work` is read-and-curate, source stays put. Inputs to `principle-distiller` (Pass C) and `chat-distiller` (Pass B, as auxiliary context).
 
 - **RP workspace state (volatile) → `.abcd/rp/workspace.json` (curated, per itd-7):** The opt-in RepoPrompt adapter pulls RepoPrompt's own workspace state (the workspace whose root path matches the current repo) into `.abcd/rp/workspace.json`. The vendor filesystem layout and the match/normalisation mechanics live with the adapter — see [`02-adapters.md`](02-adapters.md). Workspace.json only for now; presets, mcp-routing scoping, `--preset <name>` flag, and `abcd rp link` window helper come in a later phase.
 
 **Reviews as a first-class pitfall source:**
 
-Plan/implementation/completion reviews (the ones in `.abcd/development/activity/reviews/`) are *exceptionally* useful for spotting issues. The `review-collator` agent must extract every "P0 / P1 / watch out for X / found bug" finding as a candidate pitfall — **even when the original issue was fixed**, the lesson survives. Output:
+Plan/implementation/completion reviews (the ones in `.abcd/work/reviews/`) are *exceptionally* useful for spotting issues. The `review-collator` agent must extract every "P0 / P1 / watch out for X / found bug" finding as a candidate pitfall — **even when the original issue was fixed**, the lesson survives. Output:
 
 - `reviews-consolidated.json` — full review summaries (existing)
 - `candidate-pitfalls.json` — extracted findings ready for distiller dedup
 
 `principle-distiller` (Pass C) has four pitfall sources to dedupe by topic-hash or canonical phrasing: source `memory/pitfalls.md` (or `.abcd/memory/pitfalls.md` after curation), `candidate-pitfalls.json`, Pass B chat-distiller deltas, and code-rescuer's `code-principles.json`.
 
-**Distinct from `principles.json`:** `.abcd/memory/`, `.abcd/development/activity/reviews/`, `.abcd/development/activity/issues/`, `.abcd/development/activity/notes/` are **persistent rolling artefacts** in the source repo, refreshed by `dev-sync`, used as ongoing input to future agents. `principles.json` is **per-disembark synthesis** written into the lifeboat at `.abcd/lifeboat/principles.json`. The lifeboat consumes `.abcd/development/activity/`; `.abcd/development/activity/` is not the lifeboat.
+**Distinct from `principles.json`:** `.abcd/memory/`, `.abcd/work/reviews/`, `.abcd/work/issues/`, `.abcd/work/notes/` are **persistent rolling artefacts** in the source repo, refreshed by `dev-sync`, used as ongoing input to future agents. `principles.json` is **per-disembark synthesis** written into the lifeboat at `.abcd/lifeboat/principles.json`. The lifeboat consumes `.abcd/work/`; `.abcd/work/` is not the lifeboat.
 
 ## 3. Plugin shape — directory layout
 
@@ -389,7 +389,7 @@ external plug-in — so this brief does not restate it here.
 │   ├── activity/                       # curated-from-volatile-sources
 │   │   ├── reviews/                    # captured by the oracle adapter (RepoPrompt / codex / future) per 04-universal-patterns.md § 7
 │   │   ├── issues/{open,resolved,wontfix}/  # iss-N-<slug>.md ledger entries (per itd-4)
-│   │   └── notes/                      # distilled from .work/notes/
+│   │   └── notes/                      # distilled from .abcd/.work.local/notes/
 │   └── voyage/                         # embark/disembark provenance and history (see ../04-surfaces/03-embark.md § 7)
 │       ├── README.md
 │       ├── embark/

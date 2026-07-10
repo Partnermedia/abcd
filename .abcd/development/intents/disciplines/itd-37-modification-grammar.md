@@ -42,7 +42,7 @@ The discipline is named for what's actually new — **modification grammar**, no
 
 The semantic enforcement is genuine LLM-judgement work. The discipline owns the requirement explicitly — regex cannot catch boilerplate.
 
-**`MG004` enforcement surface (made concrete by spc-12).** The timing is unchanged — `MG004` runs at plan-review and ship time — but the named surface is the abcd-owned CI / pre-commit path: the native disciplines lint/CI wrapper invoked from `.github/workflows/lint.yml`, **not** a plan-review-step integration. The Role 1 `MG004` pass emits a `PASS` / `FAIL` boilerplate verdict; the verdict lands in a per-run batch receipt at `.abcd/logbook/audit/spec-mg-<ts>/report.{json,md}` (native specs have no `## Audit Notes` section, so the verdict cannot land in-file). spc-12 ships the `MG004` judgement pass, its receipt writer, and the receipt schema; the CI wiring is added by spc-12 itself via the native disciplines lint.
+**`MG004` enforcement surface (made concrete by spc-12).** The timing is unchanged — `MG004` runs at plan-review and ship time — but the named surface is the abcd-owned CI / pre-commit path: the native disciplines lint/CI wrapper invoked from `.github/workflows/ci.yml`, **not** a plan-review-step integration. The Role 1 `MG004` pass emits a `PASS` / `FAIL` boilerplate verdict; the verdict lands in a per-run batch receipt at `.abcd/logbook/audit/spec-mg-<ts>/report.{json,md}` (native specs have no `## Audit Notes` section, so the verdict cannot land in-file). spc-12 ships the `MG004` judgement pass, its receipt writer, and the receipt schema; the CI wiring is added by spc-12 itself via the native disciplines lint.
 
 **Why the cost is justified.** itd-37 is the first *expensive* discipline in abcd's stack (~15-30 min careful thought per spec, vs ~5 min for itd-1 / itd-5 / itd-36's mechanical gates). With itd-1 + itd-5 + itd-36 + itd-37 all live, every spec carries 4 discipline gates costing ~30-45 min total — real, but justified. The failure modes the disciplines prevent (specs without acceptance bars, agents without quality gates, specs without modification grammar, specs without provenance) compound exponentially as the corpus grows. Disciplines are a fixed per-spec tax; the failures are exponential. Trade favourably.
 
@@ -52,7 +52,7 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 
 ## What's In Scope
 
-- **`## Modification Grammar` section template** added to `scripts/abcd/templates/spec.md.template` with three sub-headings (`Extends cleanly` / `Breaks the design` / `Why`) plus the `Ripple` axis (vocabulary / surface / coupling deltas), one worked example per axis. Section header is fixed (parser depends on it).
+- **`## Modification Grammar` section template** carried by the native spec template in the Go binary (`internal/core/...`) with three sub-headings (`Extends cleanly` / `Breaks the design` / `Why`) plus the `Ripple` axis (vocabulary / surface / coupling deltas), one worked example per axis. Section header is fixed (parser depends on it).
 - **Concreteness lint** in the native intent lint with three codes:
   - `MG001` — section missing.
   - `MG002` — sub-heading missing or empty.
@@ -105,8 +105,8 @@ _Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity
 
 ## References
 
-- `.work/idea-assessments/2-programming-as-theory-building.md` — full assessment with 3-round review trail (chat `adversarial-naur-theory--0A4174`); rename from "Theory transparency" to "Modification Grammar discipline" preserved in chat record.
-- `.work/idea-assessments/3-systems-thinking.md` — sibling assessment; the `Ripple` axis on this discipline absorbs idea-3's per-spec-external concerns (chat `idea-3-itd-38-adversaria-31A06A`, MAJOR_RETHINK collapse).
+- `.abcd/work/idea-assessments/2-programming-as-theory-building.md` — full assessment with 3-round review trail (chat `adversarial-naur-theory--0A4174`); rename from "Theory transparency" to "Modification Grammar discipline" preserved in chat record.
+- `.abcd/work/idea-assessments/3-systems-thinking.md` — sibling assessment; the `Ripple` axis on this discipline absorbs idea-3's per-spec-external concerns (chat `idea-3-itd-38-adversaria-31A06A`, MAJOR_RETHINK collapse).
 - [Naur 1985][naur-1985] — "Programming as Theory Building", *Microprocessing and Microprogramming* 15(5):253-261; primary philosophical citation.
 - [`research/related-work.md § Naur 1985`](../../research/related-work.md#naur-1985--programming-as-theory-building) — full prior-art comparison.
 - [`itd-1-acceptance-gates.md`](itd-1-acceptance-gates.md) — companion discipline; this discipline's acceptance criteria conform to its Given-When-Then shape.

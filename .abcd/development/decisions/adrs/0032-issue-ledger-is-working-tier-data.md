@@ -15,7 +15,7 @@ related_adrs: [adr-3, adr-5, adr-26, adr-30]
 ## Context
 
 The capture ledger (itd-4) writes schema-checked `iss-N` files with folder-as-status
-(`open/`, `resolved/`, `wontfix/`). It was sited at `.abcd/development/activity/issues/` —
+(`open/`, `resolved/`, `wontfix/`). It was sited at `.abcd/development/activity/issues/` (historical) —
 inside the durable design-record tree that `record-lint` governs.
 
 Dogfooding surfaced a shipped-vs-shipped contradiction: `capture`'s issue schema *requires*
@@ -52,7 +52,7 @@ opens and resolves, but it was living in the tree meant for authored, git-canoni
 
 ## Alternatives Considered
 
-- **Exempt `.abcd/development/activity/` in `record-lint`.** The first-pass fix, briefly
+- **Exempt `.abcd/development/activity/` in `record-lint`.** (historical) The first-pass fix, briefly
   recommended and then reversed. Rejected as symptom suppression: it carves the lint around a
   category error rather than fixing it, and leaves the ledger in the wrong tier. The reversal
   is the methodology-over-local-fixes principle in action — recorded so the reasoning is not

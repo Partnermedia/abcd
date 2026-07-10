@@ -20,7 +20,7 @@ severity: minor
 
 ## Why This Matters
 
-The `.work/issues.md` 2026-05-22 design discussion landed on a clear conclusion: **drop the `new` sub-verb from both `/abcd:intent` and `/abcd:capture`.** Quoted-text-as-create-signal is symmetric across the two commands and aligned with abcd's universal "bare = status + help, never mutates" convention. The full rationale is recorded in that ledger entry; this intent captures the work to implement it.
+The `.abcd/work/issues/` 2026-05-22 design discussion landed on a clear conclusion: **drop the `new` sub-verb from both `/abcd:intent` and `/abcd:capture`.** Quoted-text-as-create-signal is symmetric across the two commands and aligned with abcd's universal "bare = status + help, never mutates" convention. The full rationale is recorded in that ledger entry; this intent captures the work to implement it.
 
 Three reasons the change matters beyond aesthetics:
 
@@ -63,7 +63,7 @@ This intent is project-agnostic in the same sense the rest of the command surfac
 - **Confirm `/abcd:capture` already follows the shape** — the
   `docs/reference/commands.md` `/abcd:capture` row for `"<text>"` already
   exists; verify the implementation matches the documented shape (per
-  `.work/issues.md` 2026-05-22 the implementation is already correct here
+  `.abcd/work/issues/` 2026-05-22 the implementation is already correct here
   — confirm and move on).
 
 ## What's Out Of Scope
@@ -105,7 +105,7 @@ This intent is project-agnostic in the same sense the rest of the command surfac
 
 ## Related
 
-- **`.work/issues.md` 2026-05-22 line 413** — the design discussion that
+- **`.abcd/work/issues/` 2026-05-22 line 413** — the design discussion that
   produced this intent.
 - **`docs/reference/commands.md`** — the doc that gets updated.
 - **`commands/abcd/intent.md`** — the command-routing surface.

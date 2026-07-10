@@ -30,7 +30,7 @@ For each entry:
 - **Over:** Earlier drafts had `/abcd:disembark to <path> --resume` which would re-attempt a previously-failed disembark from the last checkpoint.
 - **Why:** Resume semantics across the three-pass agent pipeline (Pass A spine + Pass B chat-distill + Pass C synthesis) require partial-output handling, agent-state restoration, and idempotency guarantees that the current release doesn't yet have. Re-running `disembark to <path>` from scratch is fast enough at current corpus sizes that resume is overhead, not value.
 - **Reconsider when:** disembark runs become long enough on real-world corpora that re-running from scratch is noticeably expensive AND a clear restart-after-failure user moment surfaces (autonomous overnight runs hitting rate limits; CI integration where re-running is expensive).
-- **Source:** `04-surfaces/02-disembark.md § 4` removal; logged in `.work/issues.md` (P1 #5) on 2026-05-08.
+- **Source:** `04-surfaces/02-disembark.md § 4` removal; logged in the `.abcd/work/issues/` ledger (P1 #5) on 2026-05-08.
 
 ### Memory unification (idea-1 → itd-36)
 
@@ -38,7 +38,7 @@ For each entry:
 - **Over:** New separate `.abcd/knowledge/` namespace (initial framing); pushing to a later phase.
 - **Why:** Initial proposal was a new namespace, but RP review revealed that the visibility-rule lock ("no exceptions") forbids per-subdirectory carve-outs, and `.abcd/memory/` already exists as the per-project compounding-curated knowledge layer (just narrowly scoped to session memory). Widening the upstream funnel of an existing namespace is structurally smaller than creating a new one. User reframed at R3; substrate reuse with itd-26 (loot) compressed the initial cost shape further.
 - **Reconsider when:** the worked-example test (3 adversarial walkthroughs across research-shaped, tooling, mixed-licence projects) shows sprawl or licence-gate failure — answer reverts to a later phase with the failed example as primary debug.
-- **Source:** `.work/idea-assessments/1-llm-wiki.md`; chat `adversarial-review-llm-w-4970CE` (5 rounds).
+- **Source:** `.abcd/work/idea-assessments/1-llm-wiki.md`; chat `adversarial-review-llm-w-4970CE` (5 rounds).
 
 ### Modification grammar discipline (idea-2 → itd-37); Ripple axis absorbing idea-3
 
@@ -46,7 +46,7 @@ For each entry:
 - **Over:** Two separate disciplines (itd-37 internal + itd-38 external); standalone `system-impact awareness` discipline; reserve-and-rename for itd-38; new `.abcd/development/system-state/` namespace.
 - **Why:** RP review (idea-3) judged the two-discipline split rhetorical not architectural — system-impact and modification-grammar pages for the same spec always sit beside each other, get curated together; same retrieval key (domain). Cost-benefit: 4 disciplines per spec is meaningfully cheaper than 5, and the per-spec authoring cost grows roughly linearly with discipline count. itd-38 had three candidate identities (discipline-set audit / system-state-registry / emergent-pattern-emission-rules) which is three intents not three names; releasing the ID prevents arbitrary stapling.
 - **Reconsider when:** observed evidence shows a `## Ripple` axis wants to be a separate page-class (pre-empted by the collapse) OR a discipline-set audit trigger fires (≥5 disciplines OR observed contradiction).
-- **Source:** `.work/idea-assessments/3-systems-thinking.md`; chat `idea-3-itd-38-adversaria-31A06A` (2 rounds).
+- **Source:** `.abcd/work/idea-assessments/3-systems-thinking.md`; chat `idea-3-itd-38-adversaria-31A06A` (2 rounds).
 
 ### Jagged frontier — split static (itd-5, current) vs dynamic (Frontier Awareness, a later phase)
 
@@ -54,7 +54,7 @@ For each entry:
 - **Over:** Single current-release discipline (itd-5 + dynamic half conflated), or single later-phase standalone (everything dynamic), or modifying the cascade contract directly.
 - **Why:** RP review (idea-4) flagged that conflating static + dynamic in itd-5 silently moves itd-5 from cheap to expensive; that the cascade-considers-capability framing silently reopens itd-2 + itd-6 (which currently say "fixed cascade" in `04-universal-patterns.md § 7`); and that `.abcd/toolchain-state/` was the third namespace-creep proposal in three reviews. Splitting static (cheap, current) vs dynamic (expensive, a later phase) preserves the cost discipline; pre-cascade selector framing preserves the cascade contract.
 - **Reconsider when:** itd-5 ships and the static `capability_scope` data accumulates across 10+ agents, providing the prior for the later-phase Frontier Awareness dynamic check.
-- **Source:** `.work/idea-assessments/4-jagged-frontier.md`; chat `idea-4-jagged-frontier-r-33C475` (2 rounds).
+- **Source:** `.abcd/work/idea-assessments/4-jagged-frontier.md`; chat `idea-4-jagged-frontier-r-33C475` (2 rounds).
 
 ### Bare-command-as-render discipline (sweep)
 
@@ -62,7 +62,7 @@ For each entry:
 - **Over:** Per-command bare conventions (some commands had `show` / `stats` / `list` sub-verbs imported from CLI conventions like `git status`, `npm list`, `abcd oracle stats`).
 - **Why:** Surface drift was a systemic failure mode (8 violator sites across 7 files surfaced in one audit). The discipline rules `show`/`stats`/`list`/`view` out of the namespace at design time. Bare-as-render is what gives abcd its discoverability ("type the verb, see what it does"); sub-verbs that just rename "show me the state" obscure the discoverability instead of enhancing it. Earned exception preserved: `/abcd:capture list --open|--resolved|--wontfix|--all` (filtered query distinct from default-open render).
 - **Reconsider when:** a sub-verb shape genuinely earns its existence (mutates state OR takes positional arg OR distinct time-axis/granularity OR distinct action) and the bare convention can't carry it.
-- **Source:** `02-constraints/04-naming.md § Bare-command-as-render discipline`; logged in `.work/issues.md` on 2026-05-08; sweep landed across 8 files in same session.
+- **Source:** `02-constraints/04-naming.md § Bare-command-as-render discipline`; logged in the `.abcd/work/issues/` ledger on 2026-05-08; sweep landed across 8 files in same session.
 
 ## Why this is separate from ADRs
 

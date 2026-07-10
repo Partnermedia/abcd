@@ -12,5 +12,5 @@ principle. A **note** here records something narrower and more operational:
   still be written down so it is not silently re-litigated.
 
 A note is the durable, committed artifact for a residual whose primary working
-record lived in a gitignored `.work/` ledger. If a note's subject later hardens
+record lives in the gitignored `.abcd/.work.local/` ledger. If a note's subject later hardens
 into a reversible architecture choice, promote it to an ADR and link back.

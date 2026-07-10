@@ -29,7 +29,8 @@ implementation):
 1. **Single-writer to the memory store.** The memory writer touches only
    `.abcd/memory/**`. Concurrent activities — a facilitator refining
    `.abcd/development/brief/**`, a product thinker amending `.abcd/intents/**`,
-   issue capture into `.work/issues.md` — write **disjoint file trees** and
+   issue capture into the `.abcd/work/issues/` ledger — write **disjoint file
+   trees** and
    never mutate the memory store. There is no real concurrent-writer scenario
    against `.abcd/memory/**`.
 

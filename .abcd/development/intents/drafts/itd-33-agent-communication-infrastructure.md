@@ -103,7 +103,7 @@ This intent moves from `drafts/` to `planned/` when ANY of the following happens
 4. **OpenCode harness ships (itd-22)** — multi-harness operation makes coordination's value concrete and surfaces the cross-harness contract requirements.
 5. **Two consecutive successful multi-agent runs** — proves the substrate works enough that the absence of coordination becomes the next bottleneck.
 
-The first user to hit (1)–(2) is asked to record the texture in `.work/issues.md` so the design proceeds against real evidence, not guesses.
+The first user to hit (1)–(2) is asked to record the texture in the `.abcd/work/issues/` ledger so the design proceeds against real evidence, not guesses.
 
 **Note on the previous file-clobber trigger.** An earlier draft included "first merge conflict caused by two agents editing the same file" as a trigger. That trigger has been removed: the narrowed scope (work_item claims, not file claims) makes file-level merge conflicts an out-of-scope failure mode for itd-33. They remain a real pain — but a separate intent's pain.
 

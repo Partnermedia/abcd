@@ -1,6 +1,6 @@
 # What Worked
 
-> **Status: PLACEHOLDER.** Evidence-shaped content (patterns that earned their keep, with the *why*) accumulates as the project progresses — this is the slot lifeboat extraction populates from `.abcd/memory/`, oracle reviews, and `.abcd/development/activity/`. During development, leave empty; populated post-build by the disembark process.
+> **Status: PLACEHOLDER.** Evidence-shaped content (patterns that earned their keep, with the *why*) accumulates as the project progresses — this is the slot lifeboat extraction populates from `.abcd/memory/`, oracle reviews, and the working record under `.abcd/work/`. During development, leave empty; populated post-build by the disembark process.
 
 ## Purpose
 

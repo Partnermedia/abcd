@@ -70,8 +70,9 @@ drifting from the corpus.
 
 ## Consequences
 
-- itd-43 and itd-7 relocate to `planned/`; `intent_lint`-style checks can later
-  enforce the scheduled ⇒ committed invariant mechanically.
+- itd-43 and itd-7 relocate to `planned/`; record-lint checks (the lint engine
+  in `internal/core/lint`) can later enforce the scheduled ⇒ committed invariant
+  mechanically.
 - `intents/README.md` describes `planned/` as committed (scheduled or awaiting
   sequencing) and its directory listings match disk.
 - The out-of-scope/later-phase enumeration (`brief/06-delivery/03-out-of-scope.md`)

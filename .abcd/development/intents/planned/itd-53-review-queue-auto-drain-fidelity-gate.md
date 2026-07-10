@@ -67,7 +67,7 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 - Depends on / coordinates with: itd-47 (headless backend reachability — the
   drainer needs a reachable backend to make progress).
 - Source: design discussion on the audit-loop enforcement design
-  (`.work/issues.md`, 2026-06-02, "should spec-close auto-run review" — resolved
+  (`.abcd/work/issues/`, 2026-06-02, "should spec-close auto-run review" — resolved
   NO; add a drainer instead).
 - Touches: the pure on-close lifecycle hook (spc-28) and the review-queue
   drain/claim machinery; the fidelity reviewer (spc-12) is the run target.

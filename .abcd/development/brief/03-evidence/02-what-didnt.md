@@ -1,6 +1,6 @@
 # What Didn't
 
-> **Status: PLACEHOLDER.** Evidence of dead ends and abandoned approaches accumulates as the project progresses; lifeboat extraction populates this slot from `.abcd/development/activity/issues/wontfix/`, oracle review pitfalls, and abandoned specs. During development, leave empty; populated post-build by the disembark process.
+> **Status: PLACEHOLDER.** Evidence of dead ends and abandoned approaches accumulates as the project progresses; lifeboat extraction populates this slot from wontfix entries in the `.abcd/work/issues/` ledger, oracle review pitfalls, and abandoned specs. During development, leave empty; populated post-build by the disembark process.
 
 ## Purpose
 
@@ -27,6 +27,6 @@ Without this section, the next agent re-tries failed approaches because nothing 
 
 While this file is empty during development, related signals already exist:
 
-- **`.work/issues.md`** — running log of issues discovered during the build (see the abcd-CLAUDE.md "Mandatory Issue Recording" rule)
-- **`.abcd/development/activity/issues/wontfix/`** — once `/abcd:capture` ships (itd-4), this becomes the canonical home for explicit non-action decisions
-- **Oracle review pitfalls** — `.abcd/development/activity/reviews/` accumulates pitfall annotations that lifeboat extraction promotes here
+- **the `.abcd/work/issues/` ledger** — running log of issues discovered during the build (see the abcd-CLAUDE.md "Mandatory Issue Recording" rule)
+- **wontfix entries in the `.abcd/work/issues/` ledger** — once `abcd capture` ships (itd-4), this becomes the canonical home for explicit non-action decisions
+- **Oracle review pitfalls** — the `.abcd/work/` area accumulates pitfall annotations that lifeboat extraction promotes here

@@ -4,7 +4,7 @@ This file holds locked decisions about *where* abcd runs and *how it ships*. The
 
 ## One repository
 
-abcd lives in **one repository** and ships a **curated release artifact** cut from it — there is no dev→public mirror ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The Go binary is the product ([adr-21](../../decisions/adrs/0021-rebuild-in-go.md)); its source, its user-facing documentation, and the design record all share this one tree. The design record (this brief, the roadmap, intents, ADRs, research) lives in-tree at `.abcd/development/`; `.work/` is a gitignored local-only surface. See [`../../../../CLAUDE.md`](../../../../CLAUDE.md) for the canonical "where things live" map.
+abcd lives in **one repository** and ships a **curated release artifact** cut from it — there is no dev→public mirror ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The Go binary is the product ([adr-21](../../decisions/adrs/0021-rebuild-in-go.md)); its source, its user-facing documentation, and the design record all share this one tree. The design record (this brief, the roadmap, intents, ADRs, research) lives in-tree at `.abcd/development/`; shared working material is committed under `.abcd/work/`, and `.abcd/.work.local/` is the gitignored local-only surface. See [`../../../../CLAUDE.md`](../../../../CLAUDE.md) for the canonical "where things live" map.
 
 **`.abcd/**` stays in-tree but is excluded from the release artifact by packaging** — exclusion is a build-time filter over the one tree, not a copy between two repos. `/abcd:launch` cuts a curated GitHub Release from this repo; **the repo is the marketplace**, so discovery, install, and the design record share one location.
 

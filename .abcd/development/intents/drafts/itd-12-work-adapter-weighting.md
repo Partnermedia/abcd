@@ -12,13 +12,13 @@ severity: minor
 
 ## Press Release
 
-> **abcd weights `.abcd/development/activity/notes/` (curated working scratch) below ADRs, specs, and memory in the principle distiller.** Quick scribbles in `.work/notes/` no longer compete on equal footing with carefully-considered architecture decisions. The distiller's confidence scoring per principle source is exposed in the lifeboat brief so reviewers can see why a particular principle made the cut.
+> **abcd weights `.abcd/work/notes/` (shared working scratch) below ADRs, specs, and memory in the principle distiller.** Quick scribbles in `.abcd/work/notes/` no longer compete on equal footing with carefully-considered architecture decisions. The distiller's confidence scoring per principle source is exposed in the lifeboat brief so reviewers can see why a particular principle made the cut.
 >
-> "I had a half-formed thought in `.work/scratch.md` that ended up appearing as a top-ranked principle in my lifeboat next to an ADR I'd spent days on," said Carol, engineering manager. "abcd now ranks them by source authority. The ADR wins; my scratch note becomes a candidate principle to revisit."
+> "I had a half-formed thought in `.abcd/.work.local/scratch/` that ended up appearing as a top-ranked principle in my lifeboat next to an ADR I'd spent days on," said Carol, engineering manager. "abcd now ranks them by source authority. The ADR wins; my scratch note becomes a candidate principle to revisit."
 
 ## Why This Matters
 
-abcd promotes content from `.work/notes/` into `.abcd/development/activity/notes/` via `dev-sync`, then feeds those into `principle-distiller` alongside ADRs, specs, memory, code-rescuer principles, and review findings. All sources are weighted equally by default. Working scratch is highly variable in quality — drafts, brainstorming, status snapshots — and shouldn't be treated as authoritative.
+abcd promotes content from `.abcd/.work.local/` into `.abcd/work/notes/` via `dev-sync`, then feeds those into `principle-distiller` alongside ADRs, specs, memory, code-rescuer principles, and review findings. All sources are weighted equally by default. Working scratch is highly variable in quality — drafts, brainstorming, status snapshots — and shouldn't be treated as authoritative.
 
 This intent introduces source-authority weighting and exposes the reasoning to reviewers.
 
@@ -31,15 +31,15 @@ This intent introduces source-authority weighting and exposes the reasoning to r
 
 ## What's Out of Scope
 
-- Auto-detecting whether a `.work/notes/` file is "polished" vs "scratch" (heuristic, fragile)
+- Auto-detecting whether a `.abcd/work/notes/` file is "polished" vs "scratch" (heuristic, fragile)
 - Cross-source contradiction resolution (a separate problem)
-- Removing `.work/notes/` from inputs entirely (we want low-weight inclusion, not exclusion)
+- Removing `.abcd/work/notes/` from inputs entirely (we want low-weight inclusion, not exclusion)
 
 ## Acceptance Criteria
 
 > _BDD format, per `itd-1-acceptance-gates`. These gates are checked by `intent-fidelity-reviewer` when this intent moves to `shipped/`._
 
-- **Given** a project with both an ADR and a `.abcd/development/activity/notes/` entry covering the same architectural concern, **when** principle-distiller runs in Pass C, **then** the resulting principle in `principles.md` cites the ADR as primary source AND the notes entry as a candidate-to-revisit (not equally weighted).
+- **Given** a project with both an ADR and a `.abcd/work/notes/` entry covering the same architectural concern, **when** principle-distiller runs in Pass C, **then** the resulting principle in `principles.md` cites the ADR as primary source AND the notes entry as a candidate-to-revisit (not equally weighted).
 - **Given** `.abcd/config.json` declares per-source weights overriding the defaults (e.g., `principle_distiller.weights.notes = 0.8`), **when** principle-distiller runs, **then** the configured weights replace the defaults AND the resulting `principles.json` records the active weight table for audit.
 - **Given** every principle in the lifeboat brief, **when** a reviewer reads `principles.md`, **then** each principle is annotated with its source list (ADR / spec / memory / review / notes / code-extracted) and the per-source weight that contributed to its acceptance.
 - **Given** a low-weight source (notes) and a high-weight source (ADR) emit contradictory principles, **when** the distiller resolves the conflict, **then** the high-weight source wins by default AND the suppressed low-weight principle appears under "candidate-principles-to-revisit" rather than being silently dropped.

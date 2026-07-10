@@ -21,7 +21,7 @@ than a deferred intention.
   ahoy scaffolded (`~/.abcd/history/` keyed on root-commit SHA), redacted on
   write, with no external recorder in the path (per adr-29).
 - `/abcd:capture "<text>"` writes a structured issue-ledger entry under
-  `.abcd/development/activity/issues/open/` with a stable `iss-N` ID, per the
+  `.abcd/work/issues/open/` with a stable `iss-N` ID, per the
   acceptance in `04-surfaces/06-capture.md`.
 - The folder-as-status lifecycle works: `capture resolve <iss-N>` and
   `capture wontfix <iss-N>` move the entry between status folders; no `status:`
@@ -80,7 +80,7 @@ something" surfaces are kept apart so each phase milestone stays sharp.
 
 - **Brief:** `04-surfaces/06-capture.md` (the capture command);
   `05-internals/07-memory.md` (itd-36's component spec);
-  `05-internals/03-configuration.md` (the `.abcd/development/activity/` namespace
+  `05-internals/03-configuration.md` (the `.abcd/work/` issue-ledger namespace
   and visibility-driven gitignore).
 - **Intents deliver the expectation:** itd-4 delivers the capture command,
   ledger, and folder-as-status lifecycle; itd-36 delivers the curated memory

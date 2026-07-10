@@ -60,7 +60,7 @@ The reviews subsystem, the schemas, and the spec store are all abcd-owned — th
 
 ## Open Questions
 
-- Sequencing against the `intents/README.md` v1/v2/v3 → phase migration (logged separately in `.work/issues.md`): both rewrite `intents/README.md`. Run the README migration first and this sweep second, or merge them into one README pass?
+- Sequencing against the `intents/README.md` v1/v2/v3 → phase migration (logged separately in the `.abcd/work/issues/` ledger): both rewrite `intents/README.md`. Run the README migration first and this sweep second, or merge them into one README pass?
 - Should `terminology/core/epic.md` be renamed (git mv → `spec.md`) or kept as a stub redirecting to `spec.md`? A stub preserves inbound links but adds a file the glossary must explain.
 - Does `epic.md`'s definition body need rewriting, or only its `term` field and filename? The concept is unchanged; only the word changes.
 
@@ -71,5 +71,5 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 ## References
 
 - Follows: the `epic_id`→`spec_id` intent-field rename (intent.schema.json, prd.schema.json, all 41 intent files, internal/core/lint, commands/abcd/intent.md) — the atomic part, done first; this intent is the non-atomic remainder.
-- Sequenced with: the `intents/README.md` v1/v2/v3 → phase migration (logged in `.work/issues.md`, 2026-05-16 session) — both rewrite the same README; order or merge them.
+- Sequenced with: the `intents/README.md` v1/v2/v3 → phase migration (logged in the `.abcd/work/issues/` ledger, 2026-05-16 session) — both rewrite the same README; order or merge them.
 - Triggered by: the native spec store adopting `spec` as its term ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), which leaves abcd's older `epic` surfaces inconsistent.

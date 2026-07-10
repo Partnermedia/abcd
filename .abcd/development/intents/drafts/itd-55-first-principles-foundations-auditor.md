@@ -69,4 +69,4 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
   compose.
 - Sibling harvest: the `socratic-grill` skill's domain-agnostic vocabulary +
   temperature modes are routed separately as an abcd-intent-grill enhancement
-  (logged in `.work/issues.md`), not into this intent.
+  (logged in the `.abcd/work/issues/` ledger), not into this intent.

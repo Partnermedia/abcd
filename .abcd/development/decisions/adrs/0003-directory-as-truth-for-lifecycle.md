@@ -55,7 +55,7 @@ Two failure modes followed: field-vs-directory drift (an intent could in princip
 
 **Downstream consequences:**
 - ADR-5 (brief is current state) extends the same principle to the brief itself: the live `brief/` directory IS the brief; no parallel `version:` field, no parallel `archive/<NN>/` directories duplicating git history.
-- The issue ledger (spc-20, itd-4) applies the same pattern: `.abcd/development/activity/issues/{open,resolved,wontfix}/iss-N-<slug>.md` carries no `status:` field; the sub-directory IS the lifecycle state. A `wontfix_reason:` or `resolution:` field is required in the corresponding directory (enforced by `_issue_lib._validate_invariants`, not by schema location alone), keeping per-state context legible.
+- The issue ledger (spc-20, itd-4) applies the same pattern: the `.abcd/work/issues/{open,resolved,wontfix}/iss-N-<slug>.md` ledger carries no `status:` field; the sub-directory IS the lifecycle state. A `wontfix_reason:` or `resolution:` field is required in the corresponding directory (enforced by `_issue_lib._validate_invariants`, not by schema location alone), keeping per-state context legible.
 
 ## Worked examples
 

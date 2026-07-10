@@ -101,7 +101,7 @@ known-state line (never an exception, never a silent omission).
 ## Dev-sync source (probed, recorded — v1 terminal stub)
 
 The `abcd dev-sync work` migration surface
-(`.work/issues.md` → the structured `iss-N` ledger) is **migration logic,
+(into the structured `.abcd/work/issues/` `iss-N` ledger) is **migration logic,
 not a durable last-run timestamp**: no config field and no history-store
 record captures "when dev-sync last ran". No such artifact exists anywhere in
 the repo.

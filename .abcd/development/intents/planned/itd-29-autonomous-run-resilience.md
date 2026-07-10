@@ -90,7 +90,7 @@ This intent moves from `drafts/` to `planned/` when ANY of the following happens
 4. **First user reports rewind difficulty** that took >30 minutes to undo a wrong autonomous turn.
 5. **Two consecutive autonomous runs** of substrate specs that succeed end-to-end (proving the run seam works enough to surface its own failure modes at scale).
 
-The first user to hit (1)–(4) is also asked to record the texture in `.work/issues.md` so this intent designs against real evidence when promoted.
+The first user to hit (1)–(4) is also asked to record the texture in the `.abcd/work/issues/` ledger so this intent designs against real evidence when promoted.
 
 ## Open Questions
 

@@ -27,8 +27,8 @@ This is also the keystone for retiring `~/ABCDevelopment/.claude/` entirely. Wit
 ## What's In Scope
 
 - **`hooks/prompt_router_hook.py`** — `UserPromptSubmit` hook. Reads merged rules (plugin defaults + `<repo>/.abcd/rules.json`), keyword-matches the `prompt` against each domain's `recall` list, injects matching rules as a system message. Signature-based dedup; force full re-inject every N turns (N defaults to 5, configurable).
-- **Plugin-bundled defaults** at `scripts/abcd/defaults/rules.json`. Domains: COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII. Each carries `recall` keywords + `rules` array. Content harvested in a one-time manual session from the legacy `~/ABCDevelopment/.claude/CLAUDE.md`.
-- **`<repo>/.abcd/rules.json`** schema (JSON Schema in `scripts/abcd/schemas/rules.schema.json`). Per-repo file. Can extend defaults, override individual rules, disable a domain entirely, or add custom domains. `/abcd:ahoy` writes a minimal skeleton.
+- **Binary-bundled defaults** embedded in the Go binary (`internal/core/...`). Domains: COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII. Each carries `recall` keywords + `rules` array. Content harvested in a one-time manual session from the legacy `~/ABCDevelopment/.claude/CLAUDE.md`.
+- **`<repo>/.abcd/rules.json`** schema (JSON Schema embedded in the Go binary, `internal/core/...`). Per-repo file. Can extend defaults, override individual rules, disable a domain entirely, or add custom domains. `/abcd:ahoy` writes a minimal skeleton.
 - **CLAUDE.md marker block** owned by `/abcd:ahoy`. ~30 lines. Identifies that abcd is active, points at `.abcd/rules.json` and the plugin defaults, lists the active domains, gives the developer the explicit-activation syntax for star-commands.
 - **Star-command bypass** — `*<DOMAIN> …` (e.g. `*ROADMAP draft a milestone`) explicitly activates a domain regardless of keyword match.
 - **Dedup + refresh discipline** — same rule signature isn't re-injected within the same session; full refresh every N turns to recover from compaction.

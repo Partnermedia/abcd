@@ -195,7 +195,7 @@ spec. The live acceptance criteria for this intent are owned by
   ADR writer matches.
 - **itd-39** (scope-aware memory retrieval) — the deferred substrate for
   pulling active decisions into planner context (out of scope here).
-- **`.work/issues.md` 2026-05-22** — the discussion that produced this intent.
+- **the `.abcd/work/issues/` ledger, 2026-05-22** — the discussion that produced this intent.
 - **`.abcd/logbook/grill/20260522T192535Z-itd-44/`** — first grill pass (lite
   mode); recommends re-grilling against the thin scope (this body rewrite is its
   prerequisite).

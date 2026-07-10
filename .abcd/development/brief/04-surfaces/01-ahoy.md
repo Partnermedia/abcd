@@ -172,7 +172,7 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 
 Every artefact `install` writes — the marker block, the `.abcd/rules.json`
 skeleton, `.abcd/usage.md` —
-comes from a canonical file under `scripts/abcd/defaults/`, never from inline
+comes from a canonical file under `internal/core/ahoy/defaults/`, never from inline
 prose in this surface or in the apply logic. If a template is stale, edit the
 template file. Drift detection (step 7) is only meaningful because the marker
 block has one canonical source.
@@ -221,7 +221,7 @@ category present, and applies the approved categories' gaps.
    `<!-- BEGIN ABCD -->` / `<!-- END ABCD -->` in the target docs. **Silent
    overwrite on drift, per itd-3 — no prompt for hand-edits inside the block;
    users edit outside the markers.** Content comes from
-   `scripts/abcd/defaults/claude-md-marker-block.md`. Write the minimal
+   `internal/core/ahoy/defaults/claude-md-marker-block.md`. Write the minimal
    `.abcd/rules.json` skeleton if missing.
 8. **PATH symlink** (`config-change`) — transparent prompt: "Install `abcd`
    symlink to `/usr/local/bin/abcd`? Default: yes for private repos, no for
@@ -308,7 +308,7 @@ user-scope app-state.
   visibility-driven `.gitignore` allowlist entries are present, the
   history-store dirs + `index.json` entry are present, the
   CLAUDE.md/AGENTS.md marker block from
-  `scripts/abcd/defaults/claude-md-marker-block.md` is installed, and
+  `internal/core/ahoy/defaults/claude-md-marker-block.md` is installed, and
   `hooks/hooks.json` is verified present (verify-only — never mutated).
 - **Given** a repo with `install` already run, **when** `/abcd:ahoy install`
   runs again with no state changes, **then** the detection pass reports zero

@@ -26,7 +26,7 @@ severity: critical
 
 ## Press Release
 
-> **`/abcd:launch` gains a real payload render with a leak-proof default-deny filter, a parity diff against the previously published release, and an installed-surface smoke test — so a maintainer sees EXACTLY what would be published, provably without `.abcd/` / `.flow/` / `.work/` leaking, and with every shipped `/abcd:*` command, skill, and hook confirmed to resolve and import from the rendered snapshot.** The payload is the curated release excluding `.abcd/**` ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)); the brief's § 2 payload manifest is default-deny (include-list + hard `.abcd/**` exclusion), but nothing yet MATERIALISES that manifest and proves the exclusions hold, diffs it against the last published release, or verifies the rendered plugin actually loads. This intent builds that: render → prove-no-leak → parity-diff → consumer-surface smoke, all read-only, so the release is trustworthy before promotion.
+> **`/abcd:launch` gains a real payload render with a leak-proof default-deny filter, a parity diff against the previously published release, and an installed-surface smoke test — so a maintainer sees EXACTLY what would be published, provably without `.abcd/` leaking, and with every shipped `/abcd:*` command, skill, and hook confirmed to resolve and import from the rendered snapshot.** The payload is the curated release excluding `.abcd/**` ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)); the brief's § 2 payload manifest is default-deny (include-list + hard `.abcd/**` exclusion), but nothing yet MATERIALISES that manifest and proves the exclusions hold, diffs it against the last published release, or verifies the rendered plugin actually loads. This intent builds that: render → prove-no-leak → parity-diff → consumer-surface smoke, all read-only, so the release is trustworthy before promotion.
 
 > "Before I publish the release I want to see the actual file list, be certain none of my development knowledge or flow state rode along, and know the plugin still works once it's just the shipped files," said a maintainer. "A preview I have to trust isn't enough — render it and prove it."
 
@@ -36,8 +36,8 @@ The pre-flight gate suite ([[itd-65-launch-preflight-gate-suite]]) decides wheth
 
 ## What's In Scope
 
-- A read-only payload RENDER: materialise the § 2 include-manifest into a temp tree, applying `.gitignore` patterns and the default-deny exclude set (`.work/`, `.flow/`, `.specstory/`, `.abcd/`, `memory/`).
-- A leak-proof assertion: the rendered tree contains ZERO `.abcd/**`, `.flow/**`, `.work/**` paths, and honours the `.abcd/launch.allow` allowlist contract (never promotes any `.abcd/**` line, per adr-28).
+- A read-only payload RENDER: materialise the § 2 include-manifest into a temp tree, applying `.gitignore` patterns and the default-deny exclude set (`.abcd/`, `.specstory/`, `memory/`).
+- A leak-proof assertion: the rendered tree contains ZERO `.abcd/**` paths, and honours the `.abcd/launch.allow` allowlist contract (never promotes any `.abcd/**` line, per adr-28).
 - A parity diff between the rendered payload and the previously published release: added / changed / removed files, so the operator previews the exact snapshot delta before promotion.
 - An installed-surface smoke test: from the rendered snapshot, load `plugin.json` + `marketplace.json` and assert every declared `/abcd:*` command, skill, and hook resolves, and every shipped Python entrypoint imports.
 - All read-only w.r.t. the dev repo (temp-tree writes only, removed after) — matches the side-effect-free posture of the spc-64 gate.
@@ -57,7 +57,7 @@ The pre-flight gate suite ([[itd-65-launch-preflight-gate-suite]]) decides wheth
 
 > _Given-When-Then per the itd-1 discipline._
 
-- **Given** the § 2 include-manifest, **when** the payload is rendered, **then** the rendered tree contains every include root and ZERO paths under `.abcd/`, `.flow/`, `.work/`, `.specstory/`, or legacy `memory/`.
+- **Given** the § 2 include-manifest, **when** the payload is rendered, **then** the rendered tree contains every include root and ZERO paths under `.abcd/`, `.specstory/`, or legacy `memory/`.
 - **Given** a `.abcd/launch.allow` line pointing at a `.abcd/**` path, **when** the render applies the allowlist, **then** that line is refused / never promoted (adr-28), and the render records the refusal.
 - **Given** a rendered payload and the previously published release, **when** the parity diff runs, **then** it reports added/changed/removed files accurately, so the operator sees the exact snapshot delta.
 - **Given** a rendered snapshot, **when** the installed-surface smoke test runs, **then** every `/abcd:*` command, skill, and hook declared in the manifest resolves and every shipped Python entrypoint imports — a broken shipped entrypoint FAILS the test.

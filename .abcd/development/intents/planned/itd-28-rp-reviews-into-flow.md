@@ -44,12 +44,12 @@ This is the **`press-release`-shaped commitment** behind the native review-store
 
 ### Carve-out: spec-tied reviews vs unscoped chats
 
-This intent covers **spec-tied reviews only** — the plan-review, impl-review, and (future) spec-completion-review artifacts that have a known spec ID, landed by the native review pipeline. A separate job is the **lifeboat-style storage of unscoped ad-hoc oracle chats** (the "I spent 30 minutes brainstorming the next intent in an oracle" case), swept into `.abcd/development/activity/reviews/` by whichever oracle adapter is configured (e.g. the RepoPrompt adapter, when present). Two stores, two clear jobs:
+This intent covers **spec-tied reviews only** — the plan-review, impl-review, and (future) spec-completion-review artifacts that have a known spec ID, landed by the native review pipeline. A separate job is the **lifeboat-style storage of unscoped ad-hoc oracle chats** (the "I spent 30 minutes brainstorming the next intent in an oracle" case), swept into `.abcd/work/reviews/` by whichever oracle adapter is configured (e.g. the RepoPrompt adapter, when present). Two stores, two clear jobs:
 
 | Store | Purpose | Cadence | Format | Lifeboat consumes |
 |---|---|---|---|---|
 | `.abcd/reviews/<spec>/` | Per-spec engineering audit trail | Push at write-time (native review pipeline) | Canonical JSON sidecar (`review.json`) + derived MD render (`review.md`) | Yes |
-| `.abcd/development/activity/reviews/` | Lifeboat-style storage of unscoped oracle transports | Pull at sync time (`abcd dev-sync`) | Verbatim MD per transport | Yes |
+| `.abcd/work/reviews/` | Lifeboat-style storage of unscoped oracle transports | Pull at sync time (`abcd dev-sync`) | Verbatim MD per transport | Yes |
 
 The unscoped-transport sweep is adapter-scoped and runs only when an oracle adapter is configured; spec-tied reviews are already landed by the native review pipeline.
 
@@ -66,7 +66,7 @@ The unscoped-transport sweep is adapter-scoped and runs only when an oracle adap
 - **`.gitignore`** allow-lists the native review store `.abcd/reviews/`; ignores each per-review `raw/` subdirectory (`.abcd/reviews/**/<NNNN>-*/raw/`).
 - **Index discovery**: `reviews-index --spec <spec-id>` generates `INDEX.md` + `INDEX.json` on demand (no new command surface). CI verifier runs `--check` mode on PRs touching `.abcd/reviews/**`. No git hooks — on-demand plus CI only.
 - **Brief edits in this repo (abcd-cli)**:
-  - `05-internals/02-adapters.md`: clarify the review dispatcher's two stores (spec-tied via the native review pipeline → `.abcd/reviews/`; unscoped via a configured oracle adapter → `.abcd/development/activity/reviews/`).
+  - `05-internals/02-adapters.md`: clarify the review dispatcher's two stores (spec-tied via the native review pipeline → `.abcd/reviews/`; unscoped via a configured oracle adapter → `.abcd/work/reviews/`).
   - `05-internals/03-configuration.md`: clarify `dev_sync.reviews.enabled` only sweeps unscoped transports.
 - **Default**: post-processor ON by default; `ABCD_REVIEW_POSTPROCESS=0` kill switch.
 - **Dirty-tree policy**: capture `worktree_sha256` and tag `dirty: true`; do NOT block.
@@ -82,7 +82,7 @@ The unscoped-transport sweep is adapter-scoped and runs only when an oracle adap
 - **Hand-rolling redaction regexes** — use gitleaks instead.
 - **Replacing the review pipeline** — this intent adds storage + governance, not a new oracle adapter.
 - **Automatic git-hook regeneration of INDEX.md** — practice-scout established this is the canonical anti-pattern (pre-commit#2240 re-stage loop, post-commit feedback loops). On-demand only + CI verifier.
-- **Unscoped oracle transport storage** — covered by the adapter-scoped sweep into `.abcd/development/activity/reviews/`.
+- **Unscoped oracle transport storage** — covered by the adapter-scoped sweep into `.abcd/work/reviews/`.
 - **`Reviewed-by:` git trailer auto-injection on implementation commits** — out of scope (nice-to-have bidirectional linkage).
 
 ## Acceptance Criteria

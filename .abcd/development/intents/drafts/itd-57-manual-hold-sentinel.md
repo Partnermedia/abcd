@@ -59,7 +59,7 @@ This is voyage-agnostic: every voyage that runs an autonomous loop eventually ne
 
 ## Audit Notes
 
-Captured 2026-06-12 from a facilitator decision while planning the session-layer activation spec (spc-58): the spec needed to be planned and double-backend reviewed but hard-blocked from run-seam pickup. The never-done-dependency mechanism was used ad hoc; this intent promotes it to a configure-time primitive. Hand-authored draft — validate via `/abcd:intent` or `intent_lint` before promotion.
+Captured 2026-06-12 from a facilitator decision while planning the session-layer activation spec (spc-58): the spec needed to be planned and double-backend reviewed but hard-blocked from run-seam pickup. The never-done-dependency mechanism was used ad hoc; this intent promotes it to a configure-time primitive. Hand-authored draft — validate via `/abcd:intent` or the record lint (`abcd docs lint`) before promotion.
 
 ## References
 

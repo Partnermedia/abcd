@@ -51,9 +51,9 @@ Every memory page declares its source class via typed `source:` frontmatter. The
 | `external_pdf` | User-ingested PDF via `/abcd:memory ingest <path>` | Immutable post-ingest (original NOT stored unless `--keep-original`) |
 | `external_transcript` | User-ingested transcript via `/abcd:memory ingest <path>` | Immutable post-ingest |
 | `external_article` | User-ingested article (URL or local) via `/abcd:memory ingest <path-or-url>` | Immutable post-ingest |
-| `oracle_review` | Synced from `.abcd/development/activity/reviews/` (RepoPrompt / codex review artefacts) | Immutable post-sync |
-| `work_notes` | Curated from `.abcd/development/activity/notes/` (which is in turn curated from `.work/`) | User-mutable upstream |
-| `issue_ledger` | Synthesised entries from `.abcd/development/activity/issues/` (per itd-4 capture) | Immutable post-create |
+| `oracle_review` | Synced from `.abcd/work/reviews/` (RepoPrompt / codex review artefacts) | Immutable post-sync |
+| `work_notes` | Curated from working notes in `.abcd/work/` (shared, committed) | User-mutable upstream |
+| `issue_ledger` | Synthesised entries from the `.abcd/work/issues/` ledger (per itd-4 capture) | Immutable post-create |
 | `dredge_synthesis` | Cross-corpus synthesis output from `/abcd:dredge synth` (per itd-25 — a later phase) | Per-run; durable knowledge |
 | `spec_modification_grammar` | Per-spec theory extraction from a spec's `## Modification Grammar` section (per itd-37) at spec completion | Append-only per spec |
 | `modification_grammar` | Compounding-curated cross-spec synthesis on the same domain (per itd-37) | Curator-merged across specs |

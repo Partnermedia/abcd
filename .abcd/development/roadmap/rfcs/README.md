@@ -17,7 +17,7 @@ RFCs are *not* used for:
 
 - Feature specifications — those are intents (`itd-N`), in press-release format.
 - Architectural decisions already made — those are ADRs (`adr-N`), at [`../../decisions/adrs/`](../../decisions/adrs). ADR format is for retrospective decision records, not forward-looking discussion.
-- Internal-only nitpicks — those go in `.work/issues.md` and surface via `/abcd:dredge` later.
+- Internal-only nitpicks — those go in the `.abcd/work/issues/` ledger and surface via `/abcd:dredge` later.
 
 ---
 

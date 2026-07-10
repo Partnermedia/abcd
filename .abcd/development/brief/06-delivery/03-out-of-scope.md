@@ -25,7 +25,7 @@ in the historical note at the end of this section, not here.)
 - itd-9 — Cross-version lifeboat schema migration
 - itd-10 — `/abcd:ahoy destroy` deeper uninstall
 - itd-11 — Pass B transcript-noise mitigation
-- itd-12 — `.abcd/development/activity/notes/` distiller weighting
+- itd-12 — `.abcd/.work.local/notes/` distiller weighting
 - itd-13 — Scheduled `dev-sync` (cron / launchd)
 - itd-14 — Prompt registry + versioning (heavier successor to itd-5)
 - itd-15 — Self-dogfooded SOTA audit (recurring per-disembark sibling to itd-5)
@@ -44,7 +44,7 @@ in the historical note at the end of this section, not here.)
 - itd-39 — Scope-aware memory retrieval (extends itd-3's recall hook to the memory store)
 - itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
 - itd-44 — A fourth intent kind for infrastructure choices the product thinker wants to record
-- `.work/issues.md` cleanup bundle (sweep the workshop before a later phase)
+- `.abcd/work/issues/` ledger cleanup bundle (sweep the workshop before a later phase)
 - itd-47 — oracle-backed gates pass honestly without a human in the loop
 - itd-51 — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
 - abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired

@@ -106,7 +106,7 @@ Lint codes referenced below (`ML*`, `MQ*`) ship with spc-39 (the write/lint spli
 
 - **`internal/core/memory` adapter** ([`02-adapters.md`](02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
 - **`/abcd:memory ingest`** (this substrate's primary consumer) consumes for: licence detection on every external source, citation generation on every page, registry update on every ingest.
-- **`/abcd:loot`** (later-phase consumer) consumes for: licence detection on vendored repos, citation generation in `.abcd/development/activity/loot/<source>.md`, registry update on every vendor pass.
+- **`/abcd:loot`** (later-phase consumer) consumes for: licence detection on vendored repos, citation generation in `.abcd/development/loot/<source>.md`, registry update on every vendor pass.
 - **`/abcd:disembark` (lifeboat)** is the gate's real consumer (adr-18): it reads the registry for restrictive-licence enforcement over the curated memory/provenance it publishes; does not write to it. At launch the gate is future/inert — `/abcd:launch` excludes `.abcd/` wholesale and is not the gate's consumer (the launch dry-run only renders the gate's verdicts diagnostically).
 
 ## 7. Ship gate

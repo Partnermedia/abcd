@@ -30,7 +30,7 @@ abcd has two onboarding paths: `/abcd:ahoy install` (add abcd to an existing pro
 - Templates for common project shapes: Python, Swift, Go, TypeScript, Rust, Docker, plain
 - All abcd conventions installed at scaffold time (no need to re-run ahoy)
 - Starter intent (`/abcd:intent` interview kicked off as last step) capturing the project's mission as `itd-1`
-- Templates committed and versioned in `scripts/abcd/templates/projects/`
+- Templates committed and versioned as assets embedded in the Go binary (`internal/core/...`)
 
 ## What's Out of Scope
 
@@ -44,7 +44,7 @@ abcd has two onboarding paths: `/abcd:ahoy install` (add abcd to an existing pro
 > _BDD format, per `itd-1-acceptance-gates`. These gates are checked by `intent-fidelity-reviewer` when this intent moves to `shipped/`._
 
 - **Given** an abcd-aware terminal, **when** the user runs bare `/abcd:init-project`, **then** the dispatcher detects whether the current directory is empty / a fresh repo / already abcd-shaped and shows status + suggested next actions (per the universal bare-command-as-help convention) — no scaffolding runs without an explicit verb or flag.
-- **Given** an empty directory (no files except possibly `.git/`), **when** the user runs `/abcd:init-project scaffold` (or accepts the suggestion offered by bare invocation), **then** the interview captures language + intended use + deployment target, scaffolds the chosen project template under `scripts/abcd/templates/projects/<lang>/`, installs all abcd conventions (CLAUDE.md marker block, `.abcd/` namespace, gitignore policy), and offers to start the `/abcd:intent new` flow as the final step capturing the project's mission as `itd-1`.
+- **Given** an empty directory (no files except possibly `.git/`), **when** the user runs `/abcd:init-project scaffold` (or accepts the suggestion offered by bare invocation), **then** the interview captures language + intended use + deployment target, scaffolds the chosen project template (a per-language asset embedded in the Go binary, `internal/core/...`), installs all abcd conventions (CLAUDE.md marker block, `.abcd/` namespace, gitignore policy), and offers to start the `/abcd:intent new` flow as the final step capturing the project's mission as `itd-1`.
 - **Given** a directory that fails the brief's emptiness rules (existing source files, vendored code, etc.), **when** `/abcd:init-project scaffold` is invoked, **then** the command refuses with a clear error AND suggests `/abcd:ahoy install` as the correct path for retrofitting abcd into an existing project.
 - **Given** the user picks "Python" in the interview, **when** scaffolding completes, **then** the directory contains a `pyproject.toml`, `src/<package>/__init__.py`, `tests/`, a permission template at `.claude/settings.local.json` (per itd-18), and an `.abcd/` namespace with the brief skeleton.
 - **Given** the user declines the optional starter intent, **when** init-project completes, **then** `intents/drafts/` is empty AND the ahoy report records "starter intent: declined" so the user can run `/abcd:intent new` later without confusion.

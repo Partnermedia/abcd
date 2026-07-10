@@ -24,7 +24,7 @@ Intent IDs follow the pattern `itd-N` (unpadded, mirrors the native spec `spc-N`
 
 **IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
 
-**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `spc-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (`intent_lint`, registries, dashboards) rather than via filename padding.
+**Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `spc-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (the record lint, registries, dashboards) rather than via filename padding.
 
 ---
 
@@ -58,7 +58,7 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 
 There is no `active/` state — "active" is implicit (a planned intent's linked spec is currently in flight in the native spec store; an active discipline is any intent in `disciplines/`).
 
-**Directory location is the single source of truth for lifecycle state across all kinds.** Standalone and bundle-member intents derive state from `drafts/` / `planned/` / `shipped/`; disciplines derive state from `disciplines/` / `superseded/`. No intent has a `status` field that could disagree with its directory; `intent_lint` enforces the contract.
+**Directory location is the single source of truth for lifecycle state across all kinds.** Standalone and bundle-member intents derive state from `drafts/` / `planned/` / `shipped/`; disciplines derive state from `disciplines/` / `superseded/`. No intent has a `status` field that could disagree with its directory; the record lint enforces the contract.
 
 ---
 
@@ -141,7 +141,7 @@ Continuously: intent-fidelity-reviewer's shape-classification role suggests
 | `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `spec_id: spc-N` (scalar, or `null` when in drafts/ — **never a list**) |
 | the native spec `spc-N-<slug>` | `intent: itd-N` (or list — one spec may consume several intents; that is the bundle direction) |
 
-Both directions present once `/abcd:intent plan` runs. `intent_lint` (pre-commit + CI) verifies they agree, and rejects a list-valued `spec_id`.
+Both directions present once `/abcd:intent plan` runs. The record lint (pre-commit + CI) verifies they agree, and rejects a list-valued `spec_id`.
 
 **Split-the-intent doctrine.** An intent is the unit of consumption: it is implemented by exactly one spec. Work too big for one spec decomposes into *tasks inside* that spec; an intent containing two separately verifiable promises is two intents — split it (precedent: the launch PRD's Tier A/B split into itd-67 and itd-72). This keeps the close hook singular, coverage computable, and doneness unambiguous — an intent can never be half-consumed and called done.
 
@@ -253,7 +253,7 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 |---|---|---|
 | ~~`tier-0-audit-substrate`~~ (dissolved 2026-05-07) | ~~itd-31 + itd-32~~ | The bundle premise (unified `/abcd:audit` surface bundling all review/audit roles into one verb's subverbs) was dissolved when the round-2 command-structure review split the three intent-fidelity-reviewer roles into three distinct verbs under `/abcd:intent` (review/consistency/shape). itd-31 promoted to standalone; itd-32 superseded by itd-31. |
 
-Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by `intent_lint`). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
+Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by the record lint). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.
 
 **Note on cross-phase bundle attempts:** the `intent-capture-discipline` bundle (itd-27 + itd-30) was retired. The bundle invariant requires *one shared spec shipped together* — and per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md) all bundle members must belong to the same phase. itd-27 has a plan-reviewed spec (`spc-3`); itd-30 is unscheduled. Both intents were reclassified to `standalone`; if itd-30 is later picked up, its spec can depend on or extend `spc-3` for shared interview/lint/persona-registry plumbing without needing the bundle declaration.
 
