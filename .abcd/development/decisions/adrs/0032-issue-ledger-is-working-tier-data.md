@@ -52,7 +52,7 @@ opens and resolves, but it was living in the tree meant for authored, git-canoni
 
 ## Alternatives Considered
 
-- **Exempt `.abcd/development/activity/` in `record-lint`.** (historical) The first-pass fix, briefly
+- **Exempt `.abcd/development/activity/` (historical) in `record-lint`.** The first-pass fix, briefly
   recommended and then reversed. Rejected as symptom suppression: it carves the lint around a
   category error rather than fixing it, and leaves the ledger in the wrong tier. The reversal
   is the methodology-over-local-fixes principle in action — recorded so the reasoning is not

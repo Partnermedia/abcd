@@ -250,8 +250,8 @@ same change (`roadmap/phases/README.md`, `brief/01-product/03-mental-model.md`,
 
 **Delivery note (spc-66).** Two of the three bundled artefacts are now built: the
 `PA001` valid-phase anchor lint (verify-exists, line-precise on the `phase:` key)
-and the phase-audit reviewer (in the Go binary under `internal/core/` — a sibling of
-`intent-fidelity-reviewer`, reviewing delivered reality against a phase's
+and the phase-audit reviewer (Go tooling, a sibling of `intent-fidelity-reviewer`;
+specified here, not yet in the binary — reviewing delivered reality against a phase's
 `## Phase Acceptance` via the editorial `## Scope` membership chain, receipt-only
 to `.abcd/logbook/audit/phase-<ts>/`). The **third** artefact — the corpus anchor
 backfill onto the unanchored specs — remains **deferred**, but is now **unblocked**:

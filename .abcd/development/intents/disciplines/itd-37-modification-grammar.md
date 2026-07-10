@@ -105,8 +105,8 @@ _Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity
 
 ## References
 
-- `.abcd/work/idea-assessments/2-programming-as-theory-building.md` — full assessment with 3-round review trail (chat `adversarial-naur-theory--0A4174`); rename from "Theory transparency" to "Modification Grammar discipline" preserved in chat record.
-- `.abcd/work/idea-assessments/3-systems-thinking.md` — sibling assessment; the `Ripple` axis on this discipline absorbs idea-3's per-spec-external concerns (chat `idea-3-itd-38-adversaria-31A06A`, MAJOR_RETHINK collapse).
+- Full assessment in a local working note (unmigrated), with 3-round review trail (chat `adversarial-naur-theory--0A4174`); rename from "Theory transparency" to "Modification Grammar discipline" preserved in chat record.
+- Sibling assessment in a local working note (unmigrated); the `Ripple` axis on this discipline absorbs idea-3's per-spec-external concerns (chat `idea-3-itd-38-adversaria-31A06A`, MAJOR_RETHINK collapse).
 - [Naur 1985][naur-1985] — "Programming as Theory Building", *Microprocessing and Microprogramming* 15(5):253-261; primary philosophical citation.
 - [`research/related-work.md § Naur 1985`](../../research/related-work.md#naur-1985--programming-as-theory-building) — full prior-art comparison.
 - [`itd-1-acceptance-gates.md`](itd-1-acceptance-gates.md) — companion discipline; this discipline's acceptance criteria conform to its Given-When-Then shape.

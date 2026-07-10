@@ -1,6 +1,6 @@
 # Context
 
-You did a manual lifeboat from iDelphiZero → iDelphi (`idelphiDev/.abcd/work/lifeboat/rescue/extraction.md` is the gold standard). Before rebuilding iDelphi from scratch, you want to automate: (a) **packing** lessons from an in-progress repo into a portable lifeboat artefact, and (b) **unpacking** that artefact to bootstrap a clean rebuild.
+You did a manual lifeboat from iDelphiZero → iDelphi (`idelphiDev/.work/lifeboat/rescue/extraction.md` (historical) is the gold standard). Before rebuilding iDelphi from scratch, you want to automate: (a) **packing** lessons from an in-progress repo into a portable lifeboat artefact, and (b) **unpacking** that artefact to bootstrap a clean rebuild.
 
 abcd ships these user-facing commands:
 

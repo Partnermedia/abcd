@@ -27,6 +27,6 @@ Without this section, the next agent re-tries failed approaches because nothing 
 
 While this file is empty during development, related signals already exist:
 
-- **the `.abcd/work/issues/` ledger** — running log of issues discovered during the build (see the abcd-CLAUDE.md "Mandatory Issue Recording" rule)
-- **wontfix entries in the `.abcd/work/issues/` ledger** — once `abcd capture` ships (itd-4), this becomes the canonical home for explicit non-action decisions
+- **`.abcd/.work.local/issues.md`** — running log of issues discovered during the build (see the abcd-CLAUDE.md "Mandatory Issue Recording" rule)
+- **wontfix entries in the `.abcd/work/issues/` ledger** — once `/abcd:capture` ships (itd-4), this becomes the canonical home for explicit non-action decisions
 - **Oracle review pitfalls** — the `.abcd/work/` area accumulates pitfall annotations that lifeboat extraction promotes here

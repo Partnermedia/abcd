@@ -25,7 +25,7 @@ in the historical note at the end of this section, not here.)
 - itd-9 — Cross-version lifeboat schema migration
 - itd-10 — `/abcd:ahoy destroy` deeper uninstall
 - itd-11 — Pass B transcript-noise mitigation
-- itd-12 — `.abcd/.work.local/notes/` distiller weighting
+- itd-12 — `.abcd/work/notes/` distiller weighting
 - itd-13 — Scheduled `dev-sync` (cron / launchd)
 - itd-14 — Prompt registry + versioning (heavier successor to itd-5)
 - itd-15 — Self-dogfooded SOTA audit (recurring per-disembark sibling to itd-5)

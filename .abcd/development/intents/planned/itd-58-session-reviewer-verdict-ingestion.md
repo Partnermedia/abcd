@@ -47,7 +47,7 @@ Until this lands, the seam enforces A4 as a **denial without a counterpart**: no
 
 ## References
 
-- `.abcd/work/code-review.md` §A4 (the finding) + §N1
+- A local code-review working note, §A4 (the finding) + §N1
 - The seam-owned verdict-record operation (the gap), the trusted-verdict parser, and the advance gate on the pluggable autonomous seam
 - The seam's enforcement (dependency — wiring + A4 negative), ADR-8 (trusted-verdict policy resolution), ADR-27 (pluggable autonomous seam)
 - Surfaced by: a plan-review of the seam's enforcement wiring

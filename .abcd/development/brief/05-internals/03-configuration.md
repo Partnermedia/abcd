@@ -73,7 +73,7 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
     "capture": "oracle"                 // "oracle" (capture over the native review store, adr-25) | "none"
   },
   "dev_sync": {                         // per-source enable flags (asked during ahoy); semantic names per 04-universal-patterns.md § 7
-    "reviews": { "enabled": true  },    // oracle-adapter capture → activity/reviews/ — sweeps ad-hoc reviews not tied to a spec only;
+    "reviews": { "enabled": true  },    // oracle-adapter capture → .abcd/work/reviews/ — sweeps ad-hoc reviews not tied to a spec only;
                                         // spec-tied reviews land in the native spec review store at write-time (not controlled by this flag)
     "memory":  { "enabled": true  },    // memory harvest → .abcd/memory/
     "work":    { "enabled": true  },    // .abcd/.work.local/ issues + notes/ → .abcd/work/{issues,notes}/
@@ -197,7 +197,7 @@ Set by ahoy:
 
 | Directory | Public default | Private default |
 |---|---|---|
-| `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, activity, voyage, personas), the native spec store, `memory/`, `lifeboat/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
+| `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, voyage, personas), the native spec store, `memory/`, `lifeboat/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
 | `memory/` (legacy snapshot) | gitignored | **committed** if present¹ |
 | `.abcd/.work.local/` | gitignored | gitignored (local-only scratch, per global abcd CLAUDE.md) |
 
@@ -386,10 +386,6 @@ external plug-in — so this brief does not restate it here.
 │   │   │   ├── 1/                             # Phase 1+: as needed
 │   │   │   └── ...
 │   │   └── adr/                               # architecture decision records (e.g., 01-harness-interface.md)
-│   ├── activity/                       # curated-from-volatile-sources
-│   │   ├── reviews/                    # captured by the oracle adapter (RepoPrompt / codex / future) per 04-universal-patterns.md § 7
-│   │   ├── issues/{open,resolved,wontfix}/  # iss-N-<slug>.md ledger entries (per itd-4)
-│   │   └── notes/                      # distilled from .abcd/.work.local/notes/
 │   └── voyage/                         # embark/disembark provenance and history (see ../04-surfaces/03-embark.md § 7)
 │       ├── README.md
 │       ├── embark/
@@ -397,6 +393,10 @@ external plug-in — so this brief does not restate it here.
 │       │   └── from/<timestamp>/       # opt-in via embark --archive: verbatim copy of input lifeboat
 │       └── disembark/
 │           └── history.jsonl           # append-only manifest log of every disembark run
+├── work/                               # curated-from-volatile-sources (see § 2)
+│   ├── reviews/                        # captured by the oracle adapter (RepoPrompt / codex / future) per 04-universal-patterns.md § 7
+│   ├── issues/{open,resolved,wontfix}/ # iss-N-<slug>.md ledger entries (per itd-4)
+│   └── notes/                          # distilled from .abcd/.work.local/notes/
 ├── specs/                              # native minimal spec store — directory-as-truth (adr-26): <state>/ dirs + dependency graph
 ├── memory/                             # curated memory artefact (memory harvest → .abcd/memory/, per 04-universal-patterns.md § 7)
 ├── lifeboat/                           # disembark output snapshot only — regenerable, overwritten each run (per ../02-constraints/01-platform.md, ../04-surfaces/03-embark.md § 7)

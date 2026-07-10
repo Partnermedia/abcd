@@ -255,7 +255,7 @@ implementation (repo-relative paths within that codebase):
 - Launch reference logic: `launch_ship.py`, `launch_preflight.py`,
   `public_manifest.py`, `plugin_payload.py`, `manifest_lockstep.py`,
   `launch_gate_*.py`, `scan.py`, `src/pii.py`.
-- Install reference logic: `scripts/abcd/ahoy/` (historical) (`_detect.py` folder-kind,
+- Install reference logic: `scripts/abcd/ahoy/` (historical; `_detect.py` folder-kind,
   gitignore, marker blocks), `hooks/prompt_router_hook.py`.
 - History reference: `history_store.py`, the transcript-capture shim.
 - **Behaviour spec** = the brief's per-command contracts under

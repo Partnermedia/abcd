@@ -105,7 +105,7 @@ _Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity
 
 ## References
 
-- `.abcd/work/idea-assessments/1-llm-wiki.md` — full assessment with 5-round review trail (chat `adversarial-review-llm-w-4970CE`); pre-review framings preserved in chat record.
+- Full assessment in a local working note (unmigrated), with 5-round review trail (chat `adversarial-review-llm-w-4970CE`); pre-review framings preserved in chat record.
 - [`05-internals/07-memory.md`](../../brief/05-internals/07-memory.md) — substrate spec (page-class enum, source classes, curator behaviour, lifecycle class).
 - [`05-internals/09-provenance-substrate.md`](../../brief/05-internals/09-provenance-substrate.md) — provenance/licence subsystem shared with itd-26 loot.
 - [`04-surfaces/07-memory.md`](../../brief/04-surfaces/07-memory.md) — surface contract for `/abcd:memory`.

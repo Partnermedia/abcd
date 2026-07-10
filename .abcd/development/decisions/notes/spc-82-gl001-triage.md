@@ -1,7 +1,7 @@
 # spc-82.5c — GL001 triage over shipped itd-27 / itd-28
 
 Probe-gated, report-first triage of the 69 unbucketable GL001 tokens left
-PARTIAL by spc-24 T8 R7. Seed inventory: the `.abcd/work/issues/` ledger,
+PARTIAL by spc-24 T8 R7. Seed inventory: `.work/issues.md` (historical)
 `2026-05-25` T8 entry.
 
 ## Mechanism probe (gating decision)
@@ -12,11 +12,11 @@ API-shape and artefact-ID tokens without inflating the glossary with
 non-domain entries) **is absent from the tree**. Probe:
 
 ```
-$ grep -rq "terminology_exceptions" internal/core/   # → ABSENT
+$ grep -rq "terminology_exceptions" scripts/abcd/   # → ABSENT (historical)
 ```
 
 The only surfaces that mention the string are this spec / task file. GL001's
-sub-case-1 resolution (the GL001 check in `internal/core/lint`)
+sub-case-1 resolution (`scripts/abcd/_intent_lint/_intent.py::_check_gl001` (historical))
 clears a backtick token **only** when its lowercased text equals a glossary
 `term:` display-name, an alias, or a forbidden synonym — there is no exception
 allowlist consulted. Therefore, per the spec's Decision context, **the
@@ -33,8 +33,9 @@ Every token is placed in exactly one of three buckets:
   reworded; limited to the two shipped intent files. **None taken** (see below).
 - **(G) gap** — load-bearing but not a domain noun (schema/sidecar field name,
   CLI/sub-verb/skill/doc identifier, artefact ID, or third-party tool name).
-  These need the absent `terminology_exceptions` allowlist; the gap is filed to
-  the `.abcd/work/issues/` ledger. **No broad edits, no mechanism built.**
+  These need the absent `terminology_exceptions` allowlist; filed as a
+  follow-up gap in the working log of the time (historical). **No broad edits,
+  no mechanism built.**
 
 ### (B) Canonical term file — 1 token (cleared)
 
@@ -119,8 +120,8 @@ After adding `core/disembark.md`, the GL001 check over itd-27/itd-28:
 All 68 remaining tokens are accounted for in bucket (G) above; the 1 cleared
 token (`disembark`) is in bucket (B). 69 = 68 + 1 → **zero unbucketed**. The
 remaining 68 are warn-severity residue whose closure requires the absent
-`terminology_exceptions` mechanism, filed as a follow-up gap in the
-`.abcd/work/issues/` ledger.
+`terminology_exceptions` mechanism, filed as a follow-up gap in the working
+log of the time (historical).
 
 Verification command (reproduces the per-file unique counts and confirms every
 flagged token appears in this report):

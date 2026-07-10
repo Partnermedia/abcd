@@ -113,7 +113,7 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Linked spec: `spc-3-strengthen-intent-stage-abcdgrill-skill` (in this repo). The spec slug retains the `abcdgrill-skill` form for now; rename to `intent-grill-skill` is queued as a follow-up wave (see `.abcd/work/command-structure-review/`).
+- Linked spec: `spc-3-strengthen-intent-stage-abcdgrill-skill` (in this repo). The spec slug retains the `abcdgrill-skill` form for now; rename to `intent-grill-skill` is queued as a follow-up wave (tracked in a local working note, unmigrated).
 - Depends on: `itd-1` (acceptance gates) — this intent eats its own dog food.
 - Coordinates with: `itd-24` (reflect command) — different register (post-completion learning vs pre-promotion adversarial).
 - Extended by: `itd-42` (coherence-aware grill) — adds a brief- and sibling-coherence tier to the grill this intent built; glossary-aware mode is kept verbatim.

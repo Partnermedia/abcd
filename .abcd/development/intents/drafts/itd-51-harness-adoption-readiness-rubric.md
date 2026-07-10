@@ -52,7 +52,7 @@ Critically, this is **not** a plan to swap the configured harness. This intent o
 
 ## Open Questions
 
-- Where does the rubric live as a durable artifact — an ADR (it is a standing decision), a research-note record-type, or a dedicated `roadmap/` document? (Relates to the open research-notes record-type question logged in the `.abcd/work/issues/` ledger.)
+- Where does the rubric live as a durable artifact — an ADR (it is a standing decision), a research-note record-type, or a dedicated `roadmap/` document? (Relates to the open research-notes record-type question logged in a working-log entry.)
 - Should the rubric's verification checks be purely manual (a human scores a candidate) or should some be machine-runnable probes reusing the existing external-tool monitor surface (the spc-34 doctor/probes layer)?
 - Does the rubric also cover non-safety adoption properties (cost, latency, observability, recovery), or stay scoped to the safety/integrity properties the 2026-06-02 review exposed?
 - How does the rubric stay in sync when spc-33/spc-37 land and refine the guarantee set — is the rubric the source of truth those specs cite, or a downstream summary?
@@ -63,7 +63,7 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Source: the 2026-06-02 security/architecture review block in the `.abcd/work/issues/` ledger,
+- Source: the security/architecture review block in a dated working-log entry (2026-06-02),
   generalized from specific findings into standing requirements.
 - Instantiated-by: **spc-37** (abcd orchestration-layer safety when driving the
   harness today) — the rubric's first concrete application.

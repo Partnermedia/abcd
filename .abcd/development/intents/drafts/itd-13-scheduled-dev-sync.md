@@ -34,7 +34,7 @@ Once real usage patterns emerge, the cost of "stale `.abcd/work/` until next dis
 
 - Real-time fsevents-based sync (too invasive; cron/launchd is sufficient)
 - Cross-machine sync (oracle-adapter chats from one machine appearing in another's `.abcd/work/`)
-- Pull-based sync from sources beyond the current set (configured oracle adapters, memory, .work)
+- Pull-based sync from sources beyond the current set (configured oracle adapters, memory, .abcd/.work.local)
 
 ## Acceptance Criteria
 
