@@ -64,3 +64,17 @@ the maintainer, NOT fixed. **Lesson: chasing the stochastic detector to zero
 is the wrong loop; the fix is to graduate the cross-check to a deterministic
 record-lint rule (spec-moves-with-the-surface) so the invariant is enforced
 structurally.** That graduation is the next work item.
+
+**Graduation is a design-STOP (2026-07-11, slice 10), held for maintainer
+sign-off.** Building the record-lint rule surfaced that the detector is
+bidirectional but only Direction B (surface→brief coverage) is deterministically
+lintable; Direction A (brief→binary-behaviour) is irreducibly semantic and stays
+an agent/periodic check. Even the structural half cannot be armed to green until
+the docs/history surface-taxonomy adjudication is decided (the rule fires on the
+three chapterless shipped verbs), and it needs a decided staged-vs-shipped marker
+convention. Design options (3, recommend Option A) written to
+`.abcd/development/plans/2026-07-11-iss35-record-lint-graduation.md`. iss-35 stays
+open ONLY for this gate — the reconciliation itself is complete to the limit of
+what is decidable without the maintainer (remaining discrepancies = the 2
+adjudication clusters). Blockers: adjudication items 5 (docs/history taxonomy)
+and 6 (skill classification) in NEXT.md.
