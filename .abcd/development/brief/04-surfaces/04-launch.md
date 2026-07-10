@@ -4,16 +4,16 @@
 
 ## Sub-verbs
 
-Bare `/abcd:launch` shows status + help only — never mutates state. Current sub-verbs:
+The shipped verb surface is the `--dry-run` flag on `abcd launch` — a read-only preview of the bundle and gates. Bare `abcd launch` never mutates state: it refuses (exit 1) with a hint to pass `--dry-run`; a bare-as-status render is a design target, unshipped. The sub-verb design:
 
-- **`/abcd:launch ship`** — cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers: `--allow-dirty`, `--allow-doc-warnings`. There is no version flag — the version is derived, never authored ([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md), see [§ 3](#3-versioning--marketplace)).
-- **`/abcd:launch dry-run`** — **report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the remaining gates (marker-block, `plugin.json` parse, documentation-auditor) are the gate-suite intent's (itd-65) and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the full `ship` verb's behaviour (itd-65 + itd-72), not dry-run's.
+- **`/abcd:launch ship`** — **design target (itd-65 gate suite + itd-72 publishing); no `ship` verb is on any shipped surface** — `internal/core/launch` carries the `Ship` engine, unwired. The design: cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers `--allow-dirty` and `--allow-doc-warnings` belong to this sub-verb's design; the shipped verb accepts only `--dry-run` and the global `--json`. There is no version flag — the version is derived, never authored ([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md), see [§ 3](#3-versioning--marketplace)).
+- **`/abcd:launch dry-run`** — shipped as the `--dry-run` flag (the plugin command `commands/abcd/launch.md` maps its `[dry-run]` argument hint onto `abcd launch --dry-run`; the binary has no `dry-run` subcommand). **Report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the remaining gates (marker-block, `plugin.json` parse, documentation-auditor) are the gate-suite intent's (itd-65) and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the full `ship` verb's behaviour (itd-65 + itd-72), not dry-run's.
 
 ## 1. Pre-flight gates
 
 - **Secret scan** — a **native Go scanner** is the default, hard-fail (absent/fail-closed, never a silent skip). **gitleaks** is an opt-in deeper scanner (the spc-64 ship gate pins `gitleaks >= 8.18.0` when wired; absent/older = fail-closed, never a regex fallback).
 - **PII** scan (real names, emails) via the **native Go PII engine** (`scan_text` + the merged Config + the non-overridable secret/identity severity floor) — hard-fail.
-- **Custom regex** layer — home dirs (`~/...`), GitHub usernames from git config — hard-fail
+- **Custom regex** layer — home dirs (`~/...`) and local usernames — hard-fail; GitHub usernames from git config — warn (legitimate in repo-URL contexts). The per-kind severity floor is config-raisable, never lowerable (`internal/adapter/scanner/identity.go`).
 - **TruffleHog** — opt-in deep scan when `scan.deep=true` — hard-fail (live credential verification)
 - **Hook compliance** check — warn-fail
 - **Marker block sanity** — hard-fail on malformed
@@ -26,9 +26,9 @@ Pre-flight report written to `.abcd/logbook/launch/<timestamp>/preflight.{json,m
 
 ## 2. Curated release artefact (default-deny)
 
-- **Include:** `.claude-plugin/` (holds both `plugin.json` and the ONE canonical `marketplace.json` — there is no root-level `marketplace.json`), `commands/`, `skills/`, `agents/`, `scripts/`, `hooks/`, `README.md`, `LICENSE`, `.gitignore`, `docs/` (user-facing only)
-- **Exclude:** `.abcd/` (entire namespace — `development/` (brief, roadmap, research, voyage, personas), `memory/`, `lifeboat/`, `logbook/`), and patterns from `.gitignore`. Per [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) the wholesale `.abcd/` exclusion (incl. `.abcd/memory/**`) is a **packaging filter over the one tree**, not a copy between two repos: the release artefact carries plugin code, never the project's design record or knowledge store. The spc-38 restrictive-licence gate is NOT this artefact's gate — its real consumer is the lifeboat (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is future/inert; `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview.
-- **Override:** `.abcd/launch.allow` allowlist — the packaging override (the only mechanism that can put a path *into* the release artefact). Per adr-28 it must **never** promote any `.abcd/**` path (a `.abcd/**` line is refused / never promoted), so it cannot re-include `.abcd/memory/**`. This is a **distinct** mechanism from the gate's JSON `.abcd/launch-allowlist.json` (`_ALLOWLIST_REL`), which only re-includes files into the spc-38 gate's *own evaluation input*, never into the release artefact — the two are documented-distinct, never one name.
+- **Include:** the shipped include list, pinned in `.abcd/config/launch-payload.json`: `.claude-plugin/` (holds both `plugin.json` and the ONE canonical `marketplace.json` — there is no root-level `marketplace.json`), `commands/`, `scripts/`, `docs/` (user-facing only), `README.md`, `LICENSE`, `.gitignore`. `skills/`, `agents/`, and `hooks/` are design-target additions absent from the shipped list (`skills/` exists in the tree but is not packaged; `agents/` and `hooks/` have no tree presence).
+- **Exclude:** `.abcd/` (entire namespace — `development/` (brief, roadmap, research, voyage, personas), `memory/`, `lifeboat/`, `logbook/`), and patterns from `.gitignore`. Per [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md) the wholesale `.abcd/` exclusion (incl. `.abcd/memory/**`) is a **packaging filter over the one tree**, not a copy between two repos: the release artefact carries plugin code, never the project's design record or knowledge store. The spc-38 restrictive-licence gate is NOT this artefact's gate — its real consumer is the lifeboat (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-4). At launch the gate is future/inert; the shipped `dry-run` renders no licence verdicts (a diagnostic preview of the gate's verdicts in `dry-run` is part of the gate's own design, unshipped).
+- **Override:** the include list in `.abcd/config/launch-payload.json` is the packaging override (the only mechanism that can put a path *into* the release artefact). The deny is **structural** (`internal/core/launch/bundle.go`, per adr-28): no include entry can promote a denied namespace — a `.abcd/**` line is never promoted — so nothing can re-include `.abcd/memory/**`. The spc-38 gate's own evaluation-input allowlist belongs to that gate's design (future/inert, see above) and is documented-distinct from packaging: it re-includes files into the gate's *own evaluation input*, never into the release artefact — two mechanisms, never one name.
 
 ## 3. Versioning + marketplace
 
@@ -74,11 +74,14 @@ altered surface with no `breaking` intent in the release **fails the launch** �
 a mislabelled impact cannot ship a compatibility lie.
 
 `launch ship` is responsible for writing the version into **the selected
-version location**, never a hard-coded `plugin.json`. That location is recorded
-by the spc-77.1 decision artifact
+version location**, never a hard-coded `plugin.json`. That location is read from
+the spc-77.1 decision artifact
 (`.abcd/config/version-location.json`)
 as `manifest_path` + `json_pointer` (see
-[adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md)); a
+[adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md)). The
+artifact is absent from the tree, and the shipped lockstep checker fails closed
+on it — `dry-run` reports the lockstep contract unreadable — until spc-77.1
+records the decision; a
 `blocked: true` decision has no schema-valid location, so version-writing
 refuses and the escalation stands. Concretely, `ship`:
 
@@ -147,11 +150,11 @@ transcript; a `--dry-run`-shaped preview of the prune decision is part of the
 
 ## 5. Bootstrap exception
 
-The first release cut of abcd itself is a manual `v*` tag + GitHub Release; document in `commands/abcd/launch.md`.
+The first release cut of abcd itself is a manual `v*` tag + GitHub Release. Documenting the exception in `commands/abcd/launch.md` lands with publishing (itd-72); the shipped command file covers only the read-only dry-run preview.
 
 ## 6. Acceptance
 
-- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:launch`, **then** the dispatcher shows current launch readiness (pre-flight gate state, last launch attempt timestamp), the available sub-verbs (`ship`, `dry-run`), and suggested next actions — bare invocation never mutates state.
+- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:launch`, **then** the dispatcher shows current launch readiness (pre-flight gate state, last launch attempt timestamp), the available sub-verbs (`ship`, `dry-run`), and suggested next actions — bare invocation never mutates state. **Design target:** the shipped bare `abcd launch` refuses (exit 1) with a hint to pass `--dry-run`, and the shipped plugin command runs the dry-run preview directly rather than a status+help render.
 - **Given** a clean tree with a deliberate PII fixture (e.g., a real email in a comment) inside the resolved artefact, **when** `/abcd:launch dry-run` runs, **then** the report-only gate (spc-64) PRINTS that it *would* refuse on that finding (the offending file/line in the gate result), still **exits 0**, and writes no artefact. (The **hard-fail** on that finding — exit non-zero plus a `preflight.{json,md}` report under `.abcd/logbook/launch/<timestamp>/` — is the full `ship` verb's behaviour (itd-65), not dry-run's.)
 - **Given** a clean tree, **when** `/abcd:launch dry-run` runs, **then** the report lists exactly the include/exclude artefact manifest in [§ 2](#2-curated-release-artefact-default-deny) with no surprises and no artefact is written.
 - **Given** only `impact: fix` intents (or no intent-tied change) shipped since the last release, **when** `launch ship` runs, **then** the bump tier is **patch** (`v0.0.x`) and the next patch version is written into the **selected version location** (from `.abcd/config/version-location.json`, per [§ 3](#3-versioning--marketplace)) in the **release artefact** only — the working-tree manifests stay unversioned (adr-19, adr-28) — plus the canonical `.claude-plugin/marketplace.json`, never a hard-coded `plugin.json`.

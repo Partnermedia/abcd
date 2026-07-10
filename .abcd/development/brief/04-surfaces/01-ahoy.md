@@ -8,7 +8,10 @@ cannot drift apart.
 
 ## Sub-verbs
 
-Bare `/abcd:ahoy` shows status + help only — never mutates state. Current sub-verbs:
+Bare `/abcd:ahoy` shows status + help only — never mutates state. The
+`/abcd:ahoy` slash command dispatches only this bare read-only pass and names
+the CLI for anything that writes; the sub-verbs below ship on the CLI as
+`abcd ahoy <sub-verb>`. Current sub-verbs:
 
 - **`/abcd:ahoy install`** — install or update the plugin in this repo
   (idempotent; covers first-install and upgrade). Runs the detection pass, then
@@ -37,8 +40,9 @@ user-scope directory for machine-local state:
 ~/.abcd/                       USER SCOPE — one per machine (machine-local state only)
   history/                       shared history store + index.json (identity/lineage,
                                  keyed on root-commit SHA — adr-29)
-  config.json                    machine config.json defaults
-  memory/                        user-scope memory (personal, cross-project)
+  config.json                    machine config.json defaults (a later phase)
+  memory/                        user-scope memory (personal, cross-project — a later
+                                 phase; the shipped store is repo-scope .abcd/memory/)
 
 <anywhere>/<repo>/             REPO — a single repository (the only install target)
   .abcd/                         repo-scope record + config.json + rules.json
@@ -60,8 +64,8 @@ like `~/ABCDevelopment/` is just where a user keeps repos — abcd does not
 privilege it, and it groups nothing. abcd lives in **one repository**
 ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)): the design
 record is repo-scoped and in-tree. Everything genuinely machine-wide — the
-`history/` store, machine config, user memory — lives under **`~/.abcd/`**,
-which abcd bootstraps once. The `.abcd/` namespace is scoped at two levels —
+`history/` store, plus machine config and user memory in a later phase — lives
+under **`~/.abcd/`**, which abcd bootstraps once. The `.abcd/` namespace is scoped at two levels —
 **user** (`~/.abcd/`) and **repo** (in-tree `.abcd/`). See
 [`05-internals/03-configuration.md` § The two `.abcd/` scopes](../05-internals/03-configuration.md#the-two-abcd-scopes).
 
@@ -162,7 +166,7 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 
 | `category` | Examples | Apply behaviour |
 |---|---|---|
-| `safe-autocreate` | `.abcd/` skeleton, `.abcd/bin/` scripts, history-store dirs | apply once category approved, no per-item prompt |
+| `safe-autocreate` | `.abcd/` skeleton, history-store dirs (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt |
 | `config-change` | visibility, oracle adapter, PATH symlink | transparent confirm; skip-if-set with "current value" notice |
 | `plugin-owned` | CLAUDE.md/AGENTS.md marker block (per itd-3); `hooks/hooks.json` manifest verification (verify-only per spc-16 T1) | silent overwrite on marker drift; non-resolvable diagnostic for malformed/missing manifest |
 | `dependency` | opt-in scanners: `gitleaks`, `trufflehog` install | offer brew with ONE category-level approval covering the opt-in scanners (per spc-16 T1 — per-CATEGORY, not per-tool) |
@@ -170,12 +174,13 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 
 ### Templates as files
 
-Every artefact `install` writes — the marker block, the `.abcd/rules.json`
-skeleton, `.abcd/usage.md` —
-comes from a canonical file under `internal/core/ahoy/defaults/`, never from inline
-prose in this surface or in the apply logic. If a template is stale, edit the
-template file. Drift detection (step 7) is only meaningful because the marker
-block has one canonical source.
+The marker block `install` writes comes from a canonical file under
+`internal/core/ahoy/defaults/` (`claude-md-marker-block.md`), never from inline
+prose in this surface. If the template is stale, edit the template file. Drift
+detection (step 7) is only meaningful because the marker block has one
+canonical source. The `.abcd/rules.json` skeleton is written inline by the
+apply pass (`stepRules`); a later phase moves it — and `.abcd/usage.md`, once
+that artefact ships — to canonical files under `defaults/` too.
 
 ## Install flow (`/abcd:ahoy install`)
 
@@ -188,10 +193,11 @@ category present, and applies the approved categories' gaps.
    tools with ONE category-level approval (per spc-16 T1 — per-category, not
    per-tool). spc-16 NEVER auto-executes package managers; the user runs the
    install commands manually.
-3. **Skeleton gaps** (`safe-autocreate`) — `abcd init --json` creates `.abcd/`,
-   writes `config.json` (idempotent merge; the `meta` setup block is a key within it). Create `.abcd/bin/`
-   only if `--with-scripts`; copy scripts with `chmod +x`; write
-   `.abcd/usage.md`. Create history-store dirs (see step 6).
+3. **Skeleton gaps** (`safe-autocreate`) — the apply pass creates `.abcd/` and
+   writes `config.json` (idempotent merge; the `meta` setup block is a key
+   within it). Create history-store dirs (see step 6). Later phase: create
+   `.abcd/bin/` (only with `--with-scripts`; scripts copied with `chmod +x`)
+   and write `.abcd/usage.md`.
 4. **Config gaps** (`config-change`) — transparent prompts; each skips with a
    "current value" notice if the key is already set:
    - **Visibility** (private/public) — always re-confirms, shows current state
@@ -237,12 +243,13 @@ category present, and applies the approved categories' gaps.
 11. Print summary: installed files, config table, symlink status, hook status,
     notes (re-run hint, uninstall hint).
 
-**Same-version re-install:** if the detection pass reports zero gaps, `install`
-prints "already up to date" and exits without writing. This falls out of
+**Same-version re-install:** if the detection pass reports zero actionable
+gaps (gaps both required and resolvable), `install` prints "already up to
+date" and exits without writing. This falls out of
 detection naturally — it is not a version-stamp short-circuit.
 
-**Mid-run changes:** accept `abcd config set <key> <value>` inline; re-run only
-the affected detection check and its apply step.
+**Mid-run changes (a later phase):** accept `abcd config set <key> <value>`
+inline; re-run only the affected detection check and its apply step.
 
 ## Re-founding (the `supersedes` flow)
 
@@ -275,7 +282,7 @@ development/, memory/, lifeboat/, logbook/, rp/) and the history store. Deeper
 removal (`/abcd:ahoy destroy`) comes in a later phase as itd-10.
 
 **Uninstall ↔ install is a tested round-trip invariant:** after `uninstall`
-then `install`, the detection pass must report zero gaps, and the resulting
+then `install`, the detection pass must report zero actionable gaps, and the resulting
 state must be byte-identical to a fresh install modulo `setup_date`. This is an
 acceptance criterion, not just prose — see § Acceptance.
 
@@ -303,16 +310,18 @@ user-scope app-state.
   status (installed?, plugin version, marker drift state, visibility) plus the
   available sub-verbs with suggested next actions — and never mutates state.
 - **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy
-  install` runs to completion, **then** the four-file repo carve-out
+  install` runs to completion, **then** the two-file repo carve-out
   (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written, the
   visibility-driven `.gitignore` allowlist entries are present, the
   history-store dirs + `index.json` entry are present, the
   CLAUDE.md/AGENTS.md marker block from
-  `internal/core/ahoy/defaults/claude-md-marker-block.md` is installed, and
-  `hooks/hooks.json` is verified present (verify-only — never mutated).
+  `internal/core/ahoy/defaults/claude-md-marker-block.md` is installed, and the
+  `hooks/hooks.json` check runs verify-only (never mutated) — the manifest
+  itself is a later-phase artefact; its absence surfaces as a non-resolvable
+  `plugin-owned` diagnostic gap.
 - **Given** a repo with `install` already run, **when** `/abcd:ahoy install`
   runs again with no state changes, **then** the detection pass reports zero
-  gaps, the message reads "already up to date", and nothing is written.
+  actionable gaps, the message reads "already up to date", and nothing is written.
 - **Given** a repo where the marker block was hand-deleted but `setup_version`
   is current, **when** `/abcd:ahoy install` runs, **then** detection reports the
   marker `missing` and the apply pass restores it — idempotency keys off state,
@@ -334,8 +343,9 @@ user-scope app-state.
   confirmation sets `supersedes` / `superseded_by` and leaves both corpora in
   place.
 - **Given** the user runs `/abcd:ahoy uninstall` then `/abcd:ahoy install`,
-  **when** both complete, **then** the detection pass reports zero gaps and the
-  resulting state is byte-identical to a fresh install modulo `setup_date`.
+  **when** both complete, **then** the detection pass reports zero actionable
+  gaps and the resulting state is byte-identical to a fresh install modulo
+  `setup_date`.
 - **Given** the user runs `/abcd:ahoy dry-run`, **when** the command completes,
   **then** the detection pass runs, the canonical `DetectionResult` JSON
   envelope (`{folder_kind, adopted, root_sha,
