@@ -348,6 +348,132 @@ func TestExemptions(t *testing.T) {
 	}
 }
 
+func TestSurfaceCoverage(t *testing.T) {
+	root := t.TempDir()
+
+	// Real plugin surfaces: three commands and one skill.
+	writeFile(t, root, "commands/abcd/ahoy.md", "# ahoy\n")
+	writeFile(t, root, "commands/abcd/capture.md", "# capture\n")
+	writeFile(t, root, "commands/abcd/orphan.md", "# orphan\n") // no registry row → coverage fires
+	writeFile(t, root, "commands/abcd/README.md", "# index\n")  // README is not a surface, skipped
+	writeFile(t, root, "skills/review/SKILL.md", "# review skill\n")
+
+	// The brief surface registry. Column order deliberately differs from the
+	// checked columns to prove the parser keys off the header, not fixed offsets.
+	registry := "# Surfaces\n\n" +
+		"| # | Command | Status | Purpose | File |\n" +
+		"|---|---|---|---|---|\n" +
+		"| 1 | `/abcd:ahoy` | shipped | Install | [`01-ahoy.md`](01-ahoy.md) |\n" + // ok: shipped + file
+		"| 2 | `/abcd:disembark` | staged | Pack | [`02.md`](02.md) |\n" + // ok: staged, no file
+		"| 3 | `/abcd:capture` | staged | Ledger | [`06.md`](06.md) |\n" + // staged but file exists → fires
+		"| 4 | `/abcd:launch` | shipped | Release | [`04.md`](04.md) |\n" + // shipped but no file → fires
+		"| 5 | `/abcd:review` | shipped | Review | [`05.md`](05.md) |\n" + // ok: shipped + skill dir
+		"| 6 | `/abcd` | shipped | Board | [`08.md`](08.md) |\n" + // bare top-level: file check skipped
+		"| 7 | `/abcd:weird` | bogus | Bad | [`07.md`](07.md) |\n" // unknown status → fires
+	writeFile(t, root, "rec/registry.md", registry)
+
+	cfg := Config{
+		Rules: map[string]RuleConfig{
+			"surface_coverage": {
+				Enabled:     true,
+				Severity:    "blocker",
+				CommandsDir: filepath.Join("commands", "abcd"),
+				SkillsDir:   "skills",
+				Registry:    filepath.Join("rec", "registry.md"),
+			},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := filepath.Join("rec", "registry.md")
+	want := []struct {
+		file string
+		line int
+		desc string
+	}{
+		{filepath.Join("commands", "abcd", "orphan.md"), 0, "command with no registry row"},
+		{reg, 7, "staged row with a backing surface"},
+		{reg, 8, "shipped row with no backing surface"},
+		{reg, 11, "row with an unknown status"},
+	}
+	for _, w := range want {
+		if !hasFinding(fs, w.file, "surface_coverage", w.line) {
+			t.Errorf("expected surface_coverage finding (%s) on %s:%d; got %+v", w.desc, w.file, w.line, fs)
+		}
+	}
+	if n := countRule(fs, "surface_coverage"); n != len(want) {
+		t.Fatalf("expected exactly %d surface_coverage findings, got %d: %+v", len(want), n, fs)
+	}
+
+	// A well-formed registry over the real surfaces produces zero findings.
+	clean := "# Surfaces\n\n" +
+		"| # | Command | Status | File |\n" +
+		"|---|---|---|---|\n" +
+		"| 1 | `/abcd:ahoy` | shipped | [`a.md`](a.md) |\n" +
+		"| 2 | `/abcd:capture` | shipped | [`c.md`](c.md) |\n" +
+		"| 3 | `/abcd:orphan` | shipped | [`o.md`](o.md) |\n" +
+		"| 4 | `/abcd:review` | shipped | [`r.md`](r.md) |\n" +
+		"| 5 | `/abcd:disembark` | staged | [`d.md`](d.md) |\n" +
+		"| 6 | `/abcd` | shipped | [`x.md`](x.md) |\n"
+	writeFile(t, root, "rec/clean.md", clean)
+	cfg.Rules["surface_coverage"] = RuleConfig{
+		Enabled: true, Severity: "blocker",
+		CommandsDir: filepath.Join("commands", "abcd"), SkillsDir: "skills",
+		Registry: filepath.Join("rec", "clean.md"),
+	}
+	fs, err = Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "surface_coverage"); n != 0 {
+		t.Fatalf("clean registry should yield no findings, got %d: %+v", n, fs)
+	}
+
+	// A missing registry file is not an error (nothing to cross-check).
+	cfg.Rules["surface_coverage"] = RuleConfig{
+		Enabled: true, Severity: "blocker",
+		CommandsDir: filepath.Join("commands", "abcd"), Registry: filepath.Join("rec", "absent.md"),
+	}
+	if _, err := Lint(cfg, root); err != nil {
+		t.Fatalf("missing registry must not error: %v", err)
+	}
+
+	// A fenced example table before the real one must be ignored (fence mask):
+	// the parser keys off the real table, so the clean surfaces stay clean. Were
+	// the fenced header latched onto, every real surface would fire a bogus
+	// coverage finding.
+	fenced := "# Surfaces\n\n" +
+		"Example of the table shape:\n\n" +
+		"```\n" +
+		"| # | Command | Status | File |\n" +
+		"|---|---|---|---|\n" +
+		"| 1 | `/abcd:example` | shipped | [`x.md`](x.md) |\n" +
+		"```\n\n" +
+		"The real registry:\n\n" +
+		"| # | Command | Status | File |\n" +
+		"|---|---|---|---|\n" +
+		"| 1 | `/abcd:ahoy` | shipped | [`a.md`](a.md) |\n" +
+		"| 2 | `/abcd:capture` | shipped | [`c.md`](c.md) |\n" +
+		"| 3 | `/abcd:orphan` | shipped | [`o.md`](o.md) |\n" +
+		"| 4 | `/abcd:review` | shipped | [`r.md`](r.md) |\n"
+	writeFile(t, root, "rec/fenced.md", fenced)
+	cfg.Rules["surface_coverage"] = RuleConfig{
+		Enabled: true, Severity: "blocker",
+		CommandsDir: filepath.Join("commands", "abcd"), SkillsDir: "skills",
+		Registry: filepath.Join("rec", "fenced.md"),
+	}
+	fs, err = Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "surface_coverage"); n != 0 {
+		t.Fatalf("fenced example table must be ignored, got %d findings: %+v", n, fs)
+	}
+}
+
 // presentTenseTokens mirrors the change-narration phrase list shipped in
 // .abcd/docs-lint.json (word-boundary, case-insensitive, inline-escape).
 func presentTenseTokens() []BannedToken {

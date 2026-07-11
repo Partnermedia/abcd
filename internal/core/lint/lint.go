@@ -38,8 +38,10 @@ var (
 	// Brittle line reference: some-file.md:171 (check D).
 	brittleRefRe = regexp.MustCompile(`[A-Za-z0-9_./-]+\.md:\d+`)
 	// Intent id embedded in a filename or a superseded_by value.
-	intentIDRe    = regexp.MustCompile(`itd-\d+`)
-	intentFileRe  = regexp.MustCompile(`^itd-\d+.*\.md$`)
+	intentIDRe   = regexp.MustCompile(`itd-\d+`)
+	intentFileRe = regexp.MustCompile(`^itd-\d+.*\.md$`)
+	// Surface registry Command cell: the bare "/abcd" top-level, or "/abcd:<name>".
+	surfaceCmdRe  = regexp.MustCompile(`^/abcd(?::([a-z0-9-]+))?$`)
 	specIDRe      = regexp.MustCompile(`^spc-`)
 	supersededRe  = regexp.MustCompile(`^itd-\d+`)
 	intentBuckets = map[string]bool{
@@ -148,6 +150,17 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, cs...)
+	}
+
+	// surface_coverage cross-checks the plugin surface (commands/, skills/ —
+	// outside cfg.Roots) against the brief's surface registry (inside a root), so
+	// it too runs once, outside the per-root loop.
+	if scCfg, ok := cfg.Rules["surface_coverage"]; ok && scCfg.Enabled {
+		sc, err := checkSurfaceCoverage(repoRoot, scCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, sc...)
 	}
 
 	sortFindings(findings)
@@ -282,6 +295,253 @@ func checkContextStatusFree(repoRoot string, cfg RuleConfig) ([]Finding, error) 
 		}
 	}
 	return out, nil
+}
+
+// surfaceRow is one parsed row of the brief's surface registry table.
+type surfaceRow struct {
+	name   string // sub-verb after "/abcd:"; empty for the bare "/abcd" top-level
+	status string // lower-cased "shipped" | "staged"; any other value is flagged
+	line   int    // 1-based line of the row in the registry file
+}
+
+// checkSurfaceCoverage is the deterministic (Direction-B) half of the iss-35
+// brief↔surface cross-check. It reads the plugin surface (commands/ + skills/,
+// which live outside cfg.Roots) and the brief's surface registry table, then
+// asserts three invariants:
+//   - coverage: every real surface (a commands/abcd/*.md file or a skills/*/
+//     directory) has a registry row;
+//   - status fidelity: a row marked "shipped" has a backing surface, and a row
+//     marked "staged" does not — the bare "/abcd" top-level is binary-backed,
+//     has no command file, and is exempt from the file check;
+//   - registry integrity: every row's status is "shipped" or "staged".
+//
+// The semantic half (a brief claim vs. binary behaviour — flags, exit codes,
+// schema fields) stays an agent/release-gate check, not a structural lint. A
+// missing registry file is not an error.
+func checkSurfaceCoverage(repoRoot string, cfg RuleConfig) ([]Finding, error) {
+	if cfg.Registry == "" {
+		return nil, nil
+	}
+	rows, err := parseSurfaceRegistry(repoRoot, cfg.Registry)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return nil, nil // registry file absent — nothing to cross-check
+	}
+	real, realPaths, err := realSurfaces(repoRoot, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []Finding
+	rowNames := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		if r.name != "" {
+			rowNames[r.name] = true
+		}
+		switch r.status {
+		case "shipped":
+			if r.name != "" && !real[r.name] {
+				out = append(out, Finding{
+					File: cfg.Registry, Line: r.line, RuleID: "surface_coverage", Severity: cfg.Severity,
+					Message: "surface row '" + surfaceLabel(r.name) + "' is marked shipped but no commands/ or skills/ surface backs it",
+				})
+			}
+		case "staged":
+			if r.name != "" && real[r.name] {
+				out = append(out, Finding{
+					File: cfg.Registry, Line: r.line, RuleID: "surface_coverage", Severity: cfg.Severity,
+					Message: "surface row '" + surfaceLabel(r.name) + "' is marked staged but a backing surface exists; mark it shipped",
+				})
+			}
+		default:
+			out = append(out, Finding{
+				File: cfg.Registry, Line: r.line, RuleID: "surface_coverage", Severity: cfg.Severity,
+				Message: "surface row '" + surfaceLabel(r.name) + "' has unknown status '" + r.status + "' (want shipped|staged)",
+			})
+		}
+	}
+
+	// Coverage: every real surface must resolve to a registry row. Iterated in
+	// sorted order so findings are deterministic before the final sort.
+	names := make([]string, 0, len(realPaths))
+	for name := range realPaths {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !rowNames[name] {
+			out = append(out, Finding{
+				File: realPaths[name], Line: 0, RuleID: "surface_coverage", Severity: cfg.Severity,
+				Message: "surface '" + name + "' has no row in the brief surface registry (" + cfg.Registry + ")",
+			})
+		}
+	}
+	return out, nil
+}
+
+// surfaceLabel renders a surface name as its slash-command spelling.
+func surfaceLabel(name string) string {
+	if name == "" {
+		return "/abcd"
+	}
+	return "/abcd:" + name
+}
+
+// realSurfaces enumerates the shipped plugin surface as a name set plus a
+// name→repo-relative-path map. Command surfaces are the *.md files directly under
+// CommandsDir (README excepted); skill surfaces are the immediate subdirectories
+// of SkillsDir. A missing directory contributes nothing and is not an error.
+func realSurfaces(repoRoot string, cfg RuleConfig) (map[string]bool, map[string]string, error) {
+	set := map[string]bool{}
+	paths := map[string]string{}
+
+	if cfg.CommandsDir != "" {
+		entries, err := os.ReadDir(filepath.Join(repoRoot, cfg.CommandsDir))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".md")
+			if strings.EqualFold(name, "README") {
+				continue
+			}
+			set[name] = true
+			paths[name] = filepath.Join(cfg.CommandsDir, e.Name())
+		}
+	}
+
+	if cfg.SkillsDir != "" {
+		entries, err := os.ReadDir(filepath.Join(repoRoot, cfg.SkillsDir))
+		if err != nil && !os.IsNotExist(err) {
+			return nil, nil, err
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			set[e.Name()] = true
+			paths[e.Name()] = filepath.Join(cfg.SkillsDir, e.Name())
+		}
+	}
+	return set, paths, nil
+}
+
+// parseSurfaceRegistry reads the surface registry markdown and returns its table
+// rows. It locates the one pipe-table whose header names both a Command and a
+// Status column, then reads each data row's Command and Status cells (keyed by
+// header position, so column order is free). Fenced code blocks are masked (the
+// house convention, per fenceMask) so a table shown as a markdown *example* — a
+// real risk in a doc whose subject is the surface table itself — is never
+// mistaken for the registry. A missing file yields (nil, nil); a present file
+// with no such table yields an empty, non-nil slice.
+func parseSurfaceRegistry(repoRoot, registry string) ([]surfaceRow, error) {
+	content, err := os.ReadFile(filepath.Join(repoRoot, registry))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	lines := strings.Split(string(content), "\n")
+	mask := fenceMask(lines)
+
+	cmdCol, statusCol, headerIdx := -1, -1, -1
+	for i, line := range lines {
+		if mask[i] || !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			continue
+		}
+		c, s := -1, -1
+		for j, cell := range tableCells(line) {
+			switch strings.ToLower(cell) {
+			case "command":
+				c = j
+			case "status":
+				s = j
+			}
+		}
+		if c >= 0 && s >= 0 {
+			cmdCol, statusCol, headerIdx = c, s, i
+			break
+		}
+	}
+	rows := []surfaceRow{}
+	if headerIdx < 0 {
+		return rows, nil
+	}
+
+	for i := headerIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if mask[i] || !strings.HasPrefix(trimmed, "|") {
+			break // table ended (a fence closes it too)
+		}
+		if isTableSeparator(trimmed) {
+			continue
+		}
+		// A row whose Command/Status cell is missing or malformed is skipped
+		// here (status-fidelity unchecked) but still caught by the coverage
+		// direction if it names a real backing surface — fail-loud, not silent.
+		cells := tableCells(lines[i])
+		if cmdCol >= len(cells) || statusCol >= len(cells) {
+			continue
+		}
+		name, ok := parseSurfaceCommand(cells[cmdCol])
+		if !ok {
+			continue // not a /abcd surface row
+		}
+		rows = append(rows, surfaceRow{
+			name:   name,
+			status: strings.ToLower(strings.TrimSpace(cells[statusCol])),
+			line:   i + 1,
+		})
+	}
+	return rows, nil
+}
+
+// tableCells splits a markdown table row into trimmed cell strings, dropping the
+// empty cells the leading and trailing border pipes produce.
+func tableCells(line string) []string {
+	parts := strings.Split(strings.TrimSpace(line), "|")
+	cells := make([]string, 0, len(parts))
+	for _, p := range parts {
+		cells = append(cells, strings.TrimSpace(p))
+	}
+	if len(cells) > 0 && cells[0] == "" {
+		cells = cells[1:]
+	}
+	if len(cells) > 0 && cells[len(cells)-1] == "" {
+		cells = cells[:len(cells)-1]
+	}
+	return cells
+}
+
+// isTableSeparator reports whether a table row is the header separator (only
+// pipes, dashes, colons, and whitespace).
+func isTableSeparator(line string) bool {
+	for _, r := range line {
+		switch r {
+		case '|', '-', ':', ' ', '\t':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// parseSurfaceCommand extracts the surface name from a Command cell. The bare
+// "/abcd" yields ("", true); "/abcd:<name>" yields (name, true); anything else
+// yields ("", false) so non-command rows are skipped rather than misread.
+func parseSurfaceCommand(cell string) (string, bool) {
+	c := strings.TrimSpace(strings.Trim(strings.TrimSpace(cell), "`"))
+	m := surfaceCmdRe.FindStringSubmatch(c)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 // tokenCheck is a compiled BannedToken ready for line matching.

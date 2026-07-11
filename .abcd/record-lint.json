@@ -22,7 +22,8 @@
     "directory_coverage": {"enabled": true, "severity": "warn", "exempt": []},
     "intent_lifecycle": {"enabled": true, "severity": "blocker", "intents_dir": "intents"},
     "persona_registry": {"enabled": true, "severity": "blocker", "registry": ".abcd/development/personas.json"},
-    "context_status_free": {"enabled": true, "severity": "blocker", "target": ".abcd/work/CONTEXT.md"}
+    "context_status_free": {"enabled": true, "severity": "blocker", "target": ".abcd/work/CONTEXT.md"},
+    "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands/abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"}
   },
   "exempt_paths": [".abcd/development/research/", ".abcd/development/intents/superseded/"],
   "exempt_if_status": ["superseded"]

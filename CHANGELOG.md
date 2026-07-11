@@ -12,6 +12,17 @@ called out in a **Breaking** section.
 
 ### Added
 
+- A `surface_coverage` record-lint rule (iss-35): the deterministic half of the
+  brief↔surface cross-check. It reads the plugin surface
+  (`rules.surface_coverage.commands_dir`, `skills_dir` — outside the lint roots)
+  and the brief's surface registry table (`rules.surface_coverage.registry`, by
+  convention `.abcd/development/brief/04-surfaces/README.md`), and asserts three
+  invariants: every real surface has a registry row; every row marked `shipped`
+  in the registry's **Status** column has a backing surface while every `staged`
+  row (a design target) has none; and every row's status is `shipped` or
+  `staged`. The bare `/abcd` top-level is binary-backed and exempt from the file
+  check. Chapter-link resolution stays with `links_resolve`; the semantic half —
+  each row's prose vs. binary behaviour — stays a release-gate agent check.
 - A managed-repo **git-identity gate** (iss-62): a repo can pin its expected
   commit identity in `.abcd/config/identity.json`, and every commit is checked
   against it. `ahoy doctor` reports a divergence (a repo-local override that

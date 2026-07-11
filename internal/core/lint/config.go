@@ -59,9 +59,18 @@ type RuleConfig struct {
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.
 	Allowlist []string `json:"allowlist"`
-	// Registry is the persona_registry roster file, repo-relative
-	// (.abcd/development/personas.json).
+	// Registry is a rule's registry file, repo-relative. For persona_registry it
+	// is the persona roster (.abcd/development/personas.json); for
+	// surface_coverage it is the brief surface table
+	// (.abcd/development/brief/04-surfaces/README.md).
 	Registry string `json:"registry"`
+	// CommandsDir is the surface_coverage plugin-command directory (commands/abcd);
+	// each *.md file (README excepted) is a shipped command surface. It lies
+	// outside Roots — the rule reads the surface tree and cross-checks the brief.
+	CommandsDir string `json:"commands_dir"`
+	// SkillsDir is the surface_coverage skills directory (skills); each immediate
+	// subdirectory is a shipped skill surface. Also outside Roots.
+	SkillsDir string `json:"skills_dir"`
 	// Target is the context_status_free single-file target, repo-relative
 	// (.abcd/work/CONTEXT.md). The rule runs even though the target lies outside
 	// Roots; a missing target is not an error.
