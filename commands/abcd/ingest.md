@@ -1,6 +1,7 @@
 ---
 name: ingest
 description: Ingest a URL or document into the local sources corpus (the user-level home's sources store, default ~/.abcd/sources) with extracted reference metadata, keywords, and a text-quality check. Use when the user says "ingest this", "add this source/URL/paper to the corpus", "register this source", or hands over a document/link to be stored. For consulting the corpus or recording provenance, use /abcd:consult.
+argument-hint: <url-or-file>
 ---
 
 # Ingest a source
@@ -10,7 +11,7 @@ script does the deterministic half (fetch, convert, store, guard); you do the
 judgment half (clean metadata, real keywords, confidentiality, quality check).
 Corpus contract: `~/.abcd/sources/README.md`. The confidentiality hard rule
 from `/abcd:consult` applies here in full. If the corpus is absent, say so and
-stop — this skill never creates it.
+stop — this command never creates it.
 
 ## 1. Read the document first
 

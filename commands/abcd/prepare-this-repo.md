@@ -5,16 +5,16 @@ description: Prepare the current repository to abcd's working conventions — au
 
 # Prepare this repo
 
-An interim bridge: abcd cannot yet manage repositories directly, so this skill
+An interim bridge: abcd cannot yet manage repositories directly, so this command
 reads the abcd record and brings the current repository up to its conventions
 in a way the abcd CLI can later take over without unpicking. It supersedes the
 older `scaffold-repo` layout (`.work/` at the repo root); Phase 3 migrates that
 layout when found.
 
-**Locate the record first.** This skill's base directory is
-`<abcd-root>/skills/prepare-this-repo/` — the abcd repository root is two
-levels up from it. Call that `$ABCD` below. Never assume any other checkout
-location.
+**Locate the record first.** This command file lives at
+`<abcd-root>/commands/abcd/prepare-this-repo.md` — the abcd repository root is
+three levels up from it. Call that `$ABCD` below. Never assume any other
+checkout location.
 
 ## Phase 0 — Refuse unless the user owns this repo
 
@@ -120,7 +120,7 @@ anything.
 Write this between `<!-- working-conventions YYYY-MM-DD -->` and
 `<!-- /working-conventions -->` markers (today's date; the markers let later
 tooling find and replace the block). The section is **self-contained and
-nameless**: it never mentions abcd, this skill, or any private repository —
+nameless**: it never mentions abcd, this command, or any private repository —
 the conventions read as the repo's own. Adapt wording to the repo; keep the
 substance:
 

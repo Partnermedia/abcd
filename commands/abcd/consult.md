@@ -10,7 +10,7 @@ papers, private-repo notes, PDFs, books) the agent may **consult** but must
 never **cite** publicly. Metadata lives in `sources.json` (CSL-JSON; the
 `custom` block carries `confidential`, `permission_status`, `keywords`,
 `aliases`). Full details: `~/.abcd/sources/README.md`. If the corpus is
-absent, say so and stop — this skill never creates it.
+absent, say so and stop — this command never creates it.
 
 ## Hard rule (overrides convenience, always)
 
@@ -73,7 +73,7 @@ decision, so they can decide about citing.
   `~/.abcd/sources/bin/sync-banlist <repo-root>`. It maintains a generated
   block in the repo's untracked `.abcd/.work.local/private-names.txt`, which
   the repo's pre-commit guard reads — leakage is then blocked mechanically,
-  not just by this skill's rule.
+  not just by this command's rule.
 - Before any document that drew on confidential material is committed, posted,
   or otherwise shared, run `~/.abcd/sources/bin/cite-guard <file>` (exit 1 =
   confidential identifier present; its report names only the CSL key, so the

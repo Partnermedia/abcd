@@ -1,12 +1,12 @@
 # Skills — Procedural Workflows That Aren't Commands
 
-abcd's surface namespace (`/abcd:`) carries both **commands** and a small set of **skills**. The skill/command distinction is documented here for the boundary rules; abcd ships **three** user-facing skills under `/abcd:` — `consult`, `ingest`, and `prepare-this-repo` (each a `skills/<name>/SKILL.md`).
+abcd's surface namespace (`/abcd:`) is **commands only**. The skill/command distinction is documented here for the boundary rules; **abcd ships zero skills**. The three workflows once shipped as skills — `consult`, `ingest`, and `prepare-this-repo` — are **commands** (they mutate state: the sources corpus, its ledger, and the target repo), and live at `commands/abcd/<name>.md` with surface chapters [`13-consult.md`](../04-surfaces/13-consult.md), [`14-ingest.md`](../04-surfaces/14-ingest.md), and [`15-prepare-this-repo.md`](../04-surfaces/15-prepare-this-repo.md).
 
 ## What's a skill?
 
 A **skill** is a procedural-workflow surface — a markdown-encoded interview, audit, or guided pass that runs against existing material in the repo. Skills are auto-registered by Claude Code's plugin system from the plugin's `skills/<skill-name>/` directory; abcd does not maintain a separate skill registry.
 
-**abcd ships three skills** (`consult`, `ingest`, `prepare-this-repo`). An earlier version of this brief proposed `/abcd:grill` as a skill; its **design target** is promotion to a sub-verb of `/abcd:intent` (per the round-2 command-structure review, see `04-surfaces/05-intent.md § 2`) — but neither `grill` nor the `intent` parent is on any shipped surface (no binary verb, no `commands/abcd/` file). Grill's mid-session glossary writes and per-session logbook output are command-shaped responsibilities — exactly the trigger for promotion this file describes below.
+**abcd ships zero skills.** The three workflows once classified as skills (`consult`, `ingest`, `prepare-this-repo`) were reclassified as commands — each mutates state, which the boundary rule below makes command-shaped. An earlier version of this brief also proposed `/abcd:grill` as a skill; its **design target** is promotion to a sub-verb of `/abcd:intent` (per the round-2 command-structure review, see `04-surfaces/05-intent.md § 2`) — but neither `grill` nor the `intent` parent is on any shipped surface (no binary verb, no `commands/abcd/` file). Grill's mid-session glossary writes and per-session logbook output are command-shaped responsibilities — exactly the trigger for promotion this file describes below.
 
 ## What's a command?
 
@@ -17,6 +17,8 @@ A **command** is a stateful operation that creates, modifies, or moves artefacts
 - A **status + help** mode when called bare — the bare-status-board convention holds for `ahoy`, `capture`, and `memory` (and bare `abcd`); it is not universal (`version` prints only the version string, and the `docs`/`history` cobra parents print help/usage with no status board).
 
 abcd ships **seven top-level commands**: `/abcd:ahoy`, `/abcd:capture`, `/abcd:docs`, `/abcd:history`, `/abcd:launch`, `/abcd:memory`, `/abcd:version`. **Design targets — not on any shipped surface (no binary verb, no `commands/abcd/` file):** `/abcd:disembark`, `/abcd:embark`, and `/abcd:intent` (design record in `04-surfaces/02-disembark.md`, `03-embark.md`, `05-intent.md`). The `intent` parent's design gives it the largest sub-verb tree (`refine`, `grill`, `plan`, `ship`, `review`, `consistency`, `shape`, `reclassify`, `link`), plus the canonical bare quoted create `/abcd:intent "<text>"` — all design target, none shipped. See [`04-surfaces/`](../04-surfaces) for per-command detail.
+
+Alongside the seven binary-backed verbs, abcd ships **three host-delegated commands** — `/abcd:consult`, `/abcd:ingest`, and `/abcd:prepare-this-repo` (chapters `13`–`15`). They are commands (state-mutating) but have **no Go verb**: the workflow runs in the host agent, so they have no bare-status render and no binary sub-verbs. This is the shape a command takes when its work is host-delegated rather than owned by the transport-agnostic core.
 
 ## Skill vs command — decision criteria
 
@@ -43,23 +45,17 @@ When in doubt, ship as a command. The earlier "ship as a skill first; promote on
 
 ## Skill registration
 
-**abcd ships three user-facing skills under `/abcd:`** — `consult`, `ingest`, and `prepare-this-repo`, each a `skills/<name>/SKILL.md` that the plugin system auto-registers as a slash-invokable skill. (`skills/` ships in the tree but is currently absent from the release payload `.abcd/config/launch-payload.json` includes — tracked as drift in iss-61.)
+**The registration list is empty — abcd ships no skills.** There is no `skills/`
+directory in the tree; the plugin system's `skills/<name>/` auto-registration finds
+nothing to register. The three workflows that once lived here (`consult`, `ingest`,
+`prepare-this-repo`) were reclassified as commands and moved to `commands/abcd/<name>.md`;
+because `commands/` is in the release payload (`.abcd/config/launch-payload.json`) and
+`skills/` never was, the move also closes iss-61 (a shipped skill silently dropped from
+the cut artefact — there are no skills left to drop).
 
-The shipped `skills/` entries are three user-facing workflow skills:
-
-1. **`consult`** — consult the local sources corpus (default `~/.abcd/sources`) and record source→decision provenance in its append-only ledger.
-2. **`ingest`** — register a URL or document into the local sources corpus with extracted reference metadata.
-3. **`prepare-this-repo`** — an interim bridge that brings the current repository up to abcd's conventions (three-tier `.abcd/` layout, an AGENTS.md section, commit gates).
-
-There are no per-command workflow directories (`skills/abcd-<verb>/`) and no hook-helper directories in the shipped tree.
-
-```
-skills/      consult/            (consult the sources corpus; record provenance)
-             ingest/             (register a source into the corpus)
-             prepare-this-repo/  (interim repo-onboarding bridge)
-```
-
-The three skills above ARE the current registration list. If a later phase introduces further user-facing skills under `/abcd:` (a slash-invokable skill that does NOT have a parent command), it is added here.
+If a later phase introduces a user-facing skill under `/abcd:` (a slash-invokable
+workflow that does NOT have a parent command and is findings-only/idempotent per the
+boundary rule), it is registered here.
 
 ## Future skills
 
