@@ -5,7 +5,7 @@ any implementation. Reached via the [prefer-sota](../principles/prefer-sota.md)
 process: an adversary challenged generic just-in-time rule-injection SOTA (CARL,
 AGENTS.md, Cursor rules, Skills) for THIS repo's fit, then a `sota-researcher`
 verdict was taken on the fit-surviving hypothesis. This doc is the design of
-record for [itd-3](../intents/planned/itd-3-modular-rules-loader.md); it does not
+record for [itd-3](../intents/shipped/itd-3-modular-rules-loader.md); it does not
 authorise a build. Adopting a planned intent is a maintainer decision — the four
 deltas from the intent (§7) are the sign-off surface.
 
@@ -30,7 +30,7 @@ rules **point at** `.abcd/development/principles/` rather than copying them.
   `internal/core`; the capability lives in the core and renders through the
   vendor-neutral `abcd rules` verb.
 - **CARL's global `~/.carl/carl.json` source** — collides with per-repo-only
-  ([the intent's "What's Out of Scope"](../intents/planned/itd-3-modular-rules-loader.md);
+  ([the intent's "What's Out of Scope"](../intents/shipped/itd-3-modular-rules-loader.md);
   `~/.abcd/` holds only machine-wide state). No `~/.abcd/rules.json`. Ever.
 - **CARL's MCP server + `add_rule`/`toggle_domain` verbs, and the Python hook** —
   each is a new runtime/dependency (ask-first). Rule *mutation* is a file-edit of

@@ -1,7 +1,7 @@
 ---
 id: itd-3
 slug: modular-rules-loader
-spec_id: null
+spec_id: spc-1
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -63,7 +63,54 @@ This is also the keystone for retiring `~/ABCDevelopment/.claude/` entirely. Wit
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+> _Manual fidelity audit — the `intent-fidelity-reviewer` agent is not yet built,
+> so this audit was performed by hand. Judge: Claude Opus 4.8; date 2026-07-11;
+> reviewed against the merged loader (the rules-loader design + implementation).
+> Per-criterion verdicts per the itd-1 discipline, then a three-bucket prose
+> audit. `spec_id: spc-1` is reserved for itd-3; the future native spec store
+> adopts it rather than re-minting._
+
+### Per-criterion verdicts
+
+1. **MET.** COMMITTING's `recall`/`aliases` cover "commit", "PR", and "git add";
+   the prompt-router hook injects the domain on the turn.
+2. **MET (exceeded).** A no-match renders zero model-facing tokens — bettering the
+   `< 200` threshold. The "header only" mechanism was replaced by out-of-band
+   diagnostics (signed-off delta D3).
+3. **MET_WITH_CONCERNS.** Dedup is MET (inject on turn 1, skip 2–3). "Forced
+   refresh on prompt 5" was deliberately replaced by event-driven refresh on
+   `SessionStart(compact)` plus a fixed-N backstop (default 15, configurable) —
+   signed-off delta D1.
+4. **MET.** A `*ROADMAP` star-command injects the domain regardless of keyword
+   match (it overrides a dormant state, not the kill switch).
+5. **INCONCLUSIVE.** The marker block is delivered and sized (~40 lines) and ahoy
+   installs it, but the live "fresh clone + installed plugin + new session"
+   behaviour cannot be observed in-repo (the hook only fires in an installed
+   plugin).
+6. **NOT_MET.** The shipped defaults are a concise curated set (eight domains)
+   drawn from the working conventions plus the Pass-1 mapping in
+   `research/legacy-harvest.md`; a completeness-audited rule-by-rule port of the
+   legacy methodology file was not performed. This is the one genuine gap.
+
+**Rollup:** 3 MET · 1 MET_WITH_CONCERNS · 1 INCONCLUSIVE · 1 NOT_MET.
+
+### Three-bucket audit
+
+- **Honoured.** Just-in-time recall injection replacing the monolithic
+  force-load (the core promise); binary-bundled defaults plus a per-repo
+  override; per-domain dedup; star-command activation; the kill switch and
+  dormant state; the `abcd rules [domain]` diagnostic verb; the OPINIONS domain
+  pointing at the canonical conventions; a fail-closed, non-blocking trust
+  boundary; a marker block under 50 lines.
+- **Diverged (every item a maintainer-signed delta).** D3 — zero no-match tokens
+  plus out-of-band diagnostics instead of a `< 200`-token header. D1 —
+  event-driven refresh with a fixed-N backstop instead of forced-every-5. D2 —
+  the shipped `{schema_version, disabled, domains{}}` per-field-override shape
+  instead of the earlier `extends`/`overrides` sketch. D4 — no `.abcdignore`.
+- **Missing / outstanding.** A completeness-audited harvest of the legacy
+  methodology file into the defaults (criterion 6). Live installed-plugin session
+  verification (criterion 5). Neither blocks the shipped promise; both are
+  recorded here as follow-ups.
 
 ## References
 
