@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -31,15 +33,53 @@ func TestInjectDedupsWithinSession(t *testing.T) {
 	}
 }
 
-func TestInjectReinjectsAfterResetState(t *testing.T) {
+func TestInjectReinjectsOnClearedLedger(t *testing.T) {
 	rs := Defaults()
 	first := Inject(rs, "commit", SessionState{}, 0)
-	// A reset clears the ledger; the next turn re-injects.
-	after := Inject(rs, "commit", SessionState{}, 0)
-	if after.Text == "" {
-		t.Fatal("re-inject after cleared ledger produced nothing")
+	if first.Text == "" {
+		t.Fatal("first turn injected nothing")
 	}
-	_ = first
+	// Same session, threaded state: dedup suppresses.
+	second := Inject(rs, "commit", first.State, 0)
+	if second.Text != "" {
+		t.Fatalf("dedup failed on threaded state:\n%s", second.Text)
+	}
+	// A cleared ledger (what a reset produces) re-injects, even though the prompt
+	// is unchanged — this is the reset/refresh contract at the unit level.
+	third := Inject(rs, "commit", SessionState{}, 0)
+	if third.Text == "" {
+		t.Fatal("cleared ledger did not re-inject")
+	}
+}
+
+func TestLoadBackstop(t *testing.T) {
+	// Absent config -> default.
+	if got := LoadBackstop(t.TempDir()); got != DefaultRefreshBackstop {
+		t.Fatalf("absent config: backstop = %d, want %d", got, DefaultRefreshBackstop)
+	}
+	// A valid config value is honoured.
+	dir := t.TempDir()
+	writeConfig(t, dir, `{"rules":{"force_refresh_every_n":7}}`)
+	if got := LoadBackstop(dir); got != 7 {
+		t.Fatalf("config value not read: %d", got)
+	}
+	// A non-positive or malformed value falls back to the default.
+	bad := t.TempDir()
+	writeConfig(t, bad, `{"rules":{"force_refresh_every_n":0}}`)
+	if got := LoadBackstop(bad); got != DefaultRefreshBackstop {
+		t.Fatalf("non-positive value not defaulted: %d", got)
+	}
+}
+
+func writeConfig(t *testing.T, dir, body string) {
+	t.Helper()
+	abcd := filepath.Join(dir, ".abcd")
+	if err := os.MkdirAll(abcd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(abcd, "config.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestInjectContentDriftReinjects(t *testing.T) {

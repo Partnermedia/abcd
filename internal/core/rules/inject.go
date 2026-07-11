@@ -105,11 +105,12 @@ func sessionFile(session string) string {
 // file yields the zero state (a fresh session), never an error — dedup is a
 // best-effort optimisation, not a correctness gate.
 func LoadState(session string) SessionState {
-	fi, err := os.Lstat(sessionFile(session))
+	path := sessionFile(session)
+	fi, err := os.Lstat(path)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxStateFileBytes {
 		return SessionState{}
 	}
-	data, err := os.ReadFile(sessionFile(session))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return SessionState{}
 	}
@@ -123,7 +124,9 @@ func LoadState(session string) SessionState {
 	return st
 }
 
-// SaveState persists the ledger for a session (0700 dir, 0600 file).
+// SaveState atomically persists the ledger for a session (0700 dir; the temp
+// file CreateTemp makes is 0600). A unique temp name avoids orphaning a fixed
+// path and avoids a same-session writer race; a failed rename cleans up.
 func SaveState(session string, st SessionState) error {
 	if err := os.MkdirAll(stateDir(), 0o700); err != nil {
 		return err
@@ -132,11 +135,50 @@ func SaveState(session string, st SessionState) error {
 	if err != nil {
 		return err
 	}
-	tmp := sessionFile(session) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	f, err := os.CreateTemp(stateDir(), "state-*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, sessionFile(session))
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, sessionFile(session)); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// LoadBackstop reads rules.force_refresh_every_n from <repoRoot>/.abcd/config.json
+// — the fixed-N full-refresh backstop (D1). Event-driven reset is the primary
+// refresh, so this only bounds always-relevant domains; a missing file/key or a
+// non-positive value falls back to DefaultRefreshBackstop.
+func LoadBackstop(repoRoot string) int {
+	path := filepath.Join(repoRoot, ".abcd", "config.json")
+	fi, err := os.Lstat(path)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxRulesFileBytes {
+		return DefaultRefreshBackstop
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return DefaultRefreshBackstop
+	}
+	var cfg struct {
+		Rules struct {
+			ForceRefreshEveryN int `json:"force_refresh_every_n"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil || cfg.Rules.ForceRefreshEveryN <= 0 {
+		return DefaultRefreshBackstop
+	}
+	return cfg.Rules.ForceRefreshEveryN
 }
 
 // ResetState clears a session's ledger (the event-driven refresh: the next

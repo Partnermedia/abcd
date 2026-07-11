@@ -230,7 +230,10 @@ func readHookInput(cmd *cobra.Command) (hookInput, error) {
 }
 
 // hookSession returns a stable session key, defaulting when the harness omits
-// the id (the hash in the state layer neutralises any hostile value).
+// the id (the hash in the state layer neutralises any hostile value). The
+// harness supplies session_id in practice; the "default" fallback means two
+// concurrent id-less sessions would share one dedup ledger — an accepted
+// edge-case degradation, never a correctness or safety issue.
 func hookSession(in hookInput) string {
 	if in.SessionID == "" {
 		return "default"
@@ -276,9 +279,9 @@ func newHookCommand() *cobra.Command {
 				return nil
 			}
 			session := hookSession(in)
-			// backstop 0 -> DefaultRefreshBackstop; config.force_refresh_every_n is
-			// wired in phase 4 (D1: event-driven refresh is primary, N is a backstop).
-			res := rules.Inject(rs, in.Prompt, rules.LoadState(session), 0)
+			// The fixed-N backstop comes from the repo's config (default 15 when
+			// unset); event-driven reset is the primary refresh (D1).
+			res := rules.Inject(rs, in.Prompt, rules.LoadState(session), rules.LoadBackstop(cwd))
 			if err := rules.SaveState(session, res.State); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: state save failed (%v)\n", err)
 			}
@@ -344,7 +347,9 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Scoped: render one domain regardless of its state.
+			// Scoped: inspect one domain's configured content regardless of its
+			// state OR the kill switch — this diagnostic shows what a domain holds,
+			// not what would inject right now (bare `abcd rules` reports disabled).
 			if len(args) == 1 {
 				name := strings.ToUpper(args[0])
 				d, ok := rs.Lookup(name)
