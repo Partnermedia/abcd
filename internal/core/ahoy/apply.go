@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/REPPL/abcd-cli/internal/core/identity"
 )
 
 // Install runs detect + apply over the approved categories. It is idempotent:
@@ -62,6 +64,7 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		overrides:  opts.ValueOverrides,
 		prompter:   p,
 		gapPresent: gapIDSet(det.Gaps),
+		autoYes:    opts.Yes,
 	}
 
 	// Ordered apply steps.
@@ -74,6 +77,7 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	ac.stepSymlink()
 	ac.stepRules()
 	ac.stepVersionStamp()
+	ac.stepIdentityPin()
 
 	// Re-detect to compute what remains.
 	final, err := Detect(abs)
@@ -104,9 +108,33 @@ type applyCtx struct {
 	prompter   Prompter
 	gapPresent map[string]bool
 	writes     []string
+	autoYes    bool // --yes: every category auto-approved without interaction
 }
 
 func (a *applyCtx) note(path string) { a.writes = append(a.writes, path) }
+
+// stepIdentityPin adopts the iss-62 identity gate for an un-pinned repo: it
+// writes .abcd/config/identity.json from the current git author identity (the
+// proposal), gated on ConfigChange approval (the confirmation). A mismatch is
+// never auto-resolved — abcd must not silently change the pin or the user's git
+// identity — so it stays a guided manual fix.
+//
+// It does NOT auto-adopt under --yes: pinning captures whatever git identity is
+// currently set, so a non-interactive run could pin a wrong/sandbox identity as
+// canonical (the very value the gate exists to reject). Under --yes the
+// un-pinned gap simply remains, to be adopted with an interactive confirmation.
+func (a *applyCtx) stepIdentityPin() {
+	if a.autoYes || !a.approved[ConfigChange] || !a.has("git_identity.unpinned") {
+		return
+	}
+	eff, err := identity.EffectiveIdentity(a.cwd)
+	if err != nil || eff.Name == "" || eff.Email == "" {
+		return
+	}
+	if err := identity.WritePin(a.cwd, identity.Pin{Name: eff.Name, Email: eff.Email}); err == nil {
+		a.note(identity.PinRelPath)
+	}
+}
 
 func (a *applyCtx) has(id string) bool { return a.gapPresent[id] }
 

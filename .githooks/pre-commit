@@ -16,6 +16,38 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# --- iss-62 identity gate ---------------------------------------------------
+# Refuse a commit whose author identity diverges from the committed pin
+# (.abcd/config/identity.json). Self-contained (no binary dependency) so the
+# guard holds even before abcd is built or on PATH, and can't be broken by a
+# stale abcd. Runs FIRST — the name-guard below early-exits when no banlist is
+# present, which must not skip this check. No-op ONLY when the repo has no pin.
+#
+# FAIL CLOSED: a pin that is present but that this shell cannot read (empty
+# value, or non-lowercase / non-canonical JSON keys the sed does not match)
+# BLOCKS the commit rather than falling through. The Go check
+# (`abcd ahoy identity-check`) enforces such pins directly; this shell guard is
+# deliberately stricter — it never permits an unverified identity. Keep the two
+# in the same fail-closed direction (see identity_test.go / the shell hook test).
+identity_pin=".abcd/config/identity.json"
+if [ -f "$identity_pin" ]; then
+  want_name=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$identity_pin" | head -n1)
+  want_email=$(sed -n 's/.*"email"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$identity_pin" | head -n1)
+  if [ -z "$want_name" ] || [ -z "$want_email" ]; then
+    echo "pre-commit: BLOCKED — $identity_pin is present but its name/email could not be read (fail closed)." >&2
+    echo "            check the pin's JSON (lowercase \"name\"/\"email\", both non-empty), or run: abcd ahoy identity-check" >&2
+    exit 1
+  fi
+  have_name=$(git config user.name || true)
+  have_email=$(git config user.email || true)
+  if [ "$have_name" != "$want_name" ] || [ "$have_email" != "$want_email" ]; then
+    echo "pre-commit: BLOCKED — git identity \"$have_name <$have_email>\" does not match the pinned \"$want_name <$want_email>\" ($identity_pin)." >&2
+    echo "            fix: git config user.name \"$want_name\" && git config user.email \"$want_email\"" >&2
+    exit 1
+  fi
+fi
+# --- end iss-62 identity gate -----------------------------------------------
+
 banlist=".abcd/.work.local/private-names.txt"
 
 # Refresh the generated block from the user-level sources corpus when present

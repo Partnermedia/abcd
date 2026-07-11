@@ -19,6 +19,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/capture"
 	"github.com/REPPL/abcd-cli/internal/core/history"
+	"github.com/REPPL/abcd-cli/internal/core/identity"
 	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
@@ -338,6 +339,32 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
 			return enc.Encode(res)
+		},
+	})
+
+	// identity-check — the iss-62 gate's canonical, testable entrypoint. Exits
+	// non-zero when the commit identity diverges from the committed pin, so a
+	// pre-commit hook (or CI) can fail closed. A match, or an un-pinned repo,
+	// exits zero.
+	ahoyCmd.AddCommand(&cobra.Command{
+		Use:   "identity-check",
+		Short: "Exit non-zero if the git commit identity does not match .abcd/config/identity.json",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := identity.Check(cwd)
+			if err != nil {
+				return err
+			}
+			if res.Blocks() {
+				return fmt.Errorf("%s\n  fix: git config user.name %q && git config user.email %q",
+					res.Reason, res.Pin.Name, res.Pin.Email)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "identity ok (%s)\n", res.Status)
+			return nil
 		},
 	})
 

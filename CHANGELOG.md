@@ -12,6 +12,14 @@ called out in a **Breaking** section.
 
 ### Added
 
+- A managed-repo **git-identity gate** (iss-62): a repo can pin its expected
+  commit identity in `.abcd/config/identity.json`, and every commit is checked
+  against it. `ahoy doctor` reports a divergence (a repo-local override that
+  differs from the pin, or an unset identity) or an un-pinned repo; `ahoy
+  install` adopts the gate by pinning the current git identity; `ahoy
+  identity-check` exits non-zero on a mismatch; and the `pre-commit` hook
+  fail-closes so a stray identity (e.g. a sandbox default) is caught at commit
+  time rather than discovered later. A repo with no pin is unaffected.
 - A `context_status_free` record-lint rule: the shared orientation file
   (`rules.context_status_free.target`, by convention `.abcd/work/CONTEXT.md`)
   must carry no phase/status claims — status is read live from the CLI and
