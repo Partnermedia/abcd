@@ -18,7 +18,7 @@ Decision interview conducted 2026-05-04 in conversation. Outcomes captured below
 
 ## Pass 1 — Methodology rules
 
-Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style domain rules per [`itd-3-modular-rules-loader`](../intents/planned/itd-3-modular-rules-loader.md), shipped as `scripts/abcd/defaults/rules.json` in the plugin.
+Source: `~/ABCDevelopment/.claude/CLAUDE.md`. Disposition: split into CARL-style domain rules per [`itd-3-modular-rules-loader`](../intents/shipped/itd-3-modular-rules-loader.md), shipped as `scripts/abcd/defaults/rules.json` in the plugin.
 
 | § | Section | Verdict | Domain mapping | Notes |
 |---|---|---|---|---|
@@ -208,7 +208,7 @@ abcdDev/
 }
 ```
 
-Merge semantics, conflict policy, and diagnostic surface (`abcd rules show`, `abcd rules diff`, `abcd rules lint`) defined in [`itd-3-modular-rules-loader`](../intents/planned/itd-3-modular-rules-loader.md).
+Merge semantics, conflict policy, and diagnostic surface (`abcd rules show`, `abcd rules diff`, `abcd rules lint`) defined in [`itd-3-modular-rules-loader`](../intents/shipped/itd-3-modular-rules-loader.md).
 
 ## Migration sequence
 
@@ -277,7 +277,7 @@ If the first phase starts feeling too heavy, the candidates for moving to a late
 ## References
 
 [itd-1]: ../intents/disciplines/itd-1-acceptance-gates.md "itd-1 — Acceptance gates"
-[itd-3]: ../intents/planned/itd-3-modular-rules-loader.md "itd-3 — Modular rules loader"
+[itd-3]: ../intents/shipped/itd-3-modular-rules-loader.md "itd-3 — Modular rules loader"
 [itd-7]: ../intents/drafts/itd-7-rp-workspace-portability.md "itd-7 — RP workspace portability"
 [itd-17]: ../intents/drafts/itd-17-model-effectiveness-tracking.md "itd-17 — Model effectiveness tracking (a later phase)"
 [itd-23]: ../intents/drafts/itd-23-spec-kit-interop.md "itd-23 — Spec Kit interop (a later phase)"
