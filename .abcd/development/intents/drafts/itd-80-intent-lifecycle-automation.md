@@ -65,6 +65,39 @@ This intent builds the automation. Directory location stays the single source of
 - **adr-26** (native spec store — directory-as-truth), **adr-25** (host-delegated LLM default), **adr-27** (autonomous-run receipt gating) — the load-bearing decisions this intent instantiates.
 - **`.abcd/development/plans/2026-07-11-intent-lifecycle.md`** — the SOTA-researched design plan this intent builds to.
 
+## SOTA
+
+> _Per the [sota-per-intent principle](../../principles/sota-per-intent.md):
+> existing alternatives + rough maturity, then the chosen path. Harvested from the
+> SOTA-researched design plan
+> [`2026-07-11-intent-lifecycle.md`](../../plans/2026-07-11-intent-lifecycle.md)._
+
+- **Spec store / lifecycle state.** Alternatives: git-native trackers (git-bug —
+  CRDT, *mature*; Fossil — *mature*) avoid directory-state for multi-writer merge,
+  a pressure a single-maintainer config tool does not have; spec-kit branch-per-spec
+  (*usable*) fragments the durable `shipped/` record we want; the companion harness
+  spec/task backend (*usable*) is the intended richer engine. → **Path 2**: a
+  minimal directory-as-truth native floor (`os.Rename`, stdlib) with the adr-26
+  seam to adopt an external spec engine later. No dependency.
+- **Fidelity review (LLM-as-judge).** Alternatives: eval/judge harnesses (*mature*)
+  plus the 2025–26 judge-calibration literature. The literature's conclusions
+  (per-criterion + 4-value ordinal + explicit INCONCLUSIVE + report-not-block,
+  cited evidence, pinned judge/prompt hashes) are adopted as *design*; the harnesses
+  themselves force a judge and add heavy deps. → **Path 2**: host-delegated native
+  emit/ingest (adr-25), the better external judge being whatever the host runs.
+  No dependency.
+- **Async ingestion.** The transactional outbox/inbox pattern (*de-facto standard*)
+  is adopted as a stdlib pattern (`encoding/json` + hand-rolled validation); the
+  verdict envelope reuses the repo's existing VSA attestation shape. Pattern reuse,
+  not a dependency.
+
+**Verdict — Path 2 on every axis.** No new dependency ⇒ no path-1 hard stop; the
+seams are load-bearing (adr-25/26) ⇒ no path-3 review. This is exactly why the
+build proceeds autonomously without a dependency gate. The design plan's headline:
+abcd's ADRs (25/26/27 + the VSA shape) already sit on or slightly ahead of generic
+SOTA here — the work is mostly naming what we have after its mature counterpart and
+closing two gaps (cited evidence per criterion; pinned judge/prompt/rubric hashes).
+
 ## Open Questions
 
 - **`spc-N` minting under reserved ids.** The corpus pre-references `spc-` ids in planning docs and itd-3 reserved `spc-1`. Slice 1 mints `max(spec-store files ∪ intent `spec_id`) + 1` to avoid live collisions; reconciling the store's sequential minting with the brief's aspirational spec numbering is deferred to the richer spec-store slice.
