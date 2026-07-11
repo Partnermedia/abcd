@@ -244,6 +244,38 @@ func TestSignatureStableAndDistinct(t *testing.T) {
 	}
 }
 
+func TestActiveExcludesDormantAndKillSwitch(t *testing.T) {
+	rs := Defaults()
+	full := len(rs.Active())
+	if full != len(rs.Domains) {
+		t.Fatalf("Active() = %d, want all %d default domains", full, len(rs.Domains))
+	}
+	d := rs.Domains["PII"]
+	d.State = StateDormant
+	rs.Domains["PII"] = d
+	if got := len(rs.Active()); got != full-1 {
+		t.Fatalf("dormant domain still active: %d", got)
+	}
+	if has(rs.Active(), "PII") {
+		t.Fatal("Active() returned a dormant domain")
+	}
+	rs.Disabled = true
+	if got := rs.Active(); got != nil {
+		t.Fatalf("kill switch: Active() = %v, want nil", names(got))
+	}
+}
+
+func TestLookup(t *testing.T) {
+	rs := Defaults()
+	if _, ok := rs.Lookup("NOSUCH"); ok {
+		t.Fatal("Lookup returned ok for an absent domain")
+	}
+	rd, ok := rs.Lookup("PII")
+	if !ok || rd.Name != "PII" || len(rd.Rules) == 0 {
+		t.Fatalf("Lookup(PII) = %+v ok=%v", rd, ok)
+	}
+}
+
 func pick(rs RuleSet, name string) ResolvedDomain {
 	return ResolvedDomain{Name: name, Domain: rs.Domains[name]}
 }

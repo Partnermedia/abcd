@@ -57,7 +57,7 @@ type RuleSet struct {
 
 // ResolvedDomain pairs a domain with its name for ordered rendering and dedup.
 type ResolvedDomain struct {
-	Name string
+	Name string `json:"name"`
 	Domain
 }
 
@@ -204,6 +204,37 @@ func (rs RuleSet) Match(prompt string) []ResolvedDomain {
 		}
 	}
 	return out
+}
+
+// Active returns every injectable domain (state != dormant) in name-sorted
+// order — the full set the diagnostic `abcd rules` render shows. The top-level
+// kill switch yields nothing.
+func (rs RuleSet) Active() []ResolvedDomain {
+	if rs.Disabled {
+		return nil
+	}
+	names := make([]string, 0, len(rs.Domains))
+	for name := range rs.Domains {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []ResolvedDomain
+	for _, name := range names {
+		if d := rs.Domains[name]; d.State != StateDormant {
+			out = append(out, ResolvedDomain{Name: name, Domain: d})
+		}
+	}
+	return out
+}
+
+// Lookup returns one domain by name regardless of its state (a dormant domain is
+// still inspectable); ok is false when the name is absent.
+func (rs RuleSet) Lookup(name string) (ResolvedDomain, bool) {
+	d, ok := rs.Domains[name]
+	if !ok {
+		return ResolvedDomain{}, false
+	}
+	return ResolvedDomain{Name: name, Domain: d}, true
 }
 
 // parseStarCommands extracts the set of *<DOMAIN> names, enforcing that the star

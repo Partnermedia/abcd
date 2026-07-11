@@ -23,6 +23,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
+	"github.com/REPPL/abcd-cli/internal/core/rules"
 	"github.com/spf13/cobra"
 )
 
@@ -116,6 +117,7 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(newCaptureCommand(&asJSON))
 	root.AddCommand(newMemoryCommand(&asJSON))
+	root.AddCommand(newRulesCommand(&asJSON))
 	root.AddCommand(newHistoryCommand(&asJSON))
 	root.AddCommand(newDocsCommand(&asJSON))
 
@@ -198,6 +200,60 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	docsCmd.AddCommand(lintCmd)
 
 	return docsCmd
+}
+
+// rulesView is the machine-readable envelope for bare `abcd rules`: the kill
+// switch plus the active domains.
+type rulesView struct {
+	Disabled bool                   `json:"disabled"`
+	Domains  []rules.ResolvedDomain `json:"domains"`
+}
+
+// newRulesCommand builds the `rules` verb — the vendor-neutral front door onto
+// internal/core/rules (itd-3). Bare `abcd rules` renders the active rule set;
+// a positional DOMAIN scopes to one domain (case-insensitive). Read-only,
+// diagnostic — it never mutates and there is no `show` sub-verb (the positional
+// argument is the scope, per the bare-command-as-render discipline).
+func newRulesCommand(asJSON *bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rules [domain]",
+		Short: "Render the active rule set; a positional DOMAIN scopes to one (read-only)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			rs, err := rules.Load(cwd)
+			if err != nil {
+				return err
+			}
+			// Scoped: render one domain regardless of its state.
+			if len(args) == 1 {
+				name := strings.ToUpper(args[0])
+				d, ok := rs.Lookup(name)
+				if !ok {
+					return &exitError{Code: 2, Msg: fmt.Sprintf("abcd rules: unknown domain %q", name)}
+				}
+				return render(cmd.OutOrStdout(), *asJSON, d, func(w io.Writer) {
+					fmt.Fprint(w, rules.Render([]rules.ResolvedDomain{d}))
+				})
+			}
+			// Bare: render the full active set.
+			active := rs.Active()
+			return render(cmd.OutOrStdout(), *asJSON, rulesView{Disabled: rs.Disabled, Domains: active}, func(w io.Writer) {
+				if rs.Disabled {
+					fmt.Fprintln(w, "abcd rules — disabled (kill switch set in .abcd/rules.json)")
+					return
+				}
+				if out := rules.Render(active); out != "" {
+					fmt.Fprint(w, out)
+					return
+				}
+				fmt.Fprintln(w, "abcd rules — no active domains")
+			})
+		},
+	}
 }
 
 // newAhoyCommand builds the `ahoy` sub-tree. Bare `ahoy` runs the read-only

@@ -45,6 +45,54 @@ func TestBareStatusJSON(t *testing.T) {
 	}
 }
 
+func TestRulesBareText(t *testing.T) {
+	out := string(runCLI(t, "rules"))
+	for _, want := range []string{"COMMITTING", "PII"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("bare `rules` missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRulesBareJSON(t *testing.T) {
+	out := runCLI(t, "rules", "--json")
+	var got struct {
+		Disabled bool             `json:"disabled"`
+		Domains  []map[string]any `json:"domains"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("rules --json not JSON: %v\n%s", err, out)
+	}
+	if len(got.Domains) == 0 {
+		t.Fatalf("rules --json returned no domains: %s", out)
+	}
+	found := false
+	for _, d := range got.Domains {
+		if d["name"] == "COMMITTING" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rules --json missing COMMITTING: %s", out)
+	}
+}
+
+func TestRulesScopedUppercasesArg(t *testing.T) {
+	out := string(runCLI(t, "rules", "committing"))
+	if !strings.Contains(out, "COMMITTING") {
+		t.Fatalf("scoped `rules committing` missing COMMITTING:\n%s", out)
+	}
+	if strings.Contains(out, "## PII") {
+		t.Fatalf("scoped render leaked another domain:\n%s", out)
+	}
+}
+
+func TestRulesUnknownDomainErrors(t *testing.T) {
+	if _, err := runCLIErr(t, "rules", "nosuch"); err == nil {
+		t.Fatal("unknown domain must exit non-zero")
+	}
+}
+
 // validHooksJSON is a structurally-sound plugin hook manifest for the hermetic
 // plugin root, so the install path's hook-manifest verification passes.
 const validHooksJSON = `{
