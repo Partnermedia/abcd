@@ -20,10 +20,12 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/capture"
 	"github.com/REPPL/abcd-cli/internal/core/history"
 	"github.com/REPPL/abcd-cli/internal/core/identity"
+	"github.com/REPPL/abcd-cli/internal/core/intent"
 	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
 	"github.com/REPPL/abcd-cli/internal/core/rules"
+	"github.com/REPPL/abcd-cli/internal/core/spec"
 	"github.com/spf13/cobra"
 )
 
@@ -121,6 +123,8 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newHookCommand())
 	root.AddCommand(newHistoryCommand(&asJSON))
 	root.AddCommand(newDocsCommand(&asJSON))
+	root.AddCommand(newIntentCommand(&asJSON))
+	root.AddCommand(newSpecCommand(&asJSON))
 
 	return root
 }
@@ -377,6 +381,148 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 			})
 		},
 	}
+}
+
+// newIntentCommand builds the `intent` verb — the front door onto
+// internal/core/intent (itd-80). Bare `abcd intent` renders the read-only
+// lifecycle status board (never mutates); the `plan` and `link` sub-verbs carry
+// the mutations. Usage/lookup failures exit 2.
+func newIntentCommand(asJSON *bool) *cobra.Command {
+	intentCmd := &cobra.Command{
+		Use:   "intent",
+		Short: "Intent lifecycle; bare invocation is read-only status",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			v, err := intent.Status(cwd)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, v, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd intent — drafts %d · planned %d · shipped %d · disciplines %d · superseded %d\n",
+					v.Buckets[intent.BucketDrafts], v.Buckets[intent.BucketPlanned], v.Buckets[intent.BucketShipped],
+					v.Buckets[intent.BucketDisciplines], v.Buckets[intent.BucketSuperseded])
+				fmt.Fprintf(w, "  specs: open %d · closed %d\n", v.SpecsOpen, v.SpecsClosed)
+				for _, p := range v.Linked {
+					fmt.Fprintf(w, "  link: %s -> %s\n", p.Intent, p.Spec)
+				}
+			})
+		},
+	}
+
+	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
+	intentCmd.AddCommand(&cobra.Command{
+		Use:   "plan <itd-N>",
+		Short: "Plan a draft intent: mint its spec, link both sides, move drafts -> planned",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := intent.Plan(cwd, args[0])
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
+				fmt.Fprintf(w, "  intent: %s\n", res.Intent.Path)
+				fmt.Fprintf(w, "  spec:   %s\n", res.Spec.Path)
+			})
+		},
+	})
+
+	// link <itd-N> <spc-N> — retroactively set spec_id on a planned intent.
+	intentCmd.AddCommand(&cobra.Command{
+		Use:   "link <itd-N> <spc-N>",
+		Short: "Link a planned intent to an existing spec (writes the intent's spec_id)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := intent.Link(cwd, args[0], args[1])
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd intent link: " + err.Error()}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd intent link — %s -> %s\n  intent: %s\n", res.Intent.ID, res.Spec.ID, res.Intent.Path)
+			})
+		},
+	})
+
+	return intentCmd
+}
+
+// specStatusView is the machine-readable envelope for bare `abcd spec`: the
+// open/closed counts and every discovered spec record.
+type specStatusView struct {
+	Open   int         `json:"open"`
+	Closed int         `json:"closed"`
+	Specs  []spec.Spec `json:"specs"`
+}
+
+// newSpecCommand builds the `spec` verb — the front door onto internal/core/spec
+// (itd-80). Bare `abcd spec` renders the read-only spec-store status; the `close`
+// sub-verb moves a spec open/ -> closed/. The lifecycle reconcile that trails a
+// close (moving the linked intent planned -> shipped) lands in the next phase;
+// `close` here touches the spec store only.
+func newSpecCommand(asJSON *bool) *cobra.Command {
+	specCmd := &cobra.Command{
+		Use:   "spec",
+		Short: "Native spec store; bare invocation is read-only status",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			store, err := spec.Load(cwd)
+			if err != nil {
+				return err
+			}
+			view := specStatusView{Specs: store.Specs}
+			for _, sp := range store.Specs {
+				if sp.Status == spec.StatusClosed {
+					view.Closed++
+				} else {
+					view.Open++
+				}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, view, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd spec — open %d · closed %d\n", view.Open, view.Closed)
+				for _, sp := range store.Specs {
+					fmt.Fprintf(w, "  %s  %s  %s  (%s)\n", sp.ID, sp.Status, sp.Slug, sp.Intent)
+				}
+			})
+		},
+	}
+
+	// close <spc-N> — open/ -> closed/. No lifecycle reconcile yet (next phase).
+	specCmd.AddCommand(&cobra.Command{
+		Use:   "close <spc-N>",
+		Short: "Close a spec (open/ -> closed/); lifecycle reconcile lands in the next phase",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			sp, err := spec.Close(cwd, args[0])
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd spec close: " + err.Error()}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, sp, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", sp.ID, sp.Path)
+			})
+		},
+	})
+
+	return specCmd
 }
 
 // newAhoyCommand builds the `ahoy` sub-tree. Bare `ahoy` runs the read-only

@@ -12,6 +12,22 @@ called out in a **Breaking** section.
 
 ### Added
 
+- The **intent lifecycle** verbs `abcd intent` and `abcd spec` (itd-80), the
+  front doors onto the native intent store (`internal/core/intent`). Bare
+  `abcd intent` renders a read-only lifecycle summary (intent counts by bucket,
+  spec counts by status, and the linked intent↔spec pairs); `abcd intent plan
+  <itd-N>` mints a native spec for a draft intent that carries a non-empty
+  `## Acceptance Criteria` section (the itd-1 gate), writes both sides of the
+  bidirectional link (the spec's `intent: itd-N` and the intent's
+  `spec_id: spc-N` plus a default `kind: standalone`), and moves the intent
+  `drafts/ → planned/` — fail-closed, so every intermediate on-disk state stays
+  valid under the `intent_lifecycle` record-lint rule. `abcd intent link <itd-N>
+  <spc-N>` retroactively links a planned intent to an existing spec, refusing a
+  spec that realises a different intent. Bare `abcd spec` renders the spec-store
+  status; `abcd spec close <spc-N>` moves a spec `open/ → closed/` (the
+  lifecycle reconcile that trails a close lands in a later phase). The
+  frontmatter line-scanner shared by these stores now lives in
+  `internal/core/frontmatter`.
 - The **modular rules loader** core and its `abcd rules [domain]` verb (itd-3,
   phases 1 + 3). `internal/core/rules` holds binary-bundled default rule domains
   (COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII, and
