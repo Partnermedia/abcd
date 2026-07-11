@@ -1,10 +1,26 @@
 # iss-35 record-lint graduation — design options (STOP for sign-off)
 
-**Status:** design gate, unsigned. The autonomous run reached this point after
-the iss-35 reconciliation (batches 1–2 + the detector re-run, 150 → 24 → all
-non-adjudication leftovers fixed) and **stopped here rather than implement**,
-because graduating the cross-check to a record-lint rule is a design decision
-with multiple credible shapes and a hard dependency on two open adjudications.
+**Status:** SIGNED OFF 2026-07-11. The maintainer chose **Option C (hybrid)**:
+build the structural `surface_coverage` record-lint rule *and* wire the LLM
+cross-check as a standing release gate. The two blockers were also resolved:
+docs/history/version are **user-facing surfaces** (each gets a `04-surfaces/`
+chapter + README row), and consult/ingest/prepare-this-repo **reclassify from
+skills to commands** via relabel (host-delegated markdown workflows, no Go
+verbs; the read-only skill boundary rule is kept — the classification gave).
+Implementation order: enumerate the three chapters + reclassify the three
+skills (so the coverage rule can go green), then build the rule (TDD, branch),
+then wire the detector gate. See DECISIONS.md 2026-07-11 and NEXT.md tasks.
+
+The original design analysis is retained below as the rationale of record.
+
+---
+
+**Original framing (design gate, pre-sign-off):** the autonomous run reached
+this point after the iss-35 reconciliation (batches 1–2 + the detector re-run,
+150 → 24 → all non-adjudication leftovers fixed) and stopped rather than
+implement, because graduating the cross-check to a record-lint rule was a design
+decision with multiple credible shapes and a hard dependency on two open
+adjudications.
 
 ## What "graduate the check" was meant to mean
 
