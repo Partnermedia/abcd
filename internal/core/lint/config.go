@@ -78,6 +78,63 @@ type RuleConfig struct {
 	// Patterns is the context_status_free line-match regexp list; when empty the
 	// rule falls back to contextStatusDefaultPatterns.
 	Patterns []string `json:"patterns"`
+	// ReceiptsDir is the receipt_gate directory of sha-keyed semantic-pass
+	// receipts (VSA-shaped JSON), repo-relative (default .abcd/work/reviews).
+	// Outside Roots.
+	ReceiptsDir string `json:"receipts_dir"`
+	// RequiredGates lists the semantic gates that must each have a PROMOTE receipt
+	// for the target commit before a release (e.g. docs-currency-reviewer,
+	// iss35-brief-surface-crosscheck).
+	RequiredGates []string `json:"required_gates"`
+	// Commit is the receipt_gate target commit sha whose receipts are verified.
+	// Release-time input (release.yml supplies the tagged commit); empty while the
+	// rule is disabled for ordinary development.
+	Commit string `json:"commit"`
+	// Runbook is the gate_lockstep runbook path (its numbered "Deterministic
+	// gates" list), repo-relative.
+	Runbook string `json:"runbook"`
+	// Workflow is the gate_lockstep CI workflow path — the source of truth for the
+	// deterministic gate list, repo-relative.
+	Workflow string `json:"workflow"`
+	// Job is the gate_lockstep workflow job whose step names are the gate list.
+	Job string `json:"job"`
+	// IgnoreSteps are workflow step names that are setup, not gates, and so are
+	// excluded from the lockstep comparison.
+	IgnoreSteps []string `json:"ignore_steps"`
+	// MinGates is the gate_lockstep non-empty floor: each side must parse at least
+	// this many gates or the rule fails closed (an under-count means the parser or
+	// a heading/job rename silently dropped gates). It is the safety net that makes
+	// the hand-parse fail-closed. Enforced as at least 1 when the rule is enabled.
+	MinGates int `json:"min_gates"`
+}
+
+// ArmReceiptGate returns cfg with the receipt_gate rule armed for a release: it
+// is enabled and pointed at the target commit, and — when a non-empty list is
+// supplied — its required gates are overridden. This is how a release runs the
+// gate: the CALLER (a CI workflow) supplies the arming, so the decision to gate,
+// the target commit, and the required-gates list are trust-rooted to the workflow
+// rather than the in-tree, committer-editable config (phase-2 review Finding 2).
+// The input cfg is not mutated (the Rules map is copied). Other rules are
+// unchanged; the deterministic gates still run alongside.
+func ArmReceiptGate(cfg Config, commit string, requiredGates []string) Config {
+	rules := make(map[string]RuleConfig, len(cfg.Rules)+1)
+	for k, v := range cfg.Rules {
+		rules[k] = v
+	}
+	rc := rules["receipt_gate"]
+	rc.Enabled = true
+	rc.Commit = commit
+	// An armed release gate is blocking by definition — force the severity so the
+	// gate's teeth are trust-rooted to the caller (a CI workflow) like Enabled and
+	// Commit, never the committer-editable config. A downgraded severity landed in
+	// the in-tree file must not defang the gate at release time.
+	rc.Severity = severityBlocker
+	if len(requiredGates) > 0 {
+		rc.RequiredGates = requiredGates
+	}
+	rules["receipt_gate"] = rc
+	cfg.Rules = rules
+	return cfg
 }
 
 // LoadConfig reads and decodes a record-lint config file.

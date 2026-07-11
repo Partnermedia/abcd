@@ -474,6 +474,296 @@ func TestSurfaceCoverage(t *testing.T) {
 	}
 }
 
+func TestReceiptGate(t *testing.T) {
+	root := t.TempDir()
+	const sha = "0123456789abcdef0123456789abcdef01234567"
+	const other = "ffffffffffffffffffffffffffffffffffffffff"
+	reviews := filepath.Join(".abcd", "work", "reviews")
+
+	receipt := func(commit, result, model string) string {
+		return `{
+  "subject": {"digest": {"gitCommit": "` + commit + `"}},
+  "verifier": {"id": "maintainer"},
+  "timeVerified": "2026-07-11T00:00:00Z",
+  "verificationResult": "` + result + `",
+  "judgeModel": "` + model + `",
+  "policy": {"detector": "x", "version": "1"}
+}`
+	}
+	gates := []string{"docs-currency-reviewer", "iss35-brief-surface-crosscheck"}
+	baseCfg := func() RuleConfig {
+		return RuleConfig{
+			Enabled: true, Severity: "blocker",
+			ReceiptsDir: reviews, Commit: sha, RequiredGates: gates,
+		}
+	}
+	run := func(cfg RuleConfig) []Finding {
+		fs, err := Lint(Config{Rules: map[string]RuleConfig{"receipt_gate": cfg}}, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fs
+	}
+	put := func(commit, gate, body string) {
+		writeFile(t, root, filepath.Join(reviews, commit, gate+".json"), body)
+	}
+
+	// 1. Every required gate has a PROMOTE receipt for the target sha → clean.
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 0 {
+		t.Fatalf("all-PROMOTE receipts should be clean, got %d", n)
+	}
+
+	// 2. Disabled → never fires, even pointed at a sha with no receipts.
+	cfg := baseCfg()
+	cfg.Enabled, cfg.Commit = false, other
+	if n := countRule(run(cfg), "receipt_gate"); n != 0 {
+		t.Fatalf("disabled rule must not fire, got %d", n)
+	}
+
+	// 3. Missing receipts for the target sha → fail-closed BLOCK, one per gate.
+	cfg = baseCfg()
+	cfg.Commit = other
+	if n := countRule(run(cfg), "receipt_gate"); n != len(gates) {
+		t.Fatalf("missing receipts should fire once per gate (%d), got %d", len(gates), n)
+	}
+
+	// 4. A HOLD verdict blocks (only the HOLD gate fires).
+	put(other, "docs-currency-reviewer", receipt(other, "HOLD", "claude-opus-4-8"))
+	put(other, "iss35-brief-surface-crosscheck", receipt(other, "PROMOTE", "claude-opus-4-8"))
+	if n := countRule(run(cfg), "receipt_gate"); n != 1 {
+		t.Fatalf("one HOLD should fire once, got %d", n)
+	}
+
+	// 5. subject digest ≠ target commit → BLOCK (receipt not for this release).
+	put(sha, "iss35-brief-surface-crosscheck", receipt("deadbeef", "PROMOTE", "claude-opus-4-8"))
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
+		t.Fatalf("subject mismatch should fire, got %d", n)
+	}
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+
+	// 6. A blank (floating) judge model is not auditable → BLOCK.
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", ""))
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
+		t.Fatalf("blank judge model should fire, got %d", n)
+	}
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+
+	// 7. Malformed receipt JSON → BLOCK (never a silent pass).
+	put(sha, "iss35-brief-surface-crosscheck", "{ not json")
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
+		t.Fatalf("malformed receipt should fire, got %d", n)
+	}
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+
+	// 8. Enabled with no target commit configured → fail-closed config error.
+	cfg = baseCfg()
+	cfg.Commit = ""
+	if n := countRule(run(cfg), "receipt_gate"); n == 0 {
+		t.Fatal("enabled rule with no target commit must fail closed")
+	}
+
+	// 9. Enabled with an empty required-gates list → fail closed (verifies nothing
+	// otherwise). Symmetric with the empty-commit guard.
+	cfg = baseCfg()
+	cfg.RequiredGates = nil
+	if n := countRule(run(cfg), "receipt_gate"); n == 0 {
+		t.Fatal("enabled rule with no required gates must fail closed, not pass vacuously")
+	}
+
+	// 10. A target commit that is not a valid sha (a path-traversal attempt) →
+	// fail closed, never a filesystem escape.
+	cfg = baseCfg()
+	cfg.Commit = "../../etc"
+	if n := countRule(run(cfg), "receipt_gate"); n == 0 {
+		t.Fatal("a non-sha target commit must fail closed")
+	}
+
+	// 11. An unsafe gate name (path component) → fail closed for that gate.
+	cfg = baseCfg()
+	cfg.RequiredGates = []string{"../evil"}
+	if n := countRule(run(cfg), "receipt_gate"); n == 0 {
+		t.Fatal("an unsafe gate name must fail closed")
+	}
+}
+
+func TestGateLockstep(t *testing.T) {
+	root := t.TempDir()
+
+	workflow := "name: release\n" +
+		"on:\n" +
+		"  push:\n" +
+		"    tags: ['v*']\n" +
+		"jobs:\n" +
+		"  verify:\n" +
+		"    runs-on: ubuntu-latest\n" +
+		"    steps:\n" +
+		"      - name: Check out the pushed commit\n" +
+		"      - name: Set up Go\n" +
+		"      - name: Format (gofmt)\n" +
+		"      - name: Build\n" +
+		"      - name: Vet\n" +
+		"  release:\n" +
+		"    steps:\n" +
+		"      - name: Publish\n" // a step in another job — must NOT be counted
+	writeFile(t, root, ".github/workflows/release.yml", workflow)
+
+	runbook := func(gates string) string {
+		return "# Release gate\n\n## Deterministic gates (CI-enforced)\n\n" + gates +
+			"\n> a staging note, not a gate\n\n## Semantic gates\n\n1. Not a deterministic gate\n"
+	}
+	// In-lockstep: exactly the verify gate steps (setup steps ignored).
+	writeFile(t, root, "runbook.md", runbook("1. Format (gofmt)\n2. Build\n3. Vet\n"))
+
+	cfg := func() RuleConfig {
+		return RuleConfig{
+			Enabled: true, Severity: "blocker",
+			Runbook: "runbook.md", Workflow: ".github/workflows/release.yml",
+			Job: "verify", IgnoreSteps: []string{"Check out the pushed commit", "Set up Go"},
+		}
+	}
+	run := func() []Finding {
+		fs, err := Lint(Config{Rules: map[string]RuleConfig{"gate_lockstep": cfg()}}, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fs
+	}
+
+	// 1. Lists agree → clean.
+	if n := countRule(run(), "gate_lockstep"); n != 0 {
+		t.Fatalf("matching lists should be clean, got %d: %+v", n, run())
+	}
+
+	// 2. A verify step missing from the runbook → BLOCK.
+	writeFile(t, root, "runbook.md", runbook("1. Format (gofmt)\n2. Build\n")) // drop Vet
+	if n := countRule(run(), "gate_lockstep"); n != 1 {
+		t.Fatalf("a workflow gate missing from the runbook should fire once, got %d: %+v", n, run())
+	}
+
+	// 3. A runbook gate not in the workflow → BLOCK.
+	writeFile(t, root, "runbook.md", runbook("1. Format (gofmt)\n2. Build\n3. Vet\n4. Phantom Gate\n"))
+	if n := countRule(run(), "gate_lockstep"); n != 1 {
+		t.Fatalf("a phantom runbook gate should fire once, got %d: %+v", n, run())
+	}
+
+	// 4. Setup steps in the ignore list are not required in the runbook (already
+	// clean in case 1 proves this); dropping an ignore entry surfaces them.
+	c := cfg()
+	c.IgnoreSteps = nil
+	writeFile(t, root, "runbook.md", runbook("1. Format (gofmt)\n2. Build\n3. Vet\n"))
+	fs, err := Lint(Config{Rules: map[string]RuleConfig{"gate_lockstep": c}}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "gate_lockstep"); n != 2 { // Check out + Set up Go now unlisted
+		t.Fatalf("un-ignored setup steps should each fire, got %d: %+v", n, fs)
+	}
+
+	lint := func(c RuleConfig) []Finding {
+		fs, err := Lint(Config{Rules: map[string]RuleConfig{"gate_lockstep": c}}, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fs
+	}
+
+	// 5. Non-empty floor: a renamed runbook heading parses to zero gates → fail
+	// closed (the double-empty / rename silent-pass hole).
+	writeFile(t, root, "renamed.md", "# R\n\n## CI checks\n\n1. Format (gofmt)\n2. Build\n3. Vet\n")
+	c5 := cfg()
+	c5.Runbook, c5.MinGates = "renamed.md", 3
+	if n := countRule(lint(c5), "gate_lockstep"); n == 0 {
+		t.Fatal("a renamed heading (zero parsed gates) must trip the non-empty floor")
+	}
+
+	// 6. The alternate step form (`- uses:` then `name:` on the next line) is seen,
+	// not invisible — matching runbook ⇒ clean.
+	writeFile(t, root, ".github/workflows/alt.yml", "name: r\non:\n  push:\njobs:\n  verify:\n    steps:\n"+
+		"      - name: Format (gofmt)\n      - uses: some/scanner@v1\n        name: Secret Scan\n      - name: Build\n")
+	writeFile(t, root, "alt-runbook.md", runbook("1. Format (gofmt)\n2. Secret Scan\n3. Build\n"))
+	c6 := cfg()
+	c6.Workflow, c6.Runbook, c6.MinGates, c6.IgnoreSteps = ".github/workflows/alt.yml", "alt-runbook.md", 3, nil
+	if n := countRule(lint(c6), "gate_lockstep"); n != 0 {
+		t.Fatalf("alternate `- uses:`/`name:` step form must be captured, got %d: %+v", n, lint(c6))
+	}
+
+	// 7. A 2-space comment inside the job does not close it early (steps after it
+	// stay in scope).
+	writeFile(t, root, ".github/workflows/cmt.yml", "name: r\non:\n  push:\njobs:\n  verify:\n    steps:\n"+
+		"      - name: Format (gofmt)\n  # a stray 2-space comment: not a job\n      - name: Build\n      - name: Vet\n")
+	writeFile(t, root, "clean-runbook.md", runbook("1. Format (gofmt)\n2. Build\n3. Vet\n"))
+	c7 := cfg()
+	c7.Workflow, c7.Runbook, c7.MinGates, c7.IgnoreSteps = ".github/workflows/cmt.yml", "clean-runbook.md", 3, nil
+	if n := countRule(lint(c7), "gate_lockstep"); n != 0 {
+		t.Fatalf("a 2-space comment must not drop steps after it, got %d: %+v", n, lint(c7))
+	}
+
+	// 8. A configured file that does not exist → fail loud, never silent.
+	c8 := cfg()
+	c8.Runbook = "does-not-exist.md"
+	if n := countRule(lint(c8), "gate_lockstep"); n == 0 {
+		t.Fatal("a missing configured runbook must fail closed")
+	}
+
+	// 9. Quote normalization is symmetric — a quoted workflow name equals an
+	// unquoted runbook item.
+	writeFile(t, root, ".github/workflows/q.yml", "name: r\non:\n  push:\njobs:\n  verify:\n    steps:\n"+
+		"      - name: \"Format (gofmt)\"\n      - name: Build\n      - name: Vet\n")
+	c9 := cfg()
+	c9.Workflow, c9.Runbook, c9.MinGates, c9.IgnoreSteps = ".github/workflows/q.yml", "clean-runbook.md", 3, nil
+	if n := countRule(lint(c9), "gate_lockstep"); n != 0 {
+		t.Fatalf("quoted vs unquoted gate names must normalize equal, got %d: %+v", n, lint(c9))
+	}
+}
+
+func TestArmReceiptGate(t *testing.T) {
+	base := Config{Rules: map[string]RuleConfig{
+		"receipt_gate": {Enabled: false, Severity: "blocker", ReceiptsDir: ".abcd/work/reviews", RequiredGates: []string{"config-gate"}},
+	}}
+
+	// Arming with a commit + explicit gates overrides enable/commit/gates.
+	armed := ArmReceiptGate(base, "abc123", []string{"cli-gate-a", "cli-gate-b"})
+	rc := armed.Rules["receipt_gate"]
+	if !rc.Enabled || rc.Commit != "abc123" {
+		t.Fatalf("arming must enable + set commit, got %+v", rc)
+	}
+	if len(rc.RequiredGates) != 2 || rc.RequiredGates[0] != "cli-gate-a" {
+		t.Fatalf("supplied gates must override the config list, got %+v", rc.RequiredGates)
+	}
+
+	// The input config is not mutated (its map is copied).
+	if base.Rules["receipt_gate"].Enabled || base.Rules["receipt_gate"].Commit != "" {
+		t.Fatal("ArmReceiptGate must not mutate the input config")
+	}
+
+	// No supplied gates → the config's list is kept.
+	kept := ArmReceiptGate(base, "def456", nil)
+	if got := kept.Rules["receipt_gate"].RequiredGates; len(got) != 1 || got[0] != "config-gate" {
+		t.Fatalf("nil gates must keep the config list, got %+v", got)
+	}
+
+	// A committer-downgraded severity in the config must NOT defang the armed
+	// gate — arming forces blocker so the teeth are trust-rooted to the caller.
+	downgraded := Config{Rules: map[string]RuleConfig{
+		"receipt_gate": {Enabled: false, Severity: "warning", ReceiptsDir: ".abcd/work/reviews", RequiredGates: []string{"g"}},
+	}}
+	if sev := ArmReceiptGate(downgraded, "abc123", nil).Rules["receipt_gate"].Severity; sev != "blocker" {
+		t.Fatalf("arming must force blocker severity, got %q", sev)
+	}
+
+	// End to end: an armed config with no receipt on disk fails closed.
+	root := t.TempDir()
+	fs, err := Lint(armed, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countRule(fs, "receipt_gate") == 0 {
+		t.Fatal("an armed gate with no receipts must fire (fail-closed)")
+	}
+}
+
 // presentTenseTokens mirrors the change-narration phrase list shipped in
 // .abcd/docs-lint.json (word-boundary, case-insensitive, inline-escape).
 func presentTenseTokens() []BannedToken {

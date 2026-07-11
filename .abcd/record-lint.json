@@ -23,7 +23,9 @@
     "intent_lifecycle": {"enabled": true, "severity": "blocker", "intents_dir": "intents"},
     "persona_registry": {"enabled": true, "severity": "blocker", "registry": ".abcd/development/personas.json"},
     "context_status_free": {"enabled": true, "severity": "blocker", "target": ".abcd/work/CONTEXT.md"},
-    "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands/abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"}
+    "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands/abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"},
+    "receipt_gate": {"enabled": false, "severity": "blocker", "receipts_dir": ".abcd/work/reviews", "required_gates": ["docs-currency-reviewer", "iss35-brief-surface-crosscheck"]},
+    "gate_lockstep": {"enabled": true, "severity": "blocker", "runbook": ".abcd/development/release-gate/README.md", "workflow": ".github/workflows/release.yml", "job": "verify", "ignore_steps": ["Check out the pushed commit", "Set up Go"], "min_gates": 9}
   },
   "exempt_paths": [".abcd/development/research/", ".abcd/development/intents/superseded/"],
   "exempt_if_status": ["superseded"]

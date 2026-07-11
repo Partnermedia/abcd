@@ -71,7 +71,13 @@ Four parts, from the verdict's ranked recommendations (R1–R4):
    PROMOTE. Sign the receipt with the SLSA attestor already used in
    `release.yml` (Sigstore/cosign-class), and verify the signature in-Go at gate
    time — never with a Rego/CUE policy (that re-imports the rejected
-   new-language cost).
+   new-language cost). **Signing receipts is necessary but not sufficient** (phase-2
+   security review, Finding 2): the *arming config* itself (`enabled`, `commit`,
+   `required_gates` in the in-tree `record-lint.json`) is equally
+   committer-editable — signed receipts protect nothing if the gate can be
+   disarmed by flipping `enabled:false` or emptying `required_gates` in-repo. So
+   phase 4 must source the arming (at minimum `enabled` and the required-gates
+   list) from the CI workflow / a trust root, not solely the in-tree file.
 
 ## Homes (host-agnostic, dev-tier)
 

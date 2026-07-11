@@ -1,0 +1,18 @@
+{
+  "_comment": "Example semantic-pass receipt (a Verification Summary Attestation). One file per gate, stored at .abcd/work/reviews/<commit-sha>/<gate>.json. The receipt_gate record-lint rule verifies, at release time, that subject.digest.gitCommit matches the target commit, verificationResult is PROMOTE, and judgeModel is a pinned snapshot (never a floating alias). A missing, mismatched, malformed, HOLD, or model-less receipt fails the release closed. In phase 4 the receipt is cosign-signed and the signature verified in-Go.",
+  "subject": {
+    "digest": { "gitCommit": "0123456789abcdef0123456789abcdef01234567" }
+  },
+  "verifier": { "id": "maintainer@release" },
+  "timeVerified": "2026-07-11T12:00:00Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-4-8",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:…",
+    "briefVersion": "…"
+  },
+  "categories": { "false-claim": 0, "undocumented-surface": 0, "fictional-layout": 0, "criterion-violation": 0, "stale-count": 0 },
+  "failing": []
+}

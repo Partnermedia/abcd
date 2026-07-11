@@ -18,6 +18,9 @@ import (
 func main() {
 	configPath := flag.String("config", "", "path to record-lint.json (default: <root>/.abcd/record-lint.json)")
 	rootPath := flag.String("root", "", "repo root to lint (default: git toplevel, or cwd)")
+	releaseGate := flag.String("release-gate", "", "arm the receipt_gate rule for a release: fail closed unless a PROMOTE semantic-pass receipt exists for this commit sha (release-time only; a CI workflow supplies the sha)")
+	var requireGates multiFlag
+	flag.Var(&requireGates, "require-gate", "a required semantic gate name for --release-gate (repeatable); overrides the config list so the workflow, not the in-tree file, is the trust root")
 	flag.Parse()
 
 	root := *rootPath
@@ -34,6 +37,13 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "record-lint: load config:", err)
 		os.Exit(2)
+	}
+
+	// --release-gate arms the receipt_gate rule from the CLI invocation, so the
+	// release-time decision to gate lives with the CI workflow, not the in-tree
+	// (committer-editable) config, which keeps the rule disabled for ordinary runs.
+	if *releaseGate != "" {
+		cfg = lint.ArmReceiptGate(cfg, *releaseGate, requireGates)
 	}
 
 	findings, err := lint.Lint(cfg, root)
@@ -54,6 +64,15 @@ func main() {
 	if blockers > 0 {
 		os.Exit(1)
 	}
+}
+
+// multiFlag collects a repeatable string flag (each --require-gate appends).
+type multiFlag []string
+
+func (m *multiFlag) String() string { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error {
+	*m = append(*m, v)
+	return nil
 }
 
 // resolveRoot returns the git toplevel, falling back to the working directory.

@@ -140,6 +140,53 @@ jobs:
           go-version: '1.25'
           cache: false
 
+      # --- Semantic release gate (iss-35; dormant until the public flip) --------
+      # The LLM semantic passes (docs-currency-reviewer, the brief↔surface
+      # cross-check) cannot run in CI — no model. The maintainer runs them
+      # host-side and commits a sha-keyed PROMOTE receipt under
+      # .abcd/work/reviews/<sha>/ (see .abcd/development/release-gate/README.md).
+      # These steps fail-close the release unless those receipts exist and are
+      # PROMOTE, then sign them for auditable release provenance. Gated on repo
+      # visibility exactly like the binary attestation below: artifact attestation
+      # is a public-repo feature, so this gate is dormant on a private repo and
+      # activates on the public flip. Signing here is provenance/tamper-evidence,
+      # not committer-forgery-proof (a forged committed receipt would be signed
+      # too) — that residual is bounded by the identity gate + branch protection.
+      - name: Semantic-gate receipts (fail-closed)
+        if: ${{ !github.event.repository.private }}
+        # Arms receipt_gate from the CLI (the workflow, not the in-tree config, is
+        # the trust root for the decision to gate and the required-gates list).
+        run: |
+          set -euo pipefail
+          test -n "${GITHUB_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
+          go run ./cmd/record-lint --release-gate "$GITHUB_SHA" \
+            --require-gate docs-currency-reviewer \
+            --require-gate iss35-brief-surface-crosscheck
+
+      - name: Attest the semantic-gate receipts (signed release provenance)
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: .abcd/work/reviews/${{ github.sha }}/*.json
+          predicate-type: https://abcd.dev/attestations/semantic-release-gate/v1
+          # Only the immutable commit sha — never github.ref_name (an
+          # attacker-influenceable tag name would inject into this signed JSON).
+          predicate: |
+            {"commit": "${{ github.sha }}", "verificationResult": "PROMOTE"}
+
+      - name: Verify the semantic-gate receipt attestation
+        if: ${{ !github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          for r in .abcd/work/reviews/"$GITHUB_SHA"/*.json; do
+            gh attestation verify "$r" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+              --predicate-type https://abcd.dev/attestations/semantic-release-gate/v1
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cross-compile the four binaries (version-stamped from the tag)
         # VERSION=<tag> stamps `abcd version` via -ldflags -X …internal/core.Version.
         # The binaries built here are the ones checksummed, attested, and uploaded
