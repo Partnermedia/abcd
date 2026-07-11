@@ -59,6 +59,7 @@ This intent **captures the concern now** so the project memory holds it. **Imple
 - **Auto-rebase before declaring done**: spec branch rebases on `dev` after each task; on conflict, spec auto-suspends with single next-step.
 - **Audit trail**: every auto-merge writes an entry to the native review store (`<spec>/INDEX.md`: auto-merged-at, by, reviews-cited, smoke-tests-passed).
 - **Ride the pluggable run seam**: the autonomous engine is a pluggable seam (Workflows / the companion harness / native loop); abcd verbs are the friendly surface layer above whichever engine is configured.
+- **Pick up out-of-band merges (async human review).** A long run may open a *series* of PRs that a maintainer merges asynchronously. The run detects each merge, prunes the merged branch, re-targets/rebases any in-flight follow-on branch onto the updated base, and re-runs the gates before continuing — so the run stays in lockstep with the maintainer's merges without the user touching git. This extends the auto-rebase item above from the engine's own trunk to externally-merged PRs. Conflicts suspend to `abcd spec resolve` (never auto-resolved); never force-push; a red gate after a rebase is a hard stop. **MVP:** the host/loop performs the git via the `gh`+`git` it already has. **Promotion:** a read-only `abcd run reconcile --json` advisory verb computes the reconcile plan (which PRs merged, which branches are stale, what rebase is needed) so any host consumes it and the destructive git never enters abcd's transport-agnostic core.
 
 ## What's Out of Scope
 
@@ -79,6 +80,32 @@ This intent **captures the concern now** so the project memory holds it. **Imple
 - **Given** a spec auto-rebase hits a conflict, **when** the loop detects it, **then** the spec suspends, emits a single concrete next-step (`abcd spec resolve spc-X`), and `abcd spec status` reflects the suspension reason.
 - **Given** the user runs `abcd spec ship spc-X`, **when** the command completes, **then** the user is shown a confirmation prompt summarising what's about to merge to `main` and only proceeds on explicit confirmation.
 - **Given** a domain expert who has never used git from the terminal, **when** they walk through start → 429 → resume → wrong-task discovery → rewind → re-run → ship, **then** they complete the flow without typing any git command and without consulting git documentation.
+- **Given** a long autonomous run has opened PRs #A and #B and the maintainer merges #A out-of-band, **when** the run next checks in, **then** it prunes #A's merged branch, rebases the in-flight #B branch onto the updated base, re-runs `make preflight`, and continues — no git typed by the user; **and** if the rebase conflicts or the gate fails, the run suspends with a single next-step (`abcd spec resolve`) rather than force-pushing or pushing through.
+
+## SOTA
+
+> _Per the [sota-per-intent principle](../../principles/sota-per-intent.md):
+> existing alternatives + rough maturity, then the chosen path. Adding this is
+> still a manual step — the `intent_sota` lint gate is the principle's unbuilt
+> promotion rung._
+
+- **Autonomous run engine.** Alternatives: agent-run frameworks / harness loops
+  (*usable–mature*, moving fast). → **Path 2**: the pluggable run seam
+  ([adr-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)) — a native
+  thin-loop floor with opt-in Workflows / companion-harness backends. No core
+  dependency.
+- **Branch / merge reconciliation.** Alternatives: stacked-PR tooling — Graphite
+  (*mature*), git-town (*mature*), `ghstack` (*usable*); merge automation —
+  Mergify (*mature*), GitHub-native auto-merge (*mature, already on the host*).
+  Each owns the git and assumes its own workflow. → **Path 2 / host-owns-git**:
+  the host/loop performs prune + rebase + retest with the `gh`+`git` it already
+  has; abcd stays read-only via a future `abcd run reconcile --json`. GitHub
+  auto-merge is already used for `docs:`/`chore:` PRs — the easy-external-onboard
+  for the merge half. Conflict-resolution and force-push are deliberately
+  excluded: a human decides (fail-closed).
+- **Verdict — Path 2, no new dependency.** The seam to a mature external
+  (Graphite / Mergify, or GitHub-native auto-merge) stays open; no path-1 or
+  path-3 hard stop.
 
 ## Revisit Triggers
 
@@ -109,3 +136,4 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 - Coordinates with: `itd-1` (acceptance gates), `itd-3` (modular rules loader, may govern budget rules), `itd-9` (schema migration, for checkpoint format), `itd-28` (RP reviews → the native review store, audit-trail integration target via `spc-2-move-repoprompt-review-artifacts-into`).
 - Builds on: a future native spec for budget/cost surfacing (likely a `spc-N-budget` spec); the pluggable run seam.
 - Implemented by: `spc-35-ralph-quota-window-resilience` — the 429/quota implementation. spc-35 delivers the window-aware quota classifier (`QUOTA_WEEKLY`/`QUOTA_FIVE_HOUR`), the `RATE_LIMITED` completion marker, and the window-aware sleep that this intent's "graceful 429 handling" acceptance describes. spc-35 is the concrete substrate behind this intent's rate-limit scope.
+- The out-of-band-merge-pickup scope (the added scope bullet + AC + SOTA) was surfaced during the itd-80 intent-lifecycle build; the design rationale (host-owns-git MVP → a read-only `abcd run reconcile --json` advisory verb, conflicts/force-push excluded) is recorded in the itd-80 run-learnings note under `research/notes/` (2026-07-11).
