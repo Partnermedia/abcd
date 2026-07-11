@@ -14,7 +14,9 @@ called out in a **Breaking** section.
 
 - The **modular rules loader** core and its `abcd rules [domain]` verb (itd-3,
   phases 1 + 3). `internal/core/rules` holds binary-bundled default rule domains
-  (COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII) merged
+  (COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII, and
+  OPINIONS — whose rules point at the canonical conventions under
+  `.abcd/development/principles/` rather than copying them) merged
   with an optional per-repo `.abcd/rules.json` override (per-field domain
   override, sticky kill switch), with word-bounded recall matching, `*<DOMAIN>`
   star-commands, and per-domain dedup signatures. Bare `abcd rules` renders the

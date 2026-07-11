@@ -27,9 +27,11 @@ A prompt that matches no domain injects nothing (zero added tokens).
 
 ### Default domains
 
-`COMMITTING`, `DOCUMENTATION`, `ROADMAP`, `ISSUES`, `INTENTS`, `LIFEBOAT`, `PII`.
-Each carries recall keywords and its rules, bundled in the abcd binary; a repo
-overrides them per-field via `.abcd/rules.json`.
+`COMMITTING`, `DOCUMENTATION`, `ROADMAP`, `ISSUES`, `INTENTS`, `LIFEBOAT`, `PII`,
+`OPINIONS`. Each carries recall keywords and its rules, bundled in the abcd
+binary; a repo overrides them per-field via `.abcd/rules.json`. `OPINIONS`
+points at the canonical conventions under `.abcd/development/principles/` rather
+than copying them.
 
 ### Reset triggers
 

@@ -3,6 +3,7 @@ package rules
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,10 +32,30 @@ func TestDefaultsParseAndValidate(t *testing.T) {
 	if err := Validate(rs); err != nil {
 		t.Fatalf("bundled defaults fail validation: %v", err)
 	}
-	for _, want := range []string{"COMMITTING", "DOCUMENTATION", "ROADMAP", "ISSUES", "INTENTS", "LIFEBOAT", "PII"} {
+	for _, want := range []string{"COMMITTING", "DOCUMENTATION", "ROADMAP", "ISSUES", "INTENTS", "LIFEBOAT", "PII", "OPINIONS"} {
 		if _, ok := rs.Domains[want]; !ok {
 			t.Errorf("default domain %q missing", want)
 		}
+	}
+}
+
+func TestOpinionsDomainPointsAtPrinciplesNotCopies(t *testing.T) {
+	rs := Defaults()
+	// Recall on an opinion/convention/SOTA prompt.
+	if !has(rs.Match("what's the SOTA approach and our convention here"), "OPINIONS") {
+		t.Fatal("OPINIONS did not recall-match a conventions prompt")
+	}
+	op := rs.Domains["OPINIONS"]
+	// Every rule points at a principle file (one-canonical-primitive): it names a
+	// path under .abcd/development/principles/, it does not inline the principle.
+	pointers := 0
+	for _, r := range op.Rules {
+		if strings.Contains(r, ".abcd/development/principles/") {
+			pointers++
+		}
+	}
+	if pointers < len(op.Rules)-1 { // allow the one index rule to name the dir
+		t.Fatalf("OPINIONS rules should point at principle files, got %d/%d", pointers, len(op.Rules))
 	}
 }
 
