@@ -306,11 +306,12 @@ func writeConfig(cwd string, cfg map[string]any) error {
 // ---------------------------------------------------------------------------
 
 // requiredHookCommand is the substring each event's command must contain. These
-// are the Go hook entrypoint names as wired in hooks/hooks.json.
+// are the Go hook subcommands (`abcd hook prompt-router` / `prompt-router-reset`)
+// as wired in hooks/hooks.json — the loader is a Go subcommand, not a script.
 var requiredHookCommand = map[string]string{
-	"UserPromptSubmit": "prompt_router_hook",
-	"SessionStart":     "prompt_router_reset",
-	"PreCompact":       "prompt_router_reset",
+	"UserPromptSubmit": "hook prompt-router",
+	"SessionStart":     "hook prompt-router-reset",
+	"PreCompact":       "hook prompt-router-reset",
 }
 
 // verifyHookManifest returns "" when hooks/hooks.json under pluginRoot is

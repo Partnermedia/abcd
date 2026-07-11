@@ -45,13 +45,145 @@ func TestBareStatusJSON(t *testing.T) {
 	}
 }
 
+func TestRulesBareText(t *testing.T) {
+	out := string(runCLI(t, "rules"))
+	for _, want := range []string{"COMMITTING", "PII"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("bare `rules` missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRulesBareJSON(t *testing.T) {
+	out := runCLI(t, "rules", "--json")
+	var got struct {
+		Disabled bool             `json:"disabled"`
+		Domains  []map[string]any `json:"domains"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("rules --json not JSON: %v\n%s", err, out)
+	}
+	if len(got.Domains) == 0 {
+		t.Fatalf("rules --json returned no domains: %s", out)
+	}
+	found := false
+	for _, d := range got.Domains {
+		if d["name"] == "COMMITTING" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rules --json missing COMMITTING: %s", out)
+	}
+}
+
+func TestRulesScopedUppercasesArg(t *testing.T) {
+	out := string(runCLI(t, "rules", "committing"))
+	if !strings.Contains(out, "COMMITTING") {
+		t.Fatalf("scoped `rules committing` missing COMMITTING:\n%s", out)
+	}
+	if strings.Contains(out, "## PII") {
+		t.Fatalf("scoped render leaked another domain:\n%s", out)
+	}
+}
+
+func TestRulesUnknownDomainErrors(t *testing.T) {
+	if _, err := runCLIErr(t, "rules", "nosuch"); err == nil {
+		t.Fatal("unknown domain must exit non-zero")
+	}
+}
+
+// runHook executes a hook entrypoint with separated streams: stdout is the
+// model-facing context (must be empty on a no-match), stderr is the out-of-band
+// diagnostic. Hooks exit 0, so an error is a test failure.
+func runHook(t *testing.T, stdin string, args ...string) (stdout, stderr string) {
+	t.Helper()
+	cmd := NewRootCommand()
+	var so, se bytes.Buffer
+	cmd.SetOut(&so)
+	cmd.SetErr(&se)
+	cmd.SetIn(strings.NewReader(stdin))
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("hook %v exited non-zero: %v\n%s", args, err, se.String())
+	}
+	return so.String(), se.String()
+}
+
+func hookInputJSON(t *testing.T, session, cwd, prompt string) string {
+	t.Helper()
+	b, err := json.Marshal(map[string]string{
+		"session_id": session, "cwd": cwd, "prompt": prompt,
+		"hook_event_name": "UserPromptSubmit",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestHookPromptRouterInjects(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	cwd := t.TempDir() // no rules.json -> bundled defaults
+	out, errlog := runHook(t, hookInputJSON(t, "s1", cwd, "commit and push"), "hook", "prompt-router")
+	if !strings.Contains(out, "COMMITTING") {
+		t.Fatalf("prompt-router did not inject COMMITTING into context:\n%s", out)
+	}
+	if !strings.Contains(errlog, "injected 1 domain") {
+		t.Fatalf("missing out-of-band diagnostic:\n%s", errlog)
+	}
+}
+
+func TestHookPromptRouterDedups(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	cwd := t.TempDir()
+	in := hookInputJSON(t, "s2", cwd, "commit and push")
+	_, _ = runHook(t, in, "hook", "prompt-router")
+	out2, _ := runHook(t, in, "hook", "prompt-router")
+	if out2 != "" {
+		t.Fatalf("second turn re-injected context (dedup failed):\n%s", out2)
+	}
+}
+
+func TestHookResetReinjects(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	cwd := t.TempDir()
+	in := hookInputJSON(t, "s3", cwd, "commit and push")
+	_, _ = runHook(t, in, "hook", "prompt-router")
+	_, _ = runHook(t, `{"session_id":"s3","hook_event_name":"SessionStart","source":"compact"}`, "hook", "prompt-router-reset")
+	out, _ := runHook(t, in, "hook", "prompt-router")
+	if !strings.Contains(out, "COMMITTING") {
+		t.Fatalf("post-reset turn did not re-inject:\n%s", out)
+	}
+}
+
+func TestHookNoMatchZeroStdout(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	cwd := t.TempDir()
+	out, _ := runHook(t, hookInputJSON(t, "s4", cwd, "paint a landscape"), "hook", "prompt-router")
+	if out != "" {
+		t.Fatalf("no-match must produce zero model-facing stdout, got %q", out)
+	}
+}
+
+func TestHookMalformedStdinExitsZero(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	// A malformed hook payload must not error the process (non-blocking) and must
+	// inject nothing.
+	out, err := runCLIErr(t, "hook", "prompt-router")
+	if err != nil {
+		t.Fatalf("malformed/empty stdin should exit 0, got %v", err)
+	}
+	_ = out
+}
+
 // validHooksJSON is a structurally-sound plugin hook manifest for the hermetic
 // plugin root, so the install path's hook-manifest verification passes.
 const validHooksJSON = `{
   "hooks": {
-    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_hook"}]}],
-    "SessionStart":     [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}],
-    "PreCompact":       [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}]
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router"}]}],
+    "SessionStart":     [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}],
+    "PreCompact":       [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}]
   }
 }`
 

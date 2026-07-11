@@ -23,6 +23,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
+	"github.com/REPPL/abcd-cli/internal/core/rules"
 	"github.com/spf13/cobra"
 )
 
@@ -116,6 +117,8 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(newCaptureCommand(&asJSON))
 	root.AddCommand(newMemoryCommand(&asJSON))
+	root.AddCommand(newRulesCommand(&asJSON))
+	root.AddCommand(newHookCommand())
 	root.AddCommand(newHistoryCommand(&asJSON))
 	root.AddCommand(newDocsCommand(&asJSON))
 
@@ -198,6 +201,182 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	docsCmd.AddCommand(lintCmd)
 
 	return docsCmd
+}
+
+// maxHookStdinBytes caps the hook payload read from stdin (trust boundary).
+const maxHookStdinBytes = 1 << 20 // 1 MiB
+
+// hookInput is the subset of the Claude Code hook stdin payload the rules
+// entrypoints read. Unknown fields are ignored.
+type hookInput struct {
+	SessionID string `json:"session_id"`
+	Cwd       string `json:"cwd"`
+	Prompt    string `json:"prompt"`
+	Source    string `json:"source"`
+	Event     string `json:"hook_event_name"`
+}
+
+// readHookInput reads and size-caps the hook stdin payload.
+func readHookInput(cmd *cobra.Command) (hookInput, error) {
+	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
+	if err != nil {
+		return hookInput{}, err
+	}
+	var in hookInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return hookInput{}, err
+	}
+	return in, nil
+}
+
+// hookSession returns a stable session key, defaulting when the harness omits
+// the id (the hash in the state layer neutralises any hostile value). The
+// harness supplies session_id in practice; the "default" fallback means two
+// concurrent id-less sessions would share one dedup ledger — an accepted
+// edge-case degradation, never a correctness or safety issue.
+func hookSession(in hookInput) string {
+	if in.SessionID == "" {
+		return "default"
+	}
+	return in.SessionID
+}
+
+// newHookCommand builds the operator-internal `hook` sub-tree: the Claude Code
+// prompt-router entrypoints (itd-3). These are NOT a user surface — they are the
+// injection transport, one front door onto internal/core/rules alongside the
+// `abcd rules` verb. Every path is fail-closed and NON-blocking: a malformed
+// payload, an unreadable rules.json, or a state error injects nothing, logs a
+// diagnostic to stderr (out-of-band, per D3), and exits 0 so it can never wedge
+// a session.
+func newHookCommand() *cobra.Command {
+	hookCmd := &cobra.Command{
+		Use:    "hook",
+		Short:  "Claude Code hook entrypoints (operator-internal)",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+	}
+
+	// prompt-router — UserPromptSubmit: recall-match, dedup, inject.
+	hookCmd.AddCommand(&cobra.Command{
+		Use:   "prompt-router",
+		Short: "UserPromptSubmit: inject the rules matching the prompt",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			in, err := readHookInput(cmd)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: unreadable hook payload (%v); injecting nothing\n", err)
+				return nil
+			}
+			cwd := in.Cwd
+			if cwd == "" {
+				if wd, err := os.Getwd(); err == nil {
+					cwd = wd
+				}
+			}
+			rs, err := rules.Load(cwd)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: %v; injecting nothing\n", err)
+				return nil
+			}
+			session := hookSession(in)
+			// The fixed-N backstop comes from the repo's config (default 15 when
+			// unset); event-driven reset is the primary refresh (D1).
+			res := rules.Inject(rs, in.Prompt, rules.LoadState(session), rules.LoadBackstop(cwd))
+			if err := rules.SaveState(session, res.State); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: state save failed (%v)\n", err)
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: turn %d, injected %d domain(s) %v, %d bytes\n",
+				res.State.Count, len(res.Injected), res.Injected, len(res.Text))
+			if res.Text != "" {
+				fmt.Fprint(cmd.OutOrStdout(), res.Text)
+			}
+			return nil
+		},
+	})
+
+	// prompt-router-reset — SessionStart / PreCompact: clear the dedup ledger so
+	// the next prompt re-injects (the event-driven refresh, D1/B2).
+	hookCmd.AddCommand(&cobra.Command{
+		Use:   "prompt-router-reset",
+		Short: "SessionStart/PreCompact: clear the dedup ledger",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			in, err := readHookInput(cmd)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: unreadable reset payload (%v)\n", err)
+				return nil
+			}
+			session := hookSession(in)
+			if err := rules.ResetState(session); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: reset failed (%v)\n", err)
+				return nil
+			}
+			// SessionStart is a natural sweep point for stale ledgers.
+			rules.PruneState(rules.StateTTL)
+			// %q quotes the untrusted hook_event_name so an embedded newline or
+			// ANSI escape cannot spoof the operator's diagnostic stream.
+			fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: reset session (%q)\n", in.Event)
+			return nil
+		},
+	})
+
+	return hookCmd
+}
+
+// rulesView is the machine-readable envelope for bare `abcd rules`: the kill
+// switch plus the active domains.
+type rulesView struct {
+	Disabled bool                   `json:"disabled"`
+	Domains  []rules.ResolvedDomain `json:"domains"`
+}
+
+// newRulesCommand builds the `rules` verb — the vendor-neutral front door onto
+// internal/core/rules (itd-3). Bare `abcd rules` renders the active rule set;
+// a positional DOMAIN scopes to one domain (case-insensitive). Read-only,
+// diagnostic — it never mutates and there is no `show` sub-verb (the positional
+// argument is the scope, per the bare-command-as-render discipline).
+func newRulesCommand(asJSON *bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rules [domain]",
+		Short: "Render the active rule set; a positional DOMAIN scopes to one (read-only)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			rs, err := rules.Load(cwd)
+			if err != nil {
+				return err
+			}
+			// Scoped: inspect one domain's configured content regardless of its
+			// state OR the kill switch — this diagnostic shows what a domain holds,
+			// not what would inject right now (bare `abcd rules` reports disabled).
+			if len(args) == 1 {
+				name := strings.ToUpper(args[0])
+				d, ok := rs.Lookup(name)
+				if !ok {
+					return &exitError{Code: 2, Msg: fmt.Sprintf("abcd rules: unknown domain %q", name)}
+				}
+				return render(cmd.OutOrStdout(), *asJSON, d, func(w io.Writer) {
+					fmt.Fprint(w, rules.Render([]rules.ResolvedDomain{d}))
+				})
+			}
+			// Bare: render the full active set.
+			active := rs.Active()
+			return render(cmd.OutOrStdout(), *asJSON, rulesView{Disabled: rs.Disabled, Domains: active}, func(w io.Writer) {
+				if rs.Disabled {
+					fmt.Fprintln(w, "abcd rules — disabled (kill switch set in .abcd/rules.json)")
+					return
+				}
+				if out := rules.Render(active); out != "" {
+					fmt.Fprint(w, out)
+					return
+				}
+				fmt.Fprintln(w, "abcd rules — no active domains")
+			})
+		},
+	}
 }
 
 // newAhoyCommand builds the `ahoy` sub-tree. Bare `ahoy` runs the read-only

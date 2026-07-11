@@ -12,6 +12,24 @@ called out in a **Breaking** section.
 
 ### Added
 
+- The **modular rules loader** core and its `abcd rules [domain]` verb (itd-3,
+  phases 1 + 3). `internal/core/rules` holds binary-bundled default rule domains
+  (COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII, and
+  OPINIONS — whose rules point at the canonical conventions under
+  `.abcd/development/principles/` rather than copying them) merged
+  with an optional per-repo `.abcd/rules.json` override (per-field domain
+  override, sticky kill switch), with word-bounded recall matching (including a
+  conservative suffix stemmer so `commits`/`issues` recall their keyword),
+  `*<DOMAIN>` star-commands, and per-domain dedup signatures. Bare `abcd rules` renders the
+  active rule set; a positional `DOMAIN` (case-insensitive) scopes to one; a
+  malformed `rules.json` fails closed. A Claude Code prompt-router hook
+  (`abcd hook prompt-router` / `prompt-router-reset`, operator-internal) injects
+  the matched rules just-in-time on `UserPromptSubmit` with per-session
+  signature dedup, clears the ledger on a `SessionStart`/`PreCompact` reset
+  (event-driven refresh; a large fixed-N counter is only a backstop), and is
+  fail-closed and non-blocking — a malformed payload, unreadable `rules.json`,
+  or state error injects nothing and logs out-of-band, never wedging a session.
+  The `hooks/hooks.json` manifest wiring lands with ahoy in the next phase.
 - A `surface_coverage` record-lint rule (iss-35): the deterministic half of the
   brief↔surface cross-check. It reads the plugin surface
   (`rules.surface_coverage.commands_dir`, `skills_dir` — outside the lint roots)

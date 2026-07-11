@@ -90,7 +90,9 @@ Setup metadata is a `meta` block inside `.abcd/config.json`; there is no separat
     "default_severity": "minor"         // default severity when /abcd:capture omits it (per itd-4)
   },
   "rules": {
-    "force_refresh_every_n": 5          // prompt-router-hook re-injects every N prompts (per itd-3)
+    "force_refresh_every_n": 15         // prompt-router fixed-N refresh backstop (per itd-3); event-driven
+                                        // reset on SessionStart/PreCompact is the primary refresh, so this
+                                        // large counter only re-injects always-relevant domains. Default 15.
   },
   "adapters": {                         // wired-adapter registry (internal/registry), refreshed each ahoy —
                                         // records which optional external backends are present per seam
