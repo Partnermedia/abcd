@@ -169,3 +169,7 @@ parallel-agent merge contention bites.
   when the maintainer is driving (docs/chore direct-to-main OK; feat/fix via PR
   awaiting their merge). Main pushed to origin; `auto/context-status-lint` opened
   as PR #12 (awaits maintainer merge; no auto-merge on a feat).
+- 2026-07-11 — itd-3 rules-loader hook is **Go**, not Python. abcd is Go-only, so
+  the `UserPromptSubmit` router is a Go subcommand invoked by `hooks/hooks.json` —
+  the intent's `hooks/prompt_router_hook.py` is a stale pre-Go-rebuild detail and
+  is superseded. No Python is added for the loader.
