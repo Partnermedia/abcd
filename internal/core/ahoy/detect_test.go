@@ -9,9 +9,9 @@ import (
 // validHooksJSON is a structurally-sound plugin hook manifest.
 const validHooksJSON = `{
   "hooks": {
-    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_hook"}]}],
-    "SessionStart":     [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}],
-    "PreCompact":       [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}]
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router"}]}],
+    "SessionStart":     [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}],
+    "PreCompact":       [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}]
   }
 }`
 
@@ -173,4 +173,12 @@ func hasGap(gaps []Gap, id string) bool {
 		}
 	}
 	return false
+}
+
+// TestShippedHookManifestVerifies pins the real hooks/hooks.json against the
+// verifier, so the manifest and requiredHookCommand can never drift apart.
+func TestShippedHookManifestVerifies(t *testing.T) {
+	if reason := verifyHookManifest("../../.."); reason != "" {
+		t.Fatalf("shipped hooks/hooks.json fails verification: %s", reason)
+	}
 }

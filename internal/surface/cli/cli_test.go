@@ -181,9 +181,9 @@ func TestHookMalformedStdinExitsZero(t *testing.T) {
 // plugin root, so the install path's hook-manifest verification passes.
 const validHooksJSON = `{
   "hooks": {
-    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_hook"}]}],
-    "SessionStart":     [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}],
-    "PreCompact":       [{"hooks": [{"type": "command", "command": "$CLAUDE_PLUGIN_ROOT/hooks/prompt_router_reset"}]}]
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router"}]}],
+    "SessionStart":     [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}],
+    "PreCompact":       [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}]
   }
 }`
 

@@ -7,30 +7,34 @@
 
 ## abcd rule loader
 
-This repository uses the abcd modular rules loader. A `UserPromptSubmit` hook
-inspects each prompt, recall-matches it against keyword triggers declared in
-`<repo>/.abcd/rules.json` (and the plugin-bundled defaults), and injects the
-matched domain rules into context — instead of force-loading the full ruleset
-on every turn.
+This repository uses the abcd modular rules loader. On `UserPromptSubmit`, a hook
+recall-matches the prompt against keyword triggers declared in the plugin-bundled
+default domains and `<repo>/.abcd/rules.json`, and injects only the matched
+domain rules into context — instead of force-loading the full ruleset every turn.
+A prompt that matches no domain injects nothing (zero added tokens).
 
-- Active rules: `abcd rules` (or `abcd rules <DOMAIN>` to scope).
-- Per-repo overrides: edit `<repo>/.abcd/rules.json` (validated against
-  `scripts/abcd/schemas/rules.schema.json`).
+- Inspect rules: `abcd rules` renders the active set; `abcd rules <DOMAIN>`
+  (case-insensitive) scopes to one domain.
+- Per-repo overrides: edit `<repo>/.abcd/rules.json`. It is
+  `{"schema_version": 1, "disabled": false, "domains": {}}` — add a domain key to
+  override a default per-field (e.g. `{"ROADMAP": {"state": "dormant"}}` silences
+  it while keeping its rules) or to declare a custom domain
+  (`{"recall": [...], "rules": [...]}`).
 - Kill switch: set `"disabled": true` at the top of `.abcd/rules.json`.
 - Explicit activation: start a prompt with `*<DOMAIN>` (e.g. `*COMMITTING`,
-  `*PII`) to inject that domain unconditionally — overrides `dormant`.
+  `*PII`) to inject that domain unconditionally — overrides a `dormant` state,
+  but never the kill switch.
 
 ### Default domains
 
-`COMMITTING`, `DOCUMENTATION`, `ROADMAP`, `ISSUES`, `INTENTS`, `LIFEBOAT`,
-`PII`. Each ships with a placeholder rule; the legacy harvest from
-`~/ABCDevelopment/.claude/CLAUDE.md` is a follow-up phase (per itd-3).
+`COMMITTING`, `DOCUMENTATION`, `ROADMAP`, `ISSUES`, `INTENTS`, `LIFEBOAT`, `PII`.
+Each carries recall keywords and its rules, bundled in the abcd binary; a repo
+overrides them per-field via `.abcd/rules.json`.
 
 ### Reset triggers
 
-`SessionStart` and `PreCompact` clear the dedup state so a fresh session sees
-the rules again. Compaction-aware: the hook does not double-inject within a
-single session, and resets cleanly across compactions.
+`SessionStart` and `PreCompact` clear the per-session dedup ledger, so a matched
+domain re-injects on the next prompt (the event-driven refresh that recovers
+after compaction). Within a session the hook does not re-inject unchanged rules.
 
-For internals see `.abcd/development/brief/05-internals/03-configuration.md`
-and the itd-3 / fn-14 spec.
+For internals see `.abcd/development/brief/05-internals/03-configuration.md`.

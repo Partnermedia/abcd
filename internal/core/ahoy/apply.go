@@ -383,7 +383,11 @@ func (a *applyCtx) stepSymlink() {
 	}
 }
 
-// stepRules writes the bundled default .abcd/rules.json when absent.
+// stepRules writes the per-repo .abcd/rules.json override skeleton when absent.
+// It is deliberately the empty-domains skeleton, NOT a copy of the bundled
+// defaults: the default domains live once in the abcd binary (itd-3), and this
+// file only overrides them per-field (one-canonical-primitive). An empty
+// domains map inherits every bundled default as-is.
 func (a *applyCtx) stepRules() {
 	if !a.approved[SafeAutocreate] || !a.has("rules.missing") {
 		return
