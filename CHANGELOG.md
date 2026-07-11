@@ -12,6 +12,13 @@ called out in a **Breaking** section.
 
 ### Added
 
+- A `context_status_free` record-lint rule: the shared orientation file
+  (`rules.context_status_free.target`, by convention `.abcd/work/CONTEXT.md`)
+  must carry no phase/status claims — status is read live from the CLI and
+  the ledger, never hand-written into orientation docs. Patterns are
+  configurable (`rules.context_status_free.patterns`) with sensible defaults;
+  lines matching inside fenced code blocks are skipped.
+
 - A `/abcd:prepare-this-repo` skill — audits the current repository against
   the abcd record and adopts the three-tier `.abcd/` layout, a marked
   working-conventions section in `AGENTS.md`, and the commit gates; an interim

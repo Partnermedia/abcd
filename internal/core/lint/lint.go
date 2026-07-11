@@ -140,6 +140,16 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 		findings = append(findings, sr...)
 	}
 
+	// context_status_free targets one work-tier file (CONTEXT.md) that lives
+	// outside cfg.Roots, so it too runs once, outside the per-root loop.
+	if ctxCfg, ok := cfg.Rules["context_status_free"]; ok && ctxCfg.Enabled {
+		cs, err := checkContextStatusFree(repoRoot, ctxCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, cs...)
+	}
+
 	sortFindings(findings)
 	return findings, nil
 }
@@ -205,6 +215,71 @@ func checkStrayRootDocs(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 			Severity: cfg.Severity,
 			Message:  "top-level markdown '" + name + "' is not in the root allowlist; documentation belongs under docs/",
 		})
+	}
+	return out, nil
+}
+
+// contextStatusDefaultPatterns is the fallback line-match set for
+// context_status_free when the config supplies no patterns. It targets the
+// phase/status idioms an orientation doc drifts into (headings, **Current
+// phase**, **Next:**, "Phase N — ...", and a status: frontmatter key).
+var contextStatusDefaultPatterns = []string{
+	`(?i)^#+\s*current (phase|status)`,
+	`(?i)\*\*current phase`,
+	`(?i)^\*\*next:`,
+	`(?i)\bphase [0-9]+(\.[0-9]+)? — `,
+	`(?i)^status:`,
+}
+
+const contextStatusMessage = "CONTEXT.md is status-free (DECISIONS.md 2026-07-10): status lives in the live surfaces (CLI, ledger), not in orientation docs"
+
+// checkContextStatusFree scans a single target file (the work-tier CONTEXT.md,
+// which sits outside cfg.Roots) line by line, flagging every line that matches
+// any configured pattern. Fenced code blocks are masked via the shared
+// fenceMask. A missing target is not an error — it yields no findings. This is a
+// file-scoped rule: banning "Phase N" corpus-wide would explode, so the ban is
+// confined to the one orientation doc that must stay status-free.
+func checkContextStatusFree(repoRoot string, cfg RuleConfig) ([]Finding, error) {
+	target := cfg.Target
+	if target == "" {
+		target = filepath.Join(".abcd", "work", "CONTEXT.md")
+	}
+	rawPatterns := cfg.Patterns
+	if len(rawPatterns) == 0 {
+		rawPatterns = contextStatusDefaultPatterns
+	}
+	patterns := make([]*regexp.Regexp, 0, len(rawPatterns))
+	for _, p := range rawPatterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return nil, err
+		}
+		patterns = append(patterns, re)
+	}
+
+	fileAbs := filepath.Join(repoRoot, target)
+	content, err := os.ReadFile(fileAbs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	rel := repoRel(repoRoot, fileAbs)
+	lines := strings.Split(string(content), "\n")
+	mask := fenceMask(lines)
+
+	var out []Finding
+	for i, line := range lines {
+		if mask[i] {
+			continue
+		}
+		if matchesAny(patterns, line) {
+			out = append(out, Finding{
+				File: rel, Line: i + 1, RuleID: "context_status_free",
+				Severity: cfg.Severity, Message: contextStatusMessage,
+			})
+		}
 	}
 	return out, nil
 }

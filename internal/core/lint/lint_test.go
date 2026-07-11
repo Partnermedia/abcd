@@ -558,6 +558,206 @@ func TestCleanRecordProducesNoFindings(t *testing.T) {
 	}
 }
 
+func TestContextStatusFree(t *testing.T) {
+	target := filepath.Join(".abcd", "work", "CONTEXT.md")
+	patterns := []string{
+		`(?i)^#+\s*current (phase|status)`,
+		`(?i)\*\*current phase`,
+		`(?i)^\*\*next:`,
+		`(?i)\bphase [0-9]+(\.[0-9]+)? — `,
+		`(?i)^status:`,
+	}
+	msg := "CONTEXT.md is status-free (DECISIONS.md 2026-07-10): status lives in the live surfaces (CLI, ledger), not in orientation docs"
+
+	// (1) A CONTEXT.md carrying status claims fires exactly those lines as blockers.
+	t.Run("flags status claims", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target,
+			"# Working context\n"+ // 1
+				"\n"+ // 2
+				"## Current phase\n"+ // 3 - heading
+				"\n"+ // 4
+				"Doing work.\n"+ // 5
+				"\n"+ // 6
+				"**Next:** Phase 0.5 wire the detector\n") // 7 - next:
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target, Patterns: patterns},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "context_status_free"); n != 2 {
+			t.Fatalf("expected exactly 2 context_status_free findings, got %d: %+v", n, fs)
+		}
+		if !hasFinding(fs, target, "context_status_free", 3) {
+			t.Errorf("expected finding on Current phase heading (line 3): %+v", fs)
+		}
+		if !hasFinding(fs, target, "context_status_free", 7) {
+			t.Errorf("expected finding on **Next:** line (line 7): %+v", fs)
+		}
+		for _, f := range fs {
+			if f.RuleID == "context_status_free" {
+				if f.Severity != "blocker" {
+					t.Errorf("severity = %q, want blocker: %+v", f.Severity, f)
+				}
+				if f.Message != msg {
+					t.Errorf("message = %q, want %q", f.Message, msg)
+				}
+			}
+		}
+	})
+
+	// (2) A status-free CONTEXT.md yields nothing.
+	t.Run("clean file is silent", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target,
+			"# Working context\n\nOrientation prose with no status claims.\nSee the ledger for state.\n")
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target, Patterns: patterns},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "context_status_free"); n != 0 {
+			t.Fatalf("clean CONTEXT.md must be silent, got %d: %+v", n, fs)
+		}
+	})
+
+	// (3) Disabled rule never fires, even with status claims present.
+	t.Run("disabled rule is silent", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target, "## Current phase\n**Next:** Phase 1\n")
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: false, Severity: "blocker", Target: target, Patterns: patterns},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "context_status_free"); n != 0 {
+			t.Fatalf("disabled rule produced findings: %+v", fs)
+		}
+	})
+
+	// (4) A missing target is not an error and yields nothing.
+	t.Run("missing target is silent", func(t *testing.T) {
+		root := t.TempDir()
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target, Patterns: patterns},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatalf("missing target must not error: %v", err)
+		}
+		if n := countRule(fs, "context_status_free"); n != 0 {
+			t.Fatalf("missing target produced findings: %+v", fs)
+		}
+	})
+
+	// (5) A phase mention inside a fenced code block is masked, not flagged.
+	t.Run("fenced code block is masked", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target,
+			"# Working context\n"+ // 1
+				"\n"+ // 2
+				"Example ledger row:\n"+ // 3
+				"\n"+ // 4
+				"```\n"+ // 5
+				"Phase 3 — Intent\n"+ // 6 - would match, but fenced
+				"```\n") // 7
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target, Patterns: patterns},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "context_status_free"); n != 0 {
+			t.Fatalf("fenced phase mention must be masked, got %d: %+v", n, fs)
+		}
+	})
+
+	// Custom patterns REPLACE the defaults: a distinctive pattern fires on a
+	// line the defaults ignore, and a default-only idiom no longer fires.
+	t.Run("configured patterns override defaults", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target,
+			"# Working context\n"+ // 1
+				"\n"+ // 2
+				"blocked: waiting on review\n"+ // 3 - custom pattern only
+				"\n"+ // 4
+				"## Current phase\n") // 5 - default idiom, must NOT fire
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target,
+					Patterns: []string{`(?i)^blocked:`}},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !hasFinding(fs, target, "context_status_free", 3) {
+			t.Errorf("custom pattern should flag 'blocked:' on line 3: %+v", fs)
+		}
+		if hasFinding(fs, target, "context_status_free", 5) {
+			t.Errorf("default idiom must not fire when custom patterns are supplied: %+v", fs)
+		}
+		if n := countRule(fs, "context_status_free"); n != 1 {
+			t.Fatalf("expected exactly 1 finding with custom patterns, got %d: %+v", n, fs)
+		}
+	})
+
+	// A malformed pattern is a config error: Lint errors, no findings.
+	t.Run("invalid pattern errors", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target, "## Current phase\n")
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target,
+					Patterns: []string{"("}},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err == nil {
+			t.Fatal("expected error for uncompilable pattern")
+		}
+		if len(fs) != 0 {
+			t.Fatalf("errored Lint must return zero findings, got %+v", fs)
+		}
+	})
+
+	// Default patterns apply when the config supplies none.
+	t.Run("default patterns when none configured", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, target, "# c\n\n## Current status\n")
+		cfg := Config{
+			Rules: map[string]RuleConfig{
+				"context_status_free": {Enabled: true, Severity: "blocker", Target: target},
+			},
+		}
+		fs, err := Lint(cfg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !hasFinding(fs, target, "context_status_free", 3) {
+			t.Errorf("default patterns should flag '## Current status' on line 3: %+v", fs)
+		}
+	})
+}
+
 func TestPersonaRegistry(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".abcd/development/personas.json",

@@ -5,31 +5,26 @@ Short and pointer-heavy; durable design truth lives in
 [`../development/`](../development/), personal session state in
 `../.work.local/NEXT.md` (local).
 
+This file is **status-free** (see `DECISIONS.md`, 2026-07-10): what is being
+worked on, what is next, and what has shipped are read live from the surfaces
+built for that — the issue ledger (`abcd capture list --open`), the roadmap
+dashboard (`../development/roadmap/README.md`), and the intent buckets — never
+written here, where they would only go stale. A record-lint rule
+(`context_status_free`) enforces this.
+
 ## What this repo is
 
 `abcd-cli` is the from-scratch **Go** rebuild of abcd as a host-agnostic
 configuration layer for development — a single `abcd` binary with a
 transport-agnostic core, usable as a Claude Code plugin and in the companion
-harness's ecosystem, depending on no external tools. It supersedes the Python
-implementation (frozen, read-only, in the sibling `abcdDev` repo).
-
-## Current phase
-
-**Phase 0 — Foundations.** Scaffolding the repo: git/CI/build carried from
-`ferry`, the design record carried from `abcdDev`, and the Go core + CLI + plugin
-surface skeleton. Exit: `make preflight` green and a verb round-tripping
-CLI → core → JSON. After Phase 0 we pick the cadence for Phase 1+.
-
-**Next:** Phase 0.5 — a full up-front reconciliation of the copied design record
-against the current architecture decisions (single-repo launch, native-minimal
-spec, host-delegated LLM, Workflows-not-Ralph, the three-tier layout), before any
-feature code.
+harness's ecosystem, depending on no external tools. It supersedes the frozen
+Python reference implementation.
 
 ## Live constraints / sharp edges
 
-- The copied `.abcd/development/` record still describes the *old* architecture
-  (flow-next required, overlay/abstraction-boundary, two-repo launch, RP/codex
-  oracles). It is the starting spec, not current truth, until Phase 0.5
-  reconciles it. Do not treat it as authoritative before then.
+- Parts of the copied design record may still describe superseded
+  architecture; the brief-vs-surface reconciliation (iss-35 in the ledger) is
+  the open cross-check. Where the record and the binary disagree, verify
+  against the binary before trusting either.
 - Single repo, curated release (no dev→public mirror). `.abcd/**` never ships.
 - Never commit/push without the maintainer asking; new deps need sign-off.

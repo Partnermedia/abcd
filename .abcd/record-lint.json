@@ -21,7 +21,8 @@
     "no_brittle_line_refs": {"enabled": true, "severity": "warn"},
     "directory_coverage": {"enabled": true, "severity": "warn", "exempt": []},
     "intent_lifecycle": {"enabled": true, "severity": "blocker", "intents_dir": "intents"},
-    "persona_registry": {"enabled": true, "severity": "blocker", "registry": ".abcd/development/personas.json"}
+    "persona_registry": {"enabled": true, "severity": "blocker", "registry": ".abcd/development/personas.json"},
+    "context_status_free": {"enabled": true, "severity": "blocker", "target": ".abcd/work/CONTEXT.md"}
   },
   "exempt_paths": [".abcd/development/research/", ".abcd/development/intents/superseded/"],
   "exempt_if_status": ["superseded"]

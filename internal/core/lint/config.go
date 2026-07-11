@@ -62,6 +62,13 @@ type RuleConfig struct {
 	// Registry is the persona_registry roster file, repo-relative
 	// (.abcd/development/personas.json).
 	Registry string `json:"registry"`
+	// Target is the context_status_free single-file target, repo-relative
+	// (.abcd/work/CONTEXT.md). The rule runs even though the target lies outside
+	// Roots; a missing target is not an error.
+	Target string `json:"target"`
+	// Patterns is the context_status_free line-match regexp list; when empty the
+	// rule falls back to contextStatusDefaultPatterns.
+	Patterns []string `json:"patterns"`
 }
 
 // LoadConfig reads and decodes a record-lint config file.
