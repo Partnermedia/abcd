@@ -12,7 +12,7 @@ A **skill** is a procedural-workflow surface — a markdown-encoded interview, a
 
 A **command** is a stateful operation that creates, modifies, or moves artefacts. Commands have:
 
-- A **brief surface file** (`04-surfaces/NN-<verb>.md`) describing acceptance criteria, interaction flow, and side effects (or a sub-verb row in an existing parent's surface file). Surface-file coverage is not yet complete: the shipped `docs`, `history`, and `version` verbs have no `04-surfaces/` file.
+- A **brief surface file** (`04-surfaces/NN-<verb>.md`) describing acceptance criteria, interaction flow, and side effects (or a sub-verb row in an existing parent's surface file). Every shipped verb has one — `docs`, `history`, and `version` are chapters `10`–`12`.
 - A **logbook subdirectory** (`.abcd/logbook/<verb>/<timestamp>/`) for per-invocation reports.
 - A **status + help** mode when called bare — the bare-status-board convention holds for `ahoy`, `capture`, and `memory` (and bare `abcd`); it is not universal (`version` prints only the version string, and the `docs`/`history` cobra parents print help/usage with no status board).
 
