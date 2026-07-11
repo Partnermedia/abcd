@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "disabled": false,
+  "domains": {
+    "COMMITTING": {
+      "state": "active",
+      "recall": ["commit", "push", "branch", "merge", "rebase"],
+      "aliases": ["pull request", "pr", "git add", "conventional commit"],
+      "rules": [
+        "Conventional prefix (feat/fix/chore/refactor/docs/test, no scopes); small atomic commits, one purpose each.",
+        "AI-assisted commits carry an Assisted-by trailer (kernel format); never Co-Authored-By for AI.",
+        "Substantive work goes on a branch + PR; never force-push, never --no-verify.",
+        "Never commit or push unless asked."
+      ]
+    },
+    "DOCUMENTATION": {
+      "state": "active",
+      "recall": ["docs", "documentation", "readme", "tutorial", "reference", "changelog", "adr"],
+      "aliases": ["how-to", "how to", "diataxis"],
+      "rules": [
+        "Markdown is the single source of truth; HTML is a generated, disposable artefact.",
+        "Docs are present tense only — what IS, never what was superseded or planned.",
+        "One Diataxis type per page (tutorial / how-to / reference / explanation).",
+        "User-facing prose in British English; code-side identifiers, comments, strings in US English."
+      ]
+    },
+    "ROADMAP": {
+      "state": "active",
+      "recall": ["roadmap", "milestone", "phase"],
+      "aliases": ["build plan"],
+      "rules": [
+        "The roadmap is intent-driven; each phase ends in a milestone.",
+        "No time estimates — the press-release intent format carries priority, not dates."
+      ]
+    },
+    "ISSUES": {
+      "state": "active",
+      "recall": ["issue", "bug", "capture", "ledger"],
+      "aliases": ["found a bug", "track this"],
+      "rules": [
+        "Capture issues to the ledger via `abcd capture`; folder membership is the status signal.",
+        "Never fix ahead of an armed detector — record the finding first."
+      ]
+    },
+    "INTENTS": {
+      "state": "active",
+      "recall": ["intent", "acceptance", "spec"],
+      "aliases": ["press release", "press-release", "acceptance criteria"],
+      "rules": [
+        "Intents are press-release-first; acceptance criteria are BDD (Given/When/Then).",
+        "Personas are always Alice, Bob, Carol — never other names.",
+        "Lifecycle is drafts/ -> planned/ -> shipped/; a planned intent's adoption is a maintainer decision."
+      ]
+    },
+    "LIFEBOAT": {
+      "state": "active",
+      "recall": ["lifeboat", "disembark", "embark", "handoff", "handover"],
+      "aliases": ["pack up", "recover the session"],
+      "rules": [
+        "The lifeboat is the floor of recoverable theory, not the theory itself (Naur) — hunt the originating session.",
+        "Runtime artefacts stay in .abcd/.work.local/; never commit scratch output into tracked directories."
+      ]
+    },
+    "PII": {
+      "state": "active",
+      "recall": ["secret", "token", "credential", "pii", "redact", "hostname", "email"],
+      "aliases": ["api key", "access token", "personal data", "absolute path"],
+      "rules": [
+        "Never commit, print, or paste secrets, tokens, or .env contents; reference them by name.",
+        "Never put absolute local paths in anything that leaves the machine — use repo-relative paths.",
+        "Never name a private repo in commits, PRs, issues, or docs; describe it generically."
+      ]
+    }
+  }
+}
