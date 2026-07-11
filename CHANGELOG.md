@@ -19,8 +19,14 @@ called out in a **Breaking** section.
   override, sticky kill switch), with word-bounded recall matching, `*<DOMAIN>`
   star-commands, and per-domain dedup signatures. Bare `abcd rules` renders the
   active rule set; a positional `DOMAIN` (case-insensitive) scopes to one; a
-  malformed `rules.json` fails closed. The prompt-router hook that injects these
-  just-in-time is the next phase — the verb is the vendor-neutral front door.
+  malformed `rules.json` fails closed. A Claude Code prompt-router hook
+  (`abcd hook prompt-router` / `prompt-router-reset`, operator-internal) injects
+  the matched rules just-in-time on `UserPromptSubmit` with per-session
+  signature dedup, clears the ledger on a `SessionStart`/`PreCompact` reset
+  (event-driven refresh; a large fixed-N counter is only a backstop), and is
+  fail-closed and non-blocking — a malformed payload, unreadable `rules.json`,
+  or state error injects nothing and logs out-of-band, never wedging a session.
+  The `hooks/hooks.json` manifest wiring lands with ahoy in the next phase.
 - A `surface_coverage` record-lint rule (iss-35): the deterministic half of the
   brief↔surface cross-check. It reads the plugin surface
   (`rules.surface_coverage.commands_dir`, `skills_dir` — outside the lint roots)

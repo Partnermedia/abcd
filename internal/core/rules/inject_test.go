@@ -1,0 +1,129 @@
+package rules
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestInjectFirstTurnRenders(t *testing.T) {
+	rs := Defaults()
+	res := Inject(rs, "commit and push", SessionState{}, 0)
+	if res.Text == "" || !strings.Contains(res.Text, "COMMITTING") {
+		t.Fatalf("first turn did not inject COMMITTING:\n%s", res.Text)
+	}
+	if len(res.Injected) == 0 {
+		t.Fatal("Injected list empty on a match")
+	}
+	if res.State.Count != 1 {
+		t.Fatalf("count = %d, want 1", res.State.Count)
+	}
+}
+
+func TestInjectDedupsWithinSession(t *testing.T) {
+	rs := Defaults()
+	first := Inject(rs, "commit and push", SessionState{}, 0)
+	second := Inject(rs, "commit and push again", first.State, 0)
+	if second.Text != "" {
+		t.Fatalf("second identical-domain turn re-injected:\n%s", second.Text)
+	}
+	if len(second.Injected) != 0 {
+		t.Fatalf("dedup failed: %v", second.Injected)
+	}
+}
+
+func TestInjectReinjectsAfterResetState(t *testing.T) {
+	rs := Defaults()
+	first := Inject(rs, "commit", SessionState{}, 0)
+	// A reset clears the ledger; the next turn re-injects.
+	after := Inject(rs, "commit", SessionState{}, 0)
+	if after.Text == "" {
+		t.Fatal("re-inject after cleared ledger produced nothing")
+	}
+	_ = first
+}
+
+func TestInjectContentDriftReinjects(t *testing.T) {
+	rs := Defaults()
+	first := Inject(rs, "commit", SessionState{}, 0)
+	// Mutate COMMITTING's rules; the signature changes, so it must re-inject
+	// despite the ledger entry.
+	d := rs.Domains["COMMITTING"]
+	d.Rules = append([]string{"a brand new rule"}, d.Rules...)
+	rs.Domains["COMMITTING"] = d
+	second := Inject(rs, "commit", first.State, 0)
+	if !strings.Contains(second.Text, "a brand new rule") {
+		t.Fatalf("content drift did not re-inject:\n%s", second.Text)
+	}
+}
+
+func TestInjectBackstopForcesRefresh(t *testing.T) {
+	rs := Defaults()
+	st := SessionState{}
+	var lastText string
+	// Backstop of 3: turns 1..2 dedup after the first inject; turn 3 (count%3==0)
+	// clears the ledger and re-injects.
+	for i := 0; i < 3; i++ {
+		res := Inject(rs, "commit", st, 3)
+		st = res.State
+		lastText = res.Text
+	}
+	if lastText == "" {
+		t.Fatal("backstop turn did not force a re-inject")
+	}
+}
+
+func TestInjectNoMatchZeroBytes(t *testing.T) {
+	rs := Defaults()
+	res := Inject(rs, "paint a landscape in oils", SessionState{}, 0)
+	if res.Text != "" {
+		t.Fatalf("no-match must render zero bytes, got %q", res.Text)
+	}
+}
+
+func TestInjectNeverReflectsPromptBytes(t *testing.T) {
+	rs := Defaults()
+	marker := "ZZUNIQUEPROMPTMARKERZZ commit"
+	res := Inject(rs, marker, SessionState{}, 0)
+	if strings.Contains(res.Text, "ZZUNIQUEPROMPTMARKERZZ") {
+		t.Fatalf("injected text reflected prompt bytes:\n%s", res.Text)
+	}
+}
+
+func TestSessionStateRoundTripAndReset(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	const sid = "session-abc/../../etc" // traversal attempt; must be neutralised
+	if got := LoadState(sid); got.Count != 0 {
+		t.Fatal("fresh session should load zero state")
+	}
+	want := SessionState{Count: 4, Ledger: map[string]string{"COMMITTING": "deadbeef"}}
+	if err := SaveState(sid, want); err != nil {
+		t.Fatalf("SaveState: %v", err)
+	}
+	got := LoadState(sid)
+	if got.Count != 4 || got.Ledger["COMMITTING"] != "deadbeef" {
+		t.Fatalf("round-trip mismatch: %+v", got)
+	}
+	if err := ResetState(sid); err != nil {
+		t.Fatalf("ResetState: %v", err)
+	}
+	if LoadState(sid).Count != 0 {
+		t.Fatal("state survived reset")
+	}
+	// A second reset on an absent file is not an error.
+	if err := ResetState(sid); err != nil {
+		t.Fatalf("reset of absent state errored: %v", err)
+	}
+}
+
+func TestSessionFileStaysInStateDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ABCD_RULES_STATE_DIR", dir)
+	// A traversal-flavoured id must still hash to a file directly inside dir.
+	f := sessionFile("../../../../etc/passwd")
+	if got := strings.TrimSuffix(f[:len(dir)], "/"); got != strings.TrimSuffix(dir, "/") {
+		t.Fatalf("session file escaped state dir: %s", f)
+	}
+	if strings.Contains(f[len(dir):], "..") {
+		t.Fatalf("session file path contains traversal: %s", f)
+	}
+}

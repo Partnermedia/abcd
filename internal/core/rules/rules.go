@@ -32,6 +32,9 @@ import (
 // RepoRelPath is the per-repo override file, relative to the repo worktree.
 const RepoRelPath = ".abcd/rules.json"
 
+// maxRulesFileBytes caps the per-repo rules.json (trust boundary).
+const maxRulesFileBytes = 256 * 1024
+
 // Domain state values. An empty string is treated as active.
 const (
 	StateActive  = "active"
@@ -102,10 +105,26 @@ func Defaults() RuleSet { return cloneRuleSet(defaultRuleSet) }
 // that cannot be parsed or fails validation is a fail-closed error.
 func Load(repoRoot string) (RuleSet, error) {
 	path := filepath.Join(repoRoot, ".abcd", "rules.json")
-	data, err := os.ReadFile(path)
+	fi, err := os.Lstat(path)
 	if os.IsNotExist(err) {
 		return Defaults(), nil
 	}
+	if err != nil {
+		return RuleSet{}, fmt.Errorf("rules: stat %s: %w", RepoRelPath, err)
+	}
+	// Trust-boundary guards (mirror the ahoy hook-manifest verifier): refuse a
+	// symlinked leaf and cap the file size so a hostile rules.json cannot force a
+	// symlink-follow or a memory blow-up.
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return RuleSet{}, fmt.Errorf("rules: %s is a symlink (refusing to follow)", RepoRelPath)
+	}
+	if !fi.Mode().IsRegular() {
+		return RuleSet{}, fmt.Errorf("rules: %s is not a regular file", RepoRelPath)
+	}
+	if fi.Size() > maxRulesFileBytes {
+		return RuleSet{}, fmt.Errorf("rules: %s exceeds the %d-byte cap", RepoRelPath, maxRulesFileBytes)
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return RuleSet{}, fmt.Errorf("rules: reading %s: %w", RepoRelPath, err)
 	}
