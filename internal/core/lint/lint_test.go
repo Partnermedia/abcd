@@ -1272,3 +1272,79 @@ func TestPersonaRegistryConfigGuards(t *testing.T) {
 		t.Fatalf("disabled rule produced findings: %+v", fs)
 	}
 }
+
+func TestSpecLifecycle(t *testing.T) {
+	root := t.TempDir()
+	base := "rec/specs"
+	ibase := "rec/intents"
+
+	// The intent corpus the specs cross-check against.
+	writeFile(t, root, ibase+"/shipped/itd-10-alpha.md", "---\nid: itd-10\nkind: standalone\nspec_id: spc-1\n---\n# ok\n")
+	writeFile(t, root, ibase+"/shipped/itd-20-beta.md", "---\nid: itd-20\nkind: standalone\nspec_id: spc-9\n---\n# ok\n") // points at a DIFFERENT spec (drift target)
+	writeFile(t, root, ibase+"/planned/itd-30-gamma.md", "---\nid: itd-30\nkind: standalone\nspec_id: null\n---\n# ok\n") // never linked back
+
+	// Good spec: names itd-10, which points back at spc-1. Agreement passes.
+	writeFile(t, root, base+"/closed/spc-1-alpha.md", "---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# ok\n")
+
+	// Bad: names an intent that does not exist in the corpus.
+	writeFile(t, root, base+"/open/spc-2-nope.md", "---\nid: spc-2\nslug: nope\nintent: itd-99\n---\n# bad\n")
+	// Bad: bidirectional drift — names itd-20, but itd-20's spec_id is spc-9, not spc-3.
+	writeFile(t, root, base+"/open/spc-3-drift.md", "---\nid: spc-3\nslug: drift\nintent: itd-20\n---\n# bad\n")
+	// Bad: malformed spec id.
+	writeFile(t, root, base+"/open/spc-4-badid.md", "---\nid: spec-4\nslug: badid\nintent: itd-10\n---\n# bad\n")
+	// Bad: names itd-30, whose spec_id is null (drift: intent points at nothing).
+	writeFile(t, root, base+"/open/spc-5-null.md", "---\nid: spc-5\nslug: null\nintent: itd-30\n---\n# bad\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"spec_lifecycle": {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	badFiles := []string{
+		filepath.Join(base, "open", "spc-2-nope.md"),
+		filepath.Join(base, "open", "spc-3-drift.md"),
+		filepath.Join(base, "open", "spc-4-badid.md"),
+		filepath.Join(base, "open", "spc-5-null.md"),
+	}
+	for _, bf := range badFiles {
+		found := false
+		for _, f := range fs {
+			if f.File == bf && f.RuleID == "spec_lifecycle" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected spec_lifecycle finding on %s; got %+v", bf, fs)
+		}
+	}
+	// The good spec produces no finding.
+	for _, f := range fs {
+		if filepath.Base(f.File) == "spc-1-alpha.md" && f.RuleID == "spec_lifecycle" {
+			t.Errorf("unexpected finding on clean spec: %+v", f)
+		}
+	}
+}
+
+func TestSpecLifecycleMissingDirIsSoft(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/README.md", "# rec\n")
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"spec_lifecycle": {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "spec_lifecycle"); n != 0 {
+		t.Fatalf("missing specs/ dir must be soft; got %+v", fs)
+	}
+}

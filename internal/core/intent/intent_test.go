@@ -336,3 +336,215 @@ func TestStatusCounts(t *testing.T) {
 		t.Fatalf("linked pairs = %+v", v.Linked)
 	}
 }
+
+// plannedLinked is a planned intent already carrying both link sides (the shape
+// Plan leaves): kind + spec_id set, ready to ship.
+func plannedLinked(id, slug, specID string) string {
+	return "---\nid: " + id + "\nslug: " + slug + "\nspec_id: " + specID + "\nkind: standalone\n---\n" +
+		"# " + slug + "\n\n## Acceptance Criteria\n\n- ok\n\n## Audit Notes\n"
+}
+
+// specNaming is an open spec file whose intent: link names the given intent.
+func specNaming(id, slug, intentID string) string {
+	return "---\nid: " + id + "\nslug: " + slug + "\nintent: " + intentID + "\n---\n# " + slug + "\n"
+}
+
+func TestReconcileHappyPath(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Reconcile(root, "spc-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IntentMoved || res.From != BucketPlanned || res.To != BucketShipped {
+		t.Fatalf("Reconcile result = %+v", res)
+	}
+	if res.Intent.Bucket != BucketShipped || res.Intent.ID != "itd-10" {
+		t.Fatalf("Reconcile intent = %+v", res.Intent)
+	}
+	if res.Spec.Status != spec.StatusClosed {
+		t.Fatalf("Reconcile spec status = %q, want closed", res.Spec.Status)
+	}
+	// Intent moved planned -> shipped; spec moved open -> closed.
+	if _, err := os.Stat(filepath.Join(root, plannedDir, "itd-10-alpha.md")); !os.IsNotExist(err) {
+		t.Fatal("planned intent should be gone after reconcile")
+	}
+	if _, err := os.Stat(filepath.Join(root, shippedDir, "itd-10-alpha.md")); err != nil {
+		t.Fatalf("shipped intent should exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, specsOpen, "spc-1-alpha.md")); !os.IsNotExist(err) {
+		t.Fatal("open spec should be gone after reconcile")
+	}
+	if _, err := os.Stat(filepath.Join(root, specsClosed, "spc-1-alpha.md")); err != nil {
+		t.Fatalf("closed spec should exist: %v", err)
+	}
+	// Audit Notes are left empty/untouched (Phase 4 fills them).
+	body, err := os.ReadFile(filepath.Join(root, shippedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "## Audit Notes") {
+		t.Fatalf("Audit Notes heading should survive verbatim:\n%s", body)
+	}
+}
+
+// TestReconcileIdempotent proves a re-run on an already-shipped intent whose
+// spec is already closed is a clean no-op/complete, not an error.
+func TestReconcileIdempotent(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	if _, err := Reconcile(root, "spc-1"); err != nil {
+		t.Fatalf("first reconcile: %v", err)
+	}
+	res, err := Reconcile(root, "spc-1")
+	if err != nil {
+		t.Fatalf("second reconcile must be a clean no-op: %v", err)
+	}
+	if res.IntentMoved {
+		t.Fatalf("second reconcile must not move the intent: %+v", res)
+	}
+	if res.Intent.Bucket != BucketShipped || res.Spec.Status != spec.StatusClosed {
+		t.Fatalf("idempotent reconcile state = %+v", res)
+	}
+}
+
+// TestReconcileClosesSpecWhenIntentAlreadyShipped covers the partial-failure
+// recovery path: the intent already shipped but the spec is still open (a prior
+// run moved the intent then failed before the close). Re-running just closes the
+// spec.
+func TestReconcileClosesSpecWhenIntentAlreadyShipped(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Reconcile(root, "spc-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IntentMoved {
+		t.Fatalf("intent already shipped; must not move: %+v", res)
+	}
+	if res.Spec.Status != spec.StatusClosed {
+		t.Fatalf("spec should be closed: %+v", res.Spec)
+	}
+}
+
+func TestReconcileFailsNoIntentLink(t *testing.T) {
+	root := t.TempDir()
+	// A spec whose intent link is malformed cannot be minted by Create, so write a
+	// spec whose intent names a non-existent intent to exercise the missing-intent path.
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-99"))
+	if _, err := Reconcile(root, "spc-1"); err == nil {
+		t.Fatal("Reconcile must fail closed when the named intent does not exist")
+	}
+	// No partial move: the spec is untouched (still open).
+	if _, err := os.Stat(filepath.Join(root, specsOpen, "spc-1-alpha.md")); err != nil {
+		t.Fatal("spec must stay open after a fail-closed reconcile")
+	}
+}
+
+// TestReconcileFailsWrongBucket refuses an intent that was never planned (still
+// in drafts), with no partial move.
+func TestReconcileFailsWrongBucket(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+	if _, err := Reconcile(root, "spc-1"); err == nil {
+		t.Fatal("Reconcile must refuse an intent still in drafts")
+	}
+	if _, err := os.Stat(filepath.Join(root, draftsDir, "itd-10-alpha.md")); err != nil {
+		t.Fatal("drafts intent must not move on a fail-closed reconcile")
+	}
+	if _, err := os.Stat(filepath.Join(root, specsOpen, "spc-1-alpha.md")); err != nil {
+		t.Fatal("spec must stay open on a fail-closed reconcile")
+	}
+}
+
+// TestReconcileFailsBidirectionalDrift refuses when the intent the spec names
+// points back at a different spec (a one-sided link).
+func TestReconcileFailsBidirectionalDrift(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-2"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+	if _, err := Reconcile(root, "spc-1"); err == nil {
+		t.Fatal("Reconcile must refuse when the intent's spec_id disagrees with the spec")
+	}
+	if _, err := os.Stat(filepath.Join(root, plannedDir, "itd-10-alpha.md")); err != nil {
+		t.Fatal("planned intent must not move on drift")
+	}
+}
+
+// TestReconcileFailsAmbiguousLink refuses when two specs realise the same intent.
+func TestReconcileFailsAmbiguousLink(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+	writeFile(t, root, specsOpen+"/spc-2-alpha.md", specNaming("spc-2", "alpha", "itd-10"))
+	if _, err := Reconcile(root, "spc-1"); err == nil {
+		t.Fatal("Reconcile must refuse when more than one spec realises the intent")
+	}
+}
+
+func TestReconcileRejectsBadSpecID(t *testing.T) {
+	if _, err := Reconcile(t.TempDir(), "spc-../../etc"); err == nil {
+		t.Fatal("Reconcile must reject a traversal spec id")
+	}
+}
+
+func TestReconcileFailsMissingSpec(t *testing.T) {
+	if _, err := Reconcile(t.TempDir(), "spc-9"); err == nil {
+		t.Fatal("Reconcile must fail when the spec does not exist")
+	}
+}
+
+// TestFullCycle drives the real lifecycle: draft -> Plan -> Reconcile (spec
+// close), asserting the intent ends in shipped/, the spec in closed/, BOTH
+// lifecycle lint rules find zero issues, and a second reconcile is idempotent.
+func TestFullCycle(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
+
+	pr, err := Plan(root, "itd-10")
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	rr, err := Reconcile(root, pr.Spec.ID)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if rr.Intent.Bucket != BucketShipped || rr.Spec.Status != spec.StatusClosed {
+		t.Fatalf("cycle end state = %+v", rr)
+	}
+	if _, err := os.Stat(filepath.Join(root, shippedDir, "itd-10-alpha.md")); err != nil {
+		t.Fatalf("intent must be shipped: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, specsClosed, "spc-1-alpha.md")); err != nil {
+		t.Fatalf("spec must be closed: %v", err)
+	}
+
+	cfg := lint.Config{
+		Roots: []string{".abcd/development"},
+		Rules: map[string]lint.RuleConfig{
+			"intent_lifecycle": {Enabled: true, Severity: "blocker", IntentsDir: "intents"},
+			"spec_lifecycle":   {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	findings, err := lint.Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range findings {
+		if f.RuleID == "intent_lifecycle" || f.RuleID == "spec_lifecycle" {
+			t.Fatalf("post-cycle lifecycle finding: %s:%d %s %s", f.File, f.Line, f.RuleID, f.Message)
+		}
+	}
+
+	// Second reconcile is a clean no-op.
+	if _, err := Reconcile(root, pr.Spec.ID); err != nil {
+		t.Fatalf("second reconcile must be idempotent: %v", err)
+	}
+}

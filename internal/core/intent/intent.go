@@ -204,6 +204,18 @@ type LinkResult struct {
 	Spec   spec.Spec `json:"spec"`
 }
 
+// ReconcileResult reports a completed Reconcile (the deterministic half of
+// `abcd spec close`): the closed spec, the linked intent in its post-reconcile
+// state, whether the intent moved this call (false on an idempotent re-run), and
+// the intent's bucket transition (From → To).
+type ReconcileResult struct {
+	Spec        spec.Spec `json:"spec"`
+	Intent      Intent    `json:"intent"`
+	IntentMoved bool      `json:"intent_moved"`
+	From        string    `json:"from"`
+	To          string    `json:"to"`
+}
+
 // LinkedPair is one intent↔spec link in the lifecycle summary.
 type LinkedPair struct {
 	Intent string `json:"intent"`

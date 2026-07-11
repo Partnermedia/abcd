@@ -468,9 +468,8 @@ type specStatusView struct {
 
 // newSpecCommand builds the `spec` verb — the front door onto internal/core/spec
 // (itd-80). Bare `abcd spec` renders the read-only spec-store status; the `close`
-// sub-verb moves a spec open/ -> closed/. The lifecycle reconcile that trails a
-// close (moving the linked intent planned -> shipped) lands in the next phase;
-// `close` here touches the spec store only.
+// sub-verb closes a spec AND reconciles its linked intent (planned -> shipped)
+// via intent.Reconcile, so one command completes the lifecycle transition.
 func newSpecCommand(asJSON *bool) *cobra.Command {
 	specCmd := &cobra.Command{
 		Use:   "spec",
@@ -502,22 +501,28 @@ func newSpecCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
-	// close <spc-N> — open/ -> closed/. No lifecycle reconcile yet (next phase).
+	// close <spc-N> — closes the spec AND reconciles the linked intent
+	// (planned -> shipped). Fail-closed and idempotent (see intent.Reconcile).
 	specCmd.AddCommand(&cobra.Command{
 		Use:   "close <spc-N>",
-		Short: "Close a spec (open/ -> closed/); lifecycle reconcile lands in the next phase",
+		Short: "Close a spec (open/ -> closed/) and ship its linked intent (planned/ -> shipped/)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			sp, err := spec.Close(cwd, args[0])
+			res, err := intent.Reconcile(cwd, args[0])
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd spec close: " + err.Error()}
 			}
-			return render(cmd.OutOrStdout(), *asJSON, sp, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", sp.ID, sp.Path)
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", res.Spec.ID, res.Spec.Path)
+				if res.IntentMoved {
+					fmt.Fprintf(w, "  reconciled intent %s: %s -> %s\n", res.Intent.ID, res.From, res.To)
+				} else {
+					fmt.Fprintf(w, "  intent %s already %s (no move)\n", res.Intent.ID, res.To)
+				}
 			})
 		},
 	})

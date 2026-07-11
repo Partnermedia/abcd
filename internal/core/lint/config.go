@@ -55,7 +55,11 @@ type RuleConfig struct {
 	// Exempt is the directory_coverage glob allowlist.
 	Exempt []string `json:"exempt"`
 	// IntentsDir is the intent_lifecycle intents subdirectory (relative to a root).
+	// spec_lifecycle also reads it to resolve the intent corpus its specs link to.
 	IntentsDir string `json:"intents_dir"`
+	// SpecsDir is the spec_lifecycle specs subdirectory (relative to a root),
+	// mirroring IntentsDir. Default "specs".
+	SpecsDir string `json:"specs_dir"`
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.
 	Allowlist []string `json:"allowlist"`

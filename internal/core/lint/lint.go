@@ -62,6 +62,10 @@ var (
 	stepNameKeyRe  = regexp.MustCompile(`^\s+name:\s*(.+?)\s*$`)
 	specIDRe       = regexp.MustCompile(`^spc-`)
 	supersededRe   = regexp.MustCompile(`^itd-\d+`)
+	// spec_lifecycle: anchored id/link/filename matchers for the spec store.
+	specFileRe     = regexp.MustCompile(`^spc-\d+.*\.md$`)
+	specIDFullRe   = regexp.MustCompile(`^spc-\d+$`)
+	intentIDFullRe = regexp.MustCompile(`^itd-\d+$`)
 	intentBuckets  = map[string]bool{
 		"drafts": true, "planned": true, "shipped": true,
 		"disciplines": true, "superseded": true,
@@ -147,6 +151,14 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 				return nil, err
 			}
 			findings = append(findings, il...)
+		}
+
+		if specCfg, ok := cfg.Rules["spec_lifecycle"]; ok && specCfg.Enabled {
+			sl, err := checkSpecLifecycle(repoRoot, rootAbs, specCfg, cfg)
+			if err != nil {
+				return nil, err
+			}
+			findings = append(findings, sl...)
 		}
 	}
 
@@ -1150,6 +1162,148 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 		}
 	}
 	return out
+}
+
+// checkSpecLifecycle is the spec-side mirror of checkIntentLifecycle (check
+// family G). It discovers spec files under specs/{open,closed}/ and validates
+// each has a well-formed id/slug/intent link, that the named intent EXISTS in the
+// corpus, and — the load-bearing cross-check — that the intent points back at
+// this spec (bidirectional agreement). A missing specs/ directory is soft.
+func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]Finding, error) {
+	specsDir := cfg.SpecsDir
+	if specsDir == "" {
+		specsDir = "specs"
+	}
+	specsRoot := filepath.Join(rootAbs, specsDir)
+	if _, err := os.Stat(specsRoot); err != nil {
+		return nil, nil // missing specs/ is soft, mirroring intent_lifecycle
+	}
+
+	// Index the intent corpus: which ids exist, and each intent's spec_id value.
+	// This is what lets a spec's link be checked for existence and back-agreement.
+	intentsDir := cfg.IntentsDir
+	if intentsDir == "" {
+		intentsDir = "intents"
+	}
+	knownIntent := map[string]bool{}
+	intentSpecID := map[string]string{}
+	_ = filepath.WalkDir(filepath.Join(rootAbs, intentsDir), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !intentFileRe.MatchString(d.Name()) {
+			return nil
+		}
+		content, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil
+		}
+		fields := frontmatterFields(strings.Split(string(content), "\n"))
+		id := fields["id"].value
+		if !intentIDFullRe.MatchString(id) {
+			id = intentIDRe.FindString(d.Name())
+		}
+		if id != "" {
+			knownIntent[id] = true
+			intentSpecID[id] = fields["spec_id"].value
+		}
+		return nil
+	})
+
+	var out []Finding
+	for _, bucket := range []string{"open", "closed"} {
+		bucketDir := filepath.Join(specsRoot, bucket)
+		entries, err := os.ReadDir(bucketDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !specFileRe.MatchString(e.Name()) {
+				continue
+			}
+			fileAbs := filepath.Join(bucketDir, e.Name())
+			content, err := os.ReadFile(fileAbs)
+			if err != nil {
+				return nil, err
+			}
+			rel := repoRel(repoRoot, fileAbs)
+			fields := frontmatterFields(strings.Split(string(content), "\n"))
+			if contentExempt(rel, fields, top) {
+				continue
+			}
+			out = append(out, validateSpec(rel, fields, knownIntent, intentSpecID, cfg.Severity)...)
+		}
+	}
+	return out, nil
+}
+
+func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]bool, intentSpecID map[string]string, severity string) []Finding {
+	var out []Finding
+	add := func(line int, msg string) {
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: rel, Line: line, RuleID: "spec_lifecycle",
+			Severity: severity, Message: msg,
+		})
+	}
+
+	// Status is the bucket directory (open/closed), never a field.
+	if st, ok := fields["status"]; ok {
+		add(st.line, "status: key forbidden; spec status is the bucket directory (open/closed), not a field")
+	}
+
+	id := fields["id"]
+	idValid := specIDFullRe.MatchString(id.value)
+	if !idValid {
+		add(id.line, "spec id must be present and match ^spc-\\d+$ (got '"+id.value+"')")
+	}
+	if slug, ok := fields["slug"]; !ok || isNull(slug.value) {
+		add(slug.line, "spec slug must be present")
+	}
+
+	intent := fields["intent"]
+	if !intentIDFullRe.MatchString(intent.value) {
+		add(intent.line, "spec intent link must be present and match ^itd-\\d+$ (got '"+intent.value+"')")
+		return out // no existence/agreement check possible without a well-formed link
+	}
+	if !knownIntent[intent.value] {
+		add(intent.line, "spec intent '"+intent.value+"' does not exist in any bucket")
+		return out
+	}
+	// Bidirectional agreement: the named intent must carry spec_id == this spec's
+	// id. Drift either way (the intent points elsewhere, or at null) is flagged.
+	if idValid {
+		back := intentSpecID[intent.value]
+		if specNum(back) != specNum(id.value) {
+			add(intent.line, "bidirectional drift: spec '"+id.value+"' names intent '"+intent.value+"' but that intent's spec_id is '"+back+"'")
+		}
+	}
+	return out
+}
+
+// specNum extracts the numeric N from a spec id or spec_id value (which may carry
+// a trailing slug, e.g. spc-1-thing), or -1 when there is no spc- id at all. It
+// lets the bidirectional check compare spc-1 against a reserved spec_id: spc-1
+// written with or without a slug suffix.
+func specNum(v string) int {
+	if !strings.HasPrefix(v, "spc-") {
+		return -1
+	}
+	rest := v[len("spc-"):]
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return -1
+	}
+	n, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // fmField is a frontmatter key's value and 1-based source line.

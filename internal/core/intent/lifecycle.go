@@ -160,21 +160,14 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 		return PlanResult{}, fmt.Errorf("intent: writing kind to %s: %w", draftRel, err)
 	}
 
-	// 3. Move drafts/ → planned/. The moved file's (kind=standalone,
-	// spec_id=null) shape is a valid planned intent, so a rename failure leaves a
-	// consistent state either side.
-	name := filepath.Base(draftRel)
-	plannedRel := filepath.Join(IntentsRelDir, BucketPlanned, name)
-	plannedAbs := filepath.Join(repoRoot, plannedRel)
-	if err := ensureRealDir(filepath.Join(repoRoot, IntentsRelDir, BucketPlanned), filepath.Join(IntentsRelDir, BucketPlanned)); err != nil {
+	// 3. Move drafts/ → planned/ via the shared, trust-guarded move. The moved
+	// file's (kind=standalone, spec_id=null) shape is a valid planned intent, so a
+	// rename failure leaves a consistent state either side.
+	plannedRel, err := moveIntentToBucket(repoRoot, draftRel, BucketPlanned)
+	if err != nil {
 		return PlanResult{}, err
 	}
-	if _, err := os.Lstat(plannedAbs); err == nil {
-		return PlanResult{}, fmt.Errorf("intent: refusing to overwrite existing %s", plannedRel)
-	}
-	if err := os.Rename(draftAbs, plannedAbs); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: moving %s drafts->planned: %w", intentID, err)
-	}
+	plannedAbs := filepath.Join(repoRoot, plannedRel)
 
 	// 4. Write the derived link (spec_id) now that the file is in planned. A
 	// planned intent with spec_id=null is still lint-valid, so a failure here is
@@ -247,6 +240,132 @@ func Link(repoRoot, intentID, specID string) (LinkResult, error) {
 	return LinkResult{Intent: it, Spec: sp}, nil
 }
 
+// Reconcile is the deterministic half of `abcd spec close`: it advances the
+// intent a spec realises, then closes the spec, so one command marks the spec
+// done AND ships its linked intent.
+//
+// Ordering is intent-first, spec-last, so a partial failure is recoverable by
+// re-running: the intent moves planned/ → shipped/ before spec.Close runs, so a
+// failure at the move leaves the spec OPEN (retry-safe), never a closed spec with
+// a still-planned intent. It is idempotent: an already-shipped intent is not
+// re-moved, and a re-run on an already-closed spec is a clean no-op/complete
+// rather than an error.
+//
+// It fails closed with NO partial move when: the spec has no/empty intent link;
+// the named intent does not exist; the link is ambiguous (more than one spec
+// realises the intent); the intent's spec_id disagrees with this spec
+// (bidirectional drift); or the intent is in an unexpected bucket (e.g. still in
+// drafts — it was never planned). Every id is validated against the ^spc-/^itd-
+// regexes before any path is built. The intent's `## Audit Notes` are left
+// untouched (the fidelity audit is a later phase; the intent ships with them empty).
+func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
+	if !specIDRe.MatchString(specID) {
+		return ReconcileResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", specID)
+	}
+	store, err := spec.Load(repoRoot)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	sp, ok := store.Lookup(specID)
+	if !ok {
+		return ReconcileResult{}, fmt.Errorf("intent: spec %s not found", specID)
+	}
+
+	// Resolve the linked intent from the spec's intent: field, validated before it
+	// is ever used to build a path.
+	intentID := sp.Intent
+	if !intentIDRe.MatchString(intentID) {
+		return ReconcileResult{}, fmt.Errorf("intent: spec %s has no well-formed intent link (got %q); refusing to reconcile", specID, intentID)
+	}
+	// Ambiguity guard: cross-check the spec's link against the whole store. If more
+	// than one spec claims this intent, the link is ambiguous and we refuse rather
+	// than ship an intent whose realising spec is undetermined.
+	var claimers []string
+	for _, s := range store.Specs {
+		if s.Intent == intentID {
+			claimers = append(claimers, s.ID)
+		}
+	}
+	if len(claimers) > 1 {
+		return ReconcileResult{}, fmt.Errorf("intent: link ambiguous — %d specs realise %s (%s); refusing to reconcile", len(claimers), intentID, strings.Join(claimers, ", "))
+	}
+
+	corpus, err := Load(repoRoot)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	it, ok := corpus.Lookup(intentID)
+	if !ok {
+		return ReconcileResult{}, fmt.Errorf("intent: %s (linked by spec %s) not found in any bucket; refusing to reconcile", intentID, specID)
+	}
+	// Bidirectional agreement: the intent must point back at THIS spec. A null or
+	// mismatched spec_id is drift (a one-sided link) — fail closed rather than ship
+	// an intent that names a different, or no, spec.
+	if it.SpecID != specID {
+		return ReconcileResult{}, fmt.Errorf("intent: %s spec_id is %q but spec %s claims it (bidirectional link disagrees); refusing to reconcile", intentID, it.SpecID, specID)
+	}
+	// Bucket guard runs BEFORE any move, so an unexpected bucket (drafts,
+	// disciplines, superseded) yields no partial move.
+	switch it.Bucket {
+	case BucketPlanned, BucketShipped:
+		// planned → advance; shipped → idempotent (already advanced).
+	default:
+		return ReconcileResult{}, fmt.Errorf("intent: %s is in %s (linked by spec %s); expected planned or shipped — refusing to reconcile", intentID, it.Bucket, specID)
+	}
+
+	res := ReconcileResult{Spec: sp, Intent: it, From: it.Bucket, To: it.Bucket}
+	// 1. Advance the intent planned/ → shipped/ FIRST. Its (kind, spec_id) are
+	// already set (Plan wrote them), so the shipped record is lint-valid without
+	// touching frontmatter. If this fails, the spec stays open — the whole
+	// operation retries cleanly.
+	if it.Bucket == BucketPlanned {
+		dstRel, err := moveIntentToBucket(repoRoot, it.Path, BucketShipped)
+		if err != nil {
+			return ReconcileResult{}, err
+		}
+		it.Bucket = BucketShipped
+		it.Path = dstRel
+		res.Intent = it
+		res.IntentMoved = true
+		res.To = BucketShipped
+	}
+
+	// 2. Close the spec, but only if still open — a re-run on an already-closed
+	// spec is a clean completion, not the "already closed" error spec.Close raises.
+	if sp.Status == spec.StatusOpen {
+		closed, err := spec.Close(repoRoot, specID)
+		if err != nil {
+			return ReconcileResult{}, err
+		}
+		res.Spec = closed
+	}
+	return res, nil
+}
+
+// moveIntentToBucket moves the intent file at srcRel into dstBucket via os.Rename
+// (atomic on one filesystem), behind the store's trust guards: it refuses to
+// follow a symlinked destination directory and refuses to clobber an existing
+// destination file. It returns the new repo-relative path. This is the single
+// canonical intent move, shared by Plan (drafts → planned) and Reconcile
+// (planned → shipped).
+func moveIntentToBucket(repoRoot, srcRel, dstBucket string) (string, error) {
+	name := filepath.Base(srcRel)
+	dstRelDir := filepath.Join(IntentsRelDir, dstBucket)
+	dstRel := filepath.Join(dstRelDir, name)
+	dstAbs := filepath.Join(repoRoot, dstRel)
+	if err := ensureRealDir(filepath.Join(repoRoot, dstRelDir), dstRelDir); err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(dstAbs); err == nil {
+		return "", fmt.Errorf("intent: refusing to overwrite existing %s", dstRel)
+	}
+	srcBucket := filepath.Base(filepath.Dir(srcRel))
+	if err := os.Rename(filepath.Join(repoRoot, srcRel), dstAbs); err != nil {
+		return "", fmt.Errorf("intent: moving %s %s->%s: %w", name, srcBucket, dstBucket, err)
+	}
+	return dstRel, nil
+}
+
 // Status builds the read-only lifecycle summary: intent counts by bucket, spec
 // counts by status, and the intent↔spec links (every intent whose spec_id is
 // non-null). Linked pairs are ordered by the corpus load order (bucket, then
@@ -306,7 +425,10 @@ func readRepoFile(abs, rel string) ([]byte, error) {
 	return data, nil
 }
 
-// ensureRealDir creates dir if absent, refusing to follow a symlinked directory.
+// ensureRealDir creates dir if absent, refusing a symlinked leaf directory.
+// NOTE: a symlinked ANCESTOR (e.g. a symlinked intents/) is not caught here — a
+// low-severity follow-up under the trusted-worktree model (planting one needs
+// write access equal to editing the record directly).
 func ensureRealDir(dir, rel string) error {
 	if di, err := os.Lstat(dir); err == nil && di.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("intent: %s is a symlink (refusing to follow)", rel)

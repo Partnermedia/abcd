@@ -98,6 +98,16 @@ called out in a **Breaking** section.
 
 ### Changed
 
+- `abcd spec close <spc-N>` now reconciles the linked intent (itd-80): it moves
+  the intent `planned/ → shipped/` and then closes the spec, so one command
+  completes the lifecycle transition. It is fail-closed (a missing/empty intent
+  link, a non-existent or ambiguously-linked intent, bidirectional drift, or an
+  intent in an unexpected bucket refuses with no partial move) and idempotent (a
+  re-run on an already-shipped intent / already-closed spec is a clean no-op).
+  The intent's `## Audit Notes` are left untouched. A new `spec_lifecycle`
+  record-lint rule mirrors `intent_lifecycle` on the spec side: every spec under
+  `specs/{open,closed}/` must carry a well-formed `id`/`slug`/`intent` link whose
+  named intent EXISTS and points back at this spec (bidirectional agreement).
 - The issue ledger moved from `.abcd/development/activity/issues` to
   `.abcd/work/issues` (the committed shared-working tier).
 

@@ -243,7 +243,10 @@ func readRepoFile(abs, rel string) ([]byte, error) {
 	return data, nil
 }
 
-// ensureDir creates dir if absent, refusing to follow a symlinked directory.
+// ensureDir creates dir if absent, refusing a symlinked leaf directory.
+// NOTE: a symlinked ANCESTOR (e.g. a symlinked specs/) is not caught here — a
+// low-severity follow-up under the trusted-worktree model (planting one needs
+// write access equal to editing the record directly).
 func ensureDir(dir, rel string) error {
 	if di, err := os.Lstat(dir); err == nil && di.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("spec: %s is a symlink (refusing to follow)", rel)

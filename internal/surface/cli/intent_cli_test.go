@@ -160,22 +160,56 @@ func TestSpecBareText(t *testing.T) {
 func TestSpecCloseHappy(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
+	// spec close now reconciles the linked intent, so the intent must exist and
+	// be planned+linked back to this spec.
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n")
 
 	out := runCLI(t, "spec", "close", "spc-1", "--json")
 	var got struct {
-		Status string `json:"status"`
-		Path   string `json:"path"`
+		Spec struct {
+			Status string `json:"status"`
+			Path   string `json:"path"`
+		} `json:"spec"`
+		Intent struct {
+			Bucket string `json:"bucket"`
+		} `json:"intent"`
+		IntentMoved bool   `json:"intent_moved"`
+		From        string `json:"from"`
+		To          string `json:"to"`
 	}
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("spec close --json not JSON: %v\n%s", err, out)
 	}
-	if got.Status != "closed" {
-		t.Fatalf("spec close status = %q, want closed", got.Status)
+	if got.Spec.Status != "closed" {
+		t.Fatalf("spec close status = %q, want closed", got.Spec.Status)
+	}
+	if !got.IntentMoved || got.From != "planned" || got.To != "shipped" || got.Intent.Bucket != "shipped" {
+		t.Fatalf("reconcile envelope = %+v", got)
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".abcd/development/specs/closed", "spc-1-alpha.md")); err != nil {
 		t.Fatalf("closed spec file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".abcd/development/intents/shipped", "itd-10-alpha.md")); err != nil {
+		t.Fatalf("shipped intent file missing: %v", err)
+	}
+}
+
+// TestSpecCloseReconcileText checks the human-readable close render names the
+// intent that moved and its from->to.
+func TestSpecCloseReconcileText(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n")
+
+	out := string(runCLI(t, "spec", "close", "spc-1"))
+	if !strings.Contains(out, "itd-10") || !strings.Contains(out, "planned") || !strings.Contains(out, "shipped") {
+		t.Fatalf("close text missing reconcile detail:\n%s", out)
 	}
 }
 
