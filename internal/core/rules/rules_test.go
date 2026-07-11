@@ -83,6 +83,50 @@ func TestMatchNoHitInjectsNothing(t *testing.T) {
 	}
 }
 
+func TestRecallStemmingMatchesInflections(t *testing.T) {
+	rs := Defaults()
+	// Plural/tense variants recall their keyword: "issues"->issue, "pushes"->push.
+	if !has(rs.Match("triage the open issues"), "ISSUES") {
+		t.Fatal("plural 'issues' did not stem-match ISSUES")
+	}
+	if !has(rs.Match("nothing pushes to main"), "COMMITTING") {
+		t.Fatal("'pushes' did not stem-match COMMITTING")
+	}
+}
+
+func TestRecallStemmingNoOverMatch(t *testing.T) {
+	// The named failure mode from the SOTA verdict: "test"-stemming must not
+	// activate on "attestation". A short keyword is left unstemmed.
+	rs := RuleSet{SchemaVersion: 1, Domains: map[string]Domain{
+		"QA": {State: StateActive, Recall: []string{"test"}, Rules: []string{"r"}},
+	}}
+	if has(rs.Match("the attestation manifesto and progress"), "QA") {
+		t.Fatal("stemming over-matched: 'attestation' activated a 'test' recall")
+	}
+	// But genuine inflections still match.
+	if !has(rs.Match("running the tests now"), "QA") {
+		t.Fatal("'tests' did not stem-match 'test'")
+	}
+	if !has(rs.Match("testing the flow"), "QA") {
+		t.Fatal("'testing' did not stem-match 'test'")
+	}
+}
+
+func TestLoadRefusesSymlinkedAbcdDir(t *testing.T) {
+	dir := t.TempDir()
+	real := t.TempDir()
+	if err := os.WriteFile(filepath.Join(real, "rules.json"),
+		[]byte(`{"schema_version":1,"domains":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(dir, ".abcd")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(dir); err == nil {
+		t.Fatal("Load followed a symlinked .abcd directory")
+	}
+}
+
 func TestMatchWordBoundaryNoSubstringFalsePositive(t *testing.T) {
 	rs := Defaults()
 	// "scommitted" must not trigger COMMITTING's "commit" keyword.

@@ -7,7 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
+
+// StateTTL bounds how long a per-session ledger lives before the reset hook
+// sweeps it (sessions are one-shot; a week is generous headroom).
+const StateTTL = 7 * 24 * time.Hour
 
 // maxPromptBytes bounds how much prompt text is scanned for recall, so a huge
 // pasted prompt cannot blow up matching (trust boundary).
@@ -189,4 +194,27 @@ func ResetState(session string) error {
 		return nil
 	}
 	return err
+}
+
+// PruneState removes session-state files older than maxAge, bounding the growth
+// of the temp state dir across many sessions. Best-effort housekeeping: a
+// missing dir or a per-entry error is ignored.
+func PruneState(maxAge time.Duration) {
+	entries, err := os.ReadDir(stateDir())
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxAge)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(stateDir(), e.Name()))
+		}
+	}
 }

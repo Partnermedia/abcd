@@ -311,6 +311,8 @@ func newHookCommand() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: reset failed (%v)\n", err)
 				return nil
 			}
+			// SessionStart is a natural sweep point for stale ledgers.
+			rules.PruneState(rules.StateTTL)
 			// %q quotes the untrusted hook_event_name so an embedded newline or
 			// ANSI escape cannot spoof the operator's diagnostic stream.
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: reset session (%q)\n", in.Event)

@@ -104,6 +104,11 @@ func Defaults() RuleSet { return cloneRuleSet(defaultRuleSet) }
 // file exists. An absent file yields the defaults unchanged; a present file
 // that cannot be parsed or fails validation is a fail-closed error.
 func Load(repoRoot string) (RuleSet, error) {
+	// Refuse a symlinked .abcd directory component before touching the leaf, so a
+	// swapped .abcd cannot redirect the read (trust boundary).
+	if di, err := os.Lstat(filepath.Join(repoRoot, ".abcd")); err == nil && di.Mode()&os.ModeSymlink != 0 {
+		return RuleSet{}, fmt.Errorf("rules: .abcd is a symlink (refusing to follow)")
+	}
 	path := filepath.Join(repoRoot, ".abcd", "rules.json")
 	fi, err := os.Lstat(path)
 	if os.IsNotExist(err) {
@@ -200,7 +205,7 @@ func (rs RuleSet) Match(prompt string) []ResolvedDomain {
 		return nil
 	}
 	stars := parseStarCommands(prompt)
-	norm := normalize(prompt)
+	idx := indexPrompt(prompt)
 
 	names := make([]string, 0, len(rs.Domains))
 	for name := range rs.Domains {
@@ -218,7 +223,7 @@ func (rs RuleSet) Match(prompt string) []ResolvedDomain {
 		if d.State == StateDormant {
 			continue
 		}
-		if recallHit(norm, d) {
+		if idx.hit(d) {
 			out = append(out, ResolvedDomain{Name: name, Domain: d})
 		}
 	}
@@ -278,37 +283,90 @@ func isSpace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\f' || b == '\v'
 }
 
-// normalize lowercases prompt, collapses non-alphanumeric runs to single spaces,
-// and pads with a leading and trailing space so a term wrapped in spaces matches
-// on word boundaries.
-func normalize(s string) string {
-	lowered := strings.ToLower(s)
-	collapsed := nonAlnumRe.ReplaceAllString(lowered, " ")
-	return " " + strings.TrimSpace(collapsed) + " "
+// promptIndex is a prompt prepared for recall matching once per Match call: a
+// space-padded normalized form for word-boundary and multi-word matching, plus a
+// set of stemmed single tokens so inflected forms (commits->commit, pushes->push)
+// recall-match their keyword.
+type promptIndex struct {
+	padded string          // " tok tok " for boundary/phrase matching
+	stems  map[string]bool // stemmed single tokens
 }
 
-// recallHit reports whether any recall keyword or alias appears in the
-// space-normalized prompt on a word boundary. Multi-word terms are supported.
-func recallHit(norm string, d Domain) bool {
+// indexPrompt lowercases, collapses non-alphanumeric runs to single spaces, and
+// builds the stemmed token set.
+func indexPrompt(s string) promptIndex {
+	collapsed := strings.TrimSpace(nonAlnumRe.ReplaceAllString(strings.ToLower(s), " "))
+	idx := promptIndex{padded: " " + collapsed + " ", stems: map[string]bool{}}
+	for _, tok := range strings.Fields(collapsed) {
+		idx.stems[stem(tok)] = true
+	}
+	return idx
+}
+
+// hit reports whether any of a domain's recall keywords or aliases match.
+func (idx promptIndex) hit(d Domain) bool {
 	for _, term := range d.Recall {
-		if termHit(norm, term) {
+		if idx.termHit(term) {
 			return true
 		}
 	}
 	for _, term := range d.Aliases {
-		if termHit(norm, term) {
+		if idx.termHit(term) {
 			return true
 		}
 	}
 	return false
 }
 
-func termHit(norm, term string) bool {
+// termHit matches a single term. A multi-word term is a word-boundary substring
+// of the padded prompt; a single token matches on an exact word boundary OR when
+// its stem is present, so plural/tense variants recall their keyword.
+func (idx promptIndex) termHit(term string) bool {
 	t := strings.TrimSpace(nonAlnumRe.ReplaceAllString(strings.ToLower(term), " "))
 	if t == "" {
 		return false
 	}
-	return strings.Contains(norm, " "+t+" ")
+	if strings.Contains(t, " ") {
+		return strings.Contains(idx.padded, " "+t+" ")
+	}
+	if strings.Contains(idx.padded, " "+t+" ") {
+		return true
+	}
+	return idx.stems[stem(t)]
+}
+
+// stem strips a common English suffix to a root. Short tokens are left untouched
+// so acronyms and 2–4 letter keywords (sota, pr, docs) are never over-stemmed —
+// the guard that keeps stemming from matching e.g. "test" against "attestation".
+func stem(w string) string {
+	switch {
+	case len(w) > 5 && strings.HasSuffix(w, "ing"):
+		return w[:len(w)-3]
+	case len(w) > 4 && strings.HasSuffix(w, "ed"):
+		return w[:len(w)-2]
+	case len(w) > 4 && strings.HasSuffix(w, "es"):
+		// "es" plural attaches to sibilant roots (boxes->box, pushes->push);
+		// elsewhere it is root+"s" (issues->issue), so only strip "es" after a
+		// sibilant, otherwise drop just the trailing "s".
+		root := w[:len(w)-2]
+		if hasSibilantSuffix(root) {
+			return root
+		}
+		return w[:len(w)-1]
+	case len(w) > 3 && strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss"):
+		return w[:len(w)-1]
+	}
+	return w
+}
+
+// hasSibilantSuffix reports whether a root takes an "-es" plural (s/x/z/ch/sh).
+func hasSibilantSuffix(root string) bool {
+	for _, suf := range []string{"s", "x", "z", "ch", "sh"} {
+		if strings.HasSuffix(root, suf) {
+			return true
+		}
+	}
+	return false
 }
 
 // Render is the single renderer both front doors use. It emits a header plus one

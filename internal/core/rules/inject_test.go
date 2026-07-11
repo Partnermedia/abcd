@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInjectFirstTurnRenders(t *testing.T) {
@@ -68,6 +69,30 @@ func TestLoadBackstop(t *testing.T) {
 	writeConfig(t, bad, `{"rules":{"force_refresh_every_n":0}}`)
 	if got := LoadBackstop(bad); got != DefaultRefreshBackstop {
 		t.Fatalf("non-positive value not defaulted: %d", got)
+	}
+}
+
+func TestPruneStateRemovesStaleOnly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ABCD_RULES_STATE_DIR", dir)
+	if err := SaveState("fresh", SessionState{Count: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveState("old", SessionState{Count: 1}); err != nil {
+		t.Fatal(err)
+	}
+	// Age the "old" session's file well past the TTL.
+	oldFile := sessionFile("old")
+	past := time.Now().Add(-StateTTL - time.Hour)
+	if err := os.Chtimes(oldFile, past, past); err != nil {
+		t.Fatal(err)
+	}
+	PruneState(StateTTL)
+	if _, err := os.Stat(oldFile); !os.IsNotExist(err) {
+		t.Fatal("stale state file survived prune")
+	}
+	if LoadState("fresh").Count != 1 {
+		t.Fatal("fresh state file was pruned")
 	}
 }
 

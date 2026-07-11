@@ -75,10 +75,18 @@ Plus a review-fix commit wiring `force_refresh_every_n` to config.
   substrings; backstop meaning) was as much of the work as the new code — a
   reminder to grep for what the tree already believes before building.
 
-## Open follow-ups (not blocking)
+## Recall stemming (conservative, against the default advice)
 
-- Suffix stemming for recall is deferred behind an eval (false-positive risk).
-- Stale session-state files under the temp dir accumulate; a periodic prune could
-  be added if it ever matters.
-- `Load` guards the `rules.json` leaf but not a symlinked `.abcd` directory
-  component (same trust level as writing the file; noted by the security review).
+Recall matches inflected forms (`commits`→`commit`, `pushes`→`push`,
+`issues`→`issue`) via a small suffix stemmer. The SOTA verdict advised deferring
+stemming behind an eval because of over-matching (`test`→`attestation`); the
+maintainer directed shipping it. It is deliberately conservative — short tokens
+are left unstemmed, `-es` only strips after a sibilant root, and the named
+`test`/`attestation` failure mode is a regression test — so the false-positive
+surface the verdict warned about is closed rather than accepted.
+
+## Housekeeping
+
+Stale per-session ledgers are swept on `SessionStart` (`PruneState`, TTL one
+week), so the temp state dir does not grow unbounded. `Load` refuses a symlinked
+`.abcd` directory component as well as a symlinked `rules.json` leaf.
