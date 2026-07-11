@@ -339,6 +339,19 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 		}
 		res.Spec = closed
 	}
+
+	// 3. Emit the fidelity-review OWED stub + ephemeral request over the shipped
+	// intent. The review is REPORT-ONLY: a failure here is captured, not raised —
+	// the intent has already shipped and must not be un-shipped by a review-emit
+	// error. The surface prints ReviewEmitError loudly.
+	if res.Intent.Bucket == BucketShipped {
+		emit, err := emitReviewForIntent(repoRoot, res.Intent)
+		if err != nil {
+			res.ReviewEmitError = err.Error()
+		} else {
+			res.ReceiptID = emit.ReceiptID
+		}
+	}
 	return res, nil
 }
 

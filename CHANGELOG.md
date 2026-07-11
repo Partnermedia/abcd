@@ -12,6 +12,23 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Intent-fidelity review** (itd-80): the ship move now emits a report-only
+  fidelity-review receipt, and `abcd intent review ingest --verdict-json <path>`
+  applies the host-produced verdict back onto the record. When `abcd spec close`
+  ships a linked intent (`planned/ → shipped/`), it parks a deterministic OWED
+  receipt marker in the intent's `## Audit Notes` and writes an ephemeral review
+  request under `.abcd/.work.local/reviews/` (gitignored); the emit is
+  non-fatal, so a failure never un-ships the intent. `abcd intent review ingest`
+  validates an untrusted intent-fidelity verdict JSON fail-closed (schema,
+  in-enum verdicts, cited evidence, and each `criterion_id` bound to an actual
+  Acceptance-Criteria bullet), then either replaces the OWED stub with the
+  rendered per-criterion verdicts and honoured/diverged/missing audit
+  (`INGESTED`, idempotent — a re-ingest is a no-op) or quarantines a bad payload
+  (`DEAD_LETTER`: all criteria `INCONCLUSIVE`, raw payload retained) — never a
+  partial application. Bare `abcd intent review <itd-N>` re-emits a shipped
+  intent's request. The single source of truth is the intent file's Audit Notes;
+  there is no side receipt store.
+
 - The **intent lifecycle** verbs `abcd intent` and `abcd spec` (itd-80), the
   front doors onto the native intent store (`internal/core/intent`). Bare
   `abcd intent` renders a read-only lifecycle summary (intent counts by bucket,

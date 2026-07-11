@@ -455,7 +455,70 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 		},
 	})
 
+	intentCmd.AddCommand(newIntentReviewCommand(asJSON))
 	return intentCmd
+}
+
+// newIntentReviewCommand builds `abcd intent review`: `ingest --verdict-json`
+// applies a host-produced intent-fidelity verdict to the shipped intent's Audit
+// Notes (fail-closed: ingested | dead_letter | noop); bare `review <itd-N>`
+// re-emits the OWED stub + ephemeral request for a shipped intent.
+func newIntentReviewCommand(asJSON *bool) *cobra.Command {
+	reviewCmd := &cobra.Command{
+		Use:   "review [<itd-N>]",
+		Short: "Fidelity review: re-emit a shipped intent's request, or ingest a verdict",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := intent.ReEmitReview(cwd, args[0])
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd intent review: " + err.Error()}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd intent review — %s %s (receipt %s)\n  request: %s\n",
+					res.IntentID, res.Status, res.ReceiptID, res.RequestPath)
+			})
+		},
+	}
+
+	var verdictJSON string
+	ingestCmd := &cobra.Command{
+		Use:   "ingest --verdict-json <path>",
+		Short: "Ingest an intent-fidelity verdict JSON into the shipped intent's Audit Notes",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			if verdictJSON == "" {
+				return &exitError{Code: 2, Msg: "abcd intent review ingest: --verdict-json <path> is required"}
+			}
+			res, err := intent.IngestVerdict(cwd, verdictJSON)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd intent review ingest: " + err.Error()}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "abcd intent review ingest — %s (receipt %s, intent %s)\n", res.Status, res.ReceiptID, res.IntentID)
+				switch res.Status {
+				case "ingested":
+					fmt.Fprintf(w, "  criteria %d: MET %d · MET_WITH_CONCERNS %d · NOT_MET %d · INCONCLUSIVE %d\n",
+						res.Criteria, res.Met, res.MetWithConcern, res.NotMet, res.Inconclusive)
+				case "dead_letter":
+					fmt.Fprintf(w, "  DEAD_LETTER: %s\n  raw payload: %s\n", res.Reason, res.DeadLetterPath)
+				}
+			})
+		},
+	}
+	ingestCmd.Flags().StringVar(&verdictJSON, "verdict-json", "", "path to the intent-fidelity verdict JSON")
+	reviewCmd.AddCommand(ingestCmd)
+	return reviewCmd
 }
 
 // specStatusView is the machine-readable envelope for bare `abcd spec`: the
@@ -516,12 +579,20 @@ func newSpecCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd spec close: " + err.Error()}
 			}
+			// The fidelity-review emit is report-only: a failure does NOT fail the
+			// close (the intent already shipped), but it is surfaced loudly on stderr.
+			if res.ReviewEmitError != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: abcd spec close — fidelity-review emit failed for %s (intent shipped anyway): %s\n", res.Intent.ID, res.ReviewEmitError)
+			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", res.Spec.ID, res.Spec.Path)
 				if res.IntentMoved {
 					fmt.Fprintf(w, "  reconciled intent %s: %s -> %s\n", res.Intent.ID, res.From, res.To)
 				} else {
 					fmt.Fprintf(w, "  intent %s already %s (no move)\n", res.Intent.ID, res.To)
+				}
+				if res.ReceiptID != "" {
+					fmt.Fprintf(w, "  fidelity review OWED: receipt %s\n", res.ReceiptID)
 				}
 			})
 		},

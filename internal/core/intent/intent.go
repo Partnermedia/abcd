@@ -214,6 +214,12 @@ type ReconcileResult struct {
 	IntentMoved bool      `json:"intent_moved"`
 	From        string    `json:"from"`
 	To          string    `json:"to"`
+	// ReceiptID is the deterministic fidelity-review receipt parked in the
+	// shipped intent's Audit Notes (empty if the emit failed).
+	ReceiptID string `json:"receipt_id,omitempty"`
+	// ReviewEmitError is a NON-FATAL report of a failed review emit. The review is
+	// report-only, so the intent still ships; the surface prints this loudly.
+	ReviewEmitError string `json:"review_emit_error,omitempty"`
 }
 
 // LinkedPair is one intent↔spec link in the lifecycle summary.

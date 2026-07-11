@@ -380,13 +380,19 @@ func TestReconcileHappyPath(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, specsClosed, "spc-1-alpha.md")); err != nil {
 		t.Fatalf("closed spec should exist: %v", err)
 	}
-	// Audit Notes are left empty/untouched (Phase 4 fills them).
+	// The ship move parks an OWED fidelity-review stub in the Audit Notes.
 	body, err := os.ReadFile(filepath.Join(root, shippedDir, "itd-10-alpha.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(body), "## Audit Notes") {
 		t.Fatalf("Audit Notes heading should survive verbatim:\n%s", body)
+	}
+	if !strings.Contains(string(body), "abcd-review: OWED") {
+		t.Fatalf("ship move should park an OWED stub in Audit Notes:\n%s", body)
+	}
+	if res.ReceiptID == "" {
+		t.Fatal("ship move should emit a receipt id")
 	}
 }
 
