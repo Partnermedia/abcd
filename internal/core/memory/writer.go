@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // writer.go — the atomic single-writer for .abcd/memory/ (ADR-13 §1–3). EVERY
@@ -32,8 +33,6 @@ type WriteReport struct {
 	Reconciled      []string `json:"reconciled"`
 	WrotePages      []string `json:"wrote_pages"`
 }
-
-var tmpCounter uint64
 
 type renderedWrite struct {
 	write PageWrite
@@ -171,7 +170,7 @@ func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryM
 
 	var wrote []string
 	for _, r := range rendered {
-		if err := durableWrite(filepath.Join(mem, r.write.Filename), r.text); err != nil {
+		if err := writeStringAtomic(filepath.Join(mem, r.write.Filename), r.text); err != nil {
 			return WriteReport{}, err
 		}
 		wrote = append(wrote, r.write.Filename)
@@ -189,7 +188,7 @@ func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryM
 		if err != nil {
 			return WriteReport{}, err
 		}
-		if err := durableWrite(SourcesIndexPath(repoRoot), SerializeRegistry(registry)); err != nil {
+		if err := writeStringAtomic(SourcesIndexPath(repoRoot), SerializeRegistry(registry)); err != nil {
 			return WriteReport{}, err
 		}
 	}
@@ -290,35 +289,13 @@ func logEvent(w PageWrite, stamp string) string {
 // Six-step durable write + tri-state read
 // ---------------------------------------------------------------------------
 
-func durableWrite(path, content string) error {
-	tmp := path + "." + itoa(os.Getpid()) + "." + itoa(int(atomic.AddUint64(&tmpCounter, 1)-1)) + ".memtmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return err
-	}
-	writeErr := func() error {
-		if _, err := f.WriteString(content); err != nil {
-			return err
-		}
-		if err := f.Sync(); err != nil {
-			return err
-		}
-		return f.Close()
-	}()
-	if writeErr != nil {
-		f.Close()
-		os.Remove(tmp)
-		return writeErr
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if dir, err := os.Open(filepath.Dir(path)); err == nil {
-		dir.Sync()
-		dir.Close()
-	}
-	return nil
+// writeStringAtomic durably writes string content through the canonical
+// fsutil primitive at the store's fixed 0644 mode — a thin string adapter, not
+// a second implementation (iss-32: one-canonical-primitive). fsutil handles the
+// temp-file, fsync, rename, and parent-dir fsync, matching the durability this
+// store previously carried in its own copy.
+func writeStringAtomic(path, content string) error {
+	return fsutil.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // triStateRead: (content, present, error). Absent -> ("", false, nil); a
@@ -375,7 +352,7 @@ func ensureSkeleton(mem string) ([]string, error) {
 			return nil, err
 		}
 		if !present {
-			if err := durableWrite(path, s.render()); err != nil {
+			if err := writeStringAtomic(path, s.render()); err != nil {
 				return nil, err
 			}
 			created = append(created, s.name)
@@ -412,12 +389,12 @@ func backfillLegacy(mem string) ([]string, error) {
 				continue
 			}
 			newRegion := region + "source:\n  class: " + backfillSourceClass + "\n"
-			if err := durableWrite(path, joinFileFrontmatter(newRegion, body)); err != nil {
+			if err := writeStringAtomic(path, joinFileFrontmatter(newRegion, body)); err != nil {
 				return nil, err
 			}
 		} else {
 			newRegion := "source:\n  class: " + backfillSourceClass + "\n"
-			if err := durableWrite(path, joinFileFrontmatter(newRegion, "\n"+text)); err != nil {
+			if err := writeStringAtomic(path, joinFileFrontmatter(newRegion, "\n"+text)); err != nil {
 				return nil, err
 			}
 		}
@@ -528,7 +505,7 @@ func reconcile(mem string) ([]string, error) {
 			return nil, err
 		}
 		if !present || sha256Hex(current) != sha256Hex(d.content) {
-			if err := durableWrite(path, d.content); err != nil {
+			if err := writeStringAtomic(path, d.content); err != nil {
 				return nil, err
 			}
 			rewritten = append(rewritten, d.name)
@@ -547,7 +524,7 @@ func appendLog(mem string, events []string) error {
 	if present {
 		base = current
 	}
-	return durableWrite(path, base+strings.Join(events, ""))
+	return writeStringAtomic(path, base+strings.Join(events, ""))
 }
 
 // ---------------------------------------------------------------------------

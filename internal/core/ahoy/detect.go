@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"sort"
 
 	"github.com/REPPL/abcd-cli/internal/core/identity"
@@ -83,7 +85,7 @@ func classify(cwd string, id RepoIdentity, idx *historyIndex) (FolderKind, map[s
 	registered := indexHasRoot(idx, id.RootSHA)
 	signals["index_registered"] = registered
 
-	abcdDir := isRealDir(filepath.Join(cwd, ".abcd"))
+	abcdDir := fsutil.IsRealDir(filepath.Join(cwd, ".abcd"))
 	signals["abcd_dir"] = abcdDir
 
 	markerFired := false
@@ -259,7 +261,7 @@ func detectHistoryStore(rootSHA string) []Gap {
 		return gaps
 	}
 	repoDir := filepath.Join(root, rootSHA)
-	if !isRealDir(filepath.Join(repoDir, "transcripts")) {
+	if !fsutil.IsRealDir(filepath.Join(repoDir, "transcripts")) {
 		gaps = append(gaps, Gap{
 			ID: "history.transcripts_missing", Category: SafeAutocreate, Scope: "repo",
 			Title:   "history transcripts/ dir missing",

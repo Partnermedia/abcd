@@ -138,6 +138,15 @@ called out in a **Breaking** section.
   named intent EXISTS and points back at this spec (bidirectional agreement).
 - The issue ledger moved from `.abcd/development/activity/issues` to
   `.abcd/work/issues` (the committed shared-working tier).
+- The atomic-write and real-directory primitives are consolidated onto
+  `internal/fsutil` (iss-32): the ahoy, capture, and memory store writers no
+  longer keep their own divergent temp-file+rename copies. Two observable
+  effects of routing through the canonical primitive: the ahoy and capture
+  writers now fsync the parent directory after the rename (a crash-durability
+  strengthening they previously lacked), and memory pages are written at a
+  fixed `0644` (an explicit chmod, where the old writer left the mode subject to
+  the process umask). A `TestNoNonCanonicalAtomicWritePrimitives` guard keeps a
+  fifth copy from reappearing.
 
 ### Removed
 
@@ -146,6 +155,14 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Launch dogfood gate — identity false positive and resolver race** (iss-31).
+  The secret/PII scanner no longer hard-fails on a system path such as
+  `/dev/null` when the machine username collides with a system directory name
+  (e.g. a user called `dev`): a local-username match is suppressed only when it
+  is the top segment of an absolute system path, so genuine username leaks
+  (nested under a home root, or bare) are still caught. The launch bundle's
+  compiled-glob cache is now guarded by a mutex, removing a data race when the
+  transport-agnostic core resolves bundles concurrently.
 - **Memory-ingest boundary — partial-failure reporting and CRLF parity**
   (iss-30, continued). When `abcd memory ingest --keep-original` fails to store
   the original *after* the pages and registry are durably written, it no longer

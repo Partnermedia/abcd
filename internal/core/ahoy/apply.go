@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"sort"
 	"strings"
 	"time"
@@ -281,7 +283,7 @@ func (a *applyCtx) stepHistory() {
 	}
 	repoDir := filepath.Join(root, sha)
 	transcripts := filepath.Join(repoDir, "transcripts")
-	if a.approved[SafeAutocreate] && !isRealDir(transcripts) {
+	if a.approved[SafeAutocreate] && !fsutil.IsRealDir(transcripts) {
 		if err := os.MkdirAll(transcripts, 0o755); err == nil {
 			a.note(transcripts)
 		}

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"strings"
 )
 
@@ -170,7 +172,7 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 	if absent {
 		eol := "\n"
 		body := strings.Join(canonicalGitignoreBlock(visibility), eol) + eol
-		if err := writeFileAtomic(path, []byte(body)); err != nil {
+		if err := fsutil.WriteFileAtomicPreserveMode(path, []byte(body)); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -195,7 +197,7 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 	if bytes.Equal(newBytes, raw) {
 		return false, nil // byte-identical — preserve mtime
 	}
-	if err := writeFileAtomic(path, newBytes); err != nil {
+	if err := fsutil.WriteFileAtomicPreserveMode(path, newBytes); err != nil {
 		return false, err
 	}
 	return true, nil

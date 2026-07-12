@@ -561,7 +561,7 @@ func writeCoverageIndex(path string, result coverageResult, budget quotationBudg
 	if err := os.MkdirAll(dirOf(path), 0o755); err != nil {
 		return nil, err
 	}
-	if err := durableWrite(path, marshalIndentNoEscape(payload)); err != nil {
+	if err := writeStringAtomic(path, marshalIndentNoEscape(payload)); err != nil {
 		return nil, err
 	}
 	return payload, nil

@@ -1,13 +1,13 @@
 // Package fsutil holds the durable-write and path-safety primitives shared by
-// the ~/.abcd store writers. It is transport-agnostic: no stdout, no os.Exit,
-// no CLI knowledge.
+// the ~/.abcd and repo .abcd store writers. It is transport-agnostic: no
+// stdout, no os.Exit, no CLI knowledge.
 //
-// It exists so the six-step atomic write and the "is this a real directory,
-// not a symlink" check live in ONE place. ahoy's marker.go/store.go carry
-// their own unexported copies (writeFileAtomic, isRealDir) predating this
-// package; those are the flagged consolidation target — a follow-up
-// behaviour-preserving refactor should route them through here rather than
-// keep a divergent copy.
+// It is the single home for the atomic temp-file+fsync+rename write and the
+// "is this a real directory, not a symlink" check: the ahoy, capture, and
+// memory store writers all route through WriteFileAtomic /
+// WriteFileAtomicPreserveMode / IsRealDir rather than keep divergent copies
+// (the one-canonical-primitive invariant, guarded by
+// TestNoNonCanonicalAtomicWritePrimitives).
 package fsutil
 
 import (
@@ -58,6 +58,18 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	}
 	syncParent(dir)
 	return nil
+}
+
+// WriteFileAtomicPreserveMode is WriteFileAtomic that keeps the target's
+// existing permission bits when it already exists, defaulting to 0644 for a new
+// file. It is the canonical form for the store writers that rewrite a file in
+// place and must not silently reset its mode.
+func WriteFileAtomicPreserveMode(path string, data []byte) error {
+	perm := os.FileMode(0o644)
+	if fi, err := os.Stat(path); err == nil {
+		perm = fi.Mode().Perm()
+	}
+	return WriteFileAtomic(path, data, perm)
 }
 
 // syncParent fsyncs the directory so a crash right after the rename cannot lose
