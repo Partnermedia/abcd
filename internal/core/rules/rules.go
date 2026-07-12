@@ -20,13 +20,16 @@ package rules
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // RepoRelPath is the per-repo override file, relative to the repo worktree.
@@ -100,6 +103,46 @@ func mustParseDefaults() RuleSet {
 // the caller to mutate.
 func Defaults() RuleSet { return cloneRuleSet(defaultRuleSet) }
 
+var (
+	errNotRegular = errors.New("not a regular file")
+	errTooBig     = errors.New("exceeds size cap")
+)
+
+// readGuarded opens path once, read-only, with O_NOFOLLOW (refuse a symlinked
+// leaf) and O_NONBLOCK (a FIFO/device leaf returns immediately instead of
+// blocking the open forever), then validates on the SAME file descriptor that it
+// is a regular file within limit bytes before reading through a LimitReader — so
+// no symlink swap between stat and read, no non-regular leaf, and no size overrun
+// can reach the caller. The raw open error is returned so callers can test
+// os.IsNotExist / syscall.ELOOP; a non-regular or oversize file returns the
+// errNotRegular / errTooBig sentinel.
+func readGuarded(path string, limit int64) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, errNotRegular
+	}
+	if fi.Size() > limit {
+		return nil, errTooBig
+	}
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		// The file grew past the cap between fstat and read (a size TOCTOU).
+		return nil, errTooBig
+	}
+	return data, nil
+}
+
 // Load returns the defaults merged with <repoRoot>/.abcd/rules.json when that
 // file exists. An absent file yields the defaults unchanged; a present file
 // that cannot be parsed or fails validation is a fail-closed error.
@@ -110,28 +153,20 @@ func Load(repoRoot string) (RuleSet, error) {
 		return RuleSet{}, fmt.Errorf("rules: .abcd is a symlink (refusing to follow)")
 	}
 	path := filepath.Join(repoRoot, ".abcd", "rules.json")
-	fi, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return Defaults(), nil
-	}
+	data, err := readGuarded(path, maxRulesFileBytes)
 	if err != nil {
-		return RuleSet{}, fmt.Errorf("rules: stat %s: %w", RepoRelPath, err)
-	}
-	// Trust-boundary guards (mirror the ahoy hook-manifest verifier): refuse a
-	// symlinked leaf and cap the file size so a hostile rules.json cannot force a
-	// symlink-follow or a memory blow-up.
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return RuleSet{}, fmt.Errorf("rules: %s is a symlink (refusing to follow)", RepoRelPath)
-	}
-	if !fi.Mode().IsRegular() {
-		return RuleSet{}, fmt.Errorf("rules: %s is not a regular file", RepoRelPath)
-	}
-	if fi.Size() > maxRulesFileBytes {
-		return RuleSet{}, fmt.Errorf("rules: %s exceeds the %d-byte cap", RepoRelPath, maxRulesFileBytes)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return RuleSet{}, fmt.Errorf("rules: reading %s: %w", RepoRelPath, err)
+		switch {
+		case os.IsNotExist(err):
+			return Defaults(), nil
+		case errors.Is(err, syscall.ELOOP):
+			return RuleSet{}, fmt.Errorf("rules: %s is a symlink (refusing to follow)", RepoRelPath)
+		case errors.Is(err, errNotRegular):
+			return RuleSet{}, fmt.Errorf("rules: %s is not a regular file", RepoRelPath)
+		case errors.Is(err, errTooBig):
+			return RuleSet{}, fmt.Errorf("rules: %s exceeds the %d-byte cap", RepoRelPath, maxRulesFileBytes)
+		default:
+			return RuleSet{}, fmt.Errorf("rules: reading %s: %w", RepoRelPath, err)
+		}
 	}
 	var over RuleSet
 	if err := json.Unmarshal(data, &over); err != nil {

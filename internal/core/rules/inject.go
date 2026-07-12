@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,12 +92,22 @@ func Inject(rs RuleSet, prompt string, prev SessionState, backstop int) InjectRe
 
 // stateDir is the machine-local directory holding per-session ledgers. It is
 // overridable via ABCD_RULES_STATE_DIR (used by tests and by operators who want
-// the state off the default temp dir).
+// the state elsewhere). The default is the per-user cache dir, NOT the
+// world-writable shared temp dir: a predictable path under a shared /tmp lets a
+// local co-tenant pre-create or poison the session-state file and suppress rule
+// injection fail-open. The uid-qualified temp fallback (only if the user cache
+// dir is unavailable — a degraded env with no HOME/XDG_CACHE_HOME) still lives
+// under the shared temp dir and is best-effort only: it avoids a cross-user
+// collision, not co-tenant pre-creation. State is fail-open advisory dedup, so a
+// poisoned fallback at worst re-injects; it never blocks or corrupts.
 func stateDir() string {
 	if d := os.Getenv("ABCD_RULES_STATE_DIR"); d != "" {
 		return d
 	}
-	return filepath.Join(os.TempDir(), "abcd-rules-state")
+	if cache, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(cache, "abcd-rules-state")
+	}
+	return filepath.Join(os.TempDir(), fmt.Sprintf("abcd-rules-state-%d", os.Getuid()))
 }
 
 // sessionFile maps a session id to a state file. The id is hashed, so an
@@ -110,12 +121,7 @@ func sessionFile(session string) string {
 // file yields the zero state (a fresh session), never an error — dedup is a
 // best-effort optimisation, not a correctness gate.
 func LoadState(session string) SessionState {
-	path := sessionFile(session)
-	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxStateFileBytes {
-		return SessionState{}
-	}
-	data, err := os.ReadFile(path)
+	data, err := readGuarded(sessionFile(session), maxStateFileBytes)
 	if err != nil {
 		return SessionState{}
 	}
@@ -167,11 +173,7 @@ func SaveState(session string, st SessionState) error {
 // non-positive value falls back to DefaultRefreshBackstop.
 func LoadBackstop(repoRoot string) int {
 	path := filepath.Join(repoRoot, ".abcd", "config.json")
-	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxRulesFileBytes {
-		return DefaultRefreshBackstop
-	}
-	data, err := os.ReadFile(path)
+	data, err := readGuarded(path, maxRulesFileBytes)
 	if err != nil {
 		return DefaultRefreshBackstop
 	}

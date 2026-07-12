@@ -4,8 +4,60 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
+
+// TestLoadRefusesSymlinkedRulesFile (iss-66 C19) proves a symlinked rules.json
+// LEAF is refused via O_NOFOLLOW. The directory-symlink test covers only the
+// ancestor guard; reverting O_NOFOLLOW makes Load follow the leaf link and read
+// an arbitrary target, so this test fails on that revert.
+func TestLoadRefusesSymlinkedRulesFile(t *testing.T) {
+	dir := t.TempDir()
+	abcd := filepath.Join(dir, ".abcd")
+	if err := os.MkdirAll(abcd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "real-rules.json")
+	if err := os.WriteFile(target, []byte(`{"schema_version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(abcd, "rules.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(dir); err == nil {
+		t.Fatal("a symlinked rules.json leaf must be refused, not followed")
+	}
+}
+
+// TestLoadRefusesFifoRulesFile (iss-66 F1) proves a FIFO leaf is rejected
+// promptly rather than hung on. O_NONBLOCK lets the open return so the
+// regular-file check fails closed; without it, open(FIFO, O_RDONLY) blocks
+// forever and wedges the (non-blocking-by-contract) prompt-router hook.
+func TestLoadRefusesFifoRulesFile(t *testing.T) {
+	dir := t.TempDir()
+	abcd := filepath.Join(dir, ".abcd")
+	if err := os.MkdirAll(abcd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(abcd, "rules.json"), 0o644); err != nil {
+		t.Skipf("mkfifo unsupported: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := Load(dir)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a FIFO rules.json must be refused, not read")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Load hung on a FIFO rules.json leaf (must never block the prompt-router hook)")
+	}
+}
 
 func names(ds []ResolvedDomain) []string {
 	out := make([]string, len(ds))

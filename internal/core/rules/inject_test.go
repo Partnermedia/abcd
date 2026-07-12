@@ -8,6 +8,25 @@ import (
 	"time"
 )
 
+// TestStateDirNotSharedTemp (iss-66 P14) proves the default session-state dir is
+// the per-user cache dir, not the world-writable shared temp dir where a local
+// co-tenant could pre-create the predictable session-state path and suppress
+// rule injection fail-open.
+func TestStateDirNotSharedTemp(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", "") // exercise the default
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Skip("user cache dir unavailable; only the degraded uid-qualified temp fallback applies")
+	}
+	dir := stateDir()
+	if !strings.HasPrefix(dir, cache) {
+		t.Fatalf("default state dir should live under the user cache dir %s, got %s", cache, dir)
+	}
+	if strings.HasPrefix(dir, os.TempDir()) {
+		t.Fatalf("default state dir must not live under the shared temp dir, got %s", dir)
+	}
+}
+
 func TestInjectFirstTurnRenders(t *testing.T) {
 	rs := Defaults()
 	res := Inject(rs, "commit and push", SessionState{}, 0)

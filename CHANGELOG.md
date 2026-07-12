@@ -158,6 +158,13 @@ called out in a **Breaking** section.
   status directories at once. A migrator-supplied `ForceID` is validated against
   the `iss-N` shape before any path is built, so a traversal id cannot touch the
   filesystem outside the ledger.
+- **Rules-loader trust hardening** (iss-66). The per-repo `.abcd/rules.json` is now
+  opened once with `O_NOFOLLOW` and validated on that file descriptor, closing a
+  Lstat-then-read window where the file could be swapped for a symlink. The
+  prompt-router's per-session dedup state moved off the world-writable shared temp
+  dir to the per-user cache dir (`ABCD_RULES_STATE_DIR` still overrides), so a local
+  co-tenant can no longer pre-create the predictable state path to suppress rule
+  injection.
 
 ## [v0.1.0] - 2026-07-07
 
