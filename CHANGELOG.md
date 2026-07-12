@@ -137,6 +137,13 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Fail-closed capture surface** (iss-29). A mistyped `capture` subcommand
+  (e.g. `abcd capture resovle iss-1 …`) is no longer swallowed as free text and
+  filed as a new issue; it is refused with a did-you-mean and writes nothing.
+  Errors requested with `--json` are now emitted as a `{"error": …}` envelope
+  rather than raw Go text, and `abcd docs lint` with a missing or unreadable
+  config reports a clean, repo-relative diagnostic instead of a raw file error
+  that leaked the absolute config path.
 - `abcd` status now reports `IsGitRepo` correctly in a linked git worktree or a
   submodule, where `.git` is a regular gitfile rather than a directory (iss-72).
 - `abcd intent plan` now refuses an `## Acceptance Criteria` section with no

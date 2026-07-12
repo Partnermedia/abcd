@@ -173,7 +173,27 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 			}
 			cfg, err := lint.LoadConfig(cfgPath)
 			if err != nil {
-				return err
+				// Surface config-load failures as clean, repo-relative
+				// diagnostics — never a raw os.Open/os.ReadFile error, whose
+				// *PathError embeds the absolute path (iss-29: no absolute path
+				// in machine output). Reference what the user typed when they
+				// passed --config, else the relative default.
+				ref := filepath.Join(".abcd", "docs-lint.json")
+				if configPath != "" {
+					ref = configPath
+				}
+				if os.IsNotExist(err) {
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"docs lint: config not found at %s — run in a prepared repo or pass --config", ref)}
+				}
+				// Strip the path-bearing wrapper: a *PathError's inner Err is the
+				// bare cause ("is a directory", "permission denied"), no path.
+				detail := err.Error()
+				var pe *os.PathError
+				if errors.As(err, &pe) {
+					detail = pe.Err.Error()
+				}
+				return &exitError{Code: 2, Msg: fmt.Sprintf("docs lint: cannot read config %s: %s", ref, detail)}
 			}
 			findings, err := lint.Lint(cfg, root)
 			if err != nil {
@@ -904,6 +924,17 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					}
 				})
 			}
+			// Guard: a mistyped subcommand (e.g. `capture resovle iss-1 …`)
+			// must not be swallowed as free text and filed. When args[0] is a
+			// near-miss to a real subverb and the shape looks like a subcommand
+			// call — a lone token, or a token followed by an issue id — refuse
+			// with a did-you-mean and write nothing (unrecognized-input-never-
+			// writes, iss-29). Genuine prose still files.
+			if sug, ok := suspectedTypoedSubcommand(cmd, args); ok {
+				return &exitError{Code: 2, Msg: fmt.Sprintf(
+					"unknown capture subcommand %q; did you mean %q? (nothing captured — reword the text if you meant to file it)",
+					args[0], sug)}
+			}
 			// Fast path: append a structured issue from the free-form text.
 			text := strings.Join(args, " ")
 			sl := slug
@@ -1063,6 +1094,57 @@ var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 // issIDRe validates a --blocked-by token at the CLI boundary (mirrors the core
 // ^iss-[0-9]+$ schema constraint).
 var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
+
+// suspectedTypoedSubcommand reports the nearest real subverb when args[0] is a
+// near-miss for one (edit distance 1–2) and the invocation shape resembles a
+// subcommand call rather than free-text prose: a lone token, or a token
+// followed by an issue id. It is deliberately high-precision so it never
+// refuses a legitimate free-text capture whose first word merely resembles a
+// verb — those carry no trailing iss-id and are multi-word.
+func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+	shapedLikeSubcommand := len(args) == 1 || issIDRe.MatchString(args[1])
+	if !shapedLikeSubcommand {
+		return "", false
+	}
+	best, bestDist := "", 3 // accept edit distances 1 and 2
+	for _, c := range parent.Commands() {
+		name := c.Name()
+		if c.Hidden || name == "help" || name == "completion" {
+			continue
+		}
+		if d := levenshtein(args[0], name); d > 0 && d < bestDist {
+			best, bestDist = name, d
+		}
+	}
+	return best, best != ""
+}
+
+// levenshtein is the classic edit distance (insert/delete/substitute each cost
+// 1). Inputs are subcommand-name sized, so the simple O(n·m) two-row form is
+// more than fast enough.
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		cur := make([]int, len(rb)+1)
+		cur[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(rb)]
+}
 
 // parseBlockedBy splits the comma-separated --blocked-by value into iss-ids,
 // dropping blanks and rejecting any token that is not ^iss-[0-9]+$. An empty
@@ -1465,15 +1547,29 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	// A command may request a specific exit code (usage errors, the memory-lint
 	// curator contract). An empty message means it already rendered its output
 	// and only the exit code should propagate.
+	code := 1
 	var coded interface{ ExitCode() int }
 	if errors.As(err, &coded) {
-		if msg := err.Error(); msg != "" {
+		code = coded.ExitCode()
+	}
+	if msg := err.Error(); msg != "" {
+		// Honour --json for the error surface too: a caller that asked for
+		// machine output must get a JSON envelope, never raw Go text (iss-29).
+		if asJSON, _ := root.PersistentFlags().GetBool("json"); asJSON {
+			enc := json.NewEncoder(stderr)
+			enc.SetIndent("", "  ")
+			_ = enc.Encode(errorEnvelope{Error: msg})
+		} else {
 			fmt.Fprintln(stderr, "abcd:", msg)
 		}
-		return coded.ExitCode()
 	}
-	fmt.Fprintln(stderr, "abcd:", err)
-	return 1
+	return code
+}
+
+// errorEnvelope is the --json error shape: a single {"error": "..."} object so
+// a machine caller can parse a failure the same way it parses a success.
+type errorEnvelope struct {
+	Error string `json:"error"`
 }
 
 // render writes v as indented JSON when asJSON is set, otherwise delegates to
