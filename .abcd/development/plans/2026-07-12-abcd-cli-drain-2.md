@@ -1,10 +1,11 @@
 # Run plan — abcd-cli ledger drain #2 (follow-up fixables)
 
 **Status:** the second C-phase `/abcd:run` drain against abcd-cli's ledger, scoped
-to the two self-contained fixables surfaced by drain #1
-([`2026-07-12-abcd-cli-ledger-drain-run.md`](2026-07-12-abcd-cli-ledger-drain-run.md)).
-This is a deliberately small, safe batch — the hand-authored precursor to
-`abcd drain`'s triage ([itd-82](../intents/drafts/itd-82-drain-ledger-triage.md)).
+to three self-contained fixables: the two follow-ups surfaced by drain #1
+([`2026-07-12-abcd-cli-ledger-drain-run.md`](2026-07-12-abcd-cli-ledger-drain-run.md))
+plus iss-73, unblocked by a 2026-07-12 maintainer adjudication. This is a
+deliberately small, safe batch — the hand-authored precursor to `abcd drain`'s triage
+([itd-82](../intents/drafts/itd-82-drain-ledger-triage.md)).
 
 Invoke (30m work / 30m pause, dynamic ScheduleWakeup 1800s):
 
@@ -33,24 +34,25 @@ pr_policy: one PR per issue; Closes #<gh-issue> only if the ledger issue maps to
   do not merge; do not enable auto-merge
 budget: 30m wall | 6 worker-agents/burst | write NEXT.md + run-journal.json continuously
 strike_limit: 3                        # failed + died entries combined, keyed on iss-N
-scope_fence: ONLY the two issues in the Ready backlog below. This is a curated batch,
+scope_fence: ONLY the three issues in the Ready backlog below. This is a curated batch,
   NOT an open-ledger sweep — do NOT auto-continue into other open issues (the older
-  cluster iss-33/34/37-49 is un-triaged; the new follow-ups iss-76/79 are the vetted
-  set). When both are done (or STOP), end the loop and report.
+  cluster iss-33/34/37-49 is un-triaged; the vetted set is iss-76/79 plus iss-73, whose
+  maintainer adjudication has landed). When all three are done (or STOP), end the loop
+  and report.
 stop_conditions:
   - An issue is a maintainer DESIGN-STOP / adjudication, not a self-contained fix — SKIP.
   - A fix would need a new dependency, a bespoke no-seam solution, a DB migration, or
     a CI-config change not already in scope.
   - A fix turns out to be a feature/contract change rather than the stated bug.
-  - Both Ready-backlog issues are resolved (or hit a STOP) — the curated batch is drained.
+  - All three Ready-backlog issues are resolved (or hit a STOP) — the curated batch is drained.
 irreversible:
   - none expected; if a fix touches persisted-state format or a schema_version, treat
     as irreversible (human checkpoint + rollback), even though not named here.
 ```
 
-## Ready backlog (the ONLY two issues in scope)
+## Ready backlog (the ONLY three issues in scope)
 
-Both self-contained, detector-first, trust-boundary (security reviewer applies):
+All three self-contained, detector-first, trust-boundary (security reviewer applies):
 
 - **iss-76** `json-error-abspath-leak` (minor, bug) — `cli.Run` routes every command
   error through the `--json` envelope, so any verb returning a bare `*fs.PathError`
@@ -66,6 +68,17 @@ Both self-contained, detector-first, trust-boundary (security reviewer applies):
   temp+rename sequences (or a targeted test), then route storeOriginal through
   `fsutil.WriteFileAtomic(target, material.rawBytes, 0o644)`, keeping the existing
   sources-dir symlink guard. Watch the security-relevant symlink guard is preserved.
+- **iss-73** `relocate-logbook-output` (minor, tech-debt) — `memory/lint.go` writes lint
+  reports to `.abcd/logbook/memory/` (`lint.go:487`) and `scanner.go`
+  `defaultSkipFragments` references `.abcd/logbook/pii-scan/` + `.abcd/logbook/audit-history/`
+  (`scanner.go:82`) — a retired location (iss-36/iss-56). A **2026-07-12 maintainer
+  adjudication** decided runtime artefacts belong in `.abcd/.work.local/logs/` (the
+  gitignored runtime tier), so **no design call remains** — this is why it is drain-safe
+  despite not being one of drain #1's own follow-ups. Detector-first: arm the
+  `.abcd/logbook` retired-location record-lint ban, watch it flag the two source sites,
+  then relocate both behind it (preserving the scanner's skip semantics) + tests.
+  Resolving it also clears the logbook `iss-56` and unblocks arming the ban. NOT part of
+  the un-triaged iss-33/34/37-49 cluster: its adjudication has already landed.
 
 ## Explicit skips (do NOT work these)
 
@@ -80,9 +93,12 @@ Both self-contained, detector-first, trust-boundary (security reviewer applies):
 
 ## Why this is a safe batch
 
-Two minor, self-contained defects, each with a pre-stated detector and acceptance
-corpus, both composing cleanly with fixes already merged (iss-29, iss-32). No
-irreversible actions. The scope fence + explicit skips keep the loop from wandering
-into un-triaged or design-shaped work. It also exercises two detector shapes drain #1
-did not: a per-verb `--json` error-shape table test (iss-76) and extending the
-canonical-primitive detector to inline sequences (iss-79).
+Three minor, self-contained defects, each with a pre-stated detector and acceptance
+corpus; iss-76/79 compose cleanly with fixes already merged (iss-29, iss-32), and
+iss-73's target location is already maintainer-adjudicated (2026-07-12), so **none
+carries an open design question**. No irreversible actions (iss-73 relocates gitignored
+runtime output, not persisted state). The scope fence + explicit skips keep the loop
+from wandering into un-triaged or design-shaped work. It also exercises three detector
+shapes drain #1 did not: a per-verb `--json` error-shape table test (iss-76), extending
+the canonical-primitive detector to inline sequences (iss-79), and arming a
+retired-location banlist ahead of a path relocation (iss-73).
