@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core"
@@ -114,11 +116,6 @@ func binTarget() string {
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
-}
-
-func isRealDir(p string) bool {
-	fi, err := os.Lstat(p)
-	return err == nil && fi.IsDir() && fi.Mode()&os.ModeSymlink == 0
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +290,7 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	data = append(data, '\n')
-	return writeFileAtomic(path, data)
+	return fsutil.WriteFileAtomicPreserveMode(path, data)
 }
 
 // writeConfig persists a config map deterministically.
