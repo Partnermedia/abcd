@@ -417,3 +417,104 @@ func TestUnscannedBinaryRecorded(t *testing.T) {
 		t.Errorf("unscannable binary file must be recorded, not silently dropped: %+v", res.Unscanned)
 	}
 }
+
+// TestSerializedFindingRedactsSiblingSecret (iss-65 C14/C17, the BLOCK) plants
+// TWO distinct secrets on one line. Each finding stores the whole line; the
+// serialized snippet of finding A must not leak finding B's raw token, and vice
+// versa — masking only a finding's own token leaves every sibling secret verbatim.
+func TestSerializedFindingRedactsSiblingSecret(t *testing.T) {
+	a := "ghp_" + strings.Repeat("A", 40)
+	b := "ghp_" + strings.Repeat("B", 40)
+	line := "gh=" + a + " other=" + b // both on one line, minified-env style
+
+	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "commands/x.md")
+	if len(findings) < 2 {
+		t.Fatalf("both planted PATs must be caught: %+v", findings)
+	}
+	blob, err := json.Marshal(findings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(blob)
+	for _, tok := range []string{a, b} {
+		if strings.Contains(js, tok) {
+			t.Errorf("serialized result leaks a sibling secret verbatim %q: %s", tok, js)
+		}
+		// No >=6-char window of either raw token may survive in any snippet.
+		for i := 0; i+6 <= len(tok); i++ {
+			if w := tok[i : i+6]; strings.Contains(js, w) {
+				t.Errorf("serialized result leaks a raw token window %q: %s", w, js)
+			}
+		}
+	}
+}
+
+// TestSerializedFindingRedactsOverlappingSecret (iss-65, the overlap variant of
+// the BLOCK) plants two secrets whose matches PARTIALLY OVERLAP on one line: a
+// greedy sk-ant- key that runs into a following JWT, both detected. Substring
+// masking (longest-first) destroys the shorter match's substring and leaves its
+// non-overlapping tail raw; only byte-span masking closes it. No >=6-char raw
+// window of either token may survive in the serialized snippet.
+func TestSerializedFindingRedactsOverlappingSecret(t *testing.T) {
+	key := "sk-ant-" + strings.Repeat("X", 34)
+	jwt := "eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	line := key + "-" + jwt // the `-` lets the key run into the JWT head; both fire
+
+	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "commands/x.md")
+	if len(findings) < 2 {
+		t.Fatalf("both an anthropic key and a JWT must be caught on the overlapping line: %+v", findings)
+	}
+	blob, err := json.Marshal(findings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(blob)
+	// The JWT payload/signature segments are the sensitive part — assert no raw
+	// >=6-char window of either token survives anywhere in the serialized result.
+	for _, tok := range []string{key, jwt} {
+		for i := 0; i+6 <= len(tok); i++ {
+			if w := tok[i : i+6]; strings.Contains(js, w) {
+				t.Errorf("serialized snippet leaks a raw token window %q from an overlapping match: %s", w, js)
+			}
+		}
+	}
+}
+
+// TestIsTextMultibyteRuneAtSniffBoundary (iss-65 C15) proves a valid UTF-8 file
+// whose multibyte rune straddles the 8192-byte sniff cap is NOT misclassified as
+// binary. The cut lands mid-rune, so a naive utf8.Valid(chunk[:8192]) fails.
+func TestIsTextMultibyteRuneAtSniffBoundary(t *testing.T) {
+	// '€' is 3 bytes (E2 82 AC) starting at index 8190, so the 8192 cut splits it.
+	data := []byte(strings.Repeat("a", 8190) + "€" + strings.Repeat("z", 100))
+	if !isText(data) {
+		t.Fatal("a valid UTF-8 file with a rune straddling the sniff cap must read as text, not binary")
+	}
+	// A genuinely invalid encoding (a lone continuation byte early on) is still binary.
+	bad := append([]byte("head "), 0x82)
+	bad = append(bad, []byte(" tail")...)
+	if isText(bad) {
+		t.Error("genuinely invalid UTF-8 must still read as binary")
+	}
+}
+
+// TestUnscannedUnreadableRecorded (iss-65 C18) proves a bundle file that cannot
+// be read is surfaced in Unscanned, with the same visibility as a binary-skipped
+// file, rather than silently dropped.
+func TestUnscannedUnreadableRecorded(t *testing.T) {
+	root := t.TempDir()
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ResolvedPath points at a file that does not exist → os.ReadFile errors.
+	res, _ := sc.ScanBundle([]BundleFile{{LogicalPath: "commands/gone.md", ResolvedPath: filepath.Join(root, "nope", "gone.md")}})
+	found := false
+	for _, p := range res.Unscanned {
+		if p == "commands/gone.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("an unreadable bundle file must be recorded in Unscanned, not silently dropped: %+v", res.Unscanned)
+	}
+}

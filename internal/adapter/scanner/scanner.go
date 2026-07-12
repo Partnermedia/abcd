@@ -246,8 +246,108 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 			}
 		}
 	}
+	sealSnippets(findings)
 	sortFindings(findings)
 	return findings
+}
+
+// sealSnippets masks EVERY finding's matched token out of the shared source line
+// each finding on that line carries, so a serialized snippet cannot leak a
+// sibling secret found on the same line. Finding.MarshalJSON only masks a
+// finding's OWN token; without this, two secrets on one line each leak the other.
+// Findings on one line always come from the same ScanText call (same file), so
+// grouping by line number is sufficient. Masking is by BYTE SPAN (Column is the
+// 1-based byte offset, len(Matched) the length), not substring: two matches that
+// partially overlap — where a substring rewrite would leave the shorter match's
+// non-overlapping tail raw — are both masked span-exactly.
+func sealSnippets(findings []Finding) {
+	byLine := map[int][]int{}
+	for i := range findings {
+		byLine[findings[i].Line] = append(byLine[findings[i].Line], i)
+	}
+	for _, idxs := range byLine {
+		if len(idxs) < 2 {
+			continue // a lone finding: MarshalJSON already masks its own token
+		}
+		src := ""
+		for _, i := range idxs {
+			if findings[i].line != "" {
+				src = findings[i].line
+				break
+			}
+		}
+		if src == "" {
+			continue
+		}
+		sealed := sealLine(src, findings, idxs)
+		for _, i := range idxs {
+			findings[i].line = sealed
+		}
+	}
+}
+
+// sealLine masks the byte spans of every finding in idxs out of src. A byte
+// covered by exactly one span shows that token's head/tail fingerprint; a byte in
+// an OVERLAP of two or more spans is forced to '*' (so no token's raw bytes leak
+// through a partner's fingerprint window); an uncovered byte is kept raw. Byte
+// spans are authoritative, so overlapping matches cannot leak. O(len(src) + spans).
+func sealLine(src string, findings []Finding, idxs []int) string {
+	b := []byte(src)
+	n := len(b)
+	if n == 0 {
+		return src
+	}
+	cov := make([]int, n+1) // difference array → per-byte coverage count in O(n+k)
+	spans := make([]span, 0, len(idxs))
+	for _, i := range idxs {
+		start := findings[i].Column - 1
+		end := start + len(findings[i].Matched)
+		if start < 0 {
+			start = 0
+		}
+		if end > n {
+			end = n
+		}
+		if start >= end {
+			continue
+		}
+		spans = append(spans, span{start, end})
+		cov[start]++
+		cov[end]--
+	}
+	out := make([]byte, n)
+	copy(out, b)
+	// Star the middle of each span, keeping its head/tail fingerprint bytes.
+	for _, s := range spans {
+		fingerprintSpan(out, b, s.start, s.end)
+	}
+	// Any byte covered by two or more spans is an overlap: force '*' regardless of
+	// a fingerprint head/tail char, so no token's raw bytes survive in an overlap.
+	run := 0
+	for i := 0; i < n; i++ {
+		run += cov[i]
+		if run >= 2 {
+			out[i] = '*'
+		}
+	}
+	return string(out)
+}
+
+// fingerprintSpan masks out[start:end] to a token fingerprint: the first keepHead
+// and last keepTail bytes are kept (enough to triage which credential), the middle
+// starred; a short span is fully starred. It is the byte-level mirror of
+// maskSecret so a byte span can be masked in place.
+func fingerprintSpan(out, src []byte, start, end int) {
+	const keepHead, keepTail, fingerprintBelow = 3, 2, 16
+	length := end - start
+	for j := start; j < end; j++ {
+		k := j - start
+		if length >= fingerprintBelow && (k < keepHead || k >= length-keepTail) {
+			out[j] = src[j] // keep head/tail raw — the fingerprint
+		} else {
+			out[j] = '*'
+		}
+	}
 }
 
 // ScanBundle scans the resolved content of every bundle file, reading
@@ -266,7 +366,11 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 		}
 		data, err := os.ReadFile(f.ResolvedPath)
 		if err != nil {
-			continue // unreadable individual file is skipped, not fatal
+			// An unreadable file is skipped, not fatal — but surfaced in Unscanned
+			// with the same visibility as a binary-skipped file, so a read-skipped
+			// file cannot silently vanish from the bundle's coverage.
+			res.Unscanned = append(res.Unscanned, f.LogicalPath)
+			continue
 		}
 		if !isText(data) {
 			res.Unscanned = append(res.Unscanned, f.LogicalPath)
@@ -323,16 +427,27 @@ func path_base(p string) string {
 	return p
 }
 
-// isText sniffs the first 8KB: a null byte or invalid UTF-8 means binary.
+// isText sniffs the first 8KB: a null byte or invalid UTF-8 means binary. When
+// the file is longer than the sniff window the cut can land mid-rune; a dangling
+// partial trailing rune (at most UTFMax-1 bytes) is trimmed before validating, so
+// a valid multibyte file whose rune straddles the boundary is not misread as
+// binary. A genuinely invalid encoding still fails.
 func isText(data []byte) bool {
 	const sniff = 8192
 	chunk := data
+	truncated := false
 	if len(chunk) > sniff {
 		chunk = chunk[:sniff]
+		truncated = true
 	}
 	for _, b := range chunk {
 		if b == 0 {
 			return false
+		}
+	}
+	if truncated {
+		for i := 0; i < utf8.UTFMax-1 && len(chunk) > 0 && !utf8.Valid(chunk); i++ {
+			chunk = chunk[:len(chunk)-1]
 		}
 	}
 	return utf8.Valid(chunk)

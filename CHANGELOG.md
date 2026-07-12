@@ -145,6 +145,13 @@ called out in a **Breaking** section.
   closed rather than inheriting the committer-editable in-tree list. The
   `gate_lockstep` workflow parser no longer mistakes a nested `with: name:` for a
   step name. (The receipt-gate remains disabled outside release time.)
+- **Secret-scanner serialisation hardening** (iss-65). A serialized scan finding's
+  snippet now masks *every* secret on its source line, not only the finding's own
+  token — two secrets sharing a line (a minified `.env`, collapsed JSON) no longer
+  leak each other into the `abcd launch --json` report. The content sniff no longer
+  misclassifies a valid UTF-8 file as binary when a multibyte rune straddles the
+  8 KB boundary (which would have skipped scanning it), and a bundle file that
+  cannot be read is now surfaced in `unscanned` rather than silently dropped.
 
 ## [v0.1.0] - 2026-07-07
 
