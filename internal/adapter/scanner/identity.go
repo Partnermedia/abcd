@@ -234,6 +234,12 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 			if inAnySpan(loc[0], supp) {
 				return
 			}
+			// A username that equals a system directory and appears as the top
+			// segment of an absolute path (e.g. "/dev/null" when the machine user
+			// is "dev") is a system path, not an identity leak.
+			if isSystemPathSegment(line, loc[0], loc[1]) {
+				return
+			}
 			add(kindLocalUser, loc[0]+1, line[loc[0]:loc[1]],
 				"(local machine username; replace with [USERNAME] or remove)")
 		}
@@ -300,6 +306,45 @@ func encodedMatches(line, encoded string) [][]int {
 
 func isUsernameWordRune(r byte) bool {
 	return r == '.' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}
+
+// systemDirNames are well-known absolute top-level system directories. A local
+// username equal to one of these that appears as the first segment of an
+// absolute path is a system path, not an identity leak — a genuine username
+// leak is nested under a home root (/Users/<u>, /home/<u>), never at the
+// filesystem root. Suppressing only this exact collision (iss-31: "/dev/null"
+// when the machine user is "dev") keeps genuine leak detection intact.
+var systemDirNames = map[string]bool{
+	"dev": true, "proc": true, "sys": true, "usr": true, "bin": true,
+	"sbin": true, "etc": true, "var": true, "tmp": true, "opt": true,
+	"lib": true, "run": true, "boot": true, "mnt": true, "media": true,
+	"srv": true, "root": true,
+}
+
+// isSystemPathSegment reports whether line[start:end] is the first segment of an
+// absolute Unix path naming a well-known system directory (e.g. the "dev" in
+// "/dev/null"). It requires a leading root '/' that is not itself nested under a
+// prior path segment, and a trailing '/', so "/Users/dev/x" and a bare "dev"
+// are NOT suppressed.
+func isSystemPathSegment(line string, start, end int) bool {
+	if !systemDirNames[line[start:end]] {
+		return false
+	}
+	if end >= len(line) || line[end] != '/' {
+		return false
+	}
+	if start == 0 || line[start-1] != '/' {
+		return false
+	}
+	root := start - 1
+	return root == 0 || !isPathSegmentByte(line[root-1])
+}
+
+// isPathSegmentByte reports whether b can be part of a path segment, used to
+// decide whether a '/' begins an absolute path or continues a nested one.
+func isPathSegmentByte(b byte) bool {
+	return b == '/' || b == '.' || b == '-' || b == '_' ||
+		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 func boundaryBefore(line string, pos int) bool {
