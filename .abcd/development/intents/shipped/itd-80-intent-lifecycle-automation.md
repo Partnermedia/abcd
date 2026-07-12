@@ -1,10 +1,10 @@
 ---
 id: itd-80
 slug: intent-lifecycle-automation
-kind: null
+kind: standalone
 suggested_kind: standalone
 bundle: null
-spec_id: null
+spec_id: spc-2
 reclassification_history: []
 builds_on: [itd-34, itd-1]
 related_adrs: [adr-25, adr-26, adr-27]
@@ -105,4 +105,44 @@ closing two gaps (cited evidence per criterion; pinned judge/prompt/rubric hashe
 
 ## Audit Notes
 
+
 <Empty until intent moves to shipped/. intent-fidelity-reviewer populates this with per-criterion verdicts plus a three-bucket prose audit comparing delivered reality to the press release above. This intent dogfoods that automation.>
+
+<!-- abcd-review: INGESTED receipt=rcp-1c213fa02f85 -->
+Fidelity review — receipt rcp-1c213fa02f85 (verifier intent-fidelity-reviewer claude-opus-4-8).
+
+Provenance: intent-fidelity-reviewer@claude-opus-4-8 · rubric_hash sha256:ab445258f3cb9204b559e976e358e19ba2042a447a057a681c388c4aa8ca4e0e · prompt_hash sha256:aa9225ac1f4b4eeadb4a3c3df9922446cfa1b35b1f9b7975b0210e282a252409
+Input attestations: diff:9596454..058072d@sha256:058072d-phases-1-4-on-main;
+
+Acceptance rollup: MET 6 · MET_WITH_CONCERNS 1 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: Live-verified this cycle: abcd intent plan itd-80 minted spc-2 (spc-1 reserved by itd-3 correctly skipped), wrote spec_id: spc-2 + kind: standalone, and moved drafts->planned; record-lint stays green.
+  evidence: internal/core/intent/lifecycle.go:97 — "func Plan(repoRoot, intentID string) (PlanResult, error)"
+- ac-2 — MET: Live-verified: abcd spec close spc-2 reconciled itd-80 planned->shipped via atomic rename through the immutable link; the shipped spec_id ^spc- contract holds and no unrelated file was modified.
+  evidence: internal/core/intent/lifecycle.go:261 — "func Reconcile(repoRoot, specID string) (ReconcileResult, error)"
+- ac-3 — MET_WITH_CONCERNS: Exactly one OWED receipt (rcp-1c213fa02f85) and one review request were parked. Concern: the request references the delivered diff as 'host supplies the range' rather than abcd capturing it — a deliberate adr-25 transport-agnostic divergence (core runs no git), so the diff is host-attested, not abcd-attested.
+  evidence: internal/core/intent/review.go:168 — "func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error)"
+- ac-4 — MET: Self-demonstrating: this very verdict is schema- and semantic-gated (criterion ids, in-enum verdicts, required policy hashes) and its per-criterion + honoured/diverged/missing audit with cited evidence is what is being appended, flipping the receipt OWED->INGESTED.
+  evidence: internal/core/intent/review.go:295 — "func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error)"
+- ac-5 — MET: Re-ingest of an already-INGESTED receipt short-circuits to a no-op; covered by TestIngestIdempotentNoOp and demonstrated by a second ingest run in this cycle.
+  evidence: internal/core/intent/review.go:326 — "if state == \"INGESTED\" {"
+- ac-6 — MET: Fail-closed throughout: reconcile refuses a missing/malformed/ambiguous link with no partial move; an unsolicited verdict is rejected; a resolvable-but-invalid verdict (incl. a partial one, len(seen)!=k) dead-letters with the raw payload retained and criteria INCONCLUSIVE. security-reviewer PASS.
+  evidence: internal/core/intent/review.go:461 — "func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, reason string)"
+- ac-7 — MET: Every itd-/spc-/rcp- id is regex-validated before any path is built; crafted traversal ids are rejected and no file outside the intent/spec dirs is touched. security-reviewer PASS after an explicit path-traversal attempt.
+  evidence: internal/core/intent/intent.go:54 — "intentIDRe = regexp.MustCompile(`^itd-[0-9]+$`)"
+
+Gap audit:
+- honoured:
+  - The core promise: an intent ships itself as a side-effect of its linked spec closing, directory-as-truth (no status field, no move verb).
+    evidence: internal/core/intent/lifecycle.go:261 — "func Reconcile"
+  - ID-anchored bidirectional link with spc-1 reservation respected — the first mint is spc-2, not a collision with itd-3.
+    evidence: internal/core/spec/store.go:91 — "func NextID(repoRoot string) (string, error)"
+  - Host-delegated async review (adr-25) with the intent's ## Audit Notes as the single source of truth for review state.
+    evidence: internal/core/intent/review.go:295 — "func IngestVerdict"
+- diverged:
+  - The review verdict/receipt live as ## Audit Notes markers rather than a separate receipt store — a simplification that honours single-source-of-truth over the design plan's sketched receipt file.
+    evidence: internal/core/intent/review.go:326 — "if state == \"INGESTED\""
+- missing:
+  - Automated capture of the delivered diff into the review request is not implemented (the host supplies the range) — the only promise-relevant gap, cross-referenced by ac-3's concern; deliberate under adr-25.
+    evidence: internal/core/intent/review.go:168 — "func emitReviewForIntent"
