@@ -132,6 +132,11 @@ func renderSpec(id, slug, intentID string) string {
 	fmt.Fprintf(&b, "intent: %s\n", intentID)
 	b.WriteString("---\n")
 	fmt.Fprintf(&b, "# %s\n\n", slug)
-	b.WriteString("## Summary\n\nTODO\n")
+	b.WriteString("## Summary\n\n")
+	// A clear author-guidance placeholder, not a bare "TODO" that reads as drift:
+	// the spec body is the design record the intent's fidelity review audits against.
+	fmt.Fprintf(&b, "_Draft: describe what %s delivers for %s — scope, approach, and how "+
+		"it satisfies the intent's Acceptance Criteria. This spec is the design record "+
+		"the fidelity review audits against._\n", id, intentID)
 	return b.String()
 }

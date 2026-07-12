@@ -115,6 +115,8 @@ called out in a **Breaking** section.
 
 ### Changed
 
+- `abcd intent plan` seeds a new native spec with a clear author-guidance
+  placeholder in its `## Summary`, rather than a bare `TODO` (iss-68).
 - `abcd spec close <spc-N>` now reconciles the linked intent (itd-80): it moves
   the intent `planned/ → shipped/` and then closes the spec, so one command
   completes the lifecycle transition. It is fail-closed (a missing/empty intent
@@ -152,6 +154,15 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **Spec-store hardening** (iss-68). The spec-store reader now opens a file once
+  with `O_NOFOLLOW`+`O_NONBLOCK` and validates the file descriptor before reading,
+  closing a symlink-swap window (and never blocking on a FIFO leaf). `NextID` fails
+  closed on an intent `spec_id` that carries no parseable reservation number (e.g.
+  `spc-` with no digits) instead of silently dropping it from the id-reservation
+  scan (which could hand out a colliding id); a `spc-N` or `spc-N-<slug>` form still
+  reserves N, consistent with record-lint. (The leaf-only ancestor-symlink guard
+  and the atomic-rename clobber check are documented as accepted under the
+  trusted-worktree model.)
 - **Release receipt-gate hardening** (iss-70). The `receipt_gate` record-lint
   rule now binds each semantic-pass receipt to the gate it attests: a receipt
   satisfies a required gate only when its `policy.detector` equals that gate name,

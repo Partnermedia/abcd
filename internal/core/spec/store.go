@@ -1,10 +1,13 @@
 package spec
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
@@ -143,6 +146,17 @@ func maxIntentSpecNum(repoRoot string) (int, error) {
 			if frontmatter.IsNull(v) {
 				continue
 			}
+			// A non-null spec_id from which no reservation number can be parsed
+			// (e.g. "spc-", "spc-abc") is fail-closed, not silently dropped:
+			// dropping it would leave its reservation out of the max and let NextID
+			// mint a colliding id. A "spc-N" or "spc-N-<slug>" form is fine and
+			// reserves N — record-lint's planned rule (prefix ^spc-) and the
+			// spec_lifecycle specNum parse both tolerate the trailing slug, so this
+			// check must NOT reject that form or the two gates would disagree and a
+			// lint-green record would brick the mint path.
+			if !specNumRe.MatchString(v) {
+				return 0, fmt.Errorf("spec: intent %s has a spec_id %q with no reservable number (must be spc-N)", rel, v)
+			}
 			if n := specNum(v); n > max {
 				max = n
 			}
@@ -209,6 +223,12 @@ func Close(repoRoot, specID string) (Spec, error) {
 		return Spec{}, err
 	}
 	dstRel := filepath.Join(SpecsRelDir, StatusClosed, name)
+	// Best-effort clobber guard: os.Rename would silently overwrite the destination,
+	// so refuse when it already exists. This Lstat→Rename check is racy against a
+	// file appearing in the window — accepted under the trusted-worktree model (only
+	// the developer/agent mutates the store; there is no concurrent adversary), where
+	// the atomic same-filesystem rename is preferred over a non-atomic no-clobber
+	// link+remove that a crash could leave half-done.
 	if _, err := os.Lstat(filepath.Join(closedDir, name)); err == nil {
 		return Spec{}, fmt.Errorf("spec: refusing to overwrite existing %s", dstRel)
 	}
@@ -220,15 +240,23 @@ func Close(repoRoot, specID string) (Spec, error) {
 	return sp, nil
 }
 
-// readRepoFile reads a repo file behind the trust-boundary guards: refuse a
-// symlinked leaf, require a regular file, and cap the size.
+// readRepoFile reads a repo file behind the trust-boundary guards. It opens ONCE
+// with O_NOFOLLOW (refuse a symlinked leaf) and O_NONBLOCK (a FIFO/device leaf
+// returns immediately instead of blocking the open), then validates the SAME file
+// descriptor (regular file, size cap) before reading — so a symlink swap between
+// stat and read cannot redirect it.
 func readRepoFile(abs, rel string) ([]byte, error) {
-	fi, err := os.Lstat(abs)
+	f, err := os.OpenFile(abs, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		if errors.Is(err, syscall.ELOOP) {
+			return nil, fmt.Errorf("spec: %s is a symlink (refusing to follow)", rel)
+		}
+		return nil, fmt.Errorf("spec: opening %s: %w", rel, err)
+	}
+	defer f.Close()
+	fi, err := f.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("spec: stat %s: %w", rel, err)
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("spec: %s is a symlink (refusing to follow)", rel)
 	}
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("spec: %s is not a regular file", rel)
@@ -236,9 +264,12 @@ func readRepoFile(abs, rel string) ([]byte, error) {
 	if fi.Size() > maxSpecFileBytes {
 		return nil, fmt.Errorf("spec: %s exceeds the %d-byte cap", rel, maxSpecFileBytes)
 	}
-	data, err := os.ReadFile(abs)
+	data, err := io.ReadAll(io.LimitReader(f, maxSpecFileBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("spec: reading %s: %w", rel, err)
+	}
+	if int64(len(data)) > maxSpecFileBytes {
+		return nil, fmt.Errorf("spec: %s exceeds the %d-byte cap", rel, maxSpecFileBytes)
 	}
 	return data, nil
 }

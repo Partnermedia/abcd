@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 const (
@@ -45,7 +47,8 @@ func TestNextIDMaxAcrossSpecsAndIntents(t *testing.T) {
 	// A spec-store file at spc-5 (higher than any intent reservation).
 	writeFile(t, root, specsOpen+"/spc-5-existing.md",
 		"---\nid: spc-5\nslug: existing\nintent: itd-9\n---\n# ok\n")
-	// An intent reserving spc-2 (lower; must not lower the max).
+	// An intent reserving spc-2 via the tolerated spc-N-<slug> form (lower; must
+	// not lower the max). record-lint accepts this shape, so the store must too.
 	writeFile(t, root, intentsBase+"/planned/itd-20-x.md",
 		"---\nid: itd-20\nslug: x\nspec_id: spc-2-thing\nkind: standalone\n---\n# ok\n")
 
@@ -210,5 +213,45 @@ func TestCloseAlreadyClosedFails(t *testing.T) {
 		"---\nid: spc-1\nslug: done\nintent: itd-9\n---\n# done\n")
 	if _, err := Close(root, "spc-1"); err == nil {
 		t.Fatal("Close on an already-closed spec must fail")
+	}
+}
+
+// TestNextIDRejectsUnreservableSpecID (iss-68 P5) proves a non-null spec_id with
+// no parseable reservation number ("spc-oops") fails NextID closed rather than
+// being silently dropped from the reservation scan (which could hand out a
+// colliding id). A well-formed "spc-N" / "spc-N-<slug>" is accepted (see
+// TestNextIDMaxAcrossSpecsAndIntents); only a numberless one is rejected.
+func TestNextIDRejectsUnreservableSpecID(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, intentsBase+"/planned/itd-20-x.md",
+		"---\nid: itd-20\nslug: x\nspec_id: spc-oops\nkind: standalone\n---\n# ok\n")
+	if _, err := NextID(root); err == nil {
+		t.Fatal("NextID must fail closed on a spec_id with no reservable number, not silently drop it")
+	}
+}
+
+// TestLoadRejectsFifoSpecFile (iss-68 P7) proves a FIFO at a spec path is rejected
+// promptly, not hung on. The read opens with O_NOFOLLOW|O_NONBLOCK and validates
+// the fd, so a FIFO returns a not-regular error instead of blocking os.ReadFile.
+func TestLoadRejectsFifoSpecFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, specsOpen), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(root, specsOpen, "spc-1-x.md"), 0o644); err != nil {
+		t.Skipf("mkfifo unsupported: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := Load(root)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a FIFO spec file must be refused, not read")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Load hung on a FIFO spec file (open must not block)")
 	}
 }
