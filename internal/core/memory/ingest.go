@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 	"unicode/utf8"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // ingest.go — the ingest flow from 07-memory.md §1:
@@ -802,25 +804,13 @@ func storeOriginal(repoRoot string, material sourceMaterial, contentHash string)
 	} else if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
 		return "", newIngestError("sources dir is a symlink or non-directory: %s", sourcesRelPath)
 	}
+	// The sources dir is guaranteed a real directory by the guard above; route
+	// the durable write through the canonical primitive (temp + fsync + chmod +
+	// rename + parent-dir fsync) rather than an inline copy (iss-79 /
+	// one-canonical-primitive). os.Rename does not follow a leaf symlink, so a
+	// pre-planted target symlink is replaced, not written through.
 	target := filepath.Join(sourcesDir, contentHash+material.ext)
-	tmp := target + "." + itoa(os.Getpid()) + ".memtmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return "", err
-	}
-	if _, err := f.Write(material.rawBytes); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return "", err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return "", err
-	}
-	f.Close()
-	if err := os.Rename(tmp, target); err != nil {
-		os.Remove(tmp)
+	if err := fsutil.WriteFileAtomic(target, material.rawBytes, 0o644); err != nil {
 		return "", err
 	}
 	return filepath.Join(".abcd", "memory", "sources", contentHash+material.ext), nil
