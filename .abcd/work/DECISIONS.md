@@ -249,3 +249,25 @@ parallel-agent merge contention bites.
   instances (the larger "ingest test-suite" effort): the --keep-original
   partial-failure reporting, CRLF parser-parity (parseFrontmatter vs
   splitFileFrontmatter), and broader URL-ingest/content-type/PDF path coverage.
+- 2026-07-12 — /abcd:auto-loop design recorded (plans/2026-07-12-abcd-auto-loop-skill.md,
+  pending sign-off, not built). SOTA pass (sota-researcher, primary sources) backs the
+  design: durable handoff + fresh-context resume over compaction/RAG (Anthropic
+  long-running-harnesses — compaction "isn't sufficient"); delegate reads/reviews but
+  keep implementation in ONE agent (Cognition "Don't Build Multi-Agents" + Anthropic
+  multi-agent — converging read/write boundary); reviewers must be a SEPARATE fresh-
+  context lens, not intrinsic self-review (Huang et al. 2310.01798; CriticGPT
+  2407.00215); gate irreversible actions on action-class not self-confidence (RLHF
+  miscalibration); attempt-journal lineage = Reflexion (NeurIPS 2023) + database WAL.
+  Rejected: parallel multi-agent implementation, compaction-as-primary-continuity,
+  RAG-over-ledger at single-milestone scale.
+- 2026-07-12 — autonomous-run surface named /abcd:run, taking itd-29's reserved
+  name as the host-delegated realization of its operator surface (not a parallel
+  /abcd:loop). Discovery: itd-29 (autonomous-run-resilience, planned) already owns
+  this surface over the ADR-27 run seam, already scopes out-of-band-merge/chain
+  reconciliation (host-owns-git MVP → future read-only `abcd run reconcile --json`)
+  and 429/quota (spc-35), and is deliberately deferred pending real evidence
+  (revisit trigger #5: two end-to-end autonomous runs). Sequence C→A: run the loop
+  as a plan+protocol under the harness loop now to dogfood + generate that evidence;
+  formalize commands/abcd/run.md + brief row + surface_coverage, reconciled into
+  itd-29, after 1-2 successful runs. Binary operator verbs (budget preflight, rewind,
+  ship, run reconcile) stay deferred in itd-29.
