@@ -1564,7 +1564,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if errors.As(err, &coded) {
 		code = coded.ExitCode()
 	}
-	if msg := err.Error(); msg != "" {
+	if msg := scrubPaths(err); msg != "" {
 		// Honour --json for the error surface too: a caller that asked for
 		// machine output must get a JSON envelope, never raw Go text (iss-29).
 		if asJSON, _ := root.PersistentFlags().GetBool("json"); asJSON {
@@ -1582,6 +1582,84 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // a machine caller can parse a failure the same way it parses a success.
 type errorEnvelope struct {
 	Error string `json:"error"`
+}
+
+// scrubPaths renders err for machine/stderr output with the DEVELOPER-IDENTITY
+// portion of any local path removed. cli.Run routes every command error through
+// the --json envelope and the stderr line, and an identity-bearing path reaches
+// that surface three ways: an os.PathError/os.LinkError embeds one in Error();
+// core fmt-formats one via %s (e.g. capture's ledger-path guards); a custom error
+// type renders one (e.g. history's home-rooted StorePathError). All three are
+// handled (iss-76 — the identity-scrub generalisation of the one branch iss-29
+// fixed):
+//
+//   - the two roots that carry developer identity — the working directory and the
+//     home directory — are redacted to "." and "~" wherever they appear, catching
+//     fmt-formatted and custom-error-type paths a typed walk cannot see;
+//   - any remaining absolute path embedded by os.PathError/os.LinkError (e.g. a
+//     path argument outside both roots) is reduced to its base name.
+//
+// This is NOT a universal absolute-path scrub: a verb that echoes a user-supplied
+// absolute path lying outside both roots (e.g. `memory ingest /tmp/x`) still
+// surfaces it — that path carries no developer identity, and sanitising such
+// verb-level echoes is tracked separately (iss-81). Scrubbing here rather than by
+// regex is deliberate: this error surface also carries URLs (fetch failures) that
+// an absolute-path regex would mangle.
+func scrubPaths(err error) string {
+	msg := err.Error()
+	if cwd, e := os.Getwd(); e == nil {
+		msg = redactRoot(msg, cwd, ".")
+	}
+	if home, e := os.UserHomeDir(); e == nil {
+		msg = redactRoot(msg, home, "~")
+	}
+	for _, p := range embeddedPaths(err) {
+		if filepath.IsAbs(p) {
+			msg = strings.ReplaceAll(msg, p, filepath.Base(p))
+		}
+	}
+	return msg
+}
+
+// redactRoot replaces every occurrence of the absolute directory root (followed
+// by a path separator) in s with repl. The filesystem root ("/") and empty or
+// relative roots are skipped so a message is never mangled into meaninglessness.
+func redactRoot(s, root, repl string) string {
+	if len(root) <= 1 || !filepath.IsAbs(root) {
+		return s
+	}
+	sep := string(os.PathSeparator)
+	return strings.ReplaceAll(s, root+sep, repl+sep)
+}
+
+// embeddedPaths collects the filesystem paths carried by os.PathError/os.LinkError
+// anywhere in err's Unwrap chain, including errors.Join fan-out.
+func embeddedPaths(err error) []string {
+	var paths []string
+	var walk func(error)
+	walk = func(e error) {
+		for e != nil {
+			switch t := e.(type) {
+			case *os.PathError:
+				paths = append(paths, t.Path)
+			case *os.LinkError:
+				paths = append(paths, t.Old, t.New)
+			}
+			switch u := e.(type) {
+			case interface{ Unwrap() error }:
+				e = u.Unwrap()
+			case interface{ Unwrap() []error }:
+				for _, sub := range u.Unwrap() {
+					walk(sub)
+				}
+				return
+			default:
+				return
+			}
+		}
+	}
+	walk(err)
+	return paths
 }
 
 // render writes v as indented JSON when asJSON is set, otherwise delegates to
