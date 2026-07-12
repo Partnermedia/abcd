@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,7 +112,7 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 	if checksum != emptyChecksum {
 		return CaptureResult{}, fmt.Errorf("%w: placeholder %s changed since reservation", ErrChecksumMismatch, placeholder)
 	}
-	if err := writeFileAtomic(placeholder, []byte(content)); err != nil {
+	if err := fsutil.WriteFileAtomicPreserveMode(placeholder, []byte(content)); err != nil {
 		return CaptureResult{}, err
 	}
 	return CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}, nil
@@ -204,7 +206,7 @@ func commitTransition(src, dst, newContent, expected string) error {
 	if current != expected {
 		return fmt.Errorf("%w: %s changed since it was read", ErrChecksumMismatch, src)
 	}
-	if err := writeFileAtomic(dst, []byte(newContent)); err != nil {
+	if err := fsutil.WriteFileAtomicPreserveMode(dst, []byte(newContent)); err != nil {
 		return err
 	}
 	if err := os.Remove(src); err != nil && !os.IsNotExist(err) {

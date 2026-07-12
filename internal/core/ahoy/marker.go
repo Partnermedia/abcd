@@ -4,7 +4,8 @@ import (
 	"bytes"
 	_ "embed"
 	"os"
-	"path/filepath"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"regexp"
 )
 
@@ -108,7 +109,7 @@ func installMarkerFile(targetPath string) (wrote bool, ok bool) {
 
 	if absent {
 		body := append(append([]byte{}, synth...), eol...)
-		if err := writeFileAtomic(targetPath, body); err != nil {
+		if err := fsutil.WriteFileAtomicPreserveMode(targetPath, body); err != nil {
 			return false, false
 		}
 		return true, true
@@ -117,7 +118,7 @@ func installMarkerFile(targetPath string) (wrote bool, ok bool) {
 	matches := markerBlockRe.FindAllIndex(existing, -1)
 	if len(matches) == 0 {
 		body := composeMarkerInsertion(existing, synth, eol)
-		if err := writeFileAtomic(targetPath, body); err != nil {
+		if err := fsutil.WriteFileAtomicPreserveMode(targetPath, body); err != nil {
 			return false, false
 		}
 		return true, true
@@ -127,7 +128,7 @@ func installMarkerFile(targetPath string) (wrote bool, ok bool) {
 		return false, true // current — no write, mtime preserved
 	}
 	body := composeMarkerReplacement(existing, matches, synth)
-	if err := writeFileAtomic(targetPath, body); err != nil {
+	if err := fsutil.WriteFileAtomicPreserveMode(targetPath, body); err != nil {
 		return false, false
 	}
 	return true, true
@@ -201,7 +202,7 @@ func removeMarkerFile(targetPath string) (wrote bool, ok bool) {
 		return false, true // no block — untouched
 	}
 	body := composeMarkerRemoval(existing, matches)
-	if err := writeFileAtomic(targetPath, body); err != nil {
+	if err := fsutil.WriteFileAtomicPreserveMode(targetPath, body); err != nil {
 		return false, false
 	}
 	return true, true
@@ -295,45 +296,4 @@ func concat(parts ...[]byte) []byte {
 		out = append(out, p...)
 	}
 	return out
-}
-
-// writeFileAtomic writes data to path via a temp file + rename, preserving the
-// existing file's mode when present. Parent dirs are created as needed.
-func writeFileAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(dir, ".abcd-tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Chmod(tmpName, mode); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return nil
 }

@@ -464,10 +464,10 @@ func Lint(req LintRequest) (LintResult, error) {
 		"generated_at":   generatedAt,
 		"store_path":     mem,
 	}
-	if err := durableWrite(filepath.Join(reportDir, "report.json"), marshalIndentNoEscape(reportFields)); err != nil {
+	if err := writeStringAtomic(filepath.Join(reportDir, "report.json"), marshalIndentNoEscape(reportFields)); err != nil {
 		return LintResult{}, err
 	}
-	if err := durableWrite(filepath.Join(reportDir, "report.md"), renderLintReportMD(reportFields)); err != nil {
+	if err := writeStringAtomic(filepath.Join(reportDir, "report.md"), renderLintReportMD(reportFields)); err != nil {
 		return LintResult{}, err
 	}
 
