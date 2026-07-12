@@ -1,5 +1,5 @@
 ---
-id: itd-82
+id: itd-83
 slug: review-bar-fires-itself
 spec_id: null
 kind: null
