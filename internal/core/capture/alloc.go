@@ -18,8 +18,9 @@ const placeholderRetryBudget = 8
 // sweep removes it.
 const orphanAgeThreshold = 60 * time.Second
 
-// lockTimeout is the default flock acquisition budget.
-const lockTimeout = 5 * time.Second
+// lockTimeout is the default flock acquisition budget. A var (not const) so a
+// test can shorten it to exercise contention without a multi-second wait.
+var lockTimeout = 5 * time.Second
 
 var rePlaceholderName = regexp.MustCompile(`^iss-[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?\.md$`)
 var reMaxIssN = regexp.MustCompile(`^iss-([0-9]+)(?:-[a-z0-9-]+)?\.md$`)
@@ -65,56 +66,79 @@ func safeMkdirLeaf(target string) error {
 	return nil
 }
 
-// reservePath reserves an iss-N id and creates a zero-byte placeholder under
-// open/, mirroring reserve_issue_path: flock -> scan max N -> O_EXCL create
-// with bump-retry. When forceID is non-empty it demands that exact id.
-func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+// withLedgerLock runs fn while holding the exclusive allocator flock, so every
+// ledger mutation — id allocation AND status transitions — serializes on one
+// lock. It creates the ledger dirs, opens the lock with the symlink/regular-file
+// guards, acquires the flock within lockTimeout, runs fn, then releases.
+func withLedgerLock(issuesRoot string, fn func() error) error {
 	if err := ensureLedgerDirs(issuesRoot); err != nil {
-		return "", "", err
+		return err
 	}
 	lockPath := filepath.Join(issuesRoot, lockFilename)
 	lockFd, err := safeOpenLockFd(lockPath)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	defer syscall.Close(lockFd)
 
 	if err := acquireFlock(lockFd, lockTimeout); err != nil {
-		return "", "", err
+		return err
 	}
 	defer syscall.Flock(lockFd, syscall.LOCK_UN)
 
-	if forceID != "" {
-		if issPresent(issuesRoot, forceID) {
-			return "", "", fmt.Errorf("%w: %s already exists in the ledger", ErrDuplicateIssueID, forceID)
-		}
-		target := filepath.Join(issuesRoot, "open", forceID+"-"+slug+".md")
-		fd, cErr := createPlaceholder(target)
-		if cErr != nil {
-			if os.IsExist(cErr) {
-				return "", "", fmt.Errorf("%w: %s appeared between scan and create", ErrDuplicateIssueID, forceID)
-			}
-			return "", "", cErr
-		}
-		syscall.Close(fd)
-		return forceID, target, nil
-	}
+	return fn()
+}
 
-	maxN := maxIssN(issuesRoot)
-	for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
-		issID := fmt.Sprintf("iss-%d", maxN+1+attempt)
-		target := filepath.Join(issuesRoot, "open", issID+"-"+slug+".md")
-		fd, cErr := createPlaceholder(target)
-		if cErr != nil {
-			if os.IsExist(cErr) {
-				continue
-			}
-			return "", "", cErr
-		}
-		syscall.Close(fd)
-		return issID, target, nil
+// reservePath reserves an iss-N id and creates a zero-byte placeholder under
+// open/, mirroring reserve_issue_path: flock -> scan max N -> O_EXCL create
+// with bump-retry. When forceID is non-empty it demands that exact id.
+func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
+	// to build a path or create a placeholder — a traversal id (../../evil) must
+	// never touch the filesystem outside the ledger, even transiently.
+	if forceID != "" && !reIssID.MatchString(forceID) {
+		return "", "", fmt.Errorf("%w: ForceID %q must match ^iss-[0-9]+$", ErrPathUnsafe, forceID)
 	}
-	return "", "", fmt.Errorf("%w: could not allocate iss-N after %d retries", ErrAllocatorContention, placeholderRetryBudget)
+	var resID, resTarget string
+	err := withLedgerLock(issuesRoot, func() error {
+		if forceID != "" {
+			if issPresent(issuesRoot, forceID) {
+				return fmt.Errorf("%w: %s already exists in the ledger", ErrDuplicateIssueID, forceID)
+			}
+			target := filepath.Join(issuesRoot, "open", forceID+"-"+slug+".md")
+			fd, cErr := createPlaceholder(target)
+			if cErr != nil {
+				if os.IsExist(cErr) {
+					return fmt.Errorf("%w: %s appeared between scan and create", ErrDuplicateIssueID, forceID)
+				}
+				return cErr
+			}
+			syscall.Close(fd)
+			resID, resTarget = forceID, target
+			return nil
+		}
+
+		maxN := maxIssN(issuesRoot)
+		for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
+			issID := fmt.Sprintf("iss-%d", maxN+1+attempt)
+			target := filepath.Join(issuesRoot, "open", issID+"-"+slug+".md")
+			fd, cErr := createPlaceholder(target)
+			if cErr != nil {
+				if os.IsExist(cErr) {
+					continue
+				}
+				return cErr
+			}
+			syscall.Close(fd)
+			resID, resTarget = issID, target
+			return nil
+		}
+		return fmt.Errorf("%w: could not allocate iss-N after %d retries", ErrAllocatorContention, placeholderRetryBudget)
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return resID, resTarget, nil
 }
 
 // safeOpenLockFd opens the allocator lock with O_NOFOLLOW and verifies it is a

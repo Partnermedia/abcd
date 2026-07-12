@@ -142,39 +142,52 @@ func transition(repoRoot, issuesRoot, issID, field, note string, target State) (
 		return TransitionResult{}, fmt.Errorf("%s must be a non-empty string", field)
 	}
 
-	src, status, err := findIssue(ir, issID)
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	if status != StateOpen {
-		return TransitionResult{}, fmt.Errorf("%w: %s already in %s", ErrTransitionConflict, issID, status)
-	}
+	// The find→read→move critical section runs under the ledger lock, the SAME
+	// lock id allocation takes, so two concurrent conflicting transitions (a
+	// resolve and a wontfix on one issue) serialize: the second sees the issue
+	// already moved out of open/ and conflicts, instead of both passing the
+	// checksum re-read and landing the issue in two status dirs (split-brain).
+	var result TransitionResult
+	err = withLedgerLock(ir, func() error {
+		src, status, err := findIssue(ir, issID)
+		if err != nil {
+			return err
+		}
+		if status != StateOpen {
+			return fmt.Errorf("%w: %s already in %s", ErrTransitionConflict, issID, status)
+		}
 
-	content, checksum, err := readWithChecksum(src)
-	if err != nil {
-		return TransitionResult{}, err
-	}
-	newContent, err := setScalarField(content, field, note)
-	if err != nil {
-		return TransitionResult{}, err
-	}
+		content, checksum, err := readWithChecksum(src)
+		if err != nil {
+			return err
+		}
+		newContent, err := setScalarField(content, field, note)
+		if err != nil {
+			return err
+		}
 
-	dst := filepath.Join(ir, statusDirName[target], filepath.Base(src))
-	fm, _, err := parseFrontmatterAndBody(newContent)
+		dst := filepath.Join(ir, statusDirName[target], filepath.Base(src))
+		fm, _, err := parseFrontmatterAndBody(newContent)
+		if err != nil {
+			return err
+		}
+		if err := validateStrict(fm); err != nil {
+			return err
+		}
+		if err := validateInvariants(fm, target, dst); err != nil {
+			return err
+		}
+
+		if err := commitTransition(src, dst, newContent, checksum); err != nil {
+			return err
+		}
+		result = TransitionResult{ID: issID, Path: dst, FromStatus: StateOpen, ToStatus: target}
+		return nil
+	})
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	if err := validateStrict(fm); err != nil {
-		return TransitionResult{}, err
-	}
-	if err := validateInvariants(fm, target, dst); err != nil {
-		return TransitionResult{}, err
-	}
-
-	if err := commitTransition(src, dst, newContent, checksum); err != nil {
-		return TransitionResult{}, err
-	}
-	return TransitionResult{ID: issID, Path: dst, FromStatus: StateOpen, ToStatus: target}, nil
+	return result, nil
 }
 
 // commitTransition re-verifies the source's checksum, writes the destination

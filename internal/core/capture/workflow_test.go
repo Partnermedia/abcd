@@ -6,8 +6,72 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
+
+// TestTransitionSerializesOnLedgerLock (iss-71 C4) proves a status transition
+// acquires the same allocator flock id allocation uses, so two concurrent
+// conflicting transitions cannot split-brain an issue across two status dirs.
+// It holds the ledger lock externally and asserts Resolve fails to acquire it
+// (rather than proceeding lock-free, which is how the split-brain arises).
+func TestTransitionSerializesOnLedgerLock(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hold the allocator lock on a separate fd, as a competing mutator would.
+	lockPath := filepath.Join(ir, lockFilename)
+	fd, err := syscall.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_NOFOLLOW, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("could not take the ledger lock for the test: %v", err)
+	}
+	defer syscall.Flock(fd, syscall.LOCK_UN)
+
+	orig := lockTimeout
+	lockTimeout = 200 * time.Millisecond
+	defer func() { lockTimeout = orig }()
+
+	_, err = Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x"})
+	if !errors.Is(err, ErrAllocatorContention) {
+		t.Fatalf("transition must serialize on the ledger lock (expect contention while held), got err=%v", err)
+	}
+	// The issue must remain untouched in open/ — no move happened.
+	if _, status, ferr := findIssue(ir, res.ID); ferr != nil || status != StateOpen {
+		t.Fatalf("a lock-blocked transition must not move the issue: status=%s err=%v", status, ferr)
+	}
+}
+
+// TestReservePathRejectsUnsafeForceID (iss-71 P13) proves reservePath validates
+// a ForceID against the iss-N shape BEFORE building any path or creating a
+// placeholder, so a traversal id cannot touch the filesystem outside the ledger.
+func TestReservePathRejectsUnsafeForceID(t *testing.T) {
+	repo, ir := ledger(t)
+	if err := ensureLedgerDirs(ir); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"../../evil", "iss-1/x", "iss-1 ", "not-an-id", "iss-1/../../evil"} {
+		id, target, err := reservePath(ir, "note", bad)
+		if err == nil {
+			t.Fatalf("reservePath must reject unsafe ForceID %q before any fs op (got id=%q target=%q)", bad, id, target)
+		}
+	}
+	// The `../../evil` id would have escaped to repo/.abcd/work/evil-note.md.
+	escaped := filepath.Join(repo, ".abcd", "work", "evil-note.md")
+	if _, err := os.Lstat(escaped); err == nil {
+		t.Fatalf("a traversal ForceID created a file outside the ledger: %s", escaped)
+	}
+}
 
 // ledger returns (repoRoot, issuesRoot) rooted in a temp dir, avoiding git
 // discovery by supplying both explicitly (resolveRoots contract B).
