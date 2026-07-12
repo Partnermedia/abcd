@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 )
 
 // Finding is one lint violation. File is repo-relative; Line is 1-based (0 when
@@ -30,8 +32,6 @@ const (
 )
 
 var (
-	// Top-level YAML frontmatter key (column 0, no indentation).
-	fmKeyRe = regexp.MustCompile(`^([A-Za-z0-9_]+):(.*)$`)
 	// Inline markdown link: [text](target). Also matches the link part of an
 	// image (![alt](src)), which resolves the same way.
 	linkRe = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
@@ -1336,27 +1336,14 @@ type fmField struct {
 }
 
 // frontmatterFields returns the top-level keys of the leading YAML frontmatter
-// (the block between the first two `---` lines). It is a line scanner, not a
-// YAML parser: nested keys and list items are ignored, which is sufficient for
-// the top-level checks here.
+// (the block between the first two `---` lines) in lint's local fmField shape. It
+// adapts the canonical scanner in internal/core/frontmatter, so the frontmatter
+// line-scanner (and its delimiter handling) lives in ONE place, not a divergent
+// copy here.
 func frontmatterFields(lines []string) map[string]fmField {
 	fields := map[string]fmField{}
-	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
-		return fields
-	}
-	for i := 1; i < len(lines); i++ {
-		line := strings.TrimRight(lines[i], "\r")
-		if line == "---" {
-			break
-		}
-		m := fmKeyRe.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		key := m[1]
-		if _, exists := fields[key]; !exists {
-			fields[key] = fmField{value: strings.TrimSpace(m[2]), line: i + 1}
-		}
+	for key, f := range frontmatter.Fields(lines) {
+		fields[key] = fmField{value: f.Value, line: f.Line}
 	}
 	return fields
 }

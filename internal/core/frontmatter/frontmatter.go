@@ -1,9 +1,9 @@
 // Package frontmatter is abcd's shared markdown-frontmatter line scanner. It is
 // deliberately a line scanner, not a YAML parser: it reads only the top-level
 // keys of the leading `---`…`---` block, first key wins, and pulls in zero
-// dependencies. It exists so the native record stores (internal/core/spec,
-// internal/core/intent) share ONE copy of this primitive rather than each
-// keeping a private replica.
+// dependencies. It exists so its consumers (internal/core/spec,
+// internal/core/intent, and record-lint's top-level frontmatter checks) share ONE
+// copy of this primitive rather than each keeping a private replica.
 //
 // It is transport-agnostic: no stdout, no os.Exit, no filesystem access — the
 // caller supplies the file's lines and decides what the fields mean.
@@ -29,12 +29,15 @@ type Field struct {
 // (or is empty) yields no fields.
 func Fields(lines []string) map[string]Field {
 	fields := map[string]Field{}
-	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
+	// A delimiter line may carry trailing whitespace ("--- "); trim spaces/tabs/CR
+	// before comparing, so a trailing-space closing delimiter is still seen as the
+	// close and body lines after it do not leak in as fields.
+	if len(lines) == 0 || strings.TrimRight(lines[0], " \t\r") != "---" {
 		return fields
 	}
 	for i := 1; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r")
-		if line == "---" {
+		if strings.TrimRight(line, " \t") == "---" {
 			break
 		}
 		m := keyRe.FindStringSubmatch(line)

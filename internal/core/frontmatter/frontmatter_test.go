@@ -70,3 +70,23 @@ func TestIsNull(t *testing.T) {
 		}
 	}
 }
+
+// TestFieldsToleratesDelimiterTrailingSpace (iss-69 C5) proves a delimiter line
+// with trailing whitespace ("--- ") is still recognised, at both ends. Otherwise
+// a trailing-space closing delimiter is not seen as the close and body lines
+// after it leak in as frontmatter fields.
+func TestFieldsToleratesDelimiterTrailingSpace(t *testing.T) {
+	lines := []string{
+		"--- ", // opening delimiter with a trailing space
+		"id: itd-9",
+		"---\t",         // closing delimiter with a trailing tab
+		"status: draft", // body — must NOT be read as a field
+	}
+	fields := Fields(lines)
+	if got := fields["id"]; got.Value != "itd-9" {
+		t.Fatalf("id must parse under a trailing-space opening delimiter, got %+v", got)
+	}
+	if _, ok := fields["status"]; ok {
+		t.Fatal("a body line after a trailing-whitespace closing delimiter must not leak in as a field")
+	}
+}

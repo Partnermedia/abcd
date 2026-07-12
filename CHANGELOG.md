@@ -143,6 +143,12 @@ called out in a **Breaking** section.
   positional criteria. The intent template's Audit Notes placeholder is cleared
   when the first review block lands, so a populated audit carries no stale "Empty"
   claim (iss-67).
+- The frontmatter scanner (`internal/core/frontmatter`, used by `abcd intent`/
+  `spec` and record-lint) now tolerates a trailing space or tab on the `---`
+  delimiters; previously a `--- ` closing delimiter went unrecognised and every
+  body line after it was misread as a frontmatter field. `record-lint` no longer
+  keeps a divergent copy of the scanner — it routes through the canonical one and
+  inherits this fix (iss-69).
 
 ### Security
 
