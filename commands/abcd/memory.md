@@ -60,7 +60,7 @@ abcd memory lint --json
 ```
 
 It rebuilds the regenerable `.coverage_index.json` and writes a report under
-`.abcd/logbook/memory/lint-<ts>/`. Summarise `summary.blockers` /
+`.abcd/.work.local/logs/memory/lint-<ts>/`. Summarise `summary.blockers` /
 `summary.warnings` / `summary.infos` and each finding's `code` and `message`.
 Blockers exit nonzero; warn-only exits 0.
 
