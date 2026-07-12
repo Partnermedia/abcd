@@ -137,6 +137,16 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Memory-ingest boundary — partial-failure reporting and CRLF parity**
+  (iss-30, continued). When `abcd memory ingest --keep-original` fails to store
+  the original *after* the pages and registry are durably written, it no longer
+  reports total failure: the successful ingest is reported (pages listed) with a
+  warning and a non-zero exit, and the failure message names only the
+  repo-relative store location — no absolute path, in text or `--json`. CRLF
+  documents now split identically to their LF form (`splitFileFrontmatter`
+  normalises line endings like its sibling parsers), so a `\r\n` closing `---`
+  delimiter is no longer rejected and hashes/summaries no longer silently
+  degrade.
 - **Fail-closed capture surface** (iss-29). A mistyped `capture` subcommand
   (e.g. `abcd capture resovle iss-1 …`) is no longer swallowed as free text and
   filed as a new issue; it is refused with a did-you-mean and writes nothing.

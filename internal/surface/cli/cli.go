@@ -1245,7 +1245,7 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd memory ingest — %s\n", res.Status)
 				fmt.Fprintf(w, "  content hash: %s\n", res.ContentHash)
 				fmt.Fprintf(w, "  licence:      %s\n", res.Licence)
@@ -1255,7 +1255,19 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 				if res.KeptOriginal != "" {
 					fmt.Fprintf(w, "  kept original: %s\n", res.KeptOriginal)
 				}
-			})
+				if res.KeepOriginalError != "" {
+					fmt.Fprintf(w, "  warning: --keep-original failed (the source was still ingested): %s\n", res.KeepOriginalError)
+				}
+			}); err != nil {
+				return err
+			}
+			// The ingest succeeded but an explicitly-requested --keep-original
+			// copy did not: signal it with a non-zero exit while leaving the
+			// rendered result (which reports what was durably written) intact.
+			if res.KeepOriginalError != "" {
+				return &exitError{Code: 1}
+			}
+			return nil
 		},
 	}
 	ingestCmd.Flags().BoolVar(&keepOriginalFlag, "keep-original", false, "store the original at .abcd/memory/sources/<sha256>.<ext>")

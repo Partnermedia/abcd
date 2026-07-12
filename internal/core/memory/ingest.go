@@ -2,6 +2,7 @@ package memory
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -75,9 +76,14 @@ type IngestResult struct {
 	Pages            []string       `json:"pages"`
 	Citation         map[string]any `json:"citation"`
 	KeptOriginal     string         `json:"kept_original"`
-	Linked           [][2]string    `json:"linked"`
-	Contradictions   [][2]string    `json:"contradictions"`
-	WriteReport      *WriteReport   `json:"write_report"`
+	// KeepOriginalError records a --keep-original copy failure that occurred
+	// AFTER the pages and registry were durably written. The ingest itself
+	// succeeded; only the best-effort original copy did not. Empty when
+	// --keep-original was not requested or the copy succeeded.
+	KeepOriginalError string       `json:"keep_original_error,omitempty"`
+	Linked            [][2]string  `json:"linked"`
+	Contradictions    [][2]string  `json:"contradictions"`
+	WriteReport       *WriteReport `json:"write_report"`
 }
 
 type sourceMaterial struct {
@@ -174,11 +180,14 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 			if err != nil {
 				return IngestResult{}, err
 			}
-			kept := ""
+			// Best-effort keep-original: a failure after the durable write is
+			// recorded, never reported as total failure (iss-30).
+			kept, keepErr := "", ""
 			if req.KeepOriginal {
-				kept, err = storeOriginal(root, material, contentHash)
-				if err != nil {
-					return IngestResult{}, err
+				if k, serr := storeOriginal(root, material, contentHash); serr != nil {
+					keepErr = keepOriginalErrorMessage(serr)
+				} else {
+					kept = k
 				}
 			}
 			cachedEntry, _ := newRegistry[contentHash].(map[string]any)
@@ -192,7 +201,7 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 			return IngestResult{
 				Status: "registry_only", ContentHash: contentHash, Licence: resultLicence,
 				SourceTokenCount: tokenCount, Pages: recorded, Citation: deepCopyMap(cachedCitation),
-				KeptOriginal: kept, WriteReport: &report,
+				KeptOriginal: kept, KeepOriginalError: keepErr, WriteReport: &report,
 			}, nil
 		}
 	}
@@ -302,11 +311,15 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	if err != nil {
 		return IngestResult{}, err
 	}
-	kept := ""
+	// storeOriginal runs AFTER the durable page + registry write. A failure
+	// here does not un-ingest anything, so it must not be reported as total
+	// failure — record it and return the successful result (iss-30).
+	kept, keepErr := "", ""
 	if req.KeepOriginal {
-		kept, err = storeOriginal(root, material, contentHash)
-		if err != nil {
-			return IngestResult{}, err
+		if k, serr := storeOriginal(root, material, contentHash); serr != nil {
+			keepErr = keepOriginalErrorMessage(serr)
+		} else {
+			kept = k
 		}
 	}
 
@@ -317,7 +330,8 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	return IngestResult{
 		Status: status, ContentHash: contentHash, Licence: licence,
 		SourceTokenCount: tokenCount, Pages: dedupPages, Citation: citation,
-		KeptOriginal: kept, Linked: plan.Linked, Contradictions: plan.Contradictions,
+		KeptOriginal: kept, KeepOriginalError: keepErr,
+		Linked: plan.Linked, Contradictions: plan.Contradictions,
 		WriteReport: &report,
 	}, nil
 }
@@ -755,6 +769,26 @@ func safeExt(ext string) string {
 // Original storage (--keep-original)
 // ---------------------------------------------------------------------------
 
+// sourcesRelPath is the repo-relative location of the kept-originals store,
+// used in user-facing errors so no absolute path leaks into rendered output.
+var sourcesRelPath = filepath.Join(".abcd", "memory", "sources")
+
+// keepOriginalErrorMessage renders a --keep-original failure without leaking the
+// absolute sources path: filesystem errors embed the full path(s), so report
+// only their bare cause against the repo-relative store location (iss-30). Both
+// *PathError (Lstat/MkdirAll/OpenFile/Write/Sync) and *LinkError (Rename, which
+// carries TWO absolute paths) are stripped; the only other storeOriginal error
+// already names the repo-relative sourcesRelPath.
+func keepOriginalErrorMessage(err error) string {
+	if pe := (*os.PathError)(nil); errors.As(err, &pe) {
+		return fmt.Sprintf("could not store original under %s: %s", sourcesRelPath, pe.Err.Error())
+	}
+	if le := (*os.LinkError)(nil); errors.As(err, &le) {
+		return fmt.Sprintf("could not store original under %s: %s", sourcesRelPath, le.Err.Error())
+	}
+	return err.Error()
+}
+
 func storeOriginal(repoRoot string, material sourceMaterial, contentHash string) (string, error) {
 	sourcesDir := filepath.Join(Dir(repoRoot), "sources")
 	if fi, err := os.Lstat(sourcesDir); err != nil {
@@ -766,7 +800,7 @@ func storeOriginal(repoRoot string, material sourceMaterial, contentHash string)
 			return "", err
 		}
 	} else if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
-		return "", newIngestError("sources dir is a symlink or non-directory: %s", sourcesDir)
+		return "", newIngestError("sources dir is a symlink or non-directory: %s", sourcesRelPath)
 	}
 	target := filepath.Join(sourcesDir, contentHash+material.ext)
 	tmp := target + "." + itoa(os.Getpid()) + ".memtmp"
