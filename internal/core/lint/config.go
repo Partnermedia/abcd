@@ -113,13 +113,16 @@ type RuleConfig struct {
 }
 
 // ArmReceiptGate returns cfg with the receipt_gate rule armed for a release: it
-// is enabled and pointed at the target commit, and — when a non-empty list is
-// supplied — its required gates are overridden. This is how a release runs the
-// gate: the CALLER (a CI workflow) supplies the arming, so the decision to gate,
-// the target commit, and the required-gates list are trust-rooted to the workflow
-// rather than the in-tree, committer-editable config (phase-2 review Finding 2).
-// The input cfg is not mutated (the Rules map is copied). Other rules are
-// unchanged; the deterministic gates still run alongside.
+// is enabled, pointed at the target commit, and its required-gates list is set to
+// the caller's list verbatim. This is how a release runs the gate: the CALLER (a
+// CI workflow) supplies the arming, so the decision to gate, the target commit,
+// and the required-gates list are trust-rooted to the workflow rather than the
+// in-tree, committer-editable config (phase-2 review Finding 2). The caller's list
+// is authoritative even when empty: an empty list clears the gates so
+// checkReceiptGate fails closed, rather than inheriting a config a committer could
+// have shrunk (an argless arming must not silently pick up in-tree gates). The
+// input cfg is not mutated (the Rules map is copied). Other rules are unchanged;
+// the deterministic gates still run alongside.
 func ArmReceiptGate(cfg Config, commit string, requiredGates []string) Config {
 	rules := make(map[string]RuleConfig, len(cfg.Rules)+1)
 	for k, v := range cfg.Rules {
@@ -133,9 +136,10 @@ func ArmReceiptGate(cfg Config, commit string, requiredGates []string) Config {
 	// Commit, never the committer-editable config. A downgraded severity landed in
 	// the in-tree file must not defang the gate at release time.
 	rc.Severity = severityBlocker
-	if len(requiredGates) > 0 {
-		rc.RequiredGates = requiredGates
-	}
+	// Verbatim, including empty: the caller is the trust root, so an empty list
+	// clears the gates (fail-closed at check time) rather than inheriting the
+	// committer-editable config.
+	rc.RequiredGates = requiredGates
 	rules["receipt_gate"] = rc
 	cfg.Rules = rules
 	return cfg

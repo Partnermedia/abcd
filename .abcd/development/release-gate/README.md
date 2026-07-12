@@ -52,10 +52,16 @@ Verification Summary Attestation (VSA) shape carrying `verificationResult`
 failing categories. Receipts live at `.abcd/work/reviews/<commit-sha>/<gate>.json`;
 [`receipt.example.json`](receipt.example.json) is the concrete shape. The
 `receipt_gate` `record-lint` rule verifies, before a tag, that each required gate
-has a PROMOTE receipt whose subject digest is the target commit and which pins a
-judge model; a missing, mismatched, malformed, HOLD, or model-less receipt
-**blocks** the release (fail-closed — an un-run semantic pass is never a silent
-pass).
+has a PROMOTE receipt whose subject digest is the target commit, whose
+`policy.detector` names that gate, and which pins a judge model; a missing,
+mismatched, malformed, HOLD, model-less, or wrong-detector receipt **blocks** the
+release (fail-closed — an un-run semantic pass is never a silent pass).
+
+A receipt is bound to its gate by its `policy.detector` value, not by its
+filename: the `<gate>.json` at `.abcd/work/reviews/<sha>/` must carry
+`policy.detector` equal to `<gate>`. This stops one genuine PROMOTE receipt from
+being copied across every gate's path to satisfy them all — each gate needs its
+own receipt from its own detector.
 
 The `receipt_gate` rule is **disabled by default** — it must never fire on
 ordinary PRs/pushes, only at release time — and is armed by `release.yml`, which

@@ -606,6 +606,12 @@ type receipt struct {
 	} `json:"subject"`
 	VerificationResult string `json:"verificationResult"`
 	JudgeModel         string `json:"judgeModel"`
+	// Policy.Detector names the gate this receipt attests. The gate binding is the
+	// receipt's content, not its filename — so a genuine receipt for one detector
+	// cannot be copied to another gate's path and satisfy it.
+	Policy struct {
+		Detector string `json:"detector"`
+	} `json:"policy"`
 }
 
 // checkReceiptGate is the fail-closed, release-time verification of the semantic
@@ -669,6 +675,14 @@ func checkReceiptGate(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		}
 		if r.VerificationResult != "PROMOTE" {
 			add(rel, "'"+gate+"' receipt verdict is '"+r.VerificationResult+"', not PROMOTE")
+			continue
+		}
+		// Bind the receipt to the gate it attests: a receipt whose policy.detector
+		// names a different gate (or none) does not satisfy this one, even if it is a
+		// genuine PROMOTE for the target commit. Without this, one receipt copied
+		// across every gate's path would satisfy them all.
+		if strings.TrimSpace(r.Policy.Detector) != gate {
+			add(rel, "'"+gate+"' receipt attests detector '"+r.Policy.Detector+"', not this gate; a receipt is bound to its detector, not its filename")
 			continue
 		}
 		if strings.TrimSpace(r.JudgeModel) == "" {
@@ -815,6 +829,10 @@ func workflowStepNames(repoRoot, rel, job string, ignore []string) ([]string, er
 	var names []string
 	seenJobs, inJob, inSteps, inStep := false, false, false, false
 	var cur string
+	// Column where the current step's own mapping keys sit (the marker's content
+	// column). A `name:` deeper than this belongs to a nested mapping (e.g.
+	// `with: name:`) and is NOT the step's name.
+	stepKeyCol := -1
 	flush := func() {
 		if inStep {
 			name := strings.Trim(strings.TrimSpace(cur), `"'`)
@@ -849,6 +867,9 @@ func workflowStepNames(repoRoot, rel, job string, ignore []string) ([]string, er
 		if m := stepMarkerRe.FindStringSubmatch(line); m != nil {
 			flush()
 			inStep = true
+			// The step's keys align at the marker's content column, so a later
+			// `name:` at that exact column is the step's name; anything deeper is nested.
+			stepKeyCol = strings.Index(line, m[1])
 			if content := m[1]; strings.HasPrefix(content, "name:") {
 				cur = strings.TrimSpace(strings.TrimPrefix(content, "name:"))
 			}
@@ -856,7 +877,9 @@ func workflowStepNames(repoRoot, rel, job string, ignore []string) ([]string, er
 		}
 		if inStep && cur == "" {
 			if nm := stepNameKeyRe.FindStringSubmatch(line); nm != nil {
-				cur = strings.TrimSpace(nm[1])
+				if indent := len(line) - len(strings.TrimLeft(line, " ")); indent == stepKeyCol {
+					cur = strings.TrimSpace(nm[1])
+				}
 			}
 		}
 	}

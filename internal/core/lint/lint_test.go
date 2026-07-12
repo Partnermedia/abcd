@@ -480,14 +480,16 @@ func TestReceiptGate(t *testing.T) {
 	const other = "ffffffffffffffffffffffffffffffffffffffff"
 	reviews := filepath.Join(".abcd", "work", "reviews")
 
-	receipt := func(commit, result, model string) string {
+	// A valid receipt binds its policy.detector to the gate it attests. Callers
+	// pass the detector explicitly so a receipt can be built for the WRONG gate.
+	receipt := func(commit, result, model, detector string) string {
 		return `{
   "subject": {"digest": {"gitCommit": "` + commit + `"}},
   "verifier": {"id": "maintainer"},
   "timeVerified": "2026-07-11T00:00:00Z",
   "verificationResult": "` + result + `",
   "judgeModel": "` + model + `",
-  "policy": {"detector": "x", "version": "1"}
+  "policy": {"detector": "` + detector + `", "version": "1"}
 }`
 	}
 	gates := []string{"docs-currency-reviewer", "iss35-brief-surface-crosscheck"}
@@ -508,9 +510,10 @@ func TestReceiptGate(t *testing.T) {
 		writeFile(t, root, filepath.Join(reviews, commit, gate+".json"), body)
 	}
 
-	// 1. Every required gate has a PROMOTE receipt for the target sha → clean.
-	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8"))
-	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	// 1. Every required gate has a PROMOTE receipt for the target sha whose
+	// policy.detector names that gate → clean.
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8", "docs-currency-reviewer"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 	if n := countRule(run(baseCfg()), "receipt_gate"); n != 0 {
 		t.Fatalf("all-PROMOTE receipts should be clean, got %d", n)
 	}
@@ -530,32 +533,32 @@ func TestReceiptGate(t *testing.T) {
 	}
 
 	// 4. A HOLD verdict blocks (only the HOLD gate fires).
-	put(other, "docs-currency-reviewer", receipt(other, "HOLD", "claude-opus-4-8"))
-	put(other, "iss35-brief-surface-crosscheck", receipt(other, "PROMOTE", "claude-opus-4-8"))
+	put(other, "docs-currency-reviewer", receipt(other, "HOLD", "claude-opus-4-8", "docs-currency-reviewer"))
+	put(other, "iss35-brief-surface-crosscheck", receipt(other, "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 	if n := countRule(run(cfg), "receipt_gate"); n != 1 {
 		t.Fatalf("one HOLD should fire once, got %d", n)
 	}
 
 	// 5. subject digest ≠ target commit → BLOCK (receipt not for this release).
-	put(sha, "iss35-brief-surface-crosscheck", receipt("deadbeef", "PROMOTE", "claude-opus-4-8"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt("deadbeef", "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
 		t.Fatalf("subject mismatch should fire, got %d", n)
 	}
-	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 
 	// 6. A blank (floating) judge model is not auditable → BLOCK.
-	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", ""))
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "", "docs-currency-reviewer"))
 	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
 		t.Fatalf("blank judge model should fire, got %d", n)
 	}
-	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8", "docs-currency-reviewer"))
 
 	// 7. Malformed receipt JSON → BLOCK (never a silent pass).
 	put(sha, "iss35-brief-surface-crosscheck", "{ not json")
 	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
 		t.Fatalf("malformed receipt should fire, got %d", n)
 	}
-	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 
 	// 8. Enabled with no target commit configured → fail-closed config error.
 	cfg = baseCfg()
@@ -586,6 +589,23 @@ func TestReceiptGate(t *testing.T) {
 	if n := countRule(run(cfg), "receipt_gate"); n == 0 {
 		t.Fatal("an unsafe gate name must fail closed")
 	}
+
+	// 12. A genuine PROMOTE receipt for one detector, copied to another gate's
+	// path, must NOT satisfy that gate — the receipt is bound to its detector, not
+	// its filename. This is the one-receipt-satisfies-every-gate hole (C16).
+	put(sha, "docs-currency-reviewer", receipt(sha, "PROMOTE", "claude-opus-4-8", "docs-currency-reviewer"))
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", "docs-currency-reviewer"))
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
+		t.Fatalf("a receipt whose detector names a different gate must fire, got %d", n)
+	}
+
+	// 13. A receipt with a blank/absent policy.detector cannot be bound to a gate
+	// → BLOCK (never a silent pass on an unbound attestation).
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", ""))
+	if n := countRule(run(baseCfg()), "receipt_gate"); n != 1 {
+		t.Fatalf("a receipt with no detector must fire, got %d", n)
+	}
+	put(sha, "iss35-brief-surface-crosscheck", receipt(sha, "PROMOTE", "claude-opus-4-8", "iss35-brief-surface-crosscheck"))
 }
 
 func TestGateLockstep(t *testing.T) {
@@ -700,6 +720,18 @@ func TestGateLockstep(t *testing.T) {
 		t.Fatalf("a 2-space comment must not drop steps after it, got %d: %+v", n, lint(c7))
 	}
 
+	// 7b. A step with no step-level name but a nested `with: name:` (deeper indent)
+	// contributes NO gate name — the nested key is not the step's name (P4). Here
+	// the upload-artifact step is unnamed, so only Format + Build are gates.
+	writeFile(t, root, ".github/workflows/nested.yml", "name: r\non:\n  push:\njobs:\n  verify:\n    steps:\n"+
+		"      - name: Format (gofmt)\n      - uses: actions/upload-artifact@v4\n        with:\n          name: build-logs\n      - name: Build\n")
+	writeFile(t, root, "nested-runbook.md", runbook("1. Format (gofmt)\n2. Build\n"))
+	c7b := cfg()
+	c7b.Workflow, c7b.Runbook, c7b.MinGates, c7b.IgnoreSteps = ".github/workflows/nested.yml", "nested-runbook.md", 2, nil
+	if n := countRule(lint(c7b), "gate_lockstep"); n != 0 {
+		t.Fatalf("a nested with:name: must not be captured as a step name, got %d: %+v", n, lint(c7b))
+	}
+
 	// 8. A configured file that does not exist → fail loud, never silent.
 	c8 := cfg()
 	c8.Runbook = "does-not-exist.md"
@@ -738,10 +770,13 @@ func TestArmReceiptGate(t *testing.T) {
 		t.Fatal("ArmReceiptGate must not mutate the input config")
 	}
 
-	// No supplied gates → the config's list is kept.
-	kept := ArmReceiptGate(base, "def456", nil)
-	if got := kept.Rules["receipt_gate"].RequiredGates; len(got) != 1 || got[0] != "config-gate" {
-		t.Fatalf("nil gates must keep the config list, got %+v", got)
+	// No supplied gates → the committer-editable config list is NOT inherited;
+	// arming is trust-rooted to the caller, so an empty caller list clears the
+	// gates and the rule fails closed at check time (P9). Never silently fall back
+	// to a config a committer could have shrunk.
+	cleared := ArmReceiptGate(base, "def456", nil)
+	if got := cleared.Rules["receipt_gate"].RequiredGates; len(got) != 0 {
+		t.Fatalf("nil gates must clear the config list (fail-closed), got %+v", got)
 	}
 
 	// A committer-downgraded severity in the config must NOT defang the armed

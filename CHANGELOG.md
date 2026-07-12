@@ -133,6 +133,19 @@ called out in a **Breaking** section.
 - The `created` and `updated` frontmatter fields on issues. Git is the canonical
   source of an issue's timeline; the ledger no longer duplicates it.
 
+### Security
+
+- **Release receipt-gate hardening** (iss-70). The `receipt_gate` record-lint
+  rule now binds each semantic-pass receipt to the gate it attests: a receipt
+  satisfies a required gate only when its `policy.detector` equals that gate name,
+  not merely when a `<gate>.json` file exists. This closes a hole where one
+  genuine PROMOTE receipt copied across every gate's path satisfied them all.
+  Arming (`record-lint --release-gate`) now treats the caller's required-gate list
+  as authoritative even when empty — an argless arming clears the gates and fails
+  closed rather than inheriting the committer-editable in-tree list. The
+  `gate_lockstep` workflow parser no longer mistakes a nested `with: name:` for a
+  step name. (The receipt-gate remains disabled outside release time.)
+
 ## [v0.1.0] - 2026-07-07
 
 First tagged milestone: the Go rebuild through Phase 2. abcd is a single,
