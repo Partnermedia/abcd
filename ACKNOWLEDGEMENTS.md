@@ -19,6 +19,10 @@ and fit for the project. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas and methodologies that shaped the design — not code abcd depends on.
 
+- **Agentic Context Engineering (ACE)** — the append-only-delta model of a
+  self-improving instruction record, and the two failure modes it names —
+  *brevity bias* and *context collapse* — which itd-81 cites to strike itd-5's
+  "shorter by >10%" prompt tiebreak.
 - **Amazon "Working Backwards"** — the press-release format of abcd's intents.
 - **Architecture Decision Records (MADR)** — the shape of the decision record.
 - **ccpm (Claude Code PM, Automaze)** — the markdown spec/task conventions
@@ -28,6 +32,9 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Citation Style Language (CSL-JSON)** — the bibliography format of the
   confidential-sources design (itd-76), whose reserved `custom` field carries
   the confidentiality metadata.
+- **CriticGPT (OpenAI)** — the injected-bug construction behind itd-81's
+  calibration corpus: natural defects are unlabelled, so ground truth is
+  manufactured by reintroducing defects whose class is already known.
 - **DITA subject scheme maps** — the controlled-vocabulary pattern behind the
   persona registry: a field's legal values live in a dedicated registry file
   and a processor flags unbound values (the `persona_registry` lint rule).
@@ -37,6 +44,9 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   dependency edges (itd-78), and the store-one-direction/derive-the-reverse
   link model the edge schema follows (shared with OpenFastTrace and
   Sphinx-Needs).
+- **GEPA (reflective prompt evolution)** — the score → reflect-on-failing-traces
+  → minimal-delta → re-score loop that itd-81 adopts as a human-approved manual
+  procedure rather than as a library dependency.
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
 - **Priority inheritance (real-time scheduling)** — the derived-priority rule

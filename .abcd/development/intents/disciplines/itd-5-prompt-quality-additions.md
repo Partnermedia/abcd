@@ -18,7 +18,7 @@ severity: major
 Every `agents/*.md` prompt that abcd ships carries four things, enforced at agent-spec close-time:
 
 1. **`prompt_version: <semver>` frontmatter field**, with a corresponding entry in `agents/CHANGELOG.md` recording the bump rationale and golden-test pass/fail delta.
-2. **A one-shot oracle self-improvement pre-flight at v1.0.0 lock-time** — the candidate prompt submitted to `lifeboat-oracle` for clarity-rewrite; if the rewritten variant passes the same goldens and is shorter by >10%, accept it; otherwise keep the candidate. Decision logged in the CHANGELOG as the agent's first entry.
+2. **A one-shot oracle self-improvement pre-flight at v1.0.0 lock-time** — the candidate prompt submitted to `lifeboat-oracle` for clarity-rewrite; the variant that scores better on the agent's calibration corpus is accepted, and ties go to the candidate. **Length is not a tiebreak** (amended 2026-07-12 per [itd-81](itd-81-judge-calibration.md); see § Why). Decision logged in the CHANGELOG as the agent's first entry, with the corpus delta.
 3. **At least one injection-canary fixture** in `agents/<name>/fixtures/` for every agent that reads untrusted input (transcripts, lifeboats, GitHub issues, commit messages, model-emitted reviews). The fixture's input contains a prompt-injection payload; the expected output demonstrates the injection was ignored. Failing the canary blocks the agent's spec from closing.
 4. **`capability_scope` frontmatter field** (added 2026-05-08 per idea-4 jagged-frontier review). Object: `{ task_classes: [<token>, ...], designed_for: "<free-text 1-line>" }`, with `task_classes` authored as a YAML inline list. `task_classes` is a closed-enum list of tokens the agent is designed to handle; `lint_prompts` validates set-membership against the `task_classes` enum in `internal/core/lint`. **Static declaration only**; dynamic `known_failure_modes` events + plan-time semantic check + capability-aware pre-cascade selector are deferred to the Frontier Awareness intent.
 
@@ -35,7 +35,7 @@ The brief specifies prompt-quality infrastructure in three layers: golden-test f
 The 2026 SOTA evidence supporting each:
 
 - **Versioning** — git-native versioning is the consensus default for solo-developer prompts-as-code (Braintrust 2026, Prompt Assay 2026). The minimum useful unit is an explicit `prompt_version` field plus a per-agent CHANGELOG entry rationale; the full diff-on-update workflow is rightly deferred to `itd-14`.
-- **Self-improvement pre-flight** — Anthropic's multi-agent research system reported a *40% task-time reduction* from having Claude rewrite its own tool descriptions. Even capturing a fraction of that across 14+ agents at lock-time is a one-shot win that compounds.
+- **Self-improvement pre-flight** — Anthropic's multi-agent research system reported a *40% task-time reduction* from having Claude rewrite its own tool descriptions. Even capturing a fraction of that across 14+ agents at lock-time is a one-shot win that compounds. **The original "shorter by >10%" tiebreak is struck** (2026-07-12, [itd-81](itd-81-judge-calibration.md)): selecting on length selects for the *brevity bias* that Agentic Context Engineering identifies as progressively destroying instruction quality — optimisers converge on short generic instructions and drop the domain detail that was load-bearing — and it did so against goldens that never measured false positives, so a shorter prompt passing them may simply have shed detail the goldens never tested. The gate is the corpus score.
 - **Injection canaries** — OWASP LLM01 has been #1 for three consecutive years. abcd's threat surface includes attacker-influenced transcripts in the native transcript store (`chat-distiller`), hostile lifeboats (`embark-scaffolder`), and adversarial GitHub issues (`issue-scout`). A single canary fixture per affected agent is the cheapest possible regression test.
 
 The discipline is project-agnostic: any project shipping LLM-driven agents under abcd inherits this rule. Application projects with their own agents (e.g., a macOS app using Claude for an in-app assistant) get the same `prompt_version` + pre-flight + canary requirements without any framework-specific reasoning.
@@ -45,7 +45,7 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
 ### Add 1: `prompt_version` frontmatter field
 
 - Every `agents/*.md` carries `prompt_version: <semver>` in YAML frontmatter alongside existing `name`, `description`, `tools`, `model`.
-- Initial value `1.0.0` for all 14+ agents.
+- **`1.0.0` means locked, and a lock must be earned.** An agent sits below `1.0.0` (`0.x.y`) until it has cleared its calibration corpus per [itd-81](itd-81-judge-calibration.md); the `0.x` band says "shipped and wired, honestly unmeasured". Stamping `1.0.0` on an unmeasured prompt asserts a lock that was never run, which is the failure itd-81 exists to prevent. The five agents shipped as of 2026-07-12 are all `0.1.0`.
 - A consolidated `agents/CHANGELOG.md` records each version bump with: agent name, old → new version, one-line rationale, eval delta (golden-test pass/fail count change).
 - Bump rules (lifted from semver, adapted): MAJOR for behaviour-breaking output schema change; MINOR for behaviour change preserving schema; PATCH for typo / non-behavioural edit.
 - Prompt linter (component C of B+C+D infra) gains a check: every `agents/*.md` MUST have a `prompt_version` field; bump version when the prompt body's git-diff is non-trivial.
@@ -134,6 +134,7 @@ Every native spec that ships an agent inherits all four rules above as acceptanc
 - **Hard prerequisite:** [itd-1 discipline](itd-1-acceptance-gates.md) — itd-1's acceptance-criteria pattern is the format this discipline's gates use.
 - **Coordinated with:** [itd-14](../drafts/itd-14-prompt-registry-versioning.md) (prompt registry) — the `prompt_version` field landed here is the foundation itd-14 builds on. This discipline ships the field; itd-14 ships the registry around it.
 - **Coordinated with:** [itd-15](../drafts/itd-15-self-dogfooded-sota-audit.md) (self-dogfooded SOTA audit) — this discipline's one-shot pre-flight at v1.0.0 lock is *not* the same as itd-15's recurring per-disembark audit; both will coexist once itd-15 lands.
+- **Amended by:** [itd-81](itd-81-judge-calibration.md) (judge calibration, 2026-07-12) — supplies the calibration corpus and TNR floor this discipline's goldens and pre-flight lacked. Two rules changed here: the pre-flight's length tiebreak is struck (the corpus score is the gate), and `1.0.0` now means *measured*, so agents ship in the `0.x` band until they clear a corpus.
 
 ## Audit Notes
 
