@@ -1071,14 +1071,19 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 	}
 
 	// Collect every intent id that exists as a file in any bucket, so the
-	// superseded_by target can be checked for existence.
+	// superseded_by target can be checked for existence. Track the files each id
+	// claims: ids are the intent's identity across the record, and parallel
+	// branches each allocating "the next free id" collide silently otherwise.
 	known := map[string]bool{}
+	idFiles := map[string][]string{}
 	_ = filepath.WalkDir(intentsRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		if intentFileRe.MatchString(d.Name()) {
-			known[intentIDRe.FindString(d.Name())] = true
+			id := intentIDRe.FindString(d.Name())
+			known[id] = true
+			idFiles[id] = append(idFiles[id], path)
 		}
 		return nil
 	})
@@ -1113,9 +1118,38 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 				continue
 			}
 			out = append(out, validateIntent(rel, bucket, fields, known, cfg.Severity)...)
+			out = append(out, validateIntentIDUnique(repoRoot, rel, e.Name(), fields, idFiles, cfg.Severity)...)
 		}
 	}
 	return out, nil
+}
+
+// validateIntentIDUnique flags every file in a colliding set, not just one:
+// the linter cannot know which claimant is authoritative, and flagging a single
+// file would imply the others are fine.
+func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmField, idFiles map[string][]string, severity string) []Finding {
+	id := intentIDRe.FindString(name)
+	claimants := idFiles[id]
+	if len(claimants) < 2 {
+		return nil
+	}
+	others := make([]string, 0, len(claimants)-1)
+	for _, p := range claimants {
+		if r := repoRel(repoRoot, p); r != rel {
+			others = append(others, r)
+		}
+	}
+	sort.Strings(others)
+
+	line := 1
+	if f, ok := fields["id"]; ok && f.line > 0 {
+		line = f.line
+	}
+	return []Finding{{
+		File: rel, Line: line, RuleID: "intent_lifecycle", Severity: severity,
+		Message: "duplicate intent id " + id + "; also claimed by " + strings.Join(others, ", ") +
+			" — an id is the intent's identity across the record and must be unique",
+	}}
 }
 
 func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, severity string) []Finding {
