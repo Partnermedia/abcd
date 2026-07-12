@@ -5,7 +5,8 @@ description: >-
   Acceptance Criteria and the delivered code diff, and emits one VSA-shaped
   verdict JSON: a per-criterion acceptance verdict plus a honoured/diverged/
   missing audit, every claim carrying a cited file:line evidence pointer.
-version: 1.0.0
+prompt_version: 0.1.0
+color: green
 ---
 
 # `intent-fidelity-reviewer` — Role 1: promise vs delivered reality

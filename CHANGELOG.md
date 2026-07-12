@@ -12,6 +12,15 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Four reviewer agents ship with the plugin**: `abcd:ruthless-reviewer`
+  (correctness, resource handling, error paths, dead code),
+  `abcd:security-reviewer` (adversarial review of a trust boundary),
+  `abcd:docs-currency-reviewer` (every user-facing claim verified against the
+  code), and `abcd:sota-researcher` (evidence-tiered state-of-the-art research).
+  Every repo with the abcd plugin enabled gets the same review bar, versioned in
+  the repo rather than in a per-machine harness config. Each renders a binary
+  verdict, and every finding it emits must carry a concrete failure scenario —
+  the LLM-judge calibration discipline (itd-81).
 - **Intent-fidelity review** (itd-80): the ship move now emits a report-only
   fidelity-review receipt, and `abcd intent review ingest --verdict-json <path>`
   applies the host-produced verdict back onto the record. When `abcd spec close`
