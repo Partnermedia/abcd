@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -309,6 +311,9 @@ func TestIngestRefusesSSRFTargets(t *testing.T) {
 		"http://172.16.5.5/x",                      // private
 		"http://metadata.google.internal/x",        // metadata name
 		"http://svc.internal/x",                    // .internal name
+		"http://[64:ff9b::a9fe:a9fe]/x",            // NAT64 embedding 169.254.169.254 (metadata)
+		"http://[64:ff9b::7f00:1]/x",               // NAT64 embedding 127.0.0.1 (loopback)
+		"http://[2002:a9fe:a9fe::]/x",              // 6to4 embedding 169.254.169.254 (metadata)
 	}
 	for _, target := range cases {
 		t.Run(target, func(t *testing.T) {
@@ -356,5 +361,78 @@ func TestValidateDistilledPageComputesTopicHash(t *testing.T) {
 	}
 	if p.Filename() != "topic_auth_x.md" {
 		t.Fatalf("filename = %q", p.Filename())
+	}
+}
+
+// TestReadFetchedResponseRejectsNon2xx (iss-30 C12) proves a non-2xx HTTP
+// response (a 404/500 error page) is an ingest error, not stored as source
+// content.
+func TestReadFetchedResponseRejectsNon2xx(t *testing.T) {
+	for _, code := range []int{404, 500, 301, 403} {
+		resp := &http.Response{
+			StatusCode: code,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader("<html>error page body</html>")),
+		}
+		if _, err := readFetchedResponse("http://x/y", resp); err == nil {
+			t.Fatalf("HTTP %d must be an ingest error, not accepted as content", code)
+		}
+	}
+	// A 200 is read normally.
+	ok := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{},
+		Body:       io.NopCloser(strings.NewReader("real content")),
+	}
+	fs, err := readFetchedResponse("http://x/y", ok)
+	if err != nil || string(fs.Body) != "real content" {
+		t.Fatalf("200 response = %q, %v", fs.Body, err)
+	}
+}
+
+// TestMaterialFromLocalSizeCap (iss-30 C13) proves a local file larger than the
+// fetch cap is rejected before it is read whole into memory.
+func TestMaterialFromLocalSizeCap(t *testing.T) {
+	big := filepath.Join(t.TempDir(), "big.txt")
+	f, err := os.Create(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(maxFetchBytes + 1); err != nil { // sparse; fast
+		t.Fatal(err)
+	}
+	f.Close()
+	// Assert the SIZE cap is what rejects it — a sparse (all-zero) file would also
+	// trip the downstream NUL-byte check, so a bare "err != nil" would pass even
+	// with the cap removed (false pin). The "exceeds" message is produced only by
+	// the size guard, so this fails on revert.
+	_, err = materialFromLocal(big, nil)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("an over-cap local file must be rejected by the size cap, got: %v", err)
+	}
+}
+
+// TestMaterialFromLocalTildeUser (iss-30) proves a "~/…" path expands to the home
+// dir but a "~user" path is left literal (not mangled into home+"user").
+func TestMaterialFromLocalTildeUser(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, "real.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := materialFromLocal("~/real.txt", nil); err != nil {
+		t.Fatalf("~/real.txt must expand to the home dir and be found: %v", err)
+	}
+	// Create home/baduser/real.txt — the file a MANGLED "~baduser" would resolve
+	// to (home + "baduser/real.txt"). Left literal, "~baduser/real.txt" must not
+	// find it.
+	if err := os.MkdirAll(filepath.Join(home, "baduser"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "baduser", "real.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := materialFromLocal("~baduser/real.txt", nil); err == nil {
+		t.Fatal("~baduser must be left literal, not expanded to home+baduser (which would wrongly succeed)")
 	}
 }

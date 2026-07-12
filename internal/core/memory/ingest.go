@@ -481,8 +481,42 @@ func acquireSource(source string, fetcher Fetcher, pdf PDFExtractor) (sourceMate
 // the SSRF guard that keeps cloud metadata endpoints (e.g. 169.254.169.254) and
 // internal services out of reach.
 func blockedFetchIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast()
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	// NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embed an IPv4 destination in an
+	// IPv6 address the checks above do not flag; a metadata/loopback/private IPv4
+	// wrapped in one of these would otherwise slip through. Extract the embedded
+	// v4 and re-check it (embeddedIPv4 returns nil for a v4, so no recursion loop).
+	if v4 := embeddedIPv4(ip); v4 != nil {
+		return blockedFetchIP(v4)
+	}
+	return false
+}
+
+// embeddedIPv4 returns the IPv4 address a NAT64 (64:ff9b::/96) or 6to4 (2002::/16)
+// IPv6 address embeds, or nil when ip is not one of those transition forms. Scope
+// is the WELL-KNOWN prefixes only: deprecated IPv4-compatible (::/96, non-routable)
+// and site-specific NAT64 prefixes (RFC 8215) are out of scope — the DNS64 default
+// is the well-known /96 covered here. v4-mapped ::ffff:/96 needs no extraction (the
+// standard IsPrivate/IsLoopback checks already fold through To4()).
+func embeddedIPv4(ip net.IP) net.IP {
+	v6 := ip.To16()
+	if v6 == nil || ip.To4() != nil {
+		return nil // not IPv6 (a plain v4 or v4-mapped needs no extraction)
+	}
+	// NAT64 well-known prefix 64:ff9b::/96 → last 4 bytes are the v4.
+	if v6[0] == 0x00 && v6[1] == 0x64 && v6[2] == 0xff && v6[3] == 0x9b &&
+		v6[4] == 0 && v6[5] == 0 && v6[6] == 0 && v6[7] == 0 &&
+		v6[8] == 0 && v6[9] == 0 && v6[10] == 0 && v6[11] == 0 {
+		return net.IPv4(v6[12], v6[13], v6[14], v6[15])
+	}
+	// 6to4 prefix 2002::/16 → bytes 2..5 are the v4.
+	if v6[0] == 0x20 && v6[1] == 0x02 {
+		return net.IPv4(v6[2], v6[3], v6[4], v6[5])
+	}
+	return nil
 }
 
 // guardFetchHost refuses a host that is an internal/metadata name or that
@@ -560,6 +594,16 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
 	}
 	defer resp.Body.Close()
+	return readFetchedResponse(rawURL, resp)
+}
+
+// readFetchedResponse validates the HTTP status and reads the size-capped body.
+// A non-2xx response (a 404/500 error page) is an ingest ERROR, not source
+// content — otherwise the error page's HTML would be stored as knowledge.
+func readFetchedResponse(rawURL string, resp *http.Response) (FetchedSource, error) {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return FetchedSource{}, newIngestError("fetch failed for %s: HTTP %d %s", rawURL, resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes+1))
 	if err != nil {
 		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
@@ -577,7 +621,9 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 
 func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) {
 	expanded := source
-	if strings.HasPrefix(expanded, "~") {
+	// Expand only a leading "~" or "~/…" to the home dir. A "~user" form is NOT the
+	// caller's home and must not be mangled into home+"user" — leave it literal.
+	if expanded == "~" || strings.HasPrefix(expanded, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
 			expanded = home + expanded[1:]
 		}
@@ -596,6 +642,11 @@ func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) 
 	}
 	if !st.Mode().IsRegular() {
 		return sourceMaterial{}, newIngestError("source path is not a regular file (directories, devices and symlinks-to-special are rejected): %s", resolved)
+	}
+	// Cap the local read the same as the URL path, so a huge local file cannot be
+	// slurped whole into memory before any text/NUL sniffing.
+	if st.Size() > maxFetchBytes {
+		return sourceMaterial{}, newIngestError("source file exceeds the %d-byte cap: %s", maxFetchBytes, resolved)
 	}
 	raw, err := os.ReadFile(resolved)
 	if err != nil {

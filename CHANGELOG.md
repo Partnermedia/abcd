@@ -154,6 +154,12 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **Memory-ingest fetch/read hardening** (iss-30). `abcd memory ingest` now treats
+  a non-2xx HTTP response as an error instead of storing the 404/500 error page as
+  source content; the SSRF guard additionally rejects NAT64 (`64:ff9b::/96`) and
+  6to4 (`2002::/16`) IPv6 addresses that embed a metadata/loopback/private IPv4; a
+  local source file is size-capped like the URL path; and a `~user` path is left
+  literal rather than being mangled into `home`+`user`.
 - **Spec-store hardening** (iss-68). The spec-store reader now opens a file once
   with `O_NOFOLLOW`+`O_NONBLOCK` and validates the file descriptor before reading,
   closing a symlink-swap window (and never blocking on a FIFO leaf). `NextID` fails
