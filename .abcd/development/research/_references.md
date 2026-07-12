@@ -46,6 +46,27 @@ Canonical bibliography for `.abcd/development/` documents. When citing prior art
 [amazon-working-backwards]: https://www.allthingsdistributed.com/2006/11/working_backwards.html "Working Backwards (Vogels) — Amazon press-release-first product design"
 ```
 
+### LLM judges, evals, and self-improving agents
+
+```
+[criticgpt]: https://arxiv.org/pdf/2407.00215 "LLM Critics Help Catch LLM Bugs (CriticGPT), OpenAI — injected-bug corpora as ground truth"
+[overcorrection]: https://arxiv.org/html/2603.00539 "Are LLMs Reliable Code Reviewers? Systematic Overcorrection in Requirement Conformance Judgement (Automated Software Engineering, 2026)"
+[judge-codegen]: https://arxiv.org/pdf/2507.16587 "On the Effectiveness of LLM-as-a-judge for Code Generation and Summarization — self-preference bias"
+[validators]: https://arxiv.org/pdf/2404.12272 "Who Validates the Validators? (UIST 2024) — criteria drift"
+[evals-faq]: https://hamel.dev/blog/posts/evals-faq/ "Husain & Shankar — LLM Evals FAQ (Jan 2026) — binary labels, error analysis"
+[position-bias]: https://arxiv.org/pdf/2602.02219 "Am I More Pointwise or Pairwise? Position Bias in Rubric-Based LLM-as-a-Judge"
+[speak-freely]: https://arxiv.org/html/2408.02442v1 "Let Me Speak Freely? Impact of Format Restrictions on LLM Performance"
+[ace]: https://arxiv.org/pdf/2510.04618 "Agentic Context Engineering — brevity bias, context collapse, append-only deltas"
+[gepa]: https://arxiv.org/abs/2507.19457 "GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning (ICLR 2026 oral)"
+[reward-hacking]: https://openreview.net/forum?id=ikrQWGgxYg "Reward Hacking in Self-Improving Code Agents — proxy gains without real gains"
+[nine-judges]: https://arxiv.org/html/2605.29800 "Nine Judges, Two Effective Votes: Correlated Errors Undermine LLM Evaluation Panels"
+[poll]: https://arxiv.org/html/2404.18796v1 "Replacing Judges with Juries: PoLL (Cohere)"
+[mar]: https://arxiv.org/html/2512.20845v1 "MAR: Multi-Agent Reflexion — degeneration-of-thought in single-agent reflection"
+[dgm]: https://arxiv.org/pdf/2505.22954 "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents (Sakana AI)"
+[alphaevolve]: https://arxiv.org/abs/2506.13131 "AlphaEvolve: A coding agent for scientific and algorithmic discovery (DeepMind)"
+[voyager]: https://arxiv.org/abs/2305.16291 "Voyager — skill library, admitted on verification"
+```
+
 ### Citation, provenance, and publishing
 
 ```
