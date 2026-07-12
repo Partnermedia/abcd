@@ -552,10 +552,16 @@ func indentOf(s string) int {
 // File-level split / join
 // ---------------------------------------------------------------------------
 
-// splitFileFrontmatter splits full file text into (yaml region, body). The
-// region is the text between the --- delimiters (each inner line
-// newline-terminated); body is everything after the closing --- verbatim.
+// splitFileFrontmatter splits full file text into (yaml region, body). Line
+// endings are normalised to \n first (parser parity, below); the region is the
+// text between the --- delimiters (each inner line newline-terminated); body is
+// everything after the closing --- with normalised newlines.
 func splitFileFrontmatter(text string) (string, string, error) {
+	// Normalise line endings first, exactly as parseFrontmatter and
+	// frontmatterKeyLine do — otherwise a CRLF closing delimiter ("---\r")
+	// never equals "---" and the whole document is wrongly rejected, diverging
+	// from the parser that accepts it and degrading hashes/summaries (iss-30).
+	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(text, "\n")
 	start := 0
 	for start < len(lines) {

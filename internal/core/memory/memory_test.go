@@ -436,3 +436,100 @@ func TestMaterialFromLocalTildeUser(t *testing.T) {
 		t.Fatal("~baduser must be left literal, not expanded to home+baduser (which would wrongly succeed)")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// iss-30: ingest-boundary — partial-failure reporting + CRLF parser parity
+// ---------------------------------------------------------------------------
+
+// TestIngestKeepOriginalFailureStillReportsIngest proves the partial-failure
+// instance: when --keep-original's storeOriginal fails AFTER WritePages has
+// durably written the pages and registry, Ingest must report the successful
+// ingest (not a bare total-failure error) and record the keep-original failure.
+// The failure is forced by pre-creating the sources dir as a regular file.
+func TestIngestKeepOriginalFailureStillReportsIngest(t *testing.T) {
+	repo := t.TempDir()
+	src := writeSource(t, repo, "article.txt", "Token rotation policy: rotate tokens every 24 hours.")
+
+	// Make .abcd/memory/sources a regular file so storeOriginal fails.
+	if err := os.MkdirAll(Dir(repo), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(Dir(repo), "sources"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Ingest(IngestRequest{
+		RepoRoot:     repo,
+		Source:       src,
+		KeepOriginal: true,
+		Distiller:    oneTopicDistiller("topic", "auth", "tokens", "# Token rotation\nRotate tokens every 24 hours."),
+		Now:          fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("ingest must not report total failure when only keep-original failed: %v", err)
+	}
+	if res.Status != "ingested" {
+		t.Fatalf("status = %q, want ingested", res.Status)
+	}
+	if len(res.Pages) != 1 || res.Pages[0] != "topic_auth_tokens.md" {
+		t.Fatalf("pages = %v, want [topic_auth_tokens.md]", res.Pages)
+	}
+	// The page reached disk — the mutation the old code hid behind a total error.
+	if _, err := os.Stat(filepath.Join(Dir(repo), "topic_auth_tokens.md")); err != nil {
+		t.Fatalf("page not durably written: %v", err)
+	}
+	if res.KeepOriginalError == "" {
+		t.Fatalf("keep-original failure must be recorded in the result")
+	}
+	if strings.Contains(res.KeepOriginalError, repo) {
+		t.Fatalf("keep-original error leaked the absolute repo path:\n%s", res.KeepOriginalError)
+	}
+	if res.KeptOriginal != "" {
+		t.Fatalf("KeptOriginal = %q, want empty when the copy failed", res.KeptOriginal)
+	}
+}
+
+// TestSplitFileFrontmatterCRLFParity proves the parser-parity instance: a
+// CRLF-terminated document must split identically to its LF twin. Before the
+// fix splitFileFrontmatter's exact-match closing delimiter ("---" != "---\r")
+// rejected CRLF, while parseFrontmatter accepted it — degrading hashes.
+func TestSplitFileFrontmatterCRLFParity(t *testing.T) {
+	lf := "---\ntitle: Rotation\nyear: 2026\n---\nbody line one\nbody line two\n"
+	crlf := strings.ReplaceAll(lf, "\n", "\r\n")
+
+	lfRegion, lfBody, err := splitFileFrontmatter(lf)
+	if err != nil {
+		t.Fatalf("LF split: %v", err)
+	}
+	crlfRegion, crlfBody, err := splitFileFrontmatter(crlf)
+	if err != nil {
+		t.Fatalf("CRLF split must not error (parser parity): %v", err)
+	}
+	if crlfRegion != lfRegion {
+		t.Fatalf("region parity broken:\n LF=%q\nCRLF=%q", lfRegion, crlfRegion)
+	}
+	if crlfBody != lfBody {
+		t.Fatalf("body parity broken:\n LF=%q\nCRLF=%q", lfBody, crlfBody)
+	}
+}
+
+// TestKeepOriginalErrorMessageNoPathLeak locks the no-absolute-path invariant
+// for every filesystem error shape storeOriginal can return: *os.PathError
+// (single path) and *os.LinkError (rename, two paths). Both must be reduced to
+// their bare cause against the repo-relative store location.
+func TestKeepOriginalErrorMessageNoPathLeak(t *testing.T) {
+	abs := "/Users/someone/secret/repo/.abcd/memory/sources"
+	cases := []error{
+		&os.PathError{Op: "open", Path: abs + "/deadbeef.pdf.tmp", Err: os.ErrPermission},
+		&os.LinkError{Op: "rename", Old: abs + "/deadbeef.pdf.1.memtmp", New: abs + "/deadbeef.pdf", Err: os.ErrExist},
+	}
+	for _, in := range cases {
+		msg := keepOriginalErrorMessage(in)
+		if strings.Contains(msg, "/Users/someone") {
+			t.Fatalf("leaked absolute path for %T: %q", in, msg)
+		}
+		if !strings.Contains(msg, sourcesRelPath) {
+			t.Fatalf("message for %T omits the repo-relative store path: %q", in, msg)
+		}
+	}
+}
