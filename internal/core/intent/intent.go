@@ -101,28 +101,15 @@ func Validate(it Intent) error {
 	return nil
 }
 
-// hasAcceptanceCriteria reports whether content carries a non-empty
-// `## Acceptance Criteria` section (the itd-1 discipline Plan enforces). The
-// section is non-empty when at least one non-blank line separates its heading
-// from the next heading (or end of file).
+// hasAcceptanceCriteria reports whether content carries a `## Acceptance Criteria`
+// section with at least one top-level -/* bullet — the itd-1 discipline Plan
+// enforces. It requires a BULLET (not merely non-blank prose) so the Plan gate
+// agrees with the ingest gate (countAcceptanceCriteria): an intent Plan accepts
+// is one whose criteria the fidelity review can actually enumerate and judge,
+// never a prose-only or numbered section that would perpetually dead-letter every
+// verdict for having zero positional criteria.
 func hasAcceptanceCriteria(content string) bool {
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		if !acHeadingRe.MatchString(strings.TrimRight(line, "\r")) {
-			continue
-		}
-		for _, body := range lines[i+1:] {
-			body = strings.TrimRight(body, "\r")
-			if headingRe.MatchString(body) {
-				break // next section reached with no content
-			}
-			if strings.TrimSpace(body) != "" {
-				return true
-			}
-		}
-		return false
-	}
-	return false
+	return countAcceptanceCriteria(content) > 0
 }
 
 // setFrontmatterFields returns content with the given frontmatter keys set to

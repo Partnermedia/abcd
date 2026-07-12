@@ -458,3 +458,25 @@ func TestFullReviewCycle(t *testing.T) {
 		}
 	}
 }
+
+// TestFirstReviewBlockClearsPlaceholder (iss-67 seed3) proves the intent
+// template's Audit Notes placeholder ("_Empty. Populated by ..._") is dropped when
+// the first review block lands, so a populated audit carries no stale "Empty"
+// claim above the real verdict.
+func TestFirstReviewBlockClearsPlaceholder(t *testing.T) {
+	// Both template placeholder styles the record has used must be cleared.
+	for _, placeholder := range []string{
+		"_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._",
+		"<Empty until intent moves to shipped/. intent-fidelity-reviewer populates this.>",
+	} {
+		content := "---\nid: itd-9\n---\n# alpha\n\n## Acceptance Criteria\n\n- one\n\n" +
+			"## Audit Notes\n\n" + placeholder + "\n"
+		out := upsertReviewBlock(content, "rcp-abc123", owedBlock("rcp-abc123"))
+		if strings.Contains(out, "Empty until") || strings.Contains(out, "_Empty. Populated by") {
+			t.Fatalf("the placeholder %q must be cleared once a review block lands:\n%s", placeholder, out)
+		}
+		if !strings.Contains(out, "OWED receipt=rcp-abc123") {
+			t.Fatalf("the OWED block must be present:\n%s", out)
+		}
+	}
+}

@@ -137,6 +137,12 @@ called out in a **Breaking** section.
 
 - `abcd` status now reports `IsGitRepo` correctly in a linked git worktree or a
   submodule, where `.git` is a regular gitfile rather than a directory (iss-72).
+- `abcd intent plan` now refuses an `## Acceptance Criteria` section with no
+  top-level `-`/`*` bullet, matching the ingest gate — an intent can no longer be
+  planned into a state where every fidelity verdict dead-letters for having zero
+  positional criteria. The intent template's Audit Notes placeholder is cleared
+  when the first review block lands, so a populated audit carries no stale "Empty"
+  claim (iss-67).
 
 ### Security
 

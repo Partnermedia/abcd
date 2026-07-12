@@ -179,6 +179,23 @@ func TestPlanRefusesEmptyAcceptanceCriteria(t *testing.T) {
 	}
 }
 
+// TestPlanRefusesBulletlessAcceptanceCriteria (iss-67 C9) proves Plan refuses an
+// Acceptance Criteria section that has prose but no top-level -/* bullet. The old
+// gate accepted any non-blank line, but the ingest gate counts only bullets — so
+// such an intent planned, then dead-lettered every fidelity verdict forever
+// (zero criteria to map). Plan and ingest must agree on "has criteria".
+func TestPlanRefusesBulletlessAcceptanceCriteria(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n## Acceptance Criteria\n\nThe system should just work well.\n")
+	if _, err := Plan(root, "itd-10"); err == nil {
+		t.Fatal("Plan must refuse an Acceptance Criteria section with no top-level bullet")
+	}
+	if _, err := os.Stat(filepath.Join(root, draftsDir, "itd-10-alpha.md")); err != nil {
+		t.Fatal("draft must remain in place after refusal")
+	}
+}
+
 func TestPlanRefusesNonDraft(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, plannedDir+"/itd-10-alpha.md",

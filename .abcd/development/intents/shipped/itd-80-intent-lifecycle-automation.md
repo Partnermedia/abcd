@@ -105,9 +105,6 @@ closing two gaps (cited evidence per criterion; pinned judge/prompt/rubric hashe
 
 ## Audit Notes
 
-
-<Empty until intent moves to shipped/. intent-fidelity-reviewer populates this with per-criterion verdicts plus a three-bucket prose audit comparing delivered reality to the press release above. This intent dogfoods that automation.>
-
 <!-- abcd-review: INGESTED receipt=rcp-1c213fa02f85 -->
 Fidelity review — receipt rcp-1c213fa02f85 (verifier intent-fidelity-reviewer claude-opus-4-8).
 

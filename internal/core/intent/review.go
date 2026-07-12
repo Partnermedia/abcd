@@ -64,6 +64,14 @@ var (
 	bulletRe = regexp.MustCompile(`^[-*]\s+\S`)
 	// markerRe matches a parked review marker line inside the Audit Notes.
 	markerRe = regexp.MustCompile(`<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->`)
+	// auditPlaceholderRe matches an intent template's Audit Notes placeholder,
+	// dropped when the first real review block lands so a populated audit carries no
+	// stale "Empty" claim. It tolerates both delimiter styles the templates have
+	// used — italic `_Empty. Populated by ..._` and angle-bracket `<Empty until ...>`
+	// — so template wording drift does not silently leave the placeholder behind. A
+	// real audit line never starts with `_Empty`/`<Empty` (they start with `<!--`,
+	// `Fidelity review`, `Provenance:`, or a `- ac-` bullet), so this cannot eat one.
+	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
 )
@@ -220,9 +228,14 @@ func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error) {
 	return res, nil
 }
 
-// ReEmitReview re-parks the OWED stub and request for a shipped intent (the
-// manual `abcd intent review <itd-N>` verb). It resolves the intent, refuses one
-// not in shipped/, and delegates to the shared emit.
+// ReEmitReview handles the manual `abcd intent review <itd-N>` verb for a shipped
+// intent. It resolves the intent, refuses one not in shipped/, and delegates to
+// emitReviewForIntent. Behaviour depends on the intent's current review state: an
+// OWED receipt (or none) (re-)parks the OWED stub and rewrites its ephemeral
+// request; a TERMINAL receipt is not re-reviewed — an already-INGESTED or
+// already-DEAD_LETTER receipt returns that status unchanged (re-reviewing would
+// discard the recorded audit), so the caller learns the review is already
+// resolved rather than silently receiving a fresh stub.
 func ReEmitReview(repoRoot, intentID string) (ReviewEmitResult, error) {
 	if !intentIDRe.MatchString(intentID) {
 		return ReviewEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
@@ -581,7 +594,16 @@ func appendToAuditNotes(content, block string) string {
 			break
 		}
 	}
-	section := lines[head+1 : end]
+	// Copy the section out (never alias the backing array) and drop the template
+	// placeholder line, so the first real review block replaces the "Empty" claim
+	// rather than sitting beneath it.
+	section := make([]string, 0, end-head)
+	for _, ln := range lines[head+1 : end] {
+		if auditPlaceholderRe.MatchString(strings.TrimRight(ln, "\r")) {
+			continue
+		}
+		section = append(section, ln)
+	}
 	// Drop trailing blank lines inside the section, then re-add one separator.
 	for len(section) > 0 && strings.TrimSpace(section[len(section)-1]) == "" {
 		section = section[:len(section)-1]
