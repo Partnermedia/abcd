@@ -518,3 +518,25 @@ func TestUnscannedUnreadableRecorded(t *testing.T) {
 		t.Errorf("an unreadable bundle file must be recorded in Unscanned, not silently dropped: %+v", res.Unscanned)
 	}
 }
+
+// TestIdentityLocalUsernameSystemPathSuppressed proves the iss-31 fix: a machine
+// username that collides with a system directory (here "dev" vs "/dev/null") is
+// not flagged when it is the top segment of an absolute system path, while a
+// genuine username occurrence is still caught.
+func TestIdentityLocalUsernameSystemPathSuppressed(t *testing.T) {
+	id := Identity{HomeUser: "dev"}
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+
+	// System path — must NOT flag (the /dev/null false positive).
+	if got := ScanText(`run something 2>/dev/null || true`, id, pats, sev, "scripts/x.sh"); hasKind(got, kindLocalUser) {
+		t.Errorf("system path /dev/null wrongly flagged as local username: %+v", got)
+	}
+	// Genuine leaks are still flagged (no false negatives from the suppression).
+	if got := ScanText(`backup written to /home/dev/data`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
+		t.Errorf("nested username /home/dev not flagged (false negative): %+v", got)
+	}
+	if got := ScanText(`last commit authored by dev`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
+		t.Errorf("bare username not flagged (false negative): %+v", got)
+	}
+}

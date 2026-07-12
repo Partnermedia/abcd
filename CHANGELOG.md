@@ -137,6 +137,14 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Launch dogfood gate — identity false positive and resolver race** (iss-31).
+  The secret/PII scanner no longer hard-fails on a system path such as
+  `/dev/null` when the machine username collides with a system directory name
+  (e.g. a user called `dev`): a local-username match is suppressed only when it
+  is the top segment of an absolute system path, so genuine username leaks
+  (nested under a home root, or bare) are still caught. The launch bundle's
+  compiled-glob cache is now guarded by a mutex, removing a data race when the
+  transport-agnostic core resolves bundles concurrently.
 - **Memory-ingest boundary — partial-failure reporting and CRLF parity**
   (iss-30, continued). When `abcd memory ingest --keep-original` fails to store
   the original *after* the pages and registry are durably written, it no longer

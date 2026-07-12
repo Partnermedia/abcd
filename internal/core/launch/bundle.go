@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -556,7 +557,14 @@ func globMatch(rel, pattern string) bool {
 	return true
 }
 
-var globRegexpCache = map[string]compiledGlob{}
+// globRegexpCache memoises compiled globs. It is guarded by globRegexpMu so the
+// transport-agnostic core can resolve bundles concurrently without a data race
+// (iss-31). A concurrent miss may compile the same pattern twice; that is benign
+// (both results are equivalent), so the fast path takes only a read lock.
+var (
+	globRegexpMu    sync.RWMutex
+	globRegexpCache = map[string]compiledGlob{}
+)
 
 type compiledGlob struct {
 	re     *regexp.Regexp
@@ -569,7 +577,10 @@ type compiledGlob struct {
 // via a capturing group whose captured text is post-checked for a / — the guard
 // group indices are returned.
 func globToRegexp(pattern string) (*regexp.Regexp, []int) {
-	if c, ok := globRegexpCache[pattern]; ok {
+	globRegexpMu.RLock()
+	c, ok := globRegexpCache[pattern]
+	globRegexpMu.RUnlock()
+	if ok {
 		return c.re, c.guards
 	}
 	var b strings.Builder
@@ -625,7 +636,9 @@ func globToRegexp(pattern string) (*regexp.Regexp, []int) {
 	}
 	b.WriteString(`$`)
 	re := regexp.MustCompile(b.String())
+	globRegexpMu.Lock()
 	globRegexpCache[pattern] = compiledGlob{re: re, guards: guards}
+	globRegexpMu.Unlock()
 	return re, guards
 }
 
