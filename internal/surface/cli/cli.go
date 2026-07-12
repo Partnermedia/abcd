@@ -8,6 +8,7 @@ package cli
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1447,8 +1448,32 @@ func repoRootSHA() (string, error) {
 }
 
 // Execute runs the root command; main sets the process exit code on error.
-func Execute() error {
-	return NewRootCommand().Execute()
+// Run builds the command tree, executes it against args, and renders any error
+// as a single diagnostic line — the one place that maps a command error to a
+// process exit code, so main stays a thin shell. stdout/stderr are injected so
+// the whole front door (including its error surface) is testable.
+func Run(args []string, stdout, stderr io.Writer) int {
+	root := NewRootCommand()
+	root.SetArgs(args)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+
+	err := root.Execute()
+	if err == nil {
+		return 0
+	}
+	// A command may request a specific exit code (usage errors, the memory-lint
+	// curator contract). An empty message means it already rendered its output
+	// and only the exit code should propagate.
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintln(stderr, "abcd:", msg)
+		}
+		return coded.ExitCode()
+	}
+	fmt.Fprintln(stderr, "abcd:", err)
+	return 1
 }
 
 // render writes v as indented JSON when asJSON is set, otherwise delegates to
