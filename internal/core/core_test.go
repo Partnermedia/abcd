@@ -30,6 +30,23 @@ func TestStatusBareDir(t *testing.T) {
 	}
 }
 
+// TestStatusGitfileWorktree (iss-72) proves a linked worktree or submodule —
+// where .git is a regular gitfile, not a directory — is still reported as a git
+// repo. isDir would report false for a genuine checkout.
+func TestStatusGitfileWorktree(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/wt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Status(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.IsGitRepo {
+		t.Fatal("a worktree/submodule .git gitfile must report IsGitRepo=true")
+	}
+}
+
 func TestStatusWithRecordAndGit(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, ".git"))

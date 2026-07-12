@@ -43,8 +43,11 @@ func Status(dir string) (StatusInfo, error) {
 		return StatusInfo{}, err
 	}
 	s := StatusInfo{
-		Dir:       abs,
-		IsGitRepo: isDir(filepath.Join(abs, ".git")),
+		Dir: abs,
+		// .git is a directory in a normal clone but a regular gitfile in a linked
+		// worktree or submodule — both are genuine checkouts, so test existence, not
+		// dir-ness. HasRecord/WorkTiers stay dir-only (those must be directories).
+		IsGitRepo: exists(filepath.Join(abs, ".git")),
 		HasRecord: isDir(filepath.Join(abs, ".abcd", "development")),
 	}
 	for _, tier := range []struct{ path, name string }{
@@ -62,4 +65,12 @@ func Status(dir string) (StatusInfo, error) {
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
+}
+
+// exists reports whether p exists (a file or a directory). A .git gitfile in a
+// worktree/submodule is a regular file, so a plain existence check is the correct
+// "is this a git checkout" test.
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }

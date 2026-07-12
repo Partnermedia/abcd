@@ -133,6 +133,11 @@ called out in a **Breaking** section.
 - The `created` and `updated` frontmatter fields on issues. Git is the canonical
   source of an issue's timeline; the ledger no longer duplicates it.
 
+### Fixed
+
+- `abcd` status now reports `IsGitRepo` correctly in a linked git worktree or a
+  submodule, where `.git` is a regular gitfile rather than a directory (iss-72).
+
 ### Security
 
 - **Release receipt-gate hardening** (iss-70). The `receipt_gate` record-lint
