@@ -10,6 +10,17 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `intent_lifecycle` record-lint rule now **blocks duplicate intent ids**.
+  Id allocators are branch-local — parallel agents on separate branches each
+  scan for `max + 1` and mint the same id — so two intents both claimed
+  `itd-82` and both merged with every gate green. The rule flags *every* file in
+  a colliding set, not just one: the linter cannot know which claimant is
+  authoritative, and flagging a single file would imply the others are fine. The
+  collision itself is resolved (the later claimant renumbered to `itd-83`); the
+  underlying minting scheme is tracked as `iss-80`.
+
 ### Added
 
 - **Four reviewer agents ship with the plugin**: `abcd:ruthless-reviewer`

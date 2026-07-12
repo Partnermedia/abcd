@@ -300,6 +300,54 @@ func TestIntentLifecycle(t *testing.T) {
 	}
 }
 
+// Two parallel branches each allocate "the next free" intent id, and both land.
+// The id is the intent's identity across the whole record, so a duplicate is a
+// blocker on BOTH files -- neither is authoritative, and a reader cannot tell
+// which itd-N a cross-reference means.
+func TestIntentLifecycleDuplicateID(t *testing.T) {
+	root := t.TempDir()
+	base := "rec/intents"
+
+	// Same id, different slugs, different buckets -- the real collision shape.
+	writeFile(t, root, base+"/drafts/itd-82-first-one.md", "---\nid: itd-82\nkind: null\nspec_id: null\n---\n# one\n")
+	writeFile(t, root, base+"/drafts/itd-82-second-one.md", "---\nid: itd-82\nkind: null\nspec_id: null\n---\n# two\n")
+	// A collision across buckets must be caught too, not just within one.
+	writeFile(t, root, base+"/planned/itd-90-here.md", "---\nid: itd-90\nkind: standalone\nspec_id: spc-3-x\n---\n# a\n")
+	writeFile(t, root, base+"/drafts/itd-90-there.md", "---\nid: itd-90\nkind: null\nspec_id: null\n---\n# b\n")
+	// A unique id must stay clean.
+	writeFile(t, root, base+"/drafts/itd-91-unique.md", "---\nid: itd-91\nkind: null\nspec_id: null\n---\n# ok\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"intent_lifecycle": {Enabled: true, Severity: "blocker", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every file in a colliding set is flagged -- flagging only one would imply
+	// the other is the "right" one, which the linter cannot know.
+	dupes := []string{
+		filepath.Join(base, "drafts", "itd-82-first-one.md"),
+		filepath.Join(base, "drafts", "itd-82-second-one.md"),
+		filepath.Join(base, "planned", "itd-90-here.md"),
+		filepath.Join(base, "drafts", "itd-90-there.md"),
+	}
+	for _, f := range dupes {
+		if !hasFinding(fs, f, "intent_lifecycle", 2) { // the id: line
+			t.Errorf("expected duplicate-id finding on %s:2; got %+v", f, fs)
+		}
+	}
+	for _, f := range fs {
+		if filepath.Base(f.File) == "itd-91-unique.md" {
+			t.Errorf("unexpected finding on unique intent: %+v", f)
+		}
+	}
+}
+
 func TestExemptions(t *testing.T) {
 	root := t.TempDir()
 	// A banned token in an exempt_paths file → no finding.
