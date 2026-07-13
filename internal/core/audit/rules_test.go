@@ -226,6 +226,28 @@ func TestRule_TierPresentButNotADirectory(t *testing.T) {
 	}
 }
 
+// The work tier specifically: when .abcd/work is a regular file, decision-durability
+// stats .abcd/work/DECISIONS.md (ENOTDIR). That must read as "not present", not
+// abort the audit — so the three-tier "must be a directory" finding still surfaces.
+func TestRule_WorkTierIsAFileDoesNotAbort(t *testing.T) {
+	b := newFixtureRepo(t).
+		file(".gitignore", ".abcd/.work.local/\n").
+		file(".abcd/development/README.md", "x\n").
+		file(".abcd/work", "I am a file, not the shared-working tier\n").
+		file(".abcd/.work.local/NEXT.md", "x\n").
+		file("AGENTS.md", "x\n").
+		commit()
+	res := b.run() // must not error/abort
+
+	f := findingFor(res, "three-tier-layout")
+	if f == nil {
+		t.Fatal("no three-tier-layout finding when .abcd/work is a file (audit aborted instead of reporting)")
+	}
+	if f.Severity != audit.SeverityError {
+		t.Errorf("severity = %q, want error", f.Severity)
+	}
+}
+
 // A directory named AGENTS.md does not satisfy conventions-router — the router is
 // a file.
 func TestRule_ConventionsRouterIsADirectory(t *testing.T) {

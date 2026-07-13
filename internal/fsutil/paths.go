@@ -4,7 +4,17 @@ import (
 	"errors"
 	"io"
 	"os"
+	"syscall"
 )
+
+// notPresent reports whether a stat/open error means the path cannot exist: it
+// is absent (ErrNotExist), or a component of its prefix is not a directory
+// (ENOTDIR, e.g. asking about a/b where a is a regular file). Both are "not
+// present", not a filesystem fault, so a fail-closed caller must not abort on
+// them.
+func notPresent(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
 
 // Exists reports whether path exists, following symlinks — so a link to a real
 // file exists and a dangling link does not. A stat error other than not-exist is
@@ -15,7 +25,7 @@ func Exists(path string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if errors.Is(err, os.ErrNotExist) {
+	if notPresent(err) {
 		return false, nil
 	}
 	return false, err
@@ -31,7 +41,7 @@ func IsDir(path string) (bool, error) {
 	if err == nil {
 		return fi.IsDir(), nil
 	}
-	if errors.Is(err, os.ErrNotExist) {
+	if notPresent(err) {
 		return false, nil
 	}
 	return false, err
@@ -47,7 +57,7 @@ func IsDir(path string) (bool, error) {
 func DirHasEntries(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if notPresent(err) {
 			return false, nil
 		}
 		return false, err
