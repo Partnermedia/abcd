@@ -152,6 +152,21 @@ func TestEvaluateSortsFindings(t *testing.T) {
 	}
 }
 
+// A finding carrying a severity that is neither error nor warn is a rule bug: it
+// would serialize into findings yet count as neither blocker nor warning,
+// yielding a clean exit alongside a non-empty findings list. Evaluate fails
+// closed on it rather than emit that contradiction.
+func TestEvaluateRejectsUnknownFindingSeverity(t *testing.T) {
+	_, err := audit.Evaluate([]audit.Rule{
+		fakeRule{meta: meta("x", audit.SeverityWarn), findings: []audit.Finding{
+			{RuleID: "x", Severity: audit.Severity("nonsense"), Message: "m"},
+		}},
+	}, audit.Context{})
+	if err == nil {
+		t.Fatal("expected Evaluate to reject a finding with an unknown severity, got nil")
+	}
+}
+
 // A rule that errors aborts the audit with that error — a broken check must not
 // silently read as "clean".
 func TestEvaluateRuleErrorPropagates(t *testing.T) {

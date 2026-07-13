@@ -11,7 +11,10 @@
 // zero.
 package audit
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // Severity is a rule's weight. The vocabulary is repolinter/Conftest's
 // error|warn|off, chosen over the record-lint engine's blocker|warn because it
@@ -105,6 +108,14 @@ func Evaluate(rules []Rule, ctx Context) (Result, error) {
 			return Result{}, err
 		}
 		for _, f := range fs {
+			// A finding must carry error or warn severity; anything else (empty,
+			// off, a typo) would serialize yet count toward no exit code,
+			// yielding a clean exit beside a non-empty findings list. That is a
+			// rule bug, so fail closed rather than emit the contradiction.
+			if f.Severity != SeverityError && f.Severity != SeverityWarn {
+				return Result{}, fmt.Errorf("rule %q returned a finding with severity %q; findings must be %q or %q",
+					m.ID, f.Severity, SeverityError, SeverityWarn)
+			}
 			// A finding inherits its rule's remediation metadata unless it set
 			// its own, so every serialized finding is self-describing.
 			if f.Fix == "" {
