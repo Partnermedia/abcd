@@ -79,7 +79,7 @@ var (
 		".sqlite", ".db", ".lock",
 	}
 	defaultSkipFilenames = []string{".DS_Store", "Thumbs.db", ".gitignore"}
-	defaultSkipFragments = []string{".abcd/logbook/pii-scan/", ".abcd/logbook/audit-history/"}
+	defaultSkipFragments = []string{".abcd/.work.local/logs/pii-scan/", ".abcd/.work.local/logs/audit-history/"}
 	repoConfigRelPath    = filepath.Join(".abcd", "config", "pii.json")
 )
 

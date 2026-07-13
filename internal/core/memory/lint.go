@@ -13,7 +13,7 @@ import (
 // lint.go — the `abcd memory lint` verb (fn-39): a full-store curator
 // health-check. Page-local checks (MS001/MS002/ML001/MQ001/MQ003) per typed
 // page, plus a corpus pass (MQ002 + per-source MQ003) that rebuilds the
-// regenerable .coverage_index.json. Writes ONE logbook report; mutates no
+// regenerable .coverage_index.json. Writes ONE run-log report; mutates no
 // memory-store state. Exit contract: blocker -> 1; warn/info/clean -> 0.
 
 // Finding is a single memory-lint finding.
@@ -388,7 +388,7 @@ func runMemoryCoverageLint(repoRoot string) ([]Finding, map[string]any, error) {
 // Lint orchestration
 // ---------------------------------------------------------------------------
 
-// Lint runs the full-store curator health-check and writes one logbook report.
+// Lint runs the full-store curator health-check and writes one run-log report.
 // Mutates no memory-store state (only the regenerable coverage index + report).
 func Lint(req LintRequest) (LintResult, error) {
 	root := req.RepoRoot
@@ -484,18 +484,20 @@ func Lint(req LintRequest) (LintResult, error) {
 
 func lintReportDir(repoRoot string, now time.Time) (string, error) {
 	ts := now.Format("20060102T150405.000000Z")
-	logbook := filepath.Join(repoRoot, ".abcd", "logbook", "memory")
-	base := filepath.Join(logbook, "lint-"+ts)
+	// Runtime artefacts live in the gitignored .abcd/.work.local/logs/ tier, not
+	// the retired runtime location (iss-36/iss-56 adjudication, iss-73).
+	logs := filepath.Join(repoRoot, ".abcd", ".work.local", "logs", "memory")
+	base := filepath.Join(logs, "lint-"+ts)
 	if _, err := os.Stat(base); os.IsNotExist(err) {
 		return base, nil
 	}
 	for n := 1; n < 1000; n++ {
-		candidate := filepath.Join(logbook, fmt.Sprintf("lint-%s-%03d", ts, n))
+		candidate := filepath.Join(logs, fmt.Sprintf("lint-%s-%03d", ts, n))
 		if _, err := os.Stat(candidate); os.IsNotExist(err) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("could not allocate a unique lint logbook dir for %s", ts)
+	return "", fmt.Errorf("could not allocate a unique lint run-log dir for %s", ts)
 }
 
 func findingsToMaps(findings []Finding) []any {
