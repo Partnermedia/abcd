@@ -12,13 +12,14 @@ package launch
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // DenyNamespaces are first-path-segment names that never ship. Structural deny
@@ -374,7 +375,7 @@ func (r *resolver) finalize() {
 	for _, c := range r.survivors {
 		paths = append(paths, c.logical)
 	}
-	ignored := checkIgnored(r.root, paths)
+	ignored := gitutil.CheckIgnored(r.root, paths)
 
 	// Group by logical path for duplicate-by-provenance resolution.
 	byLogical := map[string][]candidate{}
@@ -758,51 +759,6 @@ func inodeOf(info os.FileInfo) (dev, ino uint64) {
 		return uint64(st.Dev), uint64(st.Ino)
 	}
 	return 0, 0
-}
-
-// ---------------------------------------------------------------------------
-// Isolated git check-ignore
-// ---------------------------------------------------------------------------
-
-// checkIgnored returns the subset of repo-relative candidates that git ignores,
-// using an isolated `git check-ignore -z --no-index -v --stdin`. Global/system
-// config is isolated; a negation record (!pat) does not count as ignored. When
-// git is unavailable or the dir is not a repo, nothing is reported ignored.
-func checkIgnored(root string, candidates []string) map[string]struct{} {
-	out := map[string]struct{}{}
-	if len(candidates) == 0 {
-		return out
-	}
-	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
-		"check-ignore", "-z", "--no-index", "-v", "--stdin")
-	cmd.Env = append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null",
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_OPTIONAL_LOCKS=0",
-	)
-	cmd.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
-	data, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
-			// exit 1 == nothing ignored.
-			return out
-		}
-		return out
-	}
-	fields := strings.Split(string(data), "\x00")
-	if len(fields) > 0 && fields[len(fields)-1] == "" {
-		fields = fields[:len(fields)-1]
-	}
-	// -v -z emits 4 fields per record: source, linenum, pattern, pathname.
-	for i := 0; i+3 < len(fields); i += 4 {
-		pattern := fields[i+2]
-		pathname := fields[i+3]
-		if strings.HasPrefix(pattern, "!") {
-			continue // negation → path is NOT ignored
-		}
-		out[pathname] = struct{}{}
-	}
-	return out
 }
 
 func sortBundle(b *Bundle) {

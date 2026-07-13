@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // Finding is one lint violation. File is repo-relative; Line is 1-based (0 when
@@ -716,11 +717,11 @@ func checkGateLockstep(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 
 	// A configured path that does not resolve is drift/misconfig, not "clean" —
 	// fail loud rather than parsing an empty list that would pass vacuously.
-	runbookExists, err := fileExists(filepath.Join(repoRoot, cfg.Runbook))
+	runbookExists, err := fsutil.Exists(filepath.Join(repoRoot, cfg.Runbook))
 	if err != nil {
 		return nil, err
 	}
-	workflowExists, err := fileExists(filepath.Join(repoRoot, cfg.Workflow))
+	workflowExists, err := fsutil.Exists(filepath.Join(repoRoot, cfg.Workflow))
 	if err != nil {
 		return nil, err
 	}
@@ -885,19 +886,6 @@ func workflowStepNames(repoRoot, rel, job string, ignore []string) ([]string, er
 	}
 	flush()
 	return names, nil
-}
-
-// fileExists reports whether path exists (following symlinks). A stat error other
-// than not-exist is returned so the caller fails closed on it.
-func fileExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
 
 // tokenCheck is a compiled BannedToken ready for line matching.

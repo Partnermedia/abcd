@@ -322,3 +322,15 @@ parallel-agent merge contention bites.
   (three-tier-layout, conventions-router, decision-durability, docs-currency, privacy-hygiene);
   SARIF deferred to P3; wires into `prepare-this-repo` Phase 2, closing `iss-86`. SOTA-researched
   in plan `2026-07-13-abcd-audit-verb.md`.
+
+- 2026-07-13 (itd-85 M1): kept `core.exists` (bool-only, swallows errors) and
+  `ahoy.fileExists` (regular-file-only) as-is rather than folding all three
+  `exists` copies into `fsutil.Exists`. Chose partial consolidation over the
+  plan's full-consolidation because the other two hold different contracts;
+  merging them would smuggle a behaviour change into a behaviour-preserving
+  refactor. Only `lint.fileExists` (identical fail-closed contract) migrated.
+- 2026-07-13 (itd-85, carry to M3): `gitutil.CheckIgnored` fails OPEN — git
+  absent or not-a-repo returns "nothing ignored". The `three-tier-layout` rule
+  MUST treat an empty result as "cannot tell", never as "compliant", or a repo
+  with git unavailable silently passes the "is `.abcd/.work.local/` gitignored"
+  assertion. Security review flagged this as the one consumer-side spec note.
