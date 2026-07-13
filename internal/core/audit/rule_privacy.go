@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,15 @@ import (
 
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
+
+// maxScanBytes caps how much of a tracked file privacy-hygiene will read. A
+// committed file that leaks a path in prose or source is small; anything larger
+// is a data blob, skipped so a huge (or endless, via a device) file cannot
+// exhaust memory. Exposed to tests via MaxScanBytesForTest.
+const maxScanBytes = 4 << 20 // 4 MiB
+
+// MaxScanBytesForTest exposes the scan cap to the package's external tests.
+func MaxScanBytesForTest() int { return maxScanBytes }
 
 // privacyHygiene scans committed files for content that must never leave the
 // machine: absolute local home paths (/Users/<name>, /home/<name>, C:\Users\).
@@ -46,13 +56,20 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Contain every read to the repo root. os.Root refuses any path component
+	// that escapes the root — including via a symlinked intermediate directory —
+	// so a hostile working tree cannot redirect the scan at a file outside the
+	// audited repo. If the root itself cannot be opened there is nothing to scan.
+	root, err := os.OpenRoot(ctx.RepoRoot)
+	if err != nil {
+		return nil, nil
+	}
+	defer root.Close()
+
 	var out []Finding
 	for _, rel := range tracked {
-		abs := filepath.Join(ctx.RepoRoot, filepath.FromSlash(rel))
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			// A tracked path that cannot be read now (deleted-but-staged, a
-			// permission quirk) is skipped, not a scan failure.
+		data, ok := readTrackedFile(root, filepath.FromSlash(rel))
+		if !ok {
 			continue
 		}
 		if isBinary(data) {
@@ -75,6 +92,37 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// readTrackedFile reads a tracked path safely for scanning, relative to root
+// (an os.Root scoped to the repo, so no component can escape the repo — the
+// containment guarantee the leaf-only O_NOFOLLOW could not give). O_NONBLOCK
+// makes opening a FIFO or device return immediately rather than block until a
+// writer appears; the regular-file check then skips it before any read. It reads
+// only regular files and never more than maxScanBytes, so a huge or
+// device-backed file cannot exhaust memory. A file that cannot be opened, is not
+// a regular file, or exceeds the cap is skipped (ok=false), not a scan failure.
+func readTrackedFile(root *os.Root, rel string) ([]byte, bool) {
+	f, err := root.OpenFile(rel, os.O_RDONLY|syscallNoFollow, 0)
+	if err != nil {
+		return nil, false // escapes the root, missing, or unreadable
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, false // FIFO, device, directory, or vanished
+	}
+	if info.Size() > maxScanBytes {
+		return nil, false // a data blob, not prose — skip
+	}
+	// LimitReader is a belt-and-suspenders cap in case Size understates (a file
+	// growing during the read): never buffer past the cap.
+	data, err := io.ReadAll(io.LimitReader(f, maxScanBytes))
+	if err != nil {
+		return nil, false
+	}
+	return data, true
 }
 
 // isBinary reports whether data looks non-textual: a NUL byte in the first 8 KiB

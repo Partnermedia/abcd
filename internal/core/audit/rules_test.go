@@ -244,6 +244,72 @@ func TestAC_PrivacyWaiverSuppresses(t *testing.T) {
 	}
 }
 
+// A hostile repo cannot turn privacy-hygiene into an out-of-repo read: a tracked
+// symlink pointing outside the work tree is skipped, never followed. Its target
+// contains an absolute path, so following it would both leak and (if it were
+// /dev/zero) hang.
+func TestRule_PrivacySkipsTrackedSymlink(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("leak /Users/victim/.ssh/id_rsa\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := newFixtureRepo(t).conforming()
+	link := filepath.Join(b.root, "pointer.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	b.commit()
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f != nil {
+		t.Fatalf("privacy-hygiene followed a tracked symlink out of the repo: %+v", f)
+	}
+}
+
+// A hostile working tree cannot escape the repo via a symlinked INTERMEDIATE
+// directory either: sub/ is tracked, then swapped on disk for a symlink to an
+// out-of-repo directory. The scan must refuse to read through it.
+func TestRule_PrivacyRejectsIntermediateSymlinkEscape(t *testing.T) {
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "data.txt"), []byte("leak /Users/victim/x/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := newFixtureRepo(t).conforming().
+		file("sub/data.txt", "clean in-repo content\n"). // tracked, no leak
+		commit()
+	// Swap the tracked intermediate directory for a symlink pointing outside.
+	if err := os.RemoveAll(filepath.Join(b.root, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(b.root, "sub")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f != nil {
+		t.Fatalf("privacy-hygiene read through a symlinked intermediate directory: %+v", f)
+	}
+}
+
+// A tracked file larger than the scan cap is skipped rather than loaded whole —
+// a large committed binary must not OOM the audit.
+func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
+	b := newFixtureRepo(t).conforming()
+	big := make([]byte, audit.MaxScanBytesForTest()+1)
+	for i := range big {
+		big[i] = 'a'
+	}
+	// Put a leak on the first line so a naive scanner would flag it; the size cap
+	// must skip the file before it is read.
+	copy(big, []byte("/Users/alice/x/\n"))
+	b.file("huge.txt", string(big)).commit()
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f != nil {
+		t.Fatalf("privacy-hygiene scanned an oversize file: %+v", f)
+	}
+}
+
 // AC5: docs/ absent → docs-currency skipped via Where, not failed.
 func TestAC_DocsCurrencySkippedWhenNoDocs(t *testing.T) {
 	res := newFixtureRepo(t).conforming().commit().run() // conforming() creates no docs/
