@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-57"
+id: "iss-85"
 slug: "managed-attribution-config"
 severity: "minor"
 category: "future-work-seed"
