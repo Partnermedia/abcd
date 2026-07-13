@@ -16,14 +16,22 @@ justification), three temperature modes (`explore` / `challenge` /
 apply to prose or to architecture. Output: assumption inventory, contradictions,
 robustness failures, unanswered questions, a forcing-function verdict.
 
-**abcd already has this, built further:** `skills/abcd-intent-grill/` is a
-two-phase Socratic challenger (interactive one-question loop, 12-question cap,
-EARS rewrites, Toulmin tagging, exit ramps, glossary/lite tiers, Phase-2 PRD
-synthesis) — itself adapted from `mattpocock/skills` (`/grill-me`,
-`/grill-with-docs`), credited in its ACKNOWLEDGEMENTS. So socratic-grill is a
-sibling of something abcd built deeper. Importing it whole would collide with
-abcd-intent-grill and violate the one-canonical-surface-per-concept rule
-(the abstraction-layer boundary).
+**abcd already has this, designed further:** the grill is a two-phase Socratic
+challenger (interactive one-question loop, 12-question cap, EARS rewrites, Toulmin
+tagging, exit ramps, glossary/lite tiers, Phase-2 PRD synthesis) — itself adapted
+from `mattpocock/skills` (`/grill-me`, `/grill-with-docs`). So socratic-grill is a
+sibling of something abcd specified deeper. Importing it whole would collide with
+the grill and violate the one-canonical-surface-per-concept rule (the
+abstraction-layer boundary).
+
+> **Pointer corrected 2026-07-13.** This note originally cited a
+> `skills/abcd-intent-grill/` directory and its ACKNOWLEDGEMENTS as existing.
+> They do not exist in the tree: the Go rebuild left the grill as *planned,
+> unbuilt* work — [itd-27](../../intents/planned/itd-27-grill-skill-and-glossary.md),
+> [adr-7](../../decisions/adrs/0007-grill-skill-and-glossary.md), extended by
+> [itd-42](../../intents/planned/itd-42-coherence-aware-grill.md). The harvest
+> disposition below stands; its target is itd-27/itd-42, and the mattpocock
+> attribution is owed when the grill is built, not before.
 
 **What socratic-grill does better (the harvest):**
 1. **Domain-agnostic targeting.** abcd-intent-grill only grills `itd-N` intents.
