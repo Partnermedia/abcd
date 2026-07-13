@@ -136,7 +136,8 @@ parallel-agent merge contention bites.
   no local layer — we don't impose our principles on others' repos); legacy
   root `.work/` layouts migrate propose-then-sign-off, never leaving two
   working-state homes; no re-run/update machinery now — the CLI will own
-  managed-repo migration (gaps seeded as iss-56/iss-57). Rejected: a standalone
+  managed-repo migration (gaps seeded as iss-84/iss-85, originally minted as
+  duplicate iss-56/iss-57). Rejected: a standalone
   handover prompt file (drifts, unversioned); naming abcd in private-only
   target repos (two-class rule someone eventually gets wrong).
 - 2026-07-11 — iss-35's brief↔surface cross-check is **bidirectional, but only

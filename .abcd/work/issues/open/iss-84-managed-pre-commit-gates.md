@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-56"
+id: "iss-84"
 slug: "managed-pre-commit-gates"
 severity: "minor"
 category: "future-work-seed"
