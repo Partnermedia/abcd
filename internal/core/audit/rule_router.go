@@ -24,17 +24,25 @@ func (conventionsRouter) Meta() RuleMeta {
 func (conventionsRouter) Where(Context) bool { return true }
 
 func (conventionsRouter) Eval(ctx Context) ([]Finding, error) {
-	present, err := fsutil.Exists(filepath.Join(ctx.RepoRoot, "AGENTS.md"))
+	// The router is a file: a directory named AGENTS.md does not satisfy it.
+	path := filepath.Join(ctx.RepoRoot, "AGENTS.md")
+	present, err := fsutil.Exists(path)
 	if err != nil {
 		return nil, err
 	}
 	if present {
-		return nil, nil
+		isDir, err := fsutil.IsDir(path)
+		if err != nil {
+			return nil, err
+		}
+		if !isDir {
+			return nil, nil // a real router file
+		}
 	}
 	return []Finding{{
 		RuleID:   "conventions-router",
 		Severity: SeverityError,
 		File:     "AGENTS.md",
-		Message:  "no AGENTS.md conventions router at the repo root",
+		Message:  "no AGENTS.md conventions router file at the repo root",
 	}}, nil
 }

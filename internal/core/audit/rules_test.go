@@ -205,6 +205,69 @@ func TestRule_WorkLocalNotGitignored(t *testing.T) {
 	}
 }
 
+// A tier path that exists but is a regular FILE (not a directory) does not
+// satisfy three-tier-layout — the tiers are directories.
+func TestRule_TierPresentButNotADirectory(t *testing.T) {
+	b := newFixtureRepo(t).
+		file(".gitignore", ".abcd/.work.local/\n").
+		file(".abcd/development", "I am a file, not the durable-record tier\n"). // a file at a tier path
+		file(".abcd/work/DECISIONS.md", "x\n").
+		file(".abcd/.work.local/NEXT.md", "x\n").
+		file("AGENTS.md", "x\n").
+		commit()
+	res := b.run()
+
+	f := findingFor(res, "three-tier-layout")
+	if f == nil {
+		t.Fatal("no three-tier-layout finding when .abcd/development is a file, not a directory")
+	}
+	if f.Severity != audit.SeverityError {
+		t.Errorf("severity = %q, want error", f.Severity)
+	}
+}
+
+// A directory named AGENTS.md does not satisfy conventions-router — the router is
+// a file.
+func TestRule_ConventionsRouterIsADirectory(t *testing.T) {
+	b := newFixtureRepo(t).
+		file(".gitignore", ".abcd/.work.local/\n").
+		file(".abcd/development/README.md", "x\n").
+		file(".abcd/work/DECISIONS.md", "x\n").
+		file(".abcd/.work.local/NEXT.md", "x\n").
+		file("AGENTS.md/keep.txt", "AGENTS.md is a directory here\n"). // dir, not a router file
+		commit()
+	res := b.run()
+
+	f := findingFor(res, "conventions-router")
+	if f == nil {
+		t.Fatal("no conventions-router finding when AGENTS.md is a directory")
+	}
+	if f.Severity != audit.SeverityError {
+		t.Errorf("severity = %q, want error", f.Severity)
+	}
+}
+
+// docs-currency: docs/ exists but no docs-lint config → a warn that the check
+// could not run, never a silent pass.
+func TestRule_DocsCurrencyNoConfigWarns(t *testing.T) {
+	b := newFixtureRepo(t).conforming().
+		file("docs/how-to/thing.md", "clean docs\n"). // docs/ present, but no .abcd/docs-lint.json
+		commit()
+	res := b.run()
+
+	f := findingFor(res, "docs-currency")
+	if f == nil {
+		t.Fatal("docs-currency silently passed when docs/ exists but the config is missing")
+	}
+	if f.Severity != audit.SeverityWarn {
+		t.Errorf("severity = %q, want warn", f.Severity)
+	}
+	// It must be a warn, not an error: exit 1, not 2.
+	if res.ExitCode != 1 {
+		t.Errorf("exit = %d, want 1", res.ExitCode)
+	}
+}
+
 // AC3: a committed file with an absolute local path → privacy-hygiene error
 // citing file:line — unless a waiver escape is on that line.
 func TestAC_PrivacyAbsolutePath(t *testing.T) {
@@ -231,8 +294,10 @@ func TestAC_PrivacyAbsolutePath(t *testing.T) {
 
 func TestAC_PrivacyWaiverSuppresses(t *testing.T) {
 	const waived = "example path /Users/alice/x is illustrative  abcd-audit:allow\n"
+	// Kept out of docs/ so docs-currency stays skipped and does not add a warn —
+	// this test isolates the privacy waiver's effect on the exit code.
 	b := newFixtureRepo(t).conforming().
-		file("docs/reference/paths.md", waived).
+		file("reference/paths.md", waived).
 		commit()
 	res := b.run()
 
