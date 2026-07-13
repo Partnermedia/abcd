@@ -19,6 +19,7 @@ The brief's user-facing command surface is the set enumerated below (not all are
 | 13 | `/abcd:consult` | shipped | Consult the local sources corpus (`~/.abcd/sources`) and record source→decision provenance — host-delegated command, no Go verb | [`13-consult.md`](13-consult.md) |
 | 14 | `/abcd:ingest` | shipped | Register a URL or document into the local sources corpus — host-delegated command, no Go verb | [`14-ingest.md`](14-ingest.md) |
 | 15 | `/abcd:prepare-this-repo` | shipped | Bring an owned repo up to abcd's conventions (interim bridge) — host-delegated command, no Go verb | [`15-prepare-this-repo.md`](15-prepare-this-repo.md) |
+| 16 | `/abcd:audit` | shipped | Check whether a repo conforms to the working conventions (three-tier layout, AGENTS.md router, durable decisions, docs currency, privacy hygiene) — read-only, tri-state exit; backs `prepare-this-repo` and gates CI (itd-85) | [`16-audit.md`](16-audit.md) |
 
 The **Status** column is machine-checked: the `surface_coverage` record-lint rule asserts every `shipped` row has a backing surface (`commands/abcd/<name>.md` or `skills/<name>/`) and every `staged` row (a design target) has none — and, in reverse, that every real surface has a row here. The bare `/abcd` top-level is binary-backed (no command file) and is exempt from the file check. Keeping this column honest is how the brief's surface set stays reconciled with the shipped binary; the semantic half — whether each row's *prose* matches binary behaviour — stays a release-gate agent check.
 
