@@ -81,7 +81,7 @@ type Finding struct {
 // than silently omitting them.
 type Result struct {
 	Findings []Finding `json:"findings"`
-	Skipped  []string  `json:"skipped,omitempty"`
+	Skipped  []string  `json:"skipped"`
 	Blockers int       `json:"-"`
 	Warnings int       `json:"-"`
 	ExitCode int       `json:"-"`

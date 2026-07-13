@@ -37,16 +37,20 @@ func (threeTierLayout) Eval(ctx Context) ([]Finding, error) {
 		{".abcd/development", "durable-record tier .abcd/development/"},
 		{".abcd/work", "shared-working tier .abcd/work/"},
 	} {
-		present, err := fsutil.Exists(filepath.Join(ctx.RepoRoot, filepath.FromSlash(tier.rel)))
+		// A tier is a directory: a regular file at the tier path does not satisfy
+		// the convention, so check the type, not mere presence. (IsDir follows a
+		// symlink, so a symlink-to-directory does satisfy it — acceptable for a
+		// layout check, which is not the owned-store trust boundary.)
+		isDir, err := fsutil.IsDir(filepath.Join(ctx.RepoRoot, filepath.FromSlash(tier.rel)))
 		if err != nil {
 			return nil, err
 		}
-		if !present {
+		if !isDir {
 			out = append(out, Finding{
 				RuleID:   "three-tier-layout",
 				Severity: SeverityError,
 				File:     tier.rel,
-				Message:  "missing the " + tier.label,
+				Message:  "missing the " + tier.label + " (must be a directory)",
 			})
 		}
 	}

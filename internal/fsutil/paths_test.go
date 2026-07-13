@@ -61,6 +61,29 @@ func TestExistsSymlink(t *testing.T) {
 	}
 }
 
+// A path whose parent component is a regular file cannot exist; stat returns
+// ENOTDIR, and Exists/IsDir/DirHasEntries must read that as "not present"
+// (false, nil), not propagate it as a hard error — otherwise a caller that
+// fails closed on errors aborts on an obviously-absent path.
+func TestPathUnderAFileIsNotPresent(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "afile")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	under := filepath.Join(file, "child") // afile is not a directory
+
+	if got, err := fsutil.Exists(under); err != nil || got {
+		t.Errorf("Exists(under-a-file) = %v, %v; want false, nil", got, err)
+	}
+	if got, err := fsutil.IsDir(under); err != nil || got {
+		t.Errorf("IsDir(under-a-file) = %v, %v; want false, nil", got, err)
+	}
+	if got, err := fsutil.DirHasEntries(under); err != nil || got {
+		t.Errorf("DirHasEntries(under-a-file) = %v, %v; want false, nil", got, err)
+	}
+}
+
 func TestIsDir(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "f.txt")

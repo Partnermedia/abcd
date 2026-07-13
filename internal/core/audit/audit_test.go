@@ -200,6 +200,27 @@ func TestJSONSerializerCleanRepo(t *testing.T) {
 	}
 }
 
+// The JSON always carries a present "skipped" array, even when nothing was
+// skipped — the command doc promises { findings, skipped }, so neither key may
+// vanish.
+func TestJSONSerializerSkippedAlwaysPresent(t *testing.T) {
+	out, err := audit.JSONSerializer{}.Serialize(audit.Result{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(out, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	raw, ok := decoded["skipped"]
+	if !ok {
+		t.Fatalf(`clean result must still emit a "skipped" key: %s`, out)
+	}
+	if string(raw) != "[]" {
+		t.Errorf(`empty "skipped" must be [], got %s`, raw)
+	}
+}
+
 func TestJSONSerializerCarriesRuleID(t *testing.T) {
 	res := audit.Result{Findings: []audit.Finding{
 		{RuleID: "three-tier-layout", Severity: audit.SeverityError, File: ".abcd", Line: 0, Message: "missing work/"},

@@ -16,9 +16,13 @@ type Serializer interface {
 type JSONSerializer struct{}
 
 func (JSONSerializer) Serialize(res Result) ([]byte, error) {
-	// Guarantee a present empty array rather than JSON null for a clean repo.
+	// Guarantee present empty arrays rather than JSON null: the command doc
+	// promises { findings, skipped }, so neither key may be null or absent.
 	if res.Findings == nil {
 		res.Findings = []Finding{}
+	}
+	if res.Skipped == nil {
+		res.Skipped = []string{}
 	}
 	return json.MarshalIndent(res, "", "  ")
 }

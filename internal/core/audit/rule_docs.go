@@ -39,13 +39,18 @@ func (docsCurrency) Where(ctx Context) bool {
 func (docsCurrency) Eval(ctx Context) ([]Finding, error) {
 	cfgPath := filepath.Join(ctx.RepoRoot, ".abcd", "docs-lint.json")
 	// The engine reuse needs the repo's docs-lint config. A repo with docs/ but
-	// no committed config cannot be linted; degrade to no findings rather than
-	// fail — the config is what defines the checks, and its absence is a
-	// prepare-this-repo gap, not a docs-drift violation.
+	// no committed config cannot be linted — but the rule must not then read as a
+	// silent pass. Surface a warn that the check could not run (a
+	// prepare-this-repo gap), not an absence of drift.
 	if present, err := fsutil.Exists(cfgPath); err != nil {
 		return nil, err
 	} else if !present {
-		return nil, nil
+		return []Finding{{
+			RuleID:   "docs-currency",
+			Severity: SeverityWarn,
+			File:     ".abcd/docs-lint.json",
+			Message:  "docs/ is present but .abcd/docs-lint.json is missing — docs currency cannot be checked; run prepare-this-repo",
+		}}, nil
 	}
 
 	cfg, err := lint.LoadConfig(cfgPath)
