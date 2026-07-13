@@ -370,3 +370,20 @@ parallel-agent merge contention bites.
   the serializer seam is shaped for SARIF but no SARIF is emitted yet, and the
   convention is to credit a pattern in the change that lands it, never ahead. Add
   the SARIF entry when the --format sarif serializer ships.
+
+- 2026-07-13 (sensemaking method): recorded the ABCD method (cold reading / warm
+  ledger / disposition) as a research note — the parent that itd-27, itd-42,
+  itd-55, itd-86 and itd-87 had all been accumulating under without one. Minted
+  exactly ONE principle (recurrence-is-signal) rather than one per method element:
+  the cold/warm split is already stated by evaluator-outside-the-loop and
+  verifier-selects-gates-decide, and one-canonical-primitive forbids a third
+  near-copy. Recurrence was the only element with no counterpart in the record.
+  REJECTED minting a `read-it-cold` principle for the same reason.
+- 2026-07-13 (itd-86/87): recorded the two intents TOGETHER because they are
+  coupled, not merely related — a blind cold reading re-raises old tensions by
+  design, so pointing it at a ledger that dedupes them yields a detector fighting
+  its own store. itd-87 is the precondition that makes itd-86's re-raising useful.
+- 2026-07-13 (attribution): DEFERRED the ACKNOWLEDGEMENTS entry crediting the cold
+  reading to abcd's co-author, pending confirmation of how they wish to be
+  credited. Held loudly (stated in the method note), not silently; it must land
+  before itd-86 ships. Do NOT guess the credit line.
