@@ -12,6 +12,17 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`--json` and stderr command errors no longer leak the developer's home or
+  working-directory paths.** `cli.Run` routes every command error through the
+  machine envelope, so identity-bearing paths reached it three ways: an
+  `os.PathError`/`os.LinkError` (e.g. `memory ask --page-json` on a missing file),
+  a path `fmt`-formatted into a core error (e.g. `capture` on a symlinked ledger
+  dir), and a custom error type (e.g. history's home-rooted store path). The
+  `Run()` boundary now redacts the working-directory and home roots (to `.` and
+  `~`) and reduces any remaining `PathError`/`LinkError` path to its base name.
+  Generalises the per-branch fix made in `iss-29` (iss-76). A verb echoing a
+  user-supplied absolute path outside both roots is out of scope, tracked in
+  `iss-81`.
 - The `intent_lifecycle` record-lint rule now **blocks duplicate intent ids**.
   Id allocators are branch-local — parallel agents on separate branches each
   scan for `max + 1` and mint the same id — so two intents both claimed
