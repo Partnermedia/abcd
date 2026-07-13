@@ -339,3 +339,28 @@ parallel-agent merge contention bites.
   maps directly onto the tri-state exit code (error->2, warn->1) and reads right
   in a human render. Reused docs-lint findings (blocker|warn) get mapped to
   error|warn at the docs-currency rule boundary in M3, not in the engine.
+- 2026-07-13 (itd-85 M3): privacy-hygiene uses a deterministic, identity-INDEPENDENT
+  absolute-path regex, NOT the identity-aware scanner (internal/adapter/scanner).
+  Rejected the scanner because its home-path detection is identity-PARAMETERISED
+  (kindHomeSelf=hardfail vs kindHomeOther=warn) — machine-dependent severity —
+  whereas AC3's contract is "ANY absolute local path is an error", deterministic
+  across machines. The scanner also scans the release BUNDLE (a curated allowlist
+  excluding tests); audit scans all tracked files, a scope the scanner was not
+  built for. Flagged for future consolidation: absolute-home-path detection now
+  lives in two predicates (scanner identity matchers + audit regex); a later phase
+  should extract a shared identity-independent path matcher.
+- 2026-07-13 (itd-85 M3): docs-currency emits every finding at warn, downgrading
+  docs-lint blockers, because audit is an advisory conformance surface and the
+  authoritative docs gate is `abcd docs lint` (still exits 2 on a blocker).
+  Re-raising a docs blocker as an audit error would double-gate the same check.
+- 2026-07-13 (itd-85 M3): three-tier-layout does NOT require .abcd/.work.local/ to
+  be present (diverges from the plan's literal "present and gitignored") — it is
+  created on demand and a fresh clone has none; requiring presence would flag every
+  clean checkout. The load-bearing assertion is "if present, gitignored". Mechanics
+  revision, premise intact.
+- 2026-07-13 (itd-85 M3): privacy-hygiene reads tracked files through os.OpenRoot
+  (repo-root containment), not os.ReadFile. A leaf-only O_NOFOLLOW is insufficient
+  — a symlinked INTERMEDIATE directory still escapes; security review PoC-confirmed
+  an out-of-repo arbitrary read. os.Root refuses any escaping component. Plus
+  O_NONBLOCK (FIFO/device non-blocking open) + IsRegular skip + 4 MiB size cap.
+  Requires go 1.24+ (repo is 1.25); no new dependency.
