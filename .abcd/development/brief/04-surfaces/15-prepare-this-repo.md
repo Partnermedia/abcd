@@ -37,8 +37,10 @@ Five phases, each gated on the one before:
    levels up from the command file): the three-tier README, the brief,
    principles, ADRs, intents, `docs/` Diátaxis rules, and the lint configs as
    patterns.
-3. **Audit** — write the gap report to the target's
-   `.abcd/.work.local/scratch/` and present it before any change.
+3. **Audit** — run `abcd audit --json` for the engine-backed conformance core
+   (the five convention rules), supplement it with the structure/principles
+   judgement the binary does not make, write the gap report to the target's
+   `.abcd/.work.local/scratch/`, and present it before any change.
 4. **Adopt** — create the three tiers with a repo-specific `CONTEXT.md`, migrate
    any historical `.work/` layout to the new tiers (propose then wait for sign-off;
    never leave a repo with both the old and new working-state homes), merge into

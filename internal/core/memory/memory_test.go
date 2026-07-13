@@ -560,7 +560,7 @@ func TestSplitFileFrontmatterCRLFParity(t *testing.T) {
 // (single path) and *os.LinkError (rename, two paths). Both must be reduced to
 // their bare cause against the repo-relative store location.
 func TestKeepOriginalErrorMessageNoPathLeak(t *testing.T) {
-	abs := "/Users/someone/secret/repo/.abcd/memory/sources"
+	abs := "/Users/someone/secret/repo/.abcd/memory/sources" // abcd-audit:allow
 	cases := []error{
 		&os.PathError{Op: "open", Path: abs + "/deadbeef.pdf.tmp", Err: os.ErrPermission},
 		&os.LinkError{Op: "rename", Old: abs + "/deadbeef.pdf.1.memtmp", New: abs + "/deadbeef.pdf", Err: os.ErrExist},

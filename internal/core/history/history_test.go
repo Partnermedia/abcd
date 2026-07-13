@@ -171,8 +171,8 @@ func TestSurvivingCallerHomeBackstop(t *testing.T) {
 		{"users-user-hash", "root=/Users/zzhomeuser42#frag", true},
 		{"home-user-amp", "root=/home/zzhomeuser42&x", true},
 		{"users-user-eq", "cfg=/Users/zzhomeuser42=v", true},
-		{"different-longer-user", "path /Users/zzhomeuser42x/y", false},
-		{"different-user", "path /Users/someoneelse/y", false},
+		{"different-longer-user", "path /Users/zzhomeuser42x/y", false}, // abcd-audit:allow
+		{"different-user", "path /Users/someoneelse/y", false},          // abcd-audit:allow
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -190,7 +190,7 @@ func TestSurvivingCallerHomeBackstop(t *testing.T) {
 // transcript before it lands on disk.
 func TestRedactionEngineStripsUsersHomePath(t *testing.T) {
 	id := scanner.Identity{HomePath: "/Users/alice", HomeUser: "alice"}
-	line := "assistant: wrote /Users/alice/.aws/credentials"
+	line := "assistant: wrote /Users/alice/.aws/credentials" // abcd-audit:allow
 
 	findings := scanner.ScanText(line, id, scanner.DefaultPatterns(), scanner.DefaultIdentitySeverities(), "transcript")
 	redacted, n := scanner.Redact(line, findings)

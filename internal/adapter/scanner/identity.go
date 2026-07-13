@@ -324,7 +324,7 @@ var systemDirNames = map[string]bool{
 // isSystemPathSegment reports whether line[start:end] is the first segment of an
 // absolute Unix path naming a well-known system directory (e.g. the "dev" in
 // "/dev/null"). It requires a leading root '/' that is not itself nested under a
-// prior path segment, and a trailing '/', so "/Users/dev/x" and a bare "dev"
+// prior path segment, and a trailing '/', so "/Users/<user>/x" and a bare "dev"
 // are NOT suppressed.
 func isSystemPathSegment(line string, start, end int) bool {
 	if !systemDirNames[line[start:end]] {
