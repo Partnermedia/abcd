@@ -32,6 +32,9 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Citation Style Language (CSL-JSON)** — the bibliography format of the
   confidential-sources design (itd-76), whose reserved `custom` field carries
   the confidentiality metadata.
+- **Conftest (Open Policy Agent)** — the severity→exit-code convention (`0`
+  clean / `1` warnings / `2` any error) the `abcd audit` verb adopts for its
+  tri-state exit, taken as vocabulary without adopting the Rego engine (itd-85).
 - **CriticGPT (OpenAI)** — the injected-bug construction behind itd-81's
   calibration corpus: natural defects are unlabelled, so ground truth is
   manufactured by reintroducing defects whose class is already known.
@@ -52,6 +55,10 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Priority inheritance (real-time scheduling)** — the derived-priority rule
   of the intent dependency graph (itd-78): a minor blocker of a major intent
   computes to major.
+- **repolinter** — the declarative rule-object schema (`id` / `severity` /
+  `where` / `fix` / `policyInfo`) the `abcd audit` rule model adapts as data,
+  separate from the evaluator (itd-85). The tool itself is archived and is not a
+  dependency.
 - **The Rust RFC process** — the required "Prior Art" section on intents.
 
 ## References & sources

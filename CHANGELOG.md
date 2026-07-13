@@ -10,6 +10,22 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **`abcd audit` — a read-only repo-conformance check.** One command reports
+  whether a repository follows the working conventions: the three-tier `.abcd/`
+  layout, an `AGENTS.md` router, decisions durable in a committed
+  `.abcd/work/DECISIONS.md`, docs currency (reusing the docs-lint engine where
+  `docs/` exists), and privacy hygiene (no absolute local paths in committed
+  files, waivable per line with `abcd-audit:allow`). It runs against any repo
+  given only a working directory, prints a grouped human report with a fix per
+  gap or machine JSON (`--json`, stable rule ids, `{ "findings": [] }` when
+  clean), and exits with a tri-state code — `0` clean, `1` warnings only, `2`
+  any error — so it gates CI as well as onboarding. It answers a different
+  question from `abcd ahoy doctor`: `doctor` is tool-setup health, `audit` is
+  repo conformance. `/abcd:prepare-this-repo` now runs `abcd audit` for its
+  Phase 2 gap report instead of hand-auditing (itd-85, iss-86).
+
 ### Fixed
 
 - **`--json` and stderr command errors no longer leak the developer's home or
