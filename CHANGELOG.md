@@ -31,6 +31,12 @@ called out in a **Breaking** section.
   authoritative, and flagging a single file would imply the others are fine. The
   collision itself is resolved (the later claimant renumbered to `itd-83`); the
   underlying minting scheme is tracked as `iss-80`.
+- `memory ingest --keep-original` writes the stored source copy through the
+  canonical `fsutil.WriteFileAtomic` (temp + fsync + **chmod + parent-directory
+  fsync**) instead of an inline temp+rename that omitted both — the fifth
+  divergent atomic write the `iss-32` consolidation left untouched. The
+  one-canonical-primitive detector now also flags inline `os.O_EXCL`+`os.Rename`
+  sequences, not just named primitives (iss-79).
 
 ### Added
 

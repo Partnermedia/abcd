@@ -489,6 +489,48 @@ func TestIngestKeepOriginalFailureStillReportsIngest(t *testing.T) {
 	}
 }
 
+// TestIngestKeepOriginalWritesSourceCanonically is the success-path regression
+// test for --keep-original: the stored original lands with the exact source bytes
+// and a 0644 mode, and its repo-relative path is reported. (The reroute itself is
+// pinned by the canonical-primitive detector; this locks the happy path.)
+func TestIngestKeepOriginalWritesSourceCanonically(t *testing.T) {
+	repo := t.TempDir()
+	content := "Rotate tokens every 24 hours."
+	src := writeSource(t, repo, "article.txt", content)
+
+	res, err := Ingest(IngestRequest{
+		RepoRoot:     repo,
+		Source:       src,
+		KeepOriginal: true,
+		Distiller:    oneTopicDistiller("topic", "auth", "tokens", "# Token rotation\nRotate tokens every 24 hours."),
+		Now:          fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if res.KeepOriginalError != "" {
+		t.Fatalf("unexpected keep-original error: %s", res.KeepOriginalError)
+	}
+	if res.KeptOriginal == "" {
+		t.Fatalf("KeptOriginal path must be reported on success")
+	}
+	stored := filepath.Join(repo, res.KeptOriginal)
+	fi, err := os.Stat(stored)
+	if err != nil {
+		t.Fatalf("stored original not written: %v", err)
+	}
+	if fi.Mode().Perm() != 0o644 {
+		t.Fatalf("stored original mode = %v, want 0644 (fsutil.WriteFileAtomic chmod)", fi.Mode().Perm())
+	}
+	got, err := os.ReadFile(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != content {
+		t.Fatalf("stored original bytes = %q, want %q", got, content)
+	}
+}
+
 // TestSplitFileFrontmatterCRLFParity proves the parser-parity instance: a
 // CRLF-terminated document must split identically to its LF twin. Before the
 // fix splitFileFrontmatter's exact-match closing delimiter ("---" != "---\r")

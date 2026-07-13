@@ -55,3 +55,52 @@ func TestNoNonCanonicalAtomicWritePrimitives(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// TestNoInlineAtomicWriteSequences is the second half of the one-canonical-
+// primitive detector (iss-79): the name-based check above cannot see a durable
+// write open-coded inline rather than in a named func — exactly how memory's
+// storeOriginal escaped the iss-32 consolidation. An inline atomic write is an
+// exclusive temp create (os.O_EXCL) whose temp is then renamed onto the target
+// (os.Rename); their co-occurrence in one non-fsutil file is the signature.
+// (capture's allocator uses syscall.O_EXCL for a reservation with no rename, so
+// it is correctly not matched — the os-package constant plus os.Rename is what
+// marks a hand-rolled WriteFileAtomic.) The fix routes such a site through
+// fsutil.WriteFileAtomic, which removes os.O_EXCL from the file.
+//
+// Known gap: this does not yet catch the os.CreateTemp+os.Rename idiom (a weaker
+// inline write, no fsync). rules/inject.go SaveState is one such site — broadening
+// the detector to that idiom and routing it is tracked in iss-82.
+func TestNoInlineAtomicWriteSequences(t *testing.T) {
+	internalRoot := filepath.Join("..")
+	var offenders []string
+	err := filepath.WalkDir(internalRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if filepath.Base(path) == "fsutil" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".go") || strings.HasSuffix(d.Name(), "_test.go") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		src := string(data)
+		if strings.Contains(src, "os.O_EXCL") && strings.Contains(src, "os.Rename(") {
+			offenders = append(offenders, path+": inline os.O_EXCL temp + os.Rename")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk internal/: %v", err)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("inline atomic-write sequences (route through fsutil.WriteFileAtomic):\n  %s",
+			strings.Join(offenders, "\n  "))
+	}
+}
