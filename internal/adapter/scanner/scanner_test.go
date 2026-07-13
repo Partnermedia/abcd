@@ -155,7 +155,7 @@ func TestIdentityHomePath(t *testing.T) {
 	id := Identity{HomePath: "/Users/someone", HomeUser: "someone"}
 	pats := DefaultPatterns()
 	sev := DefaultIdentitySeverities()
-	got := ScanText("see /Users/someone/notes.txt for details", id, pats, sev, "f")
+	got := ScanText("see /Users/someone/notes.txt for details", id, pats, sev, "f") // abcd-audit:allow
 	if !hasKind(got, kindHomeSelf) {
 		t.Errorf("home_path_self not flagged: %+v", got)
 	}
@@ -533,7 +533,7 @@ func TestIdentityLocalUsernameSystemPathSuppressed(t *testing.T) {
 		t.Errorf("system path /dev/null wrongly flagged as local username: %+v", got)
 	}
 	// Genuine leaks are still flagged (no false negatives from the suppression).
-	if got := ScanText(`backup written to /home/dev/data`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
+	if got := ScanText(`backup written to /home/dev/data`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) { // abcd-audit:allow
 		t.Errorf("nested username /home/dev not flagged (false negative): %+v", got)
 	}
 	if got := ScanText(`last commit authored by dev`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {

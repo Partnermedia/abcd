@@ -106,7 +106,7 @@ abcdSubZero's `cli_adapter_base.py` is a module inside a Python package (`abcd.o
 - `abcdZero/.devcontainer/devcontainer.json` — Go 1.24 devcontainer, non-root `vscode` user, `postCreateCommand: go install ./cmd/abcd && abcd init`. Clean pattern; non-root convention is a Keep.
 - `abcdZero/.gitpod.yml` — Gitpod prebuild config with `go install ./cmd/abcd && abcd init`. Drop (see D3).
 - `abcdZero/.claude/CLAUDE.md` — single-file, references flowctl with `$FLOWCTL` env var pattern. Keep (see K2).
-- `abcdZero/home/dot_abcd/README.md` — describes `~/.abcd/` as local-only storage for transparency logs, segments, hash chains, SQLite db. abcd's local storage model should follow this shape (local, gitignored, per-project subdirectory).
+- `abcdZero/home/dot_abcd/README.md` — describes `~/.abcd/` as local-only storage for transparency logs, segments, hash chains, SQLite db. abcd's local storage model should follow this shape (local, gitignored, per-project subdirectory). <!-- abcd-audit:allow -->
 - `abcdZero/api/v1/` present (Go HTTP API); abcdSubZero dropped the HTTP API entirely in favour of MCP. abcd aligns with abcdSubZero — MCP over HTTP API.
 
 ### abcdSubZero (Python CLI + FastMCP)

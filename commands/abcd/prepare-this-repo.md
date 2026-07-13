@@ -62,27 +62,37 @@ Read from `$ABCD`, delegating heavy reading to subagents where available:
 
 ## Phase 2 — Audit
 
-Produce a gap report covering:
+The conformance core is **engine-backed**: run the binary's read-only audit and
+build the gap report on its result, rather than hand-producing the whole thing.
+
+```bash
+abcd audit --json
+```
+
+Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
+`message`, `fix`) cover the conventions the binary checks — the three-tier
+`.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency, and
+privacy hygiene (absolute local paths in committed files). Its `skipped` list
+names rules that did not apply (e.g. `docs-currency` where there is no `docs/`).
+The exit code is the tri-state (`0` clean, `1` warnings, `2` any error). If the
+binary is not on `PATH`, fall back to `go run ./cmd/abcd audit --json`.
+
+Then supplement with the judgement the binary does not make:
 
 - **Existing structure (mandatory):** any convention layer already present —
   a legacy `.work/` + `.work.local/` at the root, an existing `AGENTS.md`
   router, CLAUDE.md/GEMINI.md bridges, pre-commit config — and where each
   piece maps in the three-tier layout.
-- Documentation: Diátaxis shape, present tense, user-facing only; stray root
-  markdown beyond README, AGENTS, CHANGELOG, CONTRIBUTING, SECURITY, LICENSE,
-  ACKNOWLEDGEMENTS.
-- Decision hygiene: a durable decision home, or decisions re-litigated per
-  session.
-- Working-state hygiene: where handovers, scratch, and logs go; ephemera
-  committed that should not be.
-- Principles: which abcd principles the repo follows, violates, or has no
+- **Principles:** which abcd principles the repo follows, violates, or has no
   opinion on — cite files as evidence.
-- Privacy: absolute local paths, real hostnames/usernames/emails, private repo
-  names, or `private-names.txt` matches in committed files.
+- **Privacy beyond absolute paths:** real hostnames/usernames/emails, private
+  repo names, or `private-names.txt` matches the `privacy-hygiene` rule's v1
+  scope does not yet cover. A finding on a deliberately illustrative line can be
+  waived with `abcd-audit:allow` on that line.
 
-Write the report to the target's `.abcd/.work.local/scratch/` (create the
-directory via `.git/info/exclude` if needed) and present it before touching
-anything.
+Write the report — the `abcd audit` findings plus these supplements — to the
+target's `.abcd/.work.local/scratch/` (create the directory via
+`.git/info/exclude` if needed) and present it before touching anything.
 
 ## Phase 3 — Adopt
 

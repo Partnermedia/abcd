@@ -208,7 +208,7 @@ func TestRule_WorkLocalNotGitignored(t *testing.T) {
 // AC3: a committed file with an absolute local path → privacy-hygiene error
 // citing file:line — unless a waiver escape is on that line.
 func TestAC_PrivacyAbsolutePath(t *testing.T) {
-	const leak = "see /Users/alice/secret/notes.md for context\n"
+	const leak = "see /Users/alice/secret/notes.md for context\n" // abcd-audit:allow
 	b := newFixtureRepo(t).conforming().
 		file("docs/how-to/thing.md", leak).
 		commit()
@@ -250,7 +250,7 @@ func TestAC_PrivacyWaiverSuppresses(t *testing.T) {
 // /dev/zero) hang.
 func TestRule_PrivacySkipsTrackedSymlink(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "secret.txt")
-	if err := os.WriteFile(outside, []byte("leak /Users/victim/.ssh/id_rsa\n"), 0o600); err != nil {
+	if err := os.WriteFile(outside, []byte("leak /Users/victim/.ssh/id_rsa\n"), 0o600); err != nil { // abcd-audit:allow
 		t.Fatal(err)
 	}
 	b := newFixtureRepo(t).conforming()
@@ -271,7 +271,7 @@ func TestRule_PrivacySkipsTrackedSymlink(t *testing.T) {
 // out-of-repo directory. The scan must refuse to read through it.
 func TestRule_PrivacyRejectsIntermediateSymlinkEscape(t *testing.T) {
 	outsideDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outsideDir, "data.txt"), []byte("leak /Users/victim/x/\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(outsideDir, "data.txt"), []byte("leak /Users/victim/x/\n"), 0o600); err != nil { // abcd-audit:allow
 		t.Fatal(err)
 	}
 	b := newFixtureRepo(t).conforming().
@@ -301,7 +301,7 @@ func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
 	}
 	// Put a leak on the first line so a naive scanner would flag it; the size cap
 	// must skip the file before it is read.
-	copy(big, []byte("/Users/alice/x/\n"))
+	copy(big, []byte("/Users/alice/x/\n")) // abcd-audit:allow
 	b.file("huge.txt", string(big)).commit()
 	res := b.run()
 
