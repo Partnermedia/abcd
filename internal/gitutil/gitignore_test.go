@@ -9,6 +9,15 @@ import (
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
+// runGit runs an isolated git command in repo and returns its combined output.
+func runGit(t *testing.T, repo string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // newRepo makes an isolated git repo with the given .gitignore body. Global and
 // system config are neutralised so a developer's ~/.gitignore cannot change the
 // result.
