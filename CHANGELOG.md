@@ -12,6 +12,25 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd disembark probe <repo>` — a read-only coverage probe over any
+  repository.** It walks a repo without touching it and reports, per brief
+  section, whether a lifeboat could ground it: `grounded` / `partial` / `blank`,
+  with the tier it was grounded from, a confidence, and the evidence cited. A
+  blank is a first-class result — it carries what abcd searched and the question
+  a human must answer, so the report is a to-do list, not a shrug. Adapters
+  degrade across three tiers — git (any repo), conventions (README, docs,
+  CHANGELOG, manifests, ADRs wherever they live), and abcd-native (`.abcd/`) — so
+  a richer repo grounds more, and the `graveyard` section grounds from git
+  history alone (reverts, deleted files, dependency churn). Every read is
+  contained to the repo (`os.Root`), bounded, and non-blocking, and the source
+  tree is byte-identical afterwards — the probe never writes to a source. A
+  companion `abcd disembark coverage <report.json>...` reduces several probe
+  reports to one section×repo table with an always-blank verdict per section:
+  the delta between a record-rich repo and a git-only one is what keeping a
+  record is worth, legible as a number. Both are read-only operator verbs (no
+  `/abcd:disembark` command surface yet); the packer that writes a lifeboat is a
+  later milestone (itd-88, adr-35).
+
 - **Session transcripts are captured automatically when a session ends.** A
   `SessionEnd` hook now runs `abcd hook session-end`, which redacts the session
   transcript through the existing two-stage, fail-closed scanner and files it in
