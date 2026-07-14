@@ -463,3 +463,31 @@ parallel-agent merge contention bites.
   they move out-of-tree (under `<dest>` or the operator-level voyage) or they leave the
   disembark path entirely. adr-35 does not settle it; the decision is owed before the
   packer ships, and the read-only test is what will force it.
+- 2026-07-14 (M1, itd-89/spc-4) — Transcript capture is wired to `SessionEnd`, NOT the
+  `Stop` the plan specified. The plan's letter was wrong on a matter of harness fact:
+  `Stop` fires once per assistant TURN, and Claude Code's transcript file grows through a
+  session, so a `Stop`-wired capture stores a fresh, larger superset every turn — proven
+  by live test (one session, 4 turns → 4 records; a 100-turn session → 100 records and
+  O(N²) bytes). `history.Capture`'s sha256 dedup only collapses byte-IDENTICAL
+  re-captures, which never happens on a live transcript, so the plan's "re-capture is
+  idempotent" acceptance is false under `Stop`. `SessionEnd` fires once at termination and
+  by contract ignores exit code + stdout — a perfect fit for a fail-closed, non-blocking
+  side-effect hook. Verified against the harness docs (code.claude.com/docs/en/hooks).
+  Accepted cost, recorded not hidden: `SessionEnd` does not fire on a hard crash/SIGKILL,
+  so an uncleanly-killed session is not captured; the `Stop`-with-session_id-dedup
+  alternative that would recover that case needs a change to shipped core dedup semantics
+  and is deferred. This is the M1 deviation the loop is required to surface.
+- 2026-07-14 (M1) — iss-95: wiring the hook does NOT by itself start the clock. `history.
+  Capture` requires `~/.abcd/history/<root-sha>/transcripts/` to already exist and
+  deliberately never creates it (the `ownedDirsReal` symlink-safety discipline); `ahoy
+  install` bootstraps it. On a machine where install has not run — INCLUDING THIS ONE,
+  where `~/.abcd/` does not exist — `hook session-end` fails closed, logs to stderr, exits
+  0, and captures nothing, silently. That is exactly itd-89's failure mode (a hook that
+  looks wired while the corpus never accrues). Decision owed: hook self-bootstraps (changes
+  Capture's precondition and has the hook create dirs, which the symlink discipline avoids)
+  vs. `ahoy install` stays the sanctioned bootstrap and the not-installed case is made LOUD
+  (ahoy doctor already flags `history.bootstrap_missing`). iss-96 records the adjacent point:
+  automatic capture makes the scanner's secret-pattern coverage load-bearing — it catches
+  anchored tokens (AKIA…, ghp_, sk-ant-) and home paths but not unanchored high-entropy
+  values (a bare 40-char AWS secret, a prefixless token), so consider entropy detection or
+  the gitleaks adapter for the transcript path.

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
@@ -232,7 +233,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 // maxHookStdinBytes caps the hook payload read from stdin (trust boundary).
 const maxHookStdinBytes = 1 << 20 // 1 MiB
 
-// hookInput is the subset of the Claude Code hook stdin payload the rules
+// hookInput is the subset of the Claude Code hook stdin payload the hook
 // entrypoints read. Unknown fields are ignored.
 type hookInput struct {
 	SessionID string `json:"session_id"`
@@ -240,6 +241,9 @@ type hookInput struct {
 	Prompt    string `json:"prompt"`
 	Source    string `json:"source"`
 	Event     string `json:"hook_event_name"`
+	// TranscriptPath is supplied by the Stop hook; it names the session
+	// transcript on disk. Read by `hook session-end` only.
+	TranscriptPath string `json:"transcript_path"`
 }
 
 // readHookInput reads and size-caps the hook stdin payload.
@@ -346,7 +350,113 @@ func newHookCommand() *cobra.Command {
 		},
 	})
 
+	// session-end — SessionEnd: redact and store the session transcript (adr-29).
+	//
+	// Wired to SessionEnd, NOT Stop. The plan said Stop, but Stop fires once per
+	// assistant *turn*: a 40-turn session would store 40 growing supersets of one
+	// transcript, since Capture's sha256 dedup only collapses byte-identical
+	// re-captures and a live transcript grows between turns. SessionEnd fires once
+	// when the session terminates, which is the session-granular record the gate
+	// asks for. SessionEnd also ignores exit code and stdout by contract, which
+	// matches this verb's fail-closed, non-blocking shape exactly.
+	//
+	// This is a new verb because `history capture` cannot be wired to a hook: from
+	// stdin it *requires* --session <id>, and the hook delivers its session id
+	// inside a JSON payload, not as a flag.
+	//
+	// It is the only irreversible thing abcd does. A session that ends without
+	// being captured is gone: no later code can reconstruct a transcript that was
+	// never stored. That asymmetry — a missed capture is permanent, a failed
+	// capture is merely a lost session — is why every path here degrades to "log
+	// and exit 0" rather than surfacing an error to the host.
+	hookCmd.AddCommand(&cobra.Command{
+		Use:   "session-end",
+		Short: "Stop: redact and store the session transcript",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Diagnostics go to stderr, out of band; stdout stays empty, since a
+			// Stop hook's stdout is not a place to speak to the model.
+			warn := func(format string, a ...any) error {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: "+format+"\n", a...)
+				return nil // never non-zero: a Stop hook must not wedge the session
+			}
+
+			in, err := readHookInput(cmd)
+			if err != nil {
+				return warn("unreadable Stop payload (%v); capturing nothing", err)
+			}
+			if in.TranscriptPath == "" {
+				return warn("Stop payload carries no transcript_path; capturing nothing")
+			}
+			cwd := in.Cwd
+			if cwd == "" {
+				if wd, err := os.Getwd(); err == nil {
+					cwd = wd
+				}
+			}
+			det, err := ahoy.Detect(cwd)
+			if err != nil || det.RootSHA == "" {
+				return warn("cannot resolve the repo's root-commit SHA from %q; capturing nothing", cwd)
+			}
+			raw, err := readTranscript(in.TranscriptPath)
+			if err != nil {
+				return warn("%v; capturing nothing", err)
+			}
+			res, err := history.Capture(cwd, det.RootSHA, in.SessionID, raw, "native")
+			if err != nil {
+				// Includes a hostile session id and a redaction hard-fail: both
+				// write nothing, by design in internal/core/history.
+				return warn("capture failed (%v)", err)
+			}
+			if !res.Wrote {
+				return warn("session %s already stored (no-op)", res.Record.SessionID)
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: stored %s; redacted secrets=%d home=%d\n",
+				res.Record.SessionID, res.Record.Secrets, res.Record.HomePaths)
+			return nil
+		},
+	})
+
 	return hookCmd
+}
+
+// maxTranscriptBytes caps the transcript read from disk. Generous for a JSONL
+// session log, and bounded so a pathological file cannot stall the Stop hook
+// while the scanner walks it.
+const maxTranscriptBytes = 64 << 20 // 64 MiB
+
+// readTranscript reads the file named by the Stop payload's transcript_path.
+//
+// The path is external input, so the open is defensive on the two failure modes
+// that would actually hurt: O_NONBLOCK so a FIFO or device node cannot hang the
+// hook (a hung Stop hook wedges the user's session), and a regular-file check so
+// only a real file is ever read. The size cap bounds the redaction pass.
+func readTranscript(path string) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open transcript %q (%v)", path, err)
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("cannot stat transcript %q (%v)", path, err)
+	}
+	if !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("transcript %q is not a regular file", path)
+	}
+	if st.Size() > maxTranscriptBytes {
+		return nil, fmt.Errorf("transcript %q is %d bytes, over the %d-byte cap", path, st.Size(), maxTranscriptBytes)
+	}
+
+	raw, err := io.ReadAll(io.LimitReader(f, maxTranscriptBytes))
+	if err != nil {
+		return nil, fmt.Errorf("cannot read transcript %q (%v)", path, err)
+	}
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("transcript %q is empty", path)
+	}
+	return raw, nil
 }
 
 // rulesView is the machine-readable envelope for bare `abcd rules`: the kill

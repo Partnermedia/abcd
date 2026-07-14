@@ -12,6 +12,29 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Session transcripts are captured automatically when a session ends.** A
+  `SessionEnd` hook now runs `abcd hook session-end`, which redacts the session
+  transcript through the existing two-stage, fail-closed scanner and files it in
+  the local per-repo store — no flag to pass, no command to type. `abcd history
+  list` shows the records. It is wired to `SessionEnd` (which fires once when a
+  session terminates) rather than `Stop` (which fires once per assistant turn) —
+  the transcript grows through a session, so a `Stop`-wired capture would store a
+  fresh, larger superset every turn. The store has existed since the native transcript
+  corpus landed (adr-29) and was **called by nothing**: `history.Capture` was
+  built, correct, and unused, so no session was ever stored. That gap was the one
+  cost on the board that could not be recovered later — a session that ends
+  without being captured cannot be reconstructed by any amount of future work.
+  The hook is operator-internal, never blocks the host, and always exits `0`: a
+  malformed payload, a missing or non-regular `transcript_path`, a hostile
+  session id, or a directory that is not a git repo each capture nothing, say why
+  on stderr, and exit cleanly — a `Stop` hook that errors or hangs would wedge
+  the session, which is strictly worse than a missed transcript. Re-capture is
+  idempotent (a `Stop` hook may fire more than once per session), the transcript
+  open is non-blocking so a FIFO cannot hang the hook, and nothing is ever
+  written to stdout. It needed a new verb because `history capture` cannot be
+  wired to a `Stop` hook: from stdin it *requires* `--session <id>`, and a `Stop`
+  hook delivers its session id inside a JSON payload (itd-89, adr-29).
+
 - **`abcd audit` — a read-only repo-conformance check.** One command reports
   whether a repository follows the working conventions: the three-tier `.abcd/`
   layout, an `AGENTS.md` router, decisions durable in a committed
