@@ -53,7 +53,7 @@ func (c Coverage) Render() string {
 	for i, t := range c.TiersPresent {
 		tiers[i] = string(t)
 	}
-	fmt.Fprintf(&b, "coverage for %s", c.Repo.Name)
+	fmt.Fprintf(&b, "coverage for %s", sanitize(c.Repo.Name))
 	if c.Repo.Commits > 0 {
 		fmt.Fprintf(&b, " (%d commits)", c.Repo.Commits)
 	}
@@ -70,14 +70,14 @@ func (c Coverage) Render() string {
 		}
 		b.WriteString("\n")
 		if len(s.Evidence) > 0 {
-			fmt.Fprintf(&b, "    evidence: %s\n", strings.Join(s.Evidence, ", "))
+			fmt.Fprintf(&b, "    evidence: %s\n", strings.Join(sanitizeAll(s.Evidence), ", "))
 		}
 		if s.Status == StatusBlank {
 			if len(s.Searched) > 0 {
-				fmt.Fprintf(&b, "    searched: %s\n", strings.Join(s.Searched, ", "))
+				fmt.Fprintf(&b, "    searched: %s\n", strings.Join(sanitizeAll(s.Searched), ", "))
 			}
 			if s.Question != "" {
-				fmt.Fprintf(&b, "    ? %s\n", s.Question)
+				fmt.Fprintf(&b, "    ? %s\n", sanitize(s.Question))
 			}
 		}
 	}
@@ -100,6 +100,37 @@ func tiersOrNone(t []string) string {
 		return "(none)"
 	}
 	return strings.Join(t, ", ")
+}
+
+// sanitize strips terminal control characters from a string before it is
+// rendered to a terminal. Evidence, searched entries, questions, and the repo
+// name are built from repository content — commit subjects, file paths, tag
+// names — which a hostile or archived repo controls. Left raw, an ANSI escape
+// in a commit subject could spoof or corrupt the human report. C0 controls and
+// DEL are replaced with a visible caret; tab is kept as a space. (The JSON
+// output is unaffected — encoding/json escapes control characters itself.)
+func sanitize(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t':
+			return ' '
+		case r < 0x20 || r == 0x7f:
+			return '?'
+		}
+		return r
+	}, s)
+}
+
+// sanitizeAll sanitizes every member of a slice.
+func sanitizeAll(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = sanitize(s)
+	}
+	return out
 }
 
 // AggregateReport is the cross-repo readout: one row per brief section, one
@@ -144,16 +175,23 @@ type SectionVerdict struct {
 func Aggregate(covs []Coverage) AggregateReport {
 	repos := make([]AggregateRepo, 0, len(covs))
 	names := make([]string, 0, len(covs))
-	seen := map[string]int{}
+	seen := map[string]bool{}
 	for _, c := range covs {
-		name := c.Repo.Name
-		// Disambiguate a duplicate repo name so its column is not overwritten.
-		if _, dup := seen[name]; dup {
-			seen[name]++
-			name = fmt.Sprintf("%s#%d", name, seen[c.Repo.Name])
-		} else {
-			seen[name] = 1
+		// Disambiguate a duplicate repo name so its column is not overwritten,
+		// probing past a suffix that itself collides with another repo's real
+		// name (e.g. "foo", "foo#2", "foo") — the cells map is keyed by name, so
+		// any collision would silently drop a column.
+		name := sanitize(c.Repo.Name)
+		if seen[name] {
+			for n := 2; ; n++ {
+				cand := fmt.Sprintf("%s#%d", name, n)
+				if !seen[cand] {
+					name = cand
+					break
+				}
+			}
 		}
+		seen[name] = true
 		repos = append(repos, AggregateRepo{
 			Name: name, Commits: c.Repo.Commits, TiersPresent: c.TiersPresent,
 		})

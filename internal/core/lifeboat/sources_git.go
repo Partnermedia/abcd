@@ -70,15 +70,21 @@ func (gitGraveyardSource) Probe(ctx *SourceContext) Evidence {
 		)
 	}
 	var sources []string
-	conf := ConfidenceMedium
 	if len(reverts) > 0 {
 		sources = append(sources, fmt.Sprintf("%d reverted commits", len(reverts)))
-		conf = ConfidenceHigh
 	}
 	if len(deleted) > 0 {
 		sources = append(sources, fmt.Sprintf("%d files deleted (e.g. %s)", len(deleted), deleted[0]))
 	}
-	return Evidence{Status: StatusGrounded, Confidence: conf, Sources: sources}
+	// A revert is an explicit, deliberate abandonment signal — it grounds the
+	// graveyard. A file deletion alone is ambiguous: nearly every repo deletes a
+	// file in the normal course of work, so deletions without any revert are only
+	// partial evidence, not a grounded graveyard. Keeping this honest matters —
+	// the cross-repo aggregate reads these statuses as the experiment's result.
+	if len(reverts) > 0 {
+		return Evidence{Status: StatusGrounded, Confidence: ConfidenceHigh, Sources: sources}
+	}
+	return Evidence{Status: StatusPartial, Confidence: ConfidenceMedium, Sources: sources}
 }
 
 // gitSpineSource grounds "rescue/spine" partially: the commit history is a

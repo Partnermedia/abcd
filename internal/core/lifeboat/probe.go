@@ -23,6 +23,16 @@ const SchemaVersion = 1
 // hostile or accidental giant file.
 const maxProbeReadBytes = 4 << 20 // 4 MiB
 
+// maxGitOutputBytes caps how much stdout the probe buffers from any one git
+// command. Generous enough for a large legitimate history, bounded so a hostile
+// repo cannot exhaust memory through a read-only command.
+const maxGitOutputBytes = 16 << 20 // 16 MiB
+
+// maxDirEntries caps how many entries ListDir returns from one directory, so a
+// directory with millions of files cannot exhaust memory when the probe indexes
+// it.
+const maxDirEntries = 50000
+
 // Confidence qualifies a non-blank status: how sure the adapter is that the
 // evidence it cites actually grounds the section. It is meaningless for a blank.
 type Confidence string
@@ -146,7 +156,10 @@ func (c *SourceContext) Git(args ...string) (string, error) {
 	}
 	c.mu.Unlock()
 
-	out, err := gitutil.Run(c.RepoRoot, args...)
+	// Cap git stdout: an untrusted repo can make a read-only command emit
+	// arbitrarily much, and the probe must not let that grow memory without
+	// bound.
+	out, err := gitutil.RunLimited(c.RepoRoot, maxGitOutputBytes, args...)
 
 	c.mu.Lock()
 	c.gitCache[key] = gitResult{out: out, err: err}
@@ -242,8 +255,9 @@ func (c *SourceContext) ListDir(rel string) []string {
 		return nil
 	}
 	defer f.Close()
-	entries, err := f.ReadDir(-1)
-	if err != nil {
+	// Bounded: a directory with millions of entries cannot balloon memory here.
+	entries, err := f.ReadDir(maxDirEntries)
+	if err != nil && len(entries) == 0 {
 		return nil
 	}
 	names := make([]string, 0, len(entries))
