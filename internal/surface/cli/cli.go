@@ -371,7 +371,7 @@ func newHookCommand() *cobra.Command {
 	// and exit 0" rather than surfacing an error to the host.
 	hookCmd.AddCommand(&cobra.Command{
 		Use:   "session-end",
-		Short: "Stop: redact and store the session transcript",
+		Short: "SessionEnd: redact and store the session transcript",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Diagnostics go to stderr, out of band; stdout stays empty, since a
@@ -413,6 +413,53 @@ func newHookCommand() *cobra.Command {
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: stored %s; redacted secrets=%d home=%d\n",
 				res.Record.SessionID, res.Record.Secrets, res.Record.HomePaths)
+			return nil
+		},
+	})
+
+	// session-start — SessionStart: warn, visibly, when the transcript store is
+	// not bootstrapped for this repo (iss-95).
+	//
+	// The session-end hook cannot say this at session end — SessionEnd ignores a
+	// hook's exit code and stdout, so a not-installed session captures nothing and
+	// no one is told. SessionStart is the one session hook with a user-visible
+	// channel: it renders a hook's stderr as a notice ONLY on a non-zero exit, and
+	// never blocks the session on it. So the "loud" path here deliberately exits 2
+	// — the only way the warning reaches the user — while every other path stays
+	// silent at exit 0. `ahoy install` and `ahoy doctor` already handle the
+	// installed and health-check cases; this covers the plugin-enabled-but-never-
+	// installed gap that was otherwise silent.
+	hookCmd.AddCommand(&cobra.Command{
+		Use:   "session-start",
+		Short: "SessionStart: warn if the transcript store is not bootstrapped",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			in, err := readHookInput(cmd)
+			if err != nil {
+				return nil // malformed payload: not a store problem, stay silent
+			}
+			cwd := in.Cwd
+			if cwd == "" {
+				if wd, err := os.Getwd(); err == nil {
+					cwd = wd
+				}
+			}
+			det, err := ahoy.Detect(cwd)
+			if err != nil {
+				return nil // cannot tell: never nag on uncertainty
+			}
+			// history.transcripts_missing is emitted only when cwd is a git repo
+			// (a root SHA resolved) AND this repo's transcripts dir is absent —
+			// exactly the state in which session-end would silently capture
+			// nothing. A non-repo cwd never carries this gap, so we stay silent
+			// there: no `ahoy install` would make a non-repo capturable.
+			for _, g := range det.Gaps {
+				if g.ID == "history.transcripts_missing" {
+					fmt.Fprintln(cmd.ErrOrStderr(),
+						"abcd: session transcripts will not be captured — the history store is not set up for this repo. Run `/abcd:ahoy install` (or `abcd ahoy install`) to start recording.")
+					return &exitError{Code: 2} // non-zero so SessionStart shows it; SessionStart never blocks
+				}
+			}
 			return nil
 		},
 	})
