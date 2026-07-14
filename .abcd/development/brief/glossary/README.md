@@ -59,7 +59,8 @@ glossary/              ← .abcd/development/brief/glossary/ (the home, per adr-
 │   ├── phase.md
 │   ├── voyage.md
 │   ├── transport.md
-│   └── lifeboat.md
+│   ├── lifeboat.md
+│   └── disembark.md
 └── interview/         ← terms specific to the grill/interview sub-verb
     ├── session.md
     └── embark.md
@@ -141,9 +142,10 @@ See `skills/abcd-intent-grill/phase-1-glossary-mode.md` for the complete write-b
 | [persona](core/persona.md) | stable | Placeholder stakeholder character from the personas registry |
 | [phase](core/phase.md) | stable | Discrete layer of the build sequence, grouping related specs |
 | [spec](core/spec.md) | stable | Specced block of work implementing one or more intents |
-| [voyage](core/voyage.md) | stable | Complete project lifecycle from brief through delivery |
+| [voyage](core/voyage.md) | stable | Operations namespace at `~/.abcd/voyage/<source-root-sha>/` — the append-only record of disembark and embark runs against a source repository |
 | [transport](core/transport.md) | stable | Mechanism by which context is delivered to an oracle |
-| [lifeboat](core/lifeboat.md) | stable | Portable artefact packed by `/abcd:disembark` to transfer project knowledge across context boundaries |
+| [lifeboat](core/lifeboat.md) | stable | Portable artefact packed by `/abcd:disembark` to transfer project knowledge across context boundaries; it always lands outside the source repository, at an operator-chosen destination |
+| [disembark](core/disembark.md) | stable | The act of packing a lifeboat: distils a source project's settled artefacts, decisions, and configuration into a portable directory |
 
 ### interview/
 

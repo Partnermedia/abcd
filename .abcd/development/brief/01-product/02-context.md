@@ -5,8 +5,8 @@ You did a manual lifeboat from iDelphiZero → iDelphi (`idelphiDev/.work/lifebo
 abcd ships these user-facing commands:
 
 - **`/abcd:ahoy install`** — install / update abcd in any project (bootstraps configuration, gitignore, marker blocks, PATH symlink). Bare `/abcd:ahoy` shows status+help.
-- **`/abcd:disembark to <path>`** — *pack* a lifeboat from the current project to `<path>` (use `home` for current repo's `.abcd/lifeboat/`). Bare `/abcd:disembark` shows status+help; `probe` and `dry-run` sub-verbs preview without writing.
-- **`/abcd:embark from <path>`** — *unpack* a lifeboat at `<path>` into a (typically empty) target project (use `home` for current repo's `.abcd/lifeboat/`). Bare `/abcd:embark` shows status+help; `scan` and `probe <path>` sub-verbs discover/inspect without unpacking.
+- **`/abcd:disembark <source-repo> to <dest>`** — *pack* a lifeboat by **reading** `<source-repo>` — any repository, including one abcd has never touched — and writing the artefact **out-of-tree** to the operator-chosen `<dest>`. The source is never written to; the destination must be absent, an empty directory, or one carrying a parseable `_provenance.json` ([adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)). Bare `/abcd:disembark` shows status+help; `probe <source-repo>` and `dry-run` sub-verbs preview without writing — `probe` reports **coverage** (which brief sections a repository can ground, and which come back blank).
+- **`/abcd:embark from <dest>`** — *unpack* the lifeboat at `<dest>` (wherever a disembark wrote it) into a (typically empty) target project. Bare `/abcd:embark` shows status+help; `scan` and `probe <path>` sub-verbs discover/inspect without unpacking.
 - **`/abcd:launch ship`** — cut a curated release from the single repo (`.abcd/**` excluded from the artifact by packaging), scrub for PII/secrets, stamp the version, update the marketplace entry. Bare `/abcd:launch` shows status+help; `dry-run` sub-verb runs the full pre-flight gate suite without writing the release artifact.
 - **`/abcd:intent`** — bare quoted `/abcd:intent "<text>"` is the canonical create (spc-30/itd-46), plus `refine` / `grill` / `plan` / `ship` / `review` / `consistency` / `shape` / `reclassify` / `link` sub-verbs (the `consistency` sub-verb shipped in spc-29 per itd-48, which superseded itd-31). There is no plain `list` sub-verb — it is folded into the bare render per SD001. Manages **intents** (press-release-format intent docs at `.abcd/development/intents/{drafts,planned,shipped,disciplines,superseded}/`). `plan` promotes an intent to `planned/` and plans the work as a spec on the native spec store ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md); the companion harness `ccpm` as the deeper backend); `ship` drives that spec to completion (or the full pipeline if from drafts/); a spec-close hook reconciles standalone/bundle intents planned → shipped automatically on a successful close (spc-28 `intent_lifecycle.reconcile`); disciplines move from drafts/ to disciplines/ on plan and stay there. Bare `/abcd:intent` shows status+help.
 - **`/abcd:capture`** — capture / list / promote / resolve / wontfix issues (the structured `.abcd/work/issues/` ledger). Issues live at `.abcd/work/issues/{open,resolved,wontfix}/iss-N-<slug>.md`. See itd-4. The cross-corpus synthesist (`/abcd:dredge`) comes in a later phase as itd-25.
@@ -20,21 +20,25 @@ abcd ships these user-facing commands:
 
 ```
 [source repo: specs, .abcd/memory/ (or legacy memory/), ADRs, docs, code, transcripts]
-        │
-        │ /abcd:disembark to <path>   (PACK; `home` = current repo's .abcd/lifeboat/)
+        │                            READ-ONLY — the source tree is never written to
+        │ /abcd:disembark <source-repo> to <dest>   (PACK)
         ▼
-[lifeboat artefact: a portable directory]
+[lifeboat artefact at <dest>: a portable directory, out-of-tree]
    ├── README.md, press-release.md, principles.md   ← synthesised
+   ├── coverage.json, coverage.md                   ← what could NOT be grounded (a blank is a result)
    ├── rescue/specs/, docs/adrs/                    ← verbatim copies
+   ├── graveyard/                                   ← what was tried and failed (every interpreted entry cites evidence)
    ├── research/, audit/                            ← passes B/C outputs + audits
    └── _provenance.json                             ← (full shape in [04-surfaces/02-disembark.md § 5](../04-surfaces/02-disembark.md#5-output-shape))
         │
-        │ /abcd:embark from <path>   (UNPACK; `home` = current repo's .abcd/lifeboat/)
+        │ /abcd:embark from <dest>   (UNPACK)
         ▼
 [target repo: files placed at canonical locations]
+
+  operations log (never in either repo): ~/.abcd/voyage/<source-root-sha>/
 ```
 
-Lifeboats are portable directories; share by copy/tar/git, not by global archive. **The lifeboat is always *output*** — `.abcd/lifeboat/` in any repo is the latest disembark snapshot, regenerable from current state. Embark/disembark provenance and history live separately at `.abcd/development/voyage/` (see [`02-constraints/01-platform.md`](../02-constraints/01-platform.md) and [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history)); the lifeboat itself never accumulates past versions.
+Lifeboats are portable directories; share by copy/tar/git, not by global archive. **The lifeboat is always *output*** — written out-of-tree to an operator-chosen `<dest>`, never back into the repo being read (adr-35); it is the latest disembark snapshot, regenerable from current state. Embark/disembark provenance and history live separately at the operator level, `~/.abcd/voyage/<source-root-sha>/` (see [`02-constraints/01-platform.md`](../02-constraints/01-platform.md) and [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history)); the lifeboat itself never accumulates past versions.
 
 **Repo:**
 

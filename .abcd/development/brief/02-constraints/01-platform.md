@@ -14,22 +14,23 @@ The core is a transport-agnostic Go package ([adr-23](../../decisions/adrs/0023-
 
 ## Lifeboat path
 
-`.abcd/lifeboat/` (per-repo, gitignored unless private).
+**Out-of-tree, at an operator-chosen destination** — `disembark <source-repo> to <dest>`. There is no in-tree lifeboat home and nothing to gitignore in the source, because **disembark never writes to the source repo** (a test hashes its tree before and after). Per [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), superseding adr-4's `.abcd/lifeboat/`: mining a dead or archived project must not require installing abcd into a repo we only want to read.
 
-**Lifeboat is always *output*.** `.abcd/lifeboat/` holds the latest snapshot this repo would ship — produced by `disembark`, regenerable from current state. Disembark overwrites it (with a `.bak` safety net per [`04-surfaces/02-disembark.md § 7`](../04-surfaces/02-disembark.md#7-acceptance)); there is no `lifeboat-v1/` / `lifeboat-v2/` proliferation. Past disembarks are recorded as manifests (hash + file list + label), not as preserved snapshots — see [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history).
+**Lifeboat is always *output*.** `<dest>` holds the latest snapshot only — produced by `disembark`, regenerable from current state; there is no `lifeboat-v1/` / `lifeboat-v2/` proliferation. Re-running is governed by a **destination safety gate**, not adr-4's `.bak` overwrite: refuse unless the destination is absent, an empty directory, or one carrying a parseable `_provenance.json`. **abcd never overwrites a directory it did not produce.** Past disembarks are recorded as manifests (hash + file list + label) at the operator level, not as preserved snapshots — see [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history).
 
 ## Embark sources
 
-**Input lifeboats are external by default.** Embark reads from `embark from <path>` (use `home` for the current repo's own lifeboat — the round-trip / self-test case); the source repo's `.abcd/lifeboat/` is the canonical copy. Embark records source path + manifest hash in `.abcd/development/voyage/embark/provenance.json`. Opt-in `embark from <path> --archive` copies the input lifeboat verbatim into `.abcd/development/voyage/embark/from/<timestamp>/` for the rare case where the source repo will disappear.
+**Input lifeboats are external by default.** Embark reads from `embark from <path>` — the lifeboat at whatever destination a disembark wrote it to. Embark records source path + manifest hash in `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` (operator level, per adr-35 — never committed, because voyage records absolute source paths). Opt-in `embark from <path> --archive` copies the input lifeboat verbatim into `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` for the rare case where the source repo will disappear.
 
 **Embark sources, in order (post bare-as-help refactor — see [`04-surfaces/03-embark.md`](../04-surfaces/03-embark.md)):**
 
-1. `embark from home` → expands to `.abcd/lifeboat/` in cwd (round-trip case: embark from this repo's own disembark output, e.g., for testing)
-2. `embark from <path>` (any explicit path)
-3. `embark scan` (or `embark scan --deep`) → discovery sub-verb that walks sibling directories (`../`), lists `.abcd/lifeboat/` candidates ranked by mtime — does not unpack; pass the chosen path to `embark from <path>`
-4. Free-text path input via the embark interview if `<path>` is omitted on `from`
+1. `embark from <path>` (any explicit path to a lifeboat destination a disembark wrote) — **there is no `home` shorthand**, because there is no in-tree lifeboat home to expand it to (adr-35). The round-trip / self-test case is just `disembark <repo> to <dest>` followed by `embark from <dest>`.
+2. `embark scan` (or `embark scan --deep`) → discovery sub-verb that walks sibling directories (`../`), lists **lifeboat destinations** — directories carrying a parseable `_provenance.json`, the same marker the destination safety gate keys on — ranked by mtime; does not unpack; pass the chosen path to `embark from <path>`
+3. Free-text path input via the embark interview if `<path>` is omitted on `from`
 
-**No global archive (`~/.abcd/archive/`).** Lifeboats live in their producing repo; share externally by copy.
+> **Open question (adr-35):** where `scan` searches. Walking `../` made sense when a lifeboat lived inside its producing repo, so siblings-of-cwd *were* the candidate set. Destinations are now operator-chosen and need not sit beside the repo being embarked into. Either the sibling walk is kept as a cheap heuristic, or scan is given explicit roots (an argument, a configured search path, or the voyage records under `~/.abcd/voyage/`). adr-35 does not settle this; it must be decided before `scan` is specified.
+
+**No global lifeboat archive (`~/.abcd/archive/`).** A lifeboat lives at the destination its operator chose and abcd keeps no registry of them; the only operator-level state is voyage (`~/.abcd/voyage/<source-root-sha>/`), which records what was done, not the artefacts themselves. Share externally by copy.
 
 ## Validation corpus
 

@@ -37,4 +37,5 @@ implementation-scoped). The brief is project-wide; intents and specs are narrowe
 ## Related terms
 
 - [intent](intent.md) — a press-release-shaped feature description within the project scope
-- [voyage](voyage.md) — the full project lifecycle, which begins with the brief
+- [voyage](voyage.md) — the operations namespace recording what abcd did to produce a lifeboat; a
+  [disembark](disembark.md) run grounds the brief's structure section by section

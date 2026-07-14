@@ -7,7 +7,7 @@ supersedes: null
 superseded_by: null
 related_intents: []
 related_rfcs: []
-related_adrs: [adr-1, adr-3, adr-4, adr-9]
+related_adrs: [adr-1, adr-3, adr-9, adr-35]
 ---
 
 # ADR-5: Brief is the current state; no version label, no archive directory
@@ -33,7 +33,7 @@ The version-label scheme was duplicating `git log brief/`. The `archive/<NN>/` d
 - **No version label** on the brief. No "v5", no "fifth iteration", no `version:` field.
 - **No `archive/` directory.** Historical brief content is recovered via `git log brief/` and `git show <commit>:brief/...`.
 - **No changelog blobs inside `brief/README.md`.** Pure delta narration is git's job. Inflection-point rationale (real architectural shifts) lives in ADRs (this directory). File-scoped rationale (why this section reads this way) stays inline in the brief.
-- **History snapshots, when needed, come from disembark.** `voyage/disembark/history.jsonl` (per ADR-4) is the audit chain.
+- **History snapshots, when needed, come from disembark.** `voyage/disembark/history.jsonl` (per adr-35) is the audit chain.
 - **`/abcd:embark` seeds a new repo's v1 brief** from a lifeboat's amended press release. This is the *only* time a "v1 brief" framing is meaningful — at the moment a new project starts.
 
 Generalises ADR-3 (directory-as-truth-for-lifecycle) to the brief itself: the live `brief/` directory IS the brief. No parallel field, no parallel archive, no parallel iteration counter.
@@ -51,7 +51,7 @@ Generalises ADR-3 (directory-as-truth-for-lifecycle) to the brief itself: the li
 - One brief, always current. New readers don't have to ask "is this the latest?"
 - `brief/00-meta.md` shrinks dramatically — loses archive policy, version-deltas section, "fifth iteration" framing. Keeps numbered folders, padding, kebab-case, brief↔lifeboat shape contract.
 - `brief/README.md` shrinks — loses ~120 lines of changelog blobs ("What changed since v3", "v5 continuation"). Keeps navigation + reading guide.
-- Disembark and embark contracts (per ADR-4) become simpler: they read the brief as-is, no version negotiation.
+- Disembark and embark contracts (per adr-35) become simpler: they read the brief as-is, no version negotiation.
 - `.abcd/development/decisions/adrs/` becomes the canonical home for inflection-point rationale across the project.
 
 **Costs / obligations:**

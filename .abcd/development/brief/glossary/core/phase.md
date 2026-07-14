@@ -50,4 +50,4 @@ not the phase itself.
 
 - [spec](spec.md) — the implementation unit; many specs belong to one phase
 - [intent](intent.md) — the user-facing capability; a phase bundles a set of intents
-- [voyage](voyage.md) — a full lifecycle arc
+- [voyage](voyage.md) — the operations namespace recording what abcd did to produce a lifeboat; not a lifecycle arc (that sense is retired per adr-35)

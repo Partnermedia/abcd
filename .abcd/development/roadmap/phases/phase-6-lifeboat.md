@@ -2,24 +2,46 @@
 
 ## Expectation
 
-By the end of this phase — the last one — abcd closes its own loop. A user can
-run `/abcd:disembark` in a project and get a faithful lifeboat: a structured
-snapshot that carries the project's verbatim artefacts (specs, ADRs, memory,
-reviews) *and* the synthesised why — distilled principles, a composed brief, a
-press release. They can run `/abcd:embark` to unpack that lifeboat into a fresh
-target, and the new repo's brief, memory, and ADRs are a faithful subset of the
-source. The lifeboat is high-fidelity enough that someone with no prior context
-can read it and understand not just *what* the project is but *why* it was built
-the way it was. This is the heart of abcd — the surface that makes a project
-survivable — and it lands last because it depends on every prior substrate being
-native.
+By the end of this phase, abcd closes its own loop. A user can point
+`/abcd:disembark` at **any** project — including one abcd has never managed, and
+one that is already dead — and get a faithful lifeboat without the source repo
+being touched: a structured snapshot carrying the project's verbatim artefacts
+(specs, ADRs, memory, reviews) *and* the **recorded** why — distilled principles,
+a composed brief, a press release, **with every claim citing the source it came
+from**. Alongside it comes `coverage.{json,md}`: what could *not* be grounded,
+what was searched for it, and the question a human must answer instead. A blank
+is a first-class result, never a silent gap. They can run `/abcd:embark` to
+unpack that lifeboat into a fresh target, and the new repo's brief, memory, and
+ADRs are a faithful subset of the source.
+
+This is the heart of abcd — the surface that makes a project survivable.
+
+> **Two claims this section used to make have been withdrawn, per
+> [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).**
+>
+> 1. It said the lifeboat is *"high-fidelity enough that someone with no prior
+>    context can understand **why it was built the way it was**."* A
+>    transcript-less lifeboat **cannot deliver that** — the rationale nobody
+>    wrote down is not in the repository at any tier. The promise is now the
+>    **recorded** why, every claim citing its source; Pass B ships as a declared
+>    exemption in `_provenance.json`.
+> 2. It said the phase *"lands last because it depends on every prior substrate
+>    being native."* Checked against the binary, that was **mostly false** — and
+>    load-bearing, because it parked abcd's defining surface behind four phases
+>    that do not gate it. See `## Dependency rationale` below. The coverage
+>    experiment (itd-88) is pulled out of this phase and sequenced ahead of it;
+>    what remains here is the packer, embark, and the round-trip.
 
 ## Milestone
 
-- `/abcd:disembark to <path>` runs end-to-end on each corpus repo, per the
-  acceptance in `04-surfaces/02-disembark.md`.
-- The three preview shapes work: `probe` (adapter probes only), `dry-run`
-  (full plan, no writes), `to <path> --no-agents` (verbatim parts only).
+- `/abcd:disembark <source-repo> to <path>` runs end-to-end on each corpus repo,
+  per the acceptance in `04-surfaces/02-disembark.md` — the source repo is read
+  only and never written to, and the destination passes the safety gate (absent,
+  empty, or carrying a parseable `_provenance.json`).
+- The three preview shapes work: `probe <source-repo>` (adapter probes only,
+  emitting the **coverage report** — that is the experiment, landed ahead of this
+  phase by itd-88), `dry-run` (full plan, no writes), `<source-repo> to <path>
+  --no-agents` (verbatim parts only).
 - Pass A/B/C all pass their round-trip gates; Pass B retrieval reads the
   **native transcript store** (per
   [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) rather than an
@@ -37,20 +59,29 @@ native.
 
 > _Roll-up acceptance per [adr-9 amendment](../../decisions/adrs/0009-phase-as-product-layer.md). Each bullet asserts an emergent, cross-intent truth or a phase-spanning user journey — never a copy of an intent's own `## Acceptance Criteria`._
 
-- **Given** a corpus repo with no abcd lifeboat, **when** a user runs
-  `/abcd:disembark to <path>`, **then** a lifeboat is produced that carries both
-  the verbatim artefacts AND the synthesised why (distilled principles, composed
-  brief, press release) — a journey across adapters, Pass A, Pass B, Pass C, and
-  Phase 2's memory substrate that no single stage delivers alone.
+- **Given** a corpus repo abcd has never managed, **when** a user runs
+  `/abcd:disembark <source-repo> to <path>`, **then** a lifeboat is produced at
+  that destination — the source untouched — carrying both the verbatim artefacts
+  AND the **recorded** why (distilled principles, composed brief, press release,
+  **with every claim citing its source**), with `coverage.{json,md}` alongside it
+  carrying the gaps: what could not be grounded, what was searched for it, and the
+  question a human must answer. A journey across adapters, Pass A, Pass B, Pass C,
+  and Phase 2's memory substrate that no single stage delivers alone.
 - **Given** a project disembarked in this phase, **when** a user runs
   `/abcd:embark` into an empty target and then inspects it, **then** the new
   repo's brief, memory, and ADRs are a faithful subset of the source — the
   round-trip property that only exists because disembark and embark agree on one
   lifeboat schema.
 - **Given** a produced lifeboat, **when** a reader with no prior context reads
-  it, **then** they can reconstruct not just *what* the project is but *why* it
-  was built that way — the emergent fidelity property that is the whole point of
-  the pipeline, and that no individual pass can guarantee on its own.
+  it, **then** they can reconstruct not just *what* the project is but **the
+  recorded why, with every claim citing its source** — and every gap in that why
+  is named in `coverage.{json,md}` as a question for a human, never left as a
+  silent omission. Re-authored per
+  [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md): the
+  original bullet asserted a reader could reconstruct *why it was built the way
+  it was*, which a **transcript-less lifeboat cannot deliver** — the rationale
+  nobody wrote down is not in the repository at any tier. Pass B ships as a
+  declared exemption in `_provenance.json`.
 - **Given** a `dev-sync` source fails, **when** disembark runs, **then** the
   pipeline degrades gracefully with the failure named in the report rather than
   aborting — an end-to-end resilience property spanning every pass.
@@ -86,21 +117,45 @@ principles/compose/audit — plus the embark unpack half of the round-trip.
 - **Intents deliver the expectation:** itd-7 delivers the RepoPrompt-workspace
   portability that makes a lifeboat carry an opt-in RepoPrompt setup across
   machines; Phase 2's itd-36 supplies the memory the composed lifeboat draws its
-  synthesised content from.
-- **ADRs realised:** adr-4 (lifeboat as regenerable output — the disembark/embark
-  model); adr-28 (single-repo curated release — the disembark output is a
-  curated artifact, not a promotion); adr-29 (native transcript corpus — Pass B's
-  source); adr-1's "phase audit" feedback loop becomes exercisable here once the
-  pipeline produces auditable output.
+  **recorded** why from — every claim citing the source it came from.
+- **ADRs realised:** [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)
+  (the lifeboat is a coverage experiment — read-only, out-of-tree, proven before
+  it is packed; supersedes adr-4's regenerable-output model and moves `voyage/`
+  to the operator level); adr-28 (single-repo curated release — the disembark
+  output is a curated artifact, not a promotion); adr-29 (native transcript
+  corpus — Pass B's source); adr-1's "phase audit" feedback loop becomes
+  exercisable here once the pipeline produces auditable output.
 
 ## Dependency rationale
 
-- **Lands last** — the lifeboat round-trip depends on every prior substrate being
-  native: the history and memory stores (Phase 2), the review artefacts
-  (Phase 3), the native spec/task engine (Phase 4), and the run seam (Phase 5)
-  all feed the verbatim-and-synthesised snapshot disembark packs.
+> **Corrected per [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).**
+> This phase's original rationale — *"it lands last because it depends on every
+> prior substrate being native"* — was checked against the binary and found
+> **mostly false**. The error was load-bearing: it parked abcd's defining surface
+> behind four phases that do not gate it. The **coverage experiment (itd-88) is
+> pulled out of this phase** and separately sequenced; what remains here is the
+> packer and the round-trip, and it is built to whatever section list the
+> experiment's cross-repo aggregate leaves standing.
+
+- **Phases 3, 4 and 5 do not gate this work.** The native spec engine
+  (`spec.Load` / `Create` / `Close` / `Validate`) ships; reviews are already
+  committed markdown under `.abcd/work/reviews/`; backgrounding is a host
+  affordance and abcd ships no `resume` verb by its own design. The
+  host-delegation seam itd-2 was said to block on already ships **twice** —
+  `memory.Distiller` fed by `--pages-json`, and `intent review ingest
+  --verdict-json` with a dead-letter path.
+- **The one real dependency is data, not code.** Phase 2's history and memory
+  *packages* are built; their **stores are empty**. Pass B — mining chat for the
+  rationale nobody wrote down — has no corpus, and **cannot get one
+  retroactively**. That is why the transcript-capture hook ships ahead of any
+  lifeboat code, and why it is the only genuinely irreversible item on the board.
 - **Runs after Phase 1** — disembark's `dev-sync` foundation and adapter dispatch
   build on the ahoy install flow and the rules loader.
+- **Adapters degrade rather than block.** Tier 0 (git) is present in every
+  repository, so a lifeboat is always producible; richer tiers raise coverage
+  rather than gate the run. A missing source is a `blank` in the coverage
+  report — a first-class result carrying the question a human must answer — not
+  a failure.
 - **Adapters → Pass A → Pass B → Pass C → embark** is a hard internal chain:
   each pass consumes the previous pass's validated output through a round-trip
   gate, and embark unpacks what Pass C composes.

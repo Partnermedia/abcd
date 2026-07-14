@@ -95,19 +95,37 @@ contract every adapter loop inherits.
 
 ## 6. Lifeboat round-trip
 
-- **disembark** — the lifeboat pipeline (Pass A/B/C) reads the repo's own settled
-  artefacts through the source readers
-  ([`../05-internals/02-adapters.md`](../05-internals/02-adapters.md)) over the
-  native spec / history / memory stores, synthesises the lifeboat, and runs the
-  host-delegated oracle audit.
-- **embark** — scaffold a target repo from a lifeboat.
+- **probe before pack** — `abcd disembark probe <source-repo>` ships **before a
+  packer exists at all**
+  ([adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)): it
+  produces a coverage report over a corpus of repos of mixed record quality, and
+  the section list that survives that aggregate is what the packer is then built
+  to. A `blank` section is a first-class result, not a failure.
+- **disembark** — `abcd disembark <source-repo> to <dest>`: the lifeboat pipeline
+  (Pass A/B/C) reads the **source repo's** settled artefacts through the source
+  readers ([`../05-internals/02-adapters.md`](../05-internals/02-adapters.md))
+  over the native spec / history / memory stores, synthesises the lifeboat **at
+  the operator-chosen `<dest>`**, and runs the host-delegated oracle audit. The
+  source repo is **never written to** — disembark is read-only and out-of-tree,
+  so it can be pointed at a dead or archived project abcd has never installed
+  into. Operations live at the operator level under
+  `~/.abcd/voyage/<source-root-sha>/`, never in the source tree. Writing to
+  `<dest>` passes the **destination safety gate**: absent, an empty directory, or
+  one carrying a parseable `_provenance.json` — abcd never overwrites a directory
+  it did not produce.
+- **embark** — scaffold a target repo from a lifeboat, read from wherever
+  disembark landed it.
 - The **round-trip** (disembark on a corpus repo → embark into an empty target)
   is the integration milestone that exercises every seam end-to-end.
 
 ## Validation cadence
 
-After **every milestone**, run `/abcd:disembark to home` (or the relevant preview
-sub-verb — `probe` for adapter-only inspection, `dry-run` for the full plan
-without writes) against the validation corpus. Catch regressions early. Acceptance
-recorded in `.abcd/logbook/phase/<phase-id>/` (per the logbook layout in
+After **every milestone**, run `/abcd:disembark <corpus-repo> to <dest>` (or the
+relevant preview sub-verb — `probe` for the read-only coverage report,
+`dry-run` for the full plan without writes) against each repo of the validation
+corpus. There is no default destination and no in-tree home: the corpus repos are
+read, never written. Catch regressions early — and read the **coverage aggregate**
+across the corpus, which is the experiment's own readout
+([adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)).
+Acceptance recorded in `.abcd/logbook/phase/<phase-id>/` (per the logbook layout in
 [`../05-internals/04-universal-patterns.md § 6`](../05-internals/04-universal-patterns.md#6-abcdlogbook-layout)).

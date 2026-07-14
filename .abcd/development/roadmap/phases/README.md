@@ -97,6 +97,20 @@ phase's `## Scope` when sequenced, per
 critical/major severities keep them at the top of the derived-priority queue
 (itd-78) without a phase anchor.
 
+A second cluster is now unscheduled on the same terms: the **lifeboat coverage
+experiment** (itd-88). Per
+[adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), the
+probe-and-coverage half of the lifeboat is **pulled out of Phase 6** and
+sequenced ahead of it. Phase 6's stated dependency on Phases 3, 4 and 5 was
+checked against the binary and found mostly false, and the experiment's whole
+point is to test the brief's structure *before* a packer is written to it — so
+it cannot sit behind the phase whose section list it exists to revise. Phase 6
+retains the packer, embark, and the round-trip, and is built to whatever section
+list the experiment leaves standing. itd-88 is in `planned/` and enters no
+phase's `## Scope` — scheduled and planned are orthogonal axes (per
+[adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)), and
+an intent committed-to but unsequenced is a valid state.
+
 ## Related Documentation
 
 - [Roadmap](../README.md) — status dashboard
