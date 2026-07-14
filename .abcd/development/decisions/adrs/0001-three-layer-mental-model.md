@@ -7,7 +7,7 @@ supersedes: null
 superseded_by: null
 related_intents: []
 related_rfcs: []
-related_adrs: [adr-2, adr-4, adr-5, adr-9, adr-11, adr-26]
+related_adrs: [adr-2, adr-5, adr-9, adr-11, adr-26, adr-35]
 ---
 
 # ADR-1: Three-layer mental model (brief / intent / spec)
@@ -54,5 +54,5 @@ Acceptance discipline applies uniformly across both surfaces (intent and brief-p
 
 **Downstream decisions enabled:**
 - ADR-2 (three intent kinds) — once the brief/intent/spec split exists, intents can have distinct shapes (standalone/bundle/discipline).
-- ADR-4 (lifeboat as regenerable output) — disembark snapshots the brief; the layer model defines *what* gets snapshotted.
+- ADR-35 (lifeboat as coverage experiment; supersedes adr-4) — disembark snapshots the brief; the layer model defines *what* gets snapshotted.
 - ADR-5 (brief is current state) — once the brief is the canvas (not a versioned artefact), git covers history and intents cover forward-looking work.

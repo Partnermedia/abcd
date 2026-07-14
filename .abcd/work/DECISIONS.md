@@ -387,3 +387,79 @@ parallel-agent merge contention bites.
   reading to abcd's co-author, pending confirmation of how they wish to be
   credited. Held loudly (stated in the method note), not silently; it must land
   before itd-86 ships. Do NOT guess the credit line.
+
+- 2026-07-14 — The lifeboat is built as a COVERAGE EXPERIMENT, not a feature
+  (adr-35, itd-88/spc-3). Probe before pack: `disembark probe <repo>` produces a
+  cross-repo coverage aggregate BEFORE a packer exists, because the brief's
+  structure is an untested assumption and building the packer first assumes the
+  answer. The headline number is the delta in section coverage between a
+  rich-record repo and a git-only one — that is what the record is worth, and if
+  half the brief is permanently blank everywhere, the structure is wrong and we
+  learned it for one milestone instead of a phase. Phase 6's "depends on every
+  prior substrate being native" rationale was checked against the BINARY and found
+  mostly false (spec engine ships; reviews are committed markdown; backgrounding is
+  a host affordance; the itd-2 host-delegation seam already ships twice — memory's
+  `--pages-json` and `intent review ingest --verdict-json`). The ONE real
+  dependency is data, not code: `~/.abcd/` does not exist, `history.Capture` is
+  called by nothing, and Pass B's corpus cannot be obtained retroactively — the
+  only permanent, compounding cost on the board, which is why the transcript hook
+  ships ahead of any lifeboat code. Rejected: building the packer first (assumes
+  the answer); amending adr-4 in place (two of its three operative claims change —
+  a replacement, not a clarification).
+- 2026-07-14 — adr-4 SUPERSEDED by adr-35 and pruned per the ADR convention
+  (superseded ADRs are pruned; git preserves the text; the successor carries the
+  transition rationale). What survives is restated in adr-35: the lifeboat is
+  regenerable output, and the `lifeboat`(noun)/`voyage`(verb) distinction is
+  load-bearing. What changes: disembark is READ-ONLY and OUT-OF-TREE (a test hashes
+  the source tree before and after), and `voyage/` moves to the OPERATOR level
+  (`~/.abcd/voyage/<source-root-sha>/`, keyed like the history store). The voyage
+  move is not cosmetic — voyage records absolute source paths, and the
+  `privacy-hygiene` audit rule (itd-85) flags those in committed files, so abcd
+  would have failed its OWN audit. adr-4's overwrite-with-`.bak` model is replaced
+  by a destination safety gate (never overwrite a directory abcd did not produce);
+  its `shared_with` field is dropped (nothing produces it, and an empty field is a
+  lie in a schema); and its hash chain — asserted but never defined — is pinned.
+  Nine inbound references repointed by hand (2 links, 7 prose/frontmatter).
+- 2026-07-14 — The brief↔lifeboat mapping table now EXISTS. `00-meta.md` has always
+  called it "the contract" while no such table existed anywhere (found by the
+  2026-07-06 plan-consistency review). It lands as Go — `internal/core/lifeboat/
+  mapping.go` is the single source of truth — and is rendered into `00-meta.md`
+  between generated markers, with a test asserting the two agree so the document
+  cannot drift from the code. It is framed as the experiment's HYPOTHESIS, stating
+  the best status each brief section could reach at each source tier, in the SAME
+  three-valued vocabulary the probe reports (`grounded`/`partial`/`blank`) so
+  prediction and evidence are directly comparable. M2 is expected to revise it.
+  A monotonicity test (a richer tier can never ground a section worse than a poorer
+  one — tiers are CUMULATIVE) caught a real error in the first draft of the table.
+- 2026-07-14 — Vocabulary registered in `02-constraints/04-naming.md`, fulfilling a
+  claim adr-4 made and never kept (`voyage/`, `manifest_sha256`, `_provenance.json`,
+  `history.jsonl` were absent from the registry). Added with them: `coverage.json`,
+  `graveyard/`, and two new controlled enums — coverage `status ∈ {grounded, partial,
+  blank}` and source `tier ∈ {git, conventions, abcd-native}`, both with the Go enum
+  named as the machine-readable source of truth. The brief's `"sufficient"` oracle
+  verdict — a member of NO registered enum — is retired in favour of the registered
+  `{SHIP, NEEDS_WORK, MAJOR_RETHINK}`; no third verdict family is minted (four
+  brief locations).
+- 2026-07-14 — adr-35's blast radius across the record was FAR wider than the plan
+  anticipated, and the line drawn is: **the brief, glossary and roadmap are
+  reconciled; the intent corpus is NOT.** An adversarial review (four hostile lenses,
+  every finding independently verified) found the first pass had rewritten the
+  vocabulary registry to the new model while ~14 other files still asserted the old
+  one as fact — including an INVARIANT (`03-invariants.md` #6), the product's own
+  press release, the verification matrix (which encoded adr-4's `.bak` overwrite as a
+  TEST GATE), and the lint-enforced glossary SSOT. A registry contradicting an accepted
+  ADR is drift of exactly the kind iss-35 exists to prevent, so all of it was swept.
+  The INTENTS (itd-2/8/9/10/13/15/19/22/24) were deliberately left alone and tracked as
+  iss-94: an intent is a proposal with its own lifecycle, and silently rewriting nine of
+  them inside an unrelated change is worse than recording the drift — each reconciles
+  when it is next planned. Where adr-35 genuinely does not settle a question (where
+  `embark scan` searches now that destinations are operator-chosen; what the `/abcd`
+  status board reads now that there is no in-tree lifeboat to stat), the text carries an
+  explicit `Open question (adr-35)` note rather than an invented answer.
+- 2026-07-14 — iss-93: adr-35 promises disembark is READ-ONLY over the source (a test
+  hashes the tree before and after), but two paths in the design still write into it —
+  Pass-0 dev-sync (`.abcd/work/reviews/`, `.abcd/memory/`, `.abcd/work/issues/`) and the
+  backgrounded-execution checkpoint (`.abcd/logbook/disembark/<ts>/_state.json`). Either
+  they move out-of-tree (under `<dest>` or the operator-level voyage) or they leave the
+  disembark path entirely. adr-35 does not settle it; the decision is owed before the
+  packer ships, and the read-only test is what will force it.

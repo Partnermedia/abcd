@@ -12,6 +12,12 @@ plugin surface, and a future MCP server share one engine.
   or transport coupling. Currently: identity/version and the read-only status
   snapshot. Grows per phase (ahoy, launch, capture, memory, intent, brief,
   review, spec, run, lifeboat, history).
+- **`core/lifeboat/`** — the brief↔lifeboat contract. `mapping.go` is the single
+  source of truth for which brief section a lifeboat fills from which source
+  tier, and it is rendered into the brief's `00-meta.md` with a test asserting
+  the two agree. The table is a *hypothesis*: `abcd disembark probe` measures the
+  same sections against real repositories in the same `grounded`/`partial`/`blank`
+  vocabulary, and the evidence is expected to revise it (adr-35, itd-88).
 - **`surface/cli/`** — the default front door: a Cobra command tree that calls
   `core` and formats results as text or `--json`. Holds no business logic.
 - **`surface/mcp/`** *(later)* — an additive front door exposing the same core

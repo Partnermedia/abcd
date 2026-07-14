@@ -2,7 +2,7 @@
 ---
 term: disembark
 bounded_context: core
-definition: The act of packing a lifeboat — the `/abcd:disembark` surface distils a project's settled artefacts, decisions, and configuration into a portable lifeboat directory that a fresh context can later unpack via `/abcd:embark`.
+definition: The act of packing a lifeboat — `abcd disembark <source-repo> to <dest>` reads a source repository without writing to it and distils its settled artefacts, decisions, and configuration into a portable lifeboat directory at a destination outside that repository, which a fresh context can later unpack via `/abcd:embark`.
 aliases: ["lifeboat packing", "disembarkation"]
 forbidden_synonyms: ["export", "backup", "dump", "snapshot"]
 status: stable
@@ -15,10 +15,22 @@ versions: null
 
 # disembark
 
-**Disembark** is the project-lifecycle surface that packs a [lifeboat](lifeboat.md): a
-portable, highest-fidelity proxy of a project's theory that can be carried across a session,
-machine, or team boundary. Bare `/abcd:disembark` shows status and help only; `to <path>`
-performs the packing pass, while `probe` and `dry-run` inspect without writing.
+**Disembark** is the surface that packs a [lifeboat](lifeboat.md): a portable, highest-fidelity
+proxy of a project's theory that can be carried across a session, machine, or team boundary.
+
+It takes the source repository as an argument and is **read-only and out-of-tree**:
+`abcd disembark <source-repo> to <dest>` reads the repository — any repository, including a dead
+or archived one abcd has never touched — and writes the lifeboat somewhere else. The source tree
+is never written to, so there is no in-tree lifeboat directory; the record of the run lands in the
+[voyage](voyage.md) log at the operator level instead. The destination is guarded by a safety
+gate: disembark refuses unless it is absent, an empty directory, or one carrying a parseable
+`_provenance.json` — it never overwrites a directory abcd did not produce
+([adr-35](../../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), which supersedes
+adr-4).
+
+`abcd disembark probe <source-repo>` inspects without writing a lifeboat, reporting **coverage**:
+which brief sections the repository can ground, which come back blank, and what was searched. A
+blank is a first-class result, not a failure. `dry-run` likewise inspects without writing.
 
 ## When to use
 
@@ -35,9 +47,12 @@ copy.
 ## Examples
 
 - "The disembark pass distilled the shipped intents and decision timeline into the lifeboat."
-- "A `disembark probe` lists the sources that would be packed without writing anything."
+- "A `disembark probe` lists the sources that would be packed, and the sections it could not
+  ground, without writing anything."
+- "We disembarked the archived repo to `~/lifeboats/atlas/` — the source was never touched."
 
 ## Related terms
 
-- [lifeboat](lifeboat.md) — the artefact disembark packs
-- [voyage](voyage.md) — the project journey a lifeboat preserves across a boundary
+- [lifeboat](lifeboat.md) — the artefact disembark packs, at a destination outside the source repo
+- [voyage](voyage.md) — the operations namespace at `~/.abcd/voyage/<source-root-sha>/` that
+  records each disembark run

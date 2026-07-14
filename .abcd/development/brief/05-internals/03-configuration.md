@@ -172,14 +172,35 @@ Re-founding (clean-history rebuild — the case in [`../research/notes/ahoy-hist
 
 The history-store `index.json` is the sole user-scope registry — it records each managed repo's identity and lineage keyed on the immutable `root_commit`; `name`, `github`, and `path` are mutable labels ahoy refreshes on every run. There is no separate `workspaces.json`: abcd manages one repository per tree (see § The two `.abcd/` scopes below), so there is no workspace↔repo grouping to register.
 
+## The voyage store
+
+`voyage/` is **operations** (verb — what we did) as distinct from the lifeboat, which is the **artefact** (noun — what gets carried). It is a **user-scope** artefact keyed on the source repo's root-commit SHA, exactly as the history store is, and it is **never committed** ([adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), superseding adr-4's in-tree `.abcd/development/voyage/`). Layout:
+
+```
+~/.abcd/voyage/
+  <source-root-sha>/
+    disembark/
+      history.jsonl           append-only manifest log of every disembark run
+    embark/
+      provenance.json         source path + manifest hash + timestamp + files written
+      from/<timestamp>/       opt-in via embark --archive: verbatim copy of the input lifeboat
+```
+
+Two properties follow from the move, and both are load-bearing:
+
+- **`disembark` never writes to the source repository.** `abcd disembark <source-repo> to <dest>` reads the source and writes the lifeboat to an operator-chosen `<dest>`; the operations log lands at the operator level. Mining a dead or archived project must not require `ahoy install` into a repo we only want to read.
+- **Voyage records absolute source paths, so it must not be committed anywhere.** abcd's own `privacy-hygiene` audit rule (itd-85) flags `/Users/<name>/` in committed files — an in-tree voyage namespace would have made abcd fail its own audit. Keeping voyage at the operator level dissolves the collision rather than exempting it, which is why **no gitignore rule for voyage appears in § 1 below**: there is nothing in-tree to ignore.
+
+Because the lifeboat lands out-of-tree, `embark` reads it from wherever disembark wrote it. The destination is protected by a **safety gate** rather than adr-4's overwrite-in-place-with-`.bak` model: abcd refuses unless `<dest>` is absent, an empty directory, or one carrying a parseable `_provenance.json` — it **never overwrites a directory abcd did not produce**. See [`../04-surfaces/03-embark.md`](../04-surfaces/03-embark.md) for the surface contract.
+
 ## The two `.abcd/` scopes
 
 `.abcd/` is **one namespace pattern instantiated at two scopes**. abcd lives in **one repository** ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)): its design record is **repo-scoped and in-tree**, and the user scope holds only state that is genuinely machine-wide. `/abcd:ahoy` classifies the folder it runs in (see [`../04-surfaces/01-ahoy.md`](../04-surfaces/01-ahoy.md)) and acts on the scope that applies:
 
 | Scope | Location | Holds |
 |---|---|---|
-| **user** | `~/.abcd/` | one per machine — **machine-local shared state only**: the root-SHA-keyed `history/` store (`index.json` + per-root-SHA transcript corpus, [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)), machine `config.json` defaults, and the user-scope `memory/` (personal, cross-project knowledge). **Never the design record.** |
-| **repo** | in-tree `.abcd/` | this repository's record and working files — the three-tier layout below, plus `config.json` (with its `meta` setup block), `rules.json`, and the `memory/`, native spec store, `lifeboat/`, `logbook/`, `rp/` namespaces. **The home for project work.** |
+| **user** | `~/.abcd/` | one per machine — **machine-local shared state only**: the root-SHA-keyed `history/` store (`index.json` + per-root-SHA transcript corpus, [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)), the root-SHA-keyed `voyage/` operations namespace ([adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)), machine `config.json` defaults, and the user-scope `memory/` (personal, cross-project knowledge). **Never the design record.** |
+| **repo** | in-tree `.abcd/` | this repository's record and working files — the three-tier layout below, plus `config.json` (with its `meta` setup block), `rules.json`, and the `memory/`, native spec store, `logbook/`, `rp/` namespaces. **The home for project work.** There is **no in-tree `lifeboat/`**: the lifeboat is out-of-tree output at an operator-chosen destination (adr-35). |
 
 **The repo-scope three-tier working layout** (matching [`../02-constraints/01-platform.md`](../02-constraints/01-platform.md) and [`../01-product/02-context.md`](../01-product/02-context.md)):
 
@@ -199,11 +220,14 @@ Set by ahoy:
 
 | Directory | Public default | Private default |
 |---|---|---|
-| `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, voyage, personas), the native spec store, `memory/`, `lifeboat/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
+| `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, personas), the native spec store, `memory/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
 | `memory/` (legacy snapshot) | gitignored | **committed** if present¹ |
 | `.abcd/.work.local/` | gitignored | gitignored (local-only scratch, per global abcd CLAUDE.md) |
 
-The native local transcript store is **always** gitignored (user-scope `~/.abcd/history/`, local working data — adr-29), so it is not a repo directory in this table.
+Two artefacts are absent from this table by construction, not by exception:
+
+- The native local transcript store is **always** gitignored (user-scope `~/.abcd/history/`, local working data — adr-29), so it is not a repo directory.
+- **`voyage/` and the lifeboat are not repo directories either** (adr-35). Voyage is user-scope (`~/.abcd/voyage/`, § The voyage store) and the lifeboat is out-of-tree output at an operator-chosen destination, so **no gitignore rule applies to either under any visibility** — there is nothing in-tree to switch.
 
 ¹ New projects use `.abcd/memory/` (curated by `dev-sync memory`). `memory/` is the legacy `cp -r` snapshot pattern that some existing projects maintain manually — abcd respects it if present, but doesn't write to it.
 
@@ -211,7 +235,7 @@ The native local transcript store is **always** gitignored (user-scope `~/.abcd/
 
 **Sensitivity concern still valid for `/abcd:launch` payload**: regardless of visibility, the launch payload manifest ([`../04-surfaces/04-launch.md § 2`](../04-surfaces/04-launch.md#2-payload-manifest-default-deny)) excludes `.abcd/` entirely from what ships in the curated release artifact. So a private repo that commits its logbook locally still doesn't leak it on launch.
 
-In private repos, the entire `.abcd/` namespace is reproducible from a fresh clone — embark from a freshly cloned repo works including logbook (useful for diagnosing past command runs).
+In private repos, the entire `.abcd/` namespace is reproducible from a fresh clone — a clone carries the committed record, working files, and logbook (useful for diagnosing past command runs). The lifeboat is **not** part of what a clone carries: it is out-of-tree output at an operator-chosen destination, and embark reads it from there (adr-35).
 
 **Memory locations to keep straight:**
 
@@ -263,6 +287,8 @@ Sanitised export pattern (lifted from `~/.abcd/`'s `/export-transparency`): laun
 - **Implicit:** `/abcd:disembark` Phase 0 runs `dev-sync` automatically (always-fresh-at-disembark)
 - **Manual:** `abcd dev-sync` CLI for ad-hoc refresh
 
+> **Open question (adr-35):** the implicit trigger above is stated against the old model, in which disembark packed *this* repo. adr-35 makes disembark **read-only against the source** (`abcd disembark <source-repo> to <dest>`; a test hashes the source tree before and after), while `dev-sync` **writes** into the source repo (`.abcd/memory/`, `.abcd/work/{reviews,issues,notes}/`, `.abcd/rp/`). The two cannot both hold. What must be decided: whether `dev-sync` is dropped from disembark's Phase 0 entirely and becomes a separate operator-run step (with disembark reading whatever curated artefacts happen to be present, and none at all in a repo abcd never touched — the primary case), or whether the implicit trigger survives only in a narrow "source repo is abcd-managed and the operator opted in" mode. adr-35 does not settle it.
+
 Scheduled/cron sync **comes in a later phase** of the plugin (itd-13).
 
 **Per-source on/off:**
@@ -270,7 +296,7 @@ Scheduled/cron sync **comes in a later phase** of the plugin (itd-13).
 - `.abcd/config.json` extends with `dev_sync.{reviews,memory,work,rp}.enabled = true|false`
 - ahoy asks per-source enable (transparent prompts)
 - defaults: all sources on for private, all sources off for public
-- disembark Phase 0 honours per-source flags
+- disembark Phase 0 honours per-source flags (subject to the open question above on whether that implicit trigger survives adr-35)
 
 **Per-source provenance and curation rules:**
 
@@ -291,7 +317,7 @@ Plan/implementation/completion reviews (the ones in `.abcd/work/reviews/`) are *
 
 `principle-distiller` (Pass C) has four pitfall sources to dedupe by topic-hash or canonical phrasing: source `memory/pitfalls.md` (or `.abcd/memory/pitfalls.md` after curation), `candidate-pitfalls.json`, Pass B chat-distiller deltas, and code-rescuer's `code-principles.json`.
 
-**Distinct from `principles.json`:** `.abcd/memory/`, `.abcd/work/reviews/`, `.abcd/work/issues/`, `.abcd/work/notes/` are **persistent rolling artefacts** in the source repo, refreshed by `dev-sync`, used as ongoing input to future agents. `principles.json` is **per-disembark synthesis** written into the lifeboat at `.abcd/lifeboat/principles.json`. The lifeboat consumes `.abcd/work/`; `.abcd/work/` is not the lifeboat.
+**Distinct from `principles.json`:** `.abcd/memory/`, `.abcd/work/reviews/`, `.abcd/work/issues/`, `.abcd/work/notes/` are **persistent rolling artefacts** in the source repo, refreshed by `dev-sync`, used as ongoing input to future agents. `principles.json` is **per-disembark synthesis** written into the lifeboat at `<dest>/principles.json` — out-of-tree, at the operator-chosen destination, never back into the source repo (adr-35). The lifeboat consumes `.abcd/work/`; `.abcd/work/` is not the lifeboat.
 
 ## 3. Plugin shape — directory layout
 
@@ -379,31 +405,29 @@ external plug-in — so this brief does not restate it here.
 │   │   └── rfcs/
 │   │       ├── README.md
 │   │       └── rfc-N-<slug>.md         # community discussion artefacts (open / resolved-yes / resolved-no / ...)
-│   ├── research/
-│   │   ├── prompting/
-│   │   │   ├── 01-general-best-practices.md   # SOTA baseline (early spec)
-│   │   │   └── agents/<name>.md (×15)         # per-agent SOTA research (task #1 of each agent spec)
-│   │   ├── phase/                             # per-phase study artefacts (design inputs that future phases consume)
-│   │   │   ├── 0/                             # Phase 0: predecessor-notes, transcript-sampling, idelphi-rescue-study
-│   │   │   ├── 1/                             # Phase 1+: as needed
-│   │   │   └── ...
-│   │   └── adr/                               # architecture decision records (e.g., 01-harness-interface.md)
-│   └── voyage/                         # embark/disembark provenance and history (see ../04-surfaces/03-embark.md § 7)
-│       ├── README.md
-│       ├── embark/
-│       │   ├── provenance.json         # source path + manifest hash + timestamp + files written
-│       │   └── from/<timestamp>/       # opt-in via embark --archive: verbatim copy of input lifeboat
-│       └── disembark/
-│           └── history.jsonl           # append-only manifest log of every disembark run
+│   └── research/
+│       ├── prompting/
+│       │   ├── 01-general-best-practices.md   # SOTA baseline (early spec)
+│       │   └── agents/<name>.md (×15)         # per-agent SOTA research (task #1 of each agent spec)
+│       ├── phase/                             # per-phase study artefacts (design inputs that future phases consume)
+│       │   ├── 0/                             # Phase 0: predecessor-notes, transcript-sampling, idelphi-rescue-study
+│       │   ├── 1/                             # Phase 1+: as needed
+│       │   └── ...
+│       └── adr/                               # architecture decision records (e.g., 01-harness-interface.md)
+│   # NOTE: there is NO `development/voyage/` here. Voyage is user-scope and never committed —
+│   #       ~/.abcd/voyage/<source-root-sha>/{disembark/history.jsonl, embark/provenance.json,
+│   #       embark/from/<timestamp>/} (adr-35; see § The voyage store above).
 ├── work/                               # curated-from-volatile-sources (see § 2)
 │   ├── reviews/                        # captured by the oracle adapter (RepoPrompt / codex / future) per 04-universal-patterns.md § 7
 │   ├── issues/{open,resolved,wontfix}/ # iss-N-<slug>.md ledger entries (per itd-4)
 │   └── notes/                          # distilled from .abcd/.work.local/notes/
 ├── specs/                              # native minimal spec store — directory-as-truth (adr-26): <state>/ dirs + dependency graph
 ├── memory/                             # curated memory artefact (memory harvest → .abcd/memory/, per 04-universal-patterns.md § 7)
-├── lifeboat/                           # disembark output snapshot only — regenerable, overwritten each run (per ../02-constraints/01-platform.md, ../04-surfaces/03-embark.md § 7)
 ├── logbook/                            # per-command / per-phase run logs (design target — no automatic session-log hook ships)
 └── rp/                                 # RP workspace pull (per itd-7; opt-in RP adapter); workspace.json only for now
+# NOTE: there is NO `.abcd/lifeboat/` here. The lifeboat is out-of-tree output at an operator-chosen
+#       destination (`abcd disembark <source-repo> to <dest>`) — still the latest snapshot rather than an
+#       accumulating archive, but the source repo is never written to (adr-35, ../04-surfaces/03-embark.md).
 ```
 
 **User-facing docs** (packaged into the curated release artifact):

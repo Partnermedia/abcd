@@ -2,7 +2,7 @@
 ---
 term: oracle
 bounded_context: core
-definition: An AI model invoked to review, reason over, or validate artefacts produced during a voyage — host-delegated by default, or reached through an opt-in oracle adapter.
+definition: An AI model invoked to review, reason over, or validate a project's artefacts — host-delegated by default, or reached through an opt-in oracle adapter.
 aliases: ["reviewer", "AI reviewer"]
 forbidden_synonyms: ["LLM", "model", "bot", "AI", "chatbot"]
 status: stable

@@ -45,4 +45,11 @@ specs).
 ## Related terms
 
 - [intent](intent.md) — the human-authored document that a spec realises
-- [voyage](voyage.md) — a full lifecycle that contains many specs
+- [phase](phase.md) — the arc that bundles many specs
+
+> **Open question (adr-35):** this entry previously related a spec to a *voyage*, glossed as "a full
+> lifecycle that contains many specs". [adr-35](../../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)
+> retires that sense: [`voyage`](voyage.md) is now the operations namespace at
+> `~/.abcd/voyage/<source-root-sha>/`, and it contains no specs. Whether abcd still needs a term for
+> the end-to-end project lifecycle — the container the old gloss reached for — is not settled by
+> adr-35 and is not decided here.

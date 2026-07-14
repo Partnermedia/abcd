@@ -83,8 +83,25 @@ known-state line (never an exception, never a silent omission).
 
 1. **Project + visibility** — project name (the cwd's directory name) and
    `repo.visibility` from `.abcd/config.json`.
-2. **Lifeboat presence / age** — the `.abcd/lifeboat/` directory's mtime,
-   rendered as an age in days with a staleness flag.
+2. **Last disembark** — when this repo was last disembarked, and to where,
+   rendered as an age in days with a staleness flag. Under
+   [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md)
+   there is no in-tree `.abcd/lifeboat/` to stat: disembark is read-only and
+   writes the lifeboat to an operator-chosen destination, and the record of
+   what was disembarked lives at the operator level in
+   `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl`.
+
+   > **Open question (adr-35):** adr-35 removes this section's only source
+   > (`.abcd/lifeboat/`) but does not say what replaces it. The natural
+   > replacement is to read the operator-level disembark log
+   > (`~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl`), keyed on
+   > this repo's root-commit SHA, and render the last entry's timestamp and
+   > destination. That is unsettled and must be decided: (a) does the board
+   > read outside the repo at all — every other section is a local-filesystem
+   > read, and this one would not be; (b) if it does, is showing an absolute
+   > destination path on screen acceptable given the same privacy-hygiene
+   > concern that moved voyage out of the tree; (c) if it does not, is the
+   > section dropped, leaving five?
 3. **Dev-sync staleness** — v1 terminal known-state line (see below).
 4. **Recent logbook** — the last five logbook ENTRIES by mtime. The logbook
    is organised `<category>/<entry>` (e.g. `grill/20260701T000000Z-itd-67`),
@@ -102,14 +119,14 @@ known-state line (never an exception, never a silent omission).
 **Design target (itd-20; unbuilt).** None of these known-state lines exist in
 the shipped render — `core.Status` reads only `.git`, `.abcd/development`, and
 the `.abcd/` work tiers (`internal/core/core.go`); it does not read
-`repo.visibility`, `.abcd/lifeboat/`, a dev-sync record, `.abcd/logbook/`,
+`repo.visibility`, a disembark log, a dev-sync record, `.abcd/logbook/`,
 linked intents, or any spec store.
 
 | Source | Absent / unreadable → known-state line |
 |--------|----------------------------------------|
 | `.abcd/` directory | outside-abcd guidance message (single line, replaces the whole board) |
 | `repo.visibility` in `.abcd/config.json` | `visibility: unknown (no repo.visibility in config)` |
-| `.abcd/lifeboat/` | `lifeboat: never packed — run /abcd:disembark when ready` |
+| disembark log (`~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl`) | `disembark: never run — run /abcd:disembark when ready` (source pending the open question in section 2) |
 | dev-sync last-run artifact | `dev-sync: no dev-sync record …` (v1 terminal — see below) |
 | `.abcd/logbook/` (empty / unreadable) | `logbook: no entries yet` |
 | linked intents (none with a live spec) | `intents: no planned or active intents with a linked spec` |
@@ -117,14 +134,14 @@ linked intents, or any spec store.
 
 ## Staleness thresholds (decided here)
 
-**Design target (itd-20; unbuilt).** No lifeboat-age, staleness, capping, or
+**Design target (itd-20; unbuilt).** No disembark-age, staleness, capping, or
 timeout logic exists in the shipped binary — the status path is five `isDir`
 checks (`.git`, `.abcd/development`, and the three work tiers;
 `internal/core/core.go`) with no directory walks or thresholds.
 
 | Signal | Threshold | Rationale |
 |--------|-----------|-----------|
-| Lifeboat age → `(stale)` | 7 days | A point-in-time rescue snapshot a week old warrants a re-pack cue without nagging on daily work. |
+| Last-disembark age → `(stale)` | 7 days | A point-in-time rescue snapshot a week old warrants a re-pack cue without nagging on daily work. (The threshold survives adr-35; the *source* it is measured from is the open question in section 2.) |
 | Dev-sync staleness | n/a (v1) | No durable last-run artifact exists — see below. |
 
 ## Dev-sync source (probed, recorded — v1 terminal stub)
