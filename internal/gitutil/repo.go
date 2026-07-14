@@ -46,3 +46,18 @@ func TrackedFiles(root string) ([]string, error) {
 	}
 	return files, nil
 }
+
+// Run executes a read-only git command under root with the developer's global
+// and system config neutralised, returning trimmed stdout. It is the shared
+// primitive for tooling that reads git history (the lifeboat probe's Tier-0
+// adapters); centralising it keeps every caller on the same isolated
+// environment rather than re-deriving the exec plumbing. An error (git absent,
+// not a repo, a failing subcommand) is returned verbatim so the caller can
+// decide whether "git cannot answer" degrades to empty or is fatal.
+func Run(root string, args ...string) (string, error) {
+	out, err := isolatedGit(root, args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
