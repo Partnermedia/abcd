@@ -93,10 +93,13 @@ func TestProbeGroundsRichRepoFromEveryTier(t *testing.T) {
 	if ctx := findSection(t, cov, "product/context"); ctx.Status == StatusBlank {
 		t.Errorf("product/context is blank; the README should ground it")
 	}
-	// graveyard is non-blank from git alone.
-	if grave := findSection(t, cov, "graveyard"); grave.Status == StatusBlank {
-		t.Errorf("graveyard is blank; git history should ground it")
-	}
+	// NB: this test deliberately does NOT assert on git-history-derived sections
+	// (graveyard, rescue/spine, build-sequence). CI's `check` job checks out at
+	// the default shallow depth (a single commit), so the Tier-0 adapters see no
+	// reverts, deletions, or tags on this repo — those sections degrade to blank
+	// there through no fault of the probe. The git-tier grounding property is
+	// proved deterministically against a full-history fixture in
+	// TestProbeGraveyardFromGitAlone instead.
 
 	// Every grounded/partial row must cite evidence — the anti-fiction rule.
 	for _, s := range cov.Sections {
