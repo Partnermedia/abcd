@@ -123,6 +123,16 @@ func New(repoRoot string) (*Scanner, error) {
 	return s, nil
 }
 
+// Unavailable reports whether the scanner is in the fail-closed degraded state
+// (the per-repo config exists but is unreadable, invalid JSON, or carries a bad
+// override regex) and, if so, a human reason. A write-time redactor MUST consult
+// this before trusting ScanText/Redact: unlike ScanBundle, those entry points
+// cannot signal degradation in-band, so a caller that skips this check would
+// sanitise with a silently weakened pattern set. Mirrors ScanBundle's guard.
+func (s *Scanner) Unavailable() (bool, string) {
+	return s.unavailable, s.unavailReason
+}
+
 // mergeConfig layers a per-repo override onto the built-in defaults, enforcing
 // the severity floor on both bundled patterns and identity kinds.
 func (s *Scanner) mergeConfig(cfg Config) error {
@@ -159,7 +169,21 @@ func (s *Scanner) mergeConfig(cfg Config) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+
+	// Pass one — compile every NEW-name override regex before mutating anything.
+	// A BUNDLED pattern's regex is part of the non-negotiable floor and is NOT
+	// replaceable: swapping it for a never-match regex would neuter detection while
+	// the severity clamp still reports hard_fail — the exact downgrade the floor
+	// forbids, achieved through the regex field instead of the severity field. So
+	// a bundled name may only adjust severity/label/suggestion (new detection must
+	// use a new pattern name, which merges additively). Compiling all new-name
+	// regexes up front also makes the merge all-or-nothing, so a later invalid
+	// regex can no longer leave an earlier override half-applied on s.patterns.
+	compiled := map[string]*regexp.Regexp{}
 	for _, name := range names {
+		if _, bundled := floors[name]; bundled {
+			continue
+		}
 		def := cfg.Patterns[name]
 		if def.Regex == "" {
 			continue
@@ -173,31 +197,45 @@ func (s *Scanner) mergeConfig(cfg Config) error {
 			// A malformed override regex is a config fault → fail-closed.
 			return errUnreadable("pattern " + name + " has an invalid regex")
 		}
-		sev := def.Severity
-		if sev == "" {
-			sev = defaultPatternSeverity
+		compiled[name] = re
+	}
+
+	// Pass two — apply. Bundled names adjust in place (regex/kind stay built-in);
+	// new names merge additively.
+	for _, name := range names {
+		def := cfg.Patterns[name]
+		if floor, bundled := floors[name]; bundled {
+			i := byName[name]
+			sev := def.Severity
+			if sev == "" {
+				sev = floor
+			}
+			s.patterns[i].Severity = applyFloor(sev, floor)
+			if def.Label != "" {
+				s.patterns[i].Label = def.Label
+			}
+			if def.Suggestion != "" {
+				s.patterns[i].Suggestion = def.Suggestion
+			}
+			continue
 		}
-		if floor, ok := floors[name]; ok {
-			sev = applyFloor(sev, floor)
-		} else if !isValidSeverity(sev) {
+		re, ok := compiled[name]
+		if !ok {
+			continue // new pattern with no regex — nothing to add
+		}
+		sev := def.Severity
+		if !isValidSeverity(sev) {
 			sev = defaultPatternSeverity
 		}
 		kind := def.Kind
 		if kind == "" {
 			kind = name
 		}
-		np := Pattern{
+		s.patterns = append(s.patterns, Pattern{
 			Name: name, Kind: kind, Label: def.Label, Re: re,
 			Severity: sev, Suggestion: def.Suggestion,
-		}
-		if i, ok := byName[name]; ok {
-			// Preserve the built-in Skip predicate when overriding a bundled name.
-			np.Skip = s.patterns[i].Skip
-			s.patterns[i] = np
-		} else {
-			s.patterns = append(s.patterns, np)
-			byName[name] = len(s.patterns) - 1
-		}
+		})
+		byName[name] = len(s.patterns) - 1
 	}
 
 	for kind, sev := range cfg.IdentitySeverities {
