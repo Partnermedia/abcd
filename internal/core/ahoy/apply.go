@@ -52,8 +52,12 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	}
 	_ = adopted
 
-	// Idempotency: zero required+resolvable gaps => exact no-op.
-	if len(actionable(det.Gaps)) == 0 {
+	// Idempotency: zero required+resolvable gaps => exact no-op. The one
+	// exception is the advisory git-identity pin, which install adopts through an
+	// interactive confirmation (never under --yes): fall through so a later
+	// `ahoy install` on an otherwise-clean repo can still pin, as the gap's fix
+	// hint advertises.
+	if len(actionable(det.Gaps)) == 0 && !(!opts.Yes && pinAdoptable(det.Gaps)) {
 		return InstallResult{Status: "already_up_to_date"}, nil
 	}
 
@@ -213,9 +217,15 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	}
 	if ic.DocsTarget == "" {
 		ic.DocsTarget = a.resolveValue("docs_target", docsTargetChoices, docsTargetDefault)
+		if !inSet(ic.DocsTarget, docsTargetChoices) {
+			return nil // no valid docs target => partial (never persist a typo)
+		}
 	}
 	if ic.OracleBackend == "" {
 		ic.OracleBackend = a.resolveValue("oracle_backend", oracleBackendChoices, oracleBackendDefault)
+		if !inSet(ic.OracleBackend, oracleBackendChoices) {
+			return nil // no valid oracle backend => partial
+		}
 	}
 	if ic.Visibility == "private" && onPath("trufflehog") && ic.ScanDeep == nil {
 		v := a.resolveValue("scan_deep", []string{"true", "false"}, "false") == "true"
@@ -539,6 +549,19 @@ func Status(cwd string) (string, error) {
 // ---------------------------------------------------------------------------
 // approval + gap helpers
 // ---------------------------------------------------------------------------
+
+// pinAdoptable reports whether the advisory git-identity pin is the remaining
+// work. It is the one gap install closes through an interactive confirmation
+// (never under --yes), so it must not be short-circuited by the
+// "already_up_to_date" early return.
+func pinAdoptable(gaps []Gap) bool {
+	for _, g := range gaps {
+		if g.ID == "git_identity.unpinned" {
+			return true
+		}
+	}
+	return false
+}
 
 // actionable returns the required+resolvable gaps (the ones install must close).
 func actionable(gaps []Gap) []Gap {
