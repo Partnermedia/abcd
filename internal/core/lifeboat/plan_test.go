@@ -85,6 +85,63 @@ func TestPlanIsDeterministic(t *testing.T) {
 	}
 }
 
+// TestPlanEmitsGraveyardFiles: a planned lifeboat over a git repo always carries
+// graveyard/archaeology.json AND graveyard/abandoned.json, each valid JSON at
+// schema_version 1 — the always-present extraction that keeps the file set (and
+// the pinned manifest hash) stable.
+func TestPlanEmitsGraveyardFiles(t *testing.T) {
+	repo := gitFixtureWithRevert(t)
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"graveyard/archaeology.json", "graveyard/abandoned.json"} {
+		f := planFile(t, lb, p)
+		var probe struct {
+			SchemaVersion int         `json:"schema_version"`
+			Findings      []*struct{} `json:"findings"`
+		}
+		if err := json.Unmarshal(f.Content, &probe); err != nil {
+			t.Errorf("%s is not valid JSON: %v", p, err)
+			continue
+		}
+		if probe.SchemaVersion != GraveyardSchemaVersion {
+			t.Errorf("%s schema_version = %d, want %d", p, probe.SchemaVersion, GraveyardSchemaVersion)
+		}
+		if probe.Findings == nil {
+			t.Errorf("%s carries a null findings array, want [] at minimum", p)
+		}
+	}
+	// The archaeology dig grounded the revert in this git history.
+	arch := planFile(t, lb, "graveyard/archaeology.json")
+	if !strings.Contains(string(arch.Content), `"signal": "revert"`) {
+		t.Errorf("archaeology.json did not record the fixture's revert:\n%s", arch.Content)
+	}
+}
+
+// TestPlanGraveyardDeterministic extends the no-timestamp determinism property to
+// the graveyard files: two plans of an unchanged git repo are byte-identical for
+// both graveyard files, so the pinned manifest hash stays stable.
+func TestPlanGraveyardDeterministic(t *testing.T) {
+	repo := gitFixtureWithRevert(t)
+	a, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"graveyard/archaeology.json", "graveyard/abandoned.json"} {
+		if !bytes.Equal(planFile(t, a, p).Content, planFile(t, b, p).Content) {
+			t.Errorf("%s differs between two plans of an unchanged repo", p)
+		}
+	}
+	if ah, bh := ManifestSHA256(a.Files), ManifestSHA256(b.Files); ah != bh {
+		t.Errorf("manifest hash not deterministic with graveyard files: %s vs %s", ah, bh)
+	}
+}
+
 // TestManifestSHA256SortsByPathNotHash pins the adr-35 hash definition — SHA-256
 // over "<sha256>  <path>\n" lines sorted lexicographically BY PATH, provenance
 // excluded — with an independent reference. The test data is chosen so that
