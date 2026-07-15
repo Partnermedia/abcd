@@ -100,6 +100,17 @@ called out in a **Breaking** section.
   stamp (honouring `GIT_AUTHOR_*`); inline-list items with quoted commas round-trip
   faithfully; and the lifeboat probe's tier gate matches what its adapters read.
 
+### Changed
+
+- **The coverage report is now schema v2.** Each brief section carries a `kind`
+  (`extractable` — a source or a better adapter could ground it, so a blank is
+  coverage debt — versus `human-owned` — a question only a person can answer, so a
+  blank is not a failure), the durable form of the M2 cross-repo gate decision
+  (adr-36). A blank additionally carries a `resolution` (`open`/`answered`/
+  `deferred`) and, once answered, an authored `answer` whose provenance is a
+  person and a date rather than a file it did not come from. `abcd disembark
+  coverage` still refuses a report from a newer schema with an upgrade message.
+
 ### Added
 
 - **`abcd disembark probe <repo>` — a read-only coverage probe over any
@@ -123,6 +134,19 @@ called out in a **Breaking** section.
   Node, Rust, Python (pip/poetry/pdm/uv/pipenv), Ruby, and PHP, so a real project
   is not reported as having no dependencies merely because the probe did not know
   its packaging tool (found probing a Python/uv repo in the M2 cross-repo run).
+
+- **`abcd disembark plan <repo>` — a dry run of the packer.** It shows the
+  complete file set a lifeboat pack would write — brief citation maps for the
+  grounded sections, `coverage.json`/`coverage.md`, verbatim copies of the ADRs
+  and the issue ledger, the rescue spine (the intent corpus where one exists, a
+  git-derived summary where it does not), and a `_provenance.json` carrying a
+  pinned `manifest_sha256` over every other file — and writes **nothing**. Plan
+  and the eventual packer are one code path, so the dry run cannot describe a pack
+  a real pack would not perform; a re-plan of an unchanged source is byte-for-byte
+  identical (the manifest carries no timestamp). `--json` emits the manifest
+  (paths, sizes, and the hash — never file content). Still a read-only operator
+  verb (no `/abcd:disembark` command surface yet); the destination write path is
+  a later milestone (itd-88, adr-35).
 
 - **Session transcripts are captured automatically when a session ends.** A
   `SessionEnd` hook now runs `abcd hook session-end`, which redacts the session

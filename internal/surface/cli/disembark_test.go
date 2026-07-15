@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,4 +124,81 @@ func TestDisembarkCoverageRejectsNonReport(t *testing.T) {
 	if !strings.Contains(stderr.String(), "not a coverage report") {
 		t.Errorf("want a 'not a coverage report' diagnostic, got stderr:\n%s", stderr.String())
 	}
+}
+
+// TestDisembarkPlanEmitsManifestJSON proves the plan verb is wired to the core
+// and returns a manifest: a schema-stamped list of destination-relative paths
+// and the pinned hash, over a repo the packer would later write.
+func TestDisembarkPlanEmitsManifestJSON(t *testing.T) {
+	repo := probeRepo(t)
+	out := runCLI(t, "disembark", "plan", repo, "--json")
+	var m lifeboat.PlanManifest
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("plan --json is not a manifest: %v", err)
+	}
+	if m.SchemaVersion != lifeboat.SchemaVersion {
+		t.Errorf("schema_version = %d, want %d", m.SchemaVersion, lifeboat.SchemaVersion)
+	}
+	if m.FileCount != len(m.Files) || m.FileCount == 0 {
+		t.Errorf("file_count = %d, len(files) = %d", m.FileCount, len(m.Files))
+	}
+	if len(m.ManifestSHA256) != 64 {
+		t.Errorf("manifest_sha256 = %q, want a 64-hex-char digest", m.ManifestSHA256)
+	}
+	// The provenance marker is always part of the plan.
+	found := false
+	for _, f := range m.Files {
+		if f.Path == lifeboat.ProvenanceName {
+			found = true
+		}
+		if filepath.IsAbs(f.Path) || strings.Contains(f.Path, "..") {
+			t.Errorf("manifest path is not destination-safe: %q", f.Path)
+		}
+	}
+	if !found {
+		t.Errorf("manifest omits %s", lifeboat.ProvenanceName)
+	}
+}
+
+// TestDisembarkPlanWritesNothing is the dry-run contract at the surface: running
+// the verb leaves the target repository byte-for-byte unchanged.
+func TestDisembarkPlanWritesNothing(t *testing.T) {
+	repo := probeRepo(t)
+	before := dirFingerprint(t, repo)
+	runCLI(t, "disembark", "plan", repo)
+	if after := dirFingerprint(t, repo); after != before {
+		t.Error("disembark plan mutated the target repository")
+	}
+}
+
+// TestDisembarkPlanRejectsNonDirectory mirrors probe's input contract.
+func TestDisembarkPlanRejectsNonDirectory(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLIErr(t, "disembark", "plan", f); err == nil {
+		t.Error("planning a file must fail, got nil error")
+	}
+}
+
+// dirFingerprint is a cheap path+size fingerprint of a tree, excluding .git.
+func dirFingerprint(t *testing.T, root string) string {
+	t.Helper()
+	var acc strings.Builder
+	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, p)
+		if rel == ".git" {
+			return filepath.SkipDir
+		}
+		fmt.Fprintf(&acc, "%s\x00%d\x00%s\n", rel, info.Size(), info.Mode())
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return acc.String()
 }

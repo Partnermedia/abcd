@@ -282,7 +282,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	disembarkCmd := &cobra.Command{
 		Use:   "disembark",
-		Short: "Lifeboat tooling (read-only in M2: coverage probe over a repository)",
+		Short: "Lifeboat tooling (read-only: coverage probe and pack dry-run over a repository)",
 		Args:  cobra.NoArgs,
 	}
 
@@ -356,8 +356,35 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
+	planCmd := &cobra.Command{
+		Use:   "plan [repo]",
+		Short: "Show the full lifeboat file set a pack would write, without writing anything (dry run)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := "."
+			if len(args) == 1 {
+				target = args[0]
+			}
+			abs, err := filepath.Abs(target)
+			if err != nil {
+				return err
+			}
+			if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark plan: %s is not a directory", target)}
+			}
+			lb, err := lifeboat.Plan(abs)
+			if err != nil {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark plan: %s", scrubPaths(err))}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, lb.Manifest(), func(w io.Writer) {
+				fmt.Fprint(w, lb.RenderManifest())
+			})
+		},
+	}
+
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
+	disembarkCmd.AddCommand(planCmd)
 	return disembarkCmd
 }
 

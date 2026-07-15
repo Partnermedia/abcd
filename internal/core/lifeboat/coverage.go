@@ -25,17 +25,52 @@ type RepoInfo struct {
 	Commits int    `json:"commits"`
 }
 
-// SectionCoverage is the probe result for one brief section. A grounded or
-// partial row cites evidence; a blank row carries what was searched and the
-// question a human must answer.
+// SectionCoverage is the probe result for one brief section, and — from schema
+// v2 (adr-36) — a fillable object across the disembark→embark round-trip. A
+// grounded or partial row cites evidence; a blank row carries what was searched,
+// the question a human must answer, its Kind (extractable coverage debt vs a
+// human-owned prompt), a Resolution that tracks whether it has been answered or
+// deferred, and, once answered, an authored Answer whose provenance is a person
+// and a date — never a file it did not come from.
 type SectionCoverage struct {
 	Name       Section    `json:"name"`
+	Kind       Kind       `json:"kind"`
 	Status     Status     `json:"status"`
 	Confidence Confidence `json:"confidence,omitempty"`
 	Tier       Tier       `json:"tier,omitempty"`
 	Evidence   []string   `json:"evidence,omitempty"`
 	Searched   []string   `json:"searched,omitempty"`
 	Question   string     `json:"question,omitempty"`
+	// Resolution tracks a blank's fill state across the round-trip. It is
+	// meaningful only for a blank; a grounded/partial section leaves it empty.
+	Resolution Resolution `json:"resolution,omitempty"`
+	// Answer is present only once a human has answered the blank. Its provenance
+	// is authored-by, structurally distinct from an extracted citation.
+	Answer *Answer `json:"answer,omitempty"`
+}
+
+// Resolution is the fill state of a blank as it travels with the lifeboat.
+type Resolution string
+
+const (
+	// ResolutionOpen is a blank that has not been answered yet — the default the
+	// probe stamps on every blank.
+	ResolutionOpen Resolution = "open"
+	// ResolutionAnswered is a blank a human has answered; Answer is set.
+	ResolutionAnswered Resolution = "answered"
+	// ResolutionDeferred is a blank a human chose not to answer now; it
+	// re-surfaces at embark rather than being dropped.
+	ResolutionDeferred Resolution = "deferred"
+)
+
+// Answer is a human's authored answer to a blank. Its provenance is a person and
+// a date — an honest non-file source, per adr-36 — never a file the answer did
+// not come from.
+type Answer struct {
+	Text          string `json:"text"`
+	AuthoredBy    string `json:"authored_by"`
+	AuthoredAt    string `json:"authored_at"`
+	AgentAssisted bool   `json:"agent_assisted,omitempty"`
 }
 
 // Summary counts sections by status. Blank is counted, not hidden — a blank is
@@ -73,6 +108,9 @@ func (c Coverage) Render() string {
 			fmt.Fprintf(&b, "    evidence: %s\n", strings.Join(sanitizeAll(s.Evidence), ", "))
 		}
 		if s.Status == StatusBlank {
+			if s.Kind == KindHumanOwned {
+				fmt.Fprintf(&b, "    (human-owned — yours to write, not an extraction)\n")
+			}
 			if len(s.Searched) > 0 {
 				fmt.Fprintf(&b, "    searched: %s\n", strings.Join(sanitizeAll(s.Searched), ", "))
 			}
