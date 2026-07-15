@@ -208,6 +208,9 @@ const (
 const (
 	// maxLessonsBytes caps the untrusted lessons payload.
 	maxLessonsBytes = 1 << 20 // 1 MiB
+	// maxGraveyardFileBytes bounds one packed archaeology/abandoned file when the
+	// lessons validator reads it back out of a lifeboat.
+	maxGraveyardFileBytes = 8 << 20 // 8 MiB
 	// maxLessons caps how many entries one ingest may carry.
 	maxLessons = 1000
 	// maxLessonEvidenceRefs caps the evidence refs read per lesson.
@@ -219,6 +222,11 @@ const (
 // maxLessonIDLen bounds a lesson id's length (the path-traversal defence pairs
 // the regex shape with this ceiling before any low-confidence filename is built).
 const maxLessonIDLen = 64
+
+// MaxLessonsBytes is the exported cap a front door uses to bound its read of the
+// untrusted lessons payload (file or stdin) before handing it to IngestLessons,
+// which enforces the same ceiling internally.
+const MaxLessonsBytes = maxLessonsBytes
 
 // lessonIDRe constrains a lesson id so it can never build a path that escapes
 // graveyard/low-confidence/: "les-" then kebab-case [a-z0-9] segments. The
