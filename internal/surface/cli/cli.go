@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/capture"
@@ -265,8 +266,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	return docsCmd
 }
 
-// newDisembarkCommand builds the operator-internal `disembark` sub-tree. M2
-// ships only its read-only measurement half — no lifeboat is written:
+// newDisembarkCommand builds the operator `disembark` sub-tree:
 //
 //   - `probe <repo>` walks a repository read-only and reports, per brief
 //     section, whether a lifeboat could ground it, at what tier and confidence,
@@ -274,15 +274,17 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 //     a human must answer.
 //   - `coverage <report.json>...` reduces several probe reports to the cross-repo
 //     table (section × repo) that answers whether the brief structure is sound.
+//   - `plan <repo>` shows the full file set a pack would write, without writing.
+//   - `pack <repo> <dest>` writes that file set to <dest> — never to the source.
 //
-// It is CLI-only tooling (like `spec` and `rules`), not a `/abcd:` command
-// surface: the `disembark` brief row stays `staged` until M3 ships the packer,
-// so no `commands/abcd/disembark.md` exists and the surface_coverage rule is
-// satisfied. The verbs never write to a source repository.
+// `pack` is the packer M3b ships, backed by the `/abcd:disembark` command
+// surface (`commands/abcd/disembark.md`), so the surface-registry row is
+// `shipped`. probe/coverage/plan are read-only; pack writes only to <dest>,
+// behind a destination safety gate, and never mutates the source repository.
 func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	disembarkCmd := &cobra.Command{
 		Use:   "disembark",
-		Short: "Lifeboat tooling (read-only: coverage probe and pack dry-run over a repository)",
+		Short: "Lifeboat tooling: coverage probe, pack dry-run, and out-of-tree pack",
 		Args:  cobra.NoArgs,
 	}
 
@@ -382,9 +384,58 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
+	packCmd := &cobra.Command{
+		Use:   "pack <repo> <dest>",
+		Short: "Pack a lifeboat from a repository into a destination directory (writes <dest>, never the source)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repoAbs, err := filepath.Abs(args[0])
+			if err != nil {
+				return err
+			}
+			if info, err := os.Stat(repoAbs); err != nil || !info.IsDir() {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark pack: %s is not a directory", args[0])}
+			}
+			// Build the source repo's secret scanner and fail closed if its config
+			// is degraded — a pack must not ship secrets under a weakened ruleset.
+			sc, err := scanner.New(repoAbs)
+			if err != nil {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark pack: %s", scrubPaths(err))}
+			}
+			if bad, reason := sc.Unavailable(); bad {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark pack: secret scanner unavailable, refusing: %s", reason)}
+			}
+			scan := func(files []lifeboat.PlannedFile) error {
+				hard, first := 0, ""
+				for _, f := range files {
+					for _, fnd := range sc.ScanText(string(f.Content), f.Path) {
+						if fnd.Severity == scanner.SeverityHardFail {
+							hard++
+							if first == "" {
+								first = fmt.Sprintf("%s (%s)", f.Path, fnd.Kind)
+							}
+						}
+					}
+				}
+				if hard > 0 {
+					return fmt.Errorf("%d hard-fail secret(s) in planned content (first: %s); fix at source, not in the lifeboat", hard, first)
+				}
+				return nil
+			}
+			res, err := lifeboat.Pack(repoAbs, args[1], scan)
+			if err != nil {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark pack: %s", scrubPaths(err))}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
 	disembarkCmd.AddCommand(planCmd)
+	disembarkCmd.AddCommand(packCmd)
 	return disembarkCmd
 }
 

@@ -148,6 +148,24 @@ called out in a **Breaking** section.
   verb (no `/abcd:disembark` command surface yet); the destination write path is
   a later milestone (itd-88, adr-35).
 
+- **`abcd disembark pack <repo> <dest>` — writes a lifeboat out-of-tree, and the
+  `/abcd:disembark` command surface.** It writes the planned file set to `<dest>`
+  and never to the source (a test hashes the source tree before and after).
+  Everything that stops a pack destroying real work is enforced: a **destination
+  safety gate** refuses unless `<dest>` is absent, an empty directory, or an
+  existing lifeboat abcd produced (it carries a parseable `_provenance.json`) —
+  and refuses a symlinked destination, one inside a `.git/` directory, or one that
+  overlaps the source tree. The planned bytes are **secret-scanned before any
+  write** and a hard-fail refuses the whole pack — a secret is fixed at source,
+  never redacted into the artefact. Files are written into a staging directory
+  through `os.Root` (no crafted path or symlink escapes it) and renamed into
+  place, so a crash leaves staging, never a half-lifeboat; `_provenance.json` is
+  written last. Any abcd marker block in a copied record is stripped so embarking
+  the lifeboat cannot plant a stale rules-loader. Each pack appends one line to an
+  append-only voyage ledger at `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl`,
+  keyed on the source's root-commit SHA and carrying the manifest hash. `--json`
+  emits the result (destination, file/byte counts, hash, voyage status).
+
 - **Session transcripts are captured automatically when a session ends.** A
   `SessionEnd` hook now runs `abcd hook session-end`, which redacts the session
   transcript through the existing two-stage, fail-closed scanner and files it in

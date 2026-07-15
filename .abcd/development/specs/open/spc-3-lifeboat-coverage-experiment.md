@@ -15,7 +15,7 @@ adapters this spec lands. The experiment's readout is the cross-repo coverage
 aggregate: probe a record-rich repo and a git-only repo, and the delta in
 brief-section coverage is what the record is worth.
 
-Delivered across the plan's milestones M0–M3a:
+Delivered across the plan's milestones M0–M3b:
 
 - **M0 — the hypothesis.** `internal/core/lifeboat/mapping.go` holds the
   brief↔lifeboat contract as a table (23 brief sections × the best status each
@@ -29,8 +29,11 @@ Delivered across the plan's milestones M0–M3a:
 - **M3a — the read-only spine** (adr-35, adr-36): the plan orchestrator and the
   `disembark plan` dry-run verb. It assembles the full lifeboat file set *in
   memory* — brief citation maps, the coverage report, verbatim record copies, the
-  rescue spine, and a pinned manifest hash — writing nothing. The destination
-  write path is M3b.
+  rescue spine, and a pinned manifest hash — writing nothing.
+- **M3b — the write path** (adr-35): `disembark pack <repo> <dest>` writes that
+  file set out-of-tree, behind a destination safety gate, staged-then-renamed and
+  contained to the destination via `os.Root`, secret-scanned before any write,
+  with an append-only voyage ledger — and the `/abcd:disembark` command surface.
 
 ## Approach — the probe
 
@@ -117,6 +120,55 @@ Destination filenames — and directory components — are derived through a
 is not already a clean single component, so a hostile source filename or
 directory name cannot steer where a file lands.
 
+## Approach — the pack (M3b)
+
+`abcd disembark pack <repo> <dest>` writes the plan to `<dest>`. It is `Plan`
+plus a contained write — the same file set the dry-run showed, so the two cannot
+diverge. Everything that stops a pack destroying real work is here:
+
+- **Destination safety gate.** A pack refuses unless `<dest>` is absent, an empty
+  real directory, or an existing directory carrying a parseable `_provenance.json`
+  — never a directory abcd did not produce. It also refuses a symlinked
+  destination, one inside a `.git/` directory, and any destination that overlaps
+  the source tree (equal to, an ancestor of, or inside it), which would mutate the
+  source. The `.git` and overlap checks run on **symlink-resolved** paths (the
+  deepest existing prefix is resolved and the remainder rejoined), so a
+  destination reached through a symlinked parent that points into the source is
+  caught — an adversarial-review finding — without refusing an ordinary symlinked
+  ancestor like macOS's `/tmp`. It fails closed on any stat it cannot read as
+  "absent".
+- **Secret-scan before write.** The planned bytes are scanned in memory; a
+  hard-fail refuses the whole pack. A secret is fixed at source, never redacted
+  into the artefact. The scan is injected (`SecretScan`), so the lifeboat core
+  stays free of the scanner adapter, and the scanner's fail-closed `Unavailable`
+  state refuses rather than shipping under a weakened ruleset.
+- **Contained, atomic write.** Every file is written into a fresh staging
+  directory through `os.Root` (no crafted path or symlink escapes it), then the
+  staging directory is renamed into place — a crash leaves staging, never a
+  half-lifeboat. When `<dest>` already holds a prior lifeboat, it is renamed
+  *aside* to a sibling backup before the swap and removed only on success, so a
+  rename *error* (not just a crash) restores the prior lifeboat rather than
+  destroying it — an adversarial-review finding. `_provenance.json` is written
+  last: it is the commit marker and the gate key for a later re-pack. Every
+  planned path is re-validated (relative, cleaned, no `..`, no control characters)
+  before it is written.
+- **The source is never touched.** `Plan` reads read-only; a test hashes the
+  source tree before and after a pack.
+- **Marker hygiene.** A verbatim record carrying an abcd marker block has it
+  stripped (`ahoy.StripMarkerBlock`) before it travels, so embarking the lifeboat
+  cannot plant a stale rules-loader. The strip happens inside `Plan`, so the
+  manifest hash covers the bytes a pack actually writes.
+- **The voyage ledger.** Each pack appends one line to
+  `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` — genuinely
+  append-only, keyed on the source's root-commit SHA (a source without one is not
+  logged rather than logged under a forged key), carrying the manifest hash that
+  ties the line to the lifeboat's own provenance. Its top directories are verified
+  real (not symlinks) before any is created, and the ledger is written through an
+  `os.Root` anchored at the verified base so a swapped `<root-sha>`/`disembark`
+  component cannot redirect the append outside it — adversarial-review findings. A
+  voyage failure is reported, not fatal: the written lifeboat's `_provenance.json`
+  is authoritative.
+
 ## The tiers
 
 | Tier | Reads | Present in |
@@ -132,10 +184,11 @@ history, dependencies added then removed) whether or not anyone wrote it down.
 ## Surface
 
 `disembark probe`/`coverage`/`plan` are CLI-only operator tooling, like `spec`
-and `rules` — not a `/abcd:` command surface. `plan` is a dry run: it writes
-nothing, so it too stays operator-internal. The `disembark` brief row stays
-`staged` until M3b ships the packer's write path, so no `commands/abcd/disembark.md`
-exists and the `surface_coverage` record-lint rule is satisfied.
+and `rules` — read-only, no `/abcd:` command surface. `pack` is the user-facing
+verb: it ships the `/abcd:disembark` command surface (`commands/abcd/disembark.md`)
+and the surface-registry row flips from `staged` to `shipped` in the same change,
+satisfying the `surface_coverage` record-lint rule (a `shipped` row without a
+backing command file — or a `staged` row that has one — is a blocker).
 
 ## How it satisfies the Acceptance Criteria
 
@@ -152,14 +205,19 @@ exists and the `surface_coverage` record-lint rule is satisfied.
 - *Graveyard from git alone* — a git-only fixture with a reverted commit grounds
   `graveyard` at Tier 0.
 - *cite-or-be-dropped / dry-run cannot lie* — the graveyard interpreter's validator
-  is M4; the shared plan/pack code path lands here in M3a as `lifeboat.Plan`, the
-  single producer both `disembark plan` (now) and the packer (M3b) run, so a
-  dry-run cannot describe a pack a real pack would not perform.
+  is M4; the shared plan/pack code path is `lifeboat.Plan` (M3a), the single
+  producer both `disembark plan` and `disembark pack` (M3b) run, so a dry-run
+  cannot describe a pack a real pack would not perform.
+- *Byte-identical source through a pack* — `Pack` reads the source only through
+  the read-only `Plan`; a test hashes the source tree before and after a pack.
+- *Never overwrite what abcd did not produce* — the destination safety gate; a
+  test packs over a non-empty non-lifeboat directory and requires refusal, and
+  packs over an existing lifeboat and requires success.
 
 ## Out of scope for this spec
 
-The packer's **write path** (M3b: `os.Root` write containment, the destination
-safety gate, staging-then-rename, secret-scan-before-write, the voyage ledger,
-and the `/abcd:disembark` command surface), embark, the round-trip, the
-graveyard's interpretation layer, and synthesis over the record — all later
-milestones of itd-88, tracked in the plan.
+Embark and the round-trip, the graveyard's interpretation layer (M4), and
+host-delegated synthesis over the record (M5–M6) — all later milestones of
+itd-88, tracked in the plan. The multi-agent oracle passes and the aspirational
+output tree in the older [`02-disembark.md`](../../brief/04-surfaces/02-disembark.md)
+chapter are superseded by adr-35; that chapter's full rewrite is a follow-up.

@@ -242,6 +242,22 @@ func removeMarkerFile(targetPath string) (wrote bool, ok bool) {
 	return true, true
 }
 
+// StripMarkerBlock returns content with every abcd marker block (a balanced
+// BEGIN…END fence and its surrounding blank lines) removed, and reports whether
+// anything was stripped. Content with no block is returned unchanged. It is the
+// pure, path-free form of removeMarkerFile, exported for the lifeboat packer:
+// carrying a stale marker block into a packed record would plant a dead
+// rules-loader in whatever repo later embarks it, so a verbatim copy is passed
+// through this first. Only a balanced pair is matched, so an unbalanced fence or
+// a literal mention of the delimiter text outside a pair is left intact.
+func StripMarkerBlock(content []byte) ([]byte, bool) {
+	matches := markerBlockRe.FindAllIndex(content, -1)
+	if len(matches) == 0 {
+		return content, false
+	}
+	return composeMarkerRemoval(content, matches), true
+}
+
 // composeMarkerRemoval deletes each block plus its surrounding EOL run and
 // reinserts one blank-line separator when both sides survive.
 func composeMarkerRemoval(existing []byte, matches [][]int) []byte {

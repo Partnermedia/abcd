@@ -7,6 +7,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 )
 
 // PlannedFile is one file the packer would write into a lifeboat, produced
@@ -110,6 +112,13 @@ func (pb *planBuilder) add(dest string, content []byte) {
 // declared, not silently lost.
 func (pb *planBuilder) copyRecord(ctx *SourceContext, src, dest string) {
 	if data, ok := ctx.ReadFile(src); ok {
+		// Neutralise any abcd marker block before it travels: a verbatim record
+		// carrying a live BEGIN…END fence would plant a stale rules-loader in
+		// whatever repo later embarks the lifeboat. Stripping here (inside Plan)
+		// keeps the manifest hash over the bytes a pack actually writes.
+		if stripped, changed := ahoy.StripMarkerBlock(data); changed {
+			data = stripped
+		}
 		pb.add(dest, data)
 		return
 	}

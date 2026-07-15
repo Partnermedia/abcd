@@ -240,3 +240,37 @@ func TestMarkerCRLFPreserved(t *testing.T) {
 		t.Errorf("state = %q, want current", classifyMarker(path))
 	}
 }
+
+// TestStripMarkerBlock covers the pure exported strip used by the lifeboat
+// packer: a balanced block is removed and reported, content without one is
+// returned unchanged, and an unbalanced fence (or a literal delimiter mention
+// outside a pair) is left intact.
+func TestStripMarkerBlock(t *testing.T) {
+	withBlock := []byte("# Title\n\n<!-- BEGIN ABCD -->\nloader\n<!-- END ABCD -->\n\nBody.\n")
+	out, changed := StripMarkerBlock(withBlock)
+	if !changed {
+		t.Fatal("expected a balanced block to be stripped")
+	}
+	if bytes.Contains(out, []byte("BEGIN ABCD")) || bytes.Contains(out, []byte("loader")) {
+		t.Errorf("block not fully removed:\n%s", out)
+	}
+	if !bytes.Contains(out, []byte("# Title")) || !bytes.Contains(out, []byte("Body.")) {
+		t.Errorf("strip damaged surrounding content:\n%s", out)
+	}
+
+	clean := []byte("# Title\n\nNo markers here.\n")
+	out2, changed2 := StripMarkerBlock(clean)
+	if changed2 {
+		t.Error("clean content reported as changed")
+	}
+	if !bytes.Equal(out2, clean) {
+		t.Error("clean content was modified")
+	}
+
+	// An unbalanced fence is not a block: leave it intact.
+	unbalanced := []byte("# Title\n\n<!-- BEGIN ABCD -->\nno end fence\n")
+	out3, changed3 := StripMarkerBlock(unbalanced)
+	if changed3 || !bytes.Equal(out3, unbalanced) {
+		t.Errorf("unbalanced fence must be left intact, got changed=%v:\n%s", changed3, out3)
+	}
+}
