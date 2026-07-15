@@ -107,13 +107,18 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	sum := sha256.Sum256(raw)
 	sourceSHA := hex.EncodeToString(sum[:])
 
-	// Idempotency: an identical source already stored is a no-op.
+	// Idempotency: re-capturing the SAME source for the SAME session and kind is a
+	// no-op. Keying on the source SHA alone would silently attribute a second,
+	// distinct session that happens to produce byte-identical bytes to the first
+	// session's record — the second session would then have no record at all while
+	// Capture reports success. So the no-op requires the session id and kind to
+	// match too; an identical source under a new session id writes a new record.
 	existing, err := listRecords(tdir)
 	if err != nil {
 		return CaptureResult{}, err
 	}
 	for _, r := range existing {
-		if r.SourceSHA256 == sourceSHA {
+		if r.SourceSHA256 == sourceSHA && r.SessionID == sessionID && r.SourceKind == kind {
 			return CaptureResult{Record: r, Wrote: false}, nil
 		}
 	}

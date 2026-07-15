@@ -397,6 +397,46 @@ func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
 	}
 }
 
+// When git reports tracked files but the repo root cannot be opened for reading
+// (search-only permission), the privacy scan cannot run over content that exists.
+// It must surface the error rather than silently report a clean pass (audit.go:94).
+func TestRule_PrivacyRootUnreadableSurfacesError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses permission bits")
+	}
+	b := newFixtureRepo(t).conforming().
+		file("docs/how-to/thing.md", "clean content\n").
+		commit()
+
+	// Search-only (--x): git ls-files can still traverse into .git and read the
+	// index, but os.OpenRoot(root) needs read permission and fails with EACCES.
+	if err := os.Chmod(b.root, 0o311); err != nil {
+		t.Fatalf("chmod root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(b.root, 0o755) })
+
+	// Confirm the precondition actually holds on this filesystem; skip otherwise.
+	if r, err := os.OpenRoot(b.root); err == nil {
+		_ = r.Close()
+		t.Skip("filesystem allows opening a search-only root; precondition not met")
+	}
+
+	var privacy audit.Rule
+	for _, r := range audit.DefaultRules() {
+		if r.Meta().ID == "privacy-hygiene" {
+			privacy = r
+			break
+		}
+	}
+	if privacy == nil {
+		t.Fatal("privacy-hygiene rule not found in DefaultRules")
+	}
+
+	if _, err := audit.Evaluate([]audit.Rule{privacy}, audit.Context{RepoRoot: b.root}); err == nil {
+		t.Fatal("privacy-hygiene reported clean when the repo root could not be opened")
+	}
+}
+
 // AC5: docs/ absent → docs-currency skipped via Where, not failed.
 func TestAC_DocsCurrencySkippedWhenNoDocs(t *testing.T) {
 	res := newFixtureRepo(t).conforming().commit().run() // conforming() creates no docs/

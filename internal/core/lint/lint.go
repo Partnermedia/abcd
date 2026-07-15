@@ -134,7 +134,7 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 				findings = append(findings, checkLinks(rel, fileAbs, repoRoot, lines, mask, linksCfg)...)
 			}
 			if brittleOn {
-				findings = append(findings, checkBrittleRefs(rel, lines, brittleCfg)...)
+				findings = append(findings, checkBrittleRefs(rel, lines, mask, brittleCfg)...)
 			}
 		}
 
@@ -1001,9 +1001,12 @@ func checkLinks(rel, fileAbs, repoRoot string, lines []string, mask []bool, cfg 
 }
 
 // checkBrittleRefs implements check family D.
-func checkBrittleRefs(rel string, lines []string, cfg RuleConfig) []Finding {
+func checkBrittleRefs(rel string, lines []string, mask []bool, cfg RuleConfig) []Finding {
 	var out []Finding
 	for i, line := range lines {
+		if mask[i] {
+			continue
+		}
 		for _, m := range brittleRefRe.FindAllString(line, -1) {
 			out = append(out, Finding{
 				File: rel, Line: i + 1, RuleID: "no_brittle_line_refs",

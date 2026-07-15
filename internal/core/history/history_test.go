@@ -251,6 +251,48 @@ func TestCaptureIdempotentOnSourceSHA(t *testing.T) {
 	}
 }
 
+// TestCaptureIdenticalSourceDistinctSessionsWritesBoth proves the idempotency
+// no-op is scoped to the session: a second, distinct session that produces
+// byte-identical source must get its own record, not be silently attributed to
+// the first session's record.
+func TestCaptureIdenticalSourceDistinctSessionsWritesBoth(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+	raw := []byte("user: hello\nassistant: hi\n")
+
+	first, err := Capture(repoRoot, testRootSHA, "sess-a", raw, "native")
+	if err != nil {
+		t.Fatalf("first capture: %v", err)
+	}
+	if !first.Wrote {
+		t.Fatalf("first capture should write")
+	}
+
+	second, err := Capture(repoRoot, testRootSHA, "sess-b", raw, "native")
+	if err != nil {
+		t.Fatalf("second capture: %v", err)
+	}
+	if !second.Wrote {
+		t.Fatalf("a distinct session with identical source must write its own record, not no-op")
+	}
+	if second.Record.SessionID != "sess-b" {
+		t.Fatalf("second record attributed to %q, want sess-b", second.Record.SessionID)
+	}
+	if second.Record.Path == first.Record.Path {
+		t.Fatalf("distinct sessions must not share a record path")
+	}
+
+	recs, err := List(testRootSHA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 records for two distinct sessions, got %d", len(recs))
+	}
+	if _, _, err := Read(testRootSHA, "sess-b"); err != nil {
+		t.Fatalf("second session must be retrievable after capture: %v", err)
+	}
+}
+
 // TestListAndRead exercises the read side: metadata newest-first, and a body
 // fetch that returns the sanitised content without frontmatter.
 func TestListAndRead(t *testing.T) {

@@ -8,10 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
+
+// mintLockTimeout bounds how long Create waits for the spec-store mint lock. A
+// var (not const) so a test can shorten it to exercise contention.
+var mintLockTimeout = 5 * time.Second
 
 // Load discovers spec files under both buckets, parses their frontmatter, and
 // returns the in-memory Store. A missing specs/ directory yields an empty store
@@ -175,27 +180,75 @@ func Create(repoRoot, intentID, slug string) (Spec, error) {
 	if !slugRe.MatchString(slug) {
 		return Spec{}, fmt.Errorf("spec: slug %q must be kebab-case", slug)
 	}
-	id, err := NextID(repoRoot)
+	// Mint and write under the exclusive mint lock: NextID scans the store for
+	// max N and this writes spc-N-<slug>.md, so without serialization two
+	// concurrent plans both observe the same max and mint a duplicate id — and
+	// because the filenames differ by slug, neither the atomic write nor the
+	// clobber guard detects it. Holding the lock across the scan+write makes the
+	// second run see the first's file and mint N+1.
+	var sp Spec
+	err := withMintLock(repoRoot, func() error {
+		id, err := NextID(repoRoot)
+		if err != nil {
+			return err
+		}
+		openDir := filepath.Join(repoRoot, SpecsRelDir, StatusOpen)
+		if err := ensureDir(openDir, filepath.Join(SpecsRelDir, StatusOpen)); err != nil {
+			return err
+		}
+		name := fmt.Sprintf("%s-%s.md", id, slug)
+		// 0o644 matches the intent-side markdown writer — both write committed design-record files.
+		if err := fsutil.WriteFileAtomic(filepath.Join(openDir, name), []byte(renderSpec(id, slug, intentID)), 0o644); err != nil {
+			return fmt.Errorf("spec: writing %s: %w", filepath.Join(SpecsRelDir, StatusOpen, name), err)
+		}
+		sp = Spec{
+			ID:     id,
+			Slug:   slug,
+			Intent: intentID,
+			Status: StatusOpen,
+			Path:   filepath.Join(SpecsRelDir, StatusOpen, name),
+		}
+		return nil
+	})
 	if err != nil {
 		return Spec{}, err
 	}
-	openDir := filepath.Join(repoRoot, SpecsRelDir, StatusOpen)
-	if err := ensureDir(openDir, filepath.Join(SpecsRelDir, StatusOpen)); err != nil {
-		return Spec{}, err
-	}
-	name := fmt.Sprintf("%s-%s.md", id, slug)
-	// 0o644 matches the intent-side markdown writer — both write committed design-record files.
-	if err := fsutil.WriteFileAtomic(filepath.Join(openDir, name), []byte(renderSpec(id, slug, intentID)), 0o644); err != nil {
-		return Spec{}, fmt.Errorf("spec: writing %s: %w", filepath.Join(SpecsRelDir, StatusOpen, name), err)
-	}
-	sp := Spec{
-		ID:     id,
-		Slug:   slug,
-		Intent: intentID,
-		Status: StatusOpen,
-		Path:   filepath.Join(SpecsRelDir, StatusOpen, name),
-	}
 	return sp, Validate(sp)
+}
+
+// withMintLock runs fn while holding an exclusive advisory lock over the spec
+// store, serializing id minting across concurrent abcd processes in the same
+// worktree (two agent sessions, or a hook firing beside a manual command). It
+// flocks the specs/ directory file descriptor itself, so no lock artifact is
+// left in the committed record tree. O_NOFOLLOW refuses a symlinked specs/.
+func withMintLock(repoRoot string, fn func() error) error {
+	specsDir := filepath.Join(repoRoot, SpecsRelDir)
+	if err := ensureDir(specsDir, SpecsRelDir); err != nil {
+		return err
+	}
+	fd, err := syscall.Open(specsDir, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return fmt.Errorf("spec: opening mint lock on %s: %w", SpecsRelDir, err)
+	}
+	defer syscall.Close(fd)
+
+	deadline := time.Now().Add(mintLockTimeout)
+	for {
+		lockErr := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB)
+		if lockErr == nil {
+			break
+		}
+		if lockErr != syscall.EWOULDBLOCK {
+			return fmt.Errorf("spec: acquiring mint lock: %w", lockErr)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("spec: could not acquire mint lock within %s", mintLockTimeout)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	defer syscall.Flock(fd, syscall.LOCK_UN)
+
+	return fn()
 }
 
 // Close moves a spec file open/ -> closed/ via os.Rename (atomic on one

@@ -205,6 +205,29 @@ func TestBrittleLineRefs(t *testing.T) {
 	}
 }
 
+func TestBrittleLineRefsSkipsFencedBlocks(t *testing.T) {
+	root := t.TempDir()
+	// A fenced block quoting tool output must not trip the rule — it is a
+	// verbatim example, not a live cross-reference, mirroring the fence-mask
+	// house convention every sibling content rule honours.
+	writeFile(t, root, "rec/doc.md",
+		"quoted example below\n```\nconfiguration.md:171 stale anchor\n```\nno ref here\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"no_brittle_line_refs": {Enabled: true, Severity: "warn"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "no_brittle_line_refs"); n != 0 {
+		t.Fatalf("fenced brittle ref should be masked, got %d findings: %+v", n, fs)
+	}
+}
+
 func TestDirectoryCoverage(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "rec/README.md", "# rec\n")

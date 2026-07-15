@@ -52,6 +52,53 @@ func convSourceForSection(t *testing.T, section Section) Source {
 	return nil
 }
 
+// TestHasConventionsMatchesAdapterEvidence guards that the tier gate is not
+// narrower than what the Tier-1 adapters read: a repo carrying build manifests
+// and CI workflows but none of the headline docs (README/LICENSE/CHANGELOG/
+// CONTRIBUTING) must still count as having conventions, so its platform and
+// dependency adapters run instead of being skipped and reported as false blanks.
+func TestHasConventionsMatchesAdapterEvidence(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, content string) {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Only manifest + lockfile + CI workflows — none of the headline doc sentinels.
+	write("go.mod", "module example.com/tool\n\ngo 1.22\n")
+	write("go.sum", "example.com/dep v1.0.0 h1:abc=\n")
+	write(".github/workflows/ci.yml", "name: ci\n")
+
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	if !hasConventions(ctx) {
+		t.Fatal("hasConventions=false for a go.mod/go.sum/.github/workflows repo; Tier-1 adapters would be skipped and blanked")
+	}
+	present := tiersPresent(ctx)
+	found := false
+	for _, tr := range present {
+		if tr == TierConventions {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("tiersPresent=%v omits TierConventions for a manifest+CI repo", present)
+	}
+
+	// The gated adapter must actually ground, proving the tier was not skipped.
+	if ev := convSourceForSection(t, "constraints/platform").Probe(ctx); ev.Status != StatusGrounded {
+		t.Fatalf("constraints/platform status = %s, want grounded", ev.Status)
+	}
+}
+
 // TestConvContextGroundsFromREADME is the flagship Tier-1 assertion: a README
 // with real prose grounds "product/context" and cites the README file.
 func TestConvContextGroundsFromREADME(t *testing.T) {

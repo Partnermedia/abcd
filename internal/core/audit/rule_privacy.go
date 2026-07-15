@@ -59,10 +59,13 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	// Contain every read to the repo root. os.Root refuses any path component
 	// that escapes the root — including via a symlinked intermediate directory —
 	// so a hostile working tree cannot redirect the scan at a file outside the
-	// audited repo. If the root itself cannot be opened there is nothing to scan.
+	// audited repo. If the root itself cannot be opened while git has reported
+	// tracked files, the scan cannot run over content that exists — surface the
+	// error rather than reporting a clean pass (audit.go:94: "a check that cannot
+	// run must not be silently reported as passing").
 	root, err := os.OpenRoot(ctx.RepoRoot)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	defer root.Close()
 
