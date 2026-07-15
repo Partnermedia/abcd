@@ -28,7 +28,9 @@ type Pin struct {
 }
 
 // Effective is the identity git would actually stamp on a commit in the repo,
-// resolved through git's normal local > global > system layering.
+// resolved as git resolves the author: the GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL
+// environment overrides first, then git config's local > global > system
+// layering.
 type Effective struct {
 	Name  string
 	Email string
@@ -124,17 +126,27 @@ func WritePin(root string, p Pin) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
-// EffectiveIdentity returns the author identity git would use for a commit in
-// root, via `git config` (which honours the local > global > system layering).
-// Unset name or email yields an empty field, not an error.
+// EffectiveIdentity returns the author identity git would stamp on a commit in
+// root. Git gives the GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL environment variables
+// HIGHER precedence than user.name/user.email config, so an agent/CI sandbox that
+// exports them lands a mis-attributed commit that a config-only check would wave
+// through. Each field is therefore resolved from its GIT_AUTHOR_* override first,
+// falling back to `git config` (local > global > system) when the override is
+// unset or blank. Unset name or email yields an empty field, not an error.
 func EffectiveIdentity(root string) (Effective, error) {
-	name, err := gitConfig(root, "user.name")
-	if err != nil {
-		return Effective{}, err
+	name := strings.TrimSpace(os.Getenv("GIT_AUTHOR_NAME"))
+	if name == "" {
+		var err error
+		if name, err = gitConfig(root, "user.name"); err != nil {
+			return Effective{}, err
+		}
 	}
-	email, err := gitConfig(root, "user.email")
-	if err != nil {
-		return Effective{}, err
+	email := strings.TrimSpace(os.Getenv("GIT_AUTHOR_EMAIL"))
+	if email == "" {
+		var err error
+		if email, err = gitConfig(root, "user.email"); err != nil {
+			return Effective{}, err
+		}
 	}
 	return Effective{Name: name, Email: email}, nil
 }

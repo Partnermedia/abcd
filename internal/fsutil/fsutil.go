@@ -16,14 +16,18 @@ import (
 )
 
 // WriteFileAtomic writes data to path durably: a temp file in the target
-// directory is written, flushed, fsync'd, chmod'd to perm, then renamed over
-// the target, and finally the parent directory is fsync'd best-effort so the
-// rename survives a crash. Parent directories are created as needed.
+// directory is written, chmod'd to perm on its open descriptor, flushed,
+// fsync'd, then renamed over the target, and finally the parent directory is
+// fsync'd best-effort so the rename survives a crash. Parent directories are
+// created as needed.
 //
 // The rename is the commit point: a reader sees either the old file or the
 // complete new one, never a half-written file. os.Rename does not follow a
 // symlink at the leaf — a pre-planted symlink at path is replaced by the real
-// file, not written through.
+// file, not written through. The mode is set with fchmod on the open descriptor
+// (never chmod-by-name on the closed temp), so the enumerable temp name cannot
+// be swapped for a symlink between close and chmod and have the mode applied to
+// an attacker-chosen target.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -39,16 +43,17 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 		os.Remove(tmpName)
 		return err
 	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		os.Remove(tmpName)
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Chmod(tmpName, perm); err != nil {
 		os.Remove(tmpName)
 		return err
 	}
@@ -66,8 +71,15 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 // place and must not silently reset its mode.
 func WriteFileAtomicPreserveMode(path string, data []byte) error {
 	perm := os.FileMode(0o644)
-	if fi, err := os.Stat(path); err == nil {
+	fi, err := os.Stat(path)
+	switch {
+	case err == nil:
 		perm = fi.Mode().Perm()
+	case !notPresent(err):
+		// A real stat fault (a transient I/O error, ELOOP, EACCES) is NOT
+		// "absent" — defaulting to 0644 here would silently widen an existing
+		// restrictive mode, contrary to the contract. Fail closed, like paths.go.
+		return err
 	}
 	return WriteFileAtomic(path, data, perm)
 }

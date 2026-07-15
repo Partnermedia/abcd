@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func writeFile(t *testing.T, root, rel, content string) string {
@@ -609,5 +610,41 @@ func TestIdentityLocalUsernameSystemPathSuppressed(t *testing.T) {
 	}
 	if got := ScanText(`last commit authored by dev`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
 		t.Errorf("bare username not flagged (false negative): %+v", got)
+	}
+}
+
+// TestSerializedShortMultibyteIdentityFullyStarred guards B15: a short non-ASCII
+// identity value that is under 16 RUNES but at or over 16 BYTES must be fully
+// starred in the sealed snippet, consistent with maskSecret's rune-based policy.
+// A second finding on the same line forces the sealLine/fingerprintSpan path;
+// pre-fix, fingerprintSpan compared BYTE length and leaked the email's head/tail
+// (and could split a multi-byte rune) into the serialized snippet.
+func TestSerializedShortMultibyteIdentityFullyStarred(t *testing.T) {
+	email := "müller@täst.de" // 14 runes, 16 bytes — short by rune, long by byte
+	if utf8.RuneCountInString(email) >= 16 || len(email) < 16 {
+		t.Fatalf("test fixture invariant broke: %d runes, %d bytes", utf8.RuneCountInString(email), len(email))
+	}
+	id := Identity{GitUserEmail: email, HomePath: "/Users/someone", HomeUser: "someone"}
+	line := "email " + email + " path /Users/someone/notes.txt" // abcd-audit:allow
+	findings := ScanText(line, id, DefaultPatterns(), DefaultIdentitySeverities(), "f")
+	if !hasKind(findings, kindRealEmail) || len(findings) < 2 {
+		t.Fatalf("need the email plus a second finding on one line to seal the snippet: %+v", findings)
+	}
+	blob, err := json.Marshal(findings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(blob)
+	// The head fingerprint that leaked pre-fix ("mü") must not survive.
+	if strings.Contains(js, "mü") {
+		t.Errorf("sealed snippet leaks the head of a short multi-byte identity value: %s", js)
+	}
+	// No raw fragment of the email may survive anywhere.
+	if strings.Contains(js, email) {
+		t.Errorf("serialized result contains the raw email: %s", js)
+	}
+	// The masked snippet must remain valid UTF-8 (no rune split into 0xFFFD).
+	if strings.Contains(js, "�") {
+		t.Errorf("sealed snippet split a multi-byte rune into invalid UTF-8: %s", js)
 	}
 }
