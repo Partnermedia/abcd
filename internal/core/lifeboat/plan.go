@@ -197,6 +197,18 @@ func Plan(repoRoot string) (Lifeboat, error) {
 	//    summary where it does not.
 	planRescueSpine(ctx, pb)
 
+	// 5b. The graveyard, layers 1 and 2 — deterministic, evidence only. Layer 3
+	//     (lessons.json) is a later host-delegated step written by
+	//     `abcd disembark graveyard` into the packed lifeboat, never here. Both
+	//     files are always emitted (empty findings when the repo declared
+	//     nothing), so the file set — and the pinned manifest hash — stays stable.
+	if j, err := json.MarshalIndent(buildArchaeology(ctx), "", "  "); err == nil {
+		pb.add("graveyard/archaeology.json", append(j, '\n'))
+	}
+	if j, err := json.MarshalIndent(buildAbandoned(ctx), "", "  "); err == nil {
+		pb.add("graveyard/abandoned.json", append(j, '\n'))
+	}
+
 	files := pb.files
 
 	// 6. Provenance, assembled last, hashing every other file. It is appended
