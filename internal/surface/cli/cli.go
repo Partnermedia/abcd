@@ -24,6 +24,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/identity"
 	"github.com/REPPL/abcd-cli/internal/core/intent"
 	"github.com/REPPL/abcd-cli/internal/core/launch"
+	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
 	"github.com/REPPL/abcd-cli/internal/core/rules"
@@ -128,6 +129,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDocsCommand(&asJSON))
 	root.AddCommand(newIntentCommand(&asJSON))
 	root.AddCommand(newSpecCommand(&asJSON))
+	root.AddCommand(newDisembarkCommand(&asJSON))
 
 	return root
 }
@@ -228,6 +230,93 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	docsCmd.AddCommand(lintCmd)
 
 	return docsCmd
+}
+
+// newDisembarkCommand builds the operator-internal `disembark` sub-tree. M2
+// ships only its read-only measurement half — no lifeboat is written:
+//
+//   - `probe <repo>` walks a repository read-only and reports, per brief
+//     section, whether a lifeboat could ground it, at what tier and confidence,
+//     citing the evidence — and, for a blank, what was searched and the question
+//     a human must answer.
+//   - `coverage <report.json>...` reduces several probe reports to the cross-repo
+//     table (section × repo) that answers whether the brief structure is sound.
+//
+// It is CLI-only tooling (like `spec` and `rules`), not a `/abcd:` command
+// surface: the `disembark` brief row stays `staged` until M3 ships the packer,
+// so no `commands/abcd/disembark.md` exists and the surface_coverage rule is
+// satisfied. The verbs never write to a source repository.
+func newDisembarkCommand(asJSON *bool) *cobra.Command {
+	disembarkCmd := &cobra.Command{
+		Use:   "disembark",
+		Short: "Lifeboat tooling (read-only in M2: coverage probe over a repository)",
+		Args:  cobra.NoArgs,
+	}
+
+	probeCmd := &cobra.Command{
+		Use:   "probe [repo]",
+		Short: "Report which brief sections a lifeboat could ground from a repository (read-only)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			target := "."
+			if len(args) == 1 {
+				target = args[0]
+			}
+			abs, err := filepath.Abs(target)
+			if err != nil {
+				return err
+			}
+			if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark probe: %s is not a directory", target)}
+			}
+			cov, err := lifeboat.Probe(abs)
+			if err != nil {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark probe: %s", scrubPaths(err))}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, cov, func(w io.Writer) {
+				fmt.Fprint(w, cov.Render())
+			})
+		},
+	}
+
+	coverageCmd := &cobra.Command{
+		Use:   "coverage <report.json>...",
+		Short: "Aggregate probe reports into the cross-repo section×repo coverage table",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			covs := make([]lifeboat.Coverage, 0, len(args))
+			for _, path := range args {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					// Reference the path the user typed, not an absolute PathError.
+					detail := err.Error()
+					var pe *os.PathError
+					if errors.As(err, &pe) {
+						detail = pe.Err.Error()
+					}
+					return &exitError{Code: 2, Msg: fmt.Sprintf("disembark coverage: cannot read %s: %s", path, detail)}
+				}
+				var cov lifeboat.Coverage
+				if err := json.Unmarshal(data, &cov); err != nil {
+					return &exitError{Code: 2, Msg: fmt.Sprintf("disembark coverage: %s is not a coverage report: %s", path, err)}
+				}
+				if cov.SchemaVersion > lifeboat.SchemaVersion {
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"disembark coverage: %s is schema v%d; this abcd knows up to v%d — upgrade abcd",
+						path, cov.SchemaVersion, lifeboat.SchemaVersion)}
+				}
+				covs = append(covs, cov)
+			}
+			agg := lifeboat.Aggregate(covs)
+			return render(cmd.OutOrStdout(), *asJSON, agg, func(w io.Writer) {
+				fmt.Fprint(w, agg.Render())
+			})
+		},
+	}
+
+	disembarkCmd.AddCommand(probeCmd)
+	disembarkCmd.AddCommand(coverageCmd)
+	return disembarkCmd
 }
 
 // maxHookStdinBytes caps the hook payload read from stdin (trust boundary).
