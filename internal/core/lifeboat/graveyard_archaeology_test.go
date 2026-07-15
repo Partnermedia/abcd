@@ -571,16 +571,31 @@ func TestArchRevertCapTruncates(t *testing.T) {
 		t.Skip("skipping cap test in -short mode (builds many commits)")
 	}
 	r := gvNewRepo(t)
-	r.commit("root")
-	for i := 0; i < maxGraveyardFindingsPerSignal+2; i++ {
-		r.commit(fmt.Sprintf("Revert \"experiment %d\"", i))
+	// Build the >cap history with ONE `git fast-import` stream instead of ~500
+	// `git commit` processes. On the ubuntu CI runner, rapid sequential porcelain
+	// commits intermittently produced a repo with a missing parent object
+	// ("Could not read <sha> / Failed to traverse parents"), failing every later
+	// read with exit 128; fast-import writes a single packfile atomically, which
+	// removes that class entirely (and is far faster).
+	var stream strings.Builder
+	stamp := 1700000000
+	writeCommit := func(msg string) {
+		fmt.Fprintf(&stream, "commit refs/heads/main\n")
+		fmt.Fprintf(&stream, "committer t <t@e> %d +0000\n", stamp)
+		stamp++
+		fmt.Fprintf(&stream, "data %d\n%s\n", len(msg), msg)
 	}
-	// Settle the freshly-built object store before probing. On the ubuntu CI
-	// runner, probing a repo milliseconds after ~500 rapid commits transiently
-	// failed every git read with exit 128 (the run/stderr improvement in
-	// gitutil now surfaces the reason if it ever recurs); packing the loose
-	// objects removes that contention class deterministically.
-	r.git("gc", "--quiet")
+	writeCommit("root")
+	for i := 0; i < maxGraveyardFindingsPerSignal+2; i++ {
+		writeCommit(fmt.Sprintf("Revert \"experiment %d\"", i))
+	}
+	fi := exec.Command("git", "fast-import", "--quiet")
+	fi.Dir = r.dir
+	fi.Env = r.env
+	fi.Stdin = strings.NewReader(stream.String())
+	if out, err := fi.CombinedOutput(); err != nil {
+		t.Fatalf("git fast-import: %v: %s", err, out)
+	}
 
 	a := gvArch(t, r.dir)
 	rev := bySignal(a, SignalRevert)
