@@ -34,6 +34,11 @@ Delivered across the plan's milestones M0–M3b:
   file set out-of-tree, behind a destination safety gate, staged-then-renamed and
   contained to the destination via `os.Root`, secret-scanned before any write,
   with an append-only voyage ledger — and the `/abcd:disembark` command surface.
+- **M4 — the graveyard** (adr-35): three strictly-ordered layers. Deterministic
+  git archaeology and recorded abandonment are packed into every lifeboat as
+  `graveyard/archaeology.json` and `graveyard/abandoned.json`; host-delegated
+  interpretation is ingested afterwards by `disembark graveyard --lessons-json`
+  under a cite-or-be-dropped Go validator.
 
 ## Approach — the probe
 
@@ -169,6 +174,47 @@ diverge. Everything that stops a pack destroying real work is here:
   voyage failure is reported, not fatal: the written lifeboat's `_provenance.json`
   is authoritative.
 
+## Approach — the graveyard (M4)
+
+"Extract what failed, so it isn't tried again." Three layers, strictly ordered so
+interpretation can never float free of evidence:
+
+- **Layer 1 — archaeology** (`graveyard/archaeology.json`): Tier-0 git only,
+  deterministic, evidence only. Five signals, each with a stable namespaced id a
+  later lesson can cite: reverted commits (`rev-<sha12>`), branches never merged
+  into the default branch ranked by divergence age (`branch-<name>`), paths
+  deleted after substantial history — sustained investment retired, not a scratch
+  file swept — and absent at HEAD (`del-<path>`), dependencies present in a
+  manifest's first revision but gone at HEAD (`dep-<manifest>`), and
+  wholesale-rewrite commits that replace a large fraction of the tree in one
+  non-merge commit (`rewrite-<sha12>`). Thresholds are named constants carrying
+  their rationale; every signal is bounded and every human string sanitised.
+- **Layer 2 — recorded abandonment** (`graveyard/abandoned.json`): what the
+  project itself declared dead, keyed by the records' own ids so a lesson cites
+  exactly what a reader sees — superseded intents (the `superseded/` bucket),
+  superseded ADRs (frontmatter status or a non-null `superseded_by`, across the
+  native and conventional ADR homes), each ADR's Alternatives-Considered options
+  (`adr-N-alt`), wontfix issues with their recorded reasons, and decision-log
+  lines naming a rejected option (`dec-L<line>`), matched by a deliberately
+  narrow verb list so the signal stays conservative.
+- **Layer 3 — interpretation** (`graveyard/lessons.json`): host-delegated, never
+  packed. `abcd disembark graveyard <lifeboat-dir> --lessons-json <file|->`
+  validates untrusted interpreter output against the packed layers behind the
+  same trust guards as an intent verdict (size cap, symlink refusal, unknown
+  fields refused, schema version gated) and enforces **cite-or-be-dropped**: a
+  lesson whose evidence hits no live layer-1/2 id is dropped and the drop
+  reported, never fatal; `confidence: low` lessons are quarantined under
+  `graveyard/low-confidence/<id>.json` (the id shape itself is the
+  path-traversal defence). The validator, not the model's good intentions, is
+  the difference between a graveyard and a séance.
+
+Both packed layers are always emitted — an empty `findings` array is the honest,
+first-class statement that history or the record declares nothing dead — so the
+lifeboat's file set and its pinned `manifest_sha256` stay deterministic. The
+lessons files are deliberately **outside** `manifest_sha256`: the seal is pinned
+at pack time over the deterministic extraction, and interpretation is a later,
+mutable layer whose integrity is the per-entry citation rule, not the manifest.
+
 ## The tiers
 
 | Tier | Reads | Present in |
@@ -189,6 +235,9 @@ verb: it ships the `/abcd:disembark` command surface (`commands/abcd/disembark.m
 and the surface-registry row flips from `staged` to `shipped` in the same change,
 satisfying the `surface_coverage` record-lint rule (a `shipped` row without a
 backing command file — or a `staged` row that has one — is a blocker).
+`disembark graveyard` (M4) rides the same shipped surface: the command file's
+graveyard section tells the host how to run the interpreter and hand its output
+to the verb.
 
 ## How it satisfies the Acceptance Criteria
 
@@ -204,10 +253,12 @@ backing command file — or a `staged` row that has one — is a blocker).
   byte.
 - *Graveyard from git alone* — a git-only fixture with a reverted commit grounds
   `graveyard` at Tier 0.
-- *cite-or-be-dropped / dry-run cannot lie* — the graveyard interpreter's validator
-  is M4; the shared plan/pack code path is `lifeboat.Plan` (M3a), the single
-  producer both `disembark plan` and `disembark pack` (M3b) run, so a dry-run
-  cannot describe a pack a real pack would not perform.
+- *cite-or-be-dropped / dry-run cannot lie* — the graveyard validator (M4) drops
+  any lesson citing no live layer-1/2 finding id, and a test asserts a
+  zero-valid-refs lesson is dropped while its batch survives; the shared
+  plan/pack code path is `lifeboat.Plan` (M3a), the single producer both
+  `disembark plan` and `disembark pack` (M3b) run, so a dry-run cannot describe
+  a pack a real pack would not perform.
 - *Byte-identical source through a pack* — `Pack` reads the source only through
   the read-only `Plan`; a test hashes the source tree before and after a pack.
 - *Never overwrite what abcd did not produce* — the destination safety gate; a
@@ -216,8 +267,7 @@ backing command file — or a `staged` row that has one — is a blocker).
 
 ## Out of scope for this spec
 
-Embark and the round-trip, the graveyard's interpretation layer (M4), and
-host-delegated synthesis over the record (M5–M6) — all later milestones of
-itd-88, tracked in the plan. The multi-agent oracle passes and the aspirational
+Embark and the round-trip (M5), and host-delegated synthesis over the record
+(M6) — later milestones of itd-88, tracked in the plan. The multi-agent oracle passes and the aspirational
 output tree in the older [`02-disembark.md`](../../brief/04-surfaces/02-disembark.md)
 chapter are superseded by adr-35; that chapter's full rewrite is a follow-up.
