@@ -4,7 +4,10 @@
       {"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router"}]}
     ],
     "SessionStart": [
-      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}
+      {"hooks": [
+        {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"},
+        {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook session-start"}
+      ]}
     ],
     "PreCompact": [
       {"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}

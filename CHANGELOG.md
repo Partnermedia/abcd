@@ -35,6 +35,18 @@ called out in a **Breaking** section.
   wired to a `Stop` hook: from stdin it *requires* `--session <id>`, and a `Stop`
   hook delivers its session id inside a JSON payload (itd-89, adr-29).
 
+- **A session that starts in a repo where abcd is not installed now says so.** A
+  `SessionStart` hook runs `abcd hook session-start`, which — when the current
+  repo is a git repository whose transcript store has not been bootstrapped —
+  prints a one-line notice telling the user their sessions will not be captured
+  and how to fix it (`abcd ahoy install`). Without it the automatic-capture hook
+  above fails silently: the plugin is enabled, the user assumes their transcript
+  corpus is accruing, and it is not. The notice rides `SessionStart`'s visible
+  channel (stderr on a non-zero exit) and never blocks the session; every case
+  that is *not* a bootstrappable-store problem — a non-git cwd, a malformed or
+  empty payload, an already-installed store — stays completely silent and exits
+  `0` (iss-95, itd-89).
+
 - **`abcd audit` — a read-only repo-conformance check.** One command reports
   whether a repository follows the working conventions: the three-tier `.abcd/`
   layout, an `AGENTS.md` router, decisions durable in a committed
