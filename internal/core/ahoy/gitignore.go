@@ -211,12 +211,14 @@ func removeGitignoreBlocks(text, eol string) string {
 	}
 	lines := splitKeepEOL(text)
 	var out []string
+	var buffered []string // lines held since an as-yet-unclosed BEGIN
 	inside := false
 	for _, line := range lines {
 		stripped := strings.TrimRight(strings.TrimRight(line, "\r\n"), " \t")
 		if !inside {
 			if stripped == gitignoreBegin {
 				inside = true
+				buffered = nil
 				continue
 			}
 			if stripped == gitignoreEnd {
@@ -227,8 +229,16 @@ func removeGitignoreBlocks(text, eol string) string {
 		}
 		if stripped == gitignoreEnd {
 			inside = false
+			buffered = nil // matched BEGIN..END span removed in full
+			continue
 		}
-		// drop everything inside the block
+		buffered = append(buffered, line) // hold until we know the block closes
+	}
+	// An unbalanced BEGIN with no matching END must NOT swallow everything to EOF:
+	// that would silently delete the user's own ignore rules. Mirror the stray-END
+	// policy — drop the orphan BEGIN line alone and preserve the content after it.
+	if inside {
+		out = append(out, buffered...)
 	}
 	return strings.Join(out, "")
 }
