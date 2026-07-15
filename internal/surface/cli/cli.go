@@ -432,11 +432,68 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
+	var lessonsJSON string
+	graveyardCmd := &cobra.Command{
+		Use:   "graveyard <lifeboat-dir> --lessons-json <file|->",
+		Short: "Validate host-produced lesson JSON against a packed lifeboat and write the survivors (cite-or-be-dropped)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if lessonsJSON == "" {
+				return &exitError{Code: 2, Msg: "disembark graveyard: --lessons-json <file|-> is required"}
+			}
+			dirAbs, err := filepath.Abs(args[0])
+			if err != nil {
+				return err
+			}
+			raw, err := readLessonsPayload(cmd, lessonsJSON)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark graveyard: " + scrubPaths(err)}
+			}
+			// Exit 0 even when every entry was dropped or nothing was written:
+			// a drop is reported honestly, not a failure. Only structural faults
+			// (not a lifeboat, unreadable graveyard, unparseable/oversize payload)
+			// return an error and exit 2.
+			res, err := lifeboat.IngestLessons(dirAbs, raw)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark graveyard: " + scrubPaths(err)}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+	graveyardCmd.Flags().StringVar(&lessonsJSON, "lessons-json", "", "path to the host-produced lesson JSON (or - for stdin)")
+
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
 	disembarkCmd.AddCommand(planCmd)
 	disembarkCmd.AddCommand(packCmd)
+	disembarkCmd.AddCommand(graveyardCmd)
 	return disembarkCmd
+}
+
+// readLessonsPayload reads the untrusted lesson JSON behind the trust guards,
+// mirroring the intent verdict reader: a file must be a regular, non-symlink,
+// size-capped file; "-" reads stdin bounded to the same cap. The cap is the
+// exported lifeboat.MaxLessonsBytes.
+func readLessonsPayload(cmd *cobra.Command, spec string) ([]byte, error) {
+	if spec == "-" {
+		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxLessonsBytes))
+	}
+	fi, err := os.Lstat(spec)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s is a symlink (refusing to follow)", spec)
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", spec)
+	}
+	if fi.Size() > lifeboat.MaxLessonsBytes {
+		return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, lifeboat.MaxLessonsBytes)
+	}
+	return os.ReadFile(spec)
 }
 
 // maxHookStdinBytes caps the hook payload read from stdin (trust boundary).
