@@ -445,6 +445,96 @@ func TestArchWholesaleRewriteTinyRepoNone(t *testing.T) {
 	}
 }
 
+// TestBoundProbeList is the pure bound guarding every per-entry git fan-out: the
+// cap is respected, order is preserved, and a list already within the bound is
+// returned untouched.
+func TestBoundProbeList(t *testing.T) {
+	long := []string{"a", "b", "c", "d", "e"}
+	if got := boundProbeList(long, 3); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
+		t.Errorf("boundProbeList(len5, 3) = %v, want [a b c]", got)
+	}
+	short := []string{"x", "y"}
+	if got := boundProbeList(short, 3); len(got) != 2 || got[0] != "x" || got[1] != "y" {
+		t.Errorf("boundProbeList(len2, 3) = %v, want the list untouched", got)
+	}
+	if got := boundProbeList(long, 0); len(got) != 0 {
+		t.Errorf("boundProbeList(_, 0) = %v, want empty", got)
+	}
+	var empty []string
+	if got := boundProbeList(empty, 5); len(got) != 0 {
+		t.Errorf("boundProbeList(nil, 5) = %v, want empty", got)
+	}
+}
+
+// TestGvDeletedPathsConstantGitInvocations proves the deleted-path signal issues
+// O(1) git execs, not O(deleted paths): a hostile history with many deleted paths
+// must not fan out one `git log -- <p>` and one `cat-file -e` per path at plan
+// time. It asserts the SourceContext git cache holds a small constant number of
+// distinct invocations regardless of how many paths were deleted.
+func TestGvDeletedPathsConstantGitInvocations(t *testing.T) {
+	r := gvNewRepo(t)
+	r.commit("root")
+	// 12 distinct paths, each created then deleted (2 commits each) — well above
+	// any small constant, so a per-path implementation floods the cache.
+	const nPaths = 12
+	for i := 0; i < nPaths; i++ {
+		name := fmt.Sprintf("gone%02d.txt", i)
+		r.write(name, "x\n")
+		r.addCommit("add " + name)
+		r.rm(name)
+		r.addCommit("drop " + name)
+	}
+
+	ctx, err := newSourceContext(r.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ctx.Close)
+	_ = gvDeletedPaths(ctx)
+
+	// Independent of nPaths: one deleted-paths listing, one touch-count walk, one
+	// tracked-file listing. A small bound catches the O(paths) regression (which
+	// would leave >= nPaths+1 entries) without pinning the exact count.
+	if got := len(ctx.gitCache); got > 5 {
+		t.Errorf("gvDeletedPaths issued %d distinct git invocations for %d deleted paths; want O(1) (<= 5)", got, nPaths)
+	}
+}
+
+// TestArchDepGoModReformatNoFalseRemoval: a go.mod whose single dependency is
+// reformatted from block form to single-line form (what `go mod edit -fmt`/tidy
+// does when one dependency remains) must NOT fabricate a removed-dependency
+// finding — the dep is unchanged, only the directive layout moved.
+func TestArchDepGoModReformatNoFalseRemoval(t *testing.T) {
+	r := gvNewRepo(t)
+	r.commit("root")
+	r.write("go.mod", "module example.com/demo\n\ngo 1.21\n\nrequire (\n\tgithub.com/foo/bar v1.2.3\n)\n")
+	r.addCommit("add go.mod (block form)")
+	r.write("go.mod", "module example.com/demo\n\ngo 1.21\n\nrequire github.com/foo/bar v1.2.3\n")
+	r.addCommit("reformat go.mod to single-line require")
+
+	for _, f := range bySignal(gvArch(t, r.dir), SignalRemovedDependency) {
+		if f.ID == "dep-go.mod" {
+			t.Errorf("block->single-line reformat fabricated a removed-dependency finding: %+v", f.Evidence)
+		}
+	}
+}
+
+// TestArchWholesaleRewriteRootCommitNone: the parentless root commit diffs against
+// the empty tree, so importing a whole tree in the first commit LOOKS like a
+// wholesale rewrite. It must not be flagged — there is nothing it replaced.
+func TestArchWholesaleRewriteRootCommitNone(t *testing.T) {
+	r := gvNewRepo(t)
+	// The very first commit imports 30 files: >= min-files and 100% of the tree.
+	for i := 0; i < 30; i++ {
+		r.write(fmt.Sprintf("f%02d.txt", i), "x\n")
+	}
+	r.addCommit("initial import")
+
+	if rw := bySignal(gvArch(t, r.dir), SignalWholesaleRewrite); len(rw) != 0 {
+		t.Errorf("parentless root import reported as a wholesale rewrite: %+v", rw)
+	}
+}
+
 // TestArchEmptyMarshalsFindingsArray: a non-git tree and an empty git repo both
 // yield {schema_version:1, findings:[]} — a valid empty file, never null.
 func TestArchEmptyMarshalsFindingsArray(t *testing.T) {

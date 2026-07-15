@@ -39,17 +39,25 @@ func isolatedGit(root string, args ...string) *exec.Cmd {
 // dropped (deliberate pass-throughs such as GIT_EXEC_PATH are kept).
 func gitEnv() []string {
 	base := os.Environ()
-	env := make([]string, 0, len(base)+3)
+	env := make([]string, 0, len(base)+5)
 	for _, kv := range base {
 		if scrubGitVar(kv) {
 			continue
 		}
 		env = append(env, kv)
 	}
+	// LC_ALL=C / LANG=C pin git's own chrome to the C locale, appended AFTER
+	// os.Environ() so they win over any ambient locale. A translated git would
+	// otherwise localise porcelain summaries — e.g. the "N files changed"
+	// shortstat the graveyard's wholesale-rewrite signal parses — silently
+	// killing the signal on a French/German host and breaking the cross-host
+	// determinism of the produced manifest.
 	return append(env,
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_OPTIONAL_LOCKS=0",
+		"LC_ALL=C",
+		"LANG=C",
 	)
 }
 

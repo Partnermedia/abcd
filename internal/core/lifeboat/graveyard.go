@@ -201,6 +201,12 @@ const (
 	// maxDependencyTokens bounds the removed-dependency names cited per manifest,
 	// so a manifest rewritten wholesale does not list thousands of tokens.
 	maxDependencyTokens = 64
+
+	// maxGraveyardCandidatePaths bounds how many deleted paths the deleted-path
+	// signal even considers, as defence in depth against a hostile history with a
+	// huge number of deletions. The candidate list is sorted, so the bound is
+	// deterministic; findings are further capped at maxGraveyardFindingsPerSignal.
+	maxGraveyardCandidatePaths = 50000
 )
 
 // Lessons (layer-3) trust-boundary caps. The lessons JSON is untrusted host /

@@ -255,6 +255,85 @@ func TestIngestLessonsDuplicateID(t *testing.T) {
 	}
 }
 
+// TestIngestLessonsDroppedFirstDoesNotPoisonID proves a dropped FIRST occurrence
+// of an id does not poison it: a later, fully-citable duplicate still wins. The
+// first entry cites only a dead ref (dropped for "no valid evidence refs"); the
+// second cites a live id and must be written.
+func TestIngestLessonsDroppedFirstDoesNotPoisonID(t *testing.T) {
+	dir := stdFixture(t)
+	raw := payload(t,
+		Lesson{ID: "les-x", Lesson: "first, uncitable", Confidence: ConfidenceHigh, Evidence: []string{"dead-ref"}},
+		Lesson{ID: "les-x", Lesson: "second, cited", Confidence: ConfidenceHigh, Evidence: []string{"rev-9f3a1c2d4e5b"}},
+	)
+	res, err := IngestLessons(dir, raw)
+	if err != nil {
+		t.Fatalf("IngestLessons: %v", err)
+	}
+	if res.Written != 1 {
+		t.Fatalf("Written = %d, want 1 (the citable duplicate must survive)", res.Written)
+	}
+	lf := readWrittenLessons(t, dir)
+	if len(lf.Lessons) != 1 || lf.Lessons[0].Lesson != "second, cited" {
+		t.Errorf("citable duplicate not written: %+v", lf.Lessons)
+	}
+	// The first entry is dropped as uncitable, NOT as a duplicate.
+	if res.Dropped != 1 || res.Drops[0].Reason != "no valid evidence refs" {
+		t.Errorf("first entry drop = %+v; want a single 'no valid evidence refs' drop", res.Drops)
+	}
+}
+
+// TestIngestLessonsFullReplacement proves a re-ingest fully replaces layer 3: a
+// lesson promoted low->high must not leave its stale low-confidence file behind.
+func TestIngestLessonsFullReplacement(t *testing.T) {
+	dir := stdFixture(t)
+	rawA := payload(t, Lesson{ID: "les-a", Lesson: "maybe", Confidence: ConfidenceLow, Evidence: []string{"adr-12"}})
+	if _, err := IngestLessons(dir, rawA); err != nil {
+		t.Fatalf("ingest A: %v", err)
+	}
+	lcPath := filepath.Join(dir, "graveyard", "low-confidence", "les-a.json")
+	if _, err := os.Stat(lcPath); err != nil {
+		t.Fatalf("ingest A did not write the low-confidence file: %v", err)
+	}
+
+	rawB := payload(t, Lesson{ID: "les-a", Lesson: "certain", Confidence: ConfidenceHigh, Evidence: []string{"adr-12"}})
+	if _, err := IngestLessons(dir, rawB); err != nil {
+		t.Fatalf("ingest B: %v", err)
+	}
+	if _, err := os.Stat(lcPath); !os.IsNotExist(err) {
+		t.Errorf("stale low-confidence file survived a promoting re-ingest: err=%v", err)
+	}
+	lf := readWrittenLessons(t, dir)
+	if len(lf.Lessons) != 1 || lf.Lessons[0].ID != "les-a" {
+		t.Errorf("promoted lesson not in lessons.json: %+v", lf.Lessons)
+	}
+}
+
+// TestIngestLessonsAllDroppedClearsPrior proves an ingest whose entries are all
+// dropped removes a prior lessons.json — the coherent empty state, not a stale
+// interpretation left standing.
+func TestIngestLessonsAllDroppedClearsPrior(t *testing.T) {
+	dir := stdFixture(t)
+	rawA := payload(t, Lesson{ID: "les-a", Lesson: "certain", Confidence: ConfidenceHigh, Evidence: []string{"adr-12"}})
+	if _, err := IngestLessons(dir, rawA); err != nil {
+		t.Fatalf("ingest A: %v", err)
+	}
+	if !lessonsExists(dir) {
+		t.Fatal("ingest A did not write lessons.json")
+	}
+
+	rawB := payload(t, Lesson{ID: "les-b", Lesson: "x", Confidence: ConfidenceHigh, Evidence: []string{"no-such-id"}})
+	res, err := IngestLessons(dir, rawB)
+	if err != nil {
+		t.Fatalf("ingest B: %v", err)
+	}
+	if res.Written != 0 {
+		t.Fatalf("Written = %d, want 0 (all dropped)", res.Written)
+	}
+	if lessonsExists(dir) {
+		t.Error("prior lessons.json survived an ingest whose entries were all dropped")
+	}
+}
+
 // TestIngestLessonsSanitisesProse neutralises comment markers, ANSI escapes and
 // newlines in the written prose so it cannot forge a marker or break its line.
 func TestIngestLessonsSanitisesProse(t *testing.T) {

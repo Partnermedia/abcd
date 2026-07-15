@@ -21,6 +21,12 @@ import (
 // the batch. Output ordering is deterministic (lessons sorted by id), so a
 // re-ingest of the same payload writes byte-identical files.
 //
+// Each ingest FULLY REPLACES layer 3: the prior graveyard/lessons.json and
+// graveyard/low-confidence/ are cleared before the current survivors are written,
+// so re-ingesting is the current interpretation, not an accretion of every past
+// run — a lesson promoted low->high leaves no stale low-confidence file, and a
+// lesson dropped from a later payload does not persist.
+//
 // The written lessons files are DELIBERATELY NOT part of manifest_sha256. That
 // hash is pinned at pack time (adr-35) over the deterministic layer-1/2
 // extraction and the rest of the lifeboat; it is the integrity seal
@@ -100,7 +106,6 @@ func IngestLessons(lifeboatDir string, raw []byte) (LessonsResult, error) {
 			drop("duplicate lesson id")
 			continue
 		}
-		seen[in.ID] = true // first-wins dedup on a well-formed id
 		if in.Confidence != ConfidenceHigh && in.Confidence != ConfidenceMedium && in.Confidence != ConfidenceLow {
 			drop("unknown confidence")
 			continue
@@ -115,6 +120,11 @@ func IngestLessons(lifeboatDir string, raw []byte) (LessonsResult, error) {
 			drop("empty lesson prose")
 			continue
 		}
+		// First-wins dedup marks the id seen only once the entry SURVIVES every
+		// per-entry check. Marking earlier would let a dropped first occurrence
+		// poison the id, so a later fully-citable duplicate is refused as a
+		// "duplicate" of an entry that was never written.
+		seen[in.ID] = true
 		l := Lesson{ID: in.ID, Lesson: clean, Confidence: in.Confidence, Evidence: refs}
 		if in.Confidence == ConfidenceLow {
 			lowLessons = append(lowLessons, l)
@@ -131,6 +141,15 @@ func IngestLessons(lifeboatDir string, raw []byte) (LessonsResult, error) {
 		return LessonsResult{}, err
 	}
 	defer root.Close()
+
+	// Each ingest is a FULL REPLACEMENT of layer 3: clear the prior interpretation
+	// before writing the current survivors, so a lesson promoted low->high leaves
+	// no stale low-confidence/<id>.json and a lesson dropped from a later payload
+	// does not persist. Removal runs through the contained os.Root; a missing
+	// path is not an error.
+	if err := clearLayer3(root); err != nil {
+		return LessonsResult{}, err
+	}
 
 	if len(mainLessons) > 0 {
 		sort.Slice(mainLessons, func(i, j int) bool { return mainLessons[i].ID < mainLessons[j].ID })
@@ -205,6 +224,25 @@ func readGraveyardFile[T any](abs, rel string) (T, error) {
 		return zero, fmt.Errorf("graveyard: %s is not valid JSON: %w", rel, err)
 	}
 	return v, nil
+}
+
+// clearLayer3 removes the prior layer-3 interpretation through the containment
+// root — graveyard/lessons.json and the whole graveyard/low-confidence/ directory
+// — so a re-ingest is a full replacement rather than an accreting merge. Removing
+// a path that does not exist is not an error (os.Root.RemoveAll matches
+// os.RemoveAll here). The low-confidence directory is recreated by
+// writeIntoLifeboat's contained MkdirAll when the current payload has survivors
+// routed to it.
+func clearLayer3(root *os.Root) error {
+	for _, rel := range []string{
+		path.Join("graveyard", "lessons.json"),
+		path.Join("graveyard", "low-confidence"),
+	} {
+		if err := root.RemoveAll(rel); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeIntoLifeboat durably writes data at the relative target inside the

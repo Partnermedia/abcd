@@ -70,6 +70,9 @@ that cites nothing (or only dead refs) is **dropped** — reported in the result
 never fatal. Surviving lessons are written to `graveyard/lessons.json`, sorted by
 id. A lesson marked `confidence: "low"` is routed to
 `graveyard/low-confidence/<id>.json` instead, kept apart from the confident set.
+Re-ingesting **replaces** the prior interpretation: each run rewrites layer 3
+from the current payload's survivors, so a lesson promoted low→high or dropped
+from a later payload leaves nothing stale behind.
 
 Report the result to the user: `written` (into `lessons.json`), `low_confidence`
 (routed aside), and `dropped` (with the reason for each). The verb **exits 0 even

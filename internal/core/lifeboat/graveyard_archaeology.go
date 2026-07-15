@@ -113,7 +113,11 @@ func gvUnmergedBranches(ctx *SourceContext) []Finding {
 		baseTime int64
 	}
 	var branches []branch
-	for _, name := range ctx.GitLines("branch", "--format=%(refname:short)", "--no-merged", db) {
+	// Bound the branches probed BEFORE the per-branch fan-out (merge-base +
+	// rev-list + log, three execs each). The list arrives refname-sorted and
+	// deterministic, so truncating it keeps a stable, reproducible subset.
+	probe := boundProbeList(ctx.GitLines("branch", "--format=%(refname:short)", "--no-merged", db), maxGraveyardFindingsPerSignal)
+	for _, name := range probe {
 		name = strings.TrimSpace(name)
 		if name == "" || name == db {
 			continue
@@ -160,13 +164,30 @@ func gvUnmergedBranches(ctx *SourceContext) []Finding {
 // a deleted-then-re-added live file is never falsely reported. Sorted by path
 // (gitDeletedPaths is already sorted and deduped).
 func gvDeletedPaths(ctx *SourceContext) []Finding {
+	candidates := gitDeletedPaths(ctx)
+	// Defence in depth: bound the candidate set before iterating, so a hostile
+	// history with hundreds of thousands of deleted paths cannot make the loop
+	// (or its findings) balloon. gitDeletedPaths is already sorted, so the bound
+	// keeps the alphabetically-first paths deterministically.
+	candidates = boundProbeList(candidates, maxGraveyardCandidatePaths)
+
+	// One walk yields the per-path commit-touch counts for the WHOLE history, and
+	// one listing yields the HEAD tracked-file set — so the whole signal costs a
+	// constant number of git execs regardless of how many paths were deleted (the
+	// old code fanned out one `git log -- <p>` and one `cat-file -e` per path).
+	counts := gvPathTouchCounts(ctx)
+	tracked := map[string]bool{}
+	for _, p := range ctx.GitLines("ls-files") {
+		tracked[p] = true
+	}
+
 	var out []Finding
-	for _, p := range gitDeletedPaths(ctx) {
-		n := len(ctx.GitLines("log", "--format=%h", "--", p))
+	for _, p := range candidates {
+		n := counts[p]
 		if n < substantialHistoryCommits {
 			continue
 		}
-		if pathAtHead(ctx, p) {
+		if tracked[p] {
 			continue
 		}
 		out = append(out, Finding{
@@ -179,11 +200,17 @@ func gvDeletedPaths(ctx *SourceContext) []Finding {
 	return capSignalFindings(out)
 }
 
-// pathAtHead reports whether a repo-relative path exists at HEAD, via
-// `git cat-file -e HEAD:<p>` (which fails when the path is absent).
-func pathAtHead(ctx *SourceContext, p string) bool {
-	_, err := ctx.Git("cat-file", "-e", "HEAD:"+p)
-	return err == nil
+// gvPathTouchCounts returns, for every path named across HEAD's history, the
+// number of commits that touched it — derived in ONE git walk. `git log
+// --name-only` with an empty format emits each changed path once per (non-merge)
+// commit; counting occurrences reproduces the old per-path `git log -- <p>` count
+// for the linear histories the graveyard reasons over, without a per-path exec.
+func gvPathTouchCounts(ctx *SourceContext) map[string]int {
+	counts := map[string]int{}
+	for _, p := range ctx.GitLines("log", "--name-only", "--format=") {
+		counts[p]++
+	}
+	return counts
 }
 
 // gvRemovedDependencies reports manifests that carried a dependency (or a whole
@@ -246,6 +273,19 @@ func gvRemovedDependencies(ctx *SourceContext) []Finding {
 // is taken as that line's dependency token.
 var depTokenRe = regexp.MustCompile(`[A-Za-z0-9._/@-]+`)
 
+// goModRequireDirectives are the go.mod directive keywords whose SECOND token is
+// the dependency (module) path. When a line leads with one of these AND a second
+// identifier follows, depTokens takes the second token, so the single-line form
+// `require github.com/x/y v1` and the block form (an indented `github.com/x/y v1`
+// line) yield the SAME token. Without this, `go mod edit -fmt`/tidy collapsing a
+// one-dependency block into a single line would fabricate a removed dependency.
+// module and go are deliberately excluded: their second token is the module's own
+// name or a version, not a dependency, and taking it would invent false removals
+// on a rename or a go-version bump.
+var goModRequireDirectives = map[string]bool{
+	"require": true, "exclude": true, "replace": true, "retract": true,
+}
+
 // depTokens extracts a conservative set of dependency-ish tokens from a manifest:
 // the first identifier-ish token of each non-blank, non-comment, non-bracket
 // line. It over-includes structural keys (which cancel in the earliest-vs-HEAD
@@ -268,9 +308,19 @@ func depTokens(data []byte) map[string]bool {
 		case '{', '}', '[', ']', '(', ')', '<', '>':
 			continue
 		}
-		if tok := depTokenRe.FindString(line); tok != "" {
-			toks[tok] = true
+		matches := depTokenRe.FindAllString(line, 2)
+		if len(matches) == 0 {
+			continue
 		}
+		tok := matches[0]
+		if goModRequireDirectives[tok] {
+			if len(matches) < 2 {
+				// A bare directive line (e.g. `require (`) names no dependency.
+				continue
+			}
+			tok = matches[1]
+		}
+		toks[tok] = true
 	}
 	return toks
 }
@@ -294,9 +344,16 @@ func gvRewrites(ctx *SourceContext) []Finding {
 	var out []Finding
 	var curSHA, curSubject string
 	curFiles := 0
+	curHasParent := false
 	have := false
 	flush := func() {
 		if !have {
+			return
+		}
+		// The parentless root commit diffs against the empty tree, so its shortstat
+		// counts the whole initial import — a "rewrite" of nothing. Skip it: a
+		// wholesale rewrite is only meaningful against something it replaced.
+		if !curHasParent {
 			return
 		}
 		if curFiles >= wholesaleRewriteMinFiles && float64(curFiles) >= wholesaleRewriteTreeFraction*float64(size) {
@@ -311,12 +368,19 @@ func gvRewrites(ctx *SourceContext) []Finding {
 			})
 		}
 	}
-	for _, line := range ctx.GitLines("log", "--no-merges", "--format=%H%x00%s", "--shortstat") {
-		if i := strings.IndexByte(line, 0); i >= 0 {
-			// A commit header. Flush the previous commit (whose file count may still
-			// be 0 — an empty commit emits no shortstat line) before starting this one.
+	for _, line := range ctx.GitLines("log", "--no-merges", "--format=%H%x00%P%x00%s", "--shortstat") {
+		if strings.IndexByte(line, 0) >= 0 {
+			// A commit header (SHA \0 parents \0 subject). Flush the previous commit
+			// (whose file count may still be 0 — an empty commit emits no shortstat
+			// line) before starting this one. An empty parents field marks the root.
 			flush()
-			curSHA, curSubject = line[:i], line[i+1:]
+			parts := strings.SplitN(line, "\x00", 3)
+			curSHA = parts[0]
+			curHasParent = len(parts) > 1 && strings.TrimSpace(parts[1]) != ""
+			curSubject = ""
+			if len(parts) > 2 {
+				curSubject = parts[2]
+			}
 			curFiles = 0
 			have = true
 			continue
@@ -342,6 +406,19 @@ func shortstatFiles(line string) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// boundProbeList truncates a deterministically-ordered probe list to at most n
+// entries BEFORE a per-entry git fan-out, so a hostile repo cannot turn one probe
+// into an unbounded number of git execs. It preserves order and leaves a list
+// already within the bound (or a non-positive bound treated as "no truncation
+// needed") untouched. A pure helper so the bound is unit-testable without a
+// fixture of hundreds of branches or paths.
+func boundProbeList(names []string, n int) []string {
+	if n >= 0 && len(names) > n {
+		return names[:n]
+	}
+	return names
 }
 
 // capSignalFindings bounds one signal's findings at maxGraveyardFindingsPerSignal

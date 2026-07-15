@@ -129,9 +129,10 @@ called out in a **Breaking** section.
   fatal), low-confidence lessons are quarantined under
   `graveyard/low-confidence/` instead of the main file, and the untrusted
   payload is read behind the same trust guards as an intent verdict (size cap,
-  no symlinks, unknown fields refused, schema version gated). The validator —
-  not the model's good intentions — is the difference between a graveyard and a
-  séance (itd-88, adr-35).
+  no symlinks, unknown fields refused, schema version gated). Each ingest fully
+  replaces the prior interpretation, so a promoted or later-dropped lesson
+  leaves nothing stale behind. The validator — not the model's good intentions
+  — is the difference between a graveyard and a séance (itd-88, adr-35).
 
 - **`abcd disembark probe <repo>` — a read-only coverage probe over any
   repository.** It walks a repo without touching it and reports, per brief
