@@ -35,7 +35,7 @@ func main() {
 
 	cfg, err := lint.LoadConfig(cfgPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "record-lint: load config:", err)
+		fmt.Fprintln(os.Stderr, "record-lint: load config:", scrubPaths(err, root))
 		os.Exit(2)
 	}
 
@@ -48,7 +48,7 @@ func main() {
 
 	findings, err := lint.Lint(cfg, root)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "record-lint:", err)
+		fmt.Fprintln(os.Stderr, "record-lint:", scrubPaths(err, root))
 		os.Exit(2)
 	}
 
@@ -64,6 +64,26 @@ func main() {
 	if blockers > 0 {
 		os.Exit(1)
 	}
+}
+
+// scrubPaths strips absolute filesystem paths — the repo root and the caller's
+// home — out of an error message so record-lint's machine output never leaks a
+// developer identity or local layout into CI logs. lint.LoadConfig returns an
+// *os.PathError carrying the absolute config path; without this, that path
+// (whose base segment is often the username) would print verbatim (iss-29: no
+// absolute path in machine output).
+func scrubPaths(err error, root string) string {
+	msg := err.Error()
+	sep := string(os.PathSeparator)
+	if len(root) > 1 && filepath.IsAbs(root) {
+		msg = strings.ReplaceAll(msg, root+sep, "")
+		msg = strings.ReplaceAll(msg, root, ".")
+	}
+	if home, e := os.UserHomeDir(); e == nil && len(home) > 1 {
+		msg = strings.ReplaceAll(msg, home+sep, "~"+sep)
+		msg = strings.ReplaceAll(msg, home, "~")
+	}
+	return msg
 }
 
 // multiFlag collects a repeatable string flag (each --require-gate appends).
