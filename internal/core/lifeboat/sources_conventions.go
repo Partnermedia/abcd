@@ -295,12 +295,19 @@ type convManifestLock struct {
 }
 
 // convManifestLocks are the recognised manifest/lock pairs, in a fixed order so
-// the first match is deterministic.
+// the first match is deterministic. It spans the ecosystems the probe is likely
+// to meet — Go, Node, Rust, Python (pip/poetry/pdm/uv/pipenv), Ruby, and PHP —
+// so a real project is not reported as having no dependencies merely because the
+// probe did not know its packaging tool.
 var convManifestLocks = []convManifestLock{
 	{"go.mod", []string{"go.sum"}},
 	{"package.json", []string{"package-lock.json", "yarn.lock", "pnpm-lock.yaml"}},
 	{"Cargo.toml", []string{"Cargo.lock"}},
+	{"pyproject.toml", []string{"uv.lock", "poetry.lock", "pdm.lock"}},
+	{"Pipfile", []string{"Pipfile.lock"}},
 	{"requirements.txt", []string{"requirements.txt"}}, // pinned requirements is its own lock
+	{"Gemfile", []string{"Gemfile.lock"}},
+	{"composer.json", []string{"composer.lock"}},
 }
 
 // convDependenciesSource grounds "constraints/dependencies" from a manifest and
@@ -348,7 +355,7 @@ func (convDependenciesSource) Probe(ctx *SourceContext) Evidence {
 		}
 	}
 	return blank(
-		[]string{"dependency manifest + lockfile (go.mod/go.sum, package.json/package-lock.json, Cargo.toml/Cargo.lock, requirements.txt)"},
+		[]string{"dependency manifest + lockfile (go.mod, package.json, Cargo.toml, pyproject.toml, Pipfile, requirements.txt, Gemfile, composer.json)"},
 		"What does this project depend on? No dependency manifest found.",
 	)
 }

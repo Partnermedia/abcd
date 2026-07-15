@@ -25,7 +25,8 @@ func gitSources() []Source {
 // gitManifestFiles are the dependency manifests whose add/remove churn Tier-0
 // can read from history. Kept sorted so the churn citation is deterministic.
 var gitManifestFiles = []string{
-	"Cargo.toml", "Gemfile", "go.mod", "package.json", "requirements.txt",
+	"Cargo.toml", "Gemfile", "Pipfile", "composer.json", "go.mod",
+	"package.json", "pyproject.toml", "requirements.txt",
 }
 
 // gitReverts returns the subjects of reverting commits in HEAD's history, in

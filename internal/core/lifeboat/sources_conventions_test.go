@@ -116,6 +116,35 @@ func TestConvDependenciesGroundsFromPair(t *testing.T) {
 	}
 }
 
+// TestConvDependenciesGroundsFromPythonManifest is the fix for the manifest
+// under-detection the M2 cross-repo probe exposed: a real Python project
+// (pyproject.toml + uv.lock) was reported blank because the adapter only knew
+// Go/Node/Rust/pip. It must now ground, citing both files.
+func TestConvDependenciesGroundsFromPythonManifest(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"pyproject.toml": "[project]\nname = \"x\"\ndependencies = [\"requests\"]\n",
+		"uv.lock":        "version = 1\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "constraints/dependencies").Probe(ctx)
+	if ev.Status != StatusGrounded {
+		t.Fatalf("python deps status = %s, want grounded", ev.Status)
+	}
+	if !containsSource(ev.Sources, "pyproject.toml") || !containsSource(ev.Sources, "uv.lock") {
+		t.Errorf("python deps evidence = %v, want pyproject.toml and uv.lock", ev.Sources)
+	}
+}
+
 // TestConvADRsGroundFromDocsAdr confirms ADRs under docs/adr ground "docs/adrs"
 // and the citation lists the ADR file.
 func TestConvADRsGroundFromDocsAdr(t *testing.T) {

@@ -29,7 +29,10 @@ called out in a **Breaking** section.
   the delta between a record-rich repo and a git-only one is what keeping a
   record is worth, legible as a number. Both are read-only operator verbs (no
   `/abcd:disembark` command surface yet); the packer that writes a lifeboat is a
-  later milestone (itd-88, adr-35).
+  later milestone (itd-88, adr-35). The dependency-manifest detector spans Go,
+  Node, Rust, Python (pip/poetry/pdm/uv/pipenv), Ruby, and PHP, so a real project
+  is not reported as having no dependencies merely because the probe did not know
+  its packaging tool (found probing a Python/uv repo in the M2 cross-repo run).
 
 - **Session transcripts are captured automatically when a session ends.** A
   `SessionEnd` hook now runs `abcd hook session-end`, which redacts the session
