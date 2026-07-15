@@ -355,7 +355,10 @@ func parseFlowMap(text string) (map[string]any, error) {
 		if cp < 0 {
 			return nil, yamlErrf("missing ':' in flow-map pair: %q", pair)
 		}
-		k := strings.TrimSpace(pair[:cp])
+		k, err := parseMapKey(strings.TrimSpace(pair[:cp]))
+		if err != nil {
+			return nil, err
+		}
 		v := strings.TrimSpace(pair[cp+1:])
 		if strings.HasPrefix(v, "{") || strings.HasPrefix(v, "[") {
 			return nil, yamlErrf("deeper inline nesting not supported for key %q", k)
@@ -433,10 +436,44 @@ func splitFlowSequence(inner string) ([]string, error) {
 	return tokens, nil
 }
 
+// parseMapKey resolves a flow-map key token to its string value, unquoting a
+// double- or single-quoted key so it round-trips with dumpFlowMap (which quotes
+// keys carrying YAML metacharacters). A bare key is returned verbatim — keys are
+// not run through parseScalar, so a bare "true"/"123" stays a string key.
+func parseMapKey(text string) (string, error) {
+	if text == "" {
+		return "", yamlErrf("empty flow-map key")
+	}
+	if text[0] == '"' {
+		if len(text) < 2 || text[len(text)-1] != '"' {
+			return "", yamlErrf("unterminated double-quoted key: %q", text)
+		}
+		return unescapeDoubleQuoted(text[1 : len(text)-1])
+	}
+	if text[0] == '\'' {
+		if len(text) < 2 || text[len(text)-1] != '\'' {
+			return "", yamlErrf("unterminated single-quoted key: %q", text)
+		}
+		return strings.ReplaceAll(text[1:len(text)-1], "''", "'"), nil
+	}
+	return text, nil
+}
+
 func findUnquotedColon(text string) int {
-	inSingle, inDouble := false, false
+	inSingle, inDouble, escapeNext := false, false, false
 	for i := 0; i < len(text); i++ {
 		ch := text[i]
+		// Honour backslash escapes inside a double-quoted key exactly as
+		// splitFlowSequence does — otherwise an escaped quote (\") in a quoted key
+		// mis-toggles the in-string state and the real key/value colon is missed.
+		if escapeNext {
+			escapeNext = false
+			continue
+		}
+		if ch == '\\' && inDouble {
+			escapeNext = true
+			continue
+		}
 		switch {
 		case ch == '\'' && !inDouble:
 			inSingle = !inSingle
@@ -647,6 +684,21 @@ func frontmatterKeyLine(text, key string) int {
 
 var needsQuoteChars = ":#[]{}&*!|>'\"%@`,"
 
+// bareBlockKeyRe matches a map key the block-level parsers (splitKeyValue's keyRe,
+// collectNestedDict) can round-trip when emitted verbatim: an identifier, no YAML
+// metacharacters. A distiller-supplied key that fails this cannot be represented
+// as a bare block key, so the dumper rejects it (fail closed) rather than emit a
+// line that re-parses to a different key or breaks the read entirely.
+var bareBlockKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+// checkBlockKey rejects a block-level map key that is not round-trip-safe.
+func checkBlockKey(k string) error {
+	if !bareBlockKeyRe.MatchString(k) {
+		return yamlErrf("map key %q is not a valid frontmatter key (identifier chars only)", k)
+	}
+	return nil
+}
+
 // dumpFrontmatter serialises fm to a deterministic block-style YAML region (no
 // --- delimiters, trailing \n). Keys are sorted so output is stable regardless
 // of Go map iteration order. Round-trips through parseFrontmatter.
@@ -668,6 +720,9 @@ func dumpFrontmatter(fm map[string]any) (string, error) {
 }
 
 func dumpValueLines(key string, value any) ([]string, error) {
+	if err := checkBlockKey(key); err != nil {
+		return nil, err
+	}
 	switch v := value.(type) {
 	case []any:
 		if len(v) == 0 {
@@ -718,6 +773,9 @@ func dumpValueLines(key string, value any) ([]string, error) {
 }
 
 func dumpNestedPairLines(parentKey, k string, v any) ([]string, error) {
+	if err := checkBlockKey(k); err != nil {
+		return nil, err
+	}
 	switch val := v.(type) {
 	case map[string]any:
 		if len(val) == 0 {
@@ -761,6 +819,9 @@ func dumpNestedPairLines(parentKey, k string, v any) ([]string, error) {
 			}
 			lines = append(lines, "    -")
 			for _, ik := range sortedKeys(m) {
+				if err := checkBlockKey(ik); err != nil {
+					return nil, err
+				}
 				iv := m[ik]
 				switch inner := iv.(type) {
 				case map[string]any:
@@ -817,7 +878,11 @@ func dumpFlowMap(d map[string]any) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, k+": "+s)
+		// Quote the KEY through the same path as the value: a citation key that
+		// carries a YAML metacharacter (":", ",", "}", newline) would otherwise
+		// re-parse to a different key or break the read. parseFlowMap unquotes it
+		// on the way back, so the round-trip holds.
+		parts = append(parts, dumpString(k)+": "+s)
 	}
 	return "{ " + strings.Join(parts, ", ") + " }", nil
 }

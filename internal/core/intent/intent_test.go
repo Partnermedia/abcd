@@ -571,3 +571,45 @@ func TestFullCycle(t *testing.T) {
 		t.Fatalf("second reconcile must be idempotent: %v", err)
 	}
 }
+
+// TestSetFrontmatterFieldsToleratesDelimiterTrailingSpace (B10) proves the writer
+// agrees with frontmatter.Fields on delimiter tolerance: a closing delimiter that
+// carries a trailing space ("--- ") — a shape the reader accepts — must still be
+// found as the close, so absent keys are inserted INSIDE the frontmatter block and
+// never into the body (where a "---" horizontal rule would otherwise be mistaken
+// for the close and a body line spelled like a key silently rewritten).
+func TestSetFrontmatterFieldsToleratesDelimiterTrailingSpace(t *testing.T) {
+	content := strings.Join([]string{
+		"--- ", // opening delimiter with a trailing space
+		"id: itd-9",
+		"--- ",   // closing delimiter with a trailing space (reader-valid)
+		"# Body", // body
+		"prose above and below a horizontal rule",
+		"---", // a markdown thematic break in the body
+		"kind: not-a-field",
+	}, "\n")
+
+	out, err := setFrontmatterFields(content, map[string]string{
+		"kind":    "standalone",
+		"spec_id": "spc-1",
+	})
+	if err != nil {
+		t.Fatalf("setFrontmatterFields: %v", err)
+	}
+
+	// The reader must now see the inserted keys as real frontmatter fields.
+	fields := frontmatter.Fields(strings.Split(out, "\n"))
+	if got := fields["kind"]; got.Value != "standalone" {
+		t.Fatalf("kind must land in the frontmatter block, got %+v\n---\n%s", got, out)
+	}
+	if got := fields["spec_id"]; got.Value != "spc-1" {
+		t.Fatalf("spec_id must land in the frontmatter block, got %+v\n---\n%s", got, out)
+	}
+	// The keys must be inserted before the real (trailing-space) closing delimiter,
+	// not after the body's horizontal rule.
+	kindIdx := strings.Index(out, "kind: standalone")
+	closeIdx := strings.Index(out, "--- \n# Body")
+	if kindIdx < 0 || closeIdx < 0 || kindIdx > closeIdx {
+		t.Fatalf("inserted keys must precede the closing delimiter, not enter the body\n---\n%s", out)
+	}
+}

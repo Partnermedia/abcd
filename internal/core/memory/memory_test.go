@@ -76,6 +76,52 @@ func TestYAMLRoundTripSourceBlocks(t *testing.T) {
 	}
 }
 
+// TestYAMLFlowMapKeyRoundTrip (B06) proves distiller-controlled citation keys
+// carrying YAML metacharacters survive the dump->parse round trip: the dumper
+// quotes the key and parseFlowMap unquotes it, so a key with a colon, comma, or
+// brace neither silently mutates the map nor breaks the read (the previous verbatim
+// emission produced "missing ':' in flow-map pair" / "unexpected closing bracket").
+func TestYAMLFlowMapKeyRoundTrip(t *testing.T) {
+	for _, key := range []string{"injected: pwned", "a, b", "x}", "with\nnewline", "quote\"d"} {
+		in := map[string]any{
+			"source": map[string]any{
+				"class":       "external_pdf",
+				"citation":    map[string]any{key: "v", "title": "ok"},
+				"licence":     "MIT",
+				"source_hash": strings.Repeat("a", 64),
+				"ingested_at": "2026-07-06",
+			},
+			"topic_hash": strings.Repeat("b", 64),
+		}
+		region, err := dumpFrontmatter(in)
+		if err != nil {
+			t.Fatalf("key %q dump: %v", key, err)
+		}
+		out, err := parseFrontmatter("---\n" + region + "---\n")
+		if err != nil {
+			t.Fatalf("key %q parse (round-trip broken): %v\n%s", key, err, region)
+		}
+		cit := out["source"].(map[string]any)["citation"].(map[string]any)
+		if got, ok := cit[key]; !ok || got != "v" {
+			t.Fatalf("key %q not preserved: got %+v\n%s", key, cit, region)
+		}
+	}
+}
+
+// TestYAMLBlockKeyRejected (B06) proves a nested block-level map key that cannot be
+// represented as a bare identifier is rejected (fail closed) rather than emitted
+// verbatim and silently corrupted on read-back.
+func TestYAMLBlockKeyRejected(t *testing.T) {
+	in := map[string]any{
+		"source": map[string]any{
+			"bad: key": "v",
+		},
+	}
+	if _, err := dumpFrontmatter(in); err == nil {
+		t.Fatal("a block-level key with a metacharacter must be rejected, got no error")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Ingest -> Ask -> re-ingest
 // ---------------------------------------------------------------------------

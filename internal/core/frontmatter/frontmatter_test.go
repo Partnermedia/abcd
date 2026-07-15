@@ -90,3 +90,21 @@ func TestFieldsToleratesDelimiterTrailingSpace(t *testing.T) {
 		t.Fatal("a body line after a trailing-whitespace closing delimiter must not leak in as a field")
 	}
 }
+
+// TestFieldsUnclosedBlockYieldsNoFields (B42) proves that a leading `---` with no
+// closing `---` is treated as no frontmatter: the block is the region between the
+// FIRST TWO delimiters, so without a close there is no block, and column-0 body
+// prose (e.g. a thematic-break document, or a "----" fat-fingered close) must not
+// be harvested as top-level fields.
+func TestFieldsUnclosedBlockYieldsNoFields(t *testing.T) {
+	lines := []string{"---", "id: x", "body prose", "status: retired"}
+	if got := Fields(lines); len(got) != 0 {
+		t.Fatalf("unclosed block must yield no fields, got %+v", got)
+	}
+	// A "----" typo does not close the block (it does not trim to "---"), so the
+	// same rule applies.
+	typo := []string{"---", "id: x", "----", "status: retired"}
+	if got := Fields(typo); len(got) != 0 {
+		t.Fatalf(`a "----" close is not a delimiter; block stays unclosed, got %+v`, got)
+	}
+}
