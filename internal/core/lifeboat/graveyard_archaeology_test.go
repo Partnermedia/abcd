@@ -575,6 +575,12 @@ func TestArchRevertCapTruncates(t *testing.T) {
 	for i := 0; i < maxGraveyardFindingsPerSignal+2; i++ {
 		r.commit(fmt.Sprintf("Revert \"experiment %d\"", i))
 	}
+	// Settle the freshly-built object store before probing. On the ubuntu CI
+	// runner, probing a repo milliseconds after ~500 rapid commits transiently
+	// failed every git read with exit 128 (the run/stderr improvement in
+	// gitutil now surfaces the reason if it ever recurs); packing the loose
+	// objects removes that contention class deterministically.
+	r.git("gc", "--quiet")
 
 	a := gvArch(t, r.dir)
 	rev := bySignal(a, SignalRevert)
