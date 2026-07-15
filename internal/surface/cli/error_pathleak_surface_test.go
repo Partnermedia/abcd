@@ -135,6 +135,22 @@ func TestScrubPaths(t *testing.T) {
 			wantPresent: []string{".abcd", "history: store unreadable"},
 		},
 		{
+			// B39: a message naming exactly $HOME with no trailing separator must
+			// still be redacted — its base segment is the username.
+			name:        "fmt-embedded bare home path",
+			err:         fmt.Errorf("cannot access %s (permission denied)", home),
+			wantAbsent:  home,
+			wantPresent: []string{"cannot access", "~"},
+		},
+		{
+			// B39: a PathError whose Path IS exactly $HOME must not fall back to
+			// filepath.Base(home) == the username.
+			name:        "PathError equal to home",
+			err:         &os.PathError{Op: "open", Path: home, Err: fs.ErrPermission},
+			wantAbsent:  home,
+			wantPresent: []string{"open", "~"},
+		},
+		{
 			name:        "bare PathError",
 			err:         &os.PathError{Op: "open", Path: abs, Err: fs.ErrNotExist},
 			wantAbsent:  abs,

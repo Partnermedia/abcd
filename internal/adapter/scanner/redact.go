@@ -23,21 +23,22 @@ func (s *Scanner) ScanText(text, logicalName string) []Finding {
 // place (it reuses the same maskSecret fingerprint and the same per-line
 // strings.ReplaceAll approach as Finding.MarshalJSON).
 //
-// Every occurrence of a finding's raw Matched token on its line is replaced —
-// masked to a non-reversible fingerprint for secret tokens, and to a neutral
-// placeholder for identity kinds (a self home path collapses to "~"). Because
-// replacement is by exact substring, a length-changing rewrite (a home path to
-// "~") is safe. Redact is only stage one; the caller MUST re-scan the result
-// and fail closed if any hard_fail span survived.
+// Secret tokens are masked to a non-reversible fingerprint by AUTHORITATIVE BYTE
+// SPAN (reusing sealLine), and identity kinds to a neutral placeholder (a self
+// home path collapses to "~"). Byte-span masking is what makes two PARTIALLY
+// overlapping secret spans safe: substring replacement, longest-first, used to
+// let the wider match consume the narrower one's leading bytes so the narrower
+// ReplaceAll found nothing and its raw tail survived — sealLine instead forces
+// every overlap byte to '*'. Identity placeholders keep the substring rewrite
+// (they are length-changing) and run AFTER the secrets are sealed, when no raw
+// secret bytes remain to be shifted. Redact is only stage one; the caller MUST
+// re-scan the result and fail closed if any hard_fail span survived.
 func Redact(text string, findings []Finding) (string, int) {
 	if len(findings) == 0 {
 		return text, 0
 	}
 	lines := strings.Split(text, "\n")
 
-	// Group by 1-based line, then apply longest-match-first so a token that is
-	// a substring of a wider match (a username inside a home path) never
-	// pre-empts the wider rewrite.
 	byLine := map[int][]Finding{}
 	for _, f := range findings {
 		byLine[f.Line] = append(byLine[f.Line], f)
@@ -48,22 +49,56 @@ func Redact(text string, findings []Finding) (string, int) {
 		if idx < 0 || idx >= len(lines) {
 			continue
 		}
-		sortByMatchedLenDesc(fs)
-		line := lines[idx]
-		for _, f := range fs {
-			if f.Matched == "" {
-				continue
-			}
-			repl := redactionReplacement(f)
-			next := strings.ReplaceAll(line, f.Matched, repl)
-			if next != line {
-				rewritten++
-				line = next
-			}
-		}
+		line, n := redactLine(lines[idx], fs)
 		lines[idx] = line
+		rewritten += n
 	}
 	return strings.Join(lines, "\n"), rewritten
+}
+
+// redactLine masks every finding on one source line. Secret spans are sealed by
+// byte position (sealLine), so overlapping matches cannot leak a raw tail;
+// identity kinds get their readable placeholders by substring replacement,
+// longest-first, applied after the secret bytes are already masked.
+func redactLine(line string, fs []Finding) (string, int) {
+	var secretIdx []int
+	var identity []Finding
+	for i, f := range fs {
+		if f.Matched == "" {
+			continue
+		}
+		if isIdentityKind(f.Kind) {
+			identity = append(identity, f)
+		} else {
+			secretIdx = append(secretIdx, i)
+		}
+	}
+	changed := 0
+	if len(secretIdx) > 0 {
+		if sealed := sealLine(line, fs, secretIdx); sealed != line {
+			changed += len(secretIdx)
+			line = sealed
+		}
+	}
+	sortByMatchedLenDesc(identity)
+	for _, f := range identity {
+		repl := redactionReplacement(f)
+		if next := strings.ReplaceAll(line, f.Matched, repl); next != line {
+			changed++
+			line = next
+		}
+	}
+	return line, changed
+}
+
+// isIdentityKind reports whether a finding kind is a PII identity span (masked to
+// a readable placeholder) rather than a secret token (masked to a fingerprint).
+func isIdentityKind(kind string) bool {
+	switch kind {
+	case kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser:
+		return true
+	}
+	return false
 }
 
 // redactionReplacement maps a finding to the text that replaces its raw span.

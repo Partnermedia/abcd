@@ -123,6 +123,13 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	if err != nil {
 		return CaptureResult{}, fmt.Errorf("history: scanner init: %w", err)
 	}
+	// Fail closed on a degraded scanner. ScanText/Redact cannot signal the
+	// unavailable state in-band (only ScanBundle does), so without this guard a
+	// broken per-repo pii.json would silently redact with a weakened pattern set
+	// and still report the write as clean — the exact fail-open this store forbids.
+	if unavail, reason := sc.Unavailable(); unavail {
+		return CaptureResult{}, fmt.Errorf("history: refusing to capture with a degraded scanner: %s", reason)
+	}
 	text := string(raw)
 	findings := sc.ScanText(text, "transcript")
 	redacted, _ := scanner.Redact(text, findings)

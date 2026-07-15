@@ -1868,15 +1868,54 @@ func scrubPaths(err error) string {
 	return msg
 }
 
-// redactRoot replaces every occurrence of the absolute directory root (followed
-// by a path separator) in s with repl. The filesystem root ("/") and empty or
-// relative roots are skipped so a message is never mangled into meaninglessness.
+// redactRoot replaces every occurrence of the absolute directory root in s with
+// repl — both a path UNDER the root (root + separator + …) and the BARE root
+// itself when it sits at a right boundary (end of string or a non-path
+// character). The bare-root case matters because a PathError or message that
+// names exactly $HOME (e.g. "cannot access /Users/alex") would otherwise leak the
+// developer identity — its base segment IS the username. The filesystem root
+// ("/") and empty or relative roots are skipped so a message is never mangled.
 func redactRoot(s, root, repl string) string {
 	if len(root) <= 1 || !filepath.IsAbs(root) {
 		return s
 	}
 	sep := string(os.PathSeparator)
-	return strings.ReplaceAll(s, root+sep, repl+sep)
+	s = strings.ReplaceAll(s, root+sep, repl+sep)
+	return replaceBareRoot(s, root, repl)
+}
+
+// replaceBareRoot replaces occurrences of root that end at a path boundary (end
+// of string or a character that cannot continue a path segment), leaving a longer
+// path that merely shares this prefix untouched.
+func replaceBareRoot(s, root, repl string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, root)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		after := i + len(root)
+		b.WriteString(s[:i])
+		if after >= len(s) || isPathBoundary(s[after]) {
+			b.WriteString(repl)
+		} else {
+			b.WriteString(root)
+		}
+		s = s[after:]
+	}
+}
+
+// isPathBoundary reports whether c cannot be part of a path segment, so a root
+// immediately followed by c is a whole path rather than a prefix of a longer one.
+func isPathBoundary(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return false
+	case c == '/' || c == '.' || c == '-' || c == '_':
+		return false
+	}
+	return true
 }
 
 // embeddedPaths collects the filesystem paths carried by os.PathError/os.LinkError

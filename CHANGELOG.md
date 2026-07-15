@@ -10,6 +10,50 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Security
+
+- **The secret scanner now detects GitHub fine-grained PATs (`github_pat_…`) and
+  PEM private-key headers.** Neither was in the bundled pattern set, so a
+  current-generation GitHub token (GitHub's default since 2022) or a committed
+  private key passed both the `abcd launch` ship gate and the history-transcript
+  sanitiser unflagged.
+- **Write-time transcript redaction no longer leaks raw secret bytes from
+  overlapping matches.** `scanner.Redact` masked by longest-first substring
+  replacement, so two partially-overlapping secret spans (e.g. an `sk-ant-` key
+  running into a JWT) left the shorter token's tail verbatim, and the fail-closed
+  re-scan could not catch the now-truncated remainder. Redaction is now by
+  authoritative byte span (overlap bytes forced to `*`), matching the serializer.
+- **History capture fails closed when the per-repo `pii.json` is broken.**
+  `Scanner.ScanText`/`Redact` could not signal the degraded (`unavailable`) state
+  the way `ScanBundle` does, so a malformed config silently redacted transcripts
+  with a weakened pattern set and still reported success. A new `Unavailable()`
+  accessor is now consulted before capture.
+- **A per-repo config can no longer neuter a bundled detector by replacing its
+  regex.** The severity floor clamped an override's severity but not its regex, so
+  swapping a bundled pattern's regex for a never-match one disabled detection at
+  full `hard_fail` severity. Bundled regexes are now immutable (a config may only
+  raise severity / adjust label; new detection must use a new pattern name), and
+  the config merge is all-or-nothing.
+- **The launch bundle no longer ships denied namespaces or gitignored files
+  reached through a symlink.** A symlink to (or into) the repo root let a
+  dereferenced walk descend into `.git/**` and `.abcd/**`, and a symlink whose
+  target was gitignored shipped the ignored content under the symlink's benign
+  name. The structural deny is now re-applied to real paths at every level of a
+  dereferenced walk, and the ignore probe covers the symlink target.
+- **Command-error output no longer leaks a path equal to `$HOME` itself.** The
+  redactor only rewrote paths *under* a root, so a message or `PathError` naming
+  exactly the home directory slipped through — and its base segment is the
+  username. `record-lint` likewise printed raw `*os.PathError` config-load paths;
+  both now scrub the home/root prefix.
+
+### Fixed
+
+- **`abcd install` no longer deletes a user's `.gitignore` content after an
+  orphan `# BEGIN ABCD` fence.** An unbalanced BEGIN with no matching END made
+  the rewriter drop every line to end-of-file, taking the user's own ignore rules
+  with it. An unmatched BEGIN is now dropped alone; the content after it is
+  preserved (mirroring the stray-END policy).
+
 ### Added
 
 - **`abcd disembark probe <repo>` — a read-only coverage probe over any

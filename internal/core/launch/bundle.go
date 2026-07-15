@@ -243,6 +243,15 @@ func (r *resolver) classifyRegular(rel, abs string, info os.FileInfo, deref bool
 		r.result.Excluded = append(r.result.Excluded, ExcludedFile{LogicalPath: rel, Reason: ExcludedDeniedNamespace})
 		return
 	}
+	// For a dereferenced candidate the LOGICAL path is benign but the real target
+	// may sit under a denied namespace reached through a symlink chain the
+	// immediate-target check at handleSymlink could not see (e.g. a link to the
+	// repo root, then a nested walk into .git/objects — whose blobs the hardlink
+	// inode map deliberately exempts). Re-run the structural deny on the real path.
+	if deref && r.realPathDenied(abs) {
+		r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: rel, Reason: RejectedDeny})
+		return
+	}
 	if firstSegment(rel) == "scripts" && r.closure != nil {
 		if _, in := r.closure[rel]; !in {
 			if r.anyLiteralFileInclude(rel) && !scriptsDenied(rel) {
@@ -360,6 +369,16 @@ func (r *resolver) walkSymlinkTarget(logicalPrefix, realDir string, ancestors ma
 		case mode&os.ModeSymlink != 0:
 			r.handleSymlink(childLogical, childAbs, ancestors)
 		case mode.IsDir():
+			// Re-apply the structural deny on the REAL path at every level of a
+			// dereferenced walk, so a symlink to (or into) the repo root can never
+			// descend into .git/** or .abcd/** the way walkDir already prevents for
+			// in-tree directories.
+			if r.realPathDenied(childAbs) {
+				if r.includeMayReachDir(childLogical) {
+					r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: childLogical, Reason: RejectedDeny})
+				}
+				continue
+			}
 			r.walkSymlinkTarget(childLogical, childAbs, ancestors)
 		case mode.IsRegular():
 			r.classifyRegular(childLogical, childAbs, info, true)
@@ -367,13 +386,51 @@ func (r *resolver) walkSymlinkTarget(logicalPrefix, realDir string, ancestors ma
 	}
 }
 
+// realPathDenied reports whether a real (already-dereferenced) absolute path
+// resolves outside the repo root or under a denied namespace. It is the deny gate
+// for dereferenced walks, where the logical path is benign but the real target is
+// what actually ships. Fail-closed: an unresolvable relation counts as denied.
+func (r *resolver) realPathDenied(abs string) bool {
+	rel, err := filepath.Rel(r.root, abs)
+	if err != nil {
+		return true
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return true
+	}
+	_, denied := DenyNamespaces[firstSegment(rel)]
+	return denied
+}
+
 // finalize applies the batched ignore pass and duplicate resolution, promoting
 // surviving candidates to Included.
 func (r *resolver) finalize() {
-	// Batch the ignore probe over every survivor's logical path.
+	// Batch the ignore probe over every survivor's logical path AND, for a
+	// dereferenced candidate, the real target's repo-relative path — the target is
+	// the content that actually ships, so a gitignored file aliased by a benign
+	// symlink name must still be excluded.
+	resolvedRel := make(map[string]string, len(r.survivors))
 	paths := make([]string, 0, len(r.survivors))
+	seenPath := map[string]struct{}{}
+	addPath := func(p string) {
+		if _, ok := seenPath[p]; ok {
+			return
+		}
+		seenPath[p] = struct{}{}
+		paths = append(paths, p)
+	}
 	for _, c := range r.survivors {
-		paths = append(paths, c.logical)
+		addPath(c.logical)
+		if c.deref {
+			if rr, err := filepath.Rel(r.root, c.resolved); err == nil {
+				rr = filepath.ToSlash(rr)
+				if rr != ".." && !strings.HasPrefix(rr, "../") {
+					resolvedRel[c.resolved] = rr
+					addPath(rr)
+				}
+			}
+		}
 	}
 	ignored := gitutil.CheckIgnored(r.root, paths)
 
@@ -381,7 +438,9 @@ func (r *resolver) finalize() {
 	byLogical := map[string][]candidate{}
 	var order []string
 	for _, c := range r.survivors {
-		if _, ok := ignored[c.logical]; ok {
+		_, logicalIgnored := ignored[c.logical]
+		_, targetIgnored := ignored[resolvedRel[c.resolved]]
+		if logicalIgnored || (c.deref && targetIgnored) {
 			r.result.Excluded = append(r.result.Excluded, ExcludedFile{LogicalPath: c.logical, Reason: ExcludedGitignored})
 			continue
 		}

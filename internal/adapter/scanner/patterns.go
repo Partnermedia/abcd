@@ -69,6 +69,26 @@ func DefaultPatterns() []Pattern {
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
+			// Fine-grained PAT, GitHub's default token type since 2022:
+			// github_pat_ + 22 alnum + '_' + 59 alnum. The classic ghp_ pattern
+			// above cannot match this prefix, so it needs its own entry.
+			Name: "github_pat_finegrained", Kind: "token:github_pat_finegrained",
+			Label:      "GitHub fine-grained PAT (github_pat_)",
+			Re:         regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}\b`),
+			Severity:   SeverityHardFail,
+			Suggestion: "DELETE AND ROTATE — never commit credentials",
+		},
+		{
+			// PEM private-key header. The scanner is line-oriented and the BEGIN
+			// line is single-line and self-identifying, so matching the header
+			// flags the block's presence (RSA/EC/DSA/OPENSSH/PGP/ENCRYPTED/plain).
+			Name: "pem_private_key", Kind: "token:pem_private_key",
+			Label:      "PEM private key header",
+			Re:         regexp.MustCompile(`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----`),
+			Severity:   SeverityHardFail,
+			Suggestion: "DELETE AND ROTATE — private key material must never be committed",
+		},
+		{
 			Name: "anthropic_key", Kind: "token:anthropic", Label: "Anthropic API key (sk-ant-)",
 			Re: regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{40,}\b`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",

@@ -49,6 +49,8 @@ func TestSecretPatterns(t *testing.T) {
 		{"token:github_oauth", "gho_" + r("c", 36), "gho_short"},
 		{"token:github_user", "ghu_" + r("d", 36), "ghu_short"},
 		{"token:github_refresh", "ghr_" + r("e", 36), "ghr_short"},
+		{"token:github_pat_finegrained", "github_pat_" + r("A", 22) + "_" + r("B", 59), "github_pat_short"},
+		{"token:pem_private_key", "-----BEGIN RSA PRIVATE KEY-----", "----- not a key -----"},
 		{"token:anthropic", "sk-ant-" + r("A", 40), "sk-ant-short"},
 		{"token:openai_project", "sk-proj-" + r("B", 40), "sk-proj-short"},
 		{"token:openai_svcacct", "sk-svcacct-" + r("C", 40), "sk-svcacct-short"},
@@ -69,6 +71,28 @@ func TestSecretPatterns(t *testing.T) {
 				t.Errorf("negative %q wrongly flagged %s", c.neg, c.kind)
 			}
 		})
+	}
+}
+
+// TestRedactSealsOverlappingSecrets is the disk-redactor analogue of the
+// serializer overlap test: two partially-overlapping secret spans (an sk-ant key
+// running into a JWT) must not leave any raw token bytes behind, and a re-scan of
+// the redacted text must find no surviving hard_fail (the store's fail-closed
+// guarantee). The old substring-replace Redact left the JWT's tail verbatim.
+func TestRedactSealsOverlappingSecrets(t *testing.T) {
+	line := "sk-ant-" + strings.Repeat("X", 34) + "-eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "f")
+	redacted, _ := Redact(line, findings)
+	for _, raw := range []string{"KLMNOPQRST", "UVWXYZ0123456"} {
+		if strings.Contains(redacted, raw) {
+			t.Errorf("raw secret substring %q survived redaction: %q", raw, redacted)
+		}
+	}
+	rescan := ScanText(redacted, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "f")
+	for _, f := range rescan {
+		if f.Severity == SeverityHardFail {
+			t.Errorf("hard_fail survived redaction: %+v (out=%q)", f, redacted)
+		}
 	}
 }
 
@@ -190,6 +214,53 @@ func TestSeverityFloorHeld(t *testing.T) {
 	}
 	if sc.identSev[kindRealEmail] != SeverityHardFail {
 		t.Errorf("real_email downgrade to warn must be clamped to hard_fail, got %s", sc.identSev[kindRealEmail])
+	}
+}
+
+// TestBundledRegexNotReplaceable proves a per-repo config cannot neuter a bundled
+// detector by swapping its regex for a never-match one (the floor-bypass): the
+// bundled regex is immutable, so a real token is still caught at hard_fail.
+func TestBundledRegexNotReplaceable(t *testing.T) {
+	root := t.TempDir()
+	cfg := `{ "patterns": { "anthropic_key": { "regex": "\\bZZZNEVERMATCH\\b" } } }`
+	writeFile(t, root, ".abcd/config/pii.json", cfg)
+	secret := "sk-ant-" + strings.Repeat("A", 40)
+	abs := writeFile(t, root, "commands/x.md", "key = "+secret+"\n")
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := sc.ScanBundle([]BundleFile{{LogicalPath: "commands/x.md", ResolvedPath: abs}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasKind(res.Findings, "token:anthropic") || res.HardFails == 0 {
+		t.Errorf("bundled anthropic detector must survive a regex-override attempt: %+v", res)
+	}
+}
+
+// TestNewPatternMergeIsAllOrNothing proves an invalid NEW-name override regex
+// fails the whole merge closed (scanner unavailable) rather than half-applying a
+// preceding valid override.
+func TestNewPatternMergeIsAllOrNothing(t *testing.T) {
+	root := t.TempDir()
+	// "aaa" sorts before "zzz"; the invalid "zzz" must void the valid "aaa".
+	cfg := `{ "patterns": {
+	  "aaa_custom": { "regex": "\\bAAA[0-9]{6}\\b" },
+	  "zzz_custom": { "regex": "(" }
+	} }`
+	writeFile(t, root, ".abcd/config/pii.json", cfg)
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unavail, _ := sc.Unavailable(); !unavail {
+		t.Fatal("an invalid override regex must mark the scanner unavailable")
+	}
+	for _, p := range sc.patterns {
+		if p.Name == "aaa_custom" {
+			t.Errorf("the valid earlier override must not be half-applied: %+v", p)
+		}
 	}
 }
 
