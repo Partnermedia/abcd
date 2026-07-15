@@ -2,7 +2,9 @@ package launch
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -161,6 +163,78 @@ func TestSymlinkEscapeRejected(t *testing.T) {
 	// The real file still ships; no denied content leaked in.
 	if !included(b, "commands/keep.md") {
 		t.Errorf("real file dropped: %+v", b.Included)
+	}
+}
+
+// TestSymlinkToRepoRootDoesNotLeakDenied proves that a symlink to (or into) the
+// repo root cannot smuggle a denied namespace out through a dereferenced walk:
+// the structural deny is re-applied to the REAL path at every level, so
+// .abcd/** reached via docs/all -> <root> is rejected(deny), not shipped.
+func TestSymlinkToRepoRootDoesNotLeakDenied(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".abcd/secret.txt", "SECRET")
+	writeFile(t, root, "commands/keep.md", "ok")
+	writeFile(t, root, "docs/readme.md", "ok")
+
+	if err := os.Symlink(root, filepath.Join(root, "docs", "all")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, inc := range b.Included {
+		if strings.Contains(inc.ResolvedPath, filepath.Join(root, ".abcd")+string(filepath.Separator)) {
+			t.Errorf("denied .abcd content leaked via symlink walk: %+v", inc)
+		}
+		if strings.Contains(inc.LogicalPath, "/.abcd/") {
+			t.Errorf("denied logical path shipped: %+v", inc)
+		}
+	}
+	var denied bool
+	for _, r := range b.Rejected {
+		if r.Reason == RejectedDeny && strings.Contains(r.LogicalPath, ".abcd") {
+			denied = true
+		}
+	}
+	if !denied {
+		t.Errorf("expected rejected(deny) for the .abcd namespace reached via symlink: %+v", b.Rejected)
+	}
+}
+
+// TestGitignoredSymlinkTargetExcluded proves a symlink whose TARGET is gitignored
+// is excluded even though the symlink's own (logical) name is not ignored — the
+// target is the content that would actually ship.
+func TestGitignoredSymlinkTargetExcluded(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	writeFile(t, root, ".gitignore", ".env\n")
+	writeFile(t, root, ".env", "SECRET=1")
+	writeFile(t, root, "docs/readme.md", "ok")
+	if err := os.Symlink(filepath.Join(root, ".env"), filepath.Join(root, "docs", "alias")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, inc := range b.Included {
+		if inc.LogicalPath == "docs/alias" {
+			t.Errorf("gitignored symlink target shipped: %+v", inc)
+		}
+	}
+	var excluded bool
+	for _, e := range b.Excluded {
+		if e.LogicalPath == "docs/alias" && e.Reason == ExcludedGitignored {
+			excluded = true
+		}
+	}
+	if !excluded {
+		t.Errorf("expected docs/alias excluded(gitignored): excluded=%+v included=%+v", b.Excluded, b.Included)
 	}
 }
 
