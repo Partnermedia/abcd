@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -102,5 +103,24 @@ func TestDisembarkCoverageRejectsUnreadable(t *testing.T) {
 	}
 	if strings.Contains(string(out), string(os.PathSeparator)+"no-such-file.json") {
 		t.Errorf("error leaked an absolute path: %q", out)
+	}
+}
+
+// TestDisembarkCoverageRejectsNonReport holds the schema contract: a JSON object
+// that is not a probe report (schema_version defaults to 0 on any arbitrary
+// object) must be rejected with exit 2, not silently aggregated as an all-blank
+// phantom repo (B38).
+func TestDisembarkCoverageRejectsNonReport(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "pkg.json")
+	if err := os.WriteFile(f, []byte(`{"name":"not-a-report","version":"1.2.3"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"disembark", "coverage", f}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2 (a non-report must fail)\nstdout:%s\nstderr:%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not a coverage report") {
+		t.Errorf("want a 'not a coverage report' diagnostic, got stderr:\n%s", stderr.String())
 	}
 }

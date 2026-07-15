@@ -29,6 +29,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/memory"
 	"github.com/REPPL/abcd-cli/internal/core/rules"
 	"github.com/REPPL/abcd-cli/internal/core/spec"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"github.com/spf13/cobra"
 )
 
@@ -131,7 +132,39 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newSpecCommand(&asJSON))
 	root.AddCommand(newDisembarkCommand(&asJSON))
 
+	// A cobra usage error (unknown flag, unknown subcommand, stray positional
+	// argument) is a plain error with no ExitCode(), so Run() would map it to
+	// exit 1 — but `abcd audit` documents Conftest's tri-state where exit 1 means
+	// "warnings only" (audit.go). A mistyped invocation must not masquerade as a
+	// clean-ish gate pass: usage errors exit 2, like every usage error abcd raises
+	// itself. Flag-parse errors route through FlagErrorFunc; argument errors come
+	// from each command's Args validator — wrap both across the whole tree (B13).
+	markUsageErrorsExitTwo(root)
+
 	return root
+}
+
+// markUsageErrorsExitTwo walks the command tree and tags every cobra usage error
+// with exit code 2, so a parse/usage failure never lands on the ambiguous exit 1
+// that the audit tri-state reserves for "warnings only" (B13). Flag-parse errors
+// are routed through FlagErrorFunc (inherited by children, but set on each for
+// clarity); argument-validation errors (cobra.NoArgs violations, unknown
+// subcommands) surface from each command's Args validator, which is wrapped.
+func markUsageErrorsExitTwo(c *cobra.Command) {
+	c.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &exitError{Code: 2, Msg: err.Error()}
+	})
+	if validate := c.Args; validate != nil {
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validate(cmd, args); err != nil {
+				return &exitError{Code: 2, Msg: err.Error()}
+			}
+			return nil
+		}
+	}
+	for _, sub := range c.Commands() {
+		markUsageErrorsExitTwo(sub)
+	}
 }
 
 // docsLintResult is the machine-readable envelope for `abcd docs lint`: the
@@ -299,6 +332,15 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 				var cov lifeboat.Coverage
 				if err := json.Unmarshal(data, &cov); err != nil {
 					return &exitError{Code: 2, Msg: fmt.Sprintf("disembark coverage: %s is not a coverage report: %s", path, err)}
+				}
+				// A probe report always stamps schema_version >= 1; json.Unmarshal
+				// of any other JSON object succeeds with the zero value (schema
+				// version 0), which would otherwise sail past the guard as an
+				// all-blank phantom repo (B38). Reject it as not a coverage report,
+				// mirroring the type-mismatch message above.
+				if cov.SchemaVersion < 1 {
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"disembark coverage: %s is not a coverage report: missing schema_version", path)}
 				}
 				if cov.SchemaVersion > lifeboat.SchemaVersion {
 					return &exitError{Code: 2, Msg: fmt.Sprintf(
@@ -491,7 +533,7 @@ func newHookCommand() *cobra.Command {
 			if err != nil {
 				return warn("%v; capturing nothing", err)
 			}
-			res, err := history.Capture(cwd, det.RootSHA, in.SessionID, raw, "native")
+			res, err := history.Capture(captureRoot(cwd), det.RootSHA, in.SessionID, raw, "native")
 			if err != nil {
 				// Includes a hostile session id and a redaction hard-fail: both
 				// write nothing, by design in internal/core/history.
@@ -1690,7 +1732,7 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := history.Capture(cwd, rootSHA, sess, raw, orDefault(kind, "native"))
+			res, err := history.Capture(captureRoot(cwd), rootSHA, sess, raw, orDefault(kind, "native"))
 			if err != nil {
 				return err
 			}
@@ -1773,6 +1815,20 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 // repoRootSHA resolves the current repo's root-commit SHA (the history store
 // key) via the ahoy detection pass. An empty SHA means cwd is not a git repo
 // with commits, which the history verbs cannot key on.
+// captureRoot resolves the git working-tree root containing cwd so history
+// capture honours the per-repo redaction override (the scanner resolves it at
+// <root>/.abcd/config/pii.json, without walking up). Without this, a capture run
+// from a subdirectory hands the subdirectory to scanner.New, which finds no
+// override there and silently redacts with defaults only (B12). It falls back to
+// cwd when git cannot answer (not a repo, git absent) — the scanner then behaves
+// exactly as before, so the fallback never regresses a non-git use.
+func captureRoot(cwd string) string {
+	if top, err := gitutil.Run(cwd, "rev-parse", "--show-toplevel"); err == nil && top != "" {
+		return top
+	}
+	return cwd
+}
+
 func repoRootSHA() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {

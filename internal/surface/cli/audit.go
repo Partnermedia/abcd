@@ -35,6 +35,17 @@ func newAuditCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Validate the root before evaluating: the rules read ENOENT as
+			// "artifact missing" and would emit confident, fabricated convention
+			// violations against a directory that is not there (B41). Fail with a
+			// usage error instead, matching the disembark probe guard.
+			if info, statErr := os.Stat(dir); statErr != nil || !info.IsDir() {
+				shown := rootDir
+				if shown == "" {
+					shown = dir
+				}
+				return &exitError{Code: 2, Msg: fmt.Sprintf("audit: %s is not a directory", shown)}
+			}
 
 			result, err := audit.Evaluate(audit.DefaultRules(), audit.Context{RepoRoot: dir})
 			if err != nil {

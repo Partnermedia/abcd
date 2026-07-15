@@ -104,6 +104,44 @@ func TestAuditMissingWorkTierExitsTwo(t *testing.T) {
 	}
 }
 
+// A cobra usage error (a stray positional argument, an unknown flag) must exit 2,
+// not 1: audit documents Conftest's tri-state where exit 1 means "warnings only",
+// so a mistyped invocation landing on 1 would let a CI gate record a clean-ish
+// pass for an audit that never ran (B13). These fail before RunE, so they need no
+// repo fixture.
+func TestAuditUsageErrorsExitTwo(t *testing.T) {
+	cases := [][]string{
+		{"audit", "unexpected-arg"}, // stray positional under cobra.NoArgs
+		{"audit", "--nosuchflag"},   // unknown flag
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run(args, &stdout, &stderr)
+			if code != 2 {
+				t.Fatalf("usage error exit = %d, want 2 (must not collide with the audit tri-state's exit-1 'warnings only')\nstderr:%s", code, stderr.String())
+			}
+		})
+	}
+}
+
+// `abcd audit --root <missing>` must report a usage error, not fabricate
+// convention violations against a directory that is not there (B41).
+func TestAuditNonexistentRootIsUsageError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "gone")
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"audit", "--root", missing}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2\nstderr:%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "is not a directory") {
+		t.Errorf("want an 'is not a directory' diagnostic, got stderr:\n%s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "conventions-router") || strings.Contains(stdout.String(), "three-tier-layout") {
+		t.Errorf("audit fabricated convention findings against a missing dir:\n%s", stdout.String())
+	}
+}
+
 // The human render (no --json) is grouped and readable, and stdout stays free of
 // JSON braces.
 func TestAuditHumanRender(t *testing.T) {
