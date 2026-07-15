@@ -45,6 +45,23 @@ called out in a **Breaking** section.
   exactly the home directory slipped through — and its base segment is the
   username. `record-lint` likewise printed raw `*os.PathError` config-load paths;
   both now scrub the home/root prefix.
+- **The launch bundle's gitignore exclusion fails closed on a git failure.** It
+  delegated to a fail-open probe, so if git errored the exclusion pass admitted
+  every gitignored file (typically `.env`-style secrets). A launch-local strict
+  probe now distinguishes "nothing ignored" from a real git failure and rejects
+  the affected candidates on failure; a plain non-git directory still resolves.
+- **Git queries ignore inherited `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` and
+  config-injection env vars.** An inherited repo-selection variable could redirect
+  abcd's isolated git queries at a different repository; those variables are now
+  stripped before every invocation.
+- **Transcript snippets no longer leak the head/tail of a short multi-byte
+  identity value.** `sealLine` measured its fingerprint threshold in bytes while
+  `maskSecret` used runes, so a short non-ASCII identity value kept visible
+  characters; the two are now both rune-based.
+- **`WriteFileAtomic` sets permissions on the open descriptor** (`fchmod`) rather
+  than by name after close, closing a TOCTOU symlink-swap window; and
+  `WriteFileAtomicPreserveMode` no longer silently widens an existing file to
+  `0644` on a transient stat error (it fails closed).
 
 ### Fixed
 
@@ -53,6 +70,35 @@ called out in a **Breaking** section.
   the rewriter drop every line to end-of-file, taking the user's own ignore rules
   with it. An unmatched BEGIN is now dropped alone; the content after it is
   preserved (mirroring the stray-END policy).
+- **`git check-ignore` no longer inverts the answer for force-added files.**
+  Dropping `--no-index` means a tracked file that matches a `.gitignore` pattern
+  is correctly reported not-ignored, so the privacy audit stops flagging a
+  force-added `DECISIONS.md` and the bundler stops dropping force-added files.
+- **Recall keyword matching now handles inflected forms.** The stemmer could not
+  round-trip e-drop (`merging`→`merge`) or doubled-consonant (`committing`→
+  `commit`) inflections, and multi-word aliases bypassed stemming entirely, so
+  guardrail domains like `COMMITTING` silently failed to match common phrasings.
+- **Frontmatter and intent records agree on delimiter handling.** An unclosed
+  frontmatter block is now treated as no-frontmatter (it previously harvested body
+  prose as top-level fields), and the intent writer tolerates a trailing-space
+  `---` delimiter exactly as the reader does.
+- **YAML frontmatter flow-map keys are quoted.** A citation key containing a YAML
+  metacharacter previously corrupted the record or broke the write→read round-trip.
+- **Concurrent `abcd intent plan` runs mint distinct spec ids** (an exclusive
+  advisory lock now guards the id-scan-and-write), and history capture attributes
+  a byte-identical transcript from a distinct session to its own record instead of
+  the first session's.
+- **Several confident-but-wrong diagnostics are now guarded:** `abcd audit
+  --root <missing>` and `disembark coverage <non-report>` return a usage error
+  instead of fabricated findings; the privacy-hygiene rule surfaces an error
+  rather than reporting clean when it cannot read the repo; brittle-reference
+  linting skips fenced code blocks; and Cobra usage errors exit `2`, not `1`
+  (which `abcd audit`'s tri-state reserves for "warnings only").
+- **Robustness:** a malformed glob in the include config is a preflight error
+  instead of a panic; an overflowing manifest pointer index is rejected instead
+  of panicking; the intent identity gate compares the author git will actually
+  stamp (honouring `GIT_AUTHOR_*`); inline-list items with quoted commas round-trip
+  faithfully; and the lifeboat probe's tier gate matches what its adapters read.
 
 ### Added
 
