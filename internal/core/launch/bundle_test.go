@@ -1,6 +1,8 @@
 package launch
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -258,5 +260,84 @@ func TestGlobMatchSegmentAware(t *testing.T) {
 		if got := matchesInclude(c.rel, c.pattern); got != c.want {
 			t.Errorf("matchesInclude(%q,%q)=%v want %v", c.rel, c.pattern, got, c.want)
 		}
+	}
+}
+
+// TestGitignoreProbeFailsClosed guards B18: when the gitignore probe cannot
+// answer (git present, root is a repo, but check-ignore itself errors), the gate
+// must NOT promote unproven survivors to Included — it fails closed, rejecting
+// them, mirroring the uncertain-inode-map gate. The probe is stubbed to simulate
+// the real git failure (otherwise hard to trigger deterministically).
+func TestGitignoreProbeFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "docs/readme.md", "ok")
+
+	orig := ignoreChecker
+	ignoreChecker = func(string, []string) (map[string]struct{}, error) {
+		return nil, fmt.Errorf("simulated git check-ignore failure")
+	}
+	defer func() { ignoreChecker = orig }()
+
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Included) != 0 {
+		t.Errorf("fail-open: files shipped despite an unanswerable gitignore probe: %+v", b.Included)
+	}
+	var rejected bool
+	for _, r := range b.Rejected {
+		if r.LogicalPath == "docs/readme.md" && r.Reason == RejectedFSError && r.Details["kind"] == "gitignore_check_failed" {
+			rejected = true
+		}
+	}
+	if !rejected {
+		t.Errorf("expected docs/readme.md rejected(fs_error, gitignore_check_failed): %+v", b.Rejected)
+	}
+}
+
+// TestCheckIgnoredStrictNonRepoIsBenign guards B18's other half: a directory that
+// is simply not a git repo (or git absent) carries no gitignore semantics and
+// must still resolve — an empty set with no error, never a fail-closed rejection.
+func TestCheckIgnoredStrictNonRepoIsBenign(t *testing.T) {
+	root := t.TempDir() // a plain dir, deliberately not `git init`ed
+	got, err := checkIgnoredStrict(root, []string{"docs/readme.md"})
+	if err != nil {
+		t.Fatalf("non-repo dir must carry no gitignore semantics, got error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("non-repo dir reported ignored paths: %+v", got)
+	}
+	// And a full resolution over a non-repo dir still ships normally.
+	writeFile(t, root, "docs/readme.md", "ok")
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shipped bool
+	for _, inc := range b.Included {
+		if inc.LogicalPath == "docs/readme.md" {
+			shipped = true
+		}
+	}
+	if !shipped {
+		t.Errorf("non-repo dir failed to ship docs/readme.md: included=%+v rejected=%+v", b.Included, b.Rejected)
+	}
+}
+
+// TestMalformedGlobIncludeIsPreflightError guards B19: a malformed char-class
+// glob (invalid range [z-a]) in the include config used to panic ResolveBundle
+// via regexp.MustCompile; it must now surface as a graceful PreflightError.
+func TestMalformedGlobIncludeIsPreflightError(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "docs/readme.md", "ok")
+
+	_, err := ResolveBundle(root, []string{"docs/[z-a]*.md"})
+	if err == nil {
+		t.Fatal("expected a preflight error for a malformed char-class glob, got nil")
+	}
+	var pf *PreflightError
+	if !errors.As(err, &pf) {
+		t.Fatalf("expected *PreflightError, got %T: %v", err, err)
 	}
 }

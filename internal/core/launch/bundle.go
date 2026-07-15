@@ -11,7 +11,9 @@
 package launch
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -117,6 +119,17 @@ func resolveBundle(repoRoot string, includes []string, closureFn ClosureFn) (Bun
 		includes, err = LoadIncludes(absRoot)
 		if err != nil {
 			return Bundle{}, err
+		}
+	}
+
+	// Reject a malformed glob include (e.g. an invalid char-class range like
+	// [z-a]) as a preflight fault up front, rather than panicking mid-walk when
+	// the pattern is first compiled — every other config fault here is graceful.
+	for _, inc := range includes {
+		if isGlob(inc) {
+			if err := validateGlobInclude(inc); err != nil {
+				return Bundle{}, err
+			}
 		}
 	}
 
@@ -432,7 +445,20 @@ func (r *resolver) finalize() {
 			}
 		}
 	}
-	ignored := gitutil.CheckIgnored(r.root, paths)
+	ignored, err := ignoreChecker(r.root, paths)
+	if err != nil {
+		// Fail closed (mirrors the uncertain-inode-map gate at classifyRegular):
+		// git is present and root IS a repo, but the gitignore probe itself errored,
+		// so we cannot prove a survivor is not gitignored. Reject every survivor
+		// rather than promote a possibly-ignored secret to Included.
+		for _, c := range r.survivors {
+			r.result.Rejected = append(r.result.Rejected, RejectedFile{
+				LogicalPath: c.logical, Reason: RejectedFSError,
+				Details: map[string]string{"kind": "gitignore_check_failed"},
+			})
+		}
+		return
+	}
 
 	// Group by logical path for duplicate-by-provenance resolution.
 	byLogical := map[string][]candidate{}
@@ -474,6 +500,68 @@ func (r *resolver) finalize() {
 			r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: logical, Reason: RejectedDuplicate})
 		}
 	}
+}
+
+// ignoreChecker is the bundle gate's gitignore probe. It is a package var so a
+// test can substitute a stub that simulates a real git failure — the fail-closed
+// path is otherwise hard to trigger deterministically.
+var ignoreChecker = checkIgnoredStrict
+
+// checkIgnoredStrict is the release gate's fail-CLOSED gitignore probe. Unlike
+// gitutil.CheckIgnored (fail-OPEN, appropriate for convention checks), it
+// distinguishes three outcomes so a secret-hygiene gate never silently ships a
+// gitignored file when git could not answer (adr-18 default-deny spirit):
+//
+//   - root is not a git working tree, or git is absent: no gitignore semantics
+//     apply — returns an empty set and nil error, so a plain (non-repo) temp dir
+//     still resolves. This is "nothing ignored", not a hard failure.
+//   - root IS a repo and git answers: exit 0 lists the ignored subset, exit 1
+//     means nothing is ignored — both return nil error.
+//   - root IS a repo but the check-ignore probe itself fails (any exit other than
+//     0/1, or a spawn/IO error): returns an error so finalize fails closed rather
+//     than promote unproven files to Included.
+func checkIgnoredStrict(root string, candidates []string) (map[string]struct{}, error) {
+	out := map[string]struct{}{}
+	if len(candidates) == 0 {
+		return out, nil
+	}
+	// Probe first so a directory that is simply not a repo (or git-absent) carries
+	// no gitignore semantics — never a fail-closed rejection. Only a repo whose own
+	// check-ignore then errors is a real failure.
+	if !gitutil.InRepo(root) {
+		return out, nil
+	}
+	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
+		"check-ignore", "-z", "--no-index", "-v", "--stdin")
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_OPTIONAL_LOCKS=0",
+	)
+	cmd.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
+	data, err := cmd.Output()
+	if err != nil {
+		// In a repo, exit 1 == no candidate is ignored (a normal answer). Any other
+		// exit, or a spawn/IO error, means git could not answer — fail closed.
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
+			return out, nil
+		}
+		return nil, fmt.Errorf("git check-ignore failed under %s: %w", root, err)
+	}
+	fields := strings.Split(string(data), "\x00")
+	if len(fields) > 0 && fields[len(fields)-1] == "" {
+		fields = fields[:len(fields)-1]
+	}
+	// -v -z emits four fields per record: source, linenum, pattern, pathname.
+	for i := 0; i+3 < len(fields); i += 4 {
+		pattern := fields[i+2]
+		pathname := fields[i+3]
+		if strings.HasPrefix(pattern, "!") {
+			continue // negation → the path is NOT ignored
+		}
+		out[pathname] = struct{}{}
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -643,6 +731,39 @@ func globToRegexp(pattern string) (*regexp.Regexp, []int) {
 	if ok {
 		return c.re, c.guards
 	}
+	expr, guards := buildGlobExpr(pattern)
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		// A malformed glob (e.g. an invalid char-class range like [z-a]) is
+		// rejected up front by resolveBundle's preflight validation; if one still
+		// reaches here, degrade to a never-matching pattern rather than panicking.
+		re, guards = neverMatch, nil
+	}
+	globRegexpMu.Lock()
+	globRegexpCache[pattern] = compiledGlob{re: re, guards: guards}
+	globRegexpMu.Unlock()
+	return re, guards
+}
+
+// neverMatch matches no input at all (a character required after end-of-text):
+// the safe fallback when a glob fails to compile.
+var neverMatch = regexp.MustCompile(`\z.`)
+
+// validateGlobInclude reports a PreflightError when pattern does not compile to a
+// valid RE2 regex (e.g. an invalid char-class range), so the caller can reject it
+// gracefully before the walk instead of panicking on first use.
+func validateGlobInclude(pattern string) error {
+	expr, _ := buildGlobExpr(pattern)
+	if _, err := regexp.Compile(expr); err != nil {
+		return preflight("include pattern %q is a malformed glob: %v", pattern, err)
+	}
+	return nil
+}
+
+// buildGlobExpr translates a glob into an anchored RE2 pattern string where only
+// ** crosses /, returning the guard-group indices for positive char classes. It
+// does not compile — globToRegexp/validateGlobInclude compile and cache.
+func buildGlobExpr(pattern string) (string, []int) {
 	var b strings.Builder
 	var guards []int
 	group := 0
@@ -695,11 +816,7 @@ func globToRegexp(pattern string) (*regexp.Regexp, []int) {
 		}
 	}
 	b.WriteString(`$`)
-	re := regexp.MustCompile(b.String())
-	globRegexpMu.Lock()
-	globRegexpCache[pattern] = compiledGlob{re: re, guards: guards}
-	globRegexpMu.Unlock()
-	return re, guards
+	return b.String(), guards
 }
 
 // parseCharClass parses a [...] class starting at i, returning its body (without
