@@ -319,22 +319,32 @@ func isSpace(b byte) bool {
 }
 
 // promptIndex is a prompt prepared for recall matching once per Match call: a
-// space-padded normalized form for word-boundary and multi-word matching, plus a
-// set of stemmed single tokens so inflected forms (commits->commit, pushes->push)
-// recall-match their keyword.
+// space-padded normalized form for word-boundary and multi-word matching, a
+// second padded form with every token stemmed (so inflected multi-word phrases
+// still hit their alias), plus a set of candidate stems for the single tokens so
+// inflected forms (commits->commit, pushes->push, committing->commit,
+// merging->merge) recall-match their keyword.
 type promptIndex struct {
-	padded string          // " tok tok " for boundary/phrase matching
-	stems  map[string]bool // stemmed single tokens
+	padded        string          // " tok tok " for boundary/phrase matching
+	stemmedPadded string          // " stem stem " for stemmed phrase matching
+	stems         map[string]bool // candidate stems of the single tokens
 }
 
 // indexPrompt lowercases, collapses non-alphanumeric runs to single spaces, and
-// builds the stemmed token set.
+// builds both the stemmed-token set (with every candidate root per token) and the
+// stemmed padded form used for multi-word phrase matching.
 func indexPrompt(s string) promptIndex {
 	collapsed := strings.TrimSpace(nonAlnumRe.ReplaceAllString(strings.ToLower(s), " "))
 	idx := promptIndex{padded: " " + collapsed + " ", stems: map[string]bool{}}
-	for _, tok := range strings.Fields(collapsed) {
-		idx.stems[stem(tok)] = true
+	tokens := strings.Fields(collapsed)
+	stemmed := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		for _, v := range stemVariants(tok) {
+			idx.stems[v] = true
+		}
+		stemmed = append(stemmed, stem(tok))
 	}
+	idx.stemmedPadded = " " + strings.Join(stemmed, " ") + " "
 	return idx
 }
 
@@ -354,20 +364,36 @@ func (idx promptIndex) hit(d Domain) bool {
 }
 
 // termHit matches a single term. A multi-word term is a word-boundary substring
-// of the padded prompt; a single token matches on an exact word boundary OR when
-// its stem is present, so plural/tense variants recall their keyword.
+// of the padded prompt OR — with each of its words stemmed — of the stemmed
+// padded prompt, so inflected phrases ("pull requests") still hit their alias
+// ("pull request"). A single token matches on an exact word boundary OR when its
+// stem is among the prompt tokens' candidate stems, so plural/tense variants
+// recall their keyword.
 func (idx promptIndex) termHit(term string) bool {
 	t := strings.TrimSpace(nonAlnumRe.ReplaceAllString(strings.ToLower(term), " "))
 	if t == "" {
 		return false
 	}
 	if strings.Contains(t, " ") {
-		return strings.Contains(idx.padded, " "+t+" ")
+		if strings.Contains(idx.padded, " "+t+" ") {
+			return true
+		}
+		return strings.Contains(idx.stemmedPadded, " "+stemPhrase(t)+" ")
 	}
 	if strings.Contains(idx.padded, " "+t+" ") {
 		return true
 	}
 	return idx.stems[stem(t)]
+}
+
+// stemPhrase stems each whitespace-separated word of a normalized multi-word
+// term, so a phrase alias can be compared against the stemmed padded prompt.
+func stemPhrase(t string) string {
+	words := strings.Fields(t)
+	for i, w := range words {
+		words[i] = stem(w)
+	}
+	return strings.Join(words, " ")
 }
 
 // stem strips a common English suffix to a root. Short tokens are left untouched
@@ -402,6 +428,60 @@ func hasSibilantSuffix(root string) bool {
 		}
 	}
 	return false
+}
+
+// stemVariants returns every candidate root a prompt token may share with a base
+// keyword. It is the asymmetric counterpart of stem(): a keyword stems to a
+// single canonical root, while a prompt token expands to that root plus the two
+// forms an "-ing"/"-ed" inflection would otherwise hide — the e-drop restore
+// ("merg"->"merge", "rebas"->"rebase") and the undoubled consonant
+// ("committ"->"commit"). Only the "-ing"/"-ed" cases branch, so plural handling
+// and the short-token guard from stem() are unchanged, and the extra roots stay
+// conservative (no bare-vowel or sub-3-char stems) to avoid over-matching.
+func stemVariants(w string) []string {
+	var root string
+	switch {
+	case len(w) > 5 && strings.HasSuffix(w, "ing"):
+		root = w[:len(w)-3]
+	case len(w) > 4 && strings.HasSuffix(w, "ed"):
+		root = w[:len(w)-2]
+	default:
+		return []string{stem(w)}
+	}
+	out := []string{root, root + "e"}
+	if u := undouble(root); u != "" {
+		out = append(out, u)
+	}
+	return out
+}
+
+// undouble collapses a trailing doubled consonant to a single one
+// ("committ"->"commit", "stopp"->"stop"), or returns "" when the root does not
+// end in a doubled consonant. Such doubling is introduced when an "-ing"/"-ed"
+// inflection is stripped from a verb whose final consonant was doubled. The
+// undoubled root must stay at least 3 characters to avoid tiny, over-matching
+// stems.
+func undouble(root string) string {
+	n := len(root)
+	if n < 4 {
+		return ""
+	}
+	if a, b := root[n-2], root[n-1]; a == b && isConsonant(a) {
+		return root[:n-1]
+	}
+	return ""
+}
+
+// isConsonant reports whether b is an ASCII lowercase consonant.
+func isConsonant(b byte) bool {
+	if b < 'a' || b > 'z' {
+		return false
+	}
+	switch b {
+	case 'a', 'e', 'i', 'o', 'u':
+		return false
+	}
+	return true
 }
 
 // Render is the single renderer both front doors use. It emits a header plus one

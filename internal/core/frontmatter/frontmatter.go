@@ -26,7 +26,9 @@ type Field struct {
 // Fields returns the top-level keys of the leading frontmatter block (the block
 // between the first two `---` lines). Nested keys and list items are ignored,
 // and the first occurrence of a key wins. An input whose first line is not `---`
-// (or is empty) yields no fields.
+// (or is empty) yields no fields. An unclosed block — a leading `---` with no
+// closing `---` — is treated as no frontmatter (an empty map), so body prose is
+// never harvested as fields.
 func Fields(lines []string) map[string]Field {
 	fields := map[string]Field{}
 	// A delimiter line may carry trailing whitespace ("--- "); trim spaces/tabs/CR
@@ -35,9 +37,11 @@ func Fields(lines []string) map[string]Field {
 	if len(lines) == 0 || strings.TrimRight(lines[0], " \t\r") != "---" {
 		return fields
 	}
+	closed := false
 	for i := 1; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r")
 		if strings.TrimRight(line, " \t") == "---" {
+			closed = true
 			break
 		}
 		m := keyRe.FindStringSubmatch(line)
@@ -48,6 +52,13 @@ func Fields(lines []string) map[string]Field {
 		if _, exists := fields[key]; !exists {
 			fields[key] = Field{Value: strings.TrimSpace(m[2]), Line: i + 1}
 		}
+	}
+	// Contract: the block is delimited by the first TWO `---` lines. Without a
+	// closing delimiter there is no block, so a document whose leading `---` is
+	// really a thematic break (or whose close was fat-fingered, e.g. "----") does
+	// not leak column-0 body lines in as phantom fields.
+	if !closed {
+		return map[string]Field{}
 	}
 	return fields
 }

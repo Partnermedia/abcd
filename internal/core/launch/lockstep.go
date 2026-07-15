@@ -142,7 +142,7 @@ func resolvePointer(doc any, pointer string) (any, bool) {
 			cur = v
 		case []any:
 			idx, ok := atoiIndex(tok)
-			if !ok || idx >= len(c) {
+			if !ok || idx < 0 || idx >= len(c) {
 				return nil, false
 			}
 			cur = c[idx]
@@ -157,12 +157,20 @@ func atoiIndex(tok string) (int, bool) {
 	if tok == "" {
 		return 0, false
 	}
+	const maxInt = int(^uint(0) >> 1)
 	n := 0
 	for _, r := range tok {
 		if r < '0' || r > '9' {
 			return 0, false
 		}
-		n = n*10 + int(r-'0')
+		d := int(r - '0')
+		// Guard against overflow: a long all-digit token would otherwise wrap to a
+		// negative n and pass the `idx >= len(c)` bound, panicking on c[idx]. No
+		// valid slice index is ever this large, so reject rather than wrap.
+		if n > (maxInt-d)/10 {
+			return 0, false
+		}
+		n = n*10 + d
 	}
 	return n, true
 }

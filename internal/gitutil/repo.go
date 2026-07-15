@@ -24,12 +24,55 @@ func isolatedGit(root string, args ...string) *exec.Cmd {
 		"-C", root,
 	}, args...)
 	cmd := exec.Command("git", full...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = gitEnv()
+	return cmd
+}
+
+// gitEnv builds the child environment for an isolated git command: the parent
+// environment with every repo-selection and config-injection variable stripped,
+// then the config-file neutralisers appended. Neutralising config *files* is not
+// enough — an inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE takes precedence
+// over `-C root` and silently redirects the query to a *different* repository,
+// and GIT_CONFIG_COUNT/GIT_CONFIG_PARAMETERS re-inject config that
+// GIT_CONFIG_GLOBAL/NOSYSTEM would otherwise suppress. Repo selection and config
+// therefore come from the command line alone; see scrubGitVar for the exact set
+// dropped (deliberate pass-throughs such as GIT_EXEC_PATH are kept).
+func gitEnv() []string {
+	base := os.Environ()
+	env := make([]string, 0, len(base)+3)
+	for _, kv := range base {
+		if scrubGitVar(kv) {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env,
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_OPTIONAL_LOCKS=0",
 	)
-	return cmd
+}
+
+// scrubGitVar reports whether an "KEY=value" environment entry names a git
+// repo-selection or config-injection variable that must not leak into an
+// isolated command. It is deliberately a denylist: unrelated GIT_* pass-throughs
+// (GIT_EXEC_PATH, GIT_SSH, …) and the config-file neutralisers gitEnv appends
+// are kept intact.
+func scrubGitVar(kv string) bool {
+	key := kv
+	if i := strings.IndexByte(kv, '='); i >= 0 {
+		key = kv[:i]
+	}
+	switch key {
+	case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
+		"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+		"GIT_NAMESPACE", "GIT_COMMON_DIR",
+		"GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+		"GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS":
+		return true
+	}
+	return strings.HasPrefix(key, "GIT_CONFIG_KEY_") ||
+		strings.HasPrefix(key, "GIT_CONFIG_VALUE_")
 }
 
 // capWriter buffers at most a fixed number of bytes, silently discarding the
@@ -64,12 +107,18 @@ func InRepo(root string) bool {
 // TrackedFiles returns the repo-relative paths git tracks under root, NUL-safe
 // so a filename with a newline cannot desync the list. Outside a repo (or with
 // git absent) it returns no files and no error — a scan over committed files
-// then degrades to "nothing to scan" rather than failing.
+// then degrades to "nothing to scan" rather than failing. Inside a repo any
+// other ls-files failure (a corrupt index, say) is returned as an error, so a
+// caller cannot mistake "could not read the index" for "nothing tracked" and
+// report a scanning rule compliant after reading zero files.
 func TrackedFiles(root string) ([]string, error) {
-	out, err := isolatedGit(root, "ls-files", "-z").Output()
-	if err != nil {
+	if !InRepo(root) {
 		// Not a repo / git absent → nothing tracked, not an error.
 		return nil, nil
+	}
+	out, err := isolatedGit(root, "ls-files", "-z").Output()
+	if err != nil {
+		return nil, err
 	}
 	parts := strings.Split(string(out), "\x00")
 	files := make([]string, 0, len(parts))

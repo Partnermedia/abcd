@@ -372,19 +372,36 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 }
 
 // fingerprintSpan masks out[start:end] to a token fingerprint: the first keepHead
-// and last keepTail bytes are kept (enough to triage which credential), the middle
+// and last keepTail RUNES are kept (enough to triage which credential), the middle
 // starred; a short span is fully starred. It is the byte-level mirror of
-// maskSecret so a byte span can be masked in place.
+// maskSecret and measures the threshold in runes, not bytes, so a short multi-byte
+// identity value (email, username) that is under 16 runes but at or over 16 bytes
+// is fully starred here just as maskSecret fully stars it — and head/tail are kept
+// on rune boundaries so a multi-byte rune is never split into invalid UTF-8.
 func fingerprintSpan(out, src []byte, start, end int) {
 	const keepHead, keepTail, fingerprintBelow = 3, 2, 16
-	length := end - start
+	// Star the whole span first; head/tail fingerprint runes are restored below.
 	for j := start; j < end; j++ {
-		k := j - start
-		if length >= fingerprintBelow && (k < keepHead || k >= length-keepTail) {
-			out[j] = src[j] // keep head/tail raw — the fingerprint
-		} else {
-			out[j] = '*'
-		}
+		out[j] = '*'
+	}
+	if utf8.RuneCount(src[start:end]) < fingerprintBelow {
+		return // short value: fully starred, mirroring maskSecret
+	}
+	headEnd := start
+	for r := 0; r < keepHead; r++ {
+		_, sz := utf8.DecodeRune(src[headEnd:end])
+		headEnd += sz
+	}
+	tailStart := end
+	for r := 0; r < keepTail; r++ {
+		_, sz := utf8.DecodeLastRune(src[start:tailStart])
+		tailStart -= sz
+	}
+	for j := start; j < headEnd; j++ {
+		out[j] = src[j] // keep head raw — the fingerprint
+	}
+	for j := tailStart; j < end; j++ {
+		out[j] = src[j] // keep tail raw — the fingerprint
 	}
 }
 

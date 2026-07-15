@@ -428,13 +428,30 @@ func tiersPresent(c *SourceContext) []Tier {
 	return present
 }
 
-// hasConventions is true when any conventional project file exists.
+// hasConventions is true when any file or directory the Tier-1 convention
+// adapters actually read exists — the union of their evidence sets, not just the
+// headline docs. The tier gate skips every adapter of an absent tier
+// (probe.go:314), so narrowing this below what the adapters consult produces
+// false blanks: a repo carrying only build manifests, CI workflows, ADR dirs,
+// a glossary, or an issues file would have its whole Tier-1 set skipped even
+// though those adapters would find grounding evidence. Composed from the
+// adapters' own name lists in sources_conventions.go so the two cannot drift.
 func hasConventions(c *SourceContext) bool {
-	return c.FindFirst(
-		"README.md", "README", "README.rst", "README.txt",
-		"docs", "CHANGELOG.md", "CHANGELOG", "LICENSE", "LICENSE.md",
-		"CONTRIBUTING.md", "CONTRIBUTING",
-	) != ""
+	candidates := []string{
+		"docs", "LICENSE", "LICENSE.md", "CONTRIBUTING.md", "CONTRIBUTING",
+		"ISSUES.md", "ISSUES",
+		// Directory evidence the adapters treat as grounding.
+		".github/workflows", "issues", ".github/ISSUE_TEMPLATE",
+	}
+	candidates = append(candidates, convReadmeNames...)      // convReadme
+	candidates = append(candidates, convChangelogNames...)   // convWhatWorkedSource
+	candidates = append(candidates, convGlossaryDocNames...) // convGlossarySource
+	candidates = append(candidates, convPlatformFiles...)    // convPlatformSource (Dockerfile, Makefile, go.mod, package.json)
+	candidates = append(candidates, convADRDirs...)          // convADRsSource
+	for _, ml := range convManifestLocks {                   // convDependenciesSource
+		candidates = append(candidates, ml.manifest)
+	}
+	return c.FindFirst(candidates...) != ""
 }
 
 // hasNative is true when the repo carries an abcd record.

@@ -14,6 +14,10 @@ func isolate(t *testing.T) {
 	t.Helper()
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	// EffectiveIdentity now honours the GIT_AUTHOR_* overrides (as git does), so
+	// clear any ambient values to keep the config-based cases hermetic.
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_AUTHOR_EMAIL", "")
 }
 
 func gitRepo(t *testing.T, name, email string) string {
@@ -100,6 +104,29 @@ func TestCheck_UnsetIdentity(t *testing.T) {
 	}
 	if res.Status != StatusUnset {
 		t.Fatalf("want StatusUnset, got %v — %s", res.Status, res.Reason)
+	}
+}
+
+// TestCheck_AuthorEnvOverride guards B14: git stamps the author from
+// GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL with higher precedence than user.name/email
+// config, so a matching config must not pass the gate when the env overrides
+// diverge from the pin. Pre-fix (config-only EffectiveIdentity) this returned
+// StatusOK, letting a mis-attributed commit through.
+func TestCheck_AuthorEnvOverride(t *testing.T) {
+	isolate(t)
+	dir := gitRepo(t, "Alex Reppel", "alex@example.com") // config matches the pin
+	writePin(t, dir, `{"name":"Alex Reppel","email":"alex@example.com"}`)
+	t.Setenv("GIT_AUTHOR_NAME", "Test User")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	res, err := Check(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != StatusMismatch {
+		t.Fatalf("want StatusMismatch (env override diverges from pin), got %v — %s", res.Status, res.Reason)
+	}
+	if res.Effective.Name != "Test User" || res.Effective.Email != "test@example.com" {
+		t.Fatalf("effective identity did not reflect GIT_AUTHOR_* override: %+v", res.Effective)
 	}
 }
 

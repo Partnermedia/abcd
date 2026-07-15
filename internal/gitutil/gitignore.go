@@ -10,14 +10,19 @@
 package gitutil
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 )
 
-// CheckIgnored returns the subset of repo-relative candidates that git ignores,
-// via a single isolated `git check-ignore -z --no-index -v --stdin`. Batching
+// CheckIgnored returns the subset of repo-relative candidates that git actually
+// ignores, via a single isolated `git check-ignore -z -v --stdin`. Batching
 // keeps one subprocess for an arbitrary number of paths.
+//
+// The index is consulted (no `--no-index`), so this mirrors git's real ignore
+// decision: git never ignores a tracked file, even one force-added against a
+// matching pattern — reporting such a path as ignored would invert the answer
+// for callers asking "is this file committed-durable?" or "must this be excluded
+// from the release bundle?".
 //
 // A negation record (a pattern beginning `!`) un-ignores its path and so does
 // not count as ignored. When git is unavailable or root is not a repository the
@@ -28,12 +33,8 @@ func CheckIgnored(root string, candidates []string) map[string]struct{} {
 		return out
 	}
 	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
-		"check-ignore", "-z", "--no-index", "-v", "--stdin")
-	cmd.Env = append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null",
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_OPTIONAL_LOCKS=0",
-	)
+		"check-ignore", "-z", "-v", "--stdin")
+	cmd.Env = gitEnv()
 	cmd.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
 	data, err := cmd.Output()
 	if err != nil {

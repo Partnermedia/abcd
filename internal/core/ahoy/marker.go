@@ -55,18 +55,29 @@ func synthesizeMarker(inner, eol []byte) []byte {
 	return out
 }
 
-// markerState is the three-state classifier result.
+// markerState is the classifier result.
 type markerState string
 
 const (
 	markerCurrent  markerState = "current"
 	markerOutdated markerState = "outdated"
 	markerMissing  markerState = "missing"
+	// markerSymlink is a symlinked leaf: installMarkerFile refuses to write
+	// through one, so it is neither "missing" (resolvable) nor "current". It is
+	// a distinct non-resolvable state so detection never advertises a resolvable
+	// gap that apply can never close.
+	markerSymlink markerState = "symlink"
 )
 
 // classifyMarker reads targetPath and classifies its marker block. A read error
 // or absent file is observably equivalent to "missing".
 func classifyMarker(targetPath string) markerState {
+	// Do not follow a symlinked leaf: installMarkerFile refuses to write through
+	// one, so classifying it as "missing" would make detection emit a resolvable
+	// gap that install can never close (a permanent "partial").
+	if fi, err := os.Lstat(targetPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return markerSymlink
+	}
 	existing, err := os.ReadFile(targetPath)
 	if err != nil {
 		return markerMissing
@@ -141,8 +152,8 @@ func composeMarkerInsertion(existing, synth, eol []byte) []byte {
 		head, tail := existing[:loc[1]], existing[loc[1]:]
 		return concat(head, eol, synth, trailingSep(tail, eol), tail)
 	}
-	if loc := h1Re.FindIndex(existing); loc != nil {
-		head, tail := existing[:loc[1]], existing[loc[1]:]
+	if end := firstOutOfFenceH1(existing); end != -1 {
+		head, tail := existing[:end], existing[end:]
 		return concat(head, eol, synth, trailingSep(tail, eol), tail)
 	}
 	if len(existing) > 0 && !bytes.HasSuffix(existing, eol) && !bytes.HasSuffix(existing, []byte("\n")) {
@@ -152,6 +163,29 @@ func composeMarkerInsertion(existing, synth, eol []byte) []byte {
 		return concat(synth, eol)
 	}
 	return concat(existing, eol, synth, eol)
+}
+
+// firstOutOfFenceH1 returns the byte offset just past the first ATX-1 heading
+// line that lies outside a ``` (or ~~~) fenced code block, or -1 when none
+// exists. Scanning line-by-line with fence tracking keeps the block from being
+// planted inside a fence when a '# ' line (e.g. a shell comment) precedes the
+// document's real H1.
+func firstOutOfFenceH1(existing []byte) int {
+	inFence := false
+	for offset := 0; offset < len(existing); {
+		next := len(existing)
+		if nl := bytes.IndexByte(existing[offset:], '\n'); nl != -1 {
+			next = offset + nl + 1
+		}
+		line := existing[offset:next]
+		if trimmed := bytes.TrimLeft(line, " \t"); bytes.HasPrefix(trimmed, []byte("```")) || bytes.HasPrefix(trimmed, []byte("~~~")) {
+			inFence = !inFence
+		} else if !inFence && h1Re.Match(line) {
+			return next
+		}
+		offset = next
+	}
+	return -1
 }
 
 // trailingSep is the separator between the block and following text: at least

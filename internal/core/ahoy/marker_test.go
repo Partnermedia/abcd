@@ -53,6 +53,74 @@ func TestMarkerInsertAfterFrontmatterAndH1(t *testing.T) {
 	}
 }
 
+func TestMarkerInsertSkipsFencedH1(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "CLAUDE.md")
+	// A '# ' shell comment inside a fenced snippet precedes the real H1. The
+	// block must not split the fence; it belongs after the real heading.
+	original := "```bash\n# install deps\nmake build\n```\n# Real Title\n\nbody text\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := installMarkerFile(path); !ok {
+		t.Fatal("install failed")
+	}
+	got, _ := os.ReadFile(path)
+	// The fenced snippet must stay contiguous (block did not land inside it).
+	if !bytes.Contains(got, []byte("# install deps\nmake build")) {
+		t.Errorf("marker split the fenced snippet:\n%s", got)
+	}
+	blockAt := bytes.Index(got, markerBegin)
+	titleAt := bytes.Index(got, []byte("# Real Title"))
+	fenceCommentAt := bytes.Index(got, []byte("# install deps"))
+	if blockAt == -1 || titleAt == -1 {
+		t.Fatalf("missing landmark (block=%d title=%d):\n%s", blockAt, titleAt, got)
+	}
+	if !(fenceCommentAt < blockAt && titleAt < blockAt) {
+		t.Errorf("block not placed after the real H1:\n%s", got)
+	}
+	if classifyMarker(path) != markerCurrent {
+		t.Errorf("state = %q, want current", classifyMarker(path))
+	}
+}
+
+func TestClassifySymlinkedMarkerIsNotResolvableGap(t *testing.T) {
+	dir := t.TempDir()
+	// docs.target=claude_md so detection checks only the symlinked CLAUDE.md.
+	if err := os.MkdirAll(filepath.Join(dir, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".abcd", "config.json"),
+		[]byte(`{"docs":{"target":"claude_md"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A symlinked CLAUDE.md whose target lacks the block: classifyMarker must
+	// report it as a symlink (non-resolvable), not "missing", so detection does
+	// not emit a resolvable gap that install can never close.
+	real := filepath.Join(t.TempDir(), "real.md")
+	if err := os.WriteFile(real, []byte("# Title\n\nno block here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "CLAUDE.md")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if got := classifyMarker(link); got != markerSymlink {
+		t.Fatalf("classifyMarker on symlink = %q, want %q", got, markerSymlink)
+	}
+	// install refuses to write through the symlink, so the two must agree: no
+	// resolvable gap paired with a silent no-op.
+	if wrote, ok := installMarkerFile(link); wrote || ok {
+		t.Fatalf("installMarkerFile through symlink: wrote=%v ok=%v, want false/false", wrote, ok)
+	}
+	// detectMarkerDrift must not emit an actionable (required+resolvable) gap.
+	for _, g := range detectMarkerDrift(dir) {
+		if g.Required && g.Resolvable {
+			t.Errorf("symlinked marker produced an actionable gap: %+v", g)
+		}
+	}
+}
+
 func TestMarkerInstallIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "CLAUDE.md")

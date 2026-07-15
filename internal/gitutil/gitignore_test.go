@@ -76,6 +76,35 @@ func TestIsIgnoredNegationIsNotIgnored(t *testing.T) {
 	}
 }
 
+// A tracked (committed) file is never ignored, even when it was force-added
+// against a matching .gitignore pattern: git consults the index for its real
+// ignore decision, and CheckIgnored must not invert that answer (which would
+// falsely flag a committed file as non-durable / drop it from a release bundle).
+func TestCheckIgnoredTrackedFileNotIgnored(t *testing.T) {
+	repo := newRepo(t, ".abcd/\n")
+
+	dir := filepath.Join(repo, ".abcd", "work")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "DECISIONS.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Force-add the path even though .abcd/ is ignored, then commit it.
+	if out, err := runGit(t, repo, "add", "-f", ".abcd/work/DECISIONS.md"); err != nil {
+		t.Fatalf("git add -f: %v: %s", err, out)
+	}
+	commitAll(t, repo)
+
+	if gitutil.IsIgnored(repo, ".abcd/work/DECISIONS.md") {
+		t.Error("IsIgnored(tracked force-added file) = true; git never ignores a tracked file")
+	}
+	// A genuinely untracked path under the same pattern is still ignored.
+	if !gitutil.IsIgnored(repo, ".abcd/scratch.txt") {
+		t.Error("IsIgnored(untracked ignored path) = false, want true")
+	}
+}
+
 func TestCheckIgnoredBatch(t *testing.T) {
 	repo := newRepo(t, "ignored/\n")
 

@@ -82,3 +82,23 @@ func TestLockstepDevKeysAbsent(t *testing.T) {
 		t.Errorf("dev tree with a present version key must drift, got %+v", res2)
 	}
 }
+
+// TestResolvePointerOverflowIndex guards B20: a long all-digit pointer token used
+// to overflow atoiIndex to a negative int, which passed the `idx >= len(c)` bound
+// and panicked on c[idx]. It must now resolve as an absent key, not panic.
+func TestResolvePointerOverflowIndex(t *testing.T) {
+	doc := []any{"a"}
+	for _, tok := range []string{
+		"/9223372036854775808",           // 2^63: overflows int64 to negative
+		"/99999999999999999999999999999", // far past any int
+	} {
+		v, present := resolvePointer(doc, tok)
+		if present {
+			t.Errorf("resolvePointer(%q) resolved present (v=%v); want absent", tok, v)
+		}
+	}
+	// A valid in-range index still resolves.
+	if v, present := resolvePointer(doc, "/0"); !present || v != "a" {
+		t.Errorf("resolvePointer(/0)=(%v,%v); want (a,true)", v, present)
+	}
+}

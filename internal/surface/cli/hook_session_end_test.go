@@ -247,6 +247,55 @@ func TestHookSessionEndRedactsOnThisPath(t *testing.T) {
 	}
 }
 
+// TestHistoryCaptureFromSubdirHonoursRepoPiiConfig proves capture resolves the
+// git working-tree root, not the process cwd, before loading the per-repo
+// redaction override. The scanner looks for .abcd/config/pii.json at the repo
+// root only (no upward walk), so a capture run from a subdirectory that passed
+// the subdirectory would silently redact with default patterns and let a
+// custom-pattern secret land in the store in cleartext (B12).
+func TestHistoryCaptureFromSubdirHonoursRepoPiiConfig(t *testing.T) {
+	repo, rootSHA := sessionEndRepo(t)
+
+	// A per-repo override adding a pattern the bundled defaults do NOT match.
+	cfgDir := filepath.Join(repo, ".abcd", "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"patterns":{"acme_secret":{"regex":"ACME-WIDGET-[0-9]{6}","kind":"token","label":"acme secret","severity":"hard_fail"}}}`
+	if err := os.WriteFile(filepath.Join(cfgDir, "pii.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run capture from a subdirectory of the repo.
+	sub := filepath.Join(repo, "internal", "deep")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	token := "ACME-WIDGET-123456"
+	tp := filepath.Join(t.TempDir(), "sess.jsonl")
+	if err := os.WriteFile(tp, []byte(`{"text":"secret `+token+`"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+
+	runCLI(t, "history", "capture", tp, "--session", "subdir-cfg")
+
+	recs, err := history.List(rootSHA)
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("want 1 record, got %d (err %v)", len(recs), err)
+	}
+	if recs[0].Secrets == 0 {
+		t.Error("the custom-pattern secret was not redacted — capture used the subdirectory, not the repo root, for pii.json (B12)")
+	}
+	_, stored, err := history.Read(rootSHA, "subdir-cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stored), token) {
+		t.Error("the raw custom-pattern secret survived into the stored record (B12)")
+	}
+}
+
 // TestHookSessionEndWritesNothingToStdout keeps the SessionEnd hook silent on the
 // model-facing stream. Diagnostics belong on stderr, out of band — the same rule
 // the prompt-router follows.

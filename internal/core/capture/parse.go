@@ -122,7 +122,7 @@ func parseScalarOrList(s string) (any, error) {
 			return []string{}, nil
 		}
 		var out []string
-		for _, part := range strings.Split(inner, ",") {
+		for _, part := range splitInlineListItems(inner) {
 			item := strings.TrimSpace(part)
 			dec, err := decodeScalar(item)
 			if err != nil {
@@ -137,6 +137,40 @@ func parseScalarOrList(s string) (any, error) {
 		return out, nil
 	}
 	return decodeScalar(s)
+}
+
+// splitInlineListItems splits the interior of an inline list on top-level
+// commas, honouring the double-quoting and backslash escaping that yamlScalar
+// emits: a comma inside a quoted item (or an escaped comma/quote) is not a
+// separator. Keeping the tokenizer symmetric with the serializer is what lets a
+// quoted item containing a comma — e.g. synthesis_clusters: ["design review,
+// session 3"] — round-trip faithfully instead of being split mid-item with
+// stray quote characters left behind.
+func splitInlineListItems(inner string) []string {
+	var items []string
+	var cur strings.Builder
+	inQuote := false
+	esc := false
+	for _, r := range inner {
+		switch {
+		case esc:
+			cur.WriteRune(r)
+			esc = false
+		case r == '\\':
+			cur.WriteRune(r)
+			esc = true
+		case r == '"':
+			cur.WriteRune(r)
+			inQuote = !inQuote
+		case r == ',' && !inQuote:
+			items = append(items, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	items = append(items, cur.String())
+	return items
 }
 
 // decodeScalar decodes a single non-list scalar token.

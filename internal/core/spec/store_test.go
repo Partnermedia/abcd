@@ -1,9 +1,11 @@
 package spec
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -253,5 +255,50 @@ func TestLoadRejectsFifoSpecFile(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Load hung on a FIFO spec file (open must not block)")
+	}
+}
+
+// Concurrent Create runs in the same worktree must mint distinct ids. Without a
+// mint lock every goroutine reads the same empty store, observes max=0, and
+// mints spc-1 — the store ends with N specs sharing one id. With the lock the
+// scan+write serializes and ids are spc-1..spc-N.
+func TestCreateConcurrentMintsDistinctIDs(t *testing.T) {
+	root := t.TempDir()
+
+	const n = 8
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	ids := make(map[string]int)
+	errs := make([]error, 0)
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start // release all goroutines together to maximise the collision window
+			sp, err := Create(root, "itd-1", fmt.Sprintf("slug-%d", i))
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				errs = append(errs, err)
+				return
+			}
+			ids[sp.ID]++
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	for _, err := range errs {
+		t.Fatalf("Create failed: %v", err)
+	}
+	if len(ids) != n {
+		t.Fatalf("concurrent Create minted %d distinct ids, want %d (duplicates: %v)", len(ids), n, ids)
+	}
+	for id, count := range ids {
+		if count != 1 {
+			t.Errorf("id %s minted %d times", id, count)
+		}
 	}
 }

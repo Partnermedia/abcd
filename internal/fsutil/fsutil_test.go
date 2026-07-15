@@ -131,3 +131,45 @@ func TestIsRealDir(t *testing.T) {
 		t.Errorf("missing path reported as real dir")
 	}
 }
+
+// TestWriteFileAtomicAppliesPermViaDescriptor guards B16: the mode must be set on
+// the open temp descriptor (fchmod), not chmod-by-name on the closed temp. The
+// requested perm differs from CreateTemp's 0600 default, so a dropped/no-op chmod
+// would surface here as the wrong final mode.
+func TestWriteFileAtomicAppliesPermViaDescriptor(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "f.txt")
+	if err := WriteFileAtomic(p, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o644 {
+		t.Fatalf("perm = %o, want 644 — mode not applied via the descriptor", fi.Mode().Perm())
+	}
+	// No temp file may be left behind.
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if len(e.Name()) >= 10 && e.Name()[:10] == ".abcd-tmp-" {
+			t.Errorf("leftover temp file: %s", e.Name())
+		}
+	}
+}
+
+// TestWriteFileAtomicPreserveModeFailsClosedOnStatFault guards B17: a real stat
+// fault (here ELOOP from a self-referencing symlink at the target) is NOT
+// absence, so PreserveMode must fail closed rather than silently default to 0644
+// and write through — which would widen an existing restrictive mode.
+func TestWriteFileAtomicPreserveModeFailsClosedOnStatFault(t *testing.T) {
+	dir := t.TempDir()
+	loop := filepath.Join(dir, "loop")
+	if err := os.Symlink("loop", loop); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	// os.Stat(loop) now fails with ELOOP (a genuine fault, not not-exist).
+	if err := WriteFileAtomicPreserveMode(loop, []byte("data")); err == nil {
+		t.Fatal("want error on a real stat fault (ELOOP), got nil — mode would be silently reset to 0644")
+	}
+}

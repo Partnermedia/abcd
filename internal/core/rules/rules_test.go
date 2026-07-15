@@ -164,6 +164,52 @@ func TestRecallStemmingNoOverMatch(t *testing.T) {
 	}
 }
 
+// TestRecallStemmingEDropAndDoubledConsonant (B09) covers the inflections stem()
+// alone cannot round-trip: an "-ing"/"-ed" form whose base keyword either dropped
+// a final "e" (merge->merging, rebase->rebasing) or doubled its final consonant
+// (commit->committing). Each of these prompts must inject COMMITTING, whose recall
+// keywords are [commit, push, branch, merge, rebase].
+func TestRecallStemmingEDropAndDoubledConsonant(t *testing.T) {
+	rs := Defaults()
+	cases := []string{
+		"committing the fix now",             // committ -> commit (undouble)
+		"the change was committed yesterday", // committed -> committ -> commit
+		"help me with merging",               // merg -> merge (e-restore)
+		"i just merged the branch",           // merged -> merg -> merge
+		"i finished rebasing, what now",      // rebas -> rebase (e-restore)
+		"the topic was rebased cleanly",      // rebased -> rebas -> rebase
+	}
+	for _, p := range cases {
+		if !has(rs.Match(p), "COMMITTING") {
+			t.Errorf("inflected prompt %q did not stem-match COMMITTING, got %v", p, names(rs.Match(p)))
+		}
+	}
+}
+
+// TestRecallStemmingEDropNoOverMatch guards the e-drop/undouble variants against
+// over-activation: a token whose "-ing"/"-ed" strip happens to end near a keyword
+// must not spuriously match an unrelated domain.
+func TestRecallStemmingEDropNoOverMatch(t *testing.T) {
+	rs := RuleSet{SchemaVersion: 1, Domains: map[string]Domain{
+		"QA": {State: StateActive, Recall: []string{"merge"}, Rules: []string{"r"}},
+	}}
+	if has(rs.Match("meridian coordinates and margins"), "QA") {
+		t.Fatal("e-drop stemming over-matched an unrelated word against 'merge'")
+	}
+}
+
+// TestMatchMultiWordAliasStemsInflectedPhrase (B32) proves a plural phrase hits
+// its singular multi-word alias. COMMITTING's alias "pull request" must match the
+// prompt "please review my pull requests" via the stemmed padded prompt, even
+// though no single recall keyword appears.
+func TestMatchMultiWordAliasStemsInflectedPhrase(t *testing.T) {
+	rs := Defaults()
+	if !has(rs.Match("please review my pull requests"), "COMMITTING") {
+		t.Fatalf("plural phrase 'pull requests' did not stem-match the 'pull request' alias, got %v",
+			names(rs.Match("please review my pull requests")))
+	}
+}
+
 func TestLoadRefusesSymlinkedAbcdDir(t *testing.T) {
 	dir := t.TempDir()
 	real := t.TempDir()
