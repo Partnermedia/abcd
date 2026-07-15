@@ -182,6 +182,61 @@ func TestDisembarkPlanRejectsNonDirectory(t *testing.T) {
 	}
 }
 
+// TestDisembarkPackWritesLifeboat proves the pack verb is wired end to end: it
+// writes a lifeboat at <dest>, leaves the source byte-identical, and returns a
+// result carrying the manifest hash.
+func TestDisembarkPackWritesLifeboat(t *testing.T) {
+	repo := probeRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	dest := filepath.Join(t.TempDir(), "lifeboat")
+	before := dirFingerprint(t, repo)
+
+	out := runCLI(t, "disembark", "pack", repo, dest, "--json")
+
+	var res lifeboat.PackResult
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("pack --json is not a result: %v", err)
+	}
+	if len(res.ManifestSHA256) != 64 || res.FilesWritten == 0 {
+		t.Errorf("unexpected pack result: %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(dest, lifeboat.ProvenanceName)); err != nil {
+		t.Errorf("lifeboat has no %s: %v", lifeboat.ProvenanceName, err)
+	}
+	if after := dirFingerprint(t, repo); after != before {
+		t.Error("disembark pack mutated the source repository")
+	}
+}
+
+// TestDisembarkPackRefusesNonEmptyDest holds the destination safety gate at the
+// surface: packing over a non-empty non-lifeboat directory exits non-zero.
+func TestDisembarkPackRefusesNonEmptyDest(t *testing.T) {
+	repo := probeRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dest, "mine.txt"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLIErr(t, "disembark", "pack", repo, dest); err == nil {
+		t.Error("packing over a non-empty non-lifeboat dir must fail")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "mine.txt")); err != nil {
+		t.Errorf("refused pack destroyed the pre-existing directory: %v", err)
+	}
+}
+
+// TestDisembarkPackRejectsNonDirectorySource mirrors the other verbs' input
+// contract on the source argument.
+func TestDisembarkPackRejectsNonDirectorySource(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLIErr(t, "disembark", "pack", f, filepath.Join(t.TempDir(), "lb")); err == nil {
+		t.Error("packing a file as the source must fail")
+	}
+}
+
 // dirFingerprint is a cheap path+size fingerprint of a tree, excluding .git.
 func dirFingerprint(t *testing.T, root string) string {
 	t.Helper()
