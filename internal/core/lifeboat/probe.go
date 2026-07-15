@@ -15,7 +15,7 @@ import (
 // SchemaVersion is the coverage-report schema version. It is stamped into every
 // report and checked by the aggregate, so a future breaking change to the shape
 // is detectable rather than silently misread.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // maxProbeReadBytes caps any single file the probe reads. A coverage probe reads
 // prose (READMEs, ADRs, decision logs), never data blobs, so a file larger than
@@ -376,12 +376,16 @@ func Probe(repoRoot string) (Coverage, error) {
 			sc.Searched = splitReads(m.Reads)
 			sc.Question = "Nothing probed grounds " + string(m.Section) + "; a human must supply it."
 		}
+		// Every section carries its kind (adr-36); a blank starts life open, so
+		// the round-trip can track whether a human later answers or defers it.
+		sc.Kind = m.Section.Kind()
 		switch sc.Status {
 		case StatusGrounded:
 			sum.Grounded++
 		case StatusPartial:
 			sum.Partial++
 		default:
+			sc.Resolution = ResolutionOpen
 			sum.Blank++
 		}
 		sections = append(sections, sc)

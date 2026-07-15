@@ -79,6 +79,41 @@ func (s Status) Valid() bool { return s.rank() >= 0 }
 // Section is a brief section, named as it appears in the coverage report.
 type Section string
 
+// Kind classifies a brief section by whether a repository could ever ground it.
+// It is the durable form of the M2 gate decision (adr-36): a blank in an
+// extractable section is coverage debt abcd can close with a better source or
+// adapter; a blank in a human-owned section is not a failure at all — it is a
+// standing prompt only a person can answer, and the lifeboat frames it that way.
+type Kind string
+
+const (
+	// KindExtractable means a source or a richer adapter could ground the
+	// section; an unfilled blank is coverage debt.
+	KindExtractable Kind = "extractable"
+	// KindHumanOwned means the section is not derivable from a repository by
+	// design; the blank is a question for a human, never an extraction.
+	KindHumanOwned Kind = "human-owned"
+)
+
+// humanOwnedSections are the sections the M2 cross-repo gate ruled not derivable
+// from a repository — answered by a person, not extracted. Every other section
+// is extractable (the zero value of the Kind lookup). Keeping the set here, off
+// the positional Table literal, avoids editing 23 rows for one classification.
+var humanOwnedSections = map[Section]bool{
+	"product/personas":             true,
+	"product/mental-model":         true,
+	"delivery/verification-matrix": true,
+	"delivery/out-of-scope":        true,
+}
+
+// Kind reports whether the section is extractable or human-owned.
+func (s Section) Kind() Kind {
+	if humanOwnedSections[s] {
+		return KindHumanOwned
+	}
+	return KindExtractable
+}
+
 // Mapping is one row of the contract: where a brief section lands in a
 // lifeboat, the best status each tier could ground it to, and what a source
 // adapter reads to try.
