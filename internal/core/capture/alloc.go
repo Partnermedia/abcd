@@ -2,9 +2,11 @@ package capture
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -119,6 +121,13 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		}
 
 		maxN := maxIssN(issuesRoot)
+		// Guard the id arithmetic below (maxN+1+attempt) against int overflow: a
+		// hand-crafted MaxInt-adjacent filename would otherwise wrap to a negative
+		// "iss--N" that fails reIssID, creating a bogus placeholder that only fails
+		// downstream. Refuse clearly instead.
+		if maxN > math.MaxInt-placeholderRetryBudget {
+			return fmt.Errorf("%w: iss-N counter near the integer ceiling (highest observed %d); refusing to allocate", ErrAllocatorContention, maxN)
+		}
 		for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
 			issID := fmt.Sprintf("iss-%d", maxN+1+attempt)
 			target := filepath.Join(issuesRoot, "open", issID+"-"+slug+".md")
@@ -220,8 +229,13 @@ func maxIssN(issuesRoot string) int {
 			if m == nil {
 				continue
 			}
-			var n int
-			fmt.Sscanf(m[1], "%d", &n)
+			// An over-int digit run (or otherwise unparseable N) is not a usable
+			// maximum — skip it rather than silently folding it to 0, which would
+			// mask a filename that should have driven allocation higher.
+			n, err := strconv.Atoi(m[1])
+			if err != nil {
+				continue
+			}
 			if n > maxN {
 				maxN = n
 			}
@@ -322,9 +336,37 @@ func cleanOrphanPlaceholders(issuesRoot string) error {
 		if now.Sub(cfi.ModTime()) <= orphanAgeThreshold {
 			continue
 		}
+		if !orphanStillRemovable(cand, cfi) {
+			continue
+		}
 		os.Remove(cand)
 	}
 	return nil
+}
+
+// orphanStillRemovable re-verifies, in the tightest possible window immediately
+// before the unlink, that cand is still the same zero-byte inode the sweep
+// classified as an orphan. A capture commits by atomically renaming a full issue
+// file over its reserved placeholder, and that write happens OUTSIDE this
+// (lockless) sweep — so between the caller's Lstat and its os.Remove a stalled
+// capture can land its committed file at this exact path. Re-checking here means
+// the sweep never deletes a placeholder a commit has since replaced or filled,
+// closing the race for any commit that lands before this check. The residual
+// micro-window between this stat and the unlink can only be fully eliminated by
+// serialising the commit write on the ledger lock (see commitCapture in
+// workflow.go), which is outside this sweep's reach.
+func orphanStillRemovable(cand string, seen os.FileInfo) bool {
+	recheck, err := os.Lstat(cand)
+	if err != nil {
+		return false
+	}
+	if recheck.Mode()&os.ModeSymlink != 0 || !recheck.Mode().IsRegular() {
+		return false
+	}
+	if recheck.Size() != 0 || !os.SameFile(seen, recheck) {
+		return false
+	}
+	return true
 }
 
 // findIssue locates issID across the three status dirs, mirroring find_issue.
