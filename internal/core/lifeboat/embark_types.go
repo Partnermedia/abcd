@@ -64,6 +64,12 @@ const (
 	// ConflictTargetNotRegular: the target path exists but is not a regular file
 	// (a directory, symlink, or device). Embark refuses to replace it.
 	ConflictTargetNotRegular ConflictKind = "target-not-regular"
+	// ConflictDuplicateTarget: two lifeboat files resolve to the same embark
+	// target (e.g. a bucket-less rescue/intents/<leaf> alongside
+	// rescue/intents/drafts/<leaf>). Writing both would be a silent
+	// last-writer-wins overwrite, so the collision refuses instead.
+	ConflictDuplicateTarget ConflictKind = "duplicate-target"
+
 	// ConflictParentNotDir: a parent component of the target path exists and is
 	// not a real directory (a file, or a symlink). Writing the file would require
 	// clobbering or traversing it, so embark refuses.

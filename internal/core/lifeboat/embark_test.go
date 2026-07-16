@@ -957,3 +957,75 @@ func diffRecordFiles(t *testing.T, a, b []PlannedFile) {
 		}
 	}
 }
+
+// TestEmbarkProbeRenderSanitisesProvenanceHash: record_manifest_sha256 comes
+// verbatim from the untrusted _provenance.json (which manifest verification
+// deliberately excludes), so the human render must sanitise it like every
+// other lifeboat-derived string — an ANSI escape must never reach the terminal.
+func TestEmbarkProbeRenderSanitisesProvenanceHash(t *testing.T) {
+	source := embarkableSourceFixture(t)
+	lifeboat := packSource(t, source)
+
+	provPath := filepath.Join(lifeboat, ProvenanceName)
+	raw, err := os.ReadFile(provPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prov map[string]any
+	if err := json.Unmarshal(raw, &prov); err != nil {
+		t.Fatal(err)
+	}
+	prov["record_manifest_sha256"] = "\x1b[31mVERIFIED CLEAN\x1b[0m"
+	tampered, err := json.Marshal(prov)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, provPath, tampered)
+
+	target := t.TempDir()
+	plan, err := EmbarkProbe(lifeboat, target)
+	if err != nil {
+		t.Fatalf("EmbarkProbe: %v", err)
+	}
+	if out := plan.Render(); strings.ContainsRune(out, 0x1b) {
+		t.Fatalf("render leaks a raw control byte from provenance:\n%q", out)
+	}
+}
+
+// TestEmbarkDuplicateTargetIsConflict: two lifeboat files that resolve to the
+// same embark target (a bucket-less rescue/intents/<leaf> and the bucketed
+// rescue/intents/drafts/<leaf>) must surface as a conflict, never a silent
+// last-writer-wins overwrite.
+func TestEmbarkDuplicateTargetIsConflict(t *testing.T) {
+	source := embarkableSourceFixture(t)
+	// A bucket-less intent alongside a drafts intent with the same leaf: both
+	// map to .abcd/development/intents/drafts/<leaf> on embark.
+	mustWrite(t, filepath.Join(source, ".abcd/development/intents/drafts/itd-77-dup.md"),
+		[]byte("---\nid: itd-77\nslug: dup\nkind: feature\n---\n# drafts copy\n"))
+	mustWrite(t, filepath.Join(source, ".abcd/development/intents/itd-77-dup.md"),
+		[]byte("---\nid: itd-77\nslug: dup\nkind: feature\n---\n# bucket-less copy\n"))
+	lifeboat := packSource(t, source)
+
+	target := t.TempDir()
+	plan, err := EmbarkProbe(lifeboat, target)
+	if err != nil {
+		t.Fatalf("EmbarkProbe: %v", err)
+	}
+	dup := false
+	for _, c := range plan.Conflicts {
+		if c.Kind == ConflictDuplicateTarget {
+			dup = true
+		}
+	}
+	if !dup {
+		t.Fatalf("no duplicate-target conflict reported; conflicts=%+v planned=%d", plan.Conflicts, len(plan.Planned))
+	}
+
+	before := contentFingerprint(t, target)
+	if _, err := EmbarkFrom(lifeboat, target); err == nil {
+		t.Fatal("EmbarkFrom succeeded despite a duplicate-target conflict")
+	}
+	if contentFingerprint(t, target) != before {
+		t.Fatal("EmbarkFrom wrote into the target on the conflict path")
+	}
+}

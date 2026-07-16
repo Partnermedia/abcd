@@ -229,6 +229,10 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 		conflicts []Conflict
 		ignored   []IgnoredFile
 	)
+	// One lifeboat file per embark target: a second claimant (a bucket-less
+	// intent alongside its bucketed twin) would be a silent last-writer-wins
+	// overwrite, so it surfaces as a conflict instead.
+	claimed := map[string]string{}
 	for _, rel := range rels {
 		family, targetRel, disp, detail := resolveTarget(rel)
 		switch disp {
@@ -248,6 +252,16 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 			if !validRelPath(targetRel) {
 				return plannerResult{}, fmt.Errorf("embark: refusing unsafe target path %q", targetRel)
 			}
+			if first, dup := claimed[targetRel]; dup {
+				conflicts = append(conflicts, Conflict{
+					Path:         targetRel,
+					LifeboatPath: rel,
+					Kind:         ConflictDuplicateTarget,
+					Detail:       "also mapped from " + first,
+				})
+				continue
+			}
+			claimed[targetRel] = rel
 			pe, cf := classifyEmbark(targetAbs, rel, targetRel, family, data)
 			if cf != nil {
 				conflicts = append(conflicts, *cf)

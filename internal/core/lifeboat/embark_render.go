@@ -29,7 +29,9 @@ func (p EmbarkPlan) Render() string {
 	renderConflictList(&b, p.Conflicts, "embark from would refuse and write nothing")
 	renderIgnoredSummary(&b, p.Ignored)
 	if p.RecordManifestSHA256 != "" {
-		fmt.Fprintf(&b, "record manifest sha256: %s\n", p.RecordManifestSHA256)
+		// Verbatim from the untrusted provenance (which manifest verification
+		// deliberately excludes) — sanitise like every lifeboat-derived string.
+		fmt.Fprintf(&b, "record manifest sha256: %s\n", sanitize(p.RecordManifestSHA256))
 	}
 	return b.String()
 }
