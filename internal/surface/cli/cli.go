@@ -465,11 +465,106 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	}
 	graveyardCmd.Flags().StringVar(&lessonsJSON, "lessons-json", "", "path to the host-produced lesson JSON (or - for stdin)")
 
+	// The three M6 synthesis verbs (itd-88) share one dual-mode shape: WITHOUT the
+	// --*-json flag they run the core's deterministic evidence-only fallback (raw ==
+	// nil); WITH the flag they validate an untrusted host-delegated payload. Every
+	// core error — including the press-release whole-document refusal
+	// (ErrPressReleaseUncited) — is a scrubbed exit 2; a per-entry drop is reported
+	// honestly and stays exit 0.
+	var principlesJSON string
+	principlesCmd := &cobra.Command{
+		Use:   "principles <lifeboat-dir> [--principles-json <file|->]",
+		Short: "Distil principles from a packed lifeboat (deterministic from the ADRs, or validate host-produced principle JSON)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dirAbs, err := filepath.Abs(args[0])
+			if err != nil {
+				return err
+			}
+			raw, err := readSynthesisPayload(cmd, principlesJSON)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark principles: " + scrubPaths(err)}
+			}
+			res, err := lifeboat.SynthesizePrinciples(dirAbs, raw)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark principles: " + scrubPaths(err)}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+	principlesCmd.Flags().StringVar(&principlesJSON, "principles-json", "", "path to host-produced principle JSON (or - for stdin); absent runs deterministic mode")
+
+	var pressReleaseJSON string
+	pressReleaseCmd := &cobra.Command{
+		Use:   "press-release <lifeboat-dir> [--press-release-json <file|->]",
+		Short: "Compose the lifeboat's press release (deterministic from the brief/spine, or validate host-produced press-release JSON)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dirAbs, err := filepath.Abs(args[0])
+			if err != nil {
+				return err
+			}
+			raw, err := readSynthesisPayload(cmd, pressReleaseJSON)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark press-release: " + scrubPaths(err)}
+			}
+			// A delegated press release citing nothing resolvable is a whole-document
+			// refusal (ErrPressReleaseUncited): exit 2, the derived file left untouched
+			// (design §5 exception). It flows through the generic exit-2 wrapping like
+			// every other structural fault.
+			res, err := lifeboat.ComposePressRelease(dirAbs, raw)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark press-release: " + scrubPaths(err)}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+	pressReleaseCmd.Flags().StringVar(&pressReleaseJSON, "press-release-json", "", "path to host-produced press-release JSON (or - for stdin); absent runs deterministic mode")
+
+	var oracleJSON string
+	oracleCmd := &cobra.Command{
+		Use:   "oracle <lifeboat-dir> <source-repo> [--oracle-json <file|->]",
+		Short: "Audit a packed lifeboat against its source repo — a registered verdict and cited findings (deterministic, or validate host-produced audit JSON)",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 2 {
+				return &exitError{Code: 2, Msg: "disembark oracle: <lifeboat-dir> <source-repo> are both required"}
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dirAbs, err := filepath.Abs(args[0])
+			if err != nil {
+				return err
+			}
+			raw, err := readSynthesisPayload(cmd, oracleJSON)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark oracle: " + scrubPaths(err)}
+			}
+			// The source repo's content is never read (the core gates it as a real dir
+			// only); a manifest failure is a MAJOR_RETHINK verdict input, exit 0.
+			res, err := lifeboat.AuditOracle(dirAbs, args[1], raw)
+			if err != nil {
+				return &exitError{Code: 2, Msg: "disembark oracle: " + scrubPaths(err)}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+	oracleCmd.Flags().StringVar(&oracleJSON, "oracle-json", "", "path to host-produced audit JSON (or - for stdin); absent runs deterministic mode")
+
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
 	disembarkCmd.AddCommand(planCmd)
 	disembarkCmd.AddCommand(packCmd)
 	disembarkCmd.AddCommand(graveyardCmd)
+	disembarkCmd.AddCommand(principlesCmd)
+	disembarkCmd.AddCommand(pressReleaseCmd)
+	disembarkCmd.AddCommand(oracleCmd)
 	return disembarkCmd
 }
 
@@ -587,6 +682,35 @@ func readLessonsPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 	}
 	if fi.Size() > lifeboat.MaxLessonsBytes {
 		return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, lifeboat.MaxLessonsBytes)
+	}
+	return os.ReadFile(spec)
+}
+
+// readSynthesisPayload reads an untrusted synthesis payload (principles,
+// press-release, or oracle audit JSON) behind the same trust guards as
+// readLessonsPayload, capped at the exported lifeboat.MaxSynthesisBytes. An EMPTY
+// spec (the flag absent) returns a nil slice — the sentinel the dual-mode cores
+// read as "run deterministic mode", never a delegated payload. A "-" spec reads
+// stdin bounded to the cap; a file must be regular, non-symlink, and under the cap.
+func readSynthesisPayload(cmd *cobra.Command, spec string) ([]byte, error) {
+	if spec == "" {
+		return nil, nil // flag absent → deterministic mode (nil raw)
+	}
+	if spec == "-" {
+		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxSynthesisBytes))
+	}
+	fi, err := os.Lstat(spec)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s is a symlink (refusing to follow)", spec)
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", spec)
+	}
+	if fi.Size() > lifeboat.MaxSynthesisBytes {
+		return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, lifeboat.MaxSynthesisBytes)
 	}
 	return os.ReadFile(spec)
 }
