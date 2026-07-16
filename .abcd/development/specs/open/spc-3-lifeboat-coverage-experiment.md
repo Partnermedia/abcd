@@ -39,6 +39,11 @@ Delivered across the plan's milestones M0–M3b:
   `graveyard/archaeology.json` and `graveyard/abandoned.json`; host-delegated
   interpretation is ingested afterwards by `disembark graveyard --lessons-json`
   under a cite-or-be-dropped Go validator.
+- **M5 — embark and the round-trip**: `embark probe` (read-only: provenance
+  schema gate, manifest verification, bulk conflict detection) and
+  `embark from` (the contained write path), the packer carrying specs, and the
+  round-trip properties — through-the-stores equality, the record-derived
+  sub-manifest closure (P1), and literal self-closure (P2).
 
 ## Approach — the probe
 
@@ -215,6 +220,59 @@ lessons files are deliberately **outside** `manifest_sha256`: the seal is pinned
 at pack time over the deterministic extraction, and interpretation is a later,
 mutable layer whose integrity is the per-entry citation rule, not the manifest.
 
+## Approach — embark and the round-trip (M5)
+
+`abcd embark probe <lifeboat-dir> [target]` and `abcd embark from <lifeboat-dir>
+[target]` (target defaults to the working directory) unpack a lifeboat's record
+into a repository. The lifeboat directory is untrusted input:
+
+- **Gates before any read of substance:** the `_provenance.json` marker must
+  parse; a provenance `schema_version` greater than this binary knows is refused
+  with an upgrade message (itd-9's irreversible half); `VerifyManifest` re-hashes
+  every file and compares against the pinned `manifest_sha256` (the post-pack
+  layer-3 lessons files and `_provenance.json` itself are excluded by
+  definition) — a tampered, missing, or extra file is fatal; every archived path
+  is re-validated; reads are guarded (size caps, symlink refusal).
+- **Only the record families embark.** The inverse mapping is table-driven:
+  `docs/adrs/` → the native ADR home, `activity/issues/<state>/` → the issue
+  ledger, `rescue/intents/<bucket>/` → the intent corpus (a bucket-less intent
+  lands in `drafts/` — the one default that fabricates no lifecycle state), and
+  `rescue/specs/<bucket>/` → the spec store. Identity- and git-derived files
+  (`coverage.*`, `brief/`, `graveyard/`, `rescue/spine.md`) inform the report and
+  are never written; an unknown lifeboat file is reported unmapped, never
+  written.
+- **Conflicts are one bulk report, and core writes nothing on refusal.** A
+  target file with different bytes is a conflict; identical bytes are an
+  idempotent skip, not a conflict. Any conflict refuses the whole embark before
+  a single write — the core returns the conflict set and the surface renders it
+  (transport-agnostic core; the design chapter's refusal-writes-a-report is
+  corrected here).
+- **Contained writes, two layers.** `os.Root` containment over the target plus
+  independent lexical path validation, with durable bytes through the canonical
+  atomic write — a bug in one layer is not an escape.
+- **The marker, never the text.** Embark never copies lifeboat prose into
+  `CLAUDE.md`; it re-injects the *current* ahoy marker block
+  (`ahoy.EnsureMarker`), the boundary between restoring a record and planting an
+  instruction implant.
+- **The coverage report is the handoff.** The rendered result surfaces the
+  lifeboat's blanks and their questions first — what a product thinker must
+  answer — before the write summary.
+
+The round-trip gate, all property-tested through the real stores: pack a
+record-bearing source, embark into a fresh target, and `intent.Load`,
+`spec.Load`, and `capture.List` on the target equal the source, ADRs are
+byte-identical, and the target's `CLAUDE.md` carries the current marker block —
+while the source tree is untouched end to end. Closure is two pinned
+properties: **P1**, the record-derived sub-manifest — `RecordManifestSHA256`
+over the ADR/issue/intent/spec/abandoned families, recorded in provenance as
+`record_manifest_sha256` — is byte-identical across pack → embark → re-pack
+(identity- and git-derived families are excluded *by design*: a fresh target
+has a different name, root SHA, and history, and pretending otherwise would be
+fiction); and **P2**, embarking a lifeboat into a byte-copy of its own source
+changes nothing and a re-pack reproduces the exact original `manifest_sha256`.
+The plan's original literal closure wording is amended by the 2026-07-16
+decision-log entry.
+
 ## The tiers
 
 | Tier | Reads | Present in |
@@ -267,7 +325,7 @@ to the verb.
 
 ## Out of scope for this spec
 
-Embark and the round-trip (M5), and host-delegated synthesis over the record
-(M6) — later milestones of itd-88, tracked in the plan. The multi-agent oracle passes and the aspirational
+Host-delegated synthesis over the record (M6) — the last milestone of itd-88,
+tracked in the plan. The multi-agent oracle passes and the aspirational
 output tree in the older [`02-disembark.md`](../../brief/04-surfaces/02-disembark.md)
 chapter are superseded by adr-35; that chapter's full rewrite is a follow-up.
