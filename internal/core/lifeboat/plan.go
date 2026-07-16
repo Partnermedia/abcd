@@ -63,13 +63,20 @@ const ProvenanceName = "_provenance.json"
 // deliberately carries no timestamp, so a re-plan of an unchanged source is
 // byte-identical and the hash is stable.
 type Provenance struct {
-	SchemaVersion  int        `json:"schema_version"`
-	Generator      string     `json:"generator"`
-	SourceName     string     `json:"source_name"`
-	SourceRootSHA  string     `json:"source_root_sha,omitempty"`
-	TiersPresent   []Tier     `json:"tiers_present"`
-	ManifestSHA256 string     `json:"manifest_sha256"`
-	Omissions      []Omission `json:"omissions,omitempty"`
+	SchemaVersion  int    `json:"schema_version"`
+	Generator      string `json:"generator"`
+	SourceName     string `json:"source_name"`
+	SourceRootSHA  string `json:"source_root_sha,omitempty"`
+	TiersPresent   []Tier `json:"tiers_present"`
+	ManifestSHA256 string `json:"manifest_sha256"`
+	// RecordManifestSHA256 is the pinned hash over ONLY the record-derived
+	// families (docs/adrs/**, activity/issues/**, rescue/intents/**,
+	// rescue/specs/**, graveyard/abandoned.json) — the P1 closure seal. It is
+	// byte-identical across pack -> embark -> re-pack of the same records, and is
+	// recorded here so embark can surface it and a re-pack can be compared without
+	// re-deriving the families. It carries no timestamp, so a re-plan stays stable.
+	RecordManifestSHA256 string     `json:"record_manifest_sha256,omitempty"`
+	Omissions            []Omission `json:"omissions,omitempty"`
 }
 
 // planBuilder assembles a lifeboat's file set with three invariants the review
@@ -197,6 +204,27 @@ func Plan(repoRoot string) (Lifeboat, error) {
 	//    summary where it does not.
 	planRescueSpine(ctx, pb)
 
+	// 5a. The spec store, verbatim, under its status buckets — mirroring the
+	//     intent handling: copyRecord strips any marker block, safeLeaf refuses a
+	//     hostile leaf, and the buckets are a fixed set so the order is
+	//     deterministic. A fresh target embarks these back into the spec store.
+	for _, bucket := range specEmbarkBuckets {
+		dir := path.Join(nativeSpecsDir, bucket)
+		if !ctx.IsDir(dir) {
+			continue
+		}
+		for _, name := range ctx.ListDir(dir) {
+			if !strings.HasPrefix(name, "spc-") || !strings.HasSuffix(name, ".md") {
+				continue
+			}
+			leaf := safeLeaf(name)
+			if leaf == "" {
+				continue
+			}
+			pb.copyRecord(ctx, path.Join(dir, name), path.Join("rescue", "specs", bucket, leaf))
+		}
+	}
+
 	// 5b. The graveyard, layers 1 and 2 — deterministic, evidence only. Layer 3
 	//     (lessons.json) is a later host-delegated step written by
 	//     `abcd disembark graveyard` into the packed lifeboat, never here. Both
@@ -214,13 +242,14 @@ func Plan(repoRoot string) (Lifeboat, error) {
 	// 6. Provenance, assembled last, hashing every other file. It is appended
 	//    outside the builder's ceiling so it is always present.
 	prov := Provenance{
-		SchemaVersion:  SchemaVersion,
-		Generator:      "abcd disembark",
-		SourceName:     cov.Repo.Name,
-		SourceRootSHA:  cov.Repo.RootSHA,
-		TiersPresent:   cov.TiersPresent,
-		ManifestSHA256: ManifestSHA256(files),
-		Omissions:      pb.omissions,
+		SchemaVersion:        SchemaVersion,
+		Generator:            "abcd disembark",
+		SourceName:           cov.Repo.Name,
+		SourceRootSHA:        cov.Repo.RootSHA,
+		TiersPresent:         cov.TiersPresent,
+		ManifestSHA256:       ManifestSHA256(files),
+		RecordManifestSHA256: RecordManifestSHA256(files),
+		Omissions:            pb.omissions,
 	}
 	pj, err := json.MarshalIndent(prov, "", "  ")
 	if err != nil {
@@ -232,19 +261,20 @@ func Plan(repoRoot string) (Lifeboat, error) {
 	return Lifeboat{Coverage: cov, Files: files, Omissions: pb.omissions}, nil
 }
 
-// ManifestSHA256 is the pinned lifeboat hash (adr-35): SHA-256 over the
-// concatenation of "<sha256>  <path>\n" for every file EXCEPT _provenance.json
-// (which cannot hash itself), sorted lexicographically BY PATH — not by the
-// assembled line, whose leading hash would otherwise dominate the ordering. It
-// is deterministic for a given file set.
-func ManifestSHA256(files []PlannedFile) string {
+// manifestSHA256Over is the shared adr-35 hash construction: SHA-256 over the
+// concatenation of "<sha256>  <path>\n" for every file the keep predicate admits,
+// sorted lexicographically BY PATH — not by the assembled line, whose leading hash
+// would otherwise dominate the ordering. It is deterministic for a given file set
+// and predicate. ManifestSHA256 and RecordManifestSHA256 differ only in which
+// files they keep, so the two hashes cannot drift in their line construction.
+func manifestSHA256Over(files []PlannedFile, keep func(PlannedFile) bool) string {
 	type entry struct {
 		path string
 		line string
 	}
 	entries := make([]entry, 0, len(files))
 	for _, f := range files {
-		if f.Path == ProvenanceName {
+		if !keep(f) {
 			continue
 		}
 		sum := sha256.Sum256(f.Content)
@@ -257,6 +287,36 @@ func ManifestSHA256(files []PlannedFile) string {
 	}
 	h := sha256.Sum256([]byte(buf.String()))
 	return fmt.Sprintf("%x", h)
+}
+
+// ManifestSHA256 is the pinned lifeboat hash (adr-35): the shared construction
+// over every file EXCEPT _provenance.json (which cannot hash itself).
+func ManifestSHA256(files []PlannedFile) string {
+	return manifestSHA256Over(files, func(f PlannedFile) bool { return f.Path != ProvenanceName })
+}
+
+// RecordManifestSHA256 is the pinned hash over ONLY the record-derived families
+// (docs/adrs/**, activity/issues/**, rescue/intents/**, rescue/specs/**,
+// graveyard/abandoned.json) — the same construction as ManifestSHA256, restricted
+// to isRecordDerived paths. It is the closure seal (P1): byte-identical across
+// pack -> embark -> re-pack, because those families derive purely from the repo's
+// record and never from git or the operator's identity.
+func RecordManifestSHA256(files []PlannedFile) string {
+	return manifestSHA256Over(files, func(f PlannedFile) bool { return isRecordDerived(f.Path) })
+}
+
+// isRecordDerived reports whether a lifeboat-relative path is one of the
+// record-derived families sealed by RecordManifestSHA256. The set is
+// recordDerivedPrefixes (embark_types.go), the single source of truth shared with
+// the embarker, so the pack side and the embark side cannot disagree about which
+// bytes must round-trip.
+func isRecordDerived(rel string) bool {
+	for _, p := range recordDerivedPrefixes {
+		if strings.HasPrefix(rel, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // PlanManifest is the dry-run view of a Lifeboat: what `disembark plan` would

@@ -231,6 +231,139 @@ func TestPlanProvenanceRecordsManifestHash(t *testing.T) {
 	}
 }
 
+// cloneRecordFiles deep-copies a PlannedFile slice so a test can mutate one
+// file's bytes without disturbing the shared base.
+func cloneRecordFiles(in []PlannedFile) []PlannedFile {
+	out := make([]PlannedFile, len(in))
+	for i, f := range in {
+		c := f
+		c.Content = append([]byte(nil), f.Content...)
+		out[i] = c
+	}
+	return out
+}
+
+// bumpRecordFile flips one byte of the file at path p, or fails the test.
+func bumpRecordFile(t *testing.T, files []PlannedFile, p string) {
+	t.Helper()
+	for i := range files {
+		if files[i].Path == p {
+			files[i].Content = append(files[i].Content, '!')
+			return
+		}
+	}
+	t.Fatalf("no file %q to bump", p)
+}
+
+// TestRecordManifestSHA256CoversRecordFamiliesOnly pins the P1 closure boundary:
+// RecordManifestSHA256 hashes exactly the record-derived families
+// (docs/adrs/**, activity/issues/**, rescue/intents/**, rescue/specs/**,
+// graveyard/abandoned.json) and NOTHING else. Changing any record byte moves the
+// hash; changing an identity/git-derived file (coverage.*, brief/**,
+// graveyard/archaeology.json, rescue/spine.md, _provenance.json) does not — so a
+// fresh target that legitimately reproduces different identity bytes still closes.
+func TestRecordManifestSHA256CoversRecordFamiliesOnly(t *testing.T) {
+	base := []PlannedFile{
+		{Path: "docs/adrs/0001-x.md", Content: []byte("adr")},
+		{Path: "activity/issues/open/iss-1-x.md", Content: []byte("issue")},
+		{Path: "rescue/intents/drafts/itd-1-x.md", Content: []byte("intent")},
+		{Path: "rescue/specs/open/spc-1-x.md", Content: []byte("spec")},
+		{Path: "graveyard/abandoned.json", Content: []byte("{}")},
+		// Identity/git-derived — excluded from the record closure by design.
+		{Path: "coverage.json", Content: []byte("cov")},
+		{Path: "coverage.md", Content: []byte("covmd")},
+		{Path: "brief/01-product/02-context.md", Content: []byte("brief")},
+		{Path: "graveyard/archaeology.json", Content: []byte("arch")},
+		{Path: "rescue/spine.md", Content: []byte("spine")},
+		{Path: ProvenanceName, Content: []byte("prov")},
+	}
+	baseHash := RecordManifestSHA256(base)
+	if baseHash == "" {
+		t.Fatal("RecordManifestSHA256 over a record-bearing set is empty")
+	}
+
+	records := []string{
+		"docs/adrs/0001-x.md",
+		"activity/issues/open/iss-1-x.md",
+		"rescue/intents/drafts/itd-1-x.md",
+		"rescue/specs/open/spc-1-x.md",
+		"graveyard/abandoned.json",
+	}
+	for _, p := range records {
+		m := cloneRecordFiles(base)
+		bumpRecordFile(t, m, p)
+		if RecordManifestSHA256(m) == baseHash {
+			t.Errorf("RecordManifestSHA256 did not move when record %q changed", p)
+		}
+	}
+
+	identity := []string{
+		"coverage.json",
+		"coverage.md",
+		"brief/01-product/02-context.md",
+		"graveyard/archaeology.json",
+		"rescue/spine.md",
+		ProvenanceName,
+	}
+	for _, p := range identity {
+		m := cloneRecordFiles(base)
+		bumpRecordFile(t, m, p)
+		if RecordManifestSHA256(m) != baseHash {
+			t.Errorf("RecordManifestSHA256 moved when identity-derived %q changed", p)
+		}
+	}
+}
+
+// TestPlanProvenanceRecordsRecordManifestHash checks the plan writes
+// record_manifest_sha256 into _provenance.json, equal to RecordManifestSHA256 over
+// the file set; that adding the field left manifest_sha256 untouched; that
+// isAbcdLifeboat still parses the provenance; and that a re-plan of an unchanged
+// source reproduces the provenance byte-for-byte (no timestamp crept in).
+func TestPlanProvenanceRecordsRecordManifestHash(t *testing.T) {
+	repo := nativeTierFixture(t)
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pf := planFile(t, lb, ProvenanceName)
+	var prov Provenance
+	if err := json.Unmarshal(pf.Content, &prov); err != nil {
+		t.Fatalf("provenance is not valid JSON: %v", err)
+	}
+	if prov.RecordManifestSHA256 == "" {
+		t.Fatal("provenance carries no record_manifest_sha256")
+	}
+	// _provenance.json is not record-derived, so RecordManifestSHA256(lb.Files)
+	// equals the value Plan computed over the pre-provenance slice.
+	if want := RecordManifestSHA256(lb.Files); prov.RecordManifestSHA256 != want {
+		t.Errorf("record_manifest_sha256 = %s, recomputed = %s", prov.RecordManifestSHA256, want)
+	}
+	if want := ManifestSHA256(lb.Files); prov.ManifestSHA256 != want {
+		t.Errorf("manifest_sha256 disturbed by the new field: %s vs %s", prov.ManifestSHA256, want)
+	}
+	// The record and full manifests are over different sets — they must differ,
+	// or the predicate is not actually restricting anything.
+	if prov.RecordManifestSHA256 == prov.ManifestSHA256 {
+		t.Error("record_manifest_sha256 equals manifest_sha256; the record predicate is not restricting the set")
+	}
+	// isAbcdLifeboat tolerates the new field.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ProvenanceName), pf.Content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !isAbcdLifeboat(dir) {
+		t.Error("isAbcdLifeboat rejected a provenance carrying record_manifest_sha256")
+	}
+	// Byte-identical re-plan.
+	lb2, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(planFile(t, lb2, ProvenanceName).Content, pf.Content) {
+		t.Error("provenance not byte-identical across two plans")
+	}
+}
+
 // TestPlanBriefCarriesOnlyNonBlankSections is the honesty rule for the brief: a
 // grounded section gets a citation-map file; a genuinely blank section
 // (personas, absent here) gets none — the plan never fabricates a brief page for
@@ -284,6 +417,103 @@ func TestPlanCopiesADRAndIssueVerbatim(t *testing.T) {
 		if !bytes.Equal(got.Content, want) {
 			t.Errorf("%s not copied verbatim to %s", c.src, c.dst)
 		}
+	}
+}
+
+// TestPlanCopiesSpecsVerbatim proves the spec store round-trips: open and closed
+// specs land at rescue/specs/<bucket>/<leaf> with the source bytes unchanged and
+// their loadable spc-N-<slug>.md names preserved, so a fresh target can embark and
+// spec.Load them again.
+func TestPlanCopiesSpecsVerbatim(t *testing.T) {
+	repo := t.TempDir()
+	write := func(rel, content string) {
+		full := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	openSpec := "---\nid: spc-1\nslug: alpha\nintent: itd-9\nstatus: open\n---\n\n# spc-1 alpha\n\nAn open spec.\n"
+	closedSpec := "---\nid: spc-2\nslug: beta\nintent: itd-9\nstatus: closed\n---\n\n# spc-2 beta\n\nA closed spec.\n"
+	write(".abcd/development/specs/open/spc-1-alpha.md", openSpec)
+	write(".abcd/development/specs/closed/spc-2-beta.md", closedSpec)
+
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ dst, want string }{
+		{"rescue/specs/open/spc-1-alpha.md", openSpec},
+		{"rescue/specs/closed/spc-2-beta.md", closedSpec},
+	}
+	for _, c := range cases {
+		got := planFile(t, lb, c.dst)
+		if string(got.Content) != c.want {
+			t.Errorf("%s not copied verbatim:\n got %q\nwant %q", c.dst, got.Content, c.want)
+		}
+	}
+}
+
+// TestPlanDropsUnsafeSpecName proves a hostile spec filename cannot steer a write
+// out of the spec family: a control-char leaf is dropped by safeLeaf, not
+// relocated, while a legitimate sibling in the same bucket still lands.
+func TestPlanDropsUnsafeSpecName(t *testing.T) {
+	repo := t.TempDir()
+	openDir := filepath.Join(repo, ".abcd/development/specs/open")
+	if err := os.MkdirAll(openDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(openDir, "spc-1-ok.md"), []byte("ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hostile := filepath.Join(openDir, "spc-2-\x01evil.md")
+	if err := os.WriteFile(hostile, []byte("EVIL\n"), 0o644); err != nil {
+		t.Skipf("filesystem rejects control-char filenames: %v", err)
+	}
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasPlanFile(lb, "rescue/specs/open/spc-1-ok.md") {
+		t.Errorf("legit spec not planned; have:\n  %s", planPaths(lb))
+	}
+	for _, f := range lb.Files {
+		for _, r := range f.Path {
+			if r < 0x20 || r == 0x7f {
+				t.Errorf("planned path carries a control character: %q", f.Path)
+			}
+		}
+		if strings.HasPrefix(f.Path, "rescue/specs/") && strings.Contains(string(f.Content), "EVIL") {
+			t.Errorf("hostile spec content leaked into %q", f.Path)
+		}
+	}
+}
+
+// TestPlanStripsMarkerFromSpec proves a spec carrying an abcd marker block has it
+// neutralised before it travels (copyRecord's strip-on-pack), so an embarked spec
+// cannot plant a stale rules-loader in the target repo. The body survives intact.
+func TestPlanStripsMarkerFromSpec(t *testing.T) {
+	repo := t.TempDir()
+	openDir := filepath.Join(repo, ".abcd/development/specs/open")
+	if err := os.MkdirAll(openDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "# spc-1\n\n<!-- BEGIN ABCD -->\nstale loader text\n<!-- END ABCD -->\n\n## Body\n\nReal spec content.\n"
+	if err := os.WriteFile(filepath.Join(openDir, "spc-1-x.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := planFile(t, lb, "rescue/specs/open/spc-1-x.md")
+	if bytes.Contains(got.Content, []byte("BEGIN ABCD")) {
+		t.Errorf("packed spec still carries the marker block:\n%s", got.Content)
+	}
+	if !bytes.Contains(got.Content, []byte("## Body")) {
+		t.Errorf("marker strip damaged the spec body:\n%s", got.Content)
 	}
 }
 
