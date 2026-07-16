@@ -548,3 +548,26 @@ func oraclePayloadJSON(verdict string, findings ...string) []byte {
 	return []byte(`{"schema_version":1,"mode":"delegated","prompt_version":"0.1.0","verdict":"` +
 		verdict + `","findings":[` + strings.Join(findings, ",") + `]}`)
 }
+
+// TestAuditOracleReRunKeepsManifestVerified: with audit/ in the manifest
+// exclusions, a second oracle run over the SAME lifeboat still verifies the
+// manifest — the first run's audit artifact cannot poison the second's verdict.
+func TestAuditOracleReRunKeepsManifestVerified(t *testing.T) {
+	dir := oracleFixture(t, "001", &Summary{Grounded: 5, Partial: 1, Blank: 2})
+	src := t.TempDir()
+
+	first, err := AuditOracle(dir, src, nil)
+	if err != nil {
+		t.Fatalf("first AuditOracle: %v", err)
+	}
+	if first.Verdict != VerdictShip {
+		t.Fatalf("first run: verdict=%s, want SHIP", first.Verdict)
+	}
+	second, err := AuditOracle(dir, src, nil)
+	if err != nil {
+		t.Fatalf("second AuditOracle: %v", err)
+	}
+	if second.Verdict != VerdictShip {
+		t.Fatalf("re-run over the same dir: verdict=%s, want SHIP — the audit artifact perturbed the manifest", second.Verdict)
+	}
+}
