@@ -132,6 +132,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newIntentCommand(&asJSON))
 	root.AddCommand(newSpecCommand(&asJSON))
 	root.AddCommand(newDisembarkCommand(&asJSON))
+	root.AddCommand(newEmbarkCommand(&asJSON))
 
 	// A cobra usage error (unknown flag, unknown subcommand, stray positional
 	// argument) is a plain error with no ExitCode(), so Run() would map it to
@@ -470,6 +471,100 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	disembarkCmd.AddCommand(packCmd)
 	disembarkCmd.AddCommand(graveyardCmd)
 	return disembarkCmd
+}
+
+// newEmbarkCommand builds the operator `embark` sub-tree — the write half of the
+// M5 record round-trip (itd-88, adr-35), the inverse of `disembark`:
+//
+//   - `probe <lifeboat-dir> [target-dir]` inspects a packed lifeboat against a
+//     target read-only and reports what would land where, what conflicts would
+//     block a write, which files are not embarked, the marker action, and the
+//     coverage handoff. A plan WITH conflicts is a success (a report, exit 0).
+//   - `from <lifeboat-dir> [target-dir]` writes the record families back into the
+//     target through two-layer containment; on ANY conflict it refuses and writes
+//     nothing (exit 1, one bulk report), re-injecting the current marker block
+//     (never foreign prose) into the target CLAUDE.md.
+//
+// The target defaults to the working directory. Structural faults (not a lifeboat,
+// schema too new, failed manifest verification, bad target) exit 2 with a scrubbed
+// diagnostic; the conflict refusal exits 1 after rendering the report. `embark`
+// backs the `/abcd:embark` command surface (commands/abcd/embark.md), so its
+// surface-registry row is shipped.
+func newEmbarkCommand(asJSON *bool) *cobra.Command {
+	embarkCmd := &cobra.Command{
+		Use:   "embark",
+		Short: "Unpack a lifeboat's record families back into a target repo (probe read-only; from writes)",
+		Args:  cobra.NoArgs,
+	}
+
+	// resolveDirs turns the args into absolute lifeboat + target dirs; the target
+	// defaults to the working directory when omitted.
+	resolveDirs := func(args []string) (lbAbs, tgtAbs string, err error) {
+		lbAbs, err = filepath.Abs(args[0])
+		if err != nil {
+			return "", "", err
+		}
+		target := "."
+		if len(args) == 2 {
+			target = args[1]
+		}
+		tgtAbs, err = filepath.Abs(target)
+		return lbAbs, tgtAbs, err
+	}
+
+	probeCmd := &cobra.Command{
+		Use:   "probe <lifeboat-dir> [target-dir]",
+		Short: "Report what a lifeboat would write into a target, read-only (coverage blanks first)",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			lbAbs, tgtAbs, err := resolveDirs(args)
+			if err != nil {
+				return err
+			}
+			plan, err := lifeboat.EmbarkProbe(lbAbs, tgtAbs)
+			if err != nil {
+				return &exitError{Code: 2, Msg: fmt.Sprintf("embark probe: %s", scrubPaths(err))}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, plan, func(w io.Writer) {
+				fmt.Fprint(w, plan.Render())
+			})
+		},
+	}
+
+	fromCmd := &cobra.Command{
+		Use:   "from <lifeboat-dir> [target-dir]",
+		Short: "Write a lifeboat's record families into a target repo; refuses on any conflict",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			lbAbs, tgtAbs, err := resolveDirs(args)
+			if err != nil {
+				return err
+			}
+			res, err := lifeboat.EmbarkFrom(lbAbs, tgtAbs)
+			if err != nil {
+				// A conflict refusal is an EXPECTED outcome, not a fault: render the
+				// bulk report, then propagate exit 1 with an empty message (the report
+				// is the output, the exit code the only extra signal). Every other
+				// error is a structural fault: exit 2, scrubbed to one line.
+				if errors.Is(err, lifeboat.ErrEmbarkConflicts) {
+					if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+						fmt.Fprint(w, res.Render())
+					}); rerr != nil {
+						return rerr
+					}
+					return &exitError{Code: 1}
+				}
+				return &exitError{Code: 2, Msg: fmt.Sprintf("embark from: %s", scrubPaths(err))}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprint(w, res.Render())
+			})
+		},
+	}
+
+	embarkCmd.AddCommand(probeCmd)
+	embarkCmd.AddCommand(fromCmd)
+	return embarkCmd
 }
 
 // readLessonsPayload reads the untrusted lesson JSON behind the trust guards,
