@@ -323,14 +323,20 @@ var recordDerivedPrefixes = []string{
 // reportOnlyPrefixes are the lifeboat paths embark never writes but reads to
 // inform the report (Ignored{report-only}). coverage.* is handled by prefix
 // "coverage." so both coverage.json and coverage.md match. _provenance.json is a
-// slash-less exact match. This set is the embark-side complement of
-// embarkFamilies: a file matches at most one, and a file matching neither is
-// Ignored{unknown}.
+// slash-less exact match. The M6 synthesis layer (principles.*, press-release.*,
+// audit/**) is post-pack, host-delegated or deterministically derived; it is
+// reported here so embark surfaces it as report-only rather than mis-flagging it
+// Ignored{unknown} (it is neither a record family nor a foreign/tampered entry).
+// This set is the embark-side complement of embarkFamilies: a file matches at
+// most one, and a file matching neither is Ignored{unknown}.
 var reportOnlyPrefixes = []string{
 	"brief/",
 	"coverage.",
 	"graveyard/",
 	"rescue/spine.md",
+	"principles.",
+	"press-release.",
+	"audit/",
 	ProvenanceName,
 }
 
@@ -339,8 +345,13 @@ var reportOnlyPrefixes = []string{
 // the tree and reproduce the pinned hash exactly. _provenance.json cannot hash
 // itself; graveyard/lessons.json and graveyard/low-confidence/** are the mutable,
 // post-pack, host-delegated layer-3 interpretation that IngestLessons writes into
-// an already-sealed lifeboat and deliberately keeps out of the manifest.
+// an already-sealed lifeboat and deliberately keeps out of the manifest. The M6
+// synthesis layer (principles.json/.md, press-release.json/.md, and every
+// audit/** oracle audit) is the same kind of post-pack mutable artifact — written
+// into an already-sealed lifeboat, its integrity the per-entry cite-or-be-dropped
+// rule and the registered-verdict gate, not the manifest seal — so it is excluded
+// here too and VerifyManifest still reproduces the pinned hash after synthesis.
 var (
-	manifestExcludedExact    = []string{ProvenanceName, "graveyard/lessons.json"}
-	manifestExcludedPrefixes = []string{"graveyard/low-confidence/"}
+	manifestExcludedExact    = []string{ProvenanceName, "graveyard/lessons.json", "principles.json", "principles.md", "press-release.json", "press-release.md"}
+	manifestExcludedPrefixes = []string{"graveyard/low-confidence/", "audit/"}
 )
