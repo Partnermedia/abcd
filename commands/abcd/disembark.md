@@ -82,6 +82,99 @@ lifeboat, its graveyard files are unreadable, or the lesson payload is
 unreadable, oversize, or malformed. The lesson files are a later, mutable
 interpretation and are **not** part of the lifeboat's `manifest_sha256`.
 
+## Principles (distilled from the record)
+
+A packed lifeboat can carry **principles** — the load-bearing decisions the project
+settled, each citing the record it rests on. Run the `principle-distiller` agent
+(`agents/principle-distiller.md`) over the packed `docs/adrs/` and
+`activity/issues/`, have it emit a principle JSON document (each principle
+**citing** the record ids — `adr-N`, `itd-N`, `iss-N` — or the lifeboat paths it
+distils from), write that document to a file, then:
+
+```bash
+abcd disembark principles <lifeboat-dir> --principles-json <path>   # or - for stdin
+```
+
+**Without the flag** the verb runs deterministic mode: it writes an evidence-only
+`principles.json` composed straight from the packed ADRs' own stated decisions —
+no agent, no interpretation, byte-identical across re-runs.
+
+With the flag it is a **cite-or-be-dropped** gate. A principle survives only if at
+least one of its `evidence` refs resolves to a live record/finding id or a packed
+lifeboat path; one that cites nothing resolvable is **dropped** — reported in the
+result, never fatal. Surviving principles are written to `principles.json` (sorted
+by id) and rendered to `principles.md`; a delegated ingest **fully replaces** the
+prior file. Report `written` and each `dropped` (with its reason). The verb
+**exits 0 even when every principle was dropped** — the file is written with an
+empty list, an honest "nothing distilled". It exits non-zero only on a structural
+fault (not an abcd lifeboat, or a payload that is unreadable, oversize, or
+malformed). `principles.json`/`.md` are a later, mutable synthesis layer and are
+**not** part of the lifeboat's `manifest_sha256`.
+
+## Press release (the embark interview contract)
+
+The lifeboat's **press release** is the one-paragraph "what this project is"
+statement a future embark interview reads back. Run the `press-release-composer`
+agent (`agents/press-release-composer.md`) over the packed `brief/`,
+`rescue/spine.md`, and `principles.json`, have it emit a press-release JSON
+document whose `evidence` cites those inputs, write it to a file, then:
+
+```bash
+abcd disembark press-release <lifeboat-dir> --press-release-json <path>   # or - for stdin
+```
+
+**Without the flag** the verb composes deterministically from the packed brief
+press-release section (falling back to the spine, then to a grounded-nothing
+placeholder) and writes `press-release.json` + `.md`. Always written,
+byte-identical across re-runs.
+
+A press release is a **single document**, not a list, so the citation rule is
+whole-document: its `evidence` must carry at least one ref resolving to `brief/**`,
+`rescue/spine.md`, or `principles.json`. A delegated document that cites **nothing
+resolvable is refused** — the verb exits non-zero and leaves the previously derived
+press release untouched (there is no per-entry granularity to drop). Report the
+result: `mode` and `evidence_refs`. It also exits non-zero on a structural fault
+(not a lifeboat, or an unreadable/oversize/malformed payload). The press-release
+files are a mutable synthesis layer and are **not** part of `manifest_sha256`.
+
+## Oracle audit (content fidelity + verdict)
+
+The **oracle** audits a packed lifeboat against the source repo it was mined from
+and issues a registered verdict — `SHIP`, `NEEDS_WORK`, or `MAJOR_RETHINK` — with
+findings that each cite a lifeboat file. Run the `lifeboat-oracle` agent
+(`agents/lifeboat-oracle.md`) over the whole packed lifeboat versus the source,
+have it emit an audit JSON document (verdict + findings, each **citing** a packed
+lifeboat path), write it to a file, then:
+
+```bash
+abcd disembark oracle <lifeboat-dir> <source-repo> --oracle-json <path>   # or - for stdin
+```
+
+The `<source-repo>` argument is **required**; its content is never read — the
+binary gates it as a real directory only, so the audit stays deterministic and
+safe even when the source is gone. The binary always **stamps the attestation
+fields itself** (source name, manifest hash, manifest-verified flag, coverage
+summary) — they are never taken from the agent's payload.
+
+**Without the flag** the verb computes a deterministic verdict from manifest
+verification plus the packed coverage summary: a lifeboat whose bytes no longer
+match its seal is `MAJOR_RETHINK`; one that cannot attest coverage, or whose blank
+sections outnumber its grounded ones, is `NEEDS_WORK`; otherwise `SHIP`. A manifest
+mismatch is a **verdict input, not a failure** — the audit is still written and the
+verb exits 0.
+
+With the flag, the model's `verdict` is **membership-checked** (an out-of-enum
+verdict is refused, exit non-zero) and its findings are **cite-or-be-dropped**
+against the packed path set. The audit lands at
+`audit/oracle-<manifest12>.json` + `.md`, named from the manifest hash (no
+timestamp), so a deterministic run and a later delegated run write the **same**
+file — a clean replacement, no stale twin. Report the `verdict`, `written`
+findings, and each `dropped` (with its reason); the verb exits 0 even when every
+finding was dropped. It exits non-zero only on a structural fault (not a lifeboat,
+a `<source-repo>` that is not a real directory, or an unreadable/oversize/malformed
+payload). The audit files are a mutable synthesis layer and are **not** part of
+`manifest_sha256`.
+
 If the `abcd` binary is not on `PATH`, fall back to
 `go run ./cmd/abcd disembark ...` from the repo root, or build it with `make build`.
 
