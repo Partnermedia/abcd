@@ -256,7 +256,7 @@ func validateOracle(abs string, raw []byte) (OracleVerdict, []OracleFinding, ora
 		return "", nil, rep, err
 	}
 	defer root.Close()
-	paths, err := buildLifeboatPathSet(root)
+	paths, err := buildLifeboatPathSet(root, oracleOwnOutput)
 	if err != nil {
 		return "", nil, rep, err
 	}

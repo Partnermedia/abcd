@@ -143,7 +143,16 @@ func deterministicPrinciples(abs string) ([]Principle, error) {
 		if !ok {
 			return
 		}
-		bullets, found := gvSectionBullets(data, "consequences", "decision")
+		// Evaluate each keyword's own first-matching section independently:
+		// gvSectionBullets matches only the first heading in document order, so a
+		// combined ("consequences","decision") call returns the earlier Decision
+		// section — which, when it is prose or a numbered list, yields zero bullets
+		// and silently drops an ADR whose Consequences below IS bulleted. Prefer
+		// Consequences, fall back to Decision.
+		bullets, found := gvSectionBullets(data, "consequences")
+		if !found || len(bullets) == 0 {
+			bullets, found = gvSectionBullets(data, "decision")
+		}
 		if !found || len(bullets) == 0 {
 			return
 		}
@@ -249,7 +258,7 @@ func buildPrincipleEvidenceSet(abs string) (map[string]bool, error) {
 		return nil, err
 	}
 	defer root.Close()
-	paths, err := buildLifeboatPathSet(root)
+	paths, err := buildLifeboatPathSet(root, principlesOwnOutput)
 	if err != nil {
 		return nil, err
 	}
@@ -347,16 +356,39 @@ func gateSynthLifeboat(lifeboatDir string) (string, Provenance, error) {
 // lifeboat-relative POSIX path, from the same sorted, symlink-refusing, bounded
 // walk VerifyManifest uses. A delegated ref that names a packed path is a valid
 // citation.
-func buildLifeboatPathSet(root *os.Root) (map[string]bool, error) {
+func buildLifeboatPathSet(root *os.Root, ownOutput func(string) bool) (map[string]bool, error) {
 	rels, err := walkLifeboatFiles(root)
 	if err != nil {
 		return nil, err
 	}
 	set := make(map[string]bool, len(rels))
 	for _, r := range rels {
+		// A verb's OWN post-pack output must never enter its citation set, or a
+		// payload citing the verb's own not-yet-written artifact would be dropped
+		// on the first run and survive on the second — a self-referential re-run
+		// non-determinism. Another verb's output is a legitimate citation (a press
+		// release cites principles.json), so the exclusion is per-verb, not global.
+		if ownOutput != nil && ownOutput(r) {
+			continue
+		}
 		set[r] = true
 	}
 	return set, nil
+}
+
+// principlesOwnOutput matches the principle verb's own post-pack artifacts.
+func principlesOwnOutput(rel string) bool {
+	return rel == "principles.json" || rel == "principles.md"
+}
+
+// pressReleaseOwnOutput matches the press-release verb's own post-pack artifacts.
+func pressReleaseOwnOutput(rel string) bool {
+	return rel == "press-release.json" || rel == "press-release.md"
+}
+
+// oracleOwnOutput matches the oracle verb's own post-pack artifacts.
+func oracleOwnOutput(rel string) bool {
+	return strings.HasPrefix(rel, "audit/")
 }
 
 // cleanSynthProse sanitises untrusted synthesis prose (principle, finding,

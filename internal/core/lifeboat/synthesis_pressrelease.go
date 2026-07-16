@@ -57,7 +57,7 @@ func ComposePressRelease(lifeboatDir string, raw []byte) (PressReleaseResult, er
 		return PressReleaseResult{}, err
 	}
 	defer root.Close()
-	paths, err := buildLifeboatPathSet(root)
+	paths, err := buildLifeboatPathSet(root, pressReleaseOwnOutput)
 	if err != nil {
 		return PressReleaseResult{}, err
 	}

@@ -229,3 +229,27 @@ func TestSynthPressReleaseCanary(t *testing.T) {
 		t.Errorf("quote markers not neutralised: %q", pf.Quotes[0].Text)
 	}
 }
+
+// TestSynthPressReleaseCitesPrinciples: principles.json is a legitimate
+// press-release citation (brief, spine, principles). The per-verb own-output
+// exclusion must not bar it — only the press release's own artifacts are barred.
+func TestSynthPressReleaseCitesPrinciples(t *testing.T) {
+	dir := synthLifeboat(t, map[string]string{
+		"principles.json": `{"schema_version":1,"mode":"deterministic","principles":[]}`,
+	})
+	payload := pressReleasePayload(t, PressReleaseFile{
+		PromptVersion: "0.1.0",
+		Headline:      "Grounded in the distilled principles",
+		Body:          "The release rests on what the record established.",
+		Evidence:      []string{"principles.json"},
+	})
+	res, err := ComposePressRelease(dir, payload)
+	if err != nil {
+		t.Fatalf("ComposePressRelease citing principles.json: %v", err)
+	}
+	pf := readPressReleaseFile(t, dir)
+	if len(pf.Evidence) != 1 || pf.Evidence[0] != "principles.json" {
+		t.Fatalf("evidence = %v, want [principles.json] — the citation was wrongly barred", pf.Evidence)
+	}
+	_ = res
+}

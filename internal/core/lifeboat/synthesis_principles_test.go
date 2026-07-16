@@ -306,3 +306,66 @@ func TestSynthPrinciplesNotALifeboat(t *testing.T) {
 		t.Fatal("a plain dir is not an abcd lifeboat; want an error (exit 2)")
 	}
 }
+
+// TestSynthPrinciplesProseDecisionBulletedConsequences: the real-corpus ADR
+// shape — a prose or numbered-list Decision section followed by a bulleted
+// Consequences section — must still surface a principle (the first-matching-
+// heading scan silently dropped it).
+func TestSynthPrinciplesProseDecisionBulletedConsequences(t *testing.T) {
+	dir := synthLifeboat(t, map[string]string{
+		"docs/adrs/0040-prose-decision.md": "# 40. Prose decision\n\n" +
+			"## Decision\n\nWe do the thing, in prose.\n\n1. first step\n2. second step\n\n" +
+			"## Alternatives Considered\n\n- something else\n\n" +
+			"## Consequences\n\n- the durable lesson worth distilling\n",
+	})
+	res, err := SynthesizePrinciples(dir, nil)
+	if err != nil {
+		t.Fatalf("SynthesizePrinciples: %v", err)
+	}
+	if res.Written != 1 {
+		t.Fatalf("written = %d, want 1 (the bulleted Consequences must surface despite the prose Decision)", res.Written)
+	}
+	pf := readPrinciplesFile(t, dir)
+	if len(pf.Principles) != 1 || !strings.Contains(pf.Principles[0].Principle, "durable lesson") {
+		t.Fatalf("principles = %+v, want the Consequences bullet", pf.Principles)
+	}
+}
+
+// TestSynthCitationSetExcludesOwnArtifacts: the delegated citation path set is
+// the SEALED pack — a payload citing only the verb's own post-pack output is
+// dropped on every run, so re-runs stay byte-identical (no self-referential
+// flip between run 1 and run 2).
+func TestSynthCitationSetExcludesOwnArtifacts(t *testing.T) {
+	dir := adrLifeboat(t)
+	payload := principlesPayload(t, "0.1.0", Principle{
+		ID: "prn-self", Principle: "cites only my own output", Confidence: ConfidenceHigh,
+		Evidence: []string{"principles.json"},
+	})
+
+	first, err := SynthesizePrinciples(dir, payload)
+	if err != nil {
+		t.Fatalf("first delegated run: %v", err)
+	}
+	if first.Dropped != 1 || first.Written != 0 {
+		t.Fatalf("first run: written=%d dropped=%d, want 0/1", first.Written, first.Dropped)
+	}
+	bytes1, err := os.ReadFile(filepath.Join(dir, "principles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := SynthesizePrinciples(dir, payload)
+	if err != nil {
+		t.Fatalf("second delegated run: %v", err)
+	}
+	if second.Dropped != 1 || second.Written != 0 {
+		t.Fatalf("second run: written=%d dropped=%d, want 0/1 — the first run's artifact entered the citation set", second.Written, second.Dropped)
+	}
+	bytes2, err := os.ReadFile(filepath.Join(dir, "principles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bytes1) != string(bytes2) {
+		t.Fatal("re-run is not byte-identical: self-referential citation flipped between runs")
+	}
+}
