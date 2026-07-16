@@ -35,7 +35,7 @@ var gitManifestFiles = []string{
 func gitReverts(ctx *SourceContext) []string {
 	var out []string
 	for _, s := range ctx.GitLines("log", "--format=%s") {
-		if strings.HasPrefix(s, "Revert \"") || strings.HasPrefix(s, "Revert:") {
+		if isRevertSubject(s) {
 			out = append(out, s)
 		}
 	}

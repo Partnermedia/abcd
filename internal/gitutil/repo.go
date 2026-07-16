@@ -1,7 +1,8 @@
 package gitutil
 
 import (
-	"io"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -39,17 +40,25 @@ func isolatedGit(root string, args ...string) *exec.Cmd {
 // dropped (deliberate pass-throughs such as GIT_EXEC_PATH are kept).
 func gitEnv() []string {
 	base := os.Environ()
-	env := make([]string, 0, len(base)+3)
+	env := make([]string, 0, len(base)+5)
 	for _, kv := range base {
 		if scrubGitVar(kv) {
 			continue
 		}
 		env = append(env, kv)
 	}
+	// LC_ALL=C / LANG=C pin git's own chrome to the C locale, appended AFTER
+	// os.Environ() so they win over any ambient locale. A translated git would
+	// otherwise localise porcelain summaries — e.g. the "N files changed"
+	// shortstat the graveyard's wholesale-rewrite signal parses — silently
+	// killing the signal on a French/German host and breaking the cross-host
+	// determinism of the produced manifest.
 	return append(env,
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_OPTIONAL_LOCKS=0",
+		"LC_ALL=C",
+		"LANG=C",
 	)
 }
 
@@ -140,9 +149,25 @@ func TrackedFiles(root string) ([]string, error) {
 func Run(root string, args ...string) (string, error) {
 	out, err := isolatedGit(root, args...).Output()
 	if err != nil {
-		return "", err
+		return "", withStderr(err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// withStderr surfaces a failed git command's own (bounded) stderr in the
+// returned error. A bare "exit status 128" hides git's reason ("bad object",
+// "not a git repository", an object-store race) and makes a probe failure over
+// an archived or hostile repo undiagnosable; the reason is the diagnosis.
+func withStderr(err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		msg := ee.Stderr
+		if len(msg) > 4096 {
+			msg = msg[:4096]
+		}
+		return fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(msg)))
+	}
+	return err
 }
 
 // RunLimited is Run with a hard cap on how much stdout is buffered. A hostile or
@@ -150,15 +175,16 @@ func Run(root string, args ...string) (string, error) {
 // arbitrarily much output; the unbounded `Output()` would buffer all of it. The
 // probe uses this so a giant history cannot exhaust memory — output past
 // maxBytes is discarded (the last retained line may be truncated, which degrades
-// a single probe rather than crashing it). Stderr is ignored; an exit error is
-// still returned.
+// a single probe rather than crashing it). On failure the error carries git's
+// bounded stderr — the reason, not just the exit status.
 func RunLimited(root string, maxBytes int, args ...string) (string, error) {
 	cmd := isolatedGit(root, args...)
 	w := &capWriter{remaining: maxBytes}
+	e := &capWriter{remaining: 4096}
 	cmd.Stdout = w
-	cmd.Stderr = io.Discard
+	cmd.Stderr = e
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
 	}
 	return strings.TrimSpace(string(w.buf)), nil
 }

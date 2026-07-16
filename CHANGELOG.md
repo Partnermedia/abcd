@@ -113,6 +113,27 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The graveyard — what the project abandoned, in three strictly-ordered
+  layers.** Every packed lifeboat now carries `graveyard/archaeology.json`
+  (deterministic git archaeology: reverted commits, branches never merged into
+  the default branch ranked by divergence age, paths deleted after substantial
+  history, dependencies adopted then dropped, wholesale-rewrite commits — pure
+  evidence, no interpretation, from any git repo) and `graveyard/abandoned.json`
+  (what the record itself declared dead: superseded intents and ADRs, wontfix
+  issues with their reasons, each ADR's Alternatives-Considered options, and
+  rejected options named in the decision log). A new
+  `abcd disembark graveyard <lifeboat-dir> --lessons-json <file|->` verb ingests
+  a host-delegated interpretation over those two layers into
+  `graveyard/lessons.json` under a **cite-or-be-dropped** validator: every
+  lesson must cite live layer-1/2 evidence ids or it is dropped (reported, never
+  fatal), low-confidence lessons are quarantined under
+  `graveyard/low-confidence/` instead of the main file, and the untrusted
+  payload is read behind the same trust guards as an intent verdict (size cap,
+  no symlinks, unknown fields refused, schema version gated). Each ingest fully
+  replaces the prior interpretation, so a promoted or later-dropped lesson
+  leaves nothing stale behind. The validator — not the model's good intentions
+  — is the difference between a graveyard and a séance (itd-88, adr-35).
+
 - **`abcd disembark probe <repo>` — a read-only coverage probe over any
   repository.** It walks a repo without touching it and reports, per brief
   section, whether a lifeboat could ground it: `grounded` / `partial` / `blank`,
