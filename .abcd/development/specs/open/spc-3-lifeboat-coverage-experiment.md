@@ -44,6 +44,12 @@ Delivered across the plan's milestones M0–M3b:
   `embark from` (the contained write path), the packer carrying specs, and the
   round-trip properties — through-the-stores equality, the record-derived
   sub-manifest closure (P1), and literal self-closure (P2).
+- **M6 — synthesis over the record**: three post-pack synthesis verbs
+  (`disembark principles`/`press-release`/`oracle`) as injected host-delegated
+  seams with deterministic fallbacks, the first Go home of the registered
+  {SHIP, NEEDS_WORK, MAJOR_RETHINK} verdict, and the itd-5 prompt
+  infrastructure (prompt_version, reads_untrusted_input, injection canaries)
+  for the four synthesis agents.
 
 ## Approach — the probe
 
@@ -273,6 +279,44 @@ changes nothing and a re-pack reproduces the exact original `manifest_sha256`.
 The plan's original literal closure wording is amended by the 2026-07-16
 decision-log entry.
 
+## Approach — synthesis over the record (M6)
+
+Interpretation over a packed lifeboat is host-delegated behind injected seams,
+never executed by the binary — the shipped `memory.Distiller` and
+`intent review ingest` disciplines, generalised to three post-pack verbs that
+each run in one of two self-recorded modes:
+
+- **`disembark principles <lifeboat>`** — deterministic mode distils
+  `principles.json` from the packed ADRs' Decision/Consequences bullets,
+  evidence-only, no interpretation; `--principles-json <file|->` ingests a
+  `principle-distiller` agent's output under per-entry cite-or-be-dropped
+  against the live record ids, graveyard finding ids, and packed paths.
+- **`disembark press-release <lifeboat>`** — deterministic mode composes from
+  the packed brief's own press-release page (or the spine, or an honest
+  placeholder); a delegated composition citing nothing resolvable is a
+  whole-document refusal, mirroring memory ingest's unattributable-page rule.
+- **`disembark oracle <lifeboat> <source>`** — the audit verdict is the first
+  Go home of the registered `{SHIP, NEEDS_WORK, MAJOR_RETHINK}` vocabulary.
+  Deterministic mode scores mechanically — manifest verification failure is a
+  `MAJOR_RETHINK` verdict input (never a fatal error), absent or degraded
+  coverage or more blanks than grounded sections is `NEEDS_WORK`, else `SHIP` —
+  and the binary stamps the attestation fields itself, so a delegated payload
+  can never fabricate a manifest hash. The audit lands at
+  `audit/oracle-<manifest12>.json`, keyed by the lifeboat's own manifest hash —
+  no wall-clock ever enters a lifeboat artifact (amending the plan's `<ts>`
+  wording; 2026-07-16 decision log).
+
+All synthesis artifacts are the post-pack mutable layer: excluded from
+`manifest_sha256` like the graveyard lessons, fully replaced by each re-run,
+and each self-records its `mode` — `_provenance.json` is never mutated after
+the pack (the second 2026-07-16 amendment: the commit marker stays immutable).
+Untrusted payloads are read behind the intent-verdict guards (size cap, symlink
+refusal, unknown fields refused, schema and mode gates), every rendered string
+is sanitised, and the four agents ship itd-5's prompt infrastructure from zero:
+`prompt_version` in the 0.x calibration band, `reads_untrusted_input: true`, a
+registered `capability_scope`, and one injection-canary fixture each under
+`agents/` — the canary text must survive only as inert quoted data.
+
 ## The tiers
 
 | Tier | Reads | Present in |
@@ -325,7 +369,9 @@ to the verb.
 
 ## Out of scope for this spec
 
-Host-delegated synthesis over the record (M6) — the last milestone of itd-88,
-tracked in the plan. The multi-agent oracle passes and the aspirational
+The deliberately deferred items the plan lists — the hostile-lifeboat battery,
+itd-35's Merkle chain, `--with-code` (itd-8), schema migrators beyond the
+version stamp (itd-9), and backgrounded execution. All itd-88 milestones
+(M0–M6) are delivered by this spec. The multi-agent oracle passes and the aspirational
 output tree in the older [`02-disembark.md`](../../brief/04-surfaces/02-disembark.md)
 chapter are superseded by adr-35; that chapter's full rewrite is a follow-up.
