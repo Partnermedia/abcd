@@ -72,4 +72,62 @@ The verb has to be new. **`history capture` cannot be wired to a session hook**:
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+<!-- abcd-review: INGESTED receipt=rcp-791c91982a80 -->
+Fidelity review — receipt rcp-791c91982a80 (verifier intent-fidelity-reviewer claude-fable-5).
+
+Provenance: intent-fidelity-reviewer@claude-fable-5 · rubric_hash sha256:95792472ae74ca0469f69a51c618946e0d33cb1380032460099ed4b469d67e86 · prompt_hash sha256:82804d99f5a1de14cee029c6d45847ab447907d09bdd9b1610791dfd28d15143
+Input attestations: diff:c3aeab7b08d0e8b9154bf47d70411f281ac5c72e@-;
+
+Acceptance rollup: MET 7 · MET_WITH_CONCERNS 0 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: hooks.json wires SessionEnd to `abcd hook session-end`, which calls history.Capture (redact-on-write) with no user flag; `abcd history list` renders history.List; TestHookSessionEndCapturesTranscript proves one stored, listable record (suite passes: `go test -run TestHookSessionEnd ./internal/surface/cli/` ok)
+  evidence: hooks/hooks.json:16 — "{\"type\": \"command\", \"command\": \"\\\"$CLAUDE_PLUGIN_ROOT/abcd\\\" hook session-end\"}"
+  evidence: internal/surface/cli/cli.go:890 — "res, err := history.Capture(captureRoot(cwd), det.RootSHA, in.SessionID, raw, \"native\")"
+  evidence: internal/surface/cli/cli.go:2111 — "Use:   \"list\""
+  evidence: internal/surface/cli/hook_session_end_test.go:93 — "if len(recs) != 1 {"
+- ac-2 — MET: hooks.json contains a SessionEnd entry and no Stop entry anywhere, and TestHookSessionEndOneRecordPerSession asserts a multi-turn grown transcript leaves exactly one record
+  evidence: hooks/hooks.json:15 — "\"SessionEnd\": ["
+  evidence: internal/surface/cli/hook_session_end_test.go:148 — "if len(recs) != 1 {"
+  evidence: internal/surface/cli/cli.go:840 — "Wired to SessionEnd, NOT Stop."
+- ac-3 — MET: Capture's sha256 dedup returns Wrote=false on an identical re-offer, and TestHookSessionEndIsIdempotent runs the same payload twice through the hook and asserts one record
+  evidence: internal/core/history/history.go:121 — "if r.SourceSHA256 == sourceSHA && r.SessionID == sessionID && r.SourceKind == kind {"
+  evidence: internal/surface/cli/hook_session_end_test.go:119 — "if len(recs) != 1 {"
+- ac-4 — MET: every guard degrades via warn() which prints to stderr and returns nil (exit 0); TestHookSessionEndNeverBlocksTheHost table covers malformed json, empty payload, missing transcript_path, absent file, directory (non-regular), hostile session id ../../escape (rejected by history's ^[A-Za-z0-9._-]+$), and non-repo cwd (RootSHA=="" guard), asserting non-empty stderr and zero records with runHook failing on any non-zero exit
+  evidence: internal/surface/cli/cli.go:866 — "return nil // never non-zero: a Stop hook must not wedge the session"
+  evidence: internal/surface/cli/cli.go:883 — "if err != nil || det.RootSHA == \"\" {"
+  evidence: internal/core/history/store.go:25 — "var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)"
+  evidence: internal/surface/cli/hook_session_end_test.go:195 — "if strings.TrimSpace(errlog) == \"\" {"
+  evidence: internal/surface/cli/cli_test.go:107 — "if err := cmd.Execute(); err != nil {"
+- ac-5 — MET: readTranscript opens O_RDONLY|O_NONBLOCK then rejects non-regular files, and TestHookSessionEndDoesNotBlockOnIrregularFiles exercises a writer-less FIFO and /dev/null under a 10-second watchdog, asserting no hang, exit 0, stderr reason, zero records
+  evidence: internal/surface/cli/cli.go:967 — "f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)"
+  evidence: internal/surface/cli/cli.go:977 — "if !st.Mode().IsRegular() {"
+  evidence: internal/surface/cli/hook_session_end_test.go:360 — "case <-time.After(10 * time.Second):"
+- ac-6 — MET: every diagnostic in the session-end RunE goes to cmd.ErrOrStderr() and nothing writes to stdout; TestHookSessionEndWritesNothingToStdout asserts stdout == "" on a successful capture
+  evidence: internal/surface/cli/cli.go:865 — "fmt.Fprintf(cmd.ErrOrStderr(), \"abcd history: \"+format+\"\\n\", a...)"
+  evidence: internal/surface/cli/hook_session_end_test.go:315 — "if stdout != \"\" {"
+- ac-7 — MET: the hook path triggers the existing two-stage redaction (TestHookSessionEndRedactsOnThisPath asserts a ghp_ token and a home path are masked in the stored record), and a hard_fail span surviving stage-two refuses the write entirely (TestHookSessionEndRefusesResidualHardFail: "refusing to write" on stderr, zero records)
+  evidence: internal/core/history/history.go:68 — "history: redaction left %d hard_fail span(s) unresolved [%s]; refusing to write"
+  evidence: internal/surface/cli/hook_session_end_test.go:248 — "if strings.Contains(string(stored), token) {"
+  evidence: internal/surface/cli/hook_session_end_test.go:433 — "if !strings.Contains(errlog, \"refusing to write\") {"
+
+Gap audit:
+- honoured:
+  - SessionEnd hook wired so the corpus accrues with no flag and no user command
+    evidence: hooks/hooks.json:16 — "\\\"$CLAUDE_PLUGIN_ROOT/abcd\\\" hook session-end"
+  - fail-closed, always exit 0, never blocks the host — every failure path logs to stderr and returns nil
+    evidence: internal/surface/cli/cli.go:866 — "return nil // never non-zero"
+  - a session that ends twice is stored once
+    evidence: internal/core/history/history.go:122 — "return CaptureResult{Record: r, Wrote: false}, nil"
+  - secrets and home paths stripped on write, refusal on residual hard-fail
+    evidence: internal/core/history/history.go:156 — "Stage two — verify. Re-scan the redacted text"
+  - 64 MiB cap refuses an over-cap transcript whole rather than truncating (open question resolved to refusal)
+    evidence: internal/surface/cli/cli.go:958 — "const maxTranscriptBytes = 64 << 20 // 64 MiB"
+    evidence: internal/surface/cli/hook_session_end_test.go:396 — "if !strings.Contains(errlog, \"cap\") {"
+- diverged:
+  - "no flag to remember, no command to run" — capture still requires a one-time store bootstrap (`ahoy install` creates the transcripts dir); an uninstalled repo captures nothing, mitigated by a delivered SessionStart warning (iss-95) rather than by auto-creation
+    evidence: internal/surface/cli/hook_session_end_test.go:53 — "Capture requires the transcripts dir to exist already (abcd install creates it)."
+    evidence: internal/surface/cli/cli.go:944 — "Run `/abcd:ahoy install` (or `abcd ahoy install`) to start recording."
+- missing:
+  - "stores your session transcripts as they happen" — a session ended by hard crash or SIGKILL fires no SessionEnd and is never captured; declared as a deliberate trade-off in the intent, not closed by the delivery
+    evidence: .abcd/development/intents/shipped/itd-89-start-the-transcript-clock.md:71 — "`SessionEnd` does **not** fire on a hard crash or `SIGKILL`"
