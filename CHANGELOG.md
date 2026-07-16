@@ -113,6 +113,29 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Synthesis over the record — `abcd disembark principles`, `press-release`,
+  and `oracle`.** Three post-pack verbs interpret a packed lifeboat, each in
+  one of two self-recorded modes. Without a payload they run **deterministic
+  mode**: principles distilled evidence-only from the packed ADRs'
+  Decision/Consequences bullets, the press release composed from the brief's
+  own page (or the spine, or an honest placeholder), and the oracle scoring
+  mechanically — a failed manifest verification is a `MAJOR_RETHINK` verdict,
+  not an error; more blanks than grounded sections is `NEEDS_WORK`; a healthy,
+  verified lifeboat ships `SHIP` — the first code home of abcd's registered
+  review-verdict vocabulary. With `--*-json <file|->` they ingest a
+  host-delegated agent's output behind the same trust guards as an intent
+  verdict, under cite-or-be-dropped (a principle or oracle finding citing no
+  live record id, graveyard finding, or packed path is dropped and reported; a
+  press release citing nothing resolvable is refused whole). The binary stamps
+  the oracle's attestation fields itself, so a model cannot fabricate a
+  manifest hash. All synthesis artifacts live outside `manifest_sha256`, are
+  fully replaced per run, and carry no wall-clock — the audit is keyed by the
+  lifeboat's own manifest hash. The four agents (`principle-distiller`,
+  `graveyard-interpreter`, `press-release-composer`, `lifeboat-oracle`) ship
+  under `agents/` with itd-5's prompt discipline: versioned prompts in the 0.x
+  calibration band, `reads_untrusted_input` declared, and an injection-canary
+  fixture each (itd-88, adr-35).
+
 - **`abcd embark` — a lifeboat comes ashore.** `embark probe <lifeboat> [target]`
   is the read-only reconciliation: it refuses a lifeboat whose provenance schema
   is newer than the binary (with an upgrade message), re-hashes every archived
