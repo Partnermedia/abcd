@@ -113,6 +113,27 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd embark` — a lifeboat comes ashore.** `embark probe <lifeboat> [target]`
+  is the read-only reconciliation: it refuses a lifeboat whose provenance schema
+  is newer than the binary (with an upgrade message), re-hashes every archived
+  file against the pinned `manifest_sha256` so a tampered or truncated lifeboat
+  is caught before anything is read in anger, and reports — in one bulk report,
+  not a per-file barrage — every conflict with the target repository. `embark
+  from <lifeboat> [target]` is the write path: it refuses entirely on any
+  conflict (identical bytes are an idempotent skip, and a re-embark is a no-op),
+  writes only the record families (ADRs, issues, intents, specs) through
+  `os.Root` containment plus independent path validation — two layers, so a bug
+  in one is not an escape — and never copies lifeboat prose into `CLAUDE.md`:
+  it re-injects the *current* abcd marker block instead. The rendered result
+  leads with the coverage report's blanks and their questions — the handoff to
+  the human who must answer them. The packer now also carries the spec store
+  (`rescue/specs/`), and every lifeboat's provenance records
+  `record_manifest_sha256`, the seal over exactly the record-derived families
+  that must survive a round-trip byte-for-byte: pack → embark → re-pack
+  reproduces it, and embarking into a byte-copy of the source reproduces the
+  full original manifest hash (itd-88, adr-35; closure re-scope in the
+  2026-07-16 decision log).
+
 - **The graveyard — what the project abandoned, in three strictly-ordered
   layers.** Every packed lifeboat now carries `graveyard/archaeology.json`
   (deterministic git archaeology: reverted commits, branches never merged into
