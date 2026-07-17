@@ -520,3 +520,191 @@ func TestDocsLintCleanTreePasses(t *testing.T) {
 		t.Fatalf("clean tree blockers = %d, want 0\n%s", res.Blockers, out)
 	}
 }
+
+// hermeticEnv redirects HOME, the plugin root and the PATH symlink target to
+// temp locations without chdir'ing anywhere, so a caller can classify an
+// arbitrary folder shape. It never touches the real machine.
+func hermeticEnv(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	pluginRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(pluginRoot, "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, "hooks", "hooks.json"), []byte(validHooksJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, "abcd"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("ABCD_PLUGIN_ROOT", pluginRoot)
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	t.Setenv("ABCD_BIN_TARGET", filepath.Join(t.TempDir(), "bin", "abcd"))
+}
+
+// TestAhoyBareUnmanagedRepoNamesAdoptPath proves itd-40 AC2: bare `abcd ahoy`
+// in a git repo with no abcd markers reports unmanaged-repo AND names
+// `/abcd:ahoy install` as the way to adopt it — without adopting it.
+func TestAhoyBareUnmanagedRepoNamesAdoptPath(t *testing.T) {
+	hermeticEnv(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+
+	out := string(runCLI(t, "ahoy"))
+	if !strings.Contains(out, "unmanaged-repo") {
+		t.Fatalf("bare ahoy did not report unmanaged-repo:\n%s", out)
+	}
+	if !strings.Contains(out, "/abcd:ahoy install") {
+		t.Fatalf("bare ahoy on an unmanaged repo did not name the adopt path `/abcd:ahoy install`:\n%s", out)
+	}
+	// Read-only: classification must not adopt (no .abcd/, no marker written).
+	if _, err := os.Stat(filepath.Join(repo, ".abcd")); !os.IsNotExist(err) {
+		t.Fatalf("bare ahoy mutated the repo (.abcd/ appeared): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Fatalf("bare ahoy mutated the repo (CLAUDE.md appeared): %v", err)
+	}
+}
+
+// TestAhoyBareUnmanagedFolderReportsNothingToActOn proves itd-40 AC3: bare
+// `abcd ahoy` in a non-git folder reports unmanaged-folder and that there is
+// nothing to act on, mutating nothing.
+func TestAhoyBareUnmanagedFolderReportsNothingToActOn(t *testing.T) {
+	hermeticEnv(t)
+	folder := t.TempDir()
+	t.Chdir(folder)
+
+	out := string(runCLI(t, "ahoy"))
+	if !strings.Contains(out, "unmanaged-folder") {
+		t.Fatalf("bare ahoy did not report unmanaged-folder:\n%s", out)
+	}
+	if !strings.Contains(out, "nothing to act on") {
+		t.Fatalf("bare ahoy on a plain folder did not report there is nothing to act on:\n%s", out)
+	}
+}
+
+// hermeticGitRepo sets the hermetic env (as hermeticEnv) and chdirs into a
+// fresh real git repo carrying one root commit, returning the repo path and its
+// root-commit SHA. Unlike hermeticRepo (a bare .git mkdir with no commits) this
+// yields a non-empty root SHA, so the history registry keys on a real identity.
+func hermeticGitRepo(t *testing.T) (repo, rootSHA string) {
+	t.Helper()
+	hermeticEnv(t)
+	repo = t.TempDir()
+	gitCmd(t, repo, "init", "-q")
+	gitCmd(t, repo, "config", "user.email", "dev@example.com")
+	gitCmd(t, repo, "config", "user.name", "Dev")
+	gitCmd(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
+	rootSHA = gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
+	t.Chdir(repo)
+	return repo, rootSHA
+}
+
+// TestAhoyInstallBootstrapsAndRegistersByRootSHA proves itd-40 AC4: with no
+// ~/.abcd/history/ store present, the first `ahoy install` bootstraps the store
+// (dir + index.json) and registers the repo in it keyed on the root-commit SHA.
+func TestAhoyInstallBootstrapsAndRegistersByRootSHA(t *testing.T) {
+	repo, rootSHA := hermeticGitRepo(t)
+	_ = repo
+	home := os.Getenv("HOME")
+	indexPath := filepath.Join(home, ".abcd", "history", "index.json")
+	if _, err := os.Stat(indexPath); !os.IsNotExist(err) {
+		t.Fatalf("history store existed before install: %v", err)
+	}
+
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("history store not bootstrapped: %v", err)
+	}
+	var idx struct {
+		Repos []struct {
+			RootCommit string `json:"root_commit"`
+			Path       string `json:"path"`
+		} `json:"repos"`
+	}
+	if err := json.Unmarshal(data, &idx); err != nil {
+		t.Fatalf("index.json not JSON: %v\n%s", err, data)
+	}
+	found := false
+	for _, r := range idx.Repos {
+		if r.RootCommit == rootSHA {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("repo not registered by root-commit SHA %q in index.json:\n%s", rootSHA, data)
+	}
+}
+
+// TestAhoyDoctorResolvesCentralLocationFromIndex proves itd-40 AC5: the
+// central/host location is resolved by reading index.json — not a hardcoded path
+// or a directory walk. Rewriting the registered path makes doctor report a stale
+// path whose detail quotes the value it read from index.json.
+func TestAhoyDoctorResolvesCentralLocationFromIndex(t *testing.T) {
+	_, _ = hermeticGitRepo(t)
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	indexPath := filepath.Join(os.Getenv("HOME"), ".abcd", "history", "index.json")
+	// A freshly-registered repo reconciles cleanly: zero audit gaps.
+	out := runCLI(t, "ahoy", "doctor", "--json")
+	var clean struct {
+		AuditGaps []struct {
+			ID string `json:"id"`
+		} `json:"audit_gaps"`
+	}
+	if err := json.Unmarshal(out, &clean); err != nil {
+		t.Fatalf("doctor output not JSON: %v\n%s", err, out)
+	}
+	if len(clean.AuditGaps) != 0 {
+		t.Fatalf("clean repo produced audit gaps: %+v", clean.AuditGaps)
+	}
+
+	// Corrupt only the registered path in index.json.
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	repos := raw["repos"].([]any)
+	repos[0].(map[string]any)["path"] = "/somewhere/relocated"
+	patched, _ := json.MarshalIndent(raw, "", "  ")
+	if err := os.WriteFile(indexPath, patched, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out2 := runCLI(t, "ahoy", "doctor", "--json")
+	var stale struct {
+		AuditGaps []struct {
+			ID     string `json:"id"`
+			Detail string `json:"detail"`
+		} `json:"audit_gaps"`
+	}
+	if err := json.Unmarshal(out2, &stale); err != nil {
+		t.Fatalf("doctor output not JSON: %v\n%s", err, out2)
+	}
+	staleFound := false
+	for _, g := range stale.AuditGaps {
+		if g.ID == "history.path_stale" {
+			staleFound = true
+			if !strings.Contains(g.Detail, "/somewhere/relocated") {
+				t.Fatalf("path_stale detail did not quote the location read from index.json: %q", g.Detail)
+			}
+		}
+	}
+	if !staleFound {
+		t.Fatalf("doctor did not resolve the central location from index.json (no history.path_stale): %+v", stale.AuditGaps)
+	}
+}
