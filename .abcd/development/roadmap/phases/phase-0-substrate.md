@@ -93,7 +93,7 @@ the disciplines are registered under), itd-43 (spec-terminology).
 surface scaffolding. This is the arch-neutral floor the disciplines are enforced
 on and the later stores plug into.
 
-The `intent-fidelity-reviewer` ships as the last Phase 0 epic (see the
+The `intent-fidelity-reviewer` ships as the last Phase 0 spec (see the
 discipline-gate Phase Acceptance bullet above). It runs through the
 host-delegated oracle and also exposes the manual `/abcd:intent review` surface.
 
