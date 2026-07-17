@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,11 +32,21 @@ func TestLoadRegistryRefusesSymlink(t *testing.T) {
 		t.Skipf("symlink unsupported: %v", err)
 	}
 	// The security property: the symlink is REFUSED (O_NOFOLLOW), never followed —
-	// no content is returned. (The open fails with ELOOP as a raw *os.PathError
-	// rather than the typed RegistryFormatError that ErrNotRegular/ErrTooBig get;
-	// wrapping it for a cleaner error and no path leak is a candidate follow-up.)
-	if reg, err := LoadRegistry(link); err == nil {
-		t.Errorf("LoadRegistry followed a symlinked sources index (reg=%v); a committed symlink must be refused", reg)
+	// no content is returned. The refusal is classified like every other guarded
+	// refusal (ErrNotRegular/ErrTooBig): a typed RegistryFormatError, so a caller
+	// that branches on the type handles a planted symlink identically to any other
+	// malformed index, and the raw ELOOP *os.PathError (with its syscall detail)
+	// never escapes.
+	reg, err := LoadRegistry(link)
+	if err == nil {
+		t.Fatalf("LoadRegistry followed a symlinked sources index (reg=%v); a committed symlink must be refused", reg)
+	}
+	var rfe *RegistryFormatError
+	if !errors.As(err, &rfe) {
+		t.Errorf("symlinked index returned %T (%v); want a typed *RegistryFormatError like the other guarded refusals", err, err)
+	}
+	if strings.Contains(err.Error(), "too many levels of symbolic links") {
+		t.Errorf("symlink refusal leaked the raw ELOOP syscall detail: %v", err)
 	}
 
 	// A real regular-file JSON object still loads.
