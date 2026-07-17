@@ -275,6 +275,15 @@ called out in a **Breaking** section.
   carry a one-line decision rule (nitpick/observation -> capture; user-facing
   change to ship -> intent). The `/abcd:capture promote` flow hands the issue text
   to this create path (itd-46).
+- **`GL002` — a glossary-driven forbidden-synonym gate for the record lint.**
+  The lint now reads each glossary term's `forbidden_synonyms` and flags an
+  *enforced* synonym used as a standalone word in live prose, so terminology
+  drift is caught by a detector instead of by eye (itd-43). Enforcement is a
+  deliberate subset (`epic` first): most forbidden synonyms are common English
+  words whose false-positive rate would sink the gate, and each enforced word
+  must be one the glossary actually forbids. Matching uses explicit Unicode word
+  boundaries — not the ASCII-only regexp `\b` — and skips code spans, YAML
+  frontmatter, dated/historical records, and the glossary term files themselves.
 - **Bare `abcd ahoy` now names the next step for the folder it classified.** An
   unmanaged git repo report points at `/abcd:ahoy install` as the way to adopt
   it, and a plain (non-git) folder report states there is nothing to act on —

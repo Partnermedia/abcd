@@ -110,6 +110,30 @@ type RuleConfig struct {
 	// a heading/job rename silently dropped gates). It is the safety net that makes
 	// the hand-parse fail-closed. Enforced as at least 1 when the rule is enabled.
 	MinGates int `json:"min_gates"`
+	// GlossaryDir is the forbidden_synonyms (GL002) glossary directory, repo-relative
+	// (default .abcd/development/brief/glossary). The rule walks it for term files and
+	// reads each term's forbidden_synonyms frontmatter list — the glossary is the
+	// single source of truth for what a forbidden synonym is.
+	GlossaryDir string `json:"glossary_dir"`
+	// Enforce is the forbidden_synonyms subset that GL002 mechanically gates. Each
+	// entry MUST be declared as a forbidden_synonym by some glossary term (the rule
+	// errors otherwise, so the config can never gate a word the glossary does not
+	// forbid). Enforcement is a deliberate subset because most forbidden synonyms
+	// ("user", "release", "project", "feature", ...) are common English words whose
+	// live-prose false-positive rate blows the detector's budget; "epic" is the
+	// mechanically-clean member (itd-43). Promotion path: add a synonym here once the
+	// corpus is swept clean of its non-substituting uses.
+	Enforce []string `json:"enforce"`
+	// ExemptPrefixes are repo-relative path prefixes whose files GL002 skips — the
+	// historical, git-tracked records the rename intent (itd-43 AC1) exempts:
+	// research/, decisions/ (dated ADRs), plans/ (dated), shipped/superseded intents,
+	// the issue ledger, and review records. The glossary directory itself is always
+	// exempt (a term file names its own forbidden synonyms legitimately).
+	ExemptPrefixes []string `json:"exempt_prefixes"`
+	// AllowContext lists regexps that, if any matches a line, suppress every GL002
+	// finding on that line — the legitimate-mention escape (naming the old token in an
+	// external reference like `epic-review`, or the rename itself `epic->spec`).
+	AllowContext []string `json:"allow_context"`
 }
 
 // ArmReceiptGate returns cfg with the receipt_gate rule armed for a release: it
