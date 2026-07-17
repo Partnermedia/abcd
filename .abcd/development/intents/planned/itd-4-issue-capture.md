@@ -1,7 +1,7 @@
 ---
 id: itd-4
 slug: issue-capture
-spec_id: null
+spec_id: spc-6
 kind: standalone
 suggested_kind: null
 reclassification_history: []
@@ -74,10 +74,11 @@ This split closes a separate loop on `/abcd:capture` as a command name. The mari
 
 ## Implementing specs
 
-itd-4 is implemented across multiple specs. The single-valued frontmatter
-`spec_id` records the **primary** delivering spec (spc-20); the remaining specs
-are recorded here because `spec_id` holds one value and would understate scope.
-This section is the canonical multi-spec implementation index:
+itd-4 was implemented across multiple specs of the superseded pre-Go record
+system; those ids are preserved below as history (they do not exist in the
+native spec store). The frontmatter `spec_id` records the **native** spec,
+**spc-6**, the record catch-up that verifies the shipped engine against the
+Acceptance Criteria and carries the open AC3 (promote) gap. Historical index:
 
 - **spc-20** (primary) — `iss-N`-ledger primitives (`iss-N` allocator, schema, capture/resolve/wontfix/update_field workflow, structure under `.abcd/work/issues/`).
 - **spc-21** — `/abcd:capture` command surface (flow-text ingest into the ledger).
