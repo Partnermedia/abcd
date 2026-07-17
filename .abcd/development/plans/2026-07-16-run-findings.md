@@ -277,3 +277,15 @@ letter nor silently mark MET.
   vs capture (mistyped sub-verb files a draft) as an explicit deliverable
   note rather than hiding it; ledgered (iss-104).
 - **Cost:** ~140k subagent tokens, ~13 min, 3 commits, 6 files.
+
+### F17 — `abcd audit` green is not `record-lint` green · tooling gap
+
+The itd-46 lifecycle move (planned→shipped at spec close) broke two inbound
+record links, and the orchestrator's mid-record checks missed it for a full
+commit: `abcd audit` (run after every record step, green throughout) does not
+resolve links, while preflight's `record-lint` (run only at gate time) does —
+the red surfaced two commits after the breakage. Same-family gates with
+different coverage invite exactly this. Fixed by pointing both links at the
+shipped path; the deeper items: (a) `spec close` moves a file it KNOWS has
+inbound links — it could rewrite or at least report them; (b) the orchestrator
+rule is now "full `record-lint` after every record commit, not just `audit`".
