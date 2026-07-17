@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/history"
 )
@@ -187,8 +190,11 @@ func TestHookSessionEndNeverBlocksTheHost(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, rootSHA := sessionEndRepo(t)
 			// runHook fails the test if the command exits non-zero.
-			runHook(t, tc.stdin(t, repo), "hook", "session-end")
+			_, errlog := runHook(t, tc.stdin(t, repo), "hook", "session-end")
 
+			if strings.TrimSpace(errlog) == "" {
+				t.Error("a rejected payload must report its reason on stderr, got nothing")
+			}
 			recs, err := history.List(rootSHA)
 			if err != nil {
 				t.Fatalf("history.List: %v", err)
@@ -308,5 +314,130 @@ func TestHookSessionEndWritesNothingToStdout(t *testing.T) {
 	stdout, _ := runHook(t, endPayload(t, "sess-3", repo, tp), "hook", "session-end")
 	if stdout != "" {
 		t.Errorf("session-end must produce zero stdout, got %q", stdout)
+	}
+}
+
+// TestHookSessionEndDoesNotBlockOnIrregularFiles holds the no-hang contract for
+// a transcript_path naming a FIFO or a device node. A plain O_RDONLY open of a
+// FIFO with no writer blocks forever, and a hung SessionEnd hook wedges the
+// session it is ending — readTranscript opens O_NONBLOCK precisely so this
+// returns immediately and the non-regular-file check rejects it. The Execute
+// runs in a goroutine so a regression hangs a 10-second timer, not the suite.
+func TestHookSessionEndDoesNotBlockOnIrregularFiles(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "sess.fifo")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Skipf("cannot create FIFO: %v", err)
+	}
+	for _, tc := range []struct {
+		name, path string
+	}{
+		{"fifo with no writer", fifo},
+		{"device node", os.DevNull},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, rootSHA := sessionEndRepo(t)
+			in := endPayload(t, "s", repo, tc.path)
+
+			type result struct {
+				stdout, stderr string
+				err            error
+			}
+			done := make(chan result, 1)
+			go func() {
+				cmd := NewRootCommand()
+				var so, se bytes.Buffer
+				cmd.SetOut(&so)
+				cmd.SetErr(&se)
+				cmd.SetIn(strings.NewReader(in))
+				cmd.SetArgs([]string{"hook", "session-end"})
+				err := cmd.Execute()
+				done <- result{so.String(), se.String(), err}
+			}()
+
+			var res result
+			select {
+			case res = <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatalf("session-end blocked opening %s — the O_NONBLOCK guard is gone", tc.name)
+			}
+			if res.err != nil {
+				t.Fatalf("session-end exited non-zero on %s: %v\n%s", tc.name, res.err, res.stderr)
+			}
+			if strings.TrimSpace(res.stderr) == "" {
+				t.Error("a rejected transcript must report its reason on stderr, got nothing")
+			}
+			recs, err := history.List(rootSHA)
+			if err != nil {
+				t.Fatalf("history.List: %v", err)
+			}
+			if len(recs) != 0 {
+				t.Errorf("a non-regular transcript must write nothing, got %d record(s)", len(recs))
+			}
+		})
+	}
+}
+
+// TestHookSessionEndRefusesOverCapTranscript holds the 64 MiB cap: an over-cap
+// transcript is refused whole (capturing a truncated prefix would break the
+// sha256 idempotency key), the refusal is reported on stderr, and nothing is
+// written. The file is sparse — the cap check reads Stat, not the bytes.
+func TestHookSessionEndRefusesOverCapTranscript(t *testing.T) {
+	repo, rootSHA := sessionEndRepo(t)
+	tp := filepath.Join(t.TempDir(), "big.jsonl")
+	if err := os.WriteFile(tp, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(tp, maxTranscriptBytes+1); err != nil {
+		t.Fatal(err)
+	}
+
+	_, errlog := runHook(t, endPayload(t, "too-big", repo, tp), "hook", "session-end")
+
+	if !strings.Contains(errlog, "cap") {
+		t.Errorf("an over-cap transcript must report the cap on stderr, got: %s", errlog)
+	}
+	recs, err := history.List(rootSHA)
+	if err != nil {
+		t.Fatalf("history.List: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("an over-cap transcript must write nothing, got %d record(s)", len(recs))
+	}
+}
+
+// TestHookSessionEndRefusesResidualHardFail holds the fail-closed tail of the
+// two-stage redaction on the hook path: if a hard_fail span SURVIVES stage-one
+// masking, the stage-two re-scan refuses the write entirely — no file, reason
+// on stderr, exit 0. The custom pattern is built to survive on purpose: its
+// regex matches both the raw token and the token's masked fingerprint (head 3 +
+// starred middle + tail 2), so redaction cannot clear it.
+func TestHookSessionEndRefusesResidualHardFail(t *testing.T) {
+	repo, rootSHA := sessionEndRepo(t)
+	cfgDir := filepath.Join(repo, ".abcd", "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"patterns":{"sticky":{"regex":"ACM[A-Za-z0-9*]{13}Z9","kind":"token","label":"sticky token","severity":"hard_fail"}}}`
+	if err := os.WriteFile(filepath.Join(cfgDir, "pii.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 18 runes: masked to "ACM" + 13 stars + "Z9", which the regex re-matches.
+	token := "ACME" + strings.Repeat("Q", 12) + "Z9"
+	tp := filepath.Join(t.TempDir(), "sess.jsonl")
+	if err := os.WriteFile(tp, []byte(`{"text":"`+token+`"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, errlog := runHook(t, endPayload(t, "residual", repo, tp), "hook", "session-end")
+
+	if !strings.Contains(errlog, "refusing to write") {
+		t.Errorf("a surviving hard_fail span must refuse the write on stderr, got: %s", errlog)
+	}
+	recs, err := history.List(rootSHA)
+	if err != nil {
+		t.Fatalf("history.List: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("a surviving hard_fail span must write NO file at all, got %d record(s)", len(recs))
 	}
 }
