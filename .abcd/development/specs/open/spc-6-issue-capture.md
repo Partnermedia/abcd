@@ -78,7 +78,7 @@ AC as ordered in itd-4 → status and evidence:
 4. **`.abcd/.work.local/issues.md` migration on upgrade** —
    **satisfied-by-history** (pre-adjudicated in the run plan §M3): the
    migration source no longer exists and the structured ledger is populated
-   (104 entries, `iss-1`..`iss-103`, across open/resolved/wontfix). The
+   (103 entries, `iss-1`..`iss-103` with no gaps: 63 open, 40 resolved). The
    historical migration already happened; building migration code for an
    absent source would be dead scaffolding. Record-only; no code.
 5. **`capture list --open` renders id, slug, severity, one-line summary for
