@@ -1,7 +1,7 @@
 ---
 id: itd-43
 slug: epic-to-spec-terminology
-spec_id: null
+spec_id: spc-8
 kind: standalone
 suggested_kind: null
 reclassification_history: []

@@ -289,3 +289,23 @@ different coverage invite exactly this. Fixed by pointing both links at the
 shipped path; the deeper items: (a) `spec close` moves a file it KNOWS has
 inbound links — it could rewrite or at least report them; (b) the orchestrator
 rule is now "full `record-lint` after every record commit, not just `audit`".
+
+### Delegation observations, burst 5 (running log)
+
+- **Detector-first survives delegation fully:** the worker armed GL002 before
+  touching prose, captured its 19 real corpus findings verbatim as the
+  watched-fail record, swept exactly what it flagged, and pinned the corpus
+  at zero with a real-glossary regression test — never hand-fixing ahead of
+  the armed detector. The repo's fix-the-detector principle transferred into
+  a sub-agent's discipline intact.
+- **Memory-carried hazards transfer by prompt:** the orchestrator's standing
+  note about Go's ASCII-only regexp \b went into the worker's instructions;
+  the worker implemented explicit Unicode boundaries and wrote the boundary
+  proof test (epics/epicenter/unicode-adjacent do not match). A known-hazard
+  line in a worker prompt is cheap insurance.
+- **Judgment calls surfaced, not buried:** the worker flagged its self-quote
+  sweep decision (itd-48's internal quotes) as an explicit judgment call in
+  its report; the orchestrator promoted it to DECISIONS.md and the spec body.
+- **Heaviest worker of the run:** ~169k subagent tokens, ~23 min, 95 tool
+  uses, 4 commits — the detector-build + corpus-sweep combination is the
+  upper end of what one worker context comfortably holds.
