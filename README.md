@@ -158,6 +158,27 @@ The reviewer is allowed to fail honestly. If a promise wasn't kept, it says so. 
 
 # Resources
 
+## Install
+
+One line, checksum-verified. It detects your OS/architecture, downloads the
+binary and the `checksums.txt` manifest from the latest release, verifies the
+binary's SHA-256 against the manifest (and refuses to install on any
+mismatch — or if the manifest doesn't list the binary at all), then installs
+to `/usr/local/bin`:
+
+```sh
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; sudo install -m 0755 "$b" /usr/local/bin/abcd; abcd version'
+```
+
+Prefer to inspect before running? The command is exactly what it says: two
+downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
+a checksum verification, and a `sudo install`. You can do the same by hand —
+grab the binary for your platform plus `checksums.txt` from the releases
+page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching line,
+and copy the binary anywhere on your `PATH`. Every release is built and
+published by CI from the exact tagged commit, with the checksums generated
+over the same bytes that are uploaded.
+
 ## Build
 
 ```bash
