@@ -1,0 +1,11 @@
+---
+schema_version: 1
+id: "iss-106"
+slug: "gl002-stripinlinecode-restores-the-whole-line-on-an-unpaired"
+severity: "minor"
+category: "observation"
+source: "user-observation"
+found_during: "manual-capture"
+---
+
+GL002 stripInlineCode restores the whole line on an unpaired trailing backtick (and mishandles double-backtick spans), so a closed code span containing an enforced synonym plus a later stray backtick fires a spurious blocker — fails toward over-flagging, never misses drift; found by burst-5 correctness review, not present in current corpus
