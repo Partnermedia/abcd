@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
@@ -160,6 +162,14 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 				return nil, err
 			}
 			findings = append(findings, sl...)
+		}
+
+		if fsCfg, ok := cfg.Rules["forbidden_synonyms"]; ok && fsCfg.Enabled {
+			fs, err := checkForbiddenSynonyms(repoRoot, rootAbs, fsCfg)
+			if err != nil {
+				return nil, err
+			}
+			findings = append(findings, fs...)
 		}
 	}
 
@@ -1355,6 +1365,279 @@ func specNum(v string) int {
 }
 
 // fmField is a frontmatter key's value and 1-based source line.
+// checkForbiddenSynonyms implements the GL002 forbidden-synonym family. It reads
+// the glossary term files under cfg.GlossaryDir (the single source of truth for
+// what a forbidden synonym is), then flags live prose that uses an *enforced*
+// synonym as a standalone word. Enforcement is scoped to cfg.Enforce because most
+// forbidden synonyms are common English words; each enforced entry must be a
+// declared forbidden_synonym or the config is rejected (an error), so the config
+// can never gate a word the glossary does not forbid.
+//
+// Matching is case-insensitive with explicit Unicode word boundaries — Go's
+// regexp \b is ASCII-only, so a run of unicode letters adjacent to the synonym
+// (é, а, …) would otherwise read as a boundary and leak a false hit. Code spans
+// (fenced and inline single-backtick), YAML frontmatter, exempt path prefixes, the
+// glossary directory itself, and any line matching an allow_context regexp are all
+// out of scope: a term file names its own forbidden synonyms legitimately, and a
+// code span or external token (`epic-review`) is a mention, not a substitution.
+func checkForbiddenSynonyms(repoRoot, rootAbs string, cfg RuleConfig) ([]Finding, error) {
+	glossaryDir := cfg.GlossaryDir
+	if glossaryDir == "" {
+		glossaryDir = ".abcd/development/brief/glossary"
+	}
+	forbidden, canonical, err := loadForbiddenSynonyms(repoRoot, glossaryDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Compile one boundary-aware matcher per enforced synonym, rejecting any the
+	// glossary does not actually forbid (the glossary is the source of truth).
+	type synMatcher struct {
+		word string
+		re   *regexp.Regexp
+	}
+	var matchers []synMatcher
+	for _, s := range cfg.Enforce {
+		key := strings.ToLower(strings.TrimSpace(s))
+		if key == "" {
+			continue
+		}
+		if !forbidden[key] {
+			return nil, &configError{"forbidden_synonyms: enforced word " + strconv.Quote(s) +
+				" is not declared as a forbidden_synonym by any glossary term under " + glossaryDir}
+		}
+		matchers = append(matchers, synMatcher{word: key, re: regexp.MustCompile("(?i)" + regexp.QuoteMeta(key))})
+	}
+	if len(matchers) == 0 {
+		return nil, nil
+	}
+
+	allow := make([]*regexp.Regexp, 0, len(cfg.AllowContext))
+	for _, a := range cfg.AllowContext {
+		re, err := regexp.Compile(a)
+		if err != nil {
+			return nil, err
+		}
+		allow = append(allow, re)
+	}
+
+	glossaryPrefix := filepath.ToSlash(glossaryDir)
+	files, err := markdownFiles(rootAbs)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []Finding
+	for _, fileAbs := range files {
+		rel := repoRel(repoRoot, fileAbs)
+		relSlash := filepath.ToSlash(rel)
+		if strings.HasPrefix(relSlash, glossaryPrefix) || hasAnyPrefix(relSlash, cfg.ExemptPrefixes) {
+			continue
+		}
+		content, err := os.ReadFile(fileAbs)
+		if err != nil {
+			return nil, err
+		}
+		lines := strings.Split(string(content), "\n")
+		mask := fenceMask(lines)
+		bodyStart := frontmatterBodyStart(lines)
+		for i, line := range lines {
+			if i < bodyStart || mask[i] {
+				continue // YAML frontmatter and fenced code are not prose
+			}
+			if matchesAny(allow, line) {
+				continue
+			}
+			stripped := stripInlineCode(line)
+			for _, m := range matchers {
+				for _, loc := range m.re.FindAllStringIndex(stripped, -1) {
+					if !wordBoundaryAt(stripped, loc[0], loc[1]) {
+						continue
+					}
+					term := canonical[m.word]
+					out = append(out, Finding{
+						File: rel, Line: i + 1, RuleID: "GL002", Severity: cfg.Severity,
+						Message: "forbidden synonym '" + m.word + "' for glossary term '" + term +
+							"' in live prose; use '" + term + "' (itd-43). If this is a mention (not a substitution), quote it in a code span.",
+					})
+					break // one finding per enforced word per line is enough signal
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// configError is a malformed-configuration error (an enforced synonym the glossary
+// does not forbid), surfaced through Lint's error return like an uncompilable regexp.
+type configError struct{ msg string }
+
+func (e *configError) Error() string { return e.msg }
+
+// loadForbiddenSynonyms walks the glossary directory and returns the set of
+// forbidden synonyms (lower-cased) and a map from each synonym to its canonical
+// term. A missing glossary directory yields empty maps, not an error.
+func loadForbiddenSynonyms(repoRoot, glossaryDir string) (map[string]bool, map[string]string, error) {
+	forbidden := map[string]bool{}
+	canonical := map[string]string{}
+	dirAbs := filepath.Join(repoRoot, glossaryDir)
+	files, err := markdownFiles(dirAbs)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fileAbs := range files {
+		content, err := os.ReadFile(fileAbs)
+		if err != nil {
+			return nil, nil, err
+		}
+		lines := strings.Split(string(content), "\n")
+		// Glossary term files carry a leading attribution comment before the `---`
+		// block (the mattpocock template), so slice from the opening delimiter — the
+		// shared frontmatter scanner requires `---` on line 0.
+		if start := frontmatterOpen(lines); start > 0 {
+			lines = lines[start:]
+		}
+		fields := frontmatterFields(lines)
+		term, ok := fields["term"]
+		if !ok {
+			continue
+		}
+		syns, ok := fields["forbidden_synonyms"]
+		if !ok {
+			continue
+		}
+		for _, s := range parseYAMLStringList(syns.value) {
+			key := strings.ToLower(strings.TrimSpace(s))
+			if key == "" {
+				continue
+			}
+			forbidden[key] = true
+			if _, seen := canonical[key]; !seen {
+				canonical[key] = term.value
+			}
+		}
+	}
+	return forbidden, canonical, nil
+}
+
+// parseYAMLStringList parses an inline YAML flow sequence of strings, e.g.
+// `["sprint", "milestone", "epic"]`, into its members. It is deliberately small —
+// the glossary frontmatter only ever uses the inline `[...]` form — and tolerates
+// quotes and surrounding whitespace.
+func parseYAMLStringList(v string) []string {
+	v = strings.TrimSpace(v)
+	v = strings.TrimPrefix(v, "[")
+	v = strings.TrimSuffix(v, "]")
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, `"'`)
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// frontmatterOpen returns the index of the opening `---` frontmatter delimiter,
+// skipping leading blank lines and HTML comments; -1 when the leading block is not
+// frontmatter. It lets a term file carry an attribution comment above its `---`.
+func frontmatterOpen(lines []string) int {
+	i := 0
+	for i < len(lines) {
+		t := strings.TrimSpace(lines[i])
+		if t == "" || (strings.HasPrefix(t, "<!--") && strings.HasSuffix(t, "-->")) {
+			i++
+			continue
+		}
+		break
+	}
+	if i < len(lines) && strings.TrimSpace(lines[i]) == "---" {
+		return i
+	}
+	return -1
+}
+
+// frontmatterBodyStart returns the index of the first body line after a leading
+// YAML frontmatter block (the line after the closing `---`); 0 when there is none.
+func frontmatterBodyStart(lines []string) int {
+	i := 0
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	if i >= len(lines) || strings.TrimSpace(lines[i]) != "---" {
+		return 0
+	}
+	for j := i + 1; j < len(lines); j++ {
+		if strings.TrimSpace(lines[j]) == "---" {
+			return j + 1
+		}
+	}
+	return 0 // unterminated frontmatter: treat all as body rather than swallow the file
+}
+
+// stripInlineCode blanks the contents of single-backtick inline code spans (and
+// their delimiters) so a forbidden synonym named inside a code span is a mention,
+// not a match. Unpaired backticks leave the remainder untouched.
+func stripInlineCode(line string) string {
+	b := []rune(line)
+	out := make([]rune, len(b))
+	copy(out, b)
+	inSpan := false
+	for i, r := range b {
+		if r == '`' {
+			out[i] = ' '
+			inSpan = !inSpan
+			continue
+		}
+		if inSpan {
+			out[i] = ' '
+		}
+	}
+	if inSpan {
+		// Unpaired backtick: nothing was a real span — restore the tail.
+		return line
+	}
+	return string(out)
+}
+
+// wordBoundaryAt reports whether [start,end) in s is bounded by non-word runes on
+// both sides. Word runes are Unicode letters, digits, and underscore — explicit
+// because Go's regexp \b is ASCII-only and would treat a unicode-letter neighbour
+// as a boundary, leaking "épic"/"epicа" style false hits past an ASCII \b.
+func wordBoundaryAt(s string, start, end int) bool {
+	if start > 0 {
+		r, _ := utf8.DecodeLastRuneInString(s[:start])
+		if isWordRune(r) {
+			return false
+		}
+	}
+	if end < len(s) {
+		r, _ := utf8.DecodeRuneInString(s[end:])
+		if isWordRune(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if p != "" && strings.HasPrefix(s, filepath.ToSlash(p)) {
+			return true
+		}
+	}
+	return false
+}
+
 type fmField struct {
 	value string
 	line  int
