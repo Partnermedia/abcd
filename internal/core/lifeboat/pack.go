@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -210,8 +211,18 @@ func pathOverlaps(a, b string) bool {
 	return within(a, b) || within(b, a)
 }
 
-// within reports whether child is equal to or nested inside parent.
+// within reports whether child is equal to or nested inside parent. On a
+// case-folding filesystem (macOS, Windows by default) the comparison is
+// case-insensitive: otherwise a destination like ".../REPO/lifeboat" computes as
+// an out-of-tree sibling of source ".../repo" and slips the overlap gate, even
+// though the two resolve to the SAME directory on disk — and the pack then writes
+// into the source tree. Erring toward "overlaps" on these platforms is the safe
+// direction for a destructive-write gate.
 func within(child, parent string) bool {
+	if caseFoldingFS() {
+		child = strings.ToLower(child)
+		parent = strings.ToLower(parent)
+	}
 	rel, err := filepath.Rel(parent, child)
 	if err != nil {
 		return false
@@ -222,17 +233,32 @@ func within(child, parent string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// caseFoldingFS reports whether the platform's default filesystem folds case.
+// macOS (APFS/HFS+ default) and Windows do; abcd assumes this default rather than
+// probing each volume, and the only cost of a false assumption is a stricter
+// overlap gate.
+func caseFoldingFS() bool {
+	return runtime.GOOS == "darwin" || runtime.GOOS == "windows"
+}
+
 // notPresent reports whether err means the path does not exist (ENOENT or a
-// non-directory component along the way).
+// non-directory component along the way). ENOTDIR — a prefix component of dest is
+// a regular file — means dest cannot exist, so it is "absent" too; treating it as
+// an uninterpretable stat error made destinationGate refuse a perfectly writable
+// destination whose parent happened to shadow a file.
 func notPresent(err error) bool {
-	return errors.Is(err, os.ErrNotExist)
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 }
 
 // isAbcdLifeboat reports whether dir holds a parseable _provenance.json — the
 // only signal that lets a pack overwrite an existing directory.
 func isAbcdLifeboat(dir string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, ProvenanceName))
-	if err != nil || len(data) > 1<<20 {
+	// Guarded read: the destination directory is attacker-influenced (a pack may
+	// target any path), so a symlinked _provenance.json must not be followed and a
+	// device/endless file must not be read unbounded — the old os.ReadFile checked
+	// the size only AFTER reading it all. The 1 MiB cap bounds the read itself.
+	data, err := fsutil.ReadGuarded(filepath.Join(dir, ProvenanceName), 1<<20)
+	if err != nil {
 		return false
 	}
 	var prov Provenance

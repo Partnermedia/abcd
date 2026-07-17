@@ -62,6 +62,40 @@ func gitEnv() []string {
 	)
 }
 
+// IsolatedEnv returns the child environment an isolated git command runs with:
+// the parent environment scrubbed of every repo-selection and config-injection
+// variable (GIT_DIR, GIT_WORK_TREE, GIT_CONFIG_*, …), plus the config-file
+// neutralisers. A front door that must run a git command this package does not
+// already wrap — a probe needing --stdin, say — uses this instead of
+// os.Environ() so it inherits the same isolation as Run/RunLimited. Reaching for
+// os.Environ() directly lets an inherited GIT_DIR/GIT_WORK_TREE silently
+// redirect the command at a DIFFERENT repository, which for a secret-hygiene gate
+// is a real vulnerability.
+func IsolatedEnv() []string { return gitEnv() }
+
+// ScrubbedEnv is IsolatedEnv without the global/system config-file neutralisers:
+// the parent environment with every repo-selection and config-injection variable
+// stripped (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG_COUNT/PARAMETERS/
+// KEY_*/VALUE_*, …) but with ~/.gitconfig and the system config still in effect.
+// It is for a git command that MUST honour the developer's real global config —
+// the identity probe reads user.name/user.email to redact the caller's OWN
+// identity, and those overwhelmingly live in global config, so suppressing it
+// (as IsolatedEnv does) would blind the probe and silently stop redacting a real
+// identity leak. Scrubbing still defeats the two attacks that matter here: an
+// inherited GIT_DIR redirecting the probe at a different repository, and an
+// injected GIT_CONFIG_* forging a fake identity that displaces the real one.
+func ScrubbedEnv() []string {
+	base := os.Environ()
+	env := make([]string, 0, len(base))
+	for _, kv := range base {
+		if scrubGitVar(kv) {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return env
+}
+
 // scrubGitVar reports whether an "KEY=value" environment entry names a git
 // repo-selection or config-injection variable that must not leak into an
 // isolated command. It is deliberately a denylist: unrelated GIT_* pass-throughs

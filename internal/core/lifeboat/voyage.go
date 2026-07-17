@@ -11,10 +11,12 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
-// rootSHARe is the operator-store key: a 40-char lowercase hex commit SHA. A
-// source without one (an empty or non-git repo) cannot key a voyage, so its pack
-// is not logged rather than logged under a forged key.
-var rootSHARe = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// rootSHARe is the operator-store key: a lowercase hex commit SHA, 40 chars for
+// git's SHA-1 object format or 64 for SHA-256. Accepting only 40 silently
+// dropped every voyage from a SHA-256 repository. A source without a root SHA (an
+// empty or non-git repo) cannot key a voyage, so its pack is not logged rather
+// than logged under a forged key.
+var rootSHARe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // voyageEntry is one line of the append-only disembark ledger. It carries no
 // oracle verdict or shared_with field — nothing produces them yet, and an empty

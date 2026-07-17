@@ -393,8 +393,12 @@ func TestHookSessionEndRefusesOverCapTranscript(t *testing.T) {
 
 	_, errlog := runHook(t, endPayload(t, "too-big", repo, tp), "hook", "session-end")
 
-	if !strings.Contains(errlog, "cap") {
-		t.Errorf("an over-cap transcript must report the cap on stderr, got: %s", errlog)
+	// Match the distinctive cap phrasing, not the bare substring "cap": the
+	// handler wraps every readTranscript error as "...; capturing nothing", and
+	// "capturing" contains "cap", so a loose Contains(errlog, "cap") would pass
+	// for ANY rejection reason — a false-confidence assertion.
+	if !strings.Contains(errlog, "over the") || !strings.Contains(errlog, "cap") {
+		t.Errorf("an over-cap transcript must report the size cap on stderr, got: %s", errlog)
 	}
 	recs, err := history.List(rootSHA)
 	if err != nil {

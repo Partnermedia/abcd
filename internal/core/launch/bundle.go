@@ -533,11 +533,11 @@ func checkIgnoredStrict(root string, candidates []string) (map[string]struct{}, 
 	}
 	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
 		"check-ignore", "-z", "--no-index", "-v", "--stdin")
-	cmd.Env = append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null",
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_OPTIONAL_LOCKS=0",
-	)
+	// Scrub the environment: appending to os.Environ() left GIT_DIR/GIT_WORK_TREE/
+	// GIT_CONFIG_* intact, and those override `-C root`, silently redirecting this
+	// gitignore probe at a DIFFERENT repository — so a gitignored secret could read
+	// as "not ignored" and be promoted into the release bundle.
+	cmd.Env = gitutil.IsolatedEnv()
 	cmd.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
 	data, err := cmd.Output()
 	if err != nil {

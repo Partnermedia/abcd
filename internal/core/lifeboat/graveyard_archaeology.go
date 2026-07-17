@@ -68,6 +68,17 @@ func gvReverts(ctx *SourceContext) []Finding {
 	return capSignalFindings(out)
 }
 
+// refIsSafe reports whether a repo-derived ref name is safe to hand git as a
+// positional argument: non-empty and not option-like (no leading '-'). The
+// lifeboat probe is designed to run over hostile/archived repositories, so a
+// crafted ref such as "-x" (a branch or an origin/HEAD target written straight
+// into .git/refs) must never reach git where it would parse as a flag — argument
+// injection. A legitimate branch name never begins with '-', so rejecting these
+// only drops hostile input.
+func refIsSafe(ref string) bool {
+	return ref != "" && !strings.HasPrefix(ref, "-")
+}
+
 // defaultBranch resolves the branch unmerged work is measured against, without
 // touching the network: origin/HEAD → the first of {main,master,trunk,develop}
 // that exists → the branch HEAD points at → "" (detached / no branches, so the
@@ -79,7 +90,7 @@ func defaultBranch(ctx *SourceContext) string {
 	const originPrefix = "refs/remotes/origin/"
 	if out, err := ctx.Git("symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"); err == nil {
 		if ref := strings.TrimSpace(out); strings.HasPrefix(ref, originPrefix) {
-			if name := strings.TrimPrefix(ref, originPrefix); name != "" {
+			if name := strings.TrimPrefix(ref, originPrefix); refIsSafe(name) {
 				return name
 			}
 		}
@@ -90,7 +101,7 @@ func defaultBranch(ctx *SourceContext) string {
 		}
 	}
 	if out, err := ctx.Git("symbolic-ref", "--quiet", "--short", "HEAD"); err == nil {
-		if name := strings.TrimSpace(out); name != "" {
+		if name := strings.TrimSpace(out); refIsSafe(name) {
 			return name
 		}
 	}
@@ -103,7 +114,7 @@ func defaultBranch(ctx *SourceContext) string {
 // data, so the ranking survives re-plans; it is not the wall clock.
 func gvUnmergedBranches(ctx *SourceContext) []Finding {
 	db := defaultBranch(ctx)
-	if db == "" {
+	if !refIsSafe(db) {
 		return nil
 	}
 	type branch struct {
@@ -119,8 +130,8 @@ func gvUnmergedBranches(ctx *SourceContext) []Finding {
 	probe := boundProbeList(ctx.GitLines("branch", "--format=%(refname:short)", "--no-merged", db), maxGraveyardFindingsPerSignal)
 	for _, name := range probe {
 		name = strings.TrimSpace(name)
-		if name == "" || name == db {
-			continue
+		if name == db || !refIsSafe(name) {
+			continue // empty, the base branch itself, or an option-like hostile ref
 		}
 		base, err := ctx.Git("merge-base", db, name)
 		if err != nil {

@@ -3,6 +3,8 @@ package lifeboat
 import (
 	"fmt"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // Coverage is one repository's probe result: which brief sections a lifeboat
@@ -140,24 +142,12 @@ func tiersOrNone(t []string) string {
 	return strings.Join(t, ", ")
 }
 
-// sanitize strips terminal control characters from a string before it is
-// rendered to a terminal. Evidence, searched entries, questions, and the repo
-// name are built from repository content — commit subjects, file paths, tag
-// names — which a hostile or archived repo controls. Left raw, an ANSI escape
-// in a commit subject could spoof or corrupt the human report. C0 controls and
-// DEL are replaced with a visible caret; tab is kept as a space. (The JSON
-// output is unaffected — encoding/json escapes control characters itself.)
-func sanitize(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\t':
-			return ' '
-		case r < 0x20 || r == 0x7f:
-			return '?'
-		}
-		return r
-	}, s)
-}
+// sanitize strips terminal-display attack characters from repository-derived text
+// (evidence, searched entries, questions, the repo name — all commit-subject/path/
+// ref content a hostile or archived repo controls) before it reaches the human
+// report. It is the canonical termsafe primitive; the JSON output is unaffected
+// (encoding/json escapes control characters itself).
+func sanitize(s string) string { return termsafe.Sanitize(s) }
 
 // sanitizeAll sanitizes every member of a slice.
 func sanitizeAll(in []string) []string {

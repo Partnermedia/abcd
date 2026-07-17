@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // RetentionPlan is the newest-per-line prune preview for a release cut.
@@ -98,9 +100,17 @@ func removeTag(tags []string, tag string) []string {
 
 // GitExistingTags is the default provider for the existing-release list: it runs
 // `git tag --list v*` under repoRoot and parses the strict-SemVer core of each
-// tag. Non-SemVer tags are ignored. It is best-effort — an error yields no tags.
+// tag. Non-SemVer tags AND prerelease/build tags are ignored — retention decides
+// newest-per-line over RELEASES (core versions), and Tag()/String() render the
+// core only, so admitting a "v1.2.3-rc1" would surface a phantom "v1.2.3" in the
+// plan and collapse it against the real "v1.2.3". It is best-effort — an error
+// yields no tags.
 func GitExistingTags(repoRoot string) ([]Semver, error) {
 	cmd := exec.Command("git", "-C", repoRoot, "tag", "--list", "v*")
+	// Isolate: an inherited GIT_DIR/GIT_WORK_TREE would override `-C repoRoot` and
+	// list a different repository's tags, skewing the existing-release set that
+	// version-collision and retention decisions depend on.
+	cmd.Env = gitutil.IsolatedEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -115,6 +125,9 @@ func GitExistingTags(repoRoot string) ([]Semver, error) {
 			continue
 		}
 		if v, err := ParseSemver(strings.TrimPrefix(line, "v")); err == nil {
+			if v.Prerelease != "" || v.Build != "" {
+				continue // not a release; its core tag would be a phantom in the plan
+			}
 			vers = append(vers, v)
 		}
 	}

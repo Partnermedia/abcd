@@ -5,6 +5,10 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // Identity is the caller's runtime identity, probed from git config and the
@@ -50,6 +54,13 @@ func ProbeIdentity(repoRoot string) Identity {
 	git := func(args ...string) string {
 		full := append([]string{"-C", repoRoot}, args...)
 		cmd := exec.Command("git", full...)
+		// Scrub repo-selection and config-injection env vars, but keep global
+		// config: this probe reads the caller's OWN user.name/user.email to redact
+		// their identity, and those live in global config, so full IsolatedEnv
+		// (which neutralises ~/.gitconfig) would blind the identity gate. Scrubbing
+		// still stops an inherited GIT_DIR pointing the probe at another repo and an
+		// injected GIT_CONFIG_* forging a fake identity that displaces the real one.
+		cmd.Env = gitutil.ScrubbedEnv()
 		out, err := cmd.Output()
 		if err != nil {
 			return ""
@@ -81,8 +92,14 @@ func ProbeIdentity(repoRoot string) Identity {
 var (
 	// GitHub username inside a remote URL (https or ssh form).
 	githubRemoteRe = regexp.MustCompile(`github\.com[:/]([A-Za-z0-9-]+)/`)
-	// Generic home path — \b is RE2-safe; the trailing boundary is a Go predicate.
-	genericHomeRe = regexp.MustCompile(`\b(?:/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+)`)
+	// Generic home path. Both boundaries are Go predicates: a leading RE2 \b is
+	// wrong here — it is an ASCII word boundary that requires a WORD character
+	// immediately before the '/', which never holds at line start or after a
+	// space/'='/quote, so it silently killed home_path_other detection for every
+	// realistic occurrence. leadingBoundaryOK enforces the real requirement (the
+	// '/' does not continue a longer path segment); the trailing boundary stays
+	// trailingBoundaryOK.
+	genericHomeRe = regexp.MustCompile(`(?:/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+)`)
 	// Loose URL span (scheme to whitespace/quote/closing).
 	urlSpanRe = regexp.MustCompile(`(?:https?://|git@|ftp://|ssh://)[^\s"'` + "`" + `)>\]<]+`)
 	// A git noreply email is not a leak.
@@ -114,19 +131,33 @@ type identityMatchers struct {
 func newIdentityMatchers(id Identity) identityMatchers {
 	m := identityMatchers{id: id}
 	if id.HomePath != "" {
-		m.homeSelf = regexp.MustCompile(regexp.QuoteMeta(id.HomePath))
+		// Case-insensitive: on a case-folding filesystem (macOS/Windows) a differently
+		// cased spelling of the caller's own home path resolves to the SAME directory,
+		// so a case variant must still trip the hard_fail home_path_self gate — matching
+		// the (?i) already applied to the email/name/github matchers below.
+		m.homeSelf = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.HomePath))
 	}
 	if id.GitUserEmail != "" {
-		m.email = regexp.MustCompile(regexp.QuoteMeta(id.GitUserEmail))
+		// Case-insensitive: email addresses are compared case-insensitively in
+		// practice (the domain always, and mailbox providers overwhelmingly), so a
+		// trivial case variant of the caller's own address must not slip the
+		// hard_fail real_email gate.
+		m.email = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitUserEmail))
 	}
 	if n := strings.TrimSpace(id.GitUserName); len(n) >= 3 {
-		m.name = regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(id.GitUserName) + `\b`)
+		// No RE2 \b: it is ASCII-only, so a name whose first or last rune is
+		// non-ASCII (accented, CJK, Cyrillic) never satisfies the boundary and the
+		// hard_fail real_name detector silently never fires. The word boundary is a
+		// Unicode-aware Go predicate applied to each match instead.
+		m.name = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitUserName))
 	}
 	if id.GitRemoteUsername != "" {
-		m.github = regexp.MustCompile(`\b` + regexp.QuoteMeta(id.GitRemoteUsername) + `\b`)
+		// GitHub usernames are case-insensitive; \b dropped for the same
+		// Unicode-boundary reason as real_name (see above).
+		m.github = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitRemoteUsername))
 	}
 	if id.HomeUser != "" {
-		m.localBare = regexp.MustCompile(`\b` + regexp.QuoteMeta(id.HomeUser) + `\b`)
+		m.localBare = regexp.MustCompile(regexp.QuoteMeta(id.HomeUser))
 		if enc := strings.ReplaceAll(id.HomeUser, ".", "-"); enc != id.HomeUser {
 			m.localEncoded = enc
 		}
@@ -181,7 +212,7 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// regardless of the trailing rune: the trailing-boundary heuristic exists
 	// only to avoid over-flagging a DIFFERENT user's path (home_path_other),
 	// never to license leaving the caller's own home path unredacted. A home
-	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is
+	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is abcd-audit:allow
 	// still the caller's home and must be redacted.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
@@ -190,7 +221,7 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	}
 	// home_path_other — a generic /Users|/home path that is not the caller's own.
 	for _, loc := range genericHomeRe.FindAllStringIndex(line, -1) {
-		if !trailingBoundaryOK(line, loc[1]) {
+		if !leadingBoundaryOK(line, loc[0]) || !trailingBoundaryOK(line, loc[1]) {
 			continue
 		}
 		matched := line[loc[0]:loc[1]]
@@ -212,6 +243,9 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// real_name — suppress inside URL spans and when it equals the github username.
 	if m.name != nil && !m.nameEqGithub {
 		for _, loc := range m.name.FindAllStringIndex(line, -1) {
+			if !wordBounded(line, loc[0], loc[1]) {
+				continue
+			}
 			if inAnySpan(loc[0], urls) {
 				continue
 			}
@@ -221,6 +255,9 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// github_username — suppress inside URL spans.
 	if m.github != nil {
 		for _, loc := range m.github.FindAllStringIndex(line, -1) {
+			if !wordBounded(line, loc[0], loc[1]) {
+				continue
+			}
 			if inAnySpan(loc[0], urls) {
 				continue
 			}
@@ -244,6 +281,9 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 				"(local machine username; replace with [USERNAME] or remove)")
 		}
 		for _, loc := range m.localBare.FindAllStringIndex(line, -1) {
+			if !wordBounded(line, loc[0], loc[1]) {
+				continue
+			}
 			emit(loc)
 		}
 		if m.localEncoded != "" {
@@ -256,24 +296,18 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 }
 
 // localSuppressionSpans returns spans where a local-username match is not a
-// standalone leak (own home path, any redacted generic home path, the exact
-// email, URLs). A local-username is only suppressed over a span that is itself
-// redacted: home_path_self is now always redacted, but a home_path_other span
-// whose trailing rune fails trailingBoundaryOK is DROPPED (never redacted), so
-// masking a username over it would leave both the path and the username verbatim
-// on disk. Such dropped spans are therefore excluded from suppression.
+// standalone leak: the caller's own home path (home_path_self, always redacted
+// hard_fail), the exact email, and URLs. home_path_other spans are deliberately
+// NOT included: home_path_other is only a WARN, so suppressing a hard_fail
+// local_username underneath one would downgrade a username leak (e.g. the
+// "<user>" in "/home/<user>/...") out of the ship-blocking gate. Letting both
+// findings fire keeps the hard_fail signal and still redacts the span.
 func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span {
 	spans := append([]span(nil), urls...)
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
 			spans = append(spans, span{loc[0], loc[1]})
 		}
-	}
-	for _, loc := range genericHomeRe.FindAllStringIndex(line, -1) {
-		if !trailingBoundaryOK(line, loc[1]) {
-			continue // dropped home_path_other — not redacted, so do not suppress
-		}
-		spans = append(spans, span{loc[0], loc[1]})
 	}
 	if m.email != nil {
 		for _, loc := range m.email.FindAllStringIndex(line, -1) {
@@ -368,6 +402,48 @@ func trailingBoundaryOK(line string, end int) bool {
 		return true
 	}
 	return homeBoundary(rune(line[end]))
+}
+
+// leadingBoundaryOK reports whether byte offset start begins a home path rather
+// than continuing a longer path segment: it is the line start, or the preceding
+// byte is not a path-segment byte. This replaces the broken leading RE2 \b on
+// genericHomeRe.
+func leadingBoundaryOK(line string, start int) bool {
+	if start == 0 {
+		return true
+	}
+	return !isPathSegmentByte(line[start-1])
+}
+
+// isWordRune reports whether r is a Unicode word rune (letter, digit, or '_') —
+// the class RE2's ASCII-only \b cannot see for non-ASCII letters.
+func isWordRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
+// wordBoundaryAt reports whether a Unicode word boundary falls at byte offset pos
+// in line: exactly one of the runes immediately before and at pos is a word rune
+// (ends of the string count as non-word). It is the Unicode-aware stand-in for
+// the \b assertions dropped from the identity matchers so accented/CJK/Cyrillic
+// names and usernames are bounded correctly.
+func wordBoundaryAt(line string, pos int) bool {
+	beforeWord := false
+	if pos > 0 {
+		r, _ := utf8.DecodeLastRuneInString(line[:pos])
+		beforeWord = isWordRune(r)
+	}
+	afterWord := false
+	if pos < len(line) {
+		r, _ := utf8.DecodeRuneInString(line[pos:])
+		afterWord = isWordRune(r)
+	}
+	return beforeWord != afterWord
+}
+
+// wordBounded reports whether the half-open match [start,end) sits on Unicode
+// word boundaries at both ends.
+func wordBounded(line string, start, end int) bool {
+	return wordBoundaryAt(line, start) && wordBoundaryAt(line, end)
 }
 
 // snippet is the trimmed line capped at 200 bytes.

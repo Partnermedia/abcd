@@ -126,9 +126,16 @@ func validateStrict(fm map[string]any) error {
 		if !isMap {
 			return fmt.Errorf("%w: resolved_by must be an object", ErrMalformedFrontmatter)
 		}
-		for k := range m {
+		for k, sv := range m {
 			if k != "intent" && k != "spec" && k != "commit" {
 				return fmt.Errorf("%w: resolved_by has unknown key %q", ErrMalformedFrontmatter, k)
+			}
+			// Type-check the sub-value: issueFromFrontmatter reads it via asString,
+			// which coerces a non-string (a number, a list) to "". Without this
+			// check a malformed resolved_by validates cleanly and then silently
+			// loses its value on read, so the round-trip is lossy and undetected.
+			if _, isStr := sv.(string); !isStr {
+				return fmt.Errorf("%w: resolved_by.%s must be a string", ErrMalformedFrontmatter, k)
 			}
 		}
 	}

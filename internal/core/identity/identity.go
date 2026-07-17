@@ -15,6 +15,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // PinRelPath is the committed identity pin, relative to the repo root.
@@ -123,7 +126,13 @@ func WritePin(root string, p Pin) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	// Route through the canonical atomic primitive (temp + fchmod + fsync + rename
+	// + parent-dir fsync): a plain in-place os.WriteFile truncates the pin before
+	// rewriting it — a crash mid-write leaves a corrupt or empty identity.json, and
+	// it follows a symlink at path. This is the fifth writer the iss-32
+	// consolidation missed (the guard only flags divergent atomic primitives, not a
+	// non-atomic write).
+	return fsutil.WriteFileAtomic(path, append(data, '\n'), 0o644)
 }
 
 // EffectiveIdentity returns the author identity git would stamp on a commit in
@@ -156,6 +165,12 @@ func EffectiveIdentity(root string) (Effective, error) {
 // failure (git absent, not a repo) is returned.
 func gitConfig(root, key string) (string, error) {
 	cmd := exec.Command("git", "-C", root, "config", "--get", key)
+	// Scrub repo-selection and config-injection env vars, but keep global config:
+	// this reads the caller's real user.name/user.email (which live in ~/.gitconfig)
+	// to enforce the commit-identity gate, so full IsolatedEnv would blind it.
+	// Scrubbing still stops an inherited GIT_DIR redirecting the read at another repo
+	// and an injected GIT_CONFIG_* forging the identity the gate is meant to verify.
+	cmd.Env = gitutil.ScrubbedEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {

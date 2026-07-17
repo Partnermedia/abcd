@@ -31,6 +31,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/rules"
 	"github.com/REPPL/abcd-cli/internal/core/spec"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 
@@ -247,8 +248,10 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 			res := docsLintResult{Findings: findings, Blockers: blockers}
 			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				for _, f := range findings {
+					// File and Message embed untrusted repo content (paths, link targets);
+					// Severity/RuleID are enum-constrained.
 					fmt.Fprintf(w, "%s:%d: [%s %s] %s\n",
-						f.File, f.Line, strings.ToUpper(f.Severity), f.RuleID, f.Message)
+						termsafe.Sanitize(f.File), f.Line, strings.ToUpper(f.Severity), f.RuleID, termsafe.Sanitize(f.Message))
 				}
 				fmt.Fprintf(w, "abcd docs lint — %d finding(s), %d blocker(s)\n", len(findings), blockers)
 			}); err != nil {
@@ -788,7 +791,8 @@ func newHookCommand() *cobra.Command {
 					cwd = wd
 				}
 			}
-			rs, err := rules.Load(cwd)
+			root := rulesRoot(cwd)
+			rs, err := rules.Load(root)
 			if err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: %v; injecting nothing\n", err)
 				return nil
@@ -796,7 +800,7 @@ func newHookCommand() *cobra.Command {
 			session := hookSession(in)
 			// The fixed-N backstop comes from the repo's config (default 15 when
 			// unset); event-driven reset is the primary refresh (D1).
-			res := rules.Inject(rs, in.Prompt, rules.LoadState(session), rules.LoadBackstop(cwd))
+			res := rules.Inject(rs, in.Prompt, rules.LoadState(session), rules.LoadBackstop(root))
 			if err := rules.SaveState(session, res.State); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: state save failed (%v)\n", err)
 			}
@@ -1013,7 +1017,7 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rs, err := rules.Load(cwd)
+			rs, err := rules.Load(rulesRoot(cwd))
 			if err != nil {
 				return err
 			}
@@ -1071,7 +1075,8 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					v.Buckets[intent.BucketDisciplines], v.Buckets[intent.BucketSuperseded])
 				fmt.Fprintf(w, "  specs: open %d · closed %d\n", v.SpecsOpen, v.SpecsClosed)
 				for _, p := range v.Linked {
-					fmt.Fprintf(w, "  link: %s -> %s\n", p.Intent, p.Spec)
+					// p.Spec is the intent file's spec_id frontmatter, not charset-validated.
+					fmt.Fprintf(w, "  link: %s -> %s\n", termsafe.Sanitize(p.Intent), termsafe.Sanitize(p.Spec))
 				}
 			})
 		},
@@ -1222,7 +1227,7 @@ func newSpecCommand(asJSON *bool) *cobra.Command {
 			return render(cmd.OutOrStdout(), *asJSON, view, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd spec — open %d · closed %d\n", view.Open, view.Closed)
 				for _, sp := range store.Specs {
-					fmt.Fprintf(w, "  %s  %s  %s  (%s)\n", sp.ID, sp.Status, sp.Slug, sp.Intent)
+					fmt.Fprintf(w, "  %s  %s  %s  (%s)\n", termsafe.Sanitize(sp.ID), sp.Status, termsafe.Sanitize(sp.Slug), termsafe.Sanitize(sp.Intent))
 				}
 			})
 		},
@@ -1648,7 +1653,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					fmt.Fprintf(w, "%s  %s  %s  %s%s\n", iss.ID, iss.Status, iss.Severity, iss.Slug, blockedNote(iss))
 				}
 				for _, sk := range res.Skipped {
-					fmt.Fprintf(w, "  skipped %s: %s\n", sk.Path, sk.Error)
+					// Path and Error echo a malformed issue file's own name and content
+					// (err.Error() carries offending bytes), so sanitise before the terminal.
+					fmt.Fprintf(w, "  skipped %s: %s\n", termsafe.Sanitize(sk.Path), termsafe.Sanitize(sk.Error))
 				}
 			})
 		},
@@ -1860,16 +1867,18 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 				}
 				fmt.Fprintln(w)
 				for _, c := range st.ByClass {
-					fmt.Fprintf(w, "  %s: %d\n", c.Class, c.Count)
+					// Class labels come from page frontmatter; contradiction/headroom lines
+					// are read verbatim from repo files — all untrusted terminal output.
+					fmt.Fprintf(w, "  %s: %d\n", termsafe.Sanitize(c.Class), c.Count)
 				}
 				if st.LastIngest != "" {
-					fmt.Fprintf(w, "  last ingest: %s\n", st.LastIngest)
+					fmt.Fprintf(w, "  last ingest: %s\n", termsafe.Sanitize(st.LastIngest))
 				}
 				for _, line := range st.Contradictions {
-					fmt.Fprintf(w, "  contradiction: %s\n", line)
+					fmt.Fprintf(w, "  contradiction: %s\n", termsafe.Sanitize(line))
 				}
 				for _, line := range st.Headroom {
-					fmt.Fprintf(w, "  %s\n", line)
+					fmt.Fprintf(w, "  %s\n", termsafe.Sanitize(line))
 				}
 			})
 		},
@@ -1982,7 +1991,7 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "abcd memory lint — %d blocker(s), %d warning(s), %d info(s)\n",
 					res.Summary.Blockers, res.Summary.Warnings, res.Summary.Infos)
 				for _, f := range res.Findings {
-					fmt.Fprintf(w, "  %s [%s] %s:%d %s\n", f.Code, f.Severity, f.File, f.Line, f.Message)
+					fmt.Fprintf(w, "  %s [%s] %s:%d %s\n", f.Code, f.Severity, termsafe.Sanitize(f.File), f.Line, termsafe.Sanitize(f.Message))
 				}
 				fmt.Fprintf(w, "  report: %s\n", res.ReportDir)
 			}); err != nil {
@@ -2191,6 +2200,28 @@ func captureRoot(cwd string) string {
 	return cwd
 }
 
+// rulesRoot resolves the repo root the modular-rules loader must read: the
+// nearest ancestor of cwd (cwd itself included) that holds a .abcd directory.
+// rules.Load/LoadBackstop join ".abcd/rules.json" onto the path they are given,
+// so handing them a subdirectory silently ignored the per-repo overrides AND the
+// kill switch — a repo that had disabled a domain (or the whole loader) would
+// still inject it whenever abcd ran from any nested directory. Falls back to the
+// git working-tree root, then cwd, so a repo without a .abcd dir still resolves.
+func rulesRoot(cwd string) string {
+	dir := cwd
+	for {
+		if fi, err := os.Stat(filepath.Join(dir, ".abcd")); err == nil && fi.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return captureRoot(cwd)
+}
+
 func repoRootSHA() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -2290,7 +2321,7 @@ func scrubPaths(err error) string {
 // repl — both a path UNDER the root (root + separator + …) and the BARE root
 // itself when it sits at a right boundary (end of string or a non-path
 // character). The bare-root case matters because a PathError or message that
-// names exactly $HOME (e.g. "cannot access /Users/alex") would otherwise leak the
+// names exactly $HOME (e.g. "cannot access /Users/alex") would otherwise leak the abcd-audit:allow
 // developer identity — its base segment IS the username. The filesystem root
 // ("/") and empty or relative roots are skipped so a message is never mangled.
 func redactRoot(s, root, repl string) string {

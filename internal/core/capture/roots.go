@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // resolveRoots resolves (repoRoot, issuesRoot) from the request fields plus git
@@ -64,6 +66,12 @@ func resolveRoots(repoRoot, issuesRoot string) (string, string, error) {
 func discoverRepoRoot(start string) string {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = start
+	// Isolate: `rev-parse --show-toplevel` honours an inherited GIT_WORK_TREE/GIT_DIR
+	// over cmd.Dir, so without scrubbing an inherited value redirects repo-root
+	// discovery at a DIFFERENT tree — and the derived issuesRoot then reads and
+	// writes the ledger under an attacker-chosen path. Repo discovery needs no
+	// global config, so full isolation is safe.
+	cmd.Env = gitutil.IsolatedEnv()
 	out, err := cmd.Output()
 	if err == nil {
 		if root := strings.TrimSpace(string(out)); root != "" {

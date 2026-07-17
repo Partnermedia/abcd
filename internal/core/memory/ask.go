@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // ask.go — deterministic native recall (fn-38 .6). Retrieval (QueryPages) is
@@ -277,17 +279,20 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 // citation-renderer, not an LLM. Missing provenance renders as explicit (none).
 func RenderCitedMatches(question string, matches []MatchedPage) string {
 	lines := []string{
-		"# /abcd:memory ask — " + question,
+		"# /abcd:memory ask — " + termsafe.Sanitize(question),
 		"",
 		fmt.Sprintf("Matched pages (%d, overlap-ranked):", len(matches)),
 		"",
 	}
 	for _, m := range matches {
-		summary := m.Summary
+		// Filename and Summary are page-derived (repo content); sanitise each field
+		// before it joins the multi-line answer — masking the whole answer wholesale
+		// would clobber its legitimate newlines.
+		summary := termsafe.Sanitize(m.Summary)
 		if summary == "" {
 			summary = "(no summary)"
 		}
-		lines = append(lines, fmt.Sprintf("- `%s` (score %d) — %s", m.Filename, m.Score, summary))
+		lines = append(lines, fmt.Sprintf("- `%s` (score %d) — %s", termsafe.Sanitize(m.Filename), m.Score, summary))
 		for _, c := range m.Citations {
 			cls := c.SourceClass
 			if cls == "" {

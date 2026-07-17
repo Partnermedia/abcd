@@ -118,7 +118,12 @@ func DefaultPatterns() []Pattern {
 		},
 		{
 			Name: "google_api_key", Kind: "token:google_api", Label: "Google API key (AIza)",
-			Re: regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`), Severity: SeverityHardFail,
+			// No trailing \b: the class includes '-' and the length is FIXED at 35, so
+			// a key whose 35th char is '-' (a valid Google key char) has no shorter
+			// match to fall back on and the ASCII \b — which needs a word char on its
+			// left — can never be satisfied, silently missing a hard_fail secret. The
+			// leading \b plus the AIza prefix and fixed length still bound the match.
+			Re: regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{

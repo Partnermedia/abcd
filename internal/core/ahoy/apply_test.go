@@ -2,6 +2,7 @@ package ahoy
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/identity"
@@ -47,6 +48,45 @@ func TestStepConfigValuesRejectsInvalidDocsTarget(t *testing.T) {
 	}
 	if _, err := os.Stat(configPath(dir)); err == nil {
 		t.Errorf("invalid docs_target was written to config.json")
+	}
+}
+
+// TestStepConfigValuesRefusesToClobberMalformedConfig proves a malformed
+// config.json is left untouched: rebuilding it from the four install values would
+// destroy whatever the user had. stepConfigValues must return nil (partial) and
+// the file bytes must be unchanged.
+func TestStepConfigValuesRefusesToClobberMalformedConfig(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(configPath(dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const malformed = "{ this is not valid json, but the user's file }\n"
+	if err := os.WriteFile(configPath(dir), []byte(malformed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := &applyCtx{
+		cwd:      dir,
+		approved: map[GapCategory]bool{ConfigChange: true},
+		gapPresent: map[string]bool{
+			"config.visibility_missing":     true,
+			"config.docs_target_missing":    true,
+			"config.oracle_backend_missing": true,
+		},
+		prompter: stubPrompter{answers: map[string]string{
+			"visibility":     "private",
+			"docs_target":    docsTargetDefault,
+			"oracle_backend": oracleBackendDefault,
+		}},
+	}
+	if cfg := a.stepConfigValues(); cfg != nil {
+		t.Fatalf("stepConfigValues acted on a malformed config: %+v", cfg)
+	}
+	got, err := os.ReadFile(configPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != malformed {
+		t.Errorf("malformed config.json was overwritten:\n got: %q\nwant: %q", got, malformed)
 	}
 }
 

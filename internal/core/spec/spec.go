@@ -118,7 +118,14 @@ func specNum(id string) int {
 	if m == nil {
 		return 0
 	}
-	n, _ := strconv.Atoi(m[1])
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		// An over-int64 (or otherwise unparseable) number is not a real
+		// reservation: Atoi returns the clamped MaxInt64 alongside the error, and
+		// keeping it would make NextID compute max+1 and wrap to a NEGATIVE id
+		// (spc--9223…). Treat it as no number so the id space stays sane.
+		return 0
+	}
 	return n
 }
 
