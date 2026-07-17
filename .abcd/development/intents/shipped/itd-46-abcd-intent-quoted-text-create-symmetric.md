@@ -1,7 +1,7 @@
 ---
 id: itd-46
 slug: abcd-intent-quoted-text-create-symmetric
-spec_id: null
+spec_id: spc-7
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
@@ -114,3 +114,8 @@ This intent is project-agnostic in the same sense the rest of the command surfac
   already-correct shape.
 - **itd-43** (epic→spec terminology) — precedent for *not* introducing a
   partial terminology migration; this intent preserves `iss-N`/`itd-N`.
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-69589b8b5103 -->
+Fidelity review OWED (receipt rcp-69589b8b5103).

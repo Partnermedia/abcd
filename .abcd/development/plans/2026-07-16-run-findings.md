@@ -259,3 +259,21 @@ letter nor silently mark MET.
   CI failure (F14) were resolved by the orchestrator between the worker's
   launch and return — multi-agent structure kept the item flowing while the
   orchestrator context-switched.
+
+### Delegation observations, burst 4 (running log)
+
+- **Real-implementation delegation held the TDD bar:** itd-46 was the run's
+  first genuinely new-behaviour item, and the worker produced verbatim
+  watched-fail evidence for every gap-filled AC (build-failure red for the
+  engine, `unknown command` red for both CLI routes, missing-rule red for the
+  help line), plus a bare-invocation regression pin. Three atomic commits
+  (engine / wiring / surface+docs) with why-shaped bodies.
+- **Premise verification generalized:** told the intent's scope verbatim, the
+  worker discovered two scope bullets referencing files that do not exist in
+  the Go tree (old-system paths) and flagged them instead of creating them —
+  the F9 lesson (stale premises) applied by a sub-agent unprompted. Both
+  adjudicated in spc-7; the underlying surface gap ledgered (iss-105).
+- **Design-delta honesty:** the worker flagged its own typo-guard asymmetry
+  vs capture (mistyped sub-verb files a draft) as an explicit deliverable
+  note rather than hiding it; ledgered (iss-104).
+- **Cost:** ~140k subagent tokens, ~13 min, 3 commits, 6 files.
