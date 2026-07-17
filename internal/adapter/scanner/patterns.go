@@ -44,28 +44,37 @@ func DefaultPatterns() []Pattern {
 			Suggestion: "RP local-workspace session token — remove or redact to placeholder",
 		},
 		{
+			// No trailing \b (same reasoning as google_api_key below, other axis):
+			// the charset is pure word chars but EXCLUDES '_'. Since '_' is itself a
+			// word char, a secret immediately followed by '_' (token=ghp_..._old, a
+			// JSON key, a concatenation) has no ASCII word boundary after the last
+			// alnum, and RE2 cannot shorten to reach one (every interior position is
+			// word/word), so a trailing \b silently drops the whole match and the
+			// hard_fail secret survives. The leading \b + the ghp_ prefix + the
+			// {36,} minimum still bound the match; greedy matching redacts the full
+			// token.
 			Name: "github_pat", Kind: "token:github_pat", Label: "GitHub PAT (ghp_)",
-			Re: regexp.MustCompile(`\bghp_[A-Za-z0-9]{36,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bghp_[A-Za-z0-9]{36,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE — never commit credentials",
 		},
 		{
 			Name: "github_server_token", Kind: "token:github_server", Label: "GitHub server token (ghs_)",
-			Re: regexp.MustCompile(`\bghs_[A-Za-z0-9]{36,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bghs_[A-Za-z0-9]{36,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
 			Name: "github_oauth", Kind: "token:github_oauth", Label: "GitHub OAuth (gho_)",
-			Re: regexp.MustCompile(`\bgho_[A-Za-z0-9]{36,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bgho_[A-Za-z0-9]{36,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
 			Name: "github_user_token", Kind: "token:github_user", Label: "GitHub user token (ghu_)",
-			Re: regexp.MustCompile(`\bghu_[A-Za-z0-9]{36,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bghu_[A-Za-z0-9]{36,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
 			Name: "github_refresh", Kind: "token:github_refresh", Label: "GitHub refresh token (ghr_)",
-			Re: regexp.MustCompile(`\bghr_[A-Za-z0-9]{36,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bghr_[A-Za-z0-9]{36,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
@@ -74,7 +83,7 @@ func DefaultPatterns() []Pattern {
 			// above cannot match this prefix, so it needs its own entry.
 			Name: "github_pat_finegrained", Kind: "token:github_pat_finegrained",
 			Label:      "GitHub fine-grained PAT (github_pat_)",
-			Re:         regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}\b`),
+			Re:         regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}`),
 			Severity:   SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE — never commit credentials",
 		},
@@ -106,7 +115,7 @@ func DefaultPatterns() []Pattern {
 		{
 			Name: "aws_access_key", Kind: "token:aws_access_key", Label: "AWS access key ID",
 			// The neg-lookahead excluding the docs example is ported as a Skip.
-			Re:         regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
+			Re:         regexp.MustCompile(`\bAKIA[0-9A-Z]{16}`),
 			Severity:   SeverityHardFail,
 			Skip:       func(m string) bool { return m == awsExample },
 			Suggestion: "DELETE AND ROTATE — also rotate corresponding secret in IAM",
@@ -128,12 +137,12 @@ func DefaultPatterns() []Pattern {
 		},
 		{
 			Name: "stripe_live_key", Kind: "token:stripe_live", Label: "Stripe live key (sk_live_)",
-			Re: regexp.MustCompile(`\bsk_live_[A-Za-z0-9]{20,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bsk_live_[A-Za-z0-9]{20,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE — production credential",
 		},
 		{
 			Name: "stripe_test_key", Kind: "token:stripe_test", Label: "Stripe test key (sk_test_)",
-			Re: regexp.MustCompile(`\bsk_test_[A-Za-z0-9]{20,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bsk_test_[A-Za-z0-9]{20,}`), Severity: SeverityHardFail,
 			Suggestion: "Review — test keys are lower risk but still shouldn't be committed",
 		},
 		{
