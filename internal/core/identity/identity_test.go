@@ -163,6 +163,36 @@ func TestWritePin_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestWritePin_DoesNotFollowSymlink proves the atomic write does not clobber a
+// symlink target: a plain os.WriteFile at a symlinked identity.json followed the
+// link and wrote through to the victim; the canonical temp+rename replaces the
+// symlink itself, leaving the target untouched.
+func TestWritePin_DoesNotFollowSymlink(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim.txt")
+	const sentinel = "do-not-touch"
+	if err := os.WriteFile(victim, []byte(sentinel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgDir := filepath.Join(dir, ".abcd", "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(cfgDir, "identity.json")); err != nil {
+		t.Skipf("cannot symlink: %v", err)
+	}
+	if err := WritePin(dir, Pin{Name: "Alex", Email: "alex@example.com"}); err != nil {
+		t.Fatalf("WritePin: %v", err)
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != sentinel {
+		t.Errorf("WritePin followed the symlink and clobbered the target: %q", got)
+	}
+}
+
 func TestWritePin_RequiresBothFields(t *testing.T) {
 	dir := t.TempDir()
 	if err := WritePin(dir, Pin{Name: "Alex"}); err == nil {

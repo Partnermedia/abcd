@@ -629,3 +629,20 @@ func TestArchSanitisesRevertEvidence(t *testing.T) {
 		t.Errorf("control character was not replaced with the sanitiser caret: %q", ev)
 	}
 }
+
+// TestRefIsSafeRejectsOptionLikeRefs is the attack-input test for the
+// argument-injection guard: a repo-derived ref beginning with '-' (a hostile
+// branch or origin/HEAD target written straight into .git/refs) must be refused
+// before it reaches git as a positional arg where it would parse as a flag.
+func TestRefIsSafeRejectsOptionLikeRefs(t *testing.T) {
+	for _, bad := range []string{"-x", "--upload-pack=evil", "-", ""} {
+		if refIsSafe(bad) {
+			t.Errorf("refIsSafe(%q) = true; an option-like/empty ref must be rejected", bad)
+		}
+	}
+	for _, ok := range []string{"main", "master", "feature/x", "origin-mirror"} {
+		if !refIsSafe(ok) {
+			t.Errorf("refIsSafe(%q) = false; a legitimate branch name must pass", ok)
+		}
+	}
+}

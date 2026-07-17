@@ -385,7 +385,7 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 	if err != nil {
 		return nil
 	}
-	if resolvePath(dest) == resolvePath(expected) {
+	if resolveSymlinkDest(target, dest) == resolvePath(expected) {
 		return nil
 	}
 	return []Gap{{

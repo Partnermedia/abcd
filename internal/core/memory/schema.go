@@ -248,7 +248,7 @@ func validateSourceBlock(source any) error {
 			declaredStr = append(declaredStr, s)
 		}
 	}
-	if !ok || !equalStrings(declaredStr, derived) {
+	if !ok || !equalStringSets(declaredStr, derived) {
 		return newSchemaError("source.classes must equal the set derived from each sources[].class (expected %v, got %v)", derived, declaredStr)
 	}
 	if len(derived) >= 2 {
@@ -756,6 +756,28 @@ func equalStrings(a, b []string) bool {
 		if a[i] != b[i] {
 			return false
 		}
+	}
+	return true
+}
+
+// equalStringSets reports multiset equality, order-independent. source.classes is
+// specified as the SET derived from sources[].class, so a caller listing the same
+// classes in a different order must validate — comparing order-sensitively (as
+// equalStrings did) rejected a correct page and contradicted the error message's
+// own "set" wording.
+func equalStringSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, x := range a {
+		seen[x]++
+	}
+	for _, y := range b {
+		if seen[y] == 0 {
+			return false
+		}
+		seen[y]--
 	}
 	return true
 }

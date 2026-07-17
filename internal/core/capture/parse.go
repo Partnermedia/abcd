@@ -73,6 +73,13 @@ func parseFrontmatterBlock(lines []string) (map[string]any, error) {
 		if key == "" {
 			return nil, fmt.Errorf("%w: empty key in %q", ErrMalformedFrontmatter, raw)
 		}
+		// Reject a duplicated top-level key. Last-wins here is a silent trap: the
+		// reader would keep the SECOND value while setScalarField (status
+		// transitions) rewrites only the FIRST occurrence, so the file the reader
+		// sees and the file a mutation edits diverge. A duplicate key is malformed.
+		if _, dup := fm[key]; dup {
+			return nil, fmt.Errorf("%w: duplicate key %q", ErrMalformedFrontmatter, key)
+		}
 		if rest == "" {
 			// Nested one-level object: consume following indented lines.
 			sub := map[string]any{}
@@ -95,7 +102,11 @@ func parseFrontmatterBlock(lines []string) (map[string]any, error) {
 				if err != nil {
 					return nil, err
 				}
-				sub[strings.TrimSpace(subTrim[:sidx])] = sval
+				subKey := strings.TrimSpace(subTrim[:sidx])
+				if _, dup := sub[subKey]; dup {
+					return nil, fmt.Errorf("%w: duplicate nested key %q", ErrMalformedFrontmatter, subKey)
+				}
+				sub[subKey] = sval
 				i++
 			}
 			fm[key] = sub

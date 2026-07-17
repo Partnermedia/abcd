@@ -354,7 +354,12 @@ func classifyEmbark(targetAbs, lifeboatRel, targetRel, family string, content []
 		return PlannedEmbark{}, cf
 	}
 	full := filepath.Join(targetAbs, filepath.FromSlash(targetRel))
-	fi, err := os.Lstat(full)
+	// Guarded read closes the lstat→read TOCTOU: a symlink swapped in after a
+	// separate lstat would be followed by a plain os.ReadFile. ReadGuarded checks
+	// regular-file on the open fd (O_NOFOLLOW) and caps the size in one call. An
+	// absent target is a create; a symlink/non-regular/oversize/unreadable target is
+	// a not-regular conflict.
+	existing, err := fsutil.ReadGuarded(full, maxEmbarkFileBytes)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return PlannedEmbark{
@@ -362,22 +367,13 @@ func classifyEmbark(targetAbs, lifeboatRel, targetRel, family string, content []
 				Bytes: len(content), Action: ActionCreate, Content: content,
 			}, nil
 		}
-		return PlannedEmbark{}, &Conflict{
-			Path: targetRel, LifeboatPath: lifeboatRel, Kind: ConflictTargetNotRegular,
-			Detail: "cannot inspect the target path",
+		detail := "cannot read the target file"
+		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, fsutil.ErrTooBig) {
+			detail = "target exists and is not a readable regular file"
 		}
-	}
-	if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
 		return PlannedEmbark{}, &Conflict{
 			Path: targetRel, LifeboatPath: lifeboatRel, Kind: ConflictTargetNotRegular,
-			Detail: "target exists and is not a regular file",
-		}
-	}
-	existing, err := os.ReadFile(full)
-	if err != nil {
-		return PlannedEmbark{}, &Conflict{
-			Path: targetRel, LifeboatPath: lifeboatRel, Kind: ConflictTargetNotRegular,
-			Detail: "cannot read the target file",
+			Detail: detail,
 		}
 	}
 	if bytes.Equal(existing, content) {
@@ -461,7 +457,10 @@ func writeEmbark(targetAbs string, planned []PlannedEmbark) (written, unchanged,
 func embarkMarker(targetAbs string, dryRun bool) MarkerResult {
 	p := filepath.Join(targetAbs, "CLAUDE.md")
 	hadBlock := false
-	if data, err := os.ReadFile(p); err == nil {
+	// Guarded read: the target repo is arbitrary, so a symlinked or oversize/device
+	// CLAUDE.md must not be followed or read unbounded. Any error leaves hadBlock
+	// false (best-effort), as before.
+	if data, err := fsutil.ReadGuarded(p, maxEmbarkFileBytes); err == nil {
 		if _, had := ahoy.StripMarkerBlock(data); had {
 			hadBlock = true
 		}
@@ -489,15 +488,15 @@ func embarkMarker(targetAbs string, dryRun bool) MarkerResult {
 // sanitised before it can reach a terminal.
 func readCoverageHandoff(abs string) *CoverageHandoff {
 	p := filepath.Join(abs, "coverage.json")
-	fi, err := os.Lstat(p)
+	// Guarded read closes the lstat→read TOCTOU and caps the size on the open fd.
+	data, err := fsutil.ReadGuarded(p, maxEmbarkFileBytes)
 	if err != nil {
-		return &CoverageHandoff{Present: false}
-	}
-	if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() || fi.Size() > maxEmbarkFileBytes {
-		return &CoverageHandoff{Present: true, Degraded: true, Note: "coverage.json is not a readable regular file"}
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &CoverageHandoff{Present: false}
+		}
+		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, fsutil.ErrTooBig) {
+			return &CoverageHandoff{Present: true, Degraded: true, Note: "coverage.json is not a readable regular file"}
+		}
 		return &CoverageHandoff{Present: true, Degraded: true, Note: "coverage.json could not be read"}
 	}
 	var cov Coverage
@@ -596,21 +595,17 @@ func readLifeboatFile(root *os.Root, abs, rel string) ([]byte, error) {
 func readProvenance(abs string) (Provenance, error) {
 	var prov Provenance
 	p := filepath.Join(abs, ProvenanceName)
-	fi, err := os.Lstat(p)
+	// Guarded read closes the lstat→read TOCTOU (a symlink swapped in after the
+	// lstat would be followed) and refuses a non-regular or oversize file on the
+	// open fd (O_NOFOLLOW), in one call.
+	data, err := fsutil.ReadGuarded(p, maxProvenanceBytes)
 	if err != nil {
-		return prov, fmt.Errorf("lifeboat: reading %s: %w", ProvenanceName, err)
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return prov, fmt.Errorf("lifeboat: %s is a symlink (refusing to follow)", ProvenanceName)
-	}
-	if !fi.Mode().IsRegular() {
-		return prov, fmt.Errorf("lifeboat: %s is not a regular file", ProvenanceName)
-	}
-	if fi.Size() > maxProvenanceBytes {
-		return prov, fmt.Errorf("lifeboat: %s exceeds the %d-byte cap", ProvenanceName, maxProvenanceBytes)
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
+		if errors.Is(err, fsutil.ErrNotRegular) {
+			return prov, fmt.Errorf("lifeboat: %s is not a regular file (or a symlink; refusing to follow)", ProvenanceName)
+		}
+		if errors.Is(err, fsutil.ErrTooBig) {
+			return prov, fmt.Errorf("lifeboat: %s exceeds the %d-byte cap", ProvenanceName, maxProvenanceBytes)
+		}
 		return prov, fmt.Errorf("lifeboat: reading %s: %w", ProvenanceName, err)
 	}
 	if err := json.Unmarshal(data, &prov); err != nil {

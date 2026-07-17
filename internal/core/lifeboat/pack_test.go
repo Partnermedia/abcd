@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -212,6 +213,40 @@ func TestPackGateRefusesOverlapWithSource(t *testing.T) {
 	}
 }
 
+// TestWithinCaseFolding proves that on a case-folding filesystem a
+// differently-cased child still counts as inside the parent, so the pack
+// overlap gate cannot be bypassed by re-casing a path segment.
+func TestWithinCaseFolding(t *testing.T) {
+	if !caseFoldingFS() {
+		t.Skip("case-sensitive filesystem platform; overlap re-casing is not exploitable")
+	}
+	parent := "/Users/x/repo"         // abcd-audit:allow
+	child := "/Users/x/REPO/lifeboat" // abcd-audit:allow
+	if !within(child, parent) {
+		t.Errorf("within(%q, %q) = false; a re-cased child must still be contained on a case-folding FS", child, parent)
+	}
+	if !pathOverlaps(child, parent) {
+		t.Errorf("pathOverlaps(%q, %q) = false; overlap gate is bypassable via case", child, parent)
+	}
+}
+
+// TestRootSHARegexAcceptsSHA256 proves the voyage key regex accepts a 64-char
+// SHA-256 root SHA, not just 40-char SHA-1 — otherwise SHA-256 repos never log a
+// voyage.
+func TestRootSHARegexAcceptsSHA256(t *testing.T) {
+	sha1 := strings.Repeat("a", 40)
+	sha256 := strings.Repeat("b", 64)
+	if !rootSHARe.MatchString(sha1) {
+		t.Errorf("40-char SHA-1 rejected")
+	}
+	if !rootSHARe.MatchString(sha256) {
+		t.Errorf("64-char SHA-256 rejected")
+	}
+	if rootSHARe.MatchString(strings.Repeat("c", 50)) {
+		t.Errorf("50-char string wrongly accepted")
+	}
+}
+
 // TestPackGateRefusesDestThroughSymlinkIntoSource is the symlink-resolution
 // guard: a destination reached through a symlinked parent that points into the
 // source resolves into the source tree and must be refused — a purely lexical
@@ -332,5 +367,22 @@ func TestValidRelPath(t *testing.T) {
 		if validRelPath(p) {
 			t.Errorf("validRelPath(%q) = true, want false", p)
 		}
+	}
+}
+
+// TestNotPresentTreatsENOTDIRAsAbsent is the attack/behaviour test for the
+// destination gate's ENOTDIR handling: when a prefix component of the destination
+// path is a regular file, stat returns ENOTDIR, which means the destination cannot
+// exist and is therefore "absent" (writable) — not an uninterpretable error that
+// refused a valid destination. ErrNotExist is absent too; an unrelated error is not.
+func TestNotPresentTreatsENOTDIRAsAbsent(t *testing.T) {
+	if !notPresent(syscall.ENOTDIR) {
+		t.Error("notPresent(ENOTDIR) = false; a file shadowing a path prefix means the dest is absent")
+	}
+	if !notPresent(os.ErrNotExist) {
+		t.Error("notPresent(ErrNotExist) = false")
+	}
+	if notPresent(syscall.EACCES) {
+		t.Error("notPresent(EACCES) = true; an unrelated stat error must not read as absent")
 	}
 }

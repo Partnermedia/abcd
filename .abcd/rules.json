@@ -1,5 +1,14 @@
 {
   "disabled": false,
-  "domains": {},
+  "domains": {
+    "BUGHUNT": {
+      "recall": ["bug", "hunt", "security", "vulnerability", "harden"],
+      "rules": [
+        "Read the where-to-look playbook before hunting: .abcd/development/research/2026-07-17-bug-hunting-principles.md — the spine, the value-ordered checklist (smell · failing question · CWE anchor), and the known gaps.",
+        "Spine: most defects are a wrong implicit assumption at a trust boundary that fails SILENTLY (ASCII-only, SHA-1-only, case-sensitive, one control range, first-occurrence-wins, clean env, parseable config). A fix is not done until every sibling site is swept — grep the pattern, not the instance.",
+        "Highest-leverage move: for each hardened primitive (gitutil.IsolatedEnv, fsutil.ReadGuarded, fsutil.WriteFileAtomic, refIsSafe, the (?i) identity matchers, lifeboat sanitize), grep for the unhardened sibling (raw os.Environ/os.ReadFile/os.WriteFile, a positional git arg, a case-sensitive matcher, a raw terminal print) and prove each is hardened or explicitly out of scope under the trusted-worktree model."
+      ]
+    }
+  },
   "schema_version": 1
 }

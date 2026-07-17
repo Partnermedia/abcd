@@ -11,9 +11,56 @@
 package fsutil
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 )
+
+// ErrNotRegular and ErrTooBig are the guarded-read sentinels: a non-regular leaf
+// (symlink/FIFO/device/directory) and a file over the caller's byte cap.
+var (
+	ErrNotRegular = errors.New("fsutil: not a regular file")
+	ErrTooBig     = errors.New("fsutil: file exceeds size cap")
+)
+
+// ReadGuarded opens path once, read-only, with O_NOFOLLOW (refuse a symlinked
+// leaf) and O_NONBLOCK (a FIFO/device leaf returns immediately instead of
+// blocking the open forever), then validates on the SAME descriptor that it is a
+// regular file within limit bytes before reading through a LimitReader — so no
+// symlink swap between stat and read, no non-regular leaf, and no size overrun
+// can reach the caller. It is the shared trust-boundary read primitive for any
+// file inside a repo working tree that untrusted content could have replaced
+// with a symlink to /dev/zero or an endless device. The raw open error is
+// returned so callers can test os.IsNotExist / syscall.ELOOP; a non-regular or
+// oversize file returns ErrNotRegular / ErrTooBig.
+func ReadGuarded(path string, limit int64) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, ErrNotRegular
+	}
+	if fi.Size() > limit {
+		return nil, ErrTooBig
+	}
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		// Grew past the cap between fstat and read (a size TOCTOU).
+		return nil, ErrTooBig
+	}
+	return data, nil
+}
 
 // WriteFileAtomic writes data to path durably: a temp file in the target
 // directory is written, chmod'd to perm on its open descriptor, flushed,

@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // provenance.go — the provenance/licence substrate (09-provenance-substrate.md):
@@ -82,14 +85,25 @@ func sha256Hex(text string) string {
 var hex64Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var dateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
+// maxRegistryBytes caps the sources-index read. The registry lives inside the
+// repo working tree — a trust boundary — so it is read with the guarded
+// primitive (O_NOFOLLOW + regular-file + size cap): a committed symlink to
+// /dev/zero or an endless device would otherwise OOM or hang the CLI, and the
+// read also runs under the store lock, so a hang would wedge it. A few MiB is
+// generous for a JSON index.
+const maxRegistryBytes = 8 << 20 // 8 MiB
+
 // LoadRegistry reads the registry JSON. A missing file yields an empty
 // registry; a present-but-unparseable file raises RegistryFormatError — durable
 // source metadata must fail loudly, never be silently replaced.
 func LoadRegistry(path string) (map[string]any, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := fsutil.ReadGuarded(path, maxRegistryBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]any{}, nil
+		}
+		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, fsutil.ErrTooBig) {
+			return nil, &RegistryFormatError{Msg: fmt.Sprintf("sources index at %s is not a readable regular file within the size cap", path)}
 		}
 		return nil, err
 	}

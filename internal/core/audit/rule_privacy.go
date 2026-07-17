@@ -35,9 +35,12 @@ type privacyHygiene struct{}
 const auditWaiver = "abcd-audit:allow"
 
 var (
-	// Absolute local home paths. The trailing [/\\] and a name segment avoid
-	// matching a bare "/Users" mention in prose.
-	absPathRe = regexp.MustCompile(`(?:/Users/|/home/)[A-Za-z0-9._-]+[/\\]|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+`)
+	// Absolute local home paths. A username segment after /Users/ or /home/ is
+	// required (so a bare "/Users" mention in prose is not flagged), but a trailing
+	// separator is NOT: the username itself is the leak, so "/Users/name" and abcd-audit:allow
+	// "/home/name" at end-of-line (e.g. `HOME=/home/name`) must be caught. This abcd-audit:allow
+	// mirrors the Windows branch, which never required a trailing separator.
+	absPathRe = regexp.MustCompile(`(?:/Users/|/home/)[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+`)
 )
 
 func (privacyHygiene) Meta() RuleMeta {

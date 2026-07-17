@@ -43,3 +43,45 @@ func TestParseScalarOrListSkipsQuotedComma(t *testing.T) {
 		t.Fatalf("got %#v, want %#v", v, want)
 	}
 }
+
+// TestParseRejectsDuplicateKey pins the duplicate-key guard: a repeated top-level
+// key is rejected rather than silently kept last-wins, which would diverge from
+// setScalarField's first-occurrence rewrite.
+func TestParseRejectsDuplicateKey(t *testing.T) {
+	text := "---\nid: iss-1\nseverity: minor\nid: iss-2\n---\nbody\n"
+	if _, _, err := parseFrontmatterAndBody(text); err == nil {
+		t.Fatal("duplicate top-level key was accepted")
+	}
+}
+
+// TestParseRejectsDuplicateNestedKey guards the nested-object variant.
+func TestParseRejectsDuplicateNestedKey(t *testing.T) {
+	text := "---\nid: iss-1\nresolved_by:\n  intent: itd-1\n  intent: itd-2\n---\nbody\n"
+	if _, _, err := parseFrontmatterAndBody(text); err == nil {
+		t.Fatal("duplicate nested key was accepted")
+	}
+}
+
+// TestValidateStrictTypeChecksResolvedBy proves a non-string resolved_by
+// sub-value is rejected rather than validating clean and then silently dropping
+// to "" on read (a lossy, undetected round-trip).
+func TestValidateStrictTypeChecksResolvedBy(t *testing.T) {
+	fm := map[string]any{
+		"schema_version": 1,
+		"id":             "iss-1",
+		"slug":           "x",
+		"severity":       "minor",
+		"category":       "bug",
+		"source":         "agent-finding",
+		"found_during":   "review",
+		"resolved_by":    map[string]any{"intent": 42}, // non-string
+	}
+	if err := validateStrict(fm); err == nil {
+		t.Fatal("non-string resolved_by sub-value was accepted")
+	}
+	// A well-formed string value still validates.
+	fm["resolved_by"] = map[string]any{"intent": "itd-1"}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("valid resolved_by rejected: %v", err)
+	}
+}

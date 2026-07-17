@@ -173,3 +173,29 @@ func TestWriteFileAtomicPreserveModeFailsClosedOnStatFault(t *testing.T) {
 		t.Fatal("want error on a real stat fault (ELOOP), got nil — mode would be silently reset to 0644")
 	}
 }
+
+// TestReadGuardedRejectsSymlinkAndOversize proves the guarded read refuses a
+// symlinked leaf (O_NOFOLLOW) and a file over the cap, and reads a normal file.
+func TestReadGuardedRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(real, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Normal read.
+	if b, err := ReadGuarded(real, 1024); err != nil || string(b) != "hello" {
+		t.Fatalf("ReadGuarded(real) = %q, %v", b, err)
+	}
+	// Symlinked leaf is refused (O_NOFOLLOW -> ELOOP).
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("cannot symlink: %v", err)
+	}
+	if _, err := ReadGuarded(link, 1024); err == nil {
+		t.Error("ReadGuarded followed a symlinked leaf")
+	}
+	// Oversize is refused with ErrTooBig.
+	if _, err := ReadGuarded(real, 2); err != ErrTooBig {
+		t.Errorf("ReadGuarded over cap = %v, want ErrTooBig", err)
+	}
+}
