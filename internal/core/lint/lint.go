@@ -1564,15 +1564,15 @@ func frontmatterOpen(lines []string) int {
 
 // frontmatterBodyStart returns the index of the first body line after a leading
 // YAML frontmatter block (the line after the closing `---`); 0 when there is none.
+// It shares frontmatterOpen's tolerance of a leading attribution comment, so a
+// file whose frontmatter carries a `core/epic` term reference is never scanned as
+// prose just because a comment precedes its `---`.
 func frontmatterBodyStart(lines []string) int {
-	i := 0
-	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
-		i++
-	}
-	if i >= len(lines) || strings.TrimSpace(lines[i]) != "---" {
+	open := frontmatterOpen(lines)
+	if open < 0 {
 		return 0
 	}
-	for j := i + 1; j < len(lines); j++ {
+	for j := open + 1; j < len(lines); j++ {
 		if strings.TrimSpace(lines[j]) == "---" {
 			return j + 1
 		}

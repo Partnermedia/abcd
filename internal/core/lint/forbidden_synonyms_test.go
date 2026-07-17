@@ -95,6 +95,24 @@ func TestForbiddenSynonymsBoundary(t *testing.T) {
 	}
 }
 
+// TestForbiddenSynonymsFrontmatterWithComment proves a leading attribution
+// comment above the `---` block does not expose the frontmatter to prose scanning:
+// a `core/epic` term reference in frontmatter must not be flagged.
+func TestForbiddenSynonymsFrontmatterWithComment(t *testing.T) {
+	root := t.TempDir()
+	glossaryTerm(t, root, "spec", []string{"epic"})
+	writeFile(t, root, "rec/commented.md",
+		"<!-- adapted from a template -->\n---\nglossary_terms_used: [core/epic]\n---\n# t\n\nClean spec body.\n")
+
+	fs, err := Lint(fsCfg([]string{"epic"}, nil, nil), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "GL002"); n != 0 {
+		t.Fatalf("frontmatter with a leading comment must not be scanned; got %d: %+v", n, fs)
+	}
+}
+
 // TestForbiddenSynonymsCaseInsensitive proves matching ignores case.
 func TestForbiddenSynonymsCaseInsensitive(t *testing.T) {
 	root := t.TempDir()
