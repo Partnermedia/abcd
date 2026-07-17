@@ -7,11 +7,11 @@
   <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a>.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
-  <a href="https://github.com/REPPL/abcd/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
-  <img src="https://img.shields.io/github/last-commit/REPPL/abcd?cacheSeconds=300" alt="Last commit">
+  <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
+  <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
   <br />
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
-  <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a>
+  <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow -->
   <br />
   <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
   <img src="https://img.shields.io/badge/Linux-core%20CI--tested-FCC624?logo=linux&logoColor=black" alt="Linux: core CI-tested">
@@ -79,7 +79,7 @@ You sit down with your facilitator and whatever discovery material you have — 
 Once both of you have agreed on the brief, the facilitator begins to plan implementation while you continue to think of additional ideas and/or features. Capturing intents is as simple as typing:
 
 ```bash
-/abcd:intent new <one-line idea>
+/abcd:intent "<one-line idea>"
 ```
 
 Each captured intent is a press release, written as if the change has already shipped, with a named user feeling the difference. Your facilitator handles the rest of the lifecycle — turning your *why* into engineering work, surfacing cross-cutting concerns, and running the fidelity reviewer when the work lands. You stay in the seat where your judgement matters most: Setting the why at the start, and reading the verdict at the end.
