@@ -113,6 +113,10 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Bare `abcd ahoy` now names the next step for the folder it classified.** An
+  unmanaged git repo report points at `/abcd:ahoy install` as the way to adopt
+  it, and a plain (non-git) folder report states there is nothing to act on —
+  the read-only classification never mutates either (itd-40).
 - **Synthesis over the record — `abcd disembark principles`, `press-release`,
   and `oracle`.** Three post-pack verbs interpret a packed lifeboat, each in
   one of two self-recorded modes. Without a payload they run **deterministic
