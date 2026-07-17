@@ -135,6 +135,66 @@ func TestDocsLintMissingConfigCleanError(t *testing.T) {
 	}
 }
 
+// TestCaptureListOpenRendersIssueFields is itd-4 AC5's characterization gate:
+// given five open captures, `capture list --open --json` must return all five,
+// each carrying the id, slug, severity, and a one-line summary (the captured
+// body). It exercises the exact binary path the acceptance criterion names, so
+// a regression that dropped any of those fields from the list surface — or that
+// failed to enumerate every open issue — would turn this red.
+func TestCaptureListOpenRendersIssueFields(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	captures := []struct {
+		text string
+		sev  string
+	}{
+		{"issue one about the parser flake", "major"},
+		{"issue two about a cache miss", "minor"},
+		{"issue three nitpick on spacing", "nitpick"},
+		{"issue four critical crash on boot", "critical"},
+		{"issue five stray observation", "minor"},
+	}
+	for _, c := range captures {
+		runCLI(t, "capture", c.text, "--severity", c.sev, "--json")
+	}
+
+	out := runCLI(t, "capture", "list", "--open", "--json")
+	var res struct {
+		Issues []struct {
+			ID       string `json:"id"`
+			Slug     string `json:"slug"`
+			Severity string `json:"severity"`
+			Body     string `json:"body"`
+		} `json:"issues"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("list --open --json not JSON: %v\n%s", err, out)
+	}
+	if len(res.Issues) != len(captures) {
+		t.Fatalf("list --open returned %d issues, want %d", len(res.Issues), len(captures))
+	}
+	// Map by the one-line summary (body) so the assertion is order-independent
+	// (list emits derived-priority order, not capture order).
+	bySummary := make(map[string]struct{ id, slug, sev string })
+	for _, iss := range res.Issues {
+		if iss.ID == "" || iss.Slug == "" || iss.Severity == "" || iss.Body == "" {
+			t.Fatalf("issue missing an AC5 field: id=%q slug=%q severity=%q body=%q",
+				iss.ID, iss.Slug, iss.Severity, iss.Body)
+		}
+		bySummary[iss.Body] = struct{ id, slug, sev string }{iss.ID, iss.Slug, iss.Severity}
+	}
+	for _, c := range captures {
+		got, ok := bySummary[c.text]
+		if !ok {
+			t.Fatalf("no listed issue carried the one-line summary %q", c.text)
+		}
+		if got.sev != c.sev {
+			t.Errorf("summary %q: severity = %q, want %q", c.text, got.sev, c.sev)
+		}
+	}
+}
+
 // TestDocsLintUnreadableConfigNoPathLeak covers a non-not-exist load failure
 // (the config path is a directory → EISDIR): a *PathError's Error() embeds the
 // absolute path, so the branch must strip it. Guards the security-review BLOCK.
