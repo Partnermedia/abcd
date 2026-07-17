@@ -8,7 +8,7 @@
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
   <a href="https://github.com/REPPL/abcd/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
-  <img src="https://img.shields.io/github/last-commit/REPPL/abcd?cacheSeconds=300" alt="Last commit">
+  <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
   <br />
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a>
