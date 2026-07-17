@@ -73,7 +73,7 @@ func TestGitExistingTagsExcludesPrerelease(t *testing.T) {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}
-	mustGit("commit", "--allow-empty", "-m", "c", "--author", "T <t@e.x>")
+	mustGit("-c", "user.email=t@e.x", "-c", "user.name=T", "commit", "--allow-empty", "-m", "c", "--author", "T <t@e.x>")
 	mustGit("-c", "user.email=t@e.x", "-c", "user.name=T", "tag", "v1.0.0")
 	mustGit("-c", "user.email=t@e.x", "-c", "user.name=T", "tag", "v1.2.3-rc1")
 
