@@ -1057,13 +1057,18 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 // the mutations. Usage/lookup failures exit 2.
 func newIntentCommand(asJSON *bool) *cobra.Command {
 	intentCmd := &cobra.Command{
-		Use:   "intent",
-		Short: "Intent lifecycle; bare invocation is read-only status",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use:   "intent [text]",
+		Short: "Intent lifecycle; bare invocation is read-only status, quoted text files a draft",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			// Quoted text (no sub-verb) files a new draft — the symmetric create path
+			// (itd-46). Bare invocation stays read-only status + help (never mutates).
+			if len(args) > 0 {
+				return createIntentFromText(cmd, cwd, strings.Join(args, " "), *asJSON)
 			}
 			v, err := intent.Status(cwd)
 			if err != nil {
@@ -1078,9 +1083,32 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					// p.Spec is the intent file's spec_id frontmatter, not charset-validated.
 					fmt.Fprintf(w, "  link: %s -> %s\n", termsafe.Sanitize(p.Intent), termsafe.Sanitize(p.Spec))
 				}
+				fmt.Fprint(w, ledgerDecisionRule)
 			})
 		},
 	}
+
+	// new "<text>" — backwards-compatible alias for the sub-verb-free create path
+	// (itd-46, lean a): routes to the same create engine and warns on stderr that
+	// the `new` sub-verb is deprecated in favour of `abcd intent "<text>"`. The
+	// stdout artefact is identical to the quoted-text form.
+	intentCmd.AddCommand(&cobra.Command{
+		Use:   "new <text>",
+		Short: "Deprecated alias for `abcd intent \"<text>\"` (files a draft from the text)",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			if len(args) == 0 {
+				return &exitError{Code: 2, Msg: "abcd intent new: text is required — use `abcd intent \"<text>\"`"}
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(),
+				"WARNING: `abcd intent new` is deprecated; use `abcd intent \"<text>\"` (quoted text is the create signal).")
+			return createIntentFromText(cmd, cwd, strings.Join(args, " "), *asJSON)
+		},
+	})
 
 	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
 	intentCmd.AddCommand(&cobra.Command{
@@ -1126,6 +1154,26 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 
 	intentCmd.AddCommand(newIntentReviewCommand(asJSON))
 	return intentCmd
+}
+
+// ledgerDecisionRule is the one-line capture-vs-intent decision rule shown in
+// both ledgers' bare-form help (itd-46 AC5), so a user knows which ledger to reach
+// for. It stays host-agnostic (binary command forms, no plugin/tool names).
+const ledgerDecisionRule = "  which ledger? half-formed observation, question, or nitpick -> `abcd capture \"…\"`; a user-facing change you want to ship -> `abcd intent \"…\"`\n"
+
+// createIntentFromText is the shared quoted-text create path behind both
+// `abcd intent "<text>"` and the deprecated `abcd intent new "<text>"` alias: it
+// files a new draft via intent.CreateFromText and renders the created record. The
+// engine refuses empty/whitespace text and mints the id under the store lock, so
+// this surface stays a thin marshaller.
+func createIntentFromText(cmd *cobra.Command, cwd, text string, asJSON bool) error {
+	it, err := intent.CreateFromText(cwd, text)
+	if err != nil {
+		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
+	}
+	return render(cmd.OutOrStdout(), asJSON, it, func(w io.Writer) {
+		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, it.Path)
+	})
 }
 
 // newIntentReviewCommand builds `abcd intent review`: `ingest --verdict-json`
@@ -1578,6 +1626,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 							fmt.Fprintf(w, "  %s  %s  %s%s\n", iss.ID, iss.Severity, iss.Slug, blockedNote(iss))
 						}
 					}
+					fmt.Fprint(w, ledgerDecisionRule)
 				})
 			}
 			// Guard: a mistyped subcommand (e.g. `capture resovle iss-1 …`)

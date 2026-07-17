@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -218,5 +219,112 @@ func TestSpecCloseMissingErrors(t *testing.T) {
 	t.Chdir(repo)
 	if _, err := runCLIErr(t, "spec", "close", "spc-99"); err == nil {
 		t.Fatal("closing a missing spec must exit non-zero")
+	}
+}
+
+// runCLISplit executes the command tree with stdout and stderr captured
+// separately, so a deprecation warning routed to stderr can be asserted distinct
+// from the stdout artefact.
+func runCLISplit(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	cmd := NewRootCommand()
+	var out, errb bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errb)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+	return out.String(), errb.String(), err
+}
+
+// TestIntentQuotedTextCreates is itd-46 AC1 at the CLI: `abcd intent "<text>"`
+// files a new drafts/itd-N-<slug>.md seeded from the text — no `new` sub-verb.
+func TestIntentQuotedTextCreates(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out := runCLI(t, "intent", "I want users to feel the card respects their time", "--json")
+	var got struct {
+		ID     string `json:"id"`
+		Slug   string `json:"slug"`
+		Bucket string `json:"bucket"`
+		Path   string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("create --json not JSON: %v\n%s", err, out)
+	}
+	if got.ID != "itd-1" || got.Bucket != "drafts" {
+		t.Fatalf("create result = %+v, want itd-1 in drafts", got)
+	}
+	body, err := os.ReadFile(filepath.Join(repo, got.Path))
+	if err != nil {
+		t.Fatalf("created draft unreadable: %v", err)
+	}
+	if !strings.Contains(string(body), "I want users to feel the card respects their time") {
+		t.Fatalf("seeded body missing the text:\n%s", body)
+	}
+}
+
+// TestIntentNewAliasWarnsAndCreates is itd-46 AC2 (lean a): `abcd intent new
+// "<text>"` routes to the same create path and prints a deprecation warning on
+// stderr naming the new shape; the stdout artefact matches the sub-verb-free form.
+func TestIntentNewAliasWarnsAndCreates(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	stdout, stderr, err := runCLISplit(t, "intent", "new", "a symmetric create path", "--json")
+	if err != nil {
+		t.Fatalf("intent new alias errored: %v\nstderr: %s", err, stderr)
+	}
+	var got struct {
+		ID     string `json:"id"`
+		Bucket string `json:"bucket"`
+		Path   string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("alias stdout not JSON: %v\n%s", err, stdout)
+	}
+	if got.ID != "itd-1" || got.Bucket != "drafts" {
+		t.Fatalf("alias create result = %+v, want itd-1 in drafts", got)
+	}
+	if !strings.Contains(stderr, "deprecat") {
+		t.Fatalf("alias must warn on stderr about deprecation, got: %q", stderr)
+	}
+	if !strings.Contains(stderr, `intent "`) {
+		t.Fatalf("deprecation warning must name the new quoted-text shape, got: %q", stderr)
+	}
+	// The warning is on stderr only — stdout stays the clean artefact.
+	if strings.Contains(stdout, "deprecat") {
+		t.Fatalf("deprecation warning leaked into stdout:\n%s", stdout)
+	}
+}
+
+// TestIntentBareCreatesNothing is itd-46 AC3: bare `abcd intent` renders status +
+// help and mutates nothing — no drafts file appears.
+func TestIntentBareCreatesNothing(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out := string(runCLI(t, "intent"))
+	if !strings.Contains(out, "abcd intent") {
+		t.Fatalf("bare intent missing status render:\n%s", out)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(repo, cliDrafts)); len(entries) != 0 {
+		t.Fatalf("bare intent created %d drafts files, want 0", len(entries))
+	}
+}
+
+// TestBareHelpsCarryDecisionRule is itd-46 AC5: both bare-form outputs carry the
+// one-line capture-vs-intent decision rule so a user knows which ledger to reach.
+func TestBareHelpsCarryDecisionRule(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	intentOut := string(runCLI(t, "intent"))
+	if !strings.Contains(intentOut, "user-facing change") || !strings.Contains(intentOut, "nitpick") {
+		t.Fatalf("bare intent help missing decision rule:\n%s", intentOut)
+	}
+	captureOut := string(runCLI(t, "capture"))
+	if !strings.Contains(captureOut, "user-facing change") || !strings.Contains(captureOut, "nitpick") {
+		t.Fatalf("bare capture help missing decision rule:\n%s", captureOut)
 	}
 }

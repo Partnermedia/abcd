@@ -579,3 +579,11 @@ parallel-agent merge contention bites.
   engine-backed convention) — spc-6 stays OPEN and itd-4 stays planned on it.
   (3) AC4 migration recorded satisfied-by-history (source absent, ledger
   populated iss-1..iss-103); no dead migration code built.
+- 2026-07-17 — Burst 4 (M4, itd-46/spc-7): quoted-text create shipped; the
+  seeded-draft shape spc-7 defines is canonical (the AC's "byte-identical to
+  intent new" clause is historical — no such Go verb existed). Two intent
+  scope bullets named old-system files with no native counterpart
+  (commands/abcd/intent.md, docs/reference/commands.md) — adjudicated moot in
+  the spec; the missing intent plugin-markdown surface is ledgered as iss-105
+  rather than silently absorbed. Typo-guard asymmetry vs capture ledgered as
+  iss-104, not fixed (ACs don't require it).

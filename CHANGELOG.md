@@ -263,6 +263,18 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd intent "<text>"` files a new draft from quoted text — a symmetric
+  create path.** Typing `abcd intent "I want users to feel X"` mints the next
+  `itd-N` under the intent-store lock and writes
+  `.abcd/development/intents/drafts/itd-N-<slug>.md`, seeded from the text with the
+  canonical draft frontmatter and a minimal, lint-valid body skeleton — no `new`
+  sub-verb required, mirroring `abcd capture "<text>"`. The old `abcd intent new
+  "<text>"` still works as a backwards-compatible alias but prints a deprecation
+  warning on stderr naming the quoted-text shape. Bare `abcd intent` stays
+  read-only status + help and mutates nothing. Both ledgers' bare-form help now
+  carry a one-line decision rule (nitpick/observation -> capture; user-facing
+  change to ship -> intent). The `/abcd:capture promote` flow hands the issue text
+  to this create path (itd-46).
 - **Bare `abcd ahoy` now names the next step for the folder it classified.** An
   unmanaged git repo report points at `/abcd:ahoy install` as the way to adopt
   it, and a plain (non-git) folder report states there is nothing to act on —
