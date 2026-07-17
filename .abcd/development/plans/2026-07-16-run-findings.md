@@ -193,3 +193,12 @@ identity-check`); author metadata is part of the record, not a cosmetic.
   test lines) — heavier per line than burst 1's in-context work, but the
   orchestrator's context stayed small enough to run the whole record/lifecycle
   half without compaction risk.
+- **Review outcomes under delegation:** three parallel Opus/max reviewers
+  (correctness, security, fidelity) returned PROMOTE / PROMOTE / 5-of-5 MET
+  with zero findings in ~2.6 min and ~134k subagent tokens. The correctness
+  reviewer independently ran the mental-revert check (would the watched-fail
+  tests fail without the 8 production lines?) and traced an unreachable
+  duplicate of the hint string before promoting — review depth did not degrade
+  because the code under review was itself agent-written. Burst-2 M2 totals:
+  ~229k subagent tokens + orchestrator overhead, one gate re-run, zero HOLDs,
+  zero human input.
