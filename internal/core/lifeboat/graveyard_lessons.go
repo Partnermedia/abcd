@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
@@ -202,22 +203,23 @@ func (r LessonsResult) Render() string {
 func readGraveyardFile[T any](abs, rel string) (T, error) {
 	var zero T
 	p := filepath.Join(abs, rel)
-	fi, err := os.Lstat(p)
+	// Guarded read closes the lstat→read TOCTOU: the previous lstat (symlink +
+	// size check) followed by a separate os.ReadFile left a swap window — a
+	// regular in-cap file could pass the checks and then be swapped for a
+	// symlink-to-/dev/zero or a grown file that os.ReadFile would follow/read
+	// unbounded. ReadGuarded refuses symlinks on the open fd (O_NOFOLLOW) and
+	// bounds the read to the cap in one call, matching classifyEmbark/pack. The
+	// source is a packed lifeboat from an arbitrary target dir — a trust boundary.
+	data, err := fsutil.ReadGuarded(p, maxGraveyardFileBytes)
 	if err != nil {
-		return zero, fmt.Errorf("graveyard: stat %s: %w", rel, err)
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return zero, fmt.Errorf("graveyard: %s is a symlink (refusing to follow)", rel)
-	}
-	if !fi.Mode().IsRegular() {
-		return zero, fmt.Errorf("graveyard: %s is not a regular file", rel)
-	}
-	if fi.Size() > maxGraveyardFileBytes {
-		return zero, fmt.Errorf("graveyard: %s exceeds the %d-byte cap", rel, maxGraveyardFileBytes)
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return zero, fmt.Errorf("graveyard: read %s: %w", rel, err)
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+			return zero, fmt.Errorf("graveyard: %s is not a regular file (a symlink or non-regular target is refused)", rel)
+		case errors.Is(err, fsutil.ErrTooBig):
+			return zero, fmt.Errorf("graveyard: %s exceeds the %d-byte cap", rel, maxGraveyardFileBytes)
+		default:
+			return zero, fmt.Errorf("graveyard: read %s: %w", rel, err)
+		}
 	}
 	var v T
 	if err := json.Unmarshal(data, &v); err != nil {
