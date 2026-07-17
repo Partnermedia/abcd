@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-17
+
 ### Security
 
 - **Two more git call sites are isolated — finishing the env-inheritance sweep.**

@@ -137,3 +137,4 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-34](0034-lifecycle-and-scheduling-orthogonal.md) | Intent lifecycle and phase scheduling are orthogonal axes — scheduled ⇒ committed (`planned/`), but planned intents may be unscheduled | accepted | 2026-07-08 |
 | [adr-35](0035-lifeboat-as-coverage-experiment.md) | The lifeboat is a coverage experiment — read-only, out-of-tree, and proven before it is packed (supersedes adr-4) | accepted | 2026-07-14 |
 | [adr-36](0036-coverage-blanks-are-a-fillable-lifecycle.md) | Coverage blanks are a fillable lifecycle — authored is not extracted, and the interview is its own step | accepted | 2026-07-15 |
+| [adr-37](0037-changelog-driven-releases.md) | Releases are changelog-driven — rolling `[Unreleased]` is the release decision, and automation tags exactly that commit | accepted | 2026-07-17 |

@@ -17,11 +17,34 @@ on:
   push:
     tags:
       - 'v*'
+  # Called by auto-release.yml after it tags the newest dated CHANGELOG version
+  # (adr-37). `tag` and `ref` are an unenforced caller CONTRACT — --verify-tag
+  # checks only that the tag exists, not that it points at `ref`; the sole
+  # caller (auto-release) binds them: ref = `git rev-parse "$tag^{commit}"` on
+  # the re-release path, empty (-> github.sha, the just-tagged commit) on the
+  # fresh-tag path. A resolved commit SHA, never a tag name, keeps the
+  # anti-tag-move property.
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      ref:
+        required: false
+        type: string
+        default: ''
+
+# The released tag name. workflow_call: inputs.tag (the tag auto-release just
+# made). push-tag: inputs is empty, so this falls through to github.ref_name
+# (the vX.Y.Z ref that triggered the run). Only the NAME — no job ever checks
+# out this name; both check out the immutable commit SHA below.
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 # Never run two releases of the same tag concurrently, and never cancel a release
 # mid-flight — a half-published release is worse than a queued one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 # Floor for the workflow: read-only. The release job elevates itself to
@@ -48,8 +71,11 @@ jobs:
         with:
           # github.sha, not the tag ref: checkout re-resolves a NAMED ref at each
           # job's start, so a tag moved after the push could differ here. The sha is
-          # the commit the pushed tag pointed at, immutable for this run.
-          ref: ${{ github.sha }}
+          # the commit the pushed tag pointed at, immutable for this run. On the
+          # workflow_call path, inputs.ref (a resolved commit SHA) overrides for
+          # the re-release-from-tag case; empty inputs.ref falls through to
+          # github.sha = the caller's HEAD = the commit auto-release just tagged.
+          ref: ${{ inputs.ref || github.sha }}
           # Full history: the reviews-charter check (RD002, append-only) inspects
           # committed history for post-creation edits, which a shallow checkout misses.
           fetch-depth: 0
@@ -114,8 +140,9 @@ jobs:
         with:
           # github.sha (the commit the pushed tag pointed at), not the tag NAME and
           # not the default-branch tip, so the binaries below are built from the exact
-          # commit verify gated.
-          ref: ${{ github.sha }}
+          # commit verify gated. inputs.ref (resolved SHA) overrides on the
+          # workflow_call re-release path, exactly as in verify.
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Record the default-branch tip (no-branch-commit tripwire)
@@ -192,7 +219,7 @@ jobs:
         # The binaries built here are the ones checksummed, attested, and uploaded
         # below, so the manifest, the published assets, and the reported version are
         # all in sync.
-        run: make build VERSION="${GITHUB_REF_NAME}"
+        run: make build VERSION="${TAG}"
 
       - name: Generate checksums.txt over the four binaries
         # Hash the exact binaries built above into a sha256sum-format manifest,
@@ -222,7 +249,7 @@ jobs:
         # --verify-tag: the tag must already exist (it triggered this run) and point
         # at the checked-out commit. --generate-notes lists the merged PRs since the
         # previous tag; CHANGELOG.md remains the durable, hand-curated record.
-        run: gh release create "${GITHUB_REF_NAME}" bin/abcd-* bin/checksums.txt --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes
+        run: gh release create "${TAG}" bin/abcd-* bin/checksums.txt --verify-tag --title "${TAG}" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -236,7 +263,7 @@ jobs:
           set -euo pipefail
           DL="$RUNNER_TEMP/attest-verify"
           mkdir -p "$DL"
-          gh release download "${GITHUB_REF_NAME}" \
+          gh release download "${TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
             --pattern 'abcd-linux-amd64' \
             --dir "$DL"
