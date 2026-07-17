@@ -58,5 +58,47 @@ This intent makes `/abcd:ahoy` classify the folder reliably, report it plainly, 
 
 ## Audit Notes
 
-<!-- abcd-review: OWED receipt=rcp-a3791f7dde2e -->
-Fidelity review OWED (receipt rcp-a3791f7dde2e).
+<!-- abcd-review: INGESTED receipt=rcp-a3791f7dde2e -->
+Fidelity review — receipt rcp-a3791f7dde2e (verifier intent-fidelity-reviewer claude-opus-4-8).
+
+Provenance: intent-fidelity-reviewer@claude-opus-4-8 · rubric_hash sha256:95792472ae74ca0469f69a51c618946e0d33cb1380032460099ed4b469d67e86 · prompt_hash sha256:f16ea4bd3b8d426558e846d9c6f19c445890c4b1bbe91b765fcc11f2efd4fe2a
+Input attestations: diff:7933dc25ca501b9935b9fd22135894f47aea8ae8@-;
+
+Acceptance rollup: MET 5 · MET_WITH_CONCERNS 0 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: A strong marker (.abcd/ dir or CLAUDE.md/AGENTS.md block or index registration) classifies as managed-repo, and bare ahoy runs the read-only DryRun path, so it mutates nothing; both halves are covered by engine tests.
+  evidence: internal/core/ahoy/detect.go:106 — "return ManagedRepo, signals"
+  evidence: internal/core/ahoy/detect_test.go:68 — "func TestClassifyManagedRepoByAbcdDir(t *testing.T) {"
+  evidence: internal/core/ahoy/detect.go:78 — "// DryRun runs Detect and returns the envelope (Adopted=nil). Zero writes."
+- ac-2 — MET: The bare-ahoy render for UnmanagedRepo now names the adoption verb, and the watched-fail test asserts both the `/abcd:ahoy install` hint and that no .abcd/ or CLAUDE.md is written (no adoption).
+  evidence: internal/surface/cli/cli.go:1295 — "unmanaged git repo — run `/abcd:ahoy install` to adopt it."
+  evidence: internal/surface/cli/cli_test.go:561 — "if !strings.Contains(out, \"/abcd:ahoy install\") {"
+  evidence: internal/surface/cli/cli_test.go:566 — "bare ahoy mutated the repo (.abcd/ appeared)"
+- ac-3 — MET: The render for UnmanagedFolder emits the nothing-to-act-on line, the CLI test asserts it, and the engine short-circuits a non-git folder to zero gaps via the read-only DryRun (mutates nothing).
+  evidence: internal/surface/cli/cli.go:1297 — "not a git repository — nothing to act on."
+  evidence: internal/surface/cli/cli_test.go:585 — "if !strings.Contains(out, \"nothing to act on\") {"
+  evidence: internal/core/ahoy/detect_test.go:125 — "func TestDetectUnmanagedFolderShortCircuits(t *testing.T) {"
+- ac-4 — MET: The characterization test starts with no ~/.abcd/history/ store, runs the first install, then reads the bootstrapped index.json and confirms the repo is registered under its real root-commit SHA; the test passes at HEAD.
+  evidence: internal/surface/cli/cli_test.go:625 — "if _, err := os.Stat(indexPath); !os.IsNotExist(err) {"
+  evidence: internal/surface/cli/cli_test.go:638 — "if r.RootCommit == rootSHA {"
+  evidence: internal/surface/cli/cli_test.go:647 — "repo not registered by root-commit SHA %q in index.json"
+- ac-5 — MET: The doctor test corrupts only the registered `path` in index.json and then observes doctor raise history.path_stale quoting that exact value, proving the central/host location is resolved by reading index.json rather than a hardcoded path or directory walk.
+  evidence: internal/surface/cli/cli_test.go:682 — "repos[0].(map[string]any)[\"path\"] = \"/somewhere/relocated\""
+  evidence: internal/surface/cli/cli_test.go:700 — "if g.ID == \"history.path_stale\" {"
+  evidence: internal/surface/cli/cli_test.go:702 — "if !strings.Contains(g.Detail, \"/somewhere/relocated\") {"
+
+Gap audit:
+- honoured:
+  - Bare /abcd:ahoy classifies cwd into managed-repo / unmanaged-repo / unmanaged-folder on a strong-signal-first hierarchy and reports only (read-only).
+    evidence: internal/core/ahoy/detect.go:103 — "strong := registered || abcdDir || markerFired"
+    evidence: internal/surface/cli/cli.go:1282 — "res, err := ahoy.DryRun(cwd)"
+  - The report now names the path forward per kind: install hint for an unmanaged repo, nothing-to-act-on for a plain folder.
+    evidence: internal/surface/cli/cli.go:1291 — "switch res.FolderKind {"
+  - The history store index.json is bootstrapped on first install and is the registry keyed on root-commit SHA, and is the source doctor reads for the central/host location.
+    evidence: internal/surface/cli/cli_test.go:634 — "if err := os.ReadFile(indexPath)"
+    evidence: internal/surface/cli/cli_test.go:708 — "doctor did not resolve the central location from index.json (no history.path_stale)"
+- diverged:
+  - Provenance-only deviation: spc-5 is record catch-up (engine predates the spec) and the report cut was delegated to a sub-agent worker with the orchestrator re-running the gate; this is a signed-off process note, not a behaviour divergence from the ACs.
+    evidence: .abcd/development/specs/closed/spc-5-folder-classification.md:44 — "Deviation: none in behaviour, one in provenance"
+- missing: (none)
