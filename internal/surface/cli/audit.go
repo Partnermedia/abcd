@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // newAuditCommand wires the read-only `abcd audit` verb: it evaluates the
@@ -95,13 +96,17 @@ func renderAuditHuman(w io.Writer, res audit.Result) {
 		fmt.Fprintln(w, "abcd audit — ✓ conforms to the working conventions")
 	}
 	for _, f := range res.Findings {
-		loc := f.File
+		// File, Message and Fix are built from the audited repo's own file paths and
+		// content (`abcd audit` runs over any repo), so they are untrusted terminal
+		// output and pass through the canonical sanitiser; RuleID/Severity are enum
+		// constants and need none.
+		loc := termsafe.Sanitize(f.File)
 		if f.Line > 0 {
-			loc = fmt.Sprintf("%s:%d", f.File, f.Line)
+			loc = fmt.Sprintf("%s:%d", termsafe.Sanitize(f.File), f.Line)
 		}
-		fmt.Fprintf(w, "%s [%s] %s — %s\n", severityGlyph(f.Severity), f.RuleID, loc, f.Message)
+		fmt.Fprintf(w, "%s [%s] %s — %s\n", severityGlyph(f.Severity), f.RuleID, loc, termsafe.Sanitize(f.Message))
 		if f.Fix != "" {
-			fmt.Fprintf(w, "    fix: %s\n", f.Fix)
+			fmt.Fprintf(w, "    fix: %s\n", termsafe.Sanitize(f.Fix))
 		}
 	}
 	for _, id := range res.Skipped {

@@ -76,6 +76,30 @@ func TestYAMLRoundTripSourceBlocks(t *testing.T) {
 	}
 }
 
+// TestValidateSourceBlockClassesOrderIndependent proves source.classes is
+// validated as a SET: the same classes declared in a different order from their
+// first appearance in sources[] must pass, since the schema (and the error
+// message) specify set semantics, not list order.
+func TestValidateSourceBlockClassesOrderIndependent(t *testing.T) {
+	block := map[string]any{
+		// Declared order is the REVERSE of the sources[] appearance order.
+		"classes":        []any{"external_transcript", "external_pdf"},
+		"weighting_note": "pdf outweighs transcript",
+		"sources": []any{
+			map[string]any{"class": "external_pdf", "citation": map[string]any{"type": "knowledge"}, "licence": "MIT", "source_hash": strings.Repeat("c", 64), "ingested_at": "2026-07-06"},
+			map[string]any{"class": "external_transcript", "citation": map[string]any{"type": "knowledge"}, "licence": "MIT", "source_hash": strings.Repeat("d", 64), "ingested_at": "2026-07-06"},
+		},
+	}
+	if err := validateSourceBlock(block); err != nil {
+		t.Fatalf("reordered-but-equal class set was rejected: %v", err)
+	}
+	// A genuinely different set is still rejected.
+	block["classes"] = []any{"external_pdf", "external_pdf"}
+	if err := validateSourceBlock(block); err == nil {
+		t.Fatal("a class multiset that differs from the derived set was accepted")
+	}
+}
+
 // TestYAMLFlowMapKeyRoundTrip (B06) proves distiller-controlled citation keys
 // carrying YAML metacharacters survive the dump->parse round trip: the dumper
 // quotes the key and parseFlowMap unquotes it, so a key with a colon, comma, or
@@ -613,7 +637,7 @@ func TestKeepOriginalErrorMessageNoPathLeak(t *testing.T) {
 	}
 	for _, in := range cases {
 		msg := keepOriginalErrorMessage(in)
-		if strings.Contains(msg, "/Users/someone") {
+		if strings.Contains(msg, "/Users/someone") { // abcd-audit:allow
 			t.Fatalf("leaked absolute path for %T: %q", in, msg)
 		}
 		if !strings.Contains(msg, sourcesRelPath) {

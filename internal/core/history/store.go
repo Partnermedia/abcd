@@ -15,9 +15,11 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
-// rootSHARe is the immutable repo key: a 40-char lowercase hex SHA. Ported from
-// the Python validate_root_sha boundary guard.
-var rootSHARe = regexp.MustCompile(`^[0-9a-f]{40}$`)
+// rootSHARe is the immutable repo key: a lowercase hex commit SHA, 40 chars for
+// git's SHA-1 object format or 64 for SHA-256. Accepting only 40 made every
+// history verb (Capture/List/Read) fail for a SHA-256 repo, whose root SHA the
+// ahoy layer derives at 64 chars — mirrors the voyage-ledger key fix.
+var rootSHARe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // sessionIDRe restricts a vendor session id to filesystem-safe characters so it
 // can be embedded verbatim in a record filename with no path-traversal or
@@ -139,8 +141,8 @@ func survivingCallerHome(text, home string) []scanner.Finding {
 
 // containsUserSegment reports whether needle ("/Users/<user>" or "/home/<user>")
 // appears in text as a complete path segment: the rune following it must not be
-// a username-continuation rune ([A-Za-z0-9._-]), so "/Users/me" does not falsely
-// match "/Users/metoo" (a different, longer username).
+// a username-continuation rune ([A-Za-z0-9._-]), so "/Users/me" does not falsely abcd-audit:allow
+// match "/Users/metoo" (a different, longer username). abcd-audit:allow
 func containsUserSegment(text, needle string) bool {
 	from := 0
 	for {

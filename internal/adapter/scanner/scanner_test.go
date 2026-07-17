@@ -75,6 +75,30 @@ func TestSecretPatterns(t *testing.T) {
 	}
 }
 
+// TestGoogleAPIKeyTrailingDashDetected proves a Google API key whose 35th
+// character is '-' (a valid key char) is still flagged. The fixed-length {35}
+// class plus a trailing ASCII \b had no shorter match to satisfy the boundary, so
+// such a key silently slipped the hard_fail secret gate.
+func TestGoogleAPIKeyTrailingDashDetected(t *testing.T) {
+	key := "AIza" + strings.Repeat("Z", 34) + "-" // 35th body char is '-'
+	if got := scanLine("api key " + key + " done"); !hasKind(got, "token:google_api") {
+		t.Errorf("Google API key ending in '-' not flagged: key=%q findings=%+v", key, got)
+	}
+}
+
+// TestIdentityHomeSelfCaseInsensitive proves a case variant of the caller's own
+// home path still trips the hard_fail home_path_self gate — on a case-folding
+// filesystem it is the SAME directory, and the sibling email/name/github matchers
+// already fold case.
+func TestIdentityHomeSelfCaseInsensitive(t *testing.T) {
+	id := Identity{HomePath: "/Users/Alice", HomeUser: "Alice"} // abcd-audit:allow
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+	if got := ScanText("wrote /USERS/ALICE/.aws/credentials", id, pats, sev, "f"); !hasKind(got, kindHomeSelf) { // abcd-audit:allow
+		t.Errorf("case-variant home_path_self not flagged: %+v", got)
+	}
+}
+
 // TestRedactSealsOverlappingSecrets is the disk-redactor analogue of the
 // serializer overlap test: two partially-overlapping secret spans (an sk-ant key
 // running into a JWT) must not leave any raw token bytes behind, and a re-scan of
@@ -174,10 +198,48 @@ func TestIdentityEmailAndNoreply(t *testing.T) {
 	}
 }
 
+// TestIdentityNonASCIIName proves a hard_fail real_name whose edge runes are
+// non-ASCII (accented/CJK/Cyrillic) is still detected — RE2's ASCII \b used to
+// silently miss it, publishing the name unredacted.
+func TestIdentityNonASCIIName(t *testing.T) {
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+	for _, name := range []string{"Émilie Dupont", "Иван Петров", "张伟明"} {
+		id := Identity{GitUserName: name}
+		line := "Reviewed-by: " + name
+		if got := ScanText(line, id, pats, sev, "f"); !hasKind(got, kindRealName) {
+			t.Errorf("non-ASCII real_name %q not flagged: %+v", name, got)
+		}
+	}
+}
+
+// TestIdentityEmailCaseInsensitive proves a case variant of the caller's own
+// email still trips the hard_fail real_email gate.
+func TestIdentityEmailCaseInsensitive(t *testing.T) {
+	id := Identity{GitUserEmail: "person@example.com"}
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+	if got := ScanText("contact Person@Example.COM today", id, pats, sev, "f"); !hasKind(got, kindRealEmail) {
+		t.Errorf("case-variant real email not flagged: %+v", got)
+	}
+}
+
+// TestIdentityHomePathOtherDetected proves a third-party home path at a realistic
+// boundary (line start, after a space) is flagged — the leading RE2 \b used to
+// make genericHomeRe never match in these positions.
+func TestIdentityHomePathOtherDetected(t *testing.T) {
+	id := Identity{HomePath: "/Users/me", HomeUser: "me"} // abcd-audit:allow
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+	if got := ScanText("scp backup.tgz /Users/colleague/incoming/", id, pats, sev, "f"); !hasKind(got, kindHomeOther) { // abcd-audit:allow
+		t.Errorf("third-party home path after a space not flagged: %+v", got)
+	}
+}
+
 // TestIdentityHomePath proves home_path_self detection with the boundary
 // predicate.
 func TestIdentityHomePath(t *testing.T) {
-	id := Identity{HomePath: "/Users/someone", HomeUser: "someone"}
+	id := Identity{HomePath: "/Users/someone", HomeUser: "someone"} // abcd-audit:allow
 	pats := DefaultPatterns()
 	sev := DefaultIdentitySeverities()
 	got := ScanText("see /Users/someone/notes.txt for details", id, pats, sev, "f") // abcd-audit:allow
@@ -606,7 +668,7 @@ func TestIdentityLocalUsernameSystemPathSuppressed(t *testing.T) {
 	}
 	// Genuine leaks are still flagged (no false negatives from the suppression).
 	if got := ScanText(`backup written to /home/dev/data`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) { // abcd-audit:allow
-		t.Errorf("nested username /home/dev not flagged (false negative): %+v", got)
+		t.Errorf("nested username /home/dev not flagged (false negative): %+v", got) // abcd-audit:allow
 	}
 	if got := ScanText(`last commit authored by dev`, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
 		t.Errorf("bare username not flagged (false negative): %+v", got)
@@ -624,8 +686,8 @@ func TestSerializedShortMultibyteIdentityFullyStarred(t *testing.T) {
 	if utf8.RuneCountInString(email) >= 16 || len(email) < 16 {
 		t.Fatalf("test fixture invariant broke: %d runes, %d bytes", utf8.RuneCountInString(email), len(email))
 	}
-	id := Identity{GitUserEmail: email, HomePath: "/Users/someone", HomeUser: "someone"}
-	line := "email " + email + " path /Users/someone/notes.txt" // abcd-audit:allow
+	id := Identity{GitUserEmail: email, HomePath: "/Users/someone", HomeUser: "someone"} // abcd-audit:allow
+	line := "email " + email + " path /Users/someone/notes.txt"                          // abcd-audit:allow
 	findings := ScanText(line, id, DefaultPatterns(), DefaultIdentitySeverities(), "f")
 	if !hasKind(findings, kindRealEmail) || len(findings) < 2 {
 		t.Fatalf("need the email plus a second finding on one line to seal the snippet: %+v", findings)

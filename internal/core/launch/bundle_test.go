@@ -240,6 +240,34 @@ func TestGitignoredSymlinkTargetExcluded(t *testing.T) {
 	}
 }
 
+// TestCheckIgnoredStrictIgnoresInheritedWorkTree is the attack-input test for the
+// os.Environ()->gitutil.IsolatedEnv() scrub: an inherited GIT_WORK_TREE must not
+// redirect the gitignore probe at a different tree. check-ignore resolves its
+// .gitignore against the WORKING TREE, so an inherited GIT_WORK_TREE pointing at a
+// tree with no matching rule (verified empirically to override `-C root`) makes a
+// gitignored secret read as "not ignored" and promoted into the release. The scrub
+// strips GIT_WORK_TREE, so the probe answers about `root`.
+func TestCheckIgnoredStrictIgnoresInheritedWorkTree(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	writeFile(t, root, ".gitignore", ".env\n")
+	writeFile(t, root, ".env", "SECRET=1")
+
+	// A second tree with no .gitignore, pointed at via an inherited GIT_WORK_TREE.
+	other := t.TempDir()
+	t.Setenv("GIT_WORK_TREE", other)
+
+	ignored, err := checkIgnoredStrict(root, []string{".env"})
+	if err != nil {
+		t.Fatalf("checkIgnoredStrict: %v", err)
+	}
+	if _, ok := ignored[".env"]; !ok {
+		t.Error(".env read as NOT ignored under an inherited GIT_WORK_TREE — the probe was redirected at another tree; a gitignored secret would ship")
+	}
+}
+
 // TestGlobMatchSegmentAware proves ** crosses separators but a single * stays
 // in-segment.
 func TestGlobMatchSegmentAware(t *testing.T) {

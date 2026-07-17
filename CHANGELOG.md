@@ -12,6 +12,48 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **The identity probe and the ahoy git helper ignore inherited `GIT_DIR`/
+  `GIT_WORK_TREE` and injected `GIT_CONFIG_*` — completing the `IsolatedEnv`
+  sweep.** Two git call sites still ran with the ambient environment. Worse of the
+  two: `scanner.ProbeIdentity` reads the caller's `user.name`/`user.email` to
+  build the hard-fail identity-redaction matchers, so an injected
+  `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*` (as a CI/agent sandbox can export) forged a
+  fake identity and the caller's *real* name/email then sailed through the ship
+  gate and the transcript sanitiser unredacted. It now runs with a new
+  `gitutil.ScrubbedEnv` — the repo-selection and config-injection vars stripped but
+  global config kept, since the caller's identity legitimately lives there and full
+  isolation would blind the probe. `ahoy.runGit` (which derives the root-commit SHA
+  and origin URL that key the cross-repo history registry) now uses the fully
+  isolated `gitutil.IsolatedEnv`, so an inherited `GIT_DIR` can no longer register
+  one repo's transcripts under another's immutable key.
+- **The secret scanner detects a Google API key whose 35th character is `-`.** The
+  `\bAIza…{35}\b` pattern is fixed-length and its class includes `-`, so a key
+  ending in `-` had no shorter match to satisfy the trailing ASCII `\b` and the
+  `hard_fail` secret slipped both the launch gate and the transcript sanitiser. The
+  trailing `\b` is dropped (the `AIza` prefix and fixed length still bound it).
+- **`home_path_self` redaction is case-insensitive.** The overlapping-secret and
+  Unicode-boundary hunt added `(?i)` to the email/name/github identity matchers but
+  left the caller's own home path case-sensitive, so on a case-folding filesystem a
+  differently-cased spelling of `$HOME` — the same directory on disk — escaped the
+  hard-fail `home_path_self` gate. It now folds case like its siblings.
+- **Untrusted repo content is sanitised on every terminal render path, not just
+  the lifeboat report.** The escape/C1 sanitiser that guarded `disembark`'s human
+  report is now a shared `internal/termsafe` primitive, and the other render paths
+  that printed repository-derived text raw — `abcd audit`, `docs lint`, `capture
+  list` skip rows, the `intent`/`spec` boards, `memory` (bare + `ask`) — route
+  through it. A crafted commit subject, file path, error string, or memory-page
+  summary can no longer inject an ANSI escape to recolour or corrupt the report.
+  The primitive also now masks the bidirectional-override and zero-width
+  ("Trojan Source") classes, so untrusted text cannot visually reorder or hide
+  characters so the rendered line differs from the bytes. JSON output is unaffected.
+- **The identity pin is written atomically.** `identity.WritePin` persisted
+  `.abcd/config/identity.json` with a plain in-place `os.WriteFile` — the fifth
+  writer the iss-32 atomic-write consolidation missed (the guard flags only
+  divergent atomic primitives, not a non-atomic one). It truncated the pin before
+  rewriting, so a crash mid-write left a corrupt or empty gate config, and it
+  followed a symlink at the path. It now routes through the canonical
+  `fsutil.WriteFileAtomic` (temp + fchmod + fsync + rename + parent fsync).
+
 - **The secret scanner now detects GitHub fine-grained PATs (`github_pat_…`) and
   PEM private-key headers.** Neither was in the bundled pattern set, so a
   current-generation GitHub token (GitHub's default since 2022) or a committed
@@ -62,6 +104,49 @@ called out in a **Breaking** section.
   than by name after close, closing a TOCTOU symlink-swap window; and
   `WriteFileAtomicPreserveMode` no longer silently widens an existing file to
   `0644` on a transient stat error (it fails closed).
+- **The PII scanner detects real names, emails, and third-party home paths that
+  RE2's ASCII `\b` was silently skipping.** A `hard_fail` `real_name` whose first
+  or last character is non-ASCII (accented, CJK, Cyrillic) never matched — the
+  name shipped unredacted; the `real_email`/`github_username` matchers were
+  case-sensitive, so a case variant of the caller's own address slipped the gate;
+  and `home_path_other` never fired at a realistic boundary (line start, after a
+  space or `=`), so third-party home paths published verbatim. All three now use
+  Unicode-aware, case-folding boundary predicates. Relatedly, a warn-level
+  `home_path_other` span no longer suppresses a `hard_fail` `local_username`
+  finding underneath it (which downgraded a username leak out of the ship gate).
+- **The privacy-hygiene audit flags a bare home path with no trailing separator.**
+  `absPathRe` required a path component *after* the username, so the leak itself —
+  `HOME=/home/alice` at end of line — was never caught. The trailing separator is <!-- abcd-audit:allow -->
+  now optional (matching the Windows branch).
+- **The release-bundle gitignore probe ignores inherited `GIT_DIR`/`GIT_WORK_TREE`
+  and config-injection env vars.** The strict probe appended to `os.Environ()`, so
+  an inherited repo-selection variable could redirect it at a different repository
+  and make a gitignored secret read as "not ignored" — promoting it into the
+  release. It now runs with the same scrubbed environment as every other isolated
+  git call (also applied to release-tag retention).
+- **Terminal-report sanitisation strips the C1 control range (`0x80`–`0x9F`).**
+  It masked C0 controls and DEL but let U+009B (CSI) through — an 8-bit terminal
+  acts on it exactly like `ESC[`, reopening the escape-injection path from
+  untrusted commit subjects/refs that masking `ESC` alone was meant to close.
+- **The lifeboat pack overlap gate is case-insensitive on case-folding
+  filesystems.** On macOS's default filesystem a differently-cased destination
+  inside the source (`.../REPO/lifeboat` vs source `.../repo`) computed as an
+  out-of-tree sibling and slipped the gate, so the pack wrote into the source
+  tree.
+- **The graveyard probe rejects option-like git refs from a hostile repo.** The
+  lifeboat probe (whose stated threat model is hostile/archived repositories) fed
+  branch names and an `origin/HEAD`-derived default branch straight to `git
+  merge-base`/`branch`/`rev-list` as positional args; a crafted ref such as `-x`
+  (written into `.git/refs`) parsed as a flag. Repo-derived refs beginning with
+  `-` are now refused before reaching git — closing the argument-injection vector
+  before a future richer subcommand makes it exploitable.
+- **Memory-store reads are guarded against symlink and size attacks.** The sources
+  registry (`.sources_index.json`) and each memory page were read with a bare
+  `os.ReadFile` — no size cap, following symlinks — inside the repo working tree
+  (a trust boundary) on every `abcd memory` verb, some under the store lock. A
+  committed symlink to `/dev/zero` could OOM or hang the CLI. Both now route
+  through a shared `fsutil.ReadGuarded` (`O_NOFOLLOW` + regular-file check on the
+  open fd + byte cap).
 
 ### Fixed
 
@@ -99,6 +184,51 @@ called out in a **Breaking** section.
   of panicking; the intent identity gate compares the author git will actually
   stamp (honouring `GIT_AUTHOR_*`); inline-list items with quoted commas round-trip
   faithfully; and the lifeboat probe's tier gate matches what its adapters read.
+- **The modular-rules loader resolves `.abcd/rules.json` from the repo root, not
+  the current directory.** Run from any subdirectory, `abcd` looked up the
+  per-repo overrides — and the kill switch — under the subdirectory, found
+  nothing, and silently injected the default ruleset a repo had disabled. The
+  loader now walks up to the nearest `.abcd` directory.
+- **`abcd install` no longer rebuilds a malformed `.abcd/config.json` from
+  scratch,** which destroyed whatever the user had. A JSON parse error is now
+  respected: the file is left untouched and the install reports partial.
+- **The issue-ledger reader rejects malformed records it used to accept
+  silently:** a duplicate top-level (or nested) frontmatter key — where the reader
+  kept the last value but a status transition rewrote the first — and a
+  non-string `resolved_by` sub-value that validated clean then dropped to `""` on
+  read.
+- **The disembark voyage ledger logs SHA-256-format repositories.** Its root-SHA
+  key accepted only a 40-char SHA-1; a 64-char SHA-256 root was rejected and the
+  pack silently went unlogged.
+- **The history transcript store accepts a SHA-256 root key too.** The same
+  40-char-only assumption in `history.store`'s `rootSHARe` (a sibling of the voyage
+  key above) made `history capture`/`list`/`read` all fail for a repo in git's
+  SHA-256 object format — the ahoy layer derives the 64-char root SHA, but history
+  refused it, so no session was ever stored. The key now accepts 40 or 64 hex.
+- **Spec id minting cannot wrap to a negative id.** `specNum` discarded the
+  `strconv.Atoi` overflow error, keeping the clamped `MaxInt64`, so an over-int64
+  spec number made `NextID` compute `max+1` and mint `spc--9223372036854775808`. An
+  unparseable/over-range number is now treated as no reservation.
+- **Release-tag retention ignores prerelease/build tags.** `Tag()` renders the
+  core `MAJOR.MINOR.PATCH` only, so a real tag `v1.2.3-rc1` surfaced in the plan
+  as a phantom `v1.2.3` and collapsed against the real release; prerelease/build
+  tags are now excluded (retention operates on release cores).
+- **Distinct deleted paths key distinct graveyard findings.** The id cleaner
+  *deleted* spaces and control characters, so two paths differing only in
+  whitespace collided onto one finding id and one shadowed the other; the
+  transform is now injective (percent-encoding), leaving ordinary paths unchanged.
+- **The lifeboat pack destination gate treats an `ENOTDIR` stat as "absent"**
+  (a prefix component being a file) rather than an uninterpretable error that
+  refused a writable destination.
+- **A relative PATH symlink is resolved against the symlink's own directory,**
+  not the process working directory — so `abcd ahoy` no longer reports a bogus
+  "foreign symlink" gap (and uninstall no longer refuses to remove a link it
+  owns) for a correct relative install such as `/usr/local/bin/abcd ->
+  ../lib/abcd/abcd` when run from another directory.
+- **`source.classes` on a memory page is validated as a set, not an ordered
+  list.** The same classes declared in a different order from their first
+  appearance in `sources[]` were rejected, contradicting the schema's (and the
+  error message's) set semantics.
 
 ### Changed
 

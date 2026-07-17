@@ -417,16 +417,26 @@ func backlinkOtherHashes(registry map[string]any, plan WritePlan, contentHash st
 // Registry-hit validation helpers
 // ---------------------------------------------------------------------------
 
+// maxMemoryPageBytes caps a single memory page read. Pages sit inside the repo
+// working tree, so each is read with the guarded primitive (O_NOFOLLOW + size
+// cap): an in-store page name can itself be a committed symlink to /dev/zero, and
+// os.ReadFile would follow it and grow without bound. A page is a small distilled
+// fact; a few MiB is far more than any real one.
+const maxMemoryPageBytes = 4 << 20 // 4 MiB
+
 func pageHashSet(mem, filename string) ([]string, bool) {
 	if !IsMemoryPageName(filename) {
 		return nil, false
 	}
 	path := filepath.Join(mem, filename)
-	raw, err := os.ReadFile(path)
+	raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false
 		}
+		// A symlinked, oversize, or otherwise unreadable page is present-but-
+		// unparseable: keep the name taken (empty hash set) rather than following
+		// a hostile leaf or reading it unbounded.
 		return []string{}, true
 	}
 	return SourceHashes(pageSourceBlock(string(raw))), true
@@ -442,7 +452,10 @@ func existingPageFrontmatter(mem string) map[string]map[string]any {
 		if !e.Type().IsRegular() || !IsMemoryPageName(e.Name()) {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(mem, e.Name()))
+		// ReadGuarded re-checks regular-file on the open fd (closing the ReadDir→
+		// open symlink-swap TOCTOU) and caps the size, so a hostile page cannot
+		// redirect the read or exhaust memory.
+		raw, err := fsutil.ReadGuarded(filepath.Join(mem, e.Name()), maxMemoryPageBytes)
 		if err != nil {
 			pages[e.Name()] = map[string]any{}
 			continue

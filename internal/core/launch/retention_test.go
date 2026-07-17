@@ -1,6 +1,9 @@
 package launch
 
-import "testing"
+import (
+	"os/exec"
+	"testing"
+)
 
 func mustParse(t *testing.T, v string) Semver {
 	t.Helper()
@@ -53,5 +56,46 @@ func TestRetentionRefusesOnNewerExisting(t *testing.T) {
 	}
 	if len(plan.Pruned) != 0 {
 		t.Errorf("a refusal must prune nothing: %+v", plan.Pruned)
+	}
+}
+
+// TestGitExistingTagsExcludesPrerelease is the attack/behaviour test for the
+// prerelease/build filter: a real tag like v1.2.3-rc1 renders its core "v1.2.3"
+// via Tag()/String(), so admitting it would surface a PHANTOM v1.2.3 in the
+// retention plan and collapse against a real v1.2.3. Only release cores survive.
+func TestGitExistingTagsExcludesPrerelease(t *testing.T) {
+	root := t.TempDir()
+	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+		t.Skipf("git init unavailable: %v (%s)", err, out)
+	}
+	mustGit := func(args ...string) {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	mustGit("commit", "--allow-empty", "-m", "c", "--author", "T <t@e.x>")
+	mustGit("-c", "user.email=t@e.x", "-c", "user.name=T", "tag", "v1.0.0")
+	mustGit("-c", "user.email=t@e.x", "-c", "user.name=T", "tag", "v1.2.3-rc1")
+
+	vers, err := GitExistingTags(root)
+	if err != nil {
+		t.Fatalf("GitExistingTags: %v", err)
+	}
+	for _, v := range vers {
+		if v.Prerelease != "" || v.Build != "" {
+			t.Errorf("prerelease/build tag leaked into the release set: %+v", v)
+		}
+		if v.Major == 1 && v.Minor == 2 && v.Patch == 3 {
+			t.Errorf("v1.2.3-rc1 surfaced as a phantom release core v1.2.3")
+		}
+	}
+	var has100 bool
+	for _, v := range vers {
+		if v.Major == 1 && v.Minor == 0 && v.Patch == 0 {
+			has100 = true
+		}
+	}
+	if !has100 {
+		t.Errorf("real release v1.0.0 missing from %+v", vers)
 	}
 }

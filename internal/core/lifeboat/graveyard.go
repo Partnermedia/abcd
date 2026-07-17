@@ -3,6 +3,7 @@ package lifeboat
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // graveyard.go — shared types, constants, and id helpers for the three-layer
@@ -289,18 +290,25 @@ func shortHex(sha string) string {
 	return string(out)
 }
 
-// idClean drops control characters and spaces from an id component. It removes
-// (rather than replaces) so the id stays a compact token; the surrounding prefix
-// keeps it namespaced and non-empty.
+// idClean makes an id component safe by percent-encoding control characters,
+// DEL, spaces, and the escape byte '%' itself. It must be INJECTIVE: the old
+// version simply DELETED spaces/controls, so distinct inputs ("my file" and
+// "myfile", or two branch names differing only in whitespace) collapsed to the
+// same id and one finding silently shadowed the other. Percent-encoding keeps the
+// token compact and space-free while guaranteeing distinct inputs yield distinct
+// ids. Ordinary paths and ref names (no control/space/'%') pass through
+// unchanged, so their ids stay stable across the re-plan invariant.
 func idClean(s string) string {
-	out := make([]rune, 0, len(s))
+	var b strings.Builder
+	b.Grow(len(s))
 	for _, r := range s {
-		if r < 0x20 || r == 0x7f || r == ' ' {
+		if r < 0x20 || r == 0x7f || r == ' ' || r == '%' {
+			fmt.Fprintf(&b, "%%%02X", r)
 			continue
 		}
-		out = append(out, r)
+		b.WriteRune(r)
 	}
-	return string(out)
+	return b.String()
 }
 
 // collectFindingIDs builds the set of live finding ids from any number of finding

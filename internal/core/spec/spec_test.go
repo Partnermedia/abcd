@@ -6,6 +6,18 @@ import (
 	"testing"
 )
 
+// TestSpecNumIgnoresOverflow proves an over-int64 spec number is treated as no
+// reservation (0), not the clamped MaxInt64: keeping the clamp made NextID compute
+// max+1 and wrap to a negative id.
+func TestSpecNumIgnoresOverflow(t *testing.T) {
+	if n := specNum("spc-99999999999999999999999"); n != 0 {
+		t.Errorf("specNum(over-int64) = %d, want 0 (an unreal number must not seed a wrapping max)", n)
+	}
+	if n := specNum("spc-7-a-slug"); n != 7 {
+		t.Errorf("specNum(spc-7-a-slug) = %d, want 7", n)
+	}
+}
+
 // writeFile writes content to root/rel, creating parent directories. Shared by
 // both test files in this package.
 func writeFile(t *testing.T, root, rel, content string) {

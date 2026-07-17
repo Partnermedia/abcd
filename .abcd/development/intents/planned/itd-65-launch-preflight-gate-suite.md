@@ -40,7 +40,7 @@ abcd's whole thesis is routing the risks a non-expert cannot see to a fail-close
 
 ## What's In Scope
 
-- The custom-regex identity layer over the resolved payload: home-dir paths (`/Users/...`, `/home/...`), real emails, GitHub usernames from git config — hard-fail (per brief § 1).
+- The custom-regex identity layer over the resolved payload: home-dir paths (`/Users/...`, `/home/...`), real emails, GitHub usernames from git config — hard-fail (per brief § 1). <!-- abcd-audit:allow -->
 - Marker-block sanity over shipped Markdown — hard-fail on malformed.
 - `plugin.json` parse + `marketplace.json` reference cross-check — hard-fail.
 - **Doc-history gate** — hard-fail on change-history / rationale-for-change

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core"
@@ -47,6 +48,13 @@ func originURL(cwd string) string {
 func runGit(cwd string, args ...string) (string, error) {
 	full := append([]string{"-C", cwd}, args...)
 	cmd := exec.Command("git", full...)
+	// Isolate: an inherited GIT_DIR/GIT_WORK_TREE overrides `-C cwd` and answers
+	// for a DIFFERENT repository, so the root-commit SHA and origin URL this feeds
+	// into RepoIdentity — which keys the cross-repo ~/.abcd/history registry and
+	// drives install/refounding decisions — would be silently registered against
+	// the wrong repo. rev-list/remote do not need global config, so full isolation
+	// is safe here.
+	cmd.Env = gitutil.IsolatedEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err

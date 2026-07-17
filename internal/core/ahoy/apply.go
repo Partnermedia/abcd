@@ -178,7 +178,14 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	// Nothing to collect if there are no config gaps and category not approved.
 	hasConfigGap := a.has("config.visibility_missing") || a.has("config.docs_target_missing") ||
 		a.has("config.oracle_backend_missing") || a.has("config.scan_deep_missing")
-	cfgMap, _ := readConfig(a.cwd)
+	cfgMap, cfgErr := readConfig(a.cwd)
+	if cfgErr != nil {
+		// config.json exists but is malformed JSON. Collecting values and writing
+		// them back would rebuild the file from scratch, DESTROYING whatever the
+		// user had. Refuse to touch a file we cannot parse and report a partial
+		// install so the operator repairs it by hand.
+		return nil
+	}
 	repo := subMap(cfgMap, "repo")
 	docs := subMap(cfgMap, "docs")
 	oracle := subMap(cfgMap, "oracle")
@@ -232,8 +239,12 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 		ic.ScanDeep = &v
 	}
 
-	// Persist into the config map (read-modify-write).
-	cfgMap, _ = readConfig(a.cwd)
+	// Persist into the config map (read-modify-write). Re-read defensively; if the
+	// file turned malformed since the first read, refuse rather than clobber it.
+	cfgMap, cfgErr = readConfig(a.cwd)
+	if cfgErr != nil {
+		return nil
+	}
 	if cfgMap == nil {
 		cfgMap = map[string]any{}
 	}
@@ -467,7 +478,7 @@ func Uninstall(cwd string) (UninstallReceipt, error) {
 		receipt.Symlink.Note = "plugin root unresolved; left untouched"
 	default:
 		dest, _ := os.Readlink(target)
-		if resolvePath(dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
+		if resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
 			if err := os.Remove(target); err == nil {
 				receipt.Symlink.Removed = true
 			} else {

@@ -314,6 +314,24 @@ func TestAC_PrivacyAbsolutePath(t *testing.T) {
 	}
 }
 
+// A bare home path with no trailing separator (the username IS the leak, e.g.
+// `HOME=/home/alice` at end of line) must still be flagged — the previous regex abcd-audit:allow
+// required a trailing slash and missed it.
+func TestAC_PrivacyBareHomePathNoTrailingSlash(t *testing.T) {
+	const leak = "HOME=/home/alice\n" // abcd-audit:allow
+	b := newFixtureRepo(t).conforming().
+		file("reference/env.md", leak).
+		commit()
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f == nil {
+		t.Fatal("bare home path without a trailing separator was not flagged")
+	}
+	if res.ExitCode != 2 {
+		t.Errorf("exit = %d, want 2", res.ExitCode)
+	}
+}
+
 func TestAC_PrivacyWaiverSuppresses(t *testing.T) {
 	const waived = "example path /Users/alice/x is illustrative  abcd-audit:allow\n"
 	// Kept out of docs/ so docs-currency stays skipped and does not add a warn —

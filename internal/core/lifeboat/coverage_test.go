@@ -123,3 +123,40 @@ func containsSection(in []Section, s Section) bool {
 	}
 	return false
 }
+
+// TestSanitizeStripsC1Controls proves the C1 range (0x80–0x9F) is masked, not
+// just C0/DEL. U+009B is the single-byte CSI an 8-bit terminal acts on like
+// ESC[, so leaving it raw would reopen the escape-injection path this function
+// exists to close.
+func TestSanitizeStripsC1Controls(t *testing.T) {
+	// \u009b is CSI (acts like ESC[ on an 8-bit terminal); \u0085 (NEL) is
+	// another C1 control. Both are above 0x7f, so the old C0/DEL-only sanitize
+	// let them through.
+	in := "commit \u009b31mspoof\u0085 end"
+	got := sanitize(in)
+	for _, r := range got {
+		if r >= 0x80 && r <= 0x9f {
+			t.Fatalf("C1 control survived sanitize: %q", got)
+		}
+	}
+	if got != "commit ?31mspoof? end" {
+		t.Errorf("sanitize = %q, want the C1 bytes mapped to '?'", got)
+	}
+}
+
+// TestSanitizeStripsBidiAndZeroWidth proves routing sanitize through the canonical
+// termsafe primitive extended coverage to the "Trojan Source" class — a
+// right-to-left override (U+202E) and a zero-width space (U+200B) that the old
+// C0/C1/DEL-only sanitize let through, so a commit subject could visually reorder
+// or hide text in the report. Written with \u escapes so this source stays ASCII.
+func TestSanitizeStripsBidiAndZeroWidth(t *testing.T) {
+	got := sanitize("safe\u202edangerous\u200bhidden")
+	for _, r := range got {
+		if (r >= 0x202A && r <= 0x202E) || r == 0x200B {
+			t.Fatalf("bidi/zero-width survived sanitize: %q", got)
+		}
+	}
+	if got != "safe?dangerous?hidden" {
+		t.Errorf("sanitize = %q, want bidi/zero-width mapped to '?'", got)
+	}
+}

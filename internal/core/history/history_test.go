@@ -16,6 +16,32 @@ const testRootSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 // setupStore points HOME at a temp dir (so both the store root and the probed
 // identity home path resolve there), creates the transcripts dir the way abcd
 // install would, and returns (repoRoot, home).
+// TestCaptureAcceptsSHA256RootKey proves history verbs work for a repo in git's
+// SHA-256 object format, whose root-commit SHA is 64 hex chars. The old
+// `^[0-9a-f]{40}$` key rejected it, so Capture/List/Read all failed for such a
+// repo — the ahoy layer derives the 64-char SHA but history refused it.
+func TestCaptureAcceptsSHA256RootKey(t *testing.T) {
+	sha256Root := strings.Repeat("b", 64)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tdir := filepath.Join(home, ".abcd", "history", sha256Root, "transcripts")
+	if err := os.MkdirAll(tdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repoRoot := t.TempDir()
+
+	res, err := Capture(repoRoot, sha256Root, "sess-sha256", []byte("assistant: hi\n"), "native")
+	if err != nil {
+		t.Fatalf("Capture with a SHA-256 root key failed: %v", err)
+	}
+	if !res.Wrote {
+		t.Fatal("expected Wrote=true for a SHA-256-keyed capture")
+	}
+	if _, err := List(sha256Root); err != nil {
+		t.Fatalf("List with a SHA-256 root key failed: %v", err)
+	}
+}
+
 func setupStore(t *testing.T) (string, string) {
 	t.Helper()
 	home := t.TempDir()
@@ -168,9 +194,9 @@ func TestSurvivingCallerHomeBackstop(t *testing.T) {
 	}{
 		{"clean-redacted", "wrote ~/notes and /Users/[redacted-user]/x", false},
 		{"literal-home-survives", "path " + home + "/x", true},
-		{"users-user-hash", "root=/Users/zzhomeuser42#frag", true},
-		{"home-user-amp", "root=/home/zzhomeuser42&x", true},
-		{"users-user-eq", "cfg=/Users/zzhomeuser42=v", true},
+		{"users-user-hash", "root=/Users/zzhomeuser42#frag", true},      // abcd-audit:allow
+		{"home-user-amp", "root=/home/zzhomeuser42&x", true},            // abcd-audit:allow
+		{"users-user-eq", "cfg=/Users/zzhomeuser42=v", true},            // abcd-audit:allow
 		{"different-longer-user", "path /Users/zzhomeuser42x/y", false}, // abcd-audit:allow
 		{"different-user", "path /Users/someoneelse/y", false},          // abcd-audit:allow
 	}
@@ -189,8 +215,8 @@ func TestSurvivingCallerHomeBackstop(t *testing.T) {
 // /Users/<user> absolute home path — the redaction Capture applies to every
 // transcript before it lands on disk.
 func TestRedactionEngineStripsUsersHomePath(t *testing.T) {
-	id := scanner.Identity{HomePath: "/Users/alice", HomeUser: "alice"}
-	line := "assistant: wrote /Users/alice/.aws/credentials" // abcd-audit:allow
+	id := scanner.Identity{HomePath: "/Users/alice", HomeUser: "alice"} // abcd-audit:allow
+	line := "assistant: wrote /Users/alice/.aws/credentials"            // abcd-audit:allow
 
 	findings := scanner.ScanText(line, id, scanner.DefaultPatterns(), scanner.DefaultIdentitySeverities(), "transcript")
 	redacted, n := scanner.Redact(line, findings)
@@ -198,7 +224,7 @@ func TestRedactionEngineStripsUsersHomePath(t *testing.T) {
 	if n < 1 {
 		t.Fatalf("expected at least one rewrite, got %d (findings: %+v)", n, findings)
 	}
-	if strings.Contains(redacted, "/Users/alice") {
+	if strings.Contains(redacted, "/Users/alice") { // abcd-audit:allow
 		t.Errorf("literal /Users home path survived redaction: %q", redacted)
 	}
 	if !strings.Contains(redacted, "~/.aws/credentials") {

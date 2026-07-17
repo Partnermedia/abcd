@@ -36,3 +36,29 @@ func TestGitEnvPinsLocale(t *testing.T) {
 		t.Errorf("resolved LANG = %q (found=%v), want C", v, ok)
 	}
 }
+
+// TestScrubbedEnvStripsHijackKeepsGlobalConfig pins the ScrubbedEnv contract: the
+// repo-selection and config-injection variables that could redirect the identity
+// probe or forge a fake identity are removed, but the global/system config-file
+// neutralisers IsolatedEnv appends are NOT — the identity probe must still read
+// the caller's real ~/.gitconfig, or it would go blind and stop redacting.
+func TestScrubbedEnvStripsHijackKeepsGlobalConfig(t *testing.T) {
+	t.Setenv("GIT_DIR", "/somewhere/else/.git")
+	t.Setenv("GIT_WORK_TREE", "/somewhere/else")
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "user.email")
+	t.Setenv("GIT_CONFIG_VALUE_0", "evil@example.com")
+
+	env := ScrubbedEnv()
+
+	for _, k := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"} {
+		if v, ok := lastEnvValue(env, k); ok {
+			t.Errorf("ScrubbedEnv leaked %s=%q; a hijack/injection var must be stripped", k, v)
+		}
+	}
+	// Must NOT force the global-config neutralisers (that would blind the identity
+	// probe). IsolatedEnv adds them; ScrubbedEnv must not.
+	if v, ok := lastEnvValue(env, "GIT_CONFIG_GLOBAL"); ok {
+		t.Errorf("ScrubbedEnv set GIT_CONFIG_GLOBAL=%q; it must keep global config in effect", v)
+	}
+}

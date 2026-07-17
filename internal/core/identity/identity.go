@@ -15,6 +15,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // PinRelPath is the committed identity pin, relative to the repo root.
@@ -123,7 +125,13 @@ func WritePin(root string, p Pin) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	// Route through the canonical atomic primitive (temp + fchmod + fsync + rename
+	// + parent-dir fsync): a plain in-place os.WriteFile truncates the pin before
+	// rewriting it — a crash mid-write leaves a corrupt or empty identity.json, and
+	// it follows a symlink at path. This is the fifth writer the iss-32
+	// consolidation missed (the guard only flags divergent atomic primitives, not a
+	// non-atomic write).
+	return fsutil.WriteFileAtomic(path, append(data, '\n'), 0o644)
 }
 
 // EffectiveIdentity returns the author identity git would stamp on a commit in
