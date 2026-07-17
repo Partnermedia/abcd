@@ -253,8 +253,12 @@ func notPresent(err error) bool {
 // isAbcdLifeboat reports whether dir holds a parseable _provenance.json — the
 // only signal that lets a pack overwrite an existing directory.
 func isAbcdLifeboat(dir string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, ProvenanceName))
-	if err != nil || len(data) > 1<<20 {
+	// Guarded read: the destination directory is attacker-influenced (a pack may
+	// target any path), so a symlinked _provenance.json must not be followed and a
+	// device/endless file must not be read unbounded — the old os.ReadFile checked
+	// the size only AFTER reading it all. The 1 MiB cap bounds the read itself.
+	data, err := fsutil.ReadGuarded(filepath.Join(dir, ProvenanceName), 1<<20)
+	if err != nil {
 		return false
 	}
 	var prov Provenance

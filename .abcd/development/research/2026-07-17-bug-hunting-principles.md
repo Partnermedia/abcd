@@ -92,9 +92,22 @@ closed and the trust-boundary read sweep remains the top open frontier.
 
 ## Known gaps / next frontiers
 
-Remaining after the 2026-07-17 fixes:
+Remaining after the 2026-07-17 fixes (including an ultracode sweep-completeness
+pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRepoRoot`
+— and guarded the five embark/pack reads over an arbitrary target repo):
 
-1. **Trust-boundary read sweep (~20 `os.ReadFile` sites) — the top open frontier.**
+0. **`ahoy.registerRepo` — unlocked read-modify-write of the cross-repo
+   `~/.abcd/history/index.json` (CWE-362 lost update).** Confirmed in two rounds.
+   Two concurrent `abcd install` runs each load → mutate → write the shared index,
+   so one repo's entry is lost. `history/store.go` already flocks its per-repo
+   store; the ahoy index has no lock. **Design wrinkle blocking a quick fix:**
+   `registerRepo`'s RMW contains an interactive `prompter.Confirm` (re-founding
+   lineage), so a flock must NOT be held across it — a correct fix locks the
+   load/write but resolves the prompt outside the lock (or re-reads under the lock
+   after confirming). Track as an issue rather than rushing a concurrency change.
+
+1. **Trust-boundary read sweep (remaining `os.ReadFile` sites) — still the top
+   frontier for any NEW code.**
    Many read `.abcd/config/*.json` and record files in the *local* worktree —
    trusted under the documented trusted-worktree model, so *not* uniformly in
    scope. The ones that genuinely cross the boundary are on the embark/probe/pack
@@ -103,7 +116,19 @@ Remaining after the 2026-07-17 fixes:
    operands) and `scanner.New` reading `pii.json` under a hook. **Next step: triage
    each by "is the source repo attacker-controlled here?" and guard only those with
    `fsutil.ReadGuarded`.**
-2. **Minor consistency gap:** `memory.LoadRegistry` wraps `ErrNotRegular`/`ErrTooBig`
+2. **JSON decode-depth stack exhaustion (CWE-674) — a DoS class no finder has yet
+   swept.** `encoding/json` recurses per nesting level with no depth limit, so a
+   ~1 MB payload of `[[[[…` (well under every byte cap) can overflow the goroutine
+   stack. Every `json.Unmarshal` fed from a non-local source — `_provenance.json`
+   and `coverage.json` on the embark/pack path, the history index — is a candidate.
+   Byte caps do not bound nesting depth; a depth-limited decoder does.
+3. **The hand-rolled frontmatter parser (`internal/core/frontmatter/Fields`) has
+   never been audited.** No YAML dependency exists, so this parser processes
+   attacker markdown from embarked/packed lifeboats and ingested memory. Check
+   duplicate-key precedence, unbounded key/value growth, and control-char/newline
+   smuggling in field values that later flow to output or gate decisions. (The
+   `capture` dup-key fix was in capture's own parser, not this one.)
+4. **Minor consistency gap:** `memory.LoadRegistry` wraps `ErrNotRegular`/`ErrTooBig`
    in a typed `RegistryFormatError`, but a symlinked index fails the `O_NOFOLLOW`
    *open* with a raw `*os.PathError` (ELOOP) that falls through — refused (good) but
    untyped and path-leaking. Wrapping the ELOOP case is a candidate follow-up.

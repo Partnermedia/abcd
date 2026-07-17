@@ -12,6 +12,26 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **Two more git call sites are isolated — finishing the env-inheritance sweep.**
+  An ultracode sweep-completeness pass found the two the earlier round missed.
+  `identity.gitConfig` (the commit-identity gate) read `user.name`/`user.email`
+  with the ambient environment, so an injected `GIT_CONFIG_*` could forge — or an
+  inherited `GIT_DIR` redirect — the very identity the gate verifies; it now uses
+  `gitutil.ScrubbedEnv` (keeping global config, like the identity probe).
+  `capture.discoverRepoRoot` ran `git rev-parse --show-toplevel` with the ambient
+  environment, so an inherited `GIT_WORK_TREE` redirected repo-root discovery — and
+  thus where the issue ledger is read and written — at an attacker-chosen tree; it
+  now uses `gitutil.IsolatedEnv`.
+- **The embark/pack path guards every read of an arbitrary target repo.** Five
+  reads on the lifeboat embark/pack path — `embark`'s target `CLAUDE.md`
+  (`embarkMarker`), the target record compare (`classifyEmbark`), the coverage
+  handoff (`readCoverageHandoff`), the pinned provenance (`readProvenance`), and the
+  destination-gate provenance probe (`isAbcdLifeboat`) — used a plain `os.ReadFile`
+  (three of them after a separate `Lstat`, a TOCTOU window; one checking the size
+  only *after* reading it all). The source is an arbitrary, possibly hostile repo,
+  so a symlinked or device/endless file could be followed or read unbounded. All
+  now route through `fsutil.ReadGuarded` (`O_NOFOLLOW` + regular-file on the open fd
+  + size cap), closing the swap window and the resource-exhaustion path in one call.
 - **The identity probe and the ahoy git helper ignore inherited `GIT_DIR`/
   `GIT_WORK_TREE` and injected `GIT_CONFIG_*` — completing the `IsolatedEnv`
   sweep.** Two git call sites still ran with the ambient environment. Worse of the
