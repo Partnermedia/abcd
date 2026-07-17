@@ -10,6 +10,15 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **A one-line, checksum-verified installer in the README.** The command
+  detects OS/architecture, downloads the binary and `checksums.txt` from the
+  latest GitHub Release, verifies the binary's SHA-256 against the manifest
+  fail-closed (a mismatch — or a binary the manifest does not list — refuses
+  to install), and installs to `/usr/local/bin`. The README also documents
+  the inspect-first manual equivalent.
+
 ## [0.2.0] - 2026-07-17
 
 ### Security

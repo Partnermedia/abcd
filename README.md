@@ -7,11 +7,11 @@
   <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a>.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
-  <a href="https://github.com/REPPL/abcd/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
+  <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
   <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
   <br />
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
-  <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a>
+  <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow -->
   <br />
   <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
   <img src="https://img.shields.io/badge/Linux-core%20CI--tested-FCC624?logo=linux&logoColor=black" alt="Linux: core CI-tested">
@@ -79,7 +79,7 @@ You sit down with your facilitator and whatever discovery material you have — 
 Once both of you have agreed on the brief, the facilitator begins to plan implementation while you continue to think of additional ideas and/or features. Capturing intents is as simple as typing:
 
 ```bash
-/abcd:intent new <one-line idea>
+/abcd:intent "<one-line idea>"
 ```
 
 Each captured intent is a press release, written as if the change has already shipped, with a named user feeling the difference. Your facilitator handles the rest of the lifecycle — turning your *why* into engineering work, surfacing cross-cutting concerns, and running the fidelity reviewer when the work lands. You stay in the seat where your judgement matters most: Setting the why at the start, and reading the verdict at the end.
@@ -157,6 +157,27 @@ The reviewer is allowed to fail honestly. If a promise wasn't kept, it says so. 
 
 
 # Resources
+
+## Install
+
+One line, checksum-verified. It detects your OS/architecture, downloads the
+binary and the `checksums.txt` manifest from the latest release, verifies the
+binary's SHA-256 against the manifest (and refuses to install on any
+mismatch — or if the manifest doesn't list the binary at all), then installs
+to `/usr/local/bin`:
+
+```sh
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; sudo install -m 0755 "$b" /usr/local/bin/abcd; abcd version'
+```
+
+Prefer to inspect before running? The command is exactly what it says: two
+downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
+a checksum verification, and a `sudo install`. You can do the same by hand —
+grab the binary for your platform plus `checksums.txt` from the releases
+page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching line,
+and copy the binary anywhere on your `PATH`. Every release is built and
+published by CI from the exact tagged commit, with the checksums generated
+over the same bytes that are uploaded.
 
 ## Build
 
