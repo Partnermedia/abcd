@@ -259,3 +259,33 @@ letter nor silently mark MET.
   CI failure (F14) were resolved by the orchestrator between the worker's
   launch and return — multi-agent structure kept the item flowing while the
   orchestrator context-switched.
+
+### Delegation observations, burst 4 (running log)
+
+- **Real-implementation delegation held the TDD bar:** itd-46 was the run's
+  first genuinely new-behaviour item, and the worker produced verbatim
+  watched-fail evidence for every gap-filled AC (build-failure red for the
+  engine, `unknown command` red for both CLI routes, missing-rule red for the
+  help line), plus a bare-invocation regression pin. Three atomic commits
+  (engine / wiring / surface+docs) with why-shaped bodies.
+- **Premise verification generalized:** told the intent's scope verbatim, the
+  worker discovered two scope bullets referencing files that do not exist in
+  the Go tree (old-system paths) and flagged them instead of creating them —
+  the F9 lesson (stale premises) applied by a sub-agent unprompted. Both
+  adjudicated in spc-7; the underlying surface gap ledgered (iss-105).
+- **Design-delta honesty:** the worker flagged its own typo-guard asymmetry
+  vs capture (mistyped sub-verb files a draft) as an explicit deliverable
+  note rather than hiding it; ledgered (iss-104).
+- **Cost:** ~140k subagent tokens, ~13 min, 3 commits, 6 files.
+
+### F17 — `abcd audit` green is not `record-lint` green · tooling gap
+
+The itd-46 lifecycle move (planned→shipped at spec close) broke two inbound
+record links, and the orchestrator's mid-record checks missed it for a full
+commit: `abcd audit` (run after every record step, green throughout) does not
+resolve links, while preflight's `record-lint` (run only at gate time) does —
+the red surfaced two commits after the breakage. Same-family gates with
+different coverage invite exactly this. Fixed by pointing both links at the
+shipped path; the deeper items: (a) `spec close` moves a file it KNOWS has
+inbound links — it could rewrite or at least report them; (b) the orchestrator
+rule is now "full `record-lint` after every record commit, not just `audit`".
