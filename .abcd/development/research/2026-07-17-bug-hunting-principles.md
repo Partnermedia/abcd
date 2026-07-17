@@ -133,6 +133,26 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
    *open* with a raw `*os.PathError` (ELOOP) that falls through — refused (good) but
    untyped and path-leaking. Wrapping the ELOOP case is a candidate follow-up.
 
+**Burst 3 (2026-07-17, session hardening loop) — unguarded CLI operand reads:**
+- `cli.readSource` (the `--pages-json`/`--page-json` memory-ingest transport) and
+  `disembark coverage <report.json>` read untrusted operands with a raw
+  `os.ReadFile` — no symlink refusal, no size cap. `readSource` was doubly
+  exposed: its stdin branch used `io.ReadAll` with NO `LimitReader` either.
+  A symlinked operand was FOLLOWED (verified: old `os.ReadFile` returns the
+  link target's content — a read-what-you-point-at gap on host-produced /
+  cross-repo JSON), and `/dev/zero`/a huge file read unbounded (OOM/hang).
+  Both routed through `fsutil.ReadGuarded` (O_NOFOLLOW + regular-file + 8 MiB
+  cap) and the stdin branch bounded by a `LimitReader`, matching
+  `readLessonsPayload`/`readSynthesisPayload`/`readHookInput`. Watched-fail:
+  `TestReadSourceRefusesSymlinkAndOversize` (symlink followed before, refused
+  after). **Sweep note:** git subprocess surface audited clean this burst —
+  every `exec.Command("git",…)` uses fixed subcommands, env-scrub (`gitEnv`/
+  `ScrubbedEnv`), and passes paths via `--stdin -z` (check-ignore), so no
+  argument-injection or `-`-leading-flag vector. `readLessonsPayload`/
+  `readSynthesisPayload` still carry a benign lstat→read TOCTOU (guarded, but
+  the swap window remains) — a candidate follow-up, lower priority as the path
+  is user-typed.
+
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
   `internal/termsafe.Sanitize`, extended with bidi/RTL-override + zero-width
