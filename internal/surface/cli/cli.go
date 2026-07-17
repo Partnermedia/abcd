@@ -1293,6 +1293,14 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  plugin root: %s\n", res.PluginRootStatus)
 				fmt.Fprintf(w, "  root sha:    %s\n", res.RootSHA)
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
+				// Classification is read-only; the human report names the
+				// next step per folder kind (itd-40 AC2/AC3).
+				switch res.FolderKind {
+				case ahoy.UnmanagedRepo:
+					fmt.Fprintf(w, "  unmanaged git repo — run `/abcd:ahoy install` to adopt it.\n")
+				case ahoy.UnmanagedFolder:
+					fmt.Fprintf(w, "  not a git repository — nothing to act on.\n")
+				}
 			})
 		},
 	}
