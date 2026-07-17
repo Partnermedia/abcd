@@ -309,3 +309,29 @@ rule is now "full `record-lint` after every record commit, not just `audit`".
 - **Heaviest worker of the run:** ~169k subagent tokens, ~23 min, 95 tool
   uses, 4 commits — the detector-build + corpus-sweep combination is the
   upper end of what one worker context comfortably holds.
+
+### F18 — The changelog-driven release path verified live · closing finding
+
+The run's final act was its own acceptance test: PR #89 (adr-37 + the
+auto-release port + the `[0.2.0]` roll) merged, and the automation fired
+first time — detect extracted 0.2.0 from the rolled heading, the annotated
+`v0.2.0` tag landed on exactly the merge commit (36s after merge), the
+called `release.yml` verified that commit, cross-compiled the four binaries,
+generated checksums, and published the GitHub Release with all five assets;
+the attestation steps skipped cleanly (private repo) and the
+no-branch-push tripwire held. Zero human tag pushes, zero reruns. The
+policy's whole claim — the CHANGELOG roll IS the release decision and
+automation follows the record — held on its first firing.
+
+### Run test B — closing summary
+
+Five milestones (M2–M5 + release) shipped across six PRs (#84–#89, plus the
+maintainer-directed bug-hunt landing #85), all merged same-day. Delegation
+verdict: implementation quality survived one-worker-per-item delegation
+intact (watched-fail TDD evidence, detector-first discipline, honest BLOCKED
+verdicts), while the orchestrator's independent re-verification earned its
+keep repeatedly (author-identity drift F13, the record off-by-one, the
+broken-link gate red F17, the audit-vs-record-lint asymmetry). Cost: ~1.3M
+subagent tokens across 17 Opus/max agents. The findings F1–F18 and the
+per-burst delegation logs are the raw material for reconciling the protocol
+into `commands/abcd/run.md` (itd-29).
