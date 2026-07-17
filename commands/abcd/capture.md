@@ -23,6 +23,10 @@ Summarise the JSON for the user: `open_count` / `resolved_count` /
 `wontfix_count`, and for each entry in `recent_open` its `id`, `severity`, and
 `slug`. No `iss-*.md` file is created, moved, or mutated by this invocation.
 
+**Which ledger?** A half-formed observation, question, or nitpick goes to
+`/abcd:capture "…"`; a user-facing change you want to ship goes to
+`/abcd:intent "…"`.
+
 ## Capture an issue
 
 Append a structured issue from free-form text:
@@ -68,8 +72,12 @@ Each moves the issue out of `open/` and records the note; report the `id` and
 the `from_status -> to_status` transition from the JSON.
 
 Promoting an issue to an intent (`/abcd:capture promote <iss-N>`) is
-skill-orchestrated, not a binary sub-verb — it runs the intent-new interview
-seeded with the issue body.
+skill-orchestrated, not a binary sub-verb. It hands the issue body to the intent
+create path — `abcd intent "<issue text>"` — which files a new draft under
+`.abcd/development/intents/drafts/` seeded from that text. It does **not** yet
+write the reciprocal `related_intents` back-link onto the `iss-N` record: no
+engine verb writes that edge today, so the back-link is done by hand or deferred
+until a capture back-link verb lands (tracked in the issue-capture spec).
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd capture …`
 from the repo root, or tell the user to build it with `make build`.
