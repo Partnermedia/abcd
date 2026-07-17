@@ -569,3 +569,13 @@ parallel-agent merge contention bites.
   the orchestrator re-ran the gate on the output, and commits carry the trailer
   of the model that authored them (worker code: claude-opus-4-8; orchestrator
   record work: claude-fable-5).
+- 2026-07-17 — Burst 3 (M3, itd-4/spc-6), three record adjudications: (1) AC2's
+  resolve note lives as the structured frontmatter scalar `resolution:` (the
+  live setScalarField design), not body-appended prose as the AC letter says —
+  recorded as intentional design evolution, not a gap. (2) AC3 (promote) is a
+  genuine BLOCKED gap: skill-orchestrated by design but uncompletable with
+  today's verbs (no intent-create until itd-46; no engine-backed related_intents
+  back-link write; hand-editing frontmatter from markdown would violate the
+  engine-backed convention) — spc-6 stays OPEN and itd-4 stays planned on it.
+  (3) AC4 migration recorded satisfied-by-history (source absent, ledger
+  populated iss-1..iss-103); no dead migration code built.

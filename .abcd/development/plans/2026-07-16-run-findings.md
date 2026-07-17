@@ -202,3 +202,60 @@ identity-check`); author metadata is part of the record, not a cosmetic.
   because the code under review was itself agent-written. Burst-2 M2 totals:
   ~229k subagent tokens + orchestrator overhead, one gate re-run, zero HOLDs,
   zero human input.
+### F14 — The local gate cannot see environment-dependent test failures · protocol gap
+
+Mid-burst-3 maintainer detour: the bug-hunt branch (PR #85) failed CI on
+ubuntu only — its new retention test created a git commit with `--author` but
+no `-c user.name/user.email`, so it broke on any machine without a global git
+identity. Every local gate run (the hunt's own, and this run's re-runs) passed
+because the dev machine has one; macOS runners happen to carry a git identity
+while ubuntu runners don't, making the failure platform-asymmetric and
+invisible until push. `make preflight` is the run's sole admission authority,
+but it inherits the workstation's environment. **For `/abcd:run`:** (a) worker
+instructions must carry the repo's known env-hermeticity rules (this run's M3
+worker prompt now includes the git-identity rule); (b) the protocol should
+treat first-push CI as a second, asynchronous gate — a PR is not "done" until
+its CI is green, and babysitting that belongs to the orchestrator's burst,
+not the maintainer. Tooling-wise, a repo test-lint (grep for `git commit`
+without `-c user.`) would catch the whole class deterministically.
+
+### F15 — "Implement it at the skill surface" is not a universal fallback · plan gap
+
+M3's pre-adjudication said: verify the plugin-surface promote path is wired,
+"else that AC is a genuine gap to implement at the skill surface". The worker
+verified the stronger fact: the skill surface *cannot* implement AC3, because
+half the flow has no engine verb behind it (no intent-create until itd-46; no
+back-link write verb at all), and markdown instructing hosts to hand-edit
+frontmatter would violate the engine-backed convention (iss-86). The honest
+verdict was BLOCKED, spec left open — the adjudication's fallback assumed
+skill-surface sufficiency without checking verb coverage. **For `/abcd:run`:**
+a plan adjudication that prescribes a fallback implementation path must name
+the engine verbs that path depends on; "the skill layer will handle it" is
+only true when every step is engine-backed.
+
+### F16 — Record catch-up surfaces AC-letter vs live-design drift · protocol gap (minor)
+
+itd-4's AC2 says the resolve note is "appended to the body"; the shipped,
+in-daily-use design stores it as a queryable frontmatter scalar. For record
+catch-up items this class — the AC letter written before implementation,
+the implementation deliberately better — recurs (burst 1's SessionEnd-vs-Stop
+was the same shape). The run handled it by adjudicating in the spec body +
+DECISIONS.md. The protocol should name this verdict explicitly (met-with-
+recorded-deviation) so catch-up runs neither force code back to the stale
+letter nor silently mark MET.
+
+### Delegation observations, burst 3 (running log)
+
+- **The worker's honesty held under a blocked AC:** told to implement the
+  promote surface "if genuinely missing", it instead proved the surface
+  *couldn't* be implemented (verb-coverage analysis, engine-backed-convention
+  citation) and returned BLOCKED with the precise missing links — the
+  highest-value outcome available; forcing markdown would have shipped a lie.
+- **Characterization-only milestone:** no production code changed; one test
+  commit (60 lines), no CHANGELOG entry (correctly judged test-only), no
+  watched-fail (correctly judged: no behaviour changed). Evidence discipline
+  intact. ~78k subagent tokens, ~8.2 min.
+- **Mid-burst maintainer detour handled inline:** PR #85's conflict + Linux
+  CI failure (F14) were resolved by the orchestrator between the worker's
+  launch and return — multi-agent structure kept the item flowing while the
+  orchestrator context-switched.
