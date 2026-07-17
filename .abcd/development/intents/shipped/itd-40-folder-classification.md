@@ -1,7 +1,7 @@
 ---
 id: itd-40
 slug: folder-classification
-spec_id: null
+spec_id: spc-5
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
@@ -58,4 +58,5 @@ This intent makes `/abcd:ahoy` classify the folder reliably, report it plainly, 
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+<!-- abcd-review: OWED receipt=rcp-a3791f7dde2e -->
+Fidelity review OWED (receipt rcp-a3791f7dde2e).
