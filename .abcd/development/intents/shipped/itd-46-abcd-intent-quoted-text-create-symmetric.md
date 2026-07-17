@@ -117,5 +117,47 @@ This intent is project-agnostic in the same sense the rest of the command surfac
 
 ## Audit Notes
 
-<!-- abcd-review: OWED receipt=rcp-69589b8b5103 -->
-Fidelity review OWED (receipt rcp-69589b8b5103).
+<!-- abcd-review: INGESTED receipt=rcp-69589b8b5103 -->
+Fidelity review — receipt rcp-69589b8b5103 (verifier intent-fidelity-reviewer claude-opus-4-8).
+
+Provenance: intent-fidelity-reviewer@claude-opus-4-8 · rubric_hash sha256:95792472ae74ca0469f69a51c618946e0d33cb1380032460099ed4b469d67e86 · prompt_hash sha256:9163e0a43a54575a50afb718052ae244a6d3763b0b2c8f20d64754457523da9f
+Input attestations: diff:7289aa520d72c867de68205d8a2b87c7c05d8321@-;
+
+Acceptance rollup: MET 4 · MET_WITH_CONCERNS 1 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: CreateFromText derives a validated slug and atomically writes drafts/itd-N-<slug>.md seeded from the text; both the quoted-text route and the new alias call the identical createIntentFromText, so the artefact is byte-identical, and the adjudication that no prior Go `intent new` verb existed is honest (verified absent in origin/main). Covered by TestCreateFromTextSeedsDraft and TestIntentQuotedTextCreates.
+  evidence: internal/core/intent/create.go:59 — "rel := filepath.Join(IntentsRelDir, BucketDrafts, name)"
+  evidence: internal/surface/cli/intent_cli_test.go:255 — "if got.ID != \"itd-1\" || got.Bucket != \"drafts\""
+- ac-2 — MET: The `new <text>` subcommand is registered as a backwards-compatible alias (lean (a)) that routes to the same createIntentFromText and prints a deprecation warning naming the quoted-text shape on stderr only, keeping stdout identical; proven by TestIntentNewAliasWarnsAndCreates.
+  evidence: internal/surface/cli/cli.go:1108 — "\"WARNING: `abcd intent new` is deprecated; use `abcd intent \\\"<text>\\\"` (quoted text is the create signal).\")"
+  evidence: internal/surface/cli/intent_cli_test.go:289 — "if !strings.Contains(stderr, \"deprecat\")"
+- ac-3 — MET: The create branch is guarded on len(args) > 0; a bare invocation falls through to intent.Status and mutates nothing. TestIntentBareCreatesNothing asserts the status render and zero files under drafts/.
+  evidence: internal/surface/cli/cli.go:1070 — "if len(args) > 0 {"
+  evidence: internal/surface/cli/intent_cli_test.go:311 — "t.Fatalf(\"bare intent created %d drafts files, want 0\", len(entries))"
+- ac-4 — MET_WITH_CONCERNS: The create path is engine-backed and tested end-to-end (ac-1 tests), and commands/abcd/capture.md now instructs promote to hand the issue body to `abcd intent "<text>"`; but promote itself is skill-orchestrated markdown with no native verb and no automated regression test (grep for promote in internal/ finds no promote engine/test), despite the intent's Open Questions asking promote regression tests to land with this spec. The 'same outcome as before' and no-back-link caveats are honestly stated in the markdown.
+  evidence: commands/abcd/capture.md:75 — "It hands the issue body to the intent create path — `abcd intent \"<issue text>\"`"
+  evidence: commands/abcd/capture.md:78 — "It does **not** yet write the reciprocal `related_intents` back-link onto the `iss-N` record"
+- ac-5 — MET: The ledgerDecisionRule constant (nitpick -> capture; user-facing change -> intent) is printed in both the bare intent status render and the bare capture status render; TestBareHelpsCarryDecisionRule asserts both, and the capture skill markdown carries the same rule.
+  evidence: internal/surface/cli/cli.go:1162 — "const ledgerDecisionRule = \"  which ledger? half-formed observation, question, or nitpick -> `abcd capture \\\"…\\\"`; a user-facing change you want to ship -> `abcd intent \\\"…\\\"`\\n\""
+  evidence: internal/surface/cli/intent_cli_test.go:327 — "if !strings.Contains(captureOut, \"user-facing change\") || !strings.Contains(captureOut, \"nitpick\")"
+
+Gap audit:
+- honoured:
+  - Sub-verb-free quoted-text create path files a lint-valid seeded draft under intents/drafts/, symmetric with capture
+    evidence: internal/core/intent/create.go:38 — "func CreateFromText(repoRoot, text string) (Intent, error) {"
+    evidence: internal/core/intent/create_test.go:88 — "// TestCreateFromTextPassesRecordLint runs the real intent_lifecycle record-lint"
+  - `intent new` preserved as a deprecation-warning alias (lean a) with byte-identical stdout
+    evidence: internal/surface/cli/cli.go:1096 — "Use:   \"new <text>\","
+  - Decision rule visible in both bare helps
+    evidence: internal/surface/cli/cli.go:1629 — "fmt.Fprint(w, ledgerDecisionRule)"
+- diverged:
+  - Scope named updates to commands/abcd/intent.md and docs/reference/commands.md; neither file exists in this tree, so the intent verb family has no plugin markdown surface — the routing/table edits have no native counterpart (recorded honestly as iss-105). The AC-level outcomes are met at the CLI surface instead.
+    evidence: .abcd/development/specs/closed/spc-7-abcd-intent-quoted-text-create-symmetric.md:54 — "Two scope bullets name files that do not exist in this tree"
+  - Promote is delivered as a markdown instruction pointing at the CLI create path rather than an engine-tested end-to-end flow; the reciprocal related_intents back-link is not written (no engine verb does it today).
+    evidence: commands/abcd/capture.md:73 — "skill-orchestrated, not a binary sub-verb. It hands the issue body to the intent"
+  - Typo-guard asymmetry accepted: any non-sub-verb first token becomes create text, so a mistyped sub-verb files a draft (recorded as iss-104); not required by any AC.
+    evidence: .abcd/development/specs/closed/spc-7-abcd-intent-quoted-text-create-symmetric.md:61 — "Typo-guard asymmetry accepted for now"
+- missing:
+  - No promote-path regression test landed with the spec despite the intent's Open Questions flagging it should; promote's issue-text-to-create handoff is exercised only via the shared create-engine tests, not a promote-specific test.
+    evidence: .abcd/development/intents/shipped/itd-46-abcd-intent-quoted-text-create-symmetric.md:102 — "regression tests for it should land with this intent's spec, not as a side note"
