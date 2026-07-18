@@ -136,6 +136,21 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
    syscall detail no longer escapes. Covered by
    `TestLoadRegistryRefusesSymlink` (now asserts the typed error + no leak).
 
+**Burst 2 (2026-07-17, session hardening loop) — the last lstat→read TOCTOU on the
+embark path, now closed:**
+- `lifeboat/graveyard_lessons.go:readGraveyardFile` read packed layer-1/2 files
+  (`archaeology.json`/`abandoned.json`) from an arbitrary target dir with the
+  `os.Lstat`(symlink+size)-then-`os.ReadFile` anti-pattern — the same swap window
+  the embark/pack conversions closed, but this one was missed. A regular in-cap
+  file could pass the checks then be swapped for a symlink-to-/dev/zero or a grown
+  file that `os.ReadFile` follows/reads unbounded. Converted to
+  `fsutil.ReadGuarded` (O_NOFOLLOW + regular-file-on-fd + size cap, one call);
+  ELOOP folded into the not-regular message so no raw syscall detail leaks.
+  Static inputs are handled identically (so no watched-fail); the fix closes the
+  race by construction, pinned by `TestIngestLessonsSymlinkedLayerFileRefused`.
+  **Sweep note:** a fresh grep confirms this was the *last* `lstat`/`Lstat`-then-
+  `ReadFile` pair over an attacker-reachable path in `internal/core/lifeboat`.
+
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
   `internal/termsafe.Sanitize`, extended with bidi/RTL-override + zero-width
