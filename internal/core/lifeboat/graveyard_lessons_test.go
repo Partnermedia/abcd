@@ -384,6 +384,33 @@ func TestIngestLessonsSymlinkedGraveyardRefused(t *testing.T) {
 	}
 }
 
+// TestIngestLessonsSymlinkedLayerFileRefused pins the per-file read guard: a
+// packed layer-1/2 file (graveyard/archaeology.json) that is a symlink must be
+// refused, never followed. This is the file-level guard that readGraveyardFile's
+// ReadGuarded conversion enforces on the open fd (O_NOFOLLOW), closing the
+// lstat→read TOCTOU — distinct from the graveyard/-directory symlink guard.
+func TestIngestLessonsSymlinkedLayerFileRefused(t *testing.T) {
+	dir := stdFixture(t)
+	archPath := filepath.Join(dir, "graveyard", "archaeology.json")
+	// Replace the real layer file with a symlink to an out-of-lifeboat target.
+	outside := filepath.Join(t.TempDir(), "attacker.json")
+	writeFile(t, outside, marshalIndent(t, stdArch()))
+	if err := os.Remove(archPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, archPath); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	raw := payload(t, Lesson{ID: "les-x", Lesson: "y", Confidence: ConfidenceHigh, Evidence: []string{"adr-12"}})
+	_, err := IngestLessons(dir, raw)
+	if err == nil {
+		t.Fatal("a symlinked graveyard layer file must be refused, not followed")
+	}
+	if strings.Contains(err.Error(), "too many levels of symbolic links") {
+		t.Errorf("symlink refusal leaked the raw ELOOP syscall detail: %v", err)
+	}
+}
+
 // TestIngestLessonsDeterministic proves two ingests of the same payload write a
 // byte-identical lessons.json, with entries sorted by id.
 func TestIngestLessonsDeterministic(t *testing.T) {

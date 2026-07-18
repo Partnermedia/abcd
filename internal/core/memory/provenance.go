@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
@@ -102,7 +103,12 @@ func LoadRegistry(path string) (map[string]any, error) {
 		if os.IsNotExist(err) {
 			return map[string]any{}, nil
 		}
-		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, fsutil.ErrTooBig) {
+		// A committed symlink where the index should be fails the O_NOFOLLOW open
+		// with ELOOP (a raw *os.PathError), not ErrNotRegular. Classify it with the
+		// other guarded refusals: a symlinked index is exactly "not a readable
+		// regular file", so a caller branching on RegistryFormatError treats it
+		// identically, and the raw ELOOP syscall detail never escapes.
+		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, fsutil.ErrTooBig) || errors.Is(err, syscall.ELOOP) {
 			return nil, &RegistryFormatError{Msg: fmt.Sprintf("sources index at %s is not a readable regular file within the size cap", path)}
 		}
 		return nil, err

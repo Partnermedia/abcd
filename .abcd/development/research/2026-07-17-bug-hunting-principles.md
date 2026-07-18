@@ -116,22 +116,77 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
    operands) and `scanner.New` reading `pii.json` under a hook. **Next step: triage
    each by "is the source repo attacker-controlled here?" and guard only those with
    `fsutil.ReadGuarded`.**
-2. **JSON decode-depth stack exhaustion (CWE-674) — a DoS class no finder has yet
-   swept.** `encoding/json` recurses per nesting level with no depth limit, so a
-   ~1 MB payload of `[[[[…` (well under every byte cap) can overflow the goroutine
-   stack. Every `json.Unmarshal` fed from a non-local source — `_provenance.json`
-   and `coverage.json` on the embark/pack path, the history index — is a candidate.
-   Byte caps do not bound nesting depth; a depth-limited decoder does.
+2. **JSON decode-depth stack exhaustion (CWE-674) — CLOSED by the toolchain
+   (verified 2026-07-17, Go 1.25.6).** `encoding/json` now enforces a max nesting
+   depth: a `[[[[…` payload returns a clean `"exceeded max depth"` error long
+   before the stack is at risk (confirmed empirically at 1 MB / ~500k levels).
+   No depth-limited decoder is needed on this toolchain — adding one would be
+   redundant dead defence duplicating the stdlib. Re-open only if the pinned Go
+   version regresses below 1.25.
 3. **The hand-rolled frontmatter parser (`internal/core/frontmatter/Fields`) has
    never been audited.** No YAML dependency exists, so this parser processes
    attacker markdown from embarked/packed lifeboats and ingested memory. Check
    duplicate-key precedence, unbounded key/value growth, and control-char/newline
    smuggling in field values that later flow to output or gate decisions. (The
    `capture` dup-key fix was in capture's own parser, not this one.)
-4. **Minor consistency gap:** `memory.LoadRegistry` wraps `ErrNotRegular`/`ErrTooBig`
-   in a typed `RegistryFormatError`, but a symlinked index fails the `O_NOFOLLOW`
-   *open* with a raw `*os.PathError` (ELOOP) that falls through — refused (good) but
-   untyped and path-leaking. Wrapping the ELOOP case is a candidate follow-up.
+4. **Minor consistency gap — FIXED (2026-07-17).** `memory.LoadRegistry` now folds
+   the `O_NOFOLLOW` symlink refusal (`syscall.ELOOP`) into the same
+   `RegistryFormatError` branch as `ErrNotRegular`/`ErrTooBig`, so a planted
+   symlink is classified like every other guarded refusal and the raw ELOOP
+   syscall detail no longer escapes. Covered by
+   `TestLoadRegistryRefusesSymlink` (now asserts the typed error + no leak).
+
+**Burst 2 (2026-07-17, session hardening loop) — the last lstat→read TOCTOU on the
+embark path, now closed:**
+- `lifeboat/graveyard_lessons.go:readGraveyardFile` read packed layer-1/2 files
+  (`archaeology.json`/`abandoned.json`) from an arbitrary target dir with the
+  `os.Lstat`(symlink+size)-then-`os.ReadFile` anti-pattern — the same swap window
+  the embark/pack conversions closed, but this one was missed. A regular in-cap
+  file could pass the checks then be swapped for a symlink-to-/dev/zero or a grown
+  file that `os.ReadFile` follows/reads unbounded. Converted to
+  `fsutil.ReadGuarded` (O_NOFOLLOW + regular-file-on-fd + size cap, one call);
+  ELOOP folded into the not-regular message so no raw syscall detail leaks.
+  Static inputs are handled identically (so no watched-fail); the fix closes the
+  race by construction, pinned by `TestIngestLessonsSymlinkedLayerFileRefused`.
+  **Sweep note:** a fresh grep confirms this was the *last* `lstat`/`Lstat`-then-
+  `ReadFile` pair over an attacker-reachable path in `internal/core/lifeboat`.
+
+**Burst 3 (2026-07-17, session hardening loop) — unguarded CLI operand reads:**
+- `cli.readSource` (the `--pages-json`/`--page-json` memory-ingest transport) and
+  `disembark coverage <report.json>` read untrusted operands with a raw
+  `os.ReadFile` — no symlink refusal, no size cap. `readSource` was doubly
+  exposed: its stdin branch used `io.ReadAll` with NO `LimitReader` either.
+  A symlinked operand was FOLLOWED (verified: old `os.ReadFile` returns the
+  link target's content — a read-what-you-point-at gap on host-produced /
+  cross-repo JSON), and `/dev/zero`/a huge file read unbounded (OOM/hang).
+  Both routed through `fsutil.ReadGuarded` (O_NOFOLLOW + regular-file + 8 MiB
+  cap) and the stdin branch bounded by a `LimitReader`, matching
+  `readLessonsPayload`/`readSynthesisPayload`/`readHookInput`. Watched-fail:
+  `TestReadSourceRefusesSymlinkAndOversize` (symlink followed before, refused
+  after). **Sweep note:** git subprocess surface audited clean this burst —
+  every `exec.Command("git",…)` uses fixed subcommands, env-scrub (`gitEnv`/
+  `ScrubbedEnv`), and passes paths via `--stdin -z` (check-ignore), so no
+  argument-injection or `-`-leading-flag vector. `readLessonsPayload`/
+  `readSynthesisPayload` still carry a benign lstat→read TOCTOU (guarded, but
+  the swap window remains) — a candidate follow-up, lower priority as the path
+  is user-typed.
+
+**Burst 6 (2026-07-18, session hardening loop) — config-override surface audited
+CLEAN; last read-guard TOCTOU closed.** The suspected config-downgrade bypass does
+NOT exist: a repo `.abcd/config` cannot lower a bundled hard_fail pattern below its
+floor (`applyFloor` clamps severity on BOTH patterns and identity kinds; rank
+ordering correct, unknown severities rank least-severe and fail to floor), a
+bundled pattern's REGEX is non-replaceable (closing the never-match-regex
+downgrade), a malformed override regex fails closed, and the merge is
+all-or-nothing. The config skip-list is additive but bounded by the trusted-
+worktree model (the local `.abcd/config` is the repo owner's). Only remaining
+read-guard item closed: `readLessonsPayload`/`readSynthesisPayload` converted from
+guarded-but-lstat→ReadFile (a benign swap window on a user-typed path) to the
+shared `readGuardedOperand` (fsutil.ReadGuarded), so EVERY CLI operand read now
+uses the one-call guarded primitive. **Convergence:** after six bursts the
+security-critical surfaces — redaction patterns (bursts 4-5), config merge (6),
+identity matchers, the Redact rewrite, filesystem reads (1-3), and the git
+subprocess surface (3) — are audited and hardened; what remains is nitpick-tier.
 
 **Burst 4 (2026-07-18, session hardening loop) — a REDACTION BYPASS (highest
 severity of the loop): secrets survive a `_` suffix.** Nine hard_fail token
