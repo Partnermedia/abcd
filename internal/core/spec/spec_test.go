@@ -31,6 +31,20 @@ func writeFile(t *testing.T, root, rel, content string) {
 	}
 }
 
+// TestBodyIsStubLockstep proves the stub detector and the minted template can
+// never drift: a freshly rendered spec body is a stub, and a body whose
+// placeholder was replaced with real content is not.
+func TestBodyIsStubLockstep(t *testing.T) {
+	minted := renderSpec("spc-1", "a-slug", "itd-9")
+	if !BodyIsStub(minted) {
+		t.Errorf("BodyIsStub(renderSpec(...)) = false, want true (template and detector drifted)")
+	}
+	written := "---\nid: spc-1\nslug: a-slug\nintent: itd-9\n---\n# a-slug\n\n## Summary\n\nA real design record: scope, approach, AC mapping.\n"
+	if BodyIsStub(written) {
+		t.Errorf("BodyIsStub(written body) = true, want false")
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string

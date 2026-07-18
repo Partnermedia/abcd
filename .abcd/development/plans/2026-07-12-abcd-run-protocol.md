@@ -62,6 +62,13 @@ decision, adjudication, or premise change** rather than a self-contained fix (th
 names how to tell — e.g. a ledger issue whose body records a maintainer design-STOP),
 do **not** work it. Record why and move to the next; if none remain, STOP and report.
 
+**Step 0 for any intent-backed item:** run `abcd intent ready <itd-N>`. A nonzero
+exit is a **SKIP** — journal the rendered findings and move on. Never run
+`abcd intent plan`, author acceptance criteria, or synthesize a spec in an
+unattended run: planning is a human sign-off act (the machine-checkable form of
+the fail-closed rule iss-83 records for run plans — a missing gate is a STOP,
+never an invitation to improvise one).
+
 ## ATTEMPT JOURNAL — write-ahead, JSON, strike-keyed on the stable id
 
 1. **Before** touching an item, append to `run-journal.json` under its stable id:
