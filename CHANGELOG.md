@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-18
+
 ### Security
 
 - **The redaction scanner no longer lets a secret survive a trailing underscore.**
@@ -24,6 +26,15 @@ called out in a **Breaking** section.
   charset also excludes `_`) and the Anthropic/OpenAI `sk-ant-`/`sk-proj-`/
   `sk-svcacct-` keys (a minimum-length key ending in `-`), so no token pattern
   relies on a trailing word boundary.
+- **Untrusted file reads are guarded against symlink-follow and unbounded
+  reads.** Reads of content that can originate outside the local worktree — the
+  sources-index registry, packed-lifeboat layer files, and the CLI JSON operands
+  (`disembark coverage`, the memory `--pages-json`/`--page-json` transport, and
+  the lesson/synthesis payloads) — now route through a single guarded primitive
+  (`O_NOFOLLOW` + regular-file on the open fd + size cap, in one call). Previously
+  some followed a symlink to its target's content or read an endless/oversized
+  file unbounded, and a symlinked registry surfaced a raw, path-leaking error;
+  all are refused consistently, closing a class of `lstat`→`read` swap windows.
 
 ### Added
 
