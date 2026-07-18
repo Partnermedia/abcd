@@ -99,17 +99,17 @@ func DefaultPatterns() []Pattern {
 		},
 		{
 			Name: "anthropic_key", Kind: "token:anthropic", Label: "Anthropic API key (sk-ant-)",
-			Re: regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{40,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_-]{40,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
 			Name: "openai_project_key", Kind: "token:openai_project", Label: "OpenAI project key (sk-proj-)",
-			Re: regexp.MustCompile(`\bsk-proj-[A-Za-z0-9_-]{40,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bsk-proj-[A-Za-z0-9_-]{40,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
 			Name: "openai_service_account", Kind: "token:openai_svcacct", Label: "OpenAI service account key (sk-svcacct-)",
-			Re: regexp.MustCompile(`\bsk-svcacct-[A-Za-z0-9_-]{40,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bsk-svcacct-[A-Za-z0-9_-]{40,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
@@ -121,8 +121,13 @@ func DefaultPatterns() []Pattern {
 			Suggestion: "DELETE AND ROTATE — also rotate corresponding secret in IAM",
 		},
 		{
+			// No trailing \b: the charset [A-Za-z0-9-] excludes '_' (a word char), so
+			// a token followed by '_' had the same miss as the ghp_ family above; and
+			// the mixed '-' also has the google_api_key axis. No token pattern in this
+			// set relies on a trailing \b — the leading \b + prefix + minimum length
+			// bound the match, greedy matching redacts the full token.
 			Name: "slack_token", Kind: "token:slack", Label: "Slack token (xox*)",
-			Re: regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}\b`), Severity: SeverityHardFail,
+			Re: regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}`), Severity: SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE",
 		},
 		{
@@ -147,7 +152,7 @@ func DefaultPatterns() []Pattern {
 		},
 		{
 			Name: "jwt_shaped", Kind: "token:jwt_shaped", Label: "JWT-shaped token",
-			Re:         regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b`),
+			Re:         regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`),
 			Severity:   SeverityHardFail,
 			Suggestion: "Review — may be benign sample or real bearer token",
 		},

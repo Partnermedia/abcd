@@ -29,6 +29,8 @@ func TestSecretSurvivesUnderscoreSuffix(t *testing.T) {
 		{"token:aws_access_key", "AKIA" + r("A", 16)},
 		{"token:stripe_live", "sk_live_" + r("a", 24)},
 		{"token:stripe_test", "sk_test_" + r("a", 24)},
+		// Slack's charset [A-Za-z0-9-] also excludes '_', so it had the same gap.
+		{"token:slack", "xoxb-" + r("a", 16)},
 	}
 	for _, c := range cases {
 		// Bare (control): must be detected.
@@ -44,6 +46,29 @@ func TestSecretSurvivesUnderscoreSuffix(t *testing.T) {
 		// caught (redacting a superset is safe).
 		if !hasKind(scanLine(c.secret+"AAAA"), c.kind) {
 			t.Errorf("%s: secret not detected with an alnum suffix", c.kind)
+		}
+	}
+}
+
+// TestDashEndingSecretStillCaught covers the other trailing-\b failure mode (the
+// original google_api_key axis, extended): a mixed-class token ([A-Za-z0-9_-])
+// whose match ends in '-' at the minimum length, followed by a non-word char.
+// The last matched char '-' is non-word and the next char is non-word, so a
+// trailing \b (between two non-word chars) can never hold and RE2 cannot shorten
+// below the minimum — the secret is missed. Dropping the trailing \b closes it.
+func TestDashEndingSecretStillCaught(t *testing.T) {
+	r := strings.Repeat
+	cases := []struct {
+		kind   string
+		secret string
+	}{
+		{"token:anthropic", "sk-ant-" + r("a", 39) + "-"},   // 40 body chars ending in '-'
+		{"token:openai_project", "sk-proj-" + r("a", 39) + "-"},
+		{"token:openai_svcacct", "sk-svcacct-" + r("a", 39) + "-"},
+	}
+	for _, c := range cases {
+		if !hasKind(scanLine(c.secret+" trailing"), c.kind) {
+			t.Errorf("%s: a minimum-length secret ending in '-' was missed before a non-word char (%q)", c.kind, c.secret)
 		}
 	}
 }

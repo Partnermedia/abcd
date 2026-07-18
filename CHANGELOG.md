@@ -20,7 +20,10 @@ called out in a **Breaking** section.
   concatenation, `token=ghp_..._old`) had no boundary and slipped through
   unredacted into the stored transcript. The trailing `\b` is dropped (matching
   the existing Google-key fix); the leading boundary, prefix, and minimum length
-  keep the match precise.
+  keep the match precise. The same fix extends to Slack `xox` tokens (whose
+  charset also excludes `_`) and the Anthropic/OpenAI `sk-ant-`/`sk-proj-`/
+  `sk-svcacct-` keys (a minimum-length key ending in `-`), so no token pattern
+  relies on a trailing word boundary.
 
 ### Added
 

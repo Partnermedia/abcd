@@ -147,7 +147,16 @@ Fixed axis-identically to the earlier google_api_key fix: **drop the trailing
 redacts the full token). Watched-fail: `TestSecretSurvivesUnderscoreSuffix`
 (secret survived the `_` suffix before, redacted after). Fixed-length patterns
 (AKIA{16}, github_pat {22}_{59}) additionally missed on ANY alnum suffix, now
-also closed. **Checked safe (unchanged):** the mixed-class variable-length
+also closed.
+
+  BURST 5 EXTENSION — verification (not reasoning) found two more of the SAME
+  class: `slack_token` (`xox`) shares the `_`-suffix miss (its `[A-Za-z0-9-]`
+  class also excludes `_`; the prior "slack clean" note only checked the
+  `-`/length axis), and `sk-ant-`/`sk-proj-`/`sk-svcacct-` miss a minimum-length
+  token ending in `-` before a non-word char (the google_api_key axis). Every
+  remaining token pattern's trailing `\b` was dropped, so the invariant is now
+  class-wide: NO token pattern relies on a trailing `\b`. Extra tests:
+  slack in `TestSecretSurvivesUnderscoreSuffix`, `TestDashEndingSecretStillCaught`. **Checked safe (unchanged):** the mixed-class variable-length
 patterns (sk-ant-/sk-proj-/sk-svcacct- {40,}, xox {10,}, jwt {10,}) whose class
 includes `_`/`-` — RE2 shortens them to a word-char boundary, so their trailing
 `\b` is not a miss (matches the earlier slack_token analysis).
