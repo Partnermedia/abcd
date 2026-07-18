@@ -62,7 +62,7 @@ func TestDashEndingSecretStillCaught(t *testing.T) {
 		kind   string
 		secret string
 	}{
-		{"token:anthropic", "sk-ant-" + r("a", 39) + "-"},   // 40 body chars ending in '-'
+		{"token:anthropic", "sk-ant-" + r("a", 39) + "-"}, // 40 body chars ending in '-'
 		{"token:openai_project", "sk-proj-" + r("a", 39) + "-"},
 		{"token:openai_svcacct", "sk-svcacct-" + r("a", 39) + "-"},
 	}
