@@ -680,25 +680,14 @@ func newEmbarkCommand(asJSON *bool) *cobra.Command {
 // readLessonsPayload reads the untrusted lesson JSON behind the trust guards,
 // mirroring the intent verdict reader: a file must be a regular, non-symlink,
 // size-capped file; "-" reads stdin bounded to the same cap. The cap is the
-// exported lifeboat.MaxLessonsBytes.
+// exported lifeboat.MaxLessonsBytes. The file read uses fsutil.ReadGuarded so
+// the symlink refusal, regular-file check, and size cap all happen on the open
+// fd in one call — no lstat→ReadFile swap window.
 func readLessonsPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
 		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxLessonsBytes))
 	}
-	fi, err := os.Lstat(spec)
-	if err != nil {
-		return nil, err
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("%s is a symlink (refusing to follow)", spec)
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", spec)
-	}
-	if fi.Size() > lifeboat.MaxLessonsBytes {
-		return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, lifeboat.MaxLessonsBytes)
-	}
-	return os.ReadFile(spec)
+	return readGuardedOperand(spec, lifeboat.MaxLessonsBytes)
 }
 
 // readSynthesisPayload reads an untrusted synthesis payload (principles,
@@ -714,20 +703,26 @@ func readSynthesisPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
 		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxSynthesisBytes))
 	}
-	fi, err := os.Lstat(spec)
+	return readGuardedOperand(spec, lifeboat.MaxSynthesisBytes)
+}
+
+// readGuardedOperand reads an untrusted operand file behind fsutil.ReadGuarded
+// (O_NOFOLLOW + regular-file on the open fd + size cap, one call, no lstat→read
+// TOCTOU) and maps the guard's sentinels to clean, path-scrubbed messages —
+// the shared body behind readLessonsPayload/readSynthesisPayload's file branch.
+func readGuardedOperand(spec string, cap int64) ([]byte, error) {
+	data, err := fsutil.ReadGuarded(spec, cap)
 	if err != nil {
-		return nil, err
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+			return nil, fmt.Errorf("%s is not a readable regular file (a symlink or non-regular operand is refused)", spec)
+		case errors.Is(err, fsutil.ErrTooBig):
+			return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, cap)
+		default:
+			return nil, err
+		}
 	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("%s is a symlink (refusing to follow)", spec)
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", spec)
-	}
-	if fi.Size() > lifeboat.MaxSynthesisBytes {
-		return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, lifeboat.MaxSynthesisBytes)
-	}
-	return os.ReadFile(spec)
+	return data, nil
 }
 
 // maxHookStdinBytes caps the hook payload read from stdin (trust boundary).
@@ -2121,18 +2116,7 @@ func readSource(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
 		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxOperandJSONBytes))
 	}
-	data, err := fsutil.ReadGuarded(spec, maxOperandJSONBytes)
-	if err != nil {
-		switch {
-		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
-			return nil, fmt.Errorf("%s is not a readable regular file (a symlink or non-regular operand is refused)", spec)
-		case errors.Is(err, fsutil.ErrTooBig):
-			return nil, fmt.Errorf("%s exceeds the %d-byte cap", spec, maxOperandJSONBytes)
-		default:
-			return nil, err
-		}
-	}
-	return data, nil
+	return readGuardedOperand(spec, maxOperandJSONBytes)
 }
 
 // newHistoryCommand builds the `history` sub-tree over internal/core/history —

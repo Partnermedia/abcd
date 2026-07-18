@@ -153,6 +153,23 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
   the swap window remains) — a candidate follow-up, lower priority as the path
   is user-typed.
 
+**Burst 6 (2026-07-18, session hardening loop) — config-override surface audited
+CLEAN; last read-guard TOCTOU closed.** The suspected config-downgrade bypass does
+NOT exist: a repo `.abcd/config` cannot lower a bundled hard_fail pattern below its
+floor (`applyFloor` clamps severity on BOTH patterns and identity kinds; rank
+ordering correct, unknown severities rank least-severe and fail to floor), a
+bundled pattern's REGEX is non-replaceable (closing the never-match-regex
+downgrade), a malformed override regex fails closed, and the merge is
+all-or-nothing. The config skip-list is additive but bounded by the trusted-
+worktree model (the local `.abcd/config` is the repo owner's). Only remaining
+read-guard item closed: `readLessonsPayload`/`readSynthesisPayload` converted from
+guarded-but-lstat→ReadFile (a benign swap window on a user-typed path) to the
+shared `readGuardedOperand` (fsutil.ReadGuarded), so EVERY CLI operand read now
+uses the one-call guarded primitive. **Convergence:** after six bursts the
+security-critical surfaces — redaction patterns (bursts 4-5), config merge (6),
+identity matchers, the Redact rewrite, filesystem reads (1-3), and the git
+subprocess surface (3) — are audited and hardened; what remains is nitpick-tier.
+
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
   `internal/termsafe.Sanitize`, extended with bidi/RTL-override + zero-width
