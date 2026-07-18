@@ -1,6 +1,6 @@
 # `/abcd:embark` — Unpack a Lifeboat
 
-> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The reconciled prose lands with the unpacker (the surface is `staged`, not shipped — no `embark` verb or `commands/abcd/embark.md` exists yet). Four changes:
+> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The reconciled prose lands with the unpacker (the `embark` verb and `commands/abcd/embark.md` now ship — with adr-35's out-of-tree model, not this chapter's in-tree prose). Four changes:
 >
 > | This chapter says | adr-35 decides |
 > |---|---|

@@ -1,6 +1,6 @@
 # `/abcd:disembark` — Pack a Lifeboat
 
-> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** This chapter still describes the **in-tree** disembark model. Four of its claims are no longer the decision, and the reconciled prose lands with the packer (the surface is `staged`, not shipped — no `disembark` verb or `commands/abcd/disembark.md` exists yet):
+> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** This chapter still describes the **in-tree** disembark model. Four of its claims are no longer the decision, and the reconciled prose lands with the packer (the `disembark` verb and `commands/abcd/disembark.md` now ship — with the out-of-tree, coverage-experiment model of adr-35, not this chapter's in-tree prose):
 >
 > | This chapter says | adr-35 decides |
 > |---|---|

@@ -76,10 +76,10 @@ Some things the project needs aren't user-facing. Often, these are cross-cutting
 
 You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. `abcd` has a skill that ingests that material and produces a plain-language draft of your project's brief. You read it together. The parts that feel fuzzy, you sharpen with a Socratic interview the framework provides. By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about.
 
-Once both of you have agreed on the brief, the facilitator begins to plan implementation while you continue to think of additional ideas and/or features. Capturing intents is as simple as typing:
+Once both of you have agreed on the brief, the facilitator begins to plan implementation while you continue to think of additional ideas and/or features. Capturing an intent is as simple as typing:
 
 ```bash
-/abcd:intent "<one-line idea>"
+abcd intent "<one-line idea>"
 ```
 
 Each captured intent is a press release, written as if the change has already shipped, with a named user feeling the difference. Your facilitator handles the rest of the lifecycle — turning your *why* into engineering work, surfacing cross-cutting concerns, and running the fidelity reviewer when the work lands. You stay in the seat where your judgement matters most: Setting the why at the start, and reading the verdict at the end.

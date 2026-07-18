@@ -65,11 +65,13 @@ reconsidered — the gate is real, not a rubber stamp.)
 
 itd-20 was planned assuming a spc-17 probe stub for the bare top-level command
 would be *replaced*. Investigation found NO such stub: the spc-17 work is
-credited with probe/bare renders for the *sub-verb* surfaces — of which only
-`/abcd:launch` is on a shipped surface today. `/abcd:disembark`, `/abcd:embark`,
-and an `/abcd:intent` surface are design targets with no command file
-(`commands/abcd/` ships `ahoy`, `capture`, `docs`, `history`, `launch`,
-`memory`, `version`) and no CLI verb. The investigation found no spc-17 probe STUB behind the
+credited with probe/bare renders for the *sub-verb* surfaces. The `disembark`,
+`embark`, `launch`, and `intent` CLI verbs all ship today; of their plugin
+command files, `disembark`, `embark`, and `launch` are present while `intent`
+has no `commands/abcd/intent.md` yet (iss-105 — the intent verb is CLI-only).
+`commands/abcd/` ships `ahoy`, `audit`, `capture`, `consult`, `disembark`,
+`docs`, `embark`, `history`, `ingest`, `launch`, `memory`, `prepare-this-repo`,
+and `version` (13 files). The investigation found no spc-17 probe STUB behind the
 top-level command to replace — the "stub replacement" premise is therefore
 recorded here as not-applicable. The top-level command file itself is present
 today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
