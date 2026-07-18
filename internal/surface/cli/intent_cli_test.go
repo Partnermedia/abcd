@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -310,6 +311,92 @@ func TestIntentBareCreatesNothing(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(filepath.Join(repo, cliDrafts)); len(entries) != 0 {
 		t.Fatalf("bare intent created %d drafts files, want 0", len(entries))
+	}
+}
+
+// exitCodeOf maps an Execute() error to the process exit code Run() would use.
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		return coded.ExitCode()
+	}
+	return 1
+}
+
+// TestIntentReadyNotReadyExit1 is the refusal half of the gate's exit contract:
+// a draft renders the full NOT READY report on stdout and exits 1 with an EMPTY
+// message (the report is the output; the code is the only extra signal).
+func TestIntentReadyNotReadyExit1(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliDrafts+"/itd-10-alpha.md", cliDraftWithAC("itd-10", "alpha"))
+
+	out, errb, err := runCLISplit(t, "intent", "ready", "itd-10")
+	if exitCodeOf(err) != 1 {
+		t.Fatalf("exit = %d (%v), want 1", exitCodeOf(err), err)
+	}
+	if err.Error() != "" {
+		t.Fatalf("not-ready must carry an empty message, got %q", err.Error())
+	}
+	if !strings.Contains(out, "NOT READY") || !strings.Contains(out, "abcd intent plan itd-10") {
+		t.Fatalf("report missing verdict or remedy:\n%s\n%s", out, errb)
+	}
+}
+
+func TestIntentReadyGreenExit0(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	out := string(runCLI(t, "intent", "ready", "itd-10"))
+	if !strings.Contains(out, "READY") || strings.Contains(out, "NOT READY") {
+		t.Fatalf("green path should render READY:\n%s", out)
+	}
+}
+
+func TestIntentReadyUnknownExit2(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	_, err := runCLIErr(t, "intent", "ready", "itd-999")
+	if exitCodeOf(err) != 2 {
+		t.Fatalf("exit = %d (%v), want 2 (structural fault)", exitCodeOf(err), err)
+	}
+}
+
+// TestIntentReadyJSON proves the machine seam: --json emits the full ReadyResult
+// (4 fixed checks) even on the not-ready path, alongside exit 1.
+func TestIntentReadyJSON(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliDrafts+"/itd-10-alpha.md", cliDraftWithAC("itd-10", "alpha"))
+
+	out, _, err := runCLISplit(t, "intent", "ready", "itd-10", "--json")
+	if exitCodeOf(err) != 1 {
+		t.Fatalf("exit = %d (%v), want 1", exitCodeOf(err), err)
+	}
+	var got struct {
+		Ready  bool `json:"ready"`
+		Checks []struct {
+			Name   string `json:"name"`
+			OK     bool   `json:"ok"`
+			Remedy string `json:"remedy"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("ready --json not JSON: %v\n%s", err, out)
+	}
+	if got.Ready || len(got.Checks) != 4 {
+		t.Fatalf("ready --json = %+v, want ready=false with 4 checks", got)
+	}
+	if got.Checks[0].Name != "bucket" || got.Checks[0].OK || got.Checks[0].Remedy == "" {
+		t.Fatalf("bucket check = %+v, want fail with remedy", got.Checks[0])
 	}
 }
 

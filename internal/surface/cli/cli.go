@@ -1139,6 +1139,50 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 		},
 	})
 
+	// ready <itd-N> — the read-only implement-readiness gate. Exit codes are the
+	// machine seam an autonomous run gates on: 0 ready, 1 not ready (the rendered
+	// report is the output, empty message — the embark-conflicts precedent), 2
+	// structural fault.
+	intentCmd.AddCommand(&cobra.Command{
+		Use:   "ready <itd-N>",
+		Short: "Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := intent.Ready(cwd, args[0])
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd intent ready: " + err.Error()}
+			}
+			if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				verdict := "READY"
+				if !res.Ready {
+					verdict = "NOT READY"
+				}
+				fmt.Fprintf(w, "abcd intent ready — %s %s (%s)\n", termsafe.Sanitize(res.IntentID), verdict, termsafe.Sanitize(res.Bucket))
+				for _, c := range res.Checks {
+					mark := "[ ok ]"
+					if !c.OK {
+						mark = "[fail]"
+					}
+					// Detail/remedy interpolate frontmatter values, not charset-validated.
+					fmt.Fprintf(w, "  %s %s: %s\n", mark, c.Name, termsafe.Sanitize(c.Detail))
+					if c.Remedy != "" {
+						fmt.Fprintf(w, "         remedy: %s\n", termsafe.Sanitize(c.Remedy))
+					}
+				}
+			}); rerr != nil {
+				return rerr
+			}
+			if !res.Ready {
+				return &exitError{Code: 1}
+			}
+			return nil
+		},
+	})
+
 	// link <itd-N> <spc-N> — retroactively set spec_id on a planned intent.
 	intentCmd.AddCommand(&cobra.Command{
 		Use:   "link <itd-N> <spc-N>",

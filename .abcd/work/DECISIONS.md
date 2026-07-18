@@ -615,3 +615,11 @@ parallel-agent merge contention bites.
   reach — the iss-108 capture's "systemic" framing was corrected on resolve. Any
   future release-scaffolding intent should scaffold the fixed two-commit
   (roll -> receipts) pattern, not the original self-referential one.
+- 2026-07-18 — Acceptance-criteria sign-off is implicit in a human running
+  `abcd intent plan` (itd-94): no `ac_confirmed` frontmatter field, keeping
+  directory-as-truth pure and adding no forgeable schema surface. The gate
+  (`abcd intent ready`) distinguishes only drafts vs planned; agents are barred
+  from unattended planning at the protocol layer (run-protocol step 0 +
+  `/abcd:intent`'s interview script: `plan` is never run without the human's
+  explicit in-session confirmation). Escalation path if violations appear: an
+  `ac_confirmed_by:` field is lint-legal today and slots in as a fifth check.

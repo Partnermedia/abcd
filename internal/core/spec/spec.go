@@ -129,6 +129,17 @@ func specNum(id string) int {
 	return n
 }
 
+// stubMarker is the opening of the author-guidance placeholder renderSpec mints.
+// BodyIsStub keys on the same constant, so the template and the detector cannot
+// drift (lockstep-tested).
+const stubMarker = "_Draft: describe what "
+
+// BodyIsStub reports whether a spec body still carries the minted placeholder —
+// i.e. no human has written the design record yet.
+func BodyIsStub(content string) bool {
+	return strings.Contains(content, stubMarker)
+}
+
 // renderSpec is the minimal spec-file body: frontmatter carrying the id, slug,
 // and the load-bearing intent link, plus a title and a Summary placeholder.
 func renderSpec(id, slug, intentID string) string {
@@ -142,8 +153,8 @@ func renderSpec(id, slug, intentID string) string {
 	b.WriteString("## Summary\n\n")
 	// A clear author-guidance placeholder, not a bare "TODO" that reads as drift:
 	// the spec body is the design record the intent's fidelity review audits against.
-	fmt.Fprintf(&b, "_Draft: describe what %s delivers for %s — scope, approach, and how "+
+	fmt.Fprintf(&b, "%s%s delivers for %s — scope, approach, and how "+
 		"it satisfies the intent's Acceptance Criteria. This spec is the design record "+
-		"the fidelity review audits against._\n", id, intentID)
+		"the fidelity review audits against._\n", stubMarker, id, intentID)
 	return b.String()
 }

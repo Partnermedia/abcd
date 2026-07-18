@@ -10,6 +10,24 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
+  verb reporting whether an intent may be implemented now: planned
+  (directory-as-truth), enumerable Acceptance Criteria, a bidirectional spec
+  link, and a spec body written past its minted stub. Every check carries a
+  reason and, when failing, the exact remedy command. The exit code is the
+  machine seam: 0 ready, 1 not ready (the rendered report is the output), 2
+  structural fault — so an autonomous run can gate on it (step 0 of the run
+  protocol) instead of re-deriving readiness from prose, and an unplanned
+  intent is refused rather than improvised against.
+- **`/abcd:intent` plugin command surface** (`commands/abcd/intent.md`),
+  covering the full verb family — status, quoted-text create, `ready`, `plan`,
+  `link`, `review`/`ingest` — plus the host-run planning interview an unready
+  intent is routed to: the human confirms the press release, resolves open
+  questions, and accepts, edits, or strikes every acceptance criterion before
+  `abcd intent plan` is run as their sign-off act.
+
 ## [0.3.0] - 2026-07-18
 
 ### Security
