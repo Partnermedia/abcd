@@ -4,7 +4,8 @@
 > verb exists on the shipped binary, no `commands/abcd/reflect.md` plugin command
 > exists, and nothing this page describes is shipped: there is no `reflect-writer`
 > capability or `--allow-empty`/`--overwrite` flag in the binary, no
-> `reflection-composer` agent (no `agents/` catalog ships), and no
+> `reflection-composer` agent (the `agents/` catalog ships, but has no
+`reflection-composer.md`), and no
 > `.abcd/logbook/` phase-audit tree or `.abcd/retrospectives/` output tree in the
 > working tree. The backing intent sits in
 > [`intents/planned/`](../../intents/planned/itd-24-reflect-command.md) (itd-24);

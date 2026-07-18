@@ -28,6 +28,9 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
   symlink, hook) that `install` touches but never otherwise
   re-validates.
   Distinct from bare invocation, which only shows summary status + help.
+- **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
+  does not match `.abcd/config/identity.json` (the commit-identity gate).
+  Read-only; a CLI-only operator/CI check with no slash-command surface.
 - **Later phase: `/abcd:ahoy destroy`** — nuclear uninstall (per itd-10): removes
   `.abcd/` namespace too. Distinct from `uninstall`'s reversible behaviour.
 

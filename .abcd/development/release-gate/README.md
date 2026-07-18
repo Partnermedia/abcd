@@ -46,6 +46,20 @@ against the exact commit to be tagged:
 
 ## Recording the semantic verdict
 
+**A receipt names the commit its reviewer READ, and lives in a LATER commit** —
+it can never sit in the tree of the commit it names, because adding it would
+change that commit's sha. Under changelog-driven auto-release (adr-37) the
+release branch is therefore exactly two commits: the CHANGELOG roll (the
+release-content commit the reviewers read), then the semantic receipts naming
+it. On merge, the released tree carries the receipts, and `release.yml` arms the
+gate with the *content* commit (`<merge>^2^` for an auto-release merge, `<tag>^`
+for a manual tag on the receipts commit) — not the merge commit — so
+`subject.digest.gitCommit` still matches the armed commit exactly and the gate
+stays strict. (Before this, the gate armed with the tagged merge commit, whose
+tree can never hold a receipt naming itself — an unsatisfiable self-reference
+that fail-closed every public release; it was dormant until the public flip, so
+it was never exercised.)
+
 Each semantic pass records its outcome as a **commit-sha-keyed receipt** — a
 Verification Summary Attestation (VSA) shape carrying `verificationResult`
 (PROMOTE / HOLD), the pinned judge-model snapshot, the detector version, and the

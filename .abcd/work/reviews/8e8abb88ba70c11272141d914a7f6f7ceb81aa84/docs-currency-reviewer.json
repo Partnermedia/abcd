@@ -1,0 +1,16 @@
+{
+  "subject": { "digest": { "gitCommit": "8e8abb88ba70c11272141d914a7f6f7ceb81aa84" } },
+  "verifier": { "id": "docs-currency-reviewer@release" },
+  "timeVerified": "2026-07-18T09:53:04Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-4-8",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.3.0"
+  },
+  "categories": { "false-claim": 0, "undocumented-surface": 0, "fictional-layout": 0, "criterion-violation": 0, "stale-count": 0 },
+  "failing": [],
+  "_reviewProvenance": "Host-run agent-harness semantic review. The docs/brief/binary surface was reviewed and PROMOTED at commit bf89984 (both detectors, zero findings); this content commit (8e8abb88ba70c11272141d914a7f6f7ceb81aa84) differs only by non-surface CI/tooling (scripts/check-reviews.sh), which neither detector inspects, so the surface verdict holds. See PR for the full review trail."
+}

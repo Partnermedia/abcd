@@ -25,7 +25,8 @@ Summarise the JSON for the user: `open_count` / `resolved_count` /
 
 **Which ledger?** A half-formed observation, question, or nitpick goes to
 `/abcd:capture "…"`; a user-facing change you want to ship goes to
-`/abcd:intent "…"`.
+`abcd intent "…"` (the intent verb is CLI-only — there is no `/abcd:intent`
+plugin command yet).
 
 ## Capture an issue
 

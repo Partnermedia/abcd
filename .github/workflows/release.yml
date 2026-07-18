@@ -143,6 +143,10 @@ jobs:
           # commit verify gated. inputs.ref (resolved SHA) overrides on the
           # workflow_call re-release path, exactly as in verify.
           ref: ${{ inputs.ref || github.sha }}
+          # Full history: the semantic-gate resolve step below walks HEAD^2^/HEAD^
+          # to find the reviewed content commit, which a shallow (depth-1) clone
+          # cannot reach — it would abort and fail-close every release.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Record the default-branch tip (no-branch-commit tripwire)
@@ -179,14 +183,51 @@ jobs:
       # activates on the public flip. Signing here is provenance/tamper-evidence,
       # not committer-forgery-proof (a forged committed receipt would be signed
       # too) — that residual is bounded by the identity gate + branch protection.
+      - name: Resolve the reviewed content commit (the receipt subject)
+        if: ${{ !github.event.repository.private }}
+        # A semantic-pass receipt names the commit its reviewer READ, and lives in
+        # a LATER commit — a receipt can never sit in the tree of the commit it
+        # names (adding it would change that commit's sha). So the receipts are the
+        # final commit on the release branch and name the immediately-preceding
+        # release-content commit; the gate is armed with THAT content commit, whose
+        # receipts are present in the released tree. Derivation, fail-closed:
+        #   - merge (workflow_call / auto-release): the receipts commit is the
+        #     merged branch tip (github.sha^2); the content it names is its parent
+        #     (github.sha^2^).
+        #   - direct tag push (manual escape hatch): the tag is placed on the
+        #     receipts commit, so the content is its parent (github.sha^).
+        # No ${{ }} interpolation in the script (injection-safe): it reads github
+        # refs via git and writes only $GITHUB_ENV.
+        run: |
+          set -euo pipefail
+          # Resolve against HEAD — the exact commit this job checked out
+          # (inputs.ref on the re-release heal path, else github.sha). Deriving
+          # from GITHUB_SHA would diverge from the checked-out tree on the heal
+          # path (GITHUB_SHA is then the moved-on main tip) and arm the gate with
+          # a commit whose receipts are not in the released tree.
+          released="$(git rev-parse --verify HEAD)"
+          if git rev-parse -q --verify "HEAD^2" >/dev/null 2>&1; then
+            content="$(git rev-parse --verify "HEAD^2^")"
+          else
+            content="$(git rev-parse --verify "HEAD^")"
+          fi
+          test -n "$content"
+          # The named content commit must be an ancestor of the released commit —
+          # a receipt for anything off the release lineage is refused.
+          git merge-base --is-ancestor "$content" "$released"
+          echo "CONTENT_SHA=$content" >> "$GITHUB_ENV"
+          echo "reviewed content commit: $content"
+
       - name: Semantic-gate receipts (fail-closed)
         if: ${{ !github.event.repository.private }}
         # Arms receipt_gate from the CLI (the workflow, not the in-tree config, is
         # the trust root for the decision to gate and the required-gates list).
+        # CONTENT_SHA reaches this step's environment via $GITHUB_ENV (exported by
+        # the resolve step above) — no per-step env: passthrough needed.
         run: |
           set -euo pipefail
-          test -n "${GITHUB_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
-          go run ./cmd/record-lint --release-gate "$GITHUB_SHA" \
+          test -n "${CONTENT_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
+          go run ./cmd/record-lint --release-gate "$CONTENT_SHA" \
             --require-gate docs-currency-reviewer \
             --require-gate iss35-brief-surface-crosscheck
 
@@ -194,25 +235,26 @@ jobs:
         if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
-          subject-path: .abcd/work/reviews/${{ github.sha }}/*.json
+          subject-path: .abcd/work/reviews/${{ env.CONTENT_SHA }}/*.json
           predicate-type: https://abcd.dev/attestations/semantic-release-gate/v1
-          # Only the immutable commit sha — never github.ref_name (an
+          # Only the immutable resolved content sha — never github.ref_name (an
           # attacker-influenceable tag name would inject into this signed JSON).
           predicate: |
-            {"commit": "${{ github.sha }}", "verificationResult": "PROMOTE"}
+            {"commit": "${{ env.CONTENT_SHA }}", "verificationResult": "PROMOTE"}
 
       - name: Verify the semantic-gate receipt attestation
         if: ${{ !github.event.repository.private }}
+        # CONTENT_SHA reaches this step via $GITHUB_ENV (resolve step above).
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for r in .abcd/work/reviews/"$GITHUB_SHA"/*.json; do
+          for r in .abcd/work/reviews/"$CONTENT_SHA"/*.json; do
             gh attestation verify "$r" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
               --predicate-type https://abcd.dev/attestations/semantic-release-gate/v1
           done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cross-compile the four binaries (version-stamped from the tag)
         # VERSION=<tag> stamps `abcd version` via -ldflags -X …internal/core.Version.

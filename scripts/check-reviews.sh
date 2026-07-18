@@ -22,6 +22,12 @@ note() { echo "  $1" >&2; }
 for d in "$ROOT"/*/; do
   [ -d "$d" ] || continue
   base="$(basename "$d")"
+  # Semantic-gate receipt directories are sha-keyed (.abcd/work/reviews/<40-hex>/
+  # <gate>.json, iss-35) — a distinct artifact class from the dated human-review
+  # dirs this charter governs, with their own integrity check (the receipt_gate
+  # record-lint rule + release.yml attestation). Exempt them from RD001's
+  # <date>-<scope>/00-summary.md shape.
+  printf '%s' "$base" | grep -Eq '^[0-9a-f]{40}$' && continue
   printf '%s' "$base" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$' \
     || { note "RD001 $d — directory name must be <YYYY-MM-DD>-<kebab-scope>"; fail=1; }
   [ -f "${d}00-summary.md" ] \

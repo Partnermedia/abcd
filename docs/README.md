@@ -8,8 +8,9 @@ under [`../.abcd/development/`](../.abcd/development/), not here.
 |-----------|---------------|-----|
 | [`tutorials/`](tutorials/) | Tutorial | Learning-oriented — a guided first run. |
 | [`how-to/`](how-to/) | How-to | Task-oriented — accomplish a specific goal. |
-| [`reference/`](reference/) | Reference | Information-oriented — config, schemas, and the generated [CLI reference](reference/cli/). |
+| [`reference/`](reference/) | Reference | Information-oriented — config, schemas, and the [CLI reference](reference/cli/) (a planned generated reference; today `abcd <verb> --help` is authoritative). |
 | [`explanation/`](explanation/) | Explanation | Understanding-oriented — the mental model and the why. |
 
-The CLI reference under `reference/cli/` is **generated** from the Cobra command tree
-and must not be hand-edited — regenerate it. Everything else is hand-authored.
+The CLI reference under `reference/cli/` is a placeholder for a planned generated
+reference (from the Cobra command tree); that generation is not yet wired, so the
+live CLI reference today is `abcd <verb> --help`. Everything else is hand-authored.
