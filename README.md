@@ -49,10 +49,6 @@ The product thinker and facilitator collaborate on artefacts that are sharedly o
 2. **press release** shaped intents *(user-facing and thus the domain of the product thinker)*
 3. **automated reviews** that grades delivered reality against the original promise *(owned by the AI-engineering team)*
 
-<div align="center">
-  <img src="docs/assets/img/roles.png"/>
-</div>
-
 As a **product thinker**, you know who the user is. You know what *done* looks like when you see it. You know which trade-offs are acceptable and which would betray the point of the project. `abcd` is built around two moments where that judgement is decisive. First, at the start of a piece of work (when you set the *why* as an intent), and at the end (when you read the verdict on whether the *why* was delivered). What happens in between — turning your why into engineering work AI agents can act on — is the facilitator's job.
 
 The **facilitator** is a *translator*, not an engineer-on-the-team in the traditional sense. Their work is to take what you wrote, shape it into plans an AI coding agent can execute well, run the framework's audit and review machinery, and tell you when the work didn't match the promise *(and what to do about it)*.

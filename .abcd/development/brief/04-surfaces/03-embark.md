@@ -1,5 +1,15 @@
 # `/abcd:embark` — Unpack a Lifeboat
 
+> **Delivery state (shipped surface).** The binary ships exactly two `embark`
+> sub-verbs — **`from <lifeboat> [target]`** and **`probe <lifeboat> [target]`** —
+> and `from` takes **no flags** (only the global `--json`). The richer surface
+> this chapter designs — the **`scan`** discovery sub-verb (and its `--deep`),
+> and the `from` flag-shaped modifiers **`--force`**, **`--archive`**, and
+> **`--refresh-audit`** — is a **design target, not yet shipped**; every
+> present-tense mention of them below describes the intended design, not current
+> binary behaviour. This chapter is the design record for the full surface; the
+> shipped subset is `from` + `probe`.
+
 > **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The reconciled prose lands with the unpacker (the `embark` verb and `commands/abcd/embark.md` now ship — with adr-35's out-of-tree model, not this chapter's in-tree prose). Four changes:
 >
 > | This chapter says | adr-35 decides |
@@ -17,14 +27,17 @@
 
 ## Sub-verbs
 
-Bare `/abcd:embark` shows status + help only — never mutates state. Current sub-verbs:
+Bare `/abcd:embark` shows status + help only — never mutates state. The two **shipped** sub-verbs:
 
-- **`/abcd:embark from <path>`** — unpack the lifeboat at `<path>` into the current repo. Path is required, and it is always an explicit path to a destination a disembark wrote — **there is no `home` shorthand** (adr-35: there is no in-tree lifeboat home to expand it to). The round-trip / self-test case is `disembark <repo> to <dest>` followed by `embark from <dest>`. Flag-shaped modifiers: `--force` (override emptiness-rule refusal), `--archive` (copy input lifeboat verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` before unpacking), `--refresh-audit` (re-run oracle product audit instead of trusting cached).
+- **`/abcd:embark from <path>`** — unpack the lifeboat at `<path>` into the current repo. Path is required, and it is always an explicit path to a destination a disembark wrote — **there is no `home` shorthand** (adr-35: there is no in-tree lifeboat home to expand it to). The round-trip / self-test case is `disembark pack <repo> <dest>` followed by `embark from <dest>`. *(Design target, not yet shipped: the flag-shaped modifiers `--force` — override emptiness-rule refusal, `--archive` — copy input lifeboat verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` before unpacking, and `--refresh-audit` — re-run oracle product audit instead of trusting cached. The shipped `from` takes no flags.)*
+- **`/abcd:embark probe <path>`** — inspect a lifeboat at `<path>` without unpacking: show what would land where, run schema/audit checks, write nothing.
+
+Design-target sub-verb (not yet shipped):
+
 - **`/abcd:embark scan`** — discovery sub-verb: list **lifeboat destinations** — directories carrying a parseable `_provenance.json`, the same marker the destination safety gate keys on (adr-35) — ranked by mtime, presented as candidates via transparent prompt. **No unpacking.** Useful before `embark from <path>` when the user isn't sure where lifeboats live. Flag-shaped modifier: `--deep` (a wider walk for power users).
 
 > **Open question (adr-35):** where `scan` searches. Walking `../` made sense when a lifeboat lived inside its producing repo, so siblings-of-cwd *were* the candidate set. Destinations are now operator-chosen and need not sit beside the repo being embarked into. Either the sibling walk is kept as a cheap heuristic, or scan is given explicit roots (an argument, a configured search path, or the voyage records under `~/.abcd/voyage/`). adr-35 does not settle this; it must be decided before `scan` is specified — and the same note is carried in [`02-constraints/01-platform.md § Embark sources`](../02-constraints/01-platform.md#embark-sources). The depth semantics of `--deep` fall out of whatever that decides.
-- **`/abcd:embark probe <path>`** — inspect a lifeboat at `<path>` without unpacking: show what would land where, run schema/audit checks, write nothing.
-- **Later phase: `/abcd:embark from-spec-kit <path>`** — ingest a GitHub Spec Kit project directory as starter draft intents (per itd-23).
+- **Later phase: `/abcd:embark from-spec-kit <path>`** — ingest a GitHub Spec Kit project directory as starter draft intents (per itd-23); not yet shipped.
 
 ## 1. Source lookup
 
@@ -90,7 +103,13 @@ Single decision, transparent (shows scope before asking). The conflict list is a
 
 ## 6. Acceptance
 
-- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:embark`, **then** the dispatcher shows whether a lifeboat is detectable in the current location, the available sub-verbs (`from <path>`, `scan`, `probe`; later phase: `from-spec-kit`), and suggested next actions — bare invocation never mutates state.
+> **Scope:** criteria naming the design-target surface (the `scan` sub-verb and
+> its `--deep`, and the `from` flags `--force` / `--archive` / `--refresh-audit`)
+> are gated on that surface shipping — they describe the intended behaviour, not
+> the current binary (which ships `from` + `probe`, no flags). The shipped-surface
+> criteria (`from`, `probe`, bare invocation, the emptiness refusal) hold today.
+
+- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:embark`, **then** the dispatcher shows whether a lifeboat is detectable in the current location, the available sub-verbs (`from <path>`, `probe`; design target: `scan`; later phase: `from-spec-kit`), and suggested next actions — bare invocation never mutates state.
 - **Given** a lifeboat at `<path>` and an empty target repo (only `.git/`, `LICENSE`, `README.md`), **when** `/abcd:embark from <path>` runs, **then** the target receives the press-release interview as the first interaction, the amended press release becomes `.abcd/development/brief/README.md`, and all sections in [§ 3](#3-scaffold-steps) land at canonical locations.
 - **Given** a repo disembarked to `<dest>`, **when** `embark from <dest>` runs in an empty target, **then** the round-trip completes with no shorthand and no special case — `<dest>` is an ordinary explicit path. (There is no `home`, and no sub-verb resolves one; matches disembark's parallel rule for sub-verb-agnostic resolution.)
 - **Given** a non-empty target repo, **when** `/abcd:embark from <path>` runs without `--force`, **then** the command refuses, core returns the conflict list **without writing any file**, and the surface renders it.
