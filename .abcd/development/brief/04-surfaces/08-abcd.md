@@ -40,10 +40,11 @@ Cobra usage text, not the render.
 | `status` | Alias — byte-identical to bare |
 | `help` | Alias — byte-identical to bare (bare-as-render IS the help) |
 
-Any other token is refused; the alias surface is a closed set. **Design target
-(itd-20):** the shipped CLI refuses an unknown token with **exit 1** (Cobra's
-`unknown command`), not exit 2, and applies that same refusal to `status` and
-`help` (neither is a CLI alias today); the exit-2 closed-set is itd-20's design.
+Any other token is refused. The shipped CLI exits **2** (Cobra's usage-error
+convention) for an unknown token — e.g. `abcd foobar` and the non-verb
+`abcd status` both exit 2, printing `abcd: unknown command …` to stderr; `abcd
+help` is Cobra's built-in and exits 0. **Design target (itd-20):** a top-level
+`/abcd` dispatcher with an explicit closed alias set of its own.
 
 ## SD001 alias rationale (investigation-gated)
 
