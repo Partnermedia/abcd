@@ -116,22 +116,25 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
    operands) and `scanner.New` reading `pii.json` under a hook. **Next step: triage
    each by "is the source repo attacker-controlled here?" and guard only those with
    `fsutil.ReadGuarded`.**
-2. **JSON decode-depth stack exhaustion (CWE-674) — a DoS class no finder has yet
-   swept.** `encoding/json` recurses per nesting level with no depth limit, so a
-   ~1 MB payload of `[[[[…` (well under every byte cap) can overflow the goroutine
-   stack. Every `json.Unmarshal` fed from a non-local source — `_provenance.json`
-   and `coverage.json` on the embark/pack path, the history index — is a candidate.
-   Byte caps do not bound nesting depth; a depth-limited decoder does.
+2. **JSON decode-depth stack exhaustion (CWE-674) — CLOSED by the toolchain
+   (verified 2026-07-17, Go 1.25.6).** `encoding/json` now enforces a max nesting
+   depth: a `[[[[…` payload returns a clean `"exceeded max depth"` error long
+   before the stack is at risk (confirmed empirically at 1 MB / ~500k levels).
+   No depth-limited decoder is needed on this toolchain — adding one would be
+   redundant dead defence duplicating the stdlib. Re-open only if the pinned Go
+   version regresses below 1.25.
 3. **The hand-rolled frontmatter parser (`internal/core/frontmatter/Fields`) has
    never been audited.** No YAML dependency exists, so this parser processes
    attacker markdown from embarked/packed lifeboats and ingested memory. Check
    duplicate-key precedence, unbounded key/value growth, and control-char/newline
    smuggling in field values that later flow to output or gate decisions. (The
    `capture` dup-key fix was in capture's own parser, not this one.)
-4. **Minor consistency gap:** `memory.LoadRegistry` wraps `ErrNotRegular`/`ErrTooBig`
-   in a typed `RegistryFormatError`, but a symlinked index fails the `O_NOFOLLOW`
-   *open* with a raw `*os.PathError` (ELOOP) that falls through — refused (good) but
-   untyped and path-leaking. Wrapping the ELOOP case is a candidate follow-up.
+4. **Minor consistency gap — FIXED (2026-07-17).** `memory.LoadRegistry` now folds
+   the `O_NOFOLLOW` symlink refusal (`syscall.ELOOP`) into the same
+   `RegistryFormatError` branch as `ErrNotRegular`/`ErrTooBig`, so a planted
+   symlink is classified like every other guarded refusal and the raw ELOOP
+   syscall detail no longer escapes. Covered by
+   `TestLoadRegistryRefusesSymlink` (now asserts the typed error + no leak).
 
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
