@@ -151,6 +151,43 @@ embark path, now closed:**
   **Sweep note:** a fresh grep confirms this was the *last* `lstat`/`Lstat`-then-
   `ReadFile` pair over an attacker-reachable path in `internal/core/lifeboat`.
 
+**Burst 3 (2026-07-17, session hardening loop) — unguarded CLI operand reads:**
+- `cli.readSource` (the `--pages-json`/`--page-json` memory-ingest transport) and
+  `disembark coverage <report.json>` read untrusted operands with a raw
+  `os.ReadFile` — no symlink refusal, no size cap. `readSource` was doubly
+  exposed: its stdin branch used `io.ReadAll` with NO `LimitReader` either.
+  A symlinked operand was FOLLOWED (verified: old `os.ReadFile` returns the
+  link target's content — a read-what-you-point-at gap on host-produced /
+  cross-repo JSON), and `/dev/zero`/a huge file read unbounded (OOM/hang).
+  Both routed through `fsutil.ReadGuarded` (O_NOFOLLOW + regular-file + 8 MiB
+  cap) and the stdin branch bounded by a `LimitReader`, matching
+  `readLessonsPayload`/`readSynthesisPayload`/`readHookInput`. Watched-fail:
+  `TestReadSourceRefusesSymlinkAndOversize` (symlink followed before, refused
+  after). **Sweep note:** git subprocess surface audited clean this burst —
+  every `exec.Command("git",…)` uses fixed subcommands, env-scrub (`gitEnv`/
+  `ScrubbedEnv`), and passes paths via `--stdin -z` (check-ignore), so no
+  argument-injection or `-`-leading-flag vector. `readLessonsPayload`/
+  `readSynthesisPayload` still carry a benign lstat→read TOCTOU (guarded, but
+  the swap window remains) — a candidate follow-up, lower priority as the path
+  is user-typed.
+
+**Burst 6 (2026-07-18, session hardening loop) — config-override surface audited
+CLEAN; last read-guard TOCTOU closed.** The suspected config-downgrade bypass does
+NOT exist: a repo `.abcd/config` cannot lower a bundled hard_fail pattern below its
+floor (`applyFloor` clamps severity on BOTH patterns and identity kinds; rank
+ordering correct, unknown severities rank least-severe and fail to floor), a
+bundled pattern's REGEX is non-replaceable (closing the never-match-regex
+downgrade), a malformed override regex fails closed, and the merge is
+all-or-nothing. The config skip-list is additive but bounded by the trusted-
+worktree model (the local `.abcd/config` is the repo owner's). Only remaining
+read-guard item closed: `readLessonsPayload`/`readSynthesisPayload` converted from
+guarded-but-lstat→ReadFile (a benign swap window on a user-typed path) to the
+shared `readGuardedOperand` (fsutil.ReadGuarded), so EVERY CLI operand read now
+uses the one-call guarded primitive. **Convergence:** after six bursts the
+security-critical surfaces — redaction patterns (bursts 4-5), config merge (6),
+identity matchers, the Redact rewrite, filesystem reads (1-3), and the git
+subprocess surface (3) — are audited and hardened; what remains is nitpick-tier.
+
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
   `internal/termsafe.Sanitize`, extended with bidi/RTL-override + zero-width
