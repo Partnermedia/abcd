@@ -188,6 +188,34 @@ security-critical surfaces — redaction patterns (bursts 4-5), config merge (6)
 identity matchers, the Redact rewrite, filesystem reads (1-3), and the git
 subprocess surface (3) — are audited and hardened; what remains is nitpick-tier.
 
+**Burst 4 (2026-07-18, session hardening loop) — a REDACTION BYPASS (highest
+severity of the loop): secrets survive a `_` suffix.** Nine hard_fail token
+patterns used a pure-word charset (`[A-Za-z0-9]`/`[0-9A-Z]`, no `_`) with a
+trailing `\b`. Because `_` is itself a word char, a secret immediately followed
+by `_` (`token=ghp_..._old`, a JSON key, a concatenation) has no ASCII boundary
+after the last alnum, and RE2 cannot shorten to one (every interior position is
+word/word) — so the trailing `\b` silently drops the whole match and the secret
+is NOT redacted, surviving into a committed, pushed transcript. Verified across
+ghp_/ghs_/gho_/ghu_/ghr_, github_pat (fine-grained), AKIA, sk_live_/sk_test_.
+Fixed axis-identically to the earlier google_api_key fix: **drop the trailing
+`\b`** (leading `\b` + prefix + minimum length keep precision; greedy matching
+redacts the full token). Watched-fail: `TestSecretSurvivesUnderscoreSuffix`
+(secret survived the `_` suffix before, redacted after). Fixed-length patterns
+(AKIA{16}, github_pat {22}_{59}) additionally missed on ANY alnum suffix, now
+also closed.
+
+  BURST 5 EXTENSION — verification (not reasoning) found two more of the SAME
+  class: `slack_token` (`xox`) shares the `_`-suffix miss (its `[A-Za-z0-9-]`
+  class also excludes `_`; the prior "slack clean" note only checked the
+  `-`/length axis), and `sk-ant-`/`sk-proj-`/`sk-svcacct-` miss a minimum-length
+  token ending in `-` before a non-word char (the google_api_key axis). Every
+  remaining token pattern's trailing `\b` was dropped, so the invariant is now
+  class-wide: NO token pattern relies on a trailing `\b`. Extra tests:
+  slack in `TestSecretSurvivesUnderscoreSuffix`, `TestDashEndingSecretStillCaught`. **Checked safe (unchanged):** the mixed-class variable-length
+patterns (sk-ant-/sk-proj-/sk-svcacct- {40,}, xox {10,}, jwt {10,}) whose class
+includes `_`/`-` — RE2 shortens them to a word-char boundary, so their trailing
+`\b` is not a miss (matches the earlier slack_token analysis).
+
 **Fixed since (was a frontier, now closed):**
 - **Terminal-escape sanitization** — the escape/C1 sanitiser is now the shared
   `internal/termsafe.Sanitize`, extended with bidi/RTL-override + zero-width

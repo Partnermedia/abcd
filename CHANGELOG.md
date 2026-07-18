@@ -10,6 +10,21 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Security
+
+- **The redaction scanner no longer lets a secret survive a trailing underscore.**
+  Nine hard-fail token patterns (GitHub `ghp_`/`ghs_`/`gho_`/`ghu_`/`ghr_` and
+  fine-grained PATs, AWS `AKIA`, Stripe `sk_live_`/`sk_test_`) used a pure
+  alphanumeric charset closed by a `\b` word boundary. Because `_` is itself a
+  word character, a credential immediately followed by `_` (a JSON key, a
+  concatenation, `token=ghp_..._old`) had no boundary and slipped through
+  unredacted into the stored transcript. The trailing `\b` is dropped (matching
+  the existing Google-key fix); the leading boundary, prefix, and minimum length
+  keep the match precise. The same fix extends to Slack `xox` tokens (whose
+  charset also excludes `_`) and the Anthropic/OpenAI `sk-ant-`/`sk-proj-`/
+  `sk-svcacct-` keys (a minimum-length key ending in `-`), so no token pattern
+  relies on a trailing word boundary.
+
 ### Added
 
 - **A one-line, checksum-verified installer in the README.** The command
