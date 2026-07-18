@@ -143,6 +143,10 @@ jobs:
           # commit verify gated. inputs.ref (resolved SHA) overrides on the
           # workflow_call re-release path, exactly as in verify.
           ref: ${{ inputs.ref || github.sha }}
+          # Full history: the semantic-gate resolve step below walks HEAD^2^/HEAD^
+          # to find the reviewed content commit, which a shallow (depth-1) clone
+          # cannot reach — it would abort and fail-close every release.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Record the default-branch tip (no-branch-commit tripwire)
@@ -196,16 +200,21 @@ jobs:
         # refs via git and writes only $GITHUB_ENV.
         run: |
           set -euo pipefail
-          test -n "${GITHUB_SHA:-}"
-          if git rev-parse -q --verify "${GITHUB_SHA}^2" >/dev/null 2>&1; then
-            content="$(git rev-parse --verify "${GITHUB_SHA}^2^")"
+          # Resolve against HEAD — the exact commit this job checked out
+          # (inputs.ref on the re-release heal path, else github.sha). Deriving
+          # from GITHUB_SHA would diverge from the checked-out tree on the heal
+          # path (GITHUB_SHA is then the moved-on main tip) and arm the gate with
+          # a commit whose receipts are not in the released tree.
+          released="$(git rev-parse --verify HEAD)"
+          if git rev-parse -q --verify "HEAD^2" >/dev/null 2>&1; then
+            content="$(git rev-parse --verify "HEAD^2^")"
           else
-            content="$(git rev-parse --verify "${GITHUB_SHA}^")"
+            content="$(git rev-parse --verify "HEAD^")"
           fi
           test -n "$content"
           # The named content commit must be an ancestor of the released commit —
           # a receipt for anything off the release lineage is refused.
-          git merge-base --is-ancestor "$content" "$GITHUB_SHA"
+          git merge-base --is-ancestor "$content" "$released"
           echo "CONTENT_SHA=$content" >> "$GITHUB_ENV"
           echo "reviewed content commit: $content"
 
@@ -213,8 +222,8 @@ jobs:
         if: ${{ !github.event.repository.private }}
         # Arms receipt_gate from the CLI (the workflow, not the in-tree config, is
         # the trust root for the decision to gate and the required-gates list).
-        env:
-          CONTENT_SHA: ${{ env.CONTENT_SHA }}
+        # CONTENT_SHA reaches this step's environment via $GITHUB_ENV (exported by
+        # the resolve step above) — no per-step env: passthrough needed.
         run: |
           set -euo pipefail
           test -n "${CONTENT_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
@@ -235,8 +244,9 @@ jobs:
 
       - name: Verify the semantic-gate receipt attestation
         if: ${{ !github.event.repository.private }}
+        # CONTENT_SHA reaches this step via $GITHUB_ENV (resolve step above).
         env:
-          CONTENT_SHA: ${{ env.CONTENT_SHA }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           for r in .abcd/work/reviews/"$CONTENT_SHA"/*.json; do
@@ -245,8 +255,6 @@ jobs:
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
               --predicate-type https://abcd.dev/attestations/semantic-release-gate/v1
           done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cross-compile the four binaries (version-stamped from the tag)
         # VERSION=<tag> stamps `abcd version` via -ldflags -X …internal/core.Version.
