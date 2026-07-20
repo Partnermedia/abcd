@@ -7,6 +7,7 @@ category: "security"
 source: "agent-finding"
 found_during: "iss-95 adversarial security review"
 found_at: "internal/core/ahoy/detect.go"
+resolution: "Routed 6 bare os.ReadFile sites in ahoy (marker.go x4, store.go loadHistoryIndex/readConfig) through fsutil.ReadGuarded (O_NOFOLLOW|O_NONBLOCK, regular+size on one fd, 1MiB cap). FIFO detector tests watched hang->pass. Ruthless SHIP, security APPROVE. Residual manual-guard TOCTOU at gitignore/verifyHookManifest filed as iss-109."
 ---
 
 ahoy.Detect reads CLAUDE.md/AGENTS.md/config via plain os.ReadFile with no size cap or O_NONBLOCK, unlike the hardened session-end transcript read; a FIFO or multi-GB file at cwd could hang or slurp any hook that calls Detect (session-start, session-end, ahoy verbs). Harden Detect's marker/config reads to match maxTranscriptBytes plus a non-blocking open.
