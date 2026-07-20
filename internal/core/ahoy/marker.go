@@ -78,7 +78,7 @@ func classifyMarker(targetPath string) markerState {
 	if fi, err := os.Lstat(targetPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return markerSymlink
 	}
-	existing, err := os.ReadFile(targetPath)
+	existing, err := fsutil.ReadGuarded(targetPath, maxAhoyFileBytes)
 	if err != nil {
 		return markerMissing
 	}
@@ -106,7 +106,7 @@ func installMarkerFile(targetPath string) (wrote bool, ok bool) {
 	if fi, err := os.Lstat(targetPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return false, false
 	}
-	existing, err := os.ReadFile(targetPath)
+	existing, err := fsutil.ReadGuarded(targetPath, maxAhoyFileBytes)
 	absent := false
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -227,7 +227,7 @@ func removeMarkerFile(targetPath string) (wrote bool, ok bool) {
 	if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
 		return false, false
 	}
-	existing, err := os.ReadFile(targetPath)
+	existing, err := fsutil.ReadGuarded(targetPath, maxAhoyFileBytes)
 	if err != nil {
 		return false, false
 	}
@@ -333,7 +333,7 @@ func markerFileHasBlock(targetPath string) bool {
 	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
 		return false
 	}
-	data, err := os.ReadFile(targetPath)
+	data, err := fsutil.ReadGuarded(targetPath, maxAhoyFileBytes)
 	if err != nil {
 		return false
 	}

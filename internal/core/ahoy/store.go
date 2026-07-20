@@ -166,7 +166,7 @@ func loadHistoryIndex() (*historyIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "index.json"))
+	data, err := fsutil.ReadGuarded(filepath.Join(root, "index.json"), maxAhoyFileBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -257,15 +257,23 @@ func writeHistoryIndex(idx *historyIndex) error {
 // repo config.json
 // ---------------------------------------------------------------------------
 
+// maxAhoyFileBytes caps ahoy's marker/config/index reads. Markers (CLAUDE.md /
+// AGENTS.md), config.json, and the history index are small text/JSON; 1 MiB is
+// far above any real one, so the cap never rejects a legitimate file while it
+// bounds a FIFO or multi-GB file planted at a cwd-influenced path (iss-97).
+const maxAhoyFileBytes = 1 << 20
+
 // configPath is the repo-scope .abcd/config.json path.
 func configPath(cwd string) string {
 	return filepath.Join(cwd, ".abcd", "config.json")
 }
 
 // readConfig reads .abcd/config.json into a generic map. Returns (nil,nil) when
-// absent, and an error only on malformed JSON.
+// absent, and an error on malformed JSON or a guarded-read refusal (a non-regular
+// leaf such as a FIFO, or a file past the size cap). Callers treat any error as
+// unusable config and fail safe.
 func readConfig(cwd string) (map[string]any, error) {
-	data, err := os.ReadFile(configPath(cwd))
+	data, err := fsutil.ReadGuarded(configPath(cwd), maxAhoyFileBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
