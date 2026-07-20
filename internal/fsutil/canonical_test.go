@@ -67,9 +67,11 @@ func TestNoNonCanonicalAtomicWritePrimitives(t *testing.T) {
 // marks a hand-rolled WriteFileAtomic.) The fix routes such a site through
 // fsutil.WriteFileAtomic, which removes os.O_EXCL from the file.
 //
-// Known gap: this does not yet catch the os.CreateTemp+os.Rename idiom (a weaker
-// inline write, no fsync). rules/inject.go SaveState is one such site — broadening
-// the detector to that idiom and routing it is tracked in iss-82.
+// Two idioms are flagged (iss-82 broadened the check to the second): the strong
+// os.O_EXCL temp + os.Rename form, and the weaker os.CreateTemp + os.Rename form
+// (no fsync) that rules/inject.go SaveState open-coded. Either co-occurrence in
+// one non-fsutil file is a hand-rolled durable write; route it through
+// fsutil.WriteFileAtomic, which removes the temp+rename pair from the file.
 func TestNoInlineAtomicWriteSequences(t *testing.T) {
 	internalRoot := filepath.Join("..")
 	var offenders []string
@@ -93,6 +95,9 @@ func TestNoInlineAtomicWriteSequences(t *testing.T) {
 		src := string(data)
 		if strings.Contains(src, "os.O_EXCL") && strings.Contains(src, "os.Rename(") {
 			offenders = append(offenders, path+": inline os.O_EXCL temp + os.Rename")
+		}
+		if strings.Contains(src, "os.CreateTemp(") && strings.Contains(src, "os.Rename(") {
+			offenders = append(offenders, path+": inline os.CreateTemp + os.Rename")
 		}
 		return nil
 	})

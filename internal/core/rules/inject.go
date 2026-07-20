@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // StateTTL bounds how long a per-session ledger lives before the reset hook
@@ -135,9 +137,11 @@ func LoadState(session string) SessionState {
 	return st
 }
 
-// SaveState atomically persists the ledger for a session (0700 dir; the temp
-// file CreateTemp makes is 0600). A unique temp name avoids orphaning a fixed
-// path and avoids a same-session writer race; a failed rename cleans up.
+// SaveState durably persists the ledger for a session through the canonical
+// fsutil.WriteFileAtomic (temp-write, fsync, rename, parent-dir fsync), so the
+// write is crash-safe and a reader sees either the old file or the complete new
+// one. The state dir is pre-created 0700 (WriteFileAtomic's own MkdirAll is a
+// no-op once it exists); the session file is 0600.
 func SaveState(session string, st SessionState) error {
 	if err := os.MkdirAll(stateDir(), 0o700); err != nil {
 		return err
@@ -146,25 +150,7 @@ func SaveState(session string, st SessionState) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(stateDir(), "state-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, sessionFile(session)); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return fsutil.WriteFileAtomic(sessionFile(session), data, 0o600)
 }
 
 // LoadBackstop reads rules.force_refresh_every_n from <repoRoot>/.abcd/config.json
