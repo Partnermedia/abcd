@@ -8,6 +8,12 @@ corpus: a detector is proven when it flags every instance it was built from.
 Instances are then drained by a cleanup pass *behind* the armed detector,
 never hand-fixed ahead of it.
 
+Name the class as one sentence before building anything — "a required numeric
+field decoded as a value type, so absent and zero conflate". That sentence *is*
+the detector's first draft: if the shape is greppable the sentence is the grep,
+and if it is structural the sentence names the surface to search. A class you
+cannot state in a sentence is not yet understood well enough to arm against.
+
 **Why.** Hand-fixing instances treats symptoms at the cost of the cause and
 leaves nothing behind to stop recurrence — the 2026-07-08 review demonstrated
 this directly, finding drift that had survived a dedicated same-day
@@ -16,6 +22,14 @@ Inverting the order pays twice: the review's findings stop being a chore list
 and become a free, real-world test fixture for the enforcement layer, and the
 cleanup itself becomes verifiable (run the detector; the count reaches zero
 and stays there).
+
+There is a second, quieter cost to hand-fixing the reported site alone:
+consistency is itself evidence, and a half-applied fix destroys it. When one
+path is guarded and its sibling is not, the asymmetry reads to the next person
+as a *decision* — as if the unguarded path was considered and deliberately
+exempted — when in truth nobody looked at it. An armed detector draining its
+class to zero restores that consistency as a fact the reader can trust; a
+scatter of hand-fixes manufactures a false one.
 
 **Bounds.**
 
