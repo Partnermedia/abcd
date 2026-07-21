@@ -36,6 +36,11 @@ called out in a **Breaking** section.
   markerless `.abcd/` reported `managed-repo`. Only index registration or a
   marker block now promotes a folder to managed; a stray `.abcd/` reports
   `unmanaged-repo` (or `unmanaged-folder` outside a git repo).
+- **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
+  A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
+  refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
+  guard; a genuine prose title still files. The shared typo heuristic is now
+  record-id aware (`iss`/`itd`/`spc`), which also sharpens `abcd capture`.
 
 ## [0.3.0] - 2026-07-18
 
