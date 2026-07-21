@@ -28,6 +28,16 @@ called out in a **Breaking** section.
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
 
+### Fixed
+
+- **GL002 no longer fires a spurious blocker when a line has a closed inline-code
+  span before a stray backtick.** `stripInlineCode` restored the entire original
+  line whenever it reached end-of-line with an unpaired backtick, un-masking an
+  enforced synonym that sat inside an earlier, correctly-closed span. It now
+  blanks matched backtick pairs only and leaves a trailing unpaired backtick (and
+  its tail) literal, so the earlier span stays masked (iss-106). Full CommonMark
+  double-backtick span parsing remains out of scope.
+
 ## [0.3.0] - 2026-07-18
 
 ### Security
