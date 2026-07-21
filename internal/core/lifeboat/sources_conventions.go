@@ -825,7 +825,7 @@ func (convOpenQuestionsSource) probeLimited(ctx *SourceContext, budget int) Evid
 		question := "What did this project know was unfinished? Its source carries no work markers."
 		if truncated || unread > 0 {
 			if truncated {
-				searched = append(searched, fmt.Sprintf("stopped at the %d-file walk cap; the rest of the tree was not walked", maxWalkFiles))
+				searched = append(searched, fmt.Sprintf("stopped at the walk cap (%d entries, %d levels deep); the rest of the tree was not walked", maxWalkFiles, maxWalkDepth))
 			}
 			if unread > 0 {
 				searched = append(searched, fmt.Sprintf("stopped at the %d-byte read budget; %d further file(s) were not read", budget, unread))
@@ -839,7 +839,7 @@ func (convOpenQuestionsSource) probeLimited(ctx *SourceContext, budget int) Evid
 	// Loud staging: a partial scan says so in its own evidence, so a rescuer
 	// never mistakes a truncated count for the whole tree.
 	if truncated {
-		sources = append(sources, fmt.Sprintf("scan truncated at the %d-file walk cap; markers beyond it were not read", maxWalkFiles))
+		sources = append(sources, fmt.Sprintf("scan truncated at the walk cap (%d entries, %d levels deep); markers beyond it were not read", maxWalkFiles, maxWalkDepth))
 	}
 	if unread > 0 {
 		sources = append(sources, fmt.Sprintf("scan stopped at the %d-byte read budget; %d further file(s) were not read", budget, unread))

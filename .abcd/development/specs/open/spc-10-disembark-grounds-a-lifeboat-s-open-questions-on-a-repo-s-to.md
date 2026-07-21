@@ -53,10 +53,19 @@ idiom.
   `vendor`, `generated`. These are dependency, VCS-internal, and generated
   trees — never a team's own open questions, and the dominant cost of an
   unfiltered walk.
-- **Cap.** `maxWalkFiles` mirrors `maxDirEntries` (50 000). On reaching it the
-  walk stops and returns `truncated = true`. Truncation is *reported*, never
-  silent (loud-staging): an adapter that hits the cap says so in its cited
-  evidence.
+- **Caps, in three dimensions.** `maxWalkFiles` mirrors `maxDirEntries`
+  (50 000) and bounds regular files *and* directories visited: a tree of
+  directories holding nothing regular yields no path, so a file cap alone never
+  fires there and the walk would run to exhaustion over a foreign tree.
+  `maxWalkDepth` (32) bounds descent, because `os.Root` resolves every
+  directory from the containment root one component at a time — a chain of
+  directories costs the square of its depth, and a few thousand of them are
+  trivial to create and take minutes to traverse. Real trees are shallow, so
+  the depth cap prunes only pathological chains, and prunes the chain rather
+  than abandoning the tree. Any bound firing returns `truncated = true`.
+  Truncation is *reported*, never silent (loud-staging): an adapter that hits a
+  cap says so in its cited evidence, and a blank drawn from a truncated walk
+  says the walk was truncated.
 - **Non-regular files** (FIFOs, devices, sockets) are skipped, so the walk
   cannot hand an adapter a path whose read would block.
 - **Output** is repo-relative POSIX paths, sorted, so every consumer is
@@ -126,7 +135,7 @@ The primitive therefore adds no second read path to audit.
 | Which tier — conventions or git? | **Conventions.** A working-tree file scan through the `SourceContext` file surface. The adapter never touches git, so it grounds a bare snapshot as readily as a working tree. |
 | Scan scope and the missing primitive | Option (a): add a bounded recursive-walk primitive, `WalkFiles`, to `SourceContext`. It is shared with itd-96, so the walk lands once. |
 | Which files to scan | Every regular file the walk yields, minus the skip set (`.git`, `node_modules`, `vendor`, `generated`), minus symlinks, minus binaries (NUL-byte heuristic), minus oversized files (`ReadFile`'s cap). |
-| Per-repo caps | `maxWalkFiles` = 50 000 files (mirrors `maxDirEntries`), `maxProbeReadBytes` per file, `maxMarkerScanBytes` = 512 MiB across the scan (reuses `maxPlanTotalBytes`), `maxMarkerCitations` = 200 citations. Both the walk cap and the byte budget are reported in the cited evidence. |
+| Per-repo caps | `maxWalkFiles` = 50 000 files **and** 50 000 directories (mirrors `maxDirEntries`), `maxWalkDepth` = 32 levels of descent, `maxProbeReadBytes` per file, `maxMarkerScanBytes` = 512 MiB across the scan (reuses `maxPlanTotalBytes`), `maxMarkerCitations` = 200 citations. Every bound that fires is reported in the cited evidence. |
 | Output shape and framing | Headline count + up to 200 `path:line (MARKER)` citations, `dedupeSorted`. |
 | Dedup | `dedupeSorted` on the rendered citation string, so an identical `path:line (MARKER)` appears once. Multiple distinct markers in one file each keep their own line. |
 | Status and confidence thresholds | Ceiling `StatusPartial`. `ConfidenceMedium` at ≥ 10 markers, else `ConfidenceLow`. Never `StatusGrounded`. |
