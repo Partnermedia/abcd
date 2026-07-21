@@ -430,7 +430,7 @@ func runCLIErr(t *testing.T, args ...string) ([]byte, error) {
 const docsLintConfig = `{
   "roots": ["docs"],
   "banned_tokens": [
-    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","message":"change-narration"}
+    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","message":"change-narration","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"]}
   ],
   "rules": {
     "links_resolve": {"enabled": true, "severity": "blocker"},

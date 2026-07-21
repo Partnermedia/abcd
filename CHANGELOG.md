@@ -10,6 +10,17 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Changed
+
+- **The record-lint banlist now requires a machine-readable successor and
+  context.** Every `banned_tokens` entry must declare a non-empty `successor`
+  (what to use instead of the retired token) and a non-empty `allow_context`
+  (where the token is legitimately allowed); a config whose entry omits either
+  is rejected at load rather than lints with a replacement that lived only in
+  prose. Each finding auto-cites its successor, so the reader is told the
+  replacement inline. The bundled record-lint and docs-lint banlists carry the
+  new fields.
+
 ### Added
 
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only

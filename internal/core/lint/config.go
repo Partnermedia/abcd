@@ -3,6 +3,8 @@ package lint
 import (
 	"encoding/json"
 	"os"
+	"strconv"
+	"strings"
 )
 
 // Config is the on-disk record-lint configuration (.abcd/record-lint.json).
@@ -29,8 +31,13 @@ type BannedToken struct {
 	Pattern  string `json:"pattern"`
 	Message  string `json:"message"`
 	Severity string `json:"severity"`
+	// Successor is the machine-readable old->new mapping: what to use instead of
+	// the banned token. It is REQUIRED (a ban with no successor left its
+	// replacement in prose only, iss-51) and is auto-cited in the finding message.
+	Successor string `json:"successor"`
 	// AllowContext lists regexps that, if any matches the same line, suppress
-	// the finding (the token is legitimate in that context).
+	// the finding (the token is legitimate in that context). It is REQUIRED to be
+	// non-empty: every ban must declare where its token is legitimately allowed.
 	AllowContext []string `json:"allow_context"`
 	// SkipCodeFences omits fenced-code lines from scanning. A nil pointer means
 	// the default (true); set false to also scan inside fences.
@@ -179,5 +186,30 @@ func LoadConfig(path string) (Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
 	}
+	if err := cfg.validateBannedTokens(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// validateBannedTokens enforces the strict banned_tokens schema (iss-51): every
+// entry must declare a non-empty successor (the machine-readable replacement,
+// not prose alone) and a non-empty allow_context (where the token is legitimately
+// allowed). A violation is a load-time rejection, so a defective ban can never
+// reach the linter. Errors identify the offending entry by id (or index when the
+// id is itself absent).
+func (c Config) validateBannedTokens() error {
+	for i, t := range c.BannedTokens {
+		who := t.ID
+		if who == "" {
+			who = "index " + strconv.Itoa(i)
+		}
+		if strings.TrimSpace(t.Successor) == "" {
+			return &configError{"banned_tokens entry " + who + " has no successor; a ban must declare the machine-readable replacement (iss-51)"}
+		}
+		if len(t.AllowContext) == 0 {
+			return &configError{"banned_tokens entry " + who + " has an empty allow_context; a ban must declare where its token is legitimately allowed (iss-51)"}
+		}
+	}
+	return nil
 }

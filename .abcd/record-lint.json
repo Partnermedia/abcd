@@ -1,19 +1,19 @@
 {
   "roots": [".abcd/development"],
   "banned_tokens": [
-    {"id":"moved-intents-path","pattern":"roadmap/intents","message":"intents live at intents/ (record IA); update the path","severity":"blocker","allow_context":[]},
-    {"id":"flow-next-spec-prefix","pattern":"\\bfn-","message":"fn- is the flow-next spec prefix (dropped tool); abcd specs use spc-","severity":"blocker","allow_context":["historical"]},
-    {"id":"python-lint-names","pattern":"\\bintent_lint\\b|inventory\\.py","message":"Python tool name; the lint engine is internal/core/lint (Go)","severity":"blocker","allow_context":["historical","spc-15"]},
-    {"id":"retired-activity-dir","pattern":"development/activity","message":"development/activity is retired; working material lives in .abcd/work/ (shared) or .abcd/.work.local/ (local)","severity":"blocker","allow_context":["historical"]},
-    {"id":"retired-work-root","pattern":"\\.work/","message":".work/ is retired as a root path; use .abcd/work/ or .abcd/.work.local/","severity":"blocker","allow_context":["historical","\\.abcd/\\.work\\.local"]},
-    {"id":"retired-scripts-dir","pattern":"scripts/abcd/","message":"scripts/abcd/ is retired; behaviour lives in the Go binary (internal/core)","severity":"blocker","allow_context":["historical"]},
-    {"id":"flow-next-dir","pattern":"\\.flow/","message":".flow/ belongs to the dropped flow-next tool","severity":"blocker","allow_context":["historical"]},
-    {"id":"retired-workflow-files","pattern":"workflows/lint\\.yml|lint-corpus\\.yml","message":"retired workflow file; CI is .github/workflows/ci.yml","severity":"blocker","allow_context":["historical"]},
-    {"id":"retired-since-staged-flag","pattern":"--since-staged","message":"--since-staged is a retired flag spelling","severity":"blocker","allow_context":["historical"]},
-    {"id":"dev-repo-name","pattern":"\\babcdDev\\b","message":"single-repo (adr-28): use 'the frozen reference implementation' / abcd-cli","severity":"blocker","allow_context":[]},
-    {"id":"workspaces-json","pattern":"workspaces\\.json","message":"the workspace concept is dropped; only a negation may mention it","severity":"blocker","allow_context":["no ","not ","there is no","sole user-scope","dropped","without a"]},
-    {"id":"meta-json-file","pattern":"\\bmeta\\.json\\b","message":"meta.json is abolished as a repo file; setup metadata is config.json[\"meta\"]","severity":"blocker","allow_context":["history","root-sha","root-commit","per-root","index.json","identity","no ","there is no","separate","abolished","not ","without"]},
-    {"id":"presidio-default","pattern":"Presidio","message":"native Go PII engine is the default; Presidio is only one opt-in scanner adapter","severity":"warn","allow_context":["gitleaks","opt-in","adapter","seam"]}
+    {"id":"moved-intents-path","pattern":"roadmap/intents","message":"intents live at intents/ (record IA); update the path","severity":"blocker","successor":"intents/","allow_context":["historical"]},
+    {"id":"flow-next-spec-prefix","pattern":"\\bfn-","message":"fn- is the flow-next spec prefix (dropped tool); abcd specs use spc-","severity":"blocker","successor":"spc-","allow_context":["historical"]},
+    {"id":"python-lint-names","pattern":"\\bintent_lint\\b|inventory\\.py","message":"Python tool name; the lint engine is internal/core/lint (Go)","severity":"blocker","successor":"internal/core/lint","allow_context":["historical","spc-15"]},
+    {"id":"retired-activity-dir","pattern":"development/activity","message":"development/activity is retired; working material lives in .abcd/work/ (shared) or .abcd/.work.local/ (local)","severity":"blocker","successor":".abcd/work/ or .abcd/.work.local/","allow_context":["historical"]},
+    {"id":"retired-work-root","pattern":"\\.work/","message":".work/ is retired as a root path; use .abcd/work/ or .abcd/.work.local/","severity":"blocker","successor":".abcd/work/ or .abcd/.work.local/","allow_context":["historical","\\.abcd/\\.work\\.local"]},
+    {"id":"retired-scripts-dir","pattern":"scripts/abcd/","message":"scripts/abcd/ is retired; behaviour lives in the Go binary (internal/core)","severity":"blocker","successor":"internal/core","allow_context":["historical"]},
+    {"id":"flow-next-dir","pattern":"\\.flow/","message":".flow/ belongs to the dropped flow-next tool","severity":"blocker","successor":".abcd/","allow_context":["historical"]},
+    {"id":"retired-workflow-files","pattern":"workflows/lint\\.yml|lint-corpus\\.yml","message":"retired workflow file; CI is .github/workflows/ci.yml","severity":"blocker","successor":".github/workflows/ci.yml","allow_context":["historical"]},
+    {"id":"retired-since-staged-flag","pattern":"--since-staged","message":"--since-staged is a retired flag spelling","severity":"blocker","successor":"--since","allow_context":["historical"]},
+    {"id":"dev-repo-name","pattern":"\\babcdDev\\b","message":"single-repo (adr-28): use 'the frozen reference implementation' / abcd-cli","severity":"blocker","successor":"abcd-cli","allow_context":["historical"]},
+    {"id":"workspaces-json","pattern":"workspaces\\.json","message":"the workspace concept is dropped; only a negation may mention it","severity":"blocker","successor":"index.json (the sole user-scope history registry, keyed by root_commit)","allow_context":["no ","not ","there is no","sole user-scope","dropped","without a"]},
+    {"id":"meta-json-file","pattern":"\\bmeta\\.json\\b","message":"meta.json is abolished as a repo file; setup metadata is config.json[\"meta\"]","severity":"blocker","successor":"config.json[\"meta\"]","allow_context":["history","root-sha","root-commit","per-root","index.json","identity","no ","there is no","separate","abolished","not ","without"]},
+    {"id":"presidio-default","pattern":"Presidio","message":"native Go PII engine is the default; Presidio is only one opt-in scanner adapter","severity":"warn","successor":"the native Go PII engine","allow_context":["gitleaks","opt-in","adapter","seam"]}
   ],
   "rules": {
     "no_git_metadata": {"enabled": true, "severity": "blocker", "fields": ["created","updated","author","maintained_by","version"]},

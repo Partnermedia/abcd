@@ -925,6 +925,14 @@ func compileTokens(tokens []BannedToken) ([]tokenCheck, error) {
 	return checks, nil
 }
 
+// bannedTokenMessage renders a banned-token finding message, auto-citing the
+// entry's machine-readable successor (iss-51 decision c) so the finding always
+// tells the reader what to use instead. LoadConfig guarantees a non-empty
+// successor, so the citation is always present.
+func bannedTokenMessage(t BannedToken) string {
+	return t.Message + " (successor: " + t.Successor + ")"
+}
+
 // checkBannedTokens implements check family A.
 func checkBannedTokens(rel string, lines []string, mask []bool, checks []tokenCheck) []Finding {
 	var out []Finding
@@ -941,7 +949,7 @@ func checkBannedTokens(rel string, lines []string, mask []bool, checks []tokenCh
 			}
 			out = append(out, Finding{
 				File: rel, Line: i + 1, RuleID: c.token.ID,
-				Severity: c.token.Severity, Message: c.token.Message,
+				Severity: c.token.Severity, Message: bannedTokenMessage(c.token),
 			})
 		}
 	}

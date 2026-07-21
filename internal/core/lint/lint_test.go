@@ -43,7 +43,7 @@ func TestLoadConfig(t *testing.T) {
 	path := filepath.Join(dir, "record-lint.json")
 	body := `{
       "roots": ["rec"],
-      "banned_tokens": [{"id":"t1","pattern":"foo","message":"no foo","severity":"blocker","allow_context":["ok"]}],
+      "banned_tokens": [{"id":"t1","pattern":"foo","message":"no foo","severity":"blocker","successor":"bar","allow_context":["ok"]}],
       "rules": {"no_git_metadata": {"enabled": true, "severity": "blocker", "fields": ["created"]}}
     }`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
@@ -58,6 +58,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if len(cfg.BannedTokens) != 1 || cfg.BannedTokens[0].ID != "t1" {
 		t.Errorf("banned_tokens = %v", cfg.BannedTokens)
+	}
+	if cfg.BannedTokens[0].Successor != "bar" {
+		t.Errorf("banned_tokens[0].Successor = %q, want bar", cfg.BannedTokens[0].Successor)
 	}
 	if r := cfg.Rules["no_git_metadata"]; !r.Enabled || r.Fields[0] != "created" {
 		t.Errorf("no_git_metadata rule = %+v", r)
