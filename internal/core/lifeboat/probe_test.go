@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -177,6 +178,68 @@ func TestWalkFilesStopsAtTheFileCap(t *testing.T) {
 	}
 	if len(capped) != 3 {
 		t.Errorf("walk returned %d files under a 3-file cap, want 3", len(capped))
+	}
+}
+
+// TestWalkFilesStopsAtTheDirectoryCap holds the bound a file cap alone cannot:
+// a tree of directories holding no regular file at all never reaches the file
+// cap, so the walk would run to exhaustion over a foreign tree that costs two
+// syscalls per directory and yields nothing. Directories are counted against the
+// same cap, and reaching it is reported like any other truncation.
+func TestWalkFilesStopsAtTheDirectoryCap(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 10; i++ {
+		if err := os.MkdirAll(filepath.Join(dir, fmt.Sprintf("d%02d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	paths, truncated := ctx.walkFilesLimited(".", 3)
+	if !truncated {
+		t.Errorf("walk of 10 empty directories under a 3-entry cap reported no truncation (paths %v)", paths)
+	}
+}
+
+// TestWalkFilesStopsAtTheDepthCap holds the other unbounded dimension: every
+// directory the walk opens is resolved from the containment root one component
+// at a time, so the cost of a chain of directories grows with the square of its
+// depth — a few thousand nested directories, cheap to create, cost minutes to
+// walk. The walk descends maxWalkDepth levels and says it stopped there.
+func TestWalkFilesStopsAtTheDepthCap(t *testing.T) {
+	dir := t.TempDir()
+	deep := make([]string, 0, maxWalkDepth+2)
+	for i := 0; i < maxWalkDepth+2; i++ {
+		deep = append(deep, "d")
+	}
+	buried := path.Join(append(deep, "buried.txt")...)
+	writeTree(t, dir, map[string]string{
+		"shallow.txt": "x\n",
+		buried:        "x\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	paths, truncated := ctx.WalkFiles(".")
+	if !truncated {
+		t.Errorf("walk of a %d-deep chain under a depth cap of %d reported no truncation", len(deep), maxWalkDepth)
+	}
+	for _, p := range paths {
+		if p == buried {
+			t.Errorf("walk returned %q, %d levels below its depth cap of %d", p, len(deep)-maxWalkDepth, maxWalkDepth)
+		}
+	}
+	// Pruning a chain is not abandoning the tree: what sits above the cap is
+	// still walked and still returned.
+	if len(paths) == 0 || paths[len(paths)-1] != "shallow.txt" {
+		t.Errorf("walk = %v, want the shallow file still returned", paths)
 	}
 }
 
