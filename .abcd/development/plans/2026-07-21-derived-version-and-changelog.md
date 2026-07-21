@@ -3,10 +3,66 @@
 _Plan / design artefact — dated 2026-07-21. Present tense; British English.
 Personas are Alice, Bob, Carol only._
 
-> **Status: design for grilling.** Locked decisions are recorded as decided (a
-> maintainer interview ruled them in — do not relitigate). Open design questions
-> each carry a recommendation and a one-line why; those are the remaining forks
-> to grill. Nothing here is built yet.
+> **Status: grilled and resolved 2026-07-21.** A maintainer grilling walked the
+> full design tree; the **Grilling outcomes** below are authoritative and
+> supersede the corresponding open questions in the body (which remain as design
+> rationale). Nothing here is built yet.
+
+## Grilling outcomes — 2026-07-21 (authoritative; supersede the open questions below)
+
+1. **Shipped-set = git tree-diff, not a log walk (supersedes RQ-3).** Compute the
+   release set as the set-difference of `git ls-tree <last-tag> -- .abcd/development/intents/shipped/ .abcd/work/issues/resolved/`
+   versus `git ls-tree HEAD -- <same>`. Comparing end-states (not history) is
+   immune to squash/rebase/merge-strategy and to rename detection, and stamps
+   nothing into the tree (ADR-19 clean). **This dissolves the Phase 1 STOP.**
+2. **Prose is faithful-by-construction via a completeness bijection.** The
+   deterministic Go core computes the exact record-id set of the cut; the agent
+   writes prose with **each line citing its record id**; the Go side verifies the
+   set of cited ids **==** the required set (no omission, no invention) before
+   writing. Loud-stage and refuse on mismatch. The agent controls wording only.
+3. **The agent judges the Keep-a-Changelog section; `impact` is version-only.**
+   `impact` (`additive|breaking|fix`) drives **only** the SemVer bump. The section
+   (Added/Changed/Removed/Deprecated/Fixed/Security) is the agent's judgement from
+   record content; the bijection guards **id-completeness only**, not the section
+   (a 3-value `impact` cannot express KaC granularity, e.g. Security/Removed).
+4. **The version is release-payload-only (corrects §7 + Phase 4).** The dev-tree
+   `plugin.json` stays version-**absent** (ADR-19, lockstep dev-mode). The derived
+   version is written into `plugin.json` / `marketplace.json` **only in the
+   rendered release payload** at ship. The sole in-tree version carrier is the
+   CHANGELOG dated heading (ADR-37). **Seed is 0.3.0** (current tag + changelog) —
+   NOT 0.1.0; the first derived cut is next-after-0.3.0 (pre-1.0: `additive`→0.3.1,
+   `breaking`→0.4.0).
+5. **Surface-break taxonomy.** Breaks (require a `breaking` intent in the cut): a
+   removed or renamed command; a removed or renamed flag; a previously
+   optional/absent flag becoming **required**; a removed declared manifest surface
+   entry. **Not** breaks: a new command or new **optional** flag; changed
+   help/description; reordering. Baseline = a deterministically-ordered committed
+   `surface.json` from the existing `GenerateReference` walker (no second walker).
+6. **Preview is deterministic-only.** `abcd changelog` (bare) renders the next
+   version + the deciding `impact` + the record list + the guardrail status. **No
+   agent, no prose** — prose is generated exactly once, at the reviewed ship.
+7. **Clean-cutover migration (supersedes RQ-5).** Do ONE final manual ADR-37 roll
+   of the current hand-written `[Unreleased]` (maintainer picks the version —
+   likely 0.4.0 given the `intent ready` Added feature). The derived machinery then
+   starts **pristine from the NEXT cut**: empty `[Unreleased]`, fully derived. No
+   fold, no double-coverage (the current `[Unreleased]` mixes shipped issues with a
+   not-yet-shipped intent, so it does not map to the derived set).
+8. **`impact` application.** Required on intents (the `intent_impact_valid` lint
+   blocks a move into `shipped/` without it); **optional, default `fix`** on issues
+   (explicit `breaking`/`additive` override for the rare case; surface guardrail
+   backstops an unlabelled structural break). The ~5 historical shipped intents are
+   **back-filled once** in Phase 1 (agent-proposed, maintainer-confirmed; they
+   drive no version as they predate the v0.3.0 tag).
+9. **Host-delegation seam = mirror `disembark` (corrects §5.5 + Phase 3).** There
+   is **no `abcd:CHANGELOG` agent** — `agents/CHANGELOG.md` is the itd-5
+   agent-prompt-version log, not an agent. Phase 3 **authors a new
+   release-changelog composer agent** modelled on `press-release-composer` /
+   `principle-distiller` (host-delegated per ADR-25, cite-or-be-dropped = the
+   bijection above, an injection-canary fixture, a `prompt_version` per itd-5). The
+   Go verb ingests the agent's `--changelog-json` (file or stdin `-`) and runs the
+   bijection — exactly like `abcd disembark … --principles-json`.
+
+---
 
 This programme covers three intents that share one seam — the release cut:
 
@@ -249,9 +305,12 @@ order:
    reads each shipped intent's press-release/AC and each resolved issue's
    title/body + commits, and writes Keep-a-Changelog sections
    (`Added`/`Changed`/`Fixed`/`Breaking`) for this version. The Go side **passes
-   the assembled record set to the agent and validates the returned prose**
-   (well-formed heading, known section names, no empty version) before accepting
-   it. `abcd:CHANGELOG` (the plugin's changelog agent) is the delegated worker.
+   the assembled record set to the agent and runs the completeness bijection**
+   (grilling outcome 2: every cited record id present, none invented) before
+   accepting it. The delegated worker is a **new release-changelog composer agent**
+   (grilling outcome 9 — there is no `abcd:CHANGELOG` agent; `agents/CHANGELOG.md`
+   is the itd-5 prompt-version log), modelled on `press-release-composer` /
+   `principle-distiller`, ingested via `--changelog-json` like `disembark`.
 6. **Fold + write.** The generated sections, folded together with the existing
    hand-written `[Unreleased]` body (§"Migration"), are written as a dated
    `## [X.Y.Z] - <date>` heading; `[Unreleased]` resets to empty. `plugin.json`
@@ -279,12 +338,14 @@ regenerated per read** (see the determinism decision).
 
 The manifests already exist; the remaining work is small and mechanical:
 
-- **`version` field in `plugin.json`** — the sole in-file version, set by the
-  derived cut, kept in lockstep with `marketplace.json`'s
-  `/plugins/0/changelog/version` (existing `lockstep.go` contract). Seed value is
-  itd-67 open Q (`0.1.0` in-development vs `1.0.0`); recommend seeding from the
-  **current newest CHANGELOG/tag** (`v0.1.0` already shipped), so the first
-  derived cut is `0.2.0` per ADR-37's stated first-release-under-policy.
+- **`version` in `plugin.json`** — the sole in-file version, **rendered into the
+  release payload only, never committed to the dev tree** (grilling outcome 4:
+  ADR-19 keeps the working tree version-absent; the CHANGELOG dated heading is the
+  one in-tree carrier). Kept in lockstep with `marketplace.json`'s
+  `/plugins/0/changelog/version` (existing `lockstep.go` contract, release-mode).
+  Seed is the **current newest CHANGELOG/tag, `0.3.0`** (grilling outcome 4 —
+  corrects an earlier `0.1.0` error), so the first derived cut is
+  next-after-`0.3.0` (`additive`→`0.3.1`, `breaking`→`0.4.0`).
 - **README install/update path:** `/plugin marketplace add REPPL/abcd` →
   `/plugin install abcd@abcd-marketplace`; update via `/plugin update abcd`.
 - **Light installability smoke** (itd-67 AC): `marketplace.json` + `plugin.json`
@@ -406,10 +467,15 @@ tests disciplines.
 
 ### Phase 3 — Changelog generation (host-delegated prose) + `abcd changelog` preview
 
-- Wire the ship-time flow (§5): assemble → derive → guard → **delegate prose to
-  `abcd:CHANGELOG` (ADR-25)** → validate → fold `[Unreleased]` (RQ-5) → write
-  dated heading + lockstep manifest versions. Add the read-only `abcd changelog`
-  bare verb.
+- **Author a new release-changelog composer agent** (outcome 9) modelled on
+  `press-release-composer`/`principle-distiller` (host-delegated, cite-or-be-dropped,
+  injection-canary fixture, `prompt_version` per itd-5). Wire the ship-time flow
+  (§5): assemble → derive → guard → **delegate prose to that agent (ADR-25),
+  ingested via `--changelog-json`** → **run the completeness bijection (outcome 2)**
+  → **clean-cutover: no fold; empty `[Unreleased]`, fully derived from this cut on**
+  (outcome 7) → write the dated heading (+ render lockstep manifest versions into
+  the release payload, outcome 4). Add the read-only, deterministic-only
+  `abcd changelog` preview verb (outcome 6).
 - **Detectors first:** a golden-ish test that assembly + validation produce a
   well-formed dated section from a fixture record set (validate structure, not
   exact prose — prose is the agent's); a test that `abcd changelog` writes
