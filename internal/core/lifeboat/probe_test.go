@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -180,19 +181,88 @@ func TestWalkFilesStopsAtTheFileCap(t *testing.T) {
 	}
 }
 
+// TestWalkFilesStopsAtTheDirectoryCap holds the bound a file cap alone cannot:
+// a tree of directories holding no regular file at all never reaches the file
+// cap, so the walk would run to exhaustion over a foreign tree that costs two
+// syscalls per directory and yields nothing. Directories are counted against the
+// same cap, and reaching it is reported like any other truncation.
+func TestWalkFilesStopsAtTheDirectoryCap(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 10; i++ {
+		if err := os.MkdirAll(filepath.Join(dir, fmt.Sprintf("d%02d", i)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	paths, truncated := ctx.walkFilesLimited(".", 3)
+	if !truncated {
+		t.Errorf("walk of 10 empty directories under a 3-entry cap reported no truncation (paths %v)", paths)
+	}
+}
+
+// TestWalkFilesStopsAtTheDepthCap holds the other unbounded dimension: every
+// directory the walk opens is resolved from the containment root one component
+// at a time, so the cost of a chain of directories grows with the square of its
+// depth — a few thousand nested directories, cheap to create, cost minutes to
+// walk. The walk descends maxWalkDepth levels and says it stopped there.
+func TestWalkFilesStopsAtTheDepthCap(t *testing.T) {
+	dir := t.TempDir()
+	deep := make([]string, 0, maxWalkDepth+2)
+	for i := 0; i < maxWalkDepth+2; i++ {
+		deep = append(deep, "d")
+	}
+	buried := path.Join(append(deep, "buried.txt")...)
+	writeTree(t, dir, map[string]string{
+		"shallow.txt": "x\n",
+		buried:        "x\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	paths, truncated := ctx.WalkFiles(".")
+	if !truncated {
+		t.Errorf("walk of a %d-deep chain under a depth cap of %d reported no truncation", len(deep), maxWalkDepth)
+	}
+	for _, p := range paths {
+		if p == buried {
+			t.Errorf("walk returned %q, %d levels below its depth cap of %d", p, len(deep)-maxWalkDepth, maxWalkDepth)
+		}
+	}
+	// Pruning a chain is not abandoning the tree: what sits above the cap is
+	// still walked and still returned.
+	if len(paths) == 0 || paths[len(paths)-1] != "shallow.txt" {
+		t.Errorf("walk = %v, want the shallow file still returned", paths)
+	}
+}
+
 // TestProbeLeavesEveryFileByteIdentical is the read-only invariance property at
 // full strength: a probe of a marker-bearing tree must leave every file's
 // contents unchanged and add or remove nothing. The marker adapter reads every
 // file in the tree, so byte-level proof — not a path/size fingerprint — is what
-// makes "point it at an archived project, touch nothing" true.
+// makes "point it at an archived project, touch nothing" true. The fixture
+// carries every signal the whole-tree adapters consult — work markers, a naming
+// document, an architecture document, and a package tree — so one fixture proves
+// the property for all of them.
 func TestProbeLeavesEveryFileByteIdentical(t *testing.T) {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
-		"README.md":     "# demo\n\nA demo project kept for the probe.\n",
-		"go.mod":        "module example.com/demo\n\ngo 1.22\n",
-		"src/a.go":      "package a\n\n// TODO: handle the retry case\n",
-		"src/b.go":      "package a\n\n// FIXME: this leaks a connection\n",
-		"docs/notes.md": "Notes about the demo.\n",
+		"README.md":               "# demo\n\nA demo project kept for the probe.\n",
+		"go.mod":                  "module example.com/demo\n\ngo 1.22\n",
+		"src/a.go":                "package a\n\n// TODO: handle the retry case\n",
+		"src/b.go":                "package a\n\n// FIXME: this leaks a connection\n",
+		"docs/notes.md":           "Notes about the demo.\n",
+		"NAMING.md":               "# Naming\n\nA voyage is never called a run.\n",
+		"ARCHITECTURE.md":         "# Architecture\n\nA core, and a shell that formats it.\n",
+		"internal/core/core.go":   "package core\n",
+		"internal/store/store.go": "package store\n",
 	})
 	before := fileHashes(t, dir)
 	if _, err := Probe(dir); err != nil {

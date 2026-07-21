@@ -592,6 +592,454 @@ func TestConvOpenQuestionsBlankAdmitsAPartialScan(t *testing.T) {
 	}
 }
 
+// convArchitectureProse is an ARCHITECTURE.md body comfortably above the
+// convGroundedProseBytes threshold — real architecture prose rather than a stub.
+const convArchitectureProse = "# Architecture\n\n" +
+	"The wreck is split into a transport-agnostic core and a thin CLI shell. " +
+	"The core owns every decision; the shell only formats what the core returns, " +
+	"so a second front door costs nothing but its formatter.\n"
+
+// TestConvNamingPartialFromNamingDoc is the intent's headline naming behaviour: a
+// record-less repository carrying a dedicated NAMING.md no longer blanks
+// "constraints/naming" — the section comes back non-blank at the conventions
+// tier, citing the file it read.
+func TestConvNamingPartialFromNamingDoc(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":    "module example.com/wreck\n\ngo 1.22\n",
+		"NAMING.md": "# Naming\n\nA voyage is never called a run.\n",
+	})
+	cov, err := Probe(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := findSection(t, cov, "constraints/naming")
+	if sc.Status != StatusPartial {
+		t.Fatalf("constraints/naming status = %s, want partial", sc.Status)
+	}
+	if sc.Tier != TierConventions {
+		t.Errorf("constraints/naming tier = %s, want %s", sc.Tier, TierConventions)
+	}
+	if !containsSource(sc.Evidence, "NAMING.md") {
+		t.Errorf("evidence = %v, want NAMING.md cited", sc.Evidence)
+	}
+	if sc.Confidence != ConfidenceMedium {
+		t.Errorf("confidence = %s for a dedicated naming document, want %s", sc.Confidence, ConfidenceMedium)
+	}
+}
+
+// TestConvNamingPartialFromDocsNamingPage confirms the docs/ prefix idiom: a
+// naming page under docs/ grounds the section when no root NAMING.md exists.
+func TestConvNamingPartialFromDocsNamingPage(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":                     "module example.com/wreck\n\ngo 1.22\n",
+		"docs/naming-conventions.md": "# Naming conventions\n\nPackages are singular nouns.\n",
+		"docs/unrelated-appendix.md": "# Appendix\n\nNothing about naming.\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "constraints/naming").Probe(ctx)
+	if ev.Status != StatusPartial {
+		t.Fatalf("constraints/naming status = %s, want partial", ev.Status)
+	}
+	if !containsSource(ev.Sources, "docs/naming-conventions.md") {
+		t.Errorf("evidence = %v, want the docs/ naming page cited", ev.Sources)
+	}
+	if ev.Confidence != ConfidenceMedium {
+		t.Errorf("confidence = %s for a docs/ naming page, want %s", ev.Confidence, ConfidenceMedium)
+	}
+}
+
+// TestConvNamingFallsBackToGlossaryWithoutDisplacingIt holds the distinctness
+// contract on the fixture that could collapse the two sections into one: a
+// repository whose only vocabulary signal is a GLOSSARY.md. The glossary section
+// stays exactly what convGlossarySource already made it, and naming is a visibly
+// weaker derived reading — lower confidence, and a citation qualified as the
+// fallback it is — never a duplicate row.
+func TestConvNamingFallsBackToGlossaryWithoutDisplacingIt(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"GLOSSARY.md": "# Glossary\n\n**Voyage** — one packed lifeboat.\n",
+	})
+	cov, err := Probe(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	naming := findSection(t, cov, "constraints/naming")
+	if naming.Status != StatusPartial {
+		t.Fatalf("constraints/naming status = %s, want partial", naming.Status)
+	}
+	if naming.Confidence != ConfidenceLow {
+		t.Errorf("naming confidence = %s on a glossary fallback, want %s", naming.Confidence, ConfidenceLow)
+	}
+	if len(naming.Evidence) != 1 || !strings.Contains(naming.Evidence[0], "GLOSSARY.md") {
+		t.Fatalf("naming evidence = %v, want the glossary cited", naming.Evidence)
+	}
+	if !strings.Contains(naming.Evidence[0], "glossary fallback") {
+		t.Errorf("naming cites %q without the glossary-fallback qualifier", naming.Evidence[0])
+	}
+
+	glossary := findSection(t, cov, "glossary")
+	if glossary.Status != StatusPartial || glossary.Confidence != ConfidenceMedium {
+		t.Fatalf("glossary = %s/%s, want partial/medium (convGlossarySource unchanged)",
+			glossary.Status, glossary.Confidence)
+	}
+	if !containsSource(glossary.Evidence, "GLOSSARY.md") {
+		t.Errorf("glossary evidence = %v, want GLOSSARY.md cited bare", glossary.Evidence)
+	}
+
+	// The two rows must differ in both dimensions: same file, different reading.
+	if naming.Confidence == glossary.Confidence {
+		t.Errorf("naming and glossary share confidence %s; naming must be the weaker reading", naming.Confidence)
+	}
+	if naming.Evidence[0] == glossary.Evidence[0] {
+		t.Errorf("naming and glossary cite the identical string %q; naming must be visibly derived", naming.Evidence[0])
+	}
+}
+
+// TestConventionSourcesHaveOneAdapterPerSection guards the registry against a
+// duplicate adapter: two adapters for one section race for the same coverage row
+// and the loser's evidence silently vanishes. It pins the sections this intent
+// touches — including glossary, which keeps its single pre-existing adapter.
+func TestConventionSourcesHaveOneAdapterPerSection(t *testing.T) {
+	count := map[Section]int{}
+	for _, s := range conventionSources() {
+		count[s.Section()]++
+	}
+	for _, section := range []Section{
+		"glossary", "constraints/naming", "internals", "evidence/open-questions",
+	} {
+		if count[section] != 1 {
+			t.Errorf("conventionSources has %d adapters for %s, want exactly 1", count[section], section)
+		}
+	}
+	for section, n := range count {
+		if n > 1 {
+			t.Errorf("conventionSources has %d adapters for %s, want at most 1", n, section)
+		}
+	}
+}
+
+// TestConvInternalsCitesArchitectureAndLayout is the intent's headline internals
+// behaviour: a record-less repository with an ARCHITECTURE.md and a package tree
+// grounds "internals" from both signals at once, citing the document and the
+// packages a rescuer must navigate.
+func TestConvInternalsCitesArchitectureAndLayout(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":                       "module example.com/wreck\n\ngo 1.22\n",
+		"ARCHITECTURE.md":              convArchitectureProse,
+		"internal/core/voyage.go":      "package core\n",
+		"internal/surface/cli/main.go": "package cli\n",
+		"cmd/wreck/main.go":            "package main\n",
+	})
+	cov, err := Probe(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := findSection(t, cov, "internals")
+	if sc.Status != StatusPartial {
+		t.Fatalf("internals status = %s, want partial", sc.Status)
+	}
+	if sc.Tier != TierConventions {
+		t.Errorf("internals tier = %s, want %s", sc.Tier, TierConventions)
+	}
+	if sc.Confidence != ConfidenceHigh {
+		t.Errorf("internals confidence = %s with real architecture prose, want %s", sc.Confidence, ConfidenceHigh)
+	}
+	if !containsSource(sc.Evidence, "ARCHITECTURE.md") {
+		t.Errorf("evidence = %v, want ARCHITECTURE.md cited", sc.Evidence)
+	}
+	for _, want := range []string{"internal/core/", "internal/surface/", "cmd/wreck/"} {
+		if !containsSource(sc.Evidence, want) {
+			t.Errorf("evidence = %v, want the layout entry %s cited", sc.Evidence, want)
+		}
+	}
+}
+
+// TestConvInternalsLayoutOnlyIsLowConfidence holds the weakest internals signal:
+// a package tree with no architecture document still says something about the
+// shape of the system, at low confidence and citing the layout alone. The fixture
+// carries no other conventional sentinel, so it also proves the tier gate admits
+// a repository whose only Tier-1 signal is its layout.
+func TestConvInternalsLayoutOnlyIsLowConfidence(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"internal/store/store.go": "package store\n",
+		"pkg/api/api.go":          "package api\n",
+	})
+	cov, err := Probe(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := findSection(t, cov, "internals")
+	if sc.Status != StatusPartial {
+		t.Fatalf("internals status = %s, want partial (evidence %v)", sc.Status, sc.Evidence)
+	}
+	if sc.Confidence != ConfidenceLow {
+		t.Errorf("internals confidence = %s with layout only, want %s", sc.Confidence, ConfidenceLow)
+	}
+	for _, want := range []string{"internal/store/", "pkg/api/"} {
+		if !containsSource(sc.Evidence, want) {
+			t.Errorf("evidence = %v, want the layout entry %s cited", sc.Evidence, want)
+		}
+	}
+	for _, got := range sc.Evidence {
+		if strings.Contains(strings.ToLower(got), "architecture") {
+			t.Errorf("layout-only internals cites %q; no architecture document exists", got)
+		}
+	}
+}
+
+// TestConvInternalsThinArchitectureIsMedium separates a written architecture
+// chapter from a placeholder: a document below the prose threshold is still
+// evidence, but only at medium confidence.
+func TestConvInternalsThinArchitectureIsMedium(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":          "module example.com/wreck\n\ngo 1.22\n",
+		"ARCHITECTURE.md": "# Architecture\n\nTBD.\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "internals").Probe(ctx)
+	if ev.Status != StatusPartial {
+		t.Fatalf("internals status = %s, want partial", ev.Status)
+	}
+	if ev.Confidence != ConfidenceMedium {
+		t.Errorf("internals confidence = %s for a thin architecture doc, want %s", ev.Confidence, ConfidenceMedium)
+	}
+	if len(ev.Sources) == 0 {
+		t.Fatal("partial internals cites no evidence")
+	}
+}
+
+// TestConvInternalsMediumFromArchitectureDirectory confirms the Diataxis
+// fallback: a docs/explanation tree holding Markdown is architecture prose spread
+// across files, and counts at medium confidence.
+func TestConvInternalsMediumFromArchitectureDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":                     "module example.com/wreck\n\ngo 1.22\n",
+		"docs/explanation/model.md":  "# The model\n\nHow the pieces fit.\n",
+		"docs/explanation/notes.txt": "not markdown\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "internals").Probe(ctx)
+	if ev.Status != StatusPartial {
+		t.Fatalf("internals status = %s, want partial", ev.Status)
+	}
+	if ev.Confidence != ConfidenceMedium {
+		t.Errorf("internals confidence = %s for a doc directory, want %s", ev.Confidence, ConfidenceMedium)
+	}
+	if !containsSource(ev.Sources, "docs/explanation/") {
+		t.Errorf("evidence = %v, want the docs/explanation/ tree cited", ev.Sources)
+	}
+}
+
+// TestConvInternalsBoundsItsLayoutCitations holds both layout bounds at once: the
+// citation cap keeps a vast monorepo from dumping every package into a section
+// while the count stays truthful, and a walk cut short by the file cap says so in
+// its own evidence rather than reading as a complete survey.
+func TestConvInternalsBoundsItsLayoutCitations(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{"go.mod": "module example.com/vast\n\ngo 1.22\n"}
+	for i := 0; i < maxLayoutCitations+5; i++ {
+		files[fmt.Sprintf("internal/p%03d/p.go", i)] = "package p\n"
+	}
+	writeTree(t, dir, files)
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	src := convSourceForSection(t, "internals").(convInternalsSource)
+	full := src.probeLimited(ctx, maxWalkFiles)
+	cited := 0
+	for _, s := range full.Sources {
+		if strings.HasPrefix(s, "internal/p") {
+			cited++
+		}
+	}
+	if cited != maxLayoutCitations {
+		t.Errorf("cited %d layout entries, want the cap of %d", cited, maxLayoutCitations)
+	}
+	if !containsSource(full.Sources, fmt.Sprintf("5 further package(s) counted but not cited (citation cap %d)", maxLayoutCitations)) {
+		t.Errorf("evidence = %v, want the 5 uncited packages reported as a count", full.Sources)
+	}
+
+	// A walk cut short must be visible in the evidence, exactly as the marker
+	// scan's truncation is.
+	capped := src.probeLimited(ctx, 3)
+	said := false
+	for _, s := range capped.Sources {
+		if strings.Contains(s, "walk cap") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("truncated layout scan does not report it in its evidence: %v", capped.Sources)
+	}
+}
+
+// TestConvInternalsStagesAScanThatReachedNoPackage holds the loud staging where
+// it is easiest to lose: a walk the cap cut short before it ever reached a
+// source root found no packages at all, so both the blank and the
+// architecture-only reading would otherwise describe a tree the scan never
+// finished reading. A blank is a first-class result only while it is trustworthy
+// (adr-35), so it must say the layout scan stopped early — and so must the
+// non-blank reading beside it.
+func TestConvInternalsStagesAScanThatReachedNoPackage(t *testing.T) {
+	// assets/ sorts before every source root, so a cap of ten files is spent
+	// before the walk reaches src/ — exactly the shape of a repository whose
+	// code sits behind a large data or frontend tree.
+	bulk := func(extra map[string]string) map[string]string {
+		files := map[string]string{"src/pkg/code.go": "package pkg\n"}
+		for i := 0; i < 40; i++ {
+			files[fmt.Sprintf("assets/a%02d.bin", i)] = "x\n"
+		}
+		for rel, content := range extra {
+			files[rel] = content
+		}
+		return files
+	}
+
+	t.Run("blank", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTree(t, dir, bulk(nil))
+		ctx, err := newSourceContext(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ctx.Close()
+
+		ev := convSourceForSection(t, "internals").(convInternalsSource).probeLimited(ctx, 10)
+		if ev.Status != StatusBlank {
+			t.Fatalf("internals status = %s, want blank (evidence %v)", ev.Status, ev.Sources)
+		}
+		said := false
+		for _, s := range ev.Searched {
+			if strings.Contains(s, "walk cap") {
+				said = true
+			}
+		}
+		if !said {
+			t.Errorf("blank internals searched %v without admitting the walk cap cut the layout scan short", ev.Searched)
+		}
+		if !strings.Contains(ev.Question, "reached") {
+			t.Errorf("blank internals asks %q, claiming no layout in a tree it did not finish reading", ev.Question)
+		}
+	})
+
+	t.Run("architecture only", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTree(t, dir, bulk(map[string]string{"ARCHITECTURE.md": convArchitectureProse}))
+		ctx, err := newSourceContext(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer ctx.Close()
+
+		ev := convSourceForSection(t, "internals").(convInternalsSource).probeLimited(ctx, 10)
+		if ev.Status != StatusPartial {
+			t.Fatalf("internals status = %s, want partial", ev.Status)
+		}
+		said := false
+		for _, s := range ev.Sources {
+			if strings.Contains(s, "walk cap") {
+				said = true
+			}
+		}
+		if !said {
+			t.Errorf("evidence = %v, want the truncated layout scan reported even though it found no package", ev.Sources)
+		}
+	})
+}
+
+// TestConvNamingAndInternalsBlankWithoutSignals holds the "a blank is a result"
+// contract for both new adapters: a repository with neither naming nor
+// architecture documentation and no recognisable layout returns honest blanks
+// naming what was searched and the question a human must answer — never a
+// fabricated section.
+func TestConvNamingAndInternalsBlankWithoutSignals(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"README.md": "# Bare\n\nA project that documented nothing else.\n",
+		"main.go":   "package main\n\nfunc main() {}\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	for _, section := range []Section{"constraints/naming", "internals"} {
+		ev := convSourceForSection(t, section).Probe(ctx)
+		if ev.Status != StatusBlank {
+			t.Fatalf("%s status = %s, want blank (evidence %v)", section, ev.Status, ev.Sources)
+		}
+		if len(ev.Searched) == 0 {
+			t.Errorf("blank %s names nothing it searched", section)
+		}
+		if ev.Question == "" {
+			t.Errorf("blank %s carries no question for a human", section)
+		}
+	}
+}
+
+// TestHasConventionsCoversNamingAndArchitecture is the tier-gate regression the
+// new adapters open up: the gate skips every adapter of an absent tier, so a
+// repository whose only conventional signal is a NAMING.md or an ARCHITECTURE.md
+// would have the whole Tier-1 set skipped and its section blanked falsely.
+func TestHasConventionsCoversNamingAndArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		file    string
+		content string
+		section Section
+	}{
+		{"NAMING.md", "# Naming\n\nA voyage is never called a run.\n", "constraints/naming"},
+		{"ARCHITECTURE.md", convArchitectureProse, "internals"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTree(t, dir, map[string]string{tc.file: tc.content})
+			cov, err := Probe(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, tr := range cov.TiersPresent {
+				if tr == TierConventions {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("tiers_present = %v omits TierConventions for a %s-only repo", cov.TiersPresent, tc.file)
+			}
+			sc := findSection(t, cov, tc.section)
+			if sc.Status == StatusBlank {
+				t.Errorf("%s blanked in a %s-only repo; the tier gate skipped its adapter", tc.section, tc.file)
+			}
+		})
+	}
+}
+
 // containsSource reports whether want appears in sources.
 func containsSource(sources []string, want string) bool {
 	for _, s := range sources {
