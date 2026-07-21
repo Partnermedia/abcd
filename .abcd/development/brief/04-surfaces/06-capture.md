@@ -38,7 +38,7 @@ id: iss-N                  # unpadded, mirrors itd-N
 slug: <kebab-case>
 severity: nitpick|minor|major|critical
 category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|architectural-insight|future-work-seed|observation
-source: plan-review|impl-review|manual-test|review-followup|agent-finding|user-observation|drift-detection|memory-curation
+source: plan-review|impl-review|manual-test|review-followup|agent-finding|agent-observation|user-observation|drift-detection|memory-curation
 found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
 details: "<text>"          # optional structured detail

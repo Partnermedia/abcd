@@ -12,6 +12,11 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`agent-observation` is now a valid `--source` value for `abcd capture`.**
+  An autonomous run's self-observation had no honest surfacing channel and was
+  reusing `agent-finding`. `agent-observation` parallels it ("an agent
+  observed") without being tied to one run mode (iss-57).
+
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
   verb reporting whether an intent may be implemented now: planned
   (directory-as-truth), enumerable Acceptance Criteria, a bidirectional spec

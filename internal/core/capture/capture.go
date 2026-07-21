@@ -64,8 +64,8 @@ var validCategories = map[Category]bool{
 
 var validSources = map[Source]bool{
 	"plan-review": true, "impl-review": true, "manual-test": true,
-	"review-followup": true, "agent-finding": true, "user-observation": true,
-	"drift-detection": true, "memory-curation": true,
+	"review-followup": true, "agent-finding": true, "agent-observation": true,
+	"user-observation": true, "drift-detection": true, "memory-curation": true,
 }
 
 // ResolvedBy is an optional structured pointer to what resolved an issue.

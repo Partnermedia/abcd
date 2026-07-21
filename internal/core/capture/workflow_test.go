@@ -231,6 +231,25 @@ func TestCaptureRejectsBadEnumAndSweepsPlaceholder(t *testing.T) {
 	}
 }
 
+func TestCaptureAcceptsAgentObservationSourceAndRejectsBogus(t *testing.T) {
+	// iss-57: an autonomous run's self-observation needs an honest --source; the
+	// honest value is agent-observation. A made-up source must still be rejected.
+	repo, ir := ledger(t)
+	if _, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "x", Severity: SeverityMinor,
+		Category: "observation", Source: "agent-observation", Slug: "s", FoundDuring: "ctx",
+	}); err != nil {
+		t.Fatalf("agent-observation should be a valid source, got %v", err)
+	}
+	_, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "x", Severity: SeverityMinor,
+		Category: "observation", Source: "made-up-source", Slug: "s2", FoundDuring: "ctx",
+	})
+	if !errors.Is(err, ErrMalformedFrontmatter) {
+		t.Fatalf("bogus source want ErrMalformedFrontmatter, got %v", err)
+	}
+}
+
 func TestResolveTransition(t *testing.T) {
 	repo, ir := ledger(t)
 	res, err := Capture(CaptureRequest{
