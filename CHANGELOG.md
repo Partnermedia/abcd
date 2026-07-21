@@ -28,6 +28,19 @@ called out in a **Breaking** section.
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
 
+### Fixed
+
+- **The identity pin round-trips through the self-contained commit guard.** The
+  pin was stored with Go's default JSON encoder, which escapes `&`, `<`, `>` (and
+  always `"`, `\`, control characters); the pre-commit identity guard reads the
+  raw bytes between the quotes with a naive parse, so an escaped value never
+  matched `git config` and fail-closed a correctly configured identity (e.g. a
+  `user.name` of `Marks & Spencer`). The pin is now marshalled without HTML
+  escaping so `&`/`<`/`>` are stored literally, and the characters a parse can
+  never read back (`"`, `\`, control) are refused at pin time with a clear remedy
+  — keeping the commit guard zero-dependency rather than delegating it to a
+  possibly-stale binary.
+
 ## [0.3.0] - 2026-07-18
 
 ### Security
