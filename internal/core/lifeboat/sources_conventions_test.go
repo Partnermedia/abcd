@@ -1,8 +1,10 @@
 package lifeboat
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -304,6 +306,289 @@ func TestConvProbeIsDeterministic(t *testing.T) {
 				t.Errorf("%s: source[%d] differs: %q vs %q", s.Section(), i, a.Sources[i], b.Sources[i])
 			}
 		}
+	}
+}
+
+// convMarkerFixture builds the intent's motivating repository: no .abcd record,
+// no git, but source files carrying the work markers the last team left behind.
+// go.mod is deliberate — it is the conventions tier gate's sentinel, without
+// which the whole Tier-1 set is skipped and every conventions section blanks.
+func convMarkerFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":   "module example.com/wreck\n\ngo 1.22\n",
+		"retry.go": "package wreck\n\nfunc retry() {\n\t// TODO: handle the retry case\n}\n",
+		"store.go": "package wreck\n\n// FIXME(alice): this leaks a connection\nfunc store() {}\n",
+	})
+	return dir
+}
+
+// TestConvOpenQuestionsPartialFromWorkMarkers is the intent's headline
+// behaviour: a record-less repository whose source is dense with TODO/FIXME no
+// longer reports "no open questions on record" — the section comes back
+// non-blank at the conventions tier, citing the file and line of each marker.
+func TestConvOpenQuestionsPartialFromWorkMarkers(t *testing.T) {
+	cov, err := Probe(convMarkerFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := findSection(t, cov, "evidence/open-questions")
+	if sc.Status != StatusPartial {
+		t.Fatalf("evidence/open-questions status = %s, want partial", sc.Status)
+	}
+	if sc.Tier != TierConventions {
+		t.Errorf("evidence/open-questions tier = %s, want %s", sc.Tier, TierConventions)
+	}
+	if !containsSource(sc.Evidence, "retry.go:4 (TODO)") {
+		t.Errorf("evidence = %v, want the TODO cited at retry.go:4", sc.Evidence)
+	}
+	if !containsSource(sc.Evidence, "store.go:3 (FIXME)") {
+		t.Errorf("evidence = %v, want the FIXME cited at store.go:3", sc.Evidence)
+	}
+	if sc.Confidence == "" {
+		t.Error("non-blank evidence/open-questions carries no confidence")
+	}
+}
+
+// TestConvOpenQuestionsCeilingIsPartial holds the status ceiling: markers are a
+// thread, not a framed set of open questions, so no quantity of them ever
+// grounds the section. Volume moves the confidence instead.
+func TestConvOpenQuestionsCeilingIsPartial(t *testing.T) {
+	dir := t.TempDir()
+	var body strings.Builder
+	body.WriteString("package wreck\n")
+	for i := 0; i < 20; i++ {
+		fmt.Fprintf(&body, "// TODO: unfinished thing %d\n", i)
+	}
+	writeTree(t, dir, map[string]string{
+		"go.mod":  "module example.com/wreck\n\ngo 1.22\n",
+		"many.go": body.String(),
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "evidence/open-questions").Probe(ctx)
+	if ev.Status != StatusPartial {
+		t.Fatalf("20 markers give status %s, want partial (grounded is not reachable)", ev.Status)
+	}
+	if ev.Confidence != ConfidenceMedium {
+		t.Errorf("confidence = %s at 20 markers, want %s", ev.Confidence, ConfidenceMedium)
+	}
+}
+
+// TestConvOpenQuestionsBlankWithoutMarkers holds the blank contract for the
+// marker scan: a tree with no work markers is an honest blank naming the markers
+// and the trees it searched, never a fabricated result.
+func TestConvOpenQuestionsBlankWithoutMarkers(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":    "module example.com/tidy\n\ngo 1.22\n",
+		"README.md": "# Tidy\n\nA project that left nothing unfinished.\n",
+		"tidy.go":   "package tidy\n\n// NOTE: this explains, it does not ask.\nfunc tidy() {}\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "evidence/open-questions").Probe(ctx)
+	if ev.Status != StatusBlank {
+		t.Fatalf("marker-free tree gives status %s, want blank (evidence %v)", ev.Status, ev.Sources)
+	}
+	if len(ev.Searched) == 0 {
+		t.Error("blank evidence/open-questions names nothing it searched")
+	}
+	if ev.Question == "" {
+		t.Error("blank evidence/open-questions carries no question for a human")
+	}
+}
+
+// TestConvOpenQuestionsIgnoresRedactionPlaceholders holds the honest-blank
+// contract against the one shape that reads like a marker and is not one: the
+// XXX-XXX-XXX redaction placeholder. Fabricated evidence is the failure a tool
+// built around honest blanks cannot afford, so a tree whose only uppercase
+// triples are redactions must still come back blank.
+func TestConvOpenQuestionsIgnoresRedactionPlaceholders(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":            "module example.com/support\n\ngo 1.22\n",
+		"docs/support.md":   "# Support\n\nCall us on XXX-XXX-XXX for details.\n",
+		"docs/redacted.md":  "account: XXX-XXX-XXX\n",
+		"docs/trailing.md":  "XXX-XXX-XXX\n",
+		"docs/customers.md": "Reach the team on XXX-XXX-XXX\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "evidence/open-questions").Probe(ctx)
+	if ev.Status != StatusBlank {
+		t.Fatalf("redaction placeholders give status %s, want blank; fabricated evidence %v", ev.Status, ev.Sources)
+	}
+}
+
+// TestConvMarkerRePinsTheRecognisedSpellings pins the marker pattern against the
+// spellings it must accept and the near-misses it must reject, so the word
+// boundary cannot be loosened or tightened without a test saying so.
+func TestConvMarkerRePinsTheRecognisedSpellings(t *testing.T) {
+	match := []string{
+		"// TODO: handle the retry case",
+		"//TODO: no space after the slashes",
+		"# TODO",
+		"- TODO: a list item",
+		"* FIXME check this",
+		"FIXME(alice): leaks a connection",
+		"-- BUG --",
+		"// HACK around the driver",
+		"XXX",
+	}
+	reject := []string{
+		"redacted: XXX-XXX-XXX",
+		"call XXX-XXX-XXX for details",
+		"XXX-XXX-XXX",
+		"TODOS are not markers",
+		"todo_list := nil",
+	}
+	for _, line := range match {
+		if convMarkerRe.FindStringSubmatch(line) == nil {
+			t.Errorf("convMarkerRe rejects the marker line %q", line)
+		}
+	}
+	for _, line := range reject {
+		if m := convMarkerRe.FindStringSubmatch(line); m != nil {
+			t.Errorf("convMarkerRe matches %q as a %s marker", line, m[2])
+		}
+	}
+}
+
+// TestConvOpenQuestionsIgnoresSkippedTrees proves the adapter inherits the
+// walk's skip set: a dependency's or a generator's TODO is not this team's open
+// question, so it is never cited.
+func TestConvOpenQuestionsIgnoresSkippedTrees(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod":                    "module example.com/wreck\n\ngo 1.22\n",
+		"keep.go":                   "package wreck\n\n// TODO: our own question\n",
+		".git/hooks/pre-commit":     "# TODO: git internals\n",
+		"node_modules/pkg/index.js": "// TODO: a dependency's marker\n",
+		"vendor/dep/dep.go":         "// TODO: vendored\n",
+		"generated/api.pb.go":       "// TODO: generated\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "evidence/open-questions").Probe(ctx)
+	if ev.Status != StatusPartial {
+		t.Fatalf("status = %s, want partial", ev.Status)
+	}
+	if !containsSource(ev.Sources, "keep.go:3 (TODO)") {
+		t.Errorf("evidence = %v, want keep.go:3 cited", ev.Sources)
+	}
+	for _, s := range ev.Sources {
+		for _, skipped := range walkSkipDirs {
+			if strings.Contains(s, skipped+"/") {
+				t.Errorf("evidence cites %q from the skipped %s/ tree", s, skipped)
+			}
+		}
+	}
+}
+
+// TestConvOpenQuestionsStopsAtTheScanBudget proves the scan is bounded in bytes,
+// not only in files: the per-file cap and the walk cap multiply, so without an
+// aggregate budget a hostile tree of large files holds the probe for hours. The
+// scan must stop when the budget is spent and say so in its own evidence, so a
+// rescuer never mistakes a partial count for the whole tree. The branch is
+// exercised through the same code path at an affordable scale — the shipped
+// budget stays a const, so concurrent adapters share no mutable state.
+func TestConvOpenQuestionsStopsAtTheScanBudget(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{"go.mod": "module example.com/vast\n\ngo 1.22\n"}
+	for i := 0; i < 6; i++ {
+		files[fmt.Sprintf("f%d.go", i)] = strings.Repeat("x", 1000) + "\n// TODO: unfinished\n"
+	}
+	writeTree(t, dir, files)
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	src := convSourceForSection(t, "evidence/open-questions").(convOpenQuestionsSource)
+	full := src.probeLimited(ctx, maxMarkerScanBytes)
+	if !containsSource(full.Sources, "6 work marker(s) across 6 file(s)") {
+		t.Fatalf("unbudgeted scan evidence = %v, want all 6 markers counted", full.Sources)
+	}
+
+	// A budget of two files' worth stops the scan partway through the walk.
+	capped := src.probeLimited(ctx, 2100)
+	if containsSource(capped.Sources, "6 work marker(s) across 6 file(s)") {
+		t.Errorf("scan ran past its 2100-byte budget: %v", capped.Sources)
+	}
+	said := false
+	for _, s := range capped.Sources {
+		if strings.Contains(s, "read budget") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("budget-exhausted scan does not report it in its evidence: %v", capped.Sources)
+	}
+}
+
+// TestConvOpenQuestionsBlankAdmitsAPartialScan closes the honesty gap the scan
+// bounds open up: when the budget or the walk cap stops the scan before the end
+// of the tree and nothing was found in the part that was read, "its source
+// carries no work markers" is a claim about files the adapter never opened. A
+// blank is a first-class result (adr-35) precisely because it is trustworthy, so
+// a blank drawn from a partial read must say the read was partial.
+func TestConvOpenQuestionsBlankAdmitsAPartialScan(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{}
+	// Marker-free files sort first, so a small budget is spent on them and the
+	// one marker-bearing file is never reached.
+	for i := 0; i < 4; i++ {
+		files[fmt.Sprintf("a%d.go", i)] = strings.Repeat("x", 1000) + "\n"
+	}
+	files["z.go"] = "// TODO: the marker the scan never reaches\n"
+	writeTree(t, dir, files)
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	src := convSourceForSection(t, "evidence/open-questions").(convOpenQuestionsSource)
+	capped := src.probeLimited(ctx, 2100)
+	if capped.Status != StatusBlank {
+		t.Fatalf("budget-exhausted marker-free prefix = %s, want blank", capped.Status)
+	}
+	if strings.Contains(capped.Question, "carries no work markers") {
+		t.Errorf("blank claims the whole tree is marker-free after a partial scan: %q", capped.Question)
+	}
+	said := false
+	for _, s := range capped.Searched {
+		if strings.Contains(s, "read budget") || strings.Contains(s, "walk cap") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("blank from a partial scan does not say the scan was partial: searched = %v", capped.Searched)
+	}
+
+	// The unbudgeted scan over the same tree still finds the marker, so the
+	// fixture proves truncation and not an unrelated miss.
+	if full := src.probeLimited(ctx, maxMarkerScanBytes); full.Status != StatusPartial {
+		t.Fatalf("unbudgeted scan = %s, want partial (z.go carries a TODO)", full.Status)
 	}
 }
 

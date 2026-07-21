@@ -2,7 +2,9 @@ package lifeboat
 
 import (
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -32,6 +34,18 @@ const maxGitOutputBytes = 16 << 20 // 16 MiB
 // directory with millions of files cannot exhaust memory when the probe indexes
 // it.
 const maxDirEntries = 50000
+
+// maxWalkFiles caps how many regular files WalkFiles returns from one walk,
+// mirroring maxDirEntries: a whole-tree walk of a vast monorepo must terminate
+// and stay bounded in memory. Reaching it is reported, never silent, so an
+// adapter can say in its evidence that it saw only part of the tree.
+const maxWalkFiles = maxDirEntries
+
+// walkSkipDirs are the directory names WalkFiles never descends into, matched by
+// name at any depth: VCS internals, dependency trees, and generated code. None
+// of them holds a team's own material, and together they are the dominant cost
+// of an unfiltered walk.
+var walkSkipDirs = []string{".git", "generated", "node_modules", "vendor"}
 
 // Confidence qualifies a non-blank status: how sure the adapter is that the
 // evidence it cites actually grounds the section. It is meaningless for a blank.
@@ -266,6 +280,73 @@ func (c *SourceContext) ListDir(rel string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// WalkFiles returns the repo-relative POSIX paths of every regular file beneath
+// a repo-relative directory, sorted, and reports whether the walk stopped at its
+// file cap. It is the recursive counterpart of ListDir, for adapters whose
+// evidence is the shape of the tree rather than a known filename. Content is
+// still read through ReadFile, so the walk adds no second read path.
+//
+// It is contained by the same os.Root as every other read, skips the
+// walkSkipDirs trees, and skips non-regular files (FIFOs, devices, sockets) so
+// no path it yields can block on open. Symlinks — file or directory — are
+// SKIPPED and the walk continues. This deliberately differs from embark's
+// walkLifeboatFiles, where a symlink is a trust violation in a packed lifeboat
+// and therefore fatal: a probe reads an arbitrary foreign tree in which a
+// symlink is ordinary, so refusing to follow one is enough, and erroring on one
+// would blank a whole section over a repository's normal furniture.
+func (c *SourceContext) WalkFiles(rel string) (paths []string, truncated bool) {
+	return c.walkFilesLimited(rel, maxWalkFiles)
+}
+
+// walkFilesLimited is WalkFiles with the file cap injected, so the truncation
+// branch is exercisable by a test at an affordable scale. The shipped cap stays
+// a const: adapters run concurrently, and a mutable package-level cap would be
+// shared state between them.
+func (c *SourceContext) walkFilesLimited(rel string, limit int) (paths []string, truncated bool) {
+	if c.root == nil {
+		return nil, false
+	}
+	start := path.Clean(filepath.ToSlash(rel))
+	if !fs.ValidPath(start) {
+		return nil, false
+	}
+	err := fs.WalkDir(c.root.FS(), start, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			// An unreadable entry in a foreign tree is skipped, not fatal: the
+			// probe reports what it could read.
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			// Never followed. A symlinked directory arrives here as a symlink
+			// entry, not a directory, so returning nil skips it alone — fs.SkipDir
+			// would skip the rest of its parent.
+			return nil
+		}
+		if d.IsDir() {
+			for _, skip := range walkSkipDirs {
+				if path.Base(p) == skip {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		if len(paths) >= limit {
+			truncated = true
+			return fs.SkipAll
+		}
+		paths = append(paths, p)
+		return nil
+	})
+	if err != nil {
+		return nil, false
+	}
+	sort.Strings(paths)
+	return paths, truncated
 }
 
 // firstRootSHA returns the canonical (first) root-commit SHA, or "".

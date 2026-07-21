@@ -74,20 +74,29 @@ The primitive therefore adds no second read path to audit.
 
 - **Recognised markers:** `TODO`, `FIXME`, `XXX`, `HACK`, `BUG` — uppercase
   only, matched by
-  `(^|[^A-Za-z0-9_])(TODO|FIXME|XXX|HACK|BUG)(:|\(|\s|$)`. The leading class
+  `(^|[^A-Za-z0-9_-])(TODO|FIXME|XXX|HACK|BUG)(:|\(|\s|$)`. The leading class
   is the word boundary that stops `TODO` matching inside `TODOS` or
   `todo_list`; the trailing class admits the two conventional spellings
-  (`TODO:` and `TODO(alice):`) plus a bare word, while rejecting the common
-  redaction placeholder shape (`XXX-XXX-XXX`). `NOTE` and `OPTIMIZE` are *not*
-  recognised: `NOTE` marks explanation rather than unfinished work, and
-  `OPTIMIZE` is rare enough that its false-positive cost exceeds its value.
+  (`TODO:` and `TODO(alice):`) plus a bare word. The hyphen is excluded from
+  the leading class so the common redaction placeholder shape (`XXX-XXX-XXX`)
+  is rejected at every one of its triples — with the hyphen admitted, the last
+  triple matches on its leading `-` and a support phone number becomes a
+  fabricated open question. `NOTE` and `OPTIMIZE` are *not* recognised: `NOTE`
+  marks explanation rather than unfinished work, and `OPTIMIZE` is rare enough
+  that its false-positive cost exceeds its value.
 - **Binary files are skipped** by a NUL byte in the first 8 KiB — the
   conventional heuristic, and dependency-free. No extension allow-list is
   maintained.
 - **Caps.** Files walked: `maxWalkFiles` (inherited). Bytes per file:
   `maxProbeReadBytes` (inherited — an oversized file is skipped by `ReadFile`).
-  Citations reported: `maxMarkerCitations` (200); beyond it the scan keeps
-  counting but stops citing, and says so.
+  Bytes across the whole scan: `maxMarkerScanBytes`, reusing `maxPlanTotalBytes`
+  (512 MiB). The file cap and the per-file cap bound one walk and one read but
+  their product does not bound the scan, so the aggregate budget is the third
+  dimension `maxEmbarkTotalBytes` already caps on the embark side; every byte
+  `ReadFile` returns is charged against it, before the binary test, so a tree of
+  blobs spends it exactly as a tree of source does. Citations reported:
+  `maxMarkerCitations` (200); beyond it the scan keeps counting but stops
+  citing, and says so.
 - **Output shape** mirrors `convADRsSource`: a headline count
   (`"N work marker(s) across M file(s)"`) followed by up to
   `maxMarkerCitations` `path:line (TODO)` entries, all passed through
@@ -100,7 +109,11 @@ The primitive therefore adds no second read path to audit.
   `ConfidenceLow` below that.
 - **No markers → a blank** carrying `Searched` (the marker set and the skip
   set) and the human `Question`, exactly as every other adapter's blank
-  contract requires.
+  contract requires. When a bound cut the scan short, the blank says so:
+  `Searched` names the cap that stopped it and the `Question` claims only that
+  the part of the tree the scan reached carries no markers. A blank is a
+  first-class result (adr-35) only while it is trustworthy, so it never
+  generalises from a partial read.
 - **Read-only by construction.** The adapter opens nothing for writing and
   touches nothing outside the containment root; a byte-for-byte tree-invariance
   test proves it.
@@ -113,7 +126,7 @@ The primitive therefore adds no second read path to audit.
 | Which tier — conventions or git? | **Conventions.** A working-tree file scan through the `SourceContext` file surface. The adapter never touches git, so it grounds a bare snapshot as readily as a working tree. |
 | Scan scope and the missing primitive | Option (a): add a bounded recursive-walk primitive, `WalkFiles`, to `SourceContext`. It is shared with itd-96, so the walk lands once. |
 | Which files to scan | Every regular file the walk yields, minus the skip set (`.git`, `node_modules`, `vendor`, `generated`), minus symlinks, minus binaries (NUL-byte heuristic), minus oversized files (`ReadFile`'s cap). |
-| Per-repo caps | `maxWalkFiles` = 50 000 files (mirrors `maxDirEntries`), `maxProbeReadBytes` per file, `maxMarkerCitations` = 200 citations. Truncation is reported in the cited evidence. |
+| Per-repo caps | `maxWalkFiles` = 50 000 files (mirrors `maxDirEntries`), `maxProbeReadBytes` per file, `maxMarkerScanBytes` = 512 MiB across the scan (reuses `maxPlanTotalBytes`), `maxMarkerCitations` = 200 citations. Both the walk cap and the byte budget are reported in the cited evidence. |
 | Output shape and framing | Headline count + up to 200 `path:line (MARKER)` citations, `dedupeSorted`. |
 | Dedup | `dedupeSorted` on the rendered citation string, so an identical `path:line (MARKER)` appears once. Multiple distinct markers in one file each keep their own line. |
 | Status and confidence thresholds | Ceiling `StatusPartial`. `ConfidenceMedium` at ≥ 10 markers, else `ConfidenceLow`. Never `StatusGrounded`. |
@@ -130,8 +143,13 @@ The primitive therefore adds no second read path to audit.
   hash every file, probe, re-hash) proves the probe writes nothing.
 - **Pathological tree stays inside the caps** — a fixture exceeding
   `maxWalkFiles` asserts the walk returns `truncated = true` and terminates; a
-  fixture with a symlink escaping the root asserts nothing outside the
-  containment root is ever read.
+  fixture exceeding an injected scan budget asserts the scan stops partway and
+  names the budget in its own evidence; a fixture with a symlink escaping the
+  root asserts nothing outside the containment root is ever read.
+- **No fabricated evidence** — a fixture whose only uppercase triples are
+  `XXX-XXX-XXX` redaction placeholders asserts `StatusBlank`, and a table test
+  pins the marker pattern against the spellings it accepts and the near-misses
+  it rejects.
 - **Both tiers present → one deterministic result** — the existing
   `beats`/`tierRank` reduction is unchanged and already tested; the new
   adapter adds no second winner.
