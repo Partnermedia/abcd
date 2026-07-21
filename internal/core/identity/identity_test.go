@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -197,6 +198,54 @@ func TestWritePin_RequiresBothFields(t *testing.T) {
 	dir := t.TempDir()
 	if err := WritePin(dir, Pin{Name: "Alex"}); err == nil {
 		t.Fatal("want error when email is missing")
+	}
+}
+
+// The self-contained pre-commit hook reads the pin with a naive sed, so the
+// stored value must round-trip through it (iss-63). WritePin refuses the
+// characters JSON must always escape (double-quote, backslash, control), which
+// the sed cannot read back, and stores &, <, > literally (no HTML escaping) so
+// a legal git identity like "Marks & Spencer" is not fail-closed.
+func TestWritePin_RejectsUnpinnableChars(t *testing.T) {
+	dir := t.TempDir()
+	for _, p := range []Pin{
+		{Name: `Alex "the dev"`, Email: "alex@example.com"}, // double-quote
+		{Name: `back\slash`, Email: "alex@example.com"},     // backslash
+		{Name: "line\nbreak", Email: "alex@example.com"},    // control char
+		{Name: "Alex", Email: `a"x@example.com`},            // quote in email
+	} {
+		if err := WritePin(dir, p); err == nil {
+			t.Fatalf("want error for unpinnable pin %+v", p)
+		}
+	}
+}
+
+func TestWritePin_LegalIdentitiesRoundTrip(t *testing.T) {
+	for _, want := range []Pin{
+		{Name: "Marks & Spencer", Email: "ci@m-and-s.example"}, // & is legal, must not HTML-escape
+		{Name: "O'Brien", Email: "obrien@example.com"},         // apostrophe
+		{Name: "José <team>", Email: "jose@example.com"},       // unicode + < >
+	} {
+		dir := t.TempDir()
+		if err := WritePin(dir, want); err != nil {
+			t.Fatalf("legal identity %+v must write: %v", want, err)
+		}
+		got, ok, err := LoadPin(dir)
+		if err != nil || !ok || got != want {
+			t.Fatalf("round-trip %+v: got %+v ok=%v err=%v", want, got, ok, err)
+		}
+		// With HTML escaping off, the raw pin carries &, <, > literally; the bug
+		// (escaping on) would store the \uXXXX form instead, so the literal char
+		// would be ABSENT from the file — which the hook's sed cannot read back.
+		raw, err := os.ReadFile(filepath.Join(dir, PinRelPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range []rune{'&', '<', '>'} {
+			if strings.ContainsRune(want.Name, r) && !strings.ContainsRune(string(raw), r) {
+				t.Fatalf("pin did not store %q literally (HTML-escaped?); the hook sed cannot read it back:\n%s", r, raw)
+			}
+		}
 	}
 }
 

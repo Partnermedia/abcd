@@ -51,6 +51,16 @@ called out in a **Breaking** section.
   markerless `.abcd/` reported `managed-repo`. Only index registration or a
   marker block now promotes a folder to managed; a stray `.abcd/` reports
   `unmanaged-repo` (or `unmanaged-folder` outside a git repo).
+- **The identity pin round-trips through the self-contained commit guard.** The
+  pin was stored with Go's default JSON encoder, which escapes `&`, `<`, `>` (and
+  always `"`, `\`, control characters); the pre-commit identity guard reads the
+  raw bytes between the quotes with a naive parse, so an escaped value never
+  matched `git config` and fail-closed a correctly configured identity (e.g. a
+  `user.name` of `Marks & Spencer`). The pin is now marshalled without HTML
+  escaping so `&`/`<`/`>` are stored literally, and the characters a parse can
+  never read back (`"`, `\`, control) are refused at pin time with a clear remedy
+  — keeping the commit guard zero-dependency rather than delegating it to a
+  possibly-stale binary.
 - **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
   A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
   refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
