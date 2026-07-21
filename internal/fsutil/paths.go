@@ -2,6 +2,7 @@ package fsutil
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -101,4 +102,33 @@ func DirHasEntries(path string) (bool, error) {
 		return false, err
 	}
 	return len(names) > 0, nil
+}
+
+// ModuleRoot walks up from start until it finds the directory holding go.mod —
+// the module root.
+//
+// It exists for the repo's code generators, which must write to the same file
+// whether they are invoked by `go generate` (the working directory is the package
+// being generated) or run directly from the repo root. Anchoring on go.mod rather
+// than on .git means a generator also works inside a worktree or an export where
+// the git directory is not where the walk expects it.
+//
+// A start outside any module is an error rather than a fallback to the working
+// directory: a generator that silently wrote its artefact into an unrelated
+// directory would be worse than one that refuses.
+func ModuleRoot(start string) (string, error) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("fsutil: go.mod not found at or above %s", start)
+		}
+		dir = parent
+	}
 }

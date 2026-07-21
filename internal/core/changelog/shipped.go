@@ -129,10 +129,36 @@ func unlabelled(records []Record) []Record {
 // Impact is the strongest impact in the cut — the one that decides the bump.
 // An empty or all-internal cut yields ImpactInternal, which reads at the call
 // site as "nothing to release".
-func (s RecordSet) Impact() Impact {
-	all := s.All()
-	impacts := make([]Impact, 0, len(all))
-	for _, r := range all {
+func (s RecordSet) Impact() Impact { return maxImpactOf(s.All()) }
+
+// DeclaresBreak reports whether the cut declares that it narrows the public
+// surface on purpose — the release guardrail's "was this break declared?" test.
+//
+// It judges the ADDED side only, and that restriction is the whole point of the
+// method existing separately from Impact(). A Removed record's blob is read from
+// the anchor tag's immutable tree, so its label is what the LAST release
+// declared, not what this one does. Supersession is a supported flow — a shipped
+// intent leaves the folder when a later one replaces it — and the historical
+// impact back-fill puts `breaking` labels on old intents, so a cut that ships
+// nothing breaking can easily carry a superseded `breaking` record on its Removed
+// side. Counting that as a declaration would wave an undeclared removal through
+// the guardrail, silently, which is the exact fail-open the guardrail exists to
+// prevent. The same reasoning excludes Removed from UnlabelledAdded.
+//
+// A withdrawal that genuinely narrows the surface therefore ships its own
+// superseding record labelled `breaking`.
+//
+// Impact() deliberately keeps counting both sides: the version must account for
+// every record in the cut, because a record leaving a terminal folder is itself a
+// user-visible change.
+func (s RecordSet) DeclaresBreak() bool { return maxImpactOf(s.Added) == ImpactBreaking }
+
+// maxImpactOf is the one place a slice of records is reduced to its strongest
+// impact, so the version arithmetic and the guardrail can never disagree about
+// what the maximum means.
+func maxImpactOf(records []Record) Impact {
+	impacts := make([]Impact, 0, len(records))
+	for _, r := range records {
 		impacts = append(impacts, r.Impact)
 	}
 	return MaxImpact(impacts)
