@@ -39,20 +39,20 @@ const (
 type SurfaceGuard struct {
 	// BaseTag is the release tag the baseline snapshot was read from, empty
 	// when no tag resolved.
-	BaseTag string
+	BaseTag string `json:"base_tag"`
 	// Status is the verdict.
-	Status SurfaceGuardStatus
+	Status SurfaceGuardStatus `json:"status"`
 	// Breaks is every structural narrowing found, in canonical order. It is
 	// populated on a PASS too when a break was declared: the release notes have
 	// to describe what broke, so a declared break is reported, not discarded.
-	Breaks []surface.Break
+	Breaks []surface.Break `json:"breaks,omitempty"`
 	// BreakingDeclared reports whether the cut ADDS a record whose impact is
 	// breaking — the author's declaration that this release narrows the surface
 	// on purpose. See RecordSet.DeclaresBreak for why the removed side does not
 	// count.
-	BreakingDeclared bool
+	BreakingDeclared bool `json:"breaking_declared"`
 	// Reason names what to fix; empty on a clean pass.
-	Reason string
+	Reason string `json:"reason,omitempty"`
 }
 
 // GuardSurface runs the release surface guardrail over the repository at root

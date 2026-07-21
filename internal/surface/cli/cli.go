@@ -123,7 +123,13 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 	launchCmd.Flags().BoolVar(&launchDryRun, "dry-run", false, "preview the launch bundle and gates without publishing")
+	// `ship` is the release-cut verb: the dry-run above previews the launch
+	// BUNDLE, this cuts the RELEASE (version + changelog record set). They hang
+	// off one command because they gate the same event.
+	launchCmd.AddCommand(newLaunchShipCommand(&asJSON))
 	root.AddCommand(launchCmd)
+
+	root.AddCommand(newChangelogCommand(&asJSON))
 
 	root.AddCommand(newCaptureCommand(&asJSON))
 	root.AddCommand(newMemoryCommand(&asJSON))

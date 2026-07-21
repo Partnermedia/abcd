@@ -48,6 +48,14 @@ type Record struct {
 	// record is reported as unlabelled rather than defaulted, because defaulting
 	// a missing judgement silently under-bumps the release.
 	ImpactErr string
+	// Title names the record: its `# ` heading, else its frontmatter slug, else
+	// its id. It is never empty (see summarise).
+	Title string
+	// Summary is the record's opening paragraph, collapsed and capped. Title and
+	// Summary are the SOURCE MATERIAL a changelog composer writes prose from;
+	// they are carried on the record because the blob is read once here, and a
+	// later reader could disagree with this one about what a record says.
+	Summary string
 }
 
 // RecordSet is a release cut: the set-difference of record END STATES between
@@ -88,12 +96,27 @@ func (s RecordSet) All() []Record {
 func (s RecordSet) ChangelogRequired() []Record {
 	out := make([]Record, 0, len(s.Added)+len(s.Removed))
 	for _, r := range s.All() {
-		if r.Impact.InChangelog() {
+		if r.InChangelog() {
 			out = append(out, r)
 		}
 	}
 	return out
 }
+
+// InChangelog reports whether this record must be cited in the generated prose.
+// It is the one definition of "must be reported", written here rather than at
+// each call site so the preview, the composer's view of the cut, and the
+// completeness bijection can never disagree about which records are required.
+//
+// It is NOT simply Impact.InChangelog(). An UNLABELLED record is required too,
+// and that is the whole reason this method exists: an unlabelled record's
+// judgement is unknown, not internal, and the only unlabelled records that ever
+// reach a ready cut are on the Removed side (UnlabelledAdded refuses the other
+// direction), read from the anchor tag's IMMUTABLE tree. Folding one into "earns
+// no line" would drop a supersession from the permanent release record for a
+// defect the operator cannot fix — the silent omission UnlabelledAdded's contract
+// promises never happens.
+func (r Record) InChangelog() bool { return r.Impact.InChangelog() || r.ImpactErr != "" }
 
 // Unlabelled returns every record in the cut whose impact is absent or invalid,
 // for a preview that must show the operator the whole picture. It is NOT the
@@ -244,8 +267,12 @@ func newRecord(root string, ref string, relPath string) Record {
 	blob, err := gitutil.RunLimited(root, maxRecordBytes, "cat-file", "blob", ref+":"+relPath)
 	if err != nil {
 		rec.ImpactErr = fmt.Sprintf("reading %s at %s: %v", relPath, ref, err)
+		rec.Title = rec.ID
 		return rec
 	}
+	// The source material is extracted even when the impact is unlabelled: the
+	// operator who has to fix that record is helped by seeing what it says.
+	rec.Title, rec.Summary = summarise(blob, rec.ID)
 	field := frontmatter.Fields(strings.Split(blob, "\n"))["impact"]
 	impact, err := ParseImpact(field.Value)
 	if err != nil {

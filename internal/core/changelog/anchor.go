@@ -10,10 +10,12 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
-// maxChangelogBytes caps the guarded CHANGELOG read. The file is a few hundred
+// MaxChangelogBytes caps the guarded CHANGELOG read. The file is a few hundred
 // kilobytes of prose at most; the cap exists so a symlinked or replaced
-// CHANGELOG.md cannot stream an unbounded file into a preview command.
-const maxChangelogBytes = 4 << 20
+// CHANGELOG.md cannot stream an unbounded file into a preview command. It is
+// exported because the ship verb that WRITES the file reads it first, and one
+// ceiling read two different ways is a ceiling that eventually disagrees.
+const MaxChangelogBytes = 4 << 20
 
 // datedHeadingRe matches a dated release heading in CHANGELOG.md, and it is a
 // CONTRACT, not a convenience: .github/workflows/auto-release.yml greps
@@ -24,6 +26,14 @@ const maxChangelogBytes = 4 << 20
 // both the string and their agreement over fixtures. The trailing " - " is
 // load-bearing: it is what skips the undated "## [Unreleased]" heading.
 var datedHeadingRe = regexp.MustCompile(`^## \[v?([0-9]+\.[0-9]+\.[0-9]+)\] - `)
+
+// IsDatedHeading reports whether a line is a dated release heading — the same
+// predicate this package reads the CHANGELOG with, exposed so the ship verb that
+// WRITES a heading can assert its output against the reader's rule rather than
+// against a second copy of the pattern.
+func IsDatedHeading(line string) bool {
+	return datedHeadingRe.MatchString(strings.TrimRight(line, "\r"))
+}
 
 // LatestReleaseTag resolves the base a release is derived against: the newest
 // `vX.Y.Z` git tag under root, by SemVer order.
@@ -74,7 +84,7 @@ func LatestReleaseTag(root string) (launch.Semver, bool, error) {
 // An absent CHANGELOG.md returns found=false and no error — the file is not this
 // package's to require; the ship verb that writes the heading is.
 func LatestChangelogVersion(root string) (launch.Semver, bool, error) {
-	data, err := fsutil.ReadGuarded(filepath.Join(root, "CHANGELOG.md"), maxChangelogBytes)
+	data, err := fsutil.ReadGuarded(filepath.Join(root, "CHANGELOG.md"), MaxChangelogBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return launch.Semver{}, false, nil

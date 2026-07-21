@@ -192,6 +192,41 @@ func TestShippedSinceExcludesInternalFromTheChangelog(t *testing.T) {
 	}
 }
 
+// TestChangelogRequiredKeepsAnUnlabelledRemovedRecord pins the other half of
+// outcome 8. UnlabelledAdded's contract promises that a record with no valid
+// impact on the REMOVED side "still travels in Removed, so the release still
+// reports it rather than dropping it silently" — which only holds if the
+// required set treats unknown as reportable rather than folding it into
+// internal. Its blob is read from the anchor tag's immutable tree, so no
+// operator can ever label it; dropping it would be a permanent silent omission.
+func TestChangelogRequiredKeepsAnUnlabelledRemovedRecord(t *testing.T) {
+	r := newFixtureRepo(t)
+	r.write(shippedDir+"README.md", "# shipped\n")
+	// No `impact:` line — the shape of every record predating the impact field.
+	r.write(shippedDir+"itd-1-first.md", "---\nid: itd-1\n---\n# itd-1\n")
+	r.commit("the released state")
+	r.git("tag", "v0.1.0")
+
+	r.remove(shippedDir + "itd-1-first.md")
+	r.record(resolvedDir+"iss-2-plumbing.md", "iss-2", "internal")
+	r.commit("supersede the unlabelled intent, resolve an internal issue")
+
+	set, err := ShippedSince(r.root, "v0.1.0")
+	if err != nil {
+		t.Fatalf("ShippedSince: %v", err)
+	}
+	if got := ids(set.Removed); !reflect.DeepEqual(got, []string{"itd-1"}) {
+		t.Fatalf("removed = %v, want [itd-1]", got)
+	}
+	if len(set.UnlabelledAdded()) != 0 {
+		t.Errorf("UnlabelledAdded = %v, want none — the unlabelled record is on the removed side",
+			ids(set.UnlabelledAdded()))
+	}
+	if got := ids(set.ChangelogRequired()); !reflect.DeepEqual(got, []string{"itd-1"}) {
+		t.Errorf("changelog-required = %v, want [itd-1] — unknown is not internal", got)
+	}
+}
+
 // TestShippedSinceIgnoresNonRecords pins that only itd-N/iss-N markdown counts:
 // a directory README living beside the records is not a release line.
 func TestShippedSinceIgnoresNonRecords(t *testing.T) {

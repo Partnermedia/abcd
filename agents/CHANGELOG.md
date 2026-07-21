@@ -11,6 +11,26 @@ corpus — `0.x` means "shipped and wired, honestly unmeasured"; `1.0.0` means
 over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below ship at `0.1.0`: wired to their `abcd disembark` verbs, unmeasured.
 
+## 0.1.0 — 2026-07-21 (itd-67 / itd-73 — the derived release cut)
+
+### release-changelog-composer 0.1.0
+
+First entry. Host-delegated composer behind `abcd launch ship --changelog-json
+<file|->`. Reads the emit step's cut (derived `next_tag`, the `added`/`removed`
+record entries with their `in_changelog` flag) and the records themselves; emits
+the composed-changelog payload — `schema_version` / `prompt_version` / `next_tag`
+/ `entries[{section, records, text}]`. Owns the WORDING and the Keep-a-Changelog
+section only: the version, the date, the heading shape, the section order, and the
+inclusion set are the binary's. The citation rule is the completeness **bijection**
+rather than cite-or-be-dropped — `cited == (added ∪ removed) where in_changelog`,
+exactly — and a mismatch (missing, invented, or an `impact: internal` record cited)
+refuses the WHOLE payload and writes nothing, because a dropped changelog line is a
+shipped change absent from the permanent release record. Carries
+`reads_untrusted_input: true`, `capability_scope.task_classes: [surface_render]`,
+and an injection-canary fixture whose payload attempts three hijacks (persona
+switch, drop the citation, cite the internal record). Unmeasured — no calibration
+corpus exists for release prose yet, and no self-improvement pre-flight was run.
+
 ## 0.1.0 — 2026-07-16 (itd-88 M6 — synthesis agents)
 
 ### principle-distiller 0.1.0

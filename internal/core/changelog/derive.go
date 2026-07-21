@@ -38,9 +38,32 @@ type Derivation struct {
 	Bumped bool
 	// Refused reports that the cut must not be derived.
 	Refused bool
+	// RefusalKind classifies the refusal for a caller that must act on it. The
+	// prose in RefusalReason is for a human; this is for the ship verb, which
+	// decides whether to name a record, a version, or a missing tag — and must
+	// not pattern-match English to tell them apart.
+	RefusalKind RefusalKind
 	// RefusalReason names what to fix; empty unless Refused.
 	RefusalReason string
 }
+
+// RefusalKind is the machine-readable classification of a derivation refusal.
+// The string values are what a machine-readable front door emits, so renaming a
+// constant is safe and changing a value is a contract change.
+type RefusalKind string
+
+// The refusal kinds, one per fail-closed case in Derive.
+const (
+	// RefusalNone is the zero value: this derivation did not refuse.
+	RefusalNone RefusalKind = ""
+	// RefusalNoReleaseTag: no immutable base to measure the cut from.
+	RefusalNoReleaseTag RefusalKind = "no-release-tag"
+	// RefusalReleaseInFlight: the newest CHANGELOG heading is ahead of the
+	// newest tag, so a release is between its merge and its tag.
+	RefusalReleaseInFlight RefusalKind = "release-in-flight"
+	// RefusalUnlabelledRecord: a record ADDED by the cut carries no valid impact.
+	RefusalUnlabelledRecord RefusalKind = "unlabelled-record"
+)
 
 // Derive runs the whole deterministic release derivation over the repository at
 // root and writes nothing. It is the one composition of this package's parts:
@@ -71,7 +94,7 @@ func Derive(root string) (Derivation, error) {
 		return Derivation{}, err
 	}
 	if !hasTag {
-		return refuse(d, "no release tag found — a cut needs an immutable base (tag the current release first)"), nil
+		return refuse(d, RefusalNoReleaseTag, "no release tag found — a cut needs an immutable base (tag the current release first)"), nil
 	}
 	d.Base, d.BaseTag = base, base.Tag()
 
@@ -80,7 +103,7 @@ func Derive(root string) (Derivation, error) {
 		return Derivation{}, err
 	}
 	if hasHeading && launch.CoreGreater(heading, base) {
-		return refuse(d, "release "+heading.Tag()+" in flight — tag pending (the newest CHANGELOG heading is ahead of "+d.BaseTag+")"), nil
+		return refuse(d, RefusalReleaseInFlight, "release "+heading.Tag()+" in flight — tag pending (the newest CHANGELOG heading is ahead of "+d.BaseTag+")"), nil
 	}
 
 	records, err := ShippedSince(root, d.BaseTag)
@@ -94,7 +117,7 @@ func Derive(root string) (Derivation, error) {
 		for _, rec := range unlabelled {
 			names = append(names, rec.ID+" ("+rec.Path+": "+rec.ImpactErr+")")
 		}
-		return refuse(d, "records added by the cut carry no valid impact: "+strings.Join(names, "; ")), nil
+		return refuse(d, RefusalUnlabelledRecord, "records added by the cut carry no valid impact: "+strings.Join(names, "; ")), nil
 	}
 
 	d.Bump = records.Impact()
@@ -109,8 +132,9 @@ func Derive(root string) (Derivation, error) {
 // that could read as a derived release. Whatever was resolved before the refusal
 // (the anchor, the records) is kept, because it is what the operator needs to
 // see to fix the cut.
-func refuse(d Derivation, reason string) Derivation {
+func refuse(d Derivation, kind RefusalKind, reason string) Derivation {
 	d.Refused = true
+	d.RefusalKind = kind
 	d.RefusalReason = reason
 	d.Bumped = false
 	d.Next = launch.Semver{}
