@@ -3,18 +3,30 @@
 _Plan / design artefact — dated 2026-07-21. Present tense; British English.
 Personas are Alice, Bob, Carol only._
 
-> **Status: grilled and resolved 2026-07-21.** A maintainer grilling walked the
-> full design tree; the **Grilling outcomes** below are authoritative and
-> supersede the corresponding open questions in the body (which remain as design
-> rationale). Nothing here is built yet.
+> **Status: grilled + adversarially reviewed 2026-07-21.** A maintainer grilling
+> walked the full design tree, then an adversarial review broke the draft against
+> the code (findings B1–B2, M1–M6, m1–m3 folded in below). The **Outcomes** section
+> is authoritative and supersedes the open questions and any body text it touches.
+> Nothing here is built yet. The `abcd launch ship` write-verb it depends on does
+> **not** exist yet — building it is outcome 10 (Phase 3's first task).
 
-## Grilling outcomes — 2026-07-21 (authoritative; supersede the open questions below)
+## Outcomes — 2026-07-21 (authoritative: grilling + adversarial-review fixes; supersede the body)
 
-1. **Shipped-set = git tree-diff, not a log walk (supersedes RQ-3).** Compute the
-   release set as the set-difference of `git ls-tree <last-tag> -- .abcd/development/intents/shipped/ .abcd/work/issues/resolved/`
-   versus `git ls-tree HEAD -- <same>`. Comparing end-states (not history) is
-   immune to squash/rebase/merge-strategy and to rename detection, and stamps
-   nothing into the tree (ADR-19 clean). **This dissolves the Phase 1 STOP.**
+1. **Shipped-set AND version base both anchored on the git TAG (supersedes RQ-3
+   and §3; fixes M1).** Resolve the last release as the **newest git tag**
+   `vX.Y.Z` — the only immutable anchor. Do **not** read the base from the newest
+   CHANGELOG heading: `auto-release.yml` creates the tag *after* the ship PR
+   merges, so in the post-merge/pre-tag window the heading is ahead of the tag and
+   the two describe different releases. Compute the release set as the
+   set-difference of `git ls-tree <tag> -- .abcd/development/intents/shipped/ .abcd/work/issues/resolved/`
+   versus `git ls-tree HEAD -- <same>` (end-states, immune to squash/rebase). If
+   the newest CHANGELOG heading is **ahead** of the newest tag (a release in
+   flight), `launch ship` / `abcd changelog` **refuse/no-op** ("release <v> in
+   flight — tag pending") rather than derive against a mismatched base.
+   *Caveats to pin in tests (m3):* the diff is **not** rename-immune — a
+   within-`shipped/` slug rename reads as delete+add; an intent **moved out** of
+   `shipped/` (supersession) must emit a `Removed`/`Changed` line, not silently
+   drop; the no-tag case is undefined here but does not arise (v0.1.0–0.3.0 exist).
 2. **Prose is faithful-by-construction via a completeness bijection.** The
    deterministic Go core computes the exact record-id set of the cut; the agent
    writes prose with **each line citing its record id**; the Go side verifies the
@@ -29,15 +41,26 @@ Personas are Alice, Bob, Carol only._
    `plugin.json` stays version-**absent** (ADR-19, lockstep dev-mode). The derived
    version is written into `plugin.json` / `marketplace.json` **only in the
    rendered release payload** at ship. The sole in-tree version carrier is the
-   CHANGELOG dated heading (ADR-37). **Seed is 0.3.0** (current tag + changelog) —
-   NOT 0.1.0; the first derived cut is next-after-0.3.0 (pre-1.0: `additive`→0.3.1,
-   `breaking`→0.4.0).
+   CHANGELOG dated heading (ADR-37). **The base version is whatever the
+   clean-cutover manual roll (outcome 7) sets, read from the newest git tag —
+   there is no fixed "next-after-0.3.0" (fixes B2).** The repo is at `v0.3.0`; the
+   manual roll advances it (e.g. to `v0.4.0`), and the first *derived* cut is
+   next-after-**that** tag. (The earlier `0.1.0`/`0.2.0` figures were wrong.)
 5. **Surface-break taxonomy.** Breaks (require a `breaking` intent in the cut): a
    removed or renamed command; a removed or renamed flag; a previously
    optional/absent flag becoming **required**; a removed declared manifest surface
    entry. **Not** breaks: a new command or new **optional** flag; changed
-   help/description; reordering. Baseline = a deterministically-ordered committed
-   `surface.json` from the existing `GenerateReference` walker (no second walker).
+   help/description; reordering. **The snapshot is a NEW structured JSON emitter
+   (fixes m2):** `GenerateReference` emits *Markdown*, **excludes the hidden
+   `hook` subtree**, and carries no structured per-flag required-ness or manifest
+   surface — so what is reused is the shared `NewRootCommand()` tree (one-canonical
+   *root command*), not the markdown walker; the emitter adds structured flag data
+   + a manifest-surface snapshot. `surface.json` is committed and **gated by a
+   drift test** (as `reference_test.go` gates `commands.md`). **No-baseline is
+   fail-closed (fixes M6):** there is no `surface.json` at v0.3.0, so Phase 2's PR
+   **seeds the baseline** at the current release commit (v0.4.0 after the manual
+   roll) and a cut with no committed baseline **refuses** rather than silently
+   passing the first, highest-risk cut.
 6. **Preview is deterministic-only.** `abcd changelog` (bare) renders the next
    version + the deciding `impact` + the record list + the guardrail status. **No
    agent, no prose** — prose is generated exactly once, at the reviewed ship.
@@ -47,20 +70,55 @@ Personas are Alice, Bob, Carol only._
    starts **pristine from the NEXT cut**: empty `[Unreleased]`, fully derived. No
    fold, no double-coverage (the current `[Unreleased]` mixes shipped issues with a
    not-yet-shipped intent, so it does not map to the derived set).
-8. **`impact` application.** Required on intents (the `intent_impact_valid` lint
-   blocks a move into `shipped/` without it); **optional, default `fix`** on issues
-   (explicit `breaking`/`additive` override for the rare case; surface guardrail
-   backstops an unlabelled structural break). The ~5 historical shipped intents are
-   **back-filled once** in Phase 1 (agent-proposed, maintainer-confirmed; they
-   drive no version as they predate the v0.3.0 tag).
-9. **Host-delegation seam = mirror `disembark` (corrects §5.5 + Phase 3).** There
-   is **no `abcd:CHANGELOG` agent** — `agents/CHANGELOG.md` is the itd-5
-   agent-prompt-version log, not an agent. Phase 3 **authors a new
-   release-changelog composer agent** modelled on `press-release-composer` /
-   `principle-distiller` (host-delegated per ADR-25, cite-or-be-dropped = the
-   bijection above, an injection-canary fixture, a `prompt_version` per itd-5). The
-   Go verb ingests the agent's `--changelog-json` (file or stdin `-`) and runs the
-   bijection — exactly like `abcd disembark … --principles-json`.
+8. **`impact` is explicit on intents AND issues, with an `internal` class (fixes
+   M3, M4).** Enum **`additive | breaking | fix | internal`**, set explicitly —
+   **no silent default.** The old "issues default `fix`" was wrong: it
+   under-bumped genuinely feature-adding issues (iss-57 added a `--source` value,
+   iss-47 added the generated CLI reference — the maintainers filed both under
+   `### Added`), and the surface guardrail only backstops *breaks*, never additive
+   under-bumps. And a hard-defaulting bijection would force internal issues
+   (iss-28/iss-82/iss-97/iss-106/iss-109 — TOCTOU, atomic-write, lint internals)
+   into a user-facing changelog. Rules: **`internal` = excluded from the changelog
+   and drives no bump**; the completeness bijection (outcome 2) requires
+   `cited == required MINUS internal`. **Intents are never `internal`** (a
+   press-release-first intent is user-facing by definition); `intent_impact_valid`
+   blocks a move to `shipped/` without a valid non-`internal` impact, and a new
+   `issue_impact_valid` lint blocks *resolving* an issue without a valid `impact`.
+   **Back-fill once:** the ~5 historical shipped intents AND the ~17 issues
+   resolved since v0.3.0 (agent-proposed, maintainer-confirmed).
+9. **Host-delegation seam = mirror `disembark` (corrects §5.5 + Phase 3; fixes
+   m1).** Phase 3 authors a new release-changelog composer agent modelled on
+   `press-release-composer` / `principle-distiller` (host-delegated per ADR-25,
+   cite-or-be-dropped = the bijection, injection-canary fixture, `prompt_version`
+   per itd-5). **Name it distinctly (e.g. `changelog-composer`)** — the
+   `CHANGELOG`/`README` agent *names are already taken* by two docs the plugin
+   loader mis-registers as agents (`agents/CHANGELOG.md` = the itd-5 prompt-version
+   log; `agents/README.md`), a latent defect filed as **iss-110** (the earlier
+   "there is no `abcd:CHANGELOG` agent" was imprecise: the slot is occupied by a
+   non-agent). The Go verb ingests the agent's `--changelog-json` and runs the
+   bijection, exactly like `disembark … --principles-json`.
+
+10. **Build the `abcd launch ship` write-verb + its orchestrating command (fixes
+    B1, M5).** `launch` is **dry-run-only today** — `Ship()` stops at
+    `WouldPublish`, `launch.md` is read-only, there is no `ship` subcommand and no
+    write path. The trigger the whole plan hangs on **does not exist**; building it
+    is an explicit deliverable at the **start of Phase 3**. Mirroring `disembark`,
+    it is a plugin-orchestrated flow (a markdown command) over **two Go entry
+    points**, not one linear call: (a) an **emit** step that produces the
+    deterministic record-set + derived version + guardrail result; (b) the host
+    runs the `changelog-composer` agent; (c) an **ingest** step
+    (`--changelog-json`) that runs the bijection and writes the dated heading +
+    renders the release-payload manifest version. `abcd changelog` (bare, preview)
+    is the deterministic (a) alone, to stdout.
+
+11. **The cut refuses if a merged feature's intent is still in `planned/` (fixes
+    M2).** Derivation reads `shipped/`, but a feature's code can merge before its
+    intent record moves to `shipped/` — **itd-94 is exactly this** (merged,
+    user-facing `abcd intent ready`, yet its record sits in `planned/`, invisible
+    to the tree-diff → silent under-bump). `launch ship` **fail-closed refuses**
+    if any `planned/` intent has a **closed spec** (it should have auto-moved to
+    `shipped/` per itd-80), naming it — so the ship is corrected before the cut,
+    not under-bumped after it.
 
 ---
 
@@ -455,9 +513,14 @@ tests disciplines.
 
 ### Phase 2 — Surface snapshot + guardrail
 
-- Generate `surface.json` from the Cobra tree (reuse `cli.GenerateReference`'s
-  walker); implement the ship-time diff + the "structural break needs a
-  `breaking` intent" gate.
+- Generate `surface.json` with a **new structured JSON emitter sharing
+  `NewRootCommand()`** (outcome 5 — NOT `GenerateReference`'s Markdown walker,
+  which excludes the hidden `hook` subtree and has no structured flag/manifest
+  data); include per-flag required-ness + the manifest surface. **Seed the
+  baseline** at the current release commit and add a **drift test** for
+  `surface.json`; a cut with no baseline is fail-closed. Implement the ship-time
+  diff + the "structural break needs a `breaking` intent" gate (taxonomy in
+  outcome 5).
 - **Detectors first:** a test that a removed command with no `breaking` intent
   FAILS the launch and names the surface; that a `breaking`-labelled removal
   passes.
@@ -465,9 +528,17 @@ tests disciplines.
 - **STOP if:** the surface walk is non-deterministic (ordering, transient
   hook subtree) — a flaky guardrail is worse than none; stabilise first.
 
-### Phase 3 — Changelog generation (host-delegated prose) + `abcd changelog` preview
+### Phase 3 — Build `launch ship` + changelog generation + `abcd changelog` preview
 
-- **Author a new release-changelog composer agent** (outcome 9) modelled on
+- **FIRST, build the `abcd launch ship` write-verb + its orchestrating markdown
+  command (outcome 10) — it does not exist today** (`launch` is dry-run-only). Two
+  Go entry points mirroring `disembark`: an **emit** step (record-set + derived
+  version + guardrail) and an **ingest** step (`--changelog-json` → bijection →
+  write); the host runs the composer agent between them. Wire the
+  `planned/`-closed-spec refuse gate (outcome 11) and the tag-ahead-of-heading
+  in-flight refuse (outcome 1) here.
+- **Author a new release-changelog composer agent** (outcome 9, named distinctly —
+  NOT `CHANGELOG`, per iss-110) modelled on
   `press-release-composer`/`principle-distiller` (host-delegated, cite-or-be-dropped,
   injection-canary fixture, `prompt_version` per itd-5). Wire the ship-time flow
   (§5): assemble → derive → guard → **delegate prose to that agent (ADR-25),
