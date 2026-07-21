@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-110"
+id: "iss-116"
 slug: "the-walkfiles-skip-set-covers-only-node-and-go-dependency-tr"
 severity: "minor"
 category: "tech-debt"
