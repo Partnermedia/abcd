@@ -40,6 +40,11 @@ called out in a **Breaking** section.
   never read back (`"`, `\`, control) are refused at pin time with a clear remedy
   — keeping the commit guard zero-dependency rather than delegating it to a
   possibly-stale binary.
+- **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
+  A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
+  refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
+  guard; a genuine prose title still files. The shared typo heuristic is now
+  record-id aware (`iss`/`itd`/`spc`), which also sharpens `abcd capture`.
 
 ## [0.3.0] - 2026-07-18
 
