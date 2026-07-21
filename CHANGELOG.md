@@ -28,6 +28,14 @@ called out in a **Breaking** section.
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
 
+### Fixed
+
+- **The history-store bootstrap error names the verb that exists.** When a
+  transcript capture found the store's owned directories absent, the preflight
+  error told the user to "run `abcd install`" — a verb that does not exist. The
+  remediation now names `abcd ahoy install`, the verb that actually bootstraps
+  the store (iss-58).
+
 ## [0.3.0] - 2026-07-18
 
 ### Security

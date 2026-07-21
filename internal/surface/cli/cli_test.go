@@ -312,7 +312,7 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 	gitCmd(t, repo, "commit", "-m", "init")
 	t.Chdir(repo)
 
-	// Create the store dir exactly as `abcd install` would (Capture never
+	// Create the store dir exactly as `abcd ahoy install` would (Capture never
 	// bootstraps it).
 	rootSHA := gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
 	tdir := filepath.Join(home, ".abcd", "history", rootSHA, "transcripts")

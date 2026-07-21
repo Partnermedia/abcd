@@ -49,7 +49,7 @@ func sessionEndRepo(t *testing.T) (repo, rootSHA string) {
 	rootSHA = strings.TrimSpace(string(out))
 
 	// Hermetic store: HOME drives ~/.abcd/history. Capture requires the
-	// transcripts dir to exist already (abcd install creates it).
+	// transcripts dir to exist already (abcd ahoy install creates it).
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, ".abcd", "history", rootSHA, "transcripts"), 0o755); err != nil {

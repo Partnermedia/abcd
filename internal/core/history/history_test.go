@@ -389,6 +389,27 @@ func TestCapturePreconditionMissingDir(t *testing.T) {
 	}
 }
 
+// TestBootstrapErrorNamesRealVerb pins the store-preflight remediation to the
+// verb that actually exists. `abcd install` is not a verb; the store is
+// bootstrapped by `abcd ahoy install`. A bare "abcd install " in the message
+// sends the user to a command that does not exist (iss-58).
+func TestBootstrapErrorNamesRealVerb(t *testing.T) {
+	repoRoot := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, err := Capture(repoRoot, testRootSHA, "sess-x", []byte("hi\n"), "native")
+	if err == nil {
+		t.Fatalf("expected a precondition error when transcripts dir is absent")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "ahoy install") {
+		t.Errorf("bootstrap error must name `abcd ahoy install`, got: %q", msg)
+	}
+	if strings.Contains(msg, "abcd install ") {
+		t.Errorf("bootstrap error names non-existent verb `abcd install`, got: %q", msg)
+	}
+}
+
 // TestCaptureRejectsBadInput validates the external-input boundary.
 func TestCaptureRejectsBadInput(t *testing.T) {
 	repoRoot, _ := setupStore(t)
