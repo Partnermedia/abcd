@@ -46,6 +46,26 @@ func ParseSemver(value string) (Semver, error) {
 	return Semver{Major: major, Minor: minor, Patch: patch, Prerelease: m[4], Build: m[5]}, nil
 }
 
+// BumpTier names the SemVer component that moved from prev to next: "major",
+// "minor", "patch", or "" when the two cores are equal.
+//
+// It reads the actual version delta rather than mapping an impact, because the
+// mapping is not fixed: pre-1.0, changelog.DeriveNext turns a breaking impact
+// into a MINOR bump and an additive one into a PATCH. A tier derived from the
+// impact would therefore mislabel every pre-1.0 release in the published
+// manifest, while the delta is true at any point on the 0.x/1.x boundary.
+func BumpTier(prev, next Semver) string {
+	switch {
+	case next.Major != prev.Major:
+		return "major"
+	case next.Minor != prev.Minor:
+		return "minor"
+	case next.Patch != prev.Patch:
+		return "patch"
+	}
+	return ""
+}
+
 // Line is the MAJOR.MINOR retention line a version belongs to.
 func (s Semver) Line() string { return fmt.Sprintf("%d.%d", s.Major, s.Minor) }
 

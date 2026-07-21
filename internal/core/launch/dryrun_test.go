@@ -19,7 +19,7 @@ func TestDryRunSecretRefusesButExitsZero(t *testing.T) {
 	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": ["commands"]}`)
 	writeFile(t, root, "commands/x.md", "# doc\ntoken = "+fakeSecret+"\n")
 
-	report, err := DryRun(DryRunRequest{RepoRoot: root, VersionOverride: "1.0.0"})
+	report, err := DryRun(DryRunRequest{RepoRoot: root, Version: "1.0.0"})
 	if err != nil {
 		t.Fatalf("dry-run must return nil error on a finding, got %v", err)
 	}
@@ -53,7 +53,7 @@ func TestShipBlocksOnSecret(t *testing.T) {
 	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": ["commands"]}`)
 	writeFile(t, root, "commands/x.md", "token = "+fakeSecret+"\n")
 
-	report, err := Ship(ShipRequest{RepoRoot: root, VersionOverride: "1.0.0"})
+	report, err := Ship(ShipRequest{RepoRoot: root, Version: "1.0.0"})
 	if !errors.Is(err, ErrShipBlocked) {
 		t.Fatalf("ship must return ErrShipBlocked, got %v", err)
 	}
@@ -76,12 +76,16 @@ func TestDryRunPreflightError(t *testing.T) {
 // WouldPublish=true with no error and no network call.
 func TestShipCleanWouldPublish(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": ["commands", "README.md"]}`)
+	// The payload must carry .claude-plugin: a bundle without the manifests is
+	// not an installable plugin, which the installability gate now says out loud.
+	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": [".claude-plugin", "commands", "README.md"]}`)
 	writeFile(t, root, "commands/a.md", "clean content\n")
 	writeFile(t, root, "README.md", "clean readme\n")
-	writeLockstepTree(t, root, "1.2.3", "1.2.3", "1.2.3")
+	// adr-19: a clean SOURCE tree is version-ABSENT; the version keys appear
+	// only in the rendered payload.
+	writeLockstepTree(t, root, "", "", "")
 
-	report, err := Ship(ShipRequest{RepoRoot: root, VersionOverride: "1.2.3"})
+	report, err := Ship(ShipRequest{RepoRoot: root, Version: "1.2.3"})
 	if err != nil {
 		t.Fatalf("clean tree must not error: %v (reasons %v)", err, report.BlockReasons)
 	}
@@ -102,9 +106,11 @@ func TestZeroCoverageRefuses(t *testing.T) {
 	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": ["commands"]}`)
 	writeFile(t, root, "commands/a.md", "clean content\n")
 	writeFile(t, root, ".abcd/config/pii.json", `{"skip_extensions": [".md"]}`)
-	writeLockstepTree(t, root, "1.2.3", "1.2.3", "1.2.3")
+	// adr-19: a clean SOURCE tree is version-ABSENT; the version keys appear
+	// only in the rendered payload.
+	writeLockstepTree(t, root, "", "", "")
 
-	report, err := DryRun(DryRunRequest{RepoRoot: root, VersionOverride: "1.2.3"})
+	report, err := DryRun(DryRunRequest{RepoRoot: root, Version: "1.2.3"})
 	if err != nil {
 		t.Fatalf("dry-run preflight must succeed: %v", err)
 	}
@@ -124,7 +130,7 @@ func TestZeroCoverageRefuses(t *testing.T) {
 		t.Errorf("WouldRefuseOn must cite scanner unavailable, got %v", report.WouldRefuseOn)
 	}
 
-	ship, err := Ship(ShipRequest{RepoRoot: root, VersionOverride: "1.2.3"})
+	ship, err := Ship(ShipRequest{RepoRoot: root, Version: "1.2.3"})
 	if !errors.Is(err, ErrShipBlocked) {
 		t.Fatalf("ship must be blocked on zero coverage, got %v", err)
 	}

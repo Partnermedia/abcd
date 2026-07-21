@@ -11,9 +11,14 @@ const versionLocationRelPath = ".abcd/config/version-location.json"
 
 // DryRunRequest is the input to a dry-run.
 type DryRunRequest struct {
-	RepoRoot        string
-	VersionOverride string   // --version; empty → read from the resolved manifests
-	ExistingTags    []Semver // injected; nil → default `git tag -l v*` provider
+	RepoRoot string
+	// Version is the release version this launch would publish, SUPPLIED by the
+	// caller. adr-19 leaves no version key in the source tree, so there is
+	// nothing here for the core to read: the version is a fact about the release
+	// cut, and the front door that knows the cut injects it. Empty is honest —
+	// it means the caller could not name one, and retention says so.
+	Version      string
+	ExistingTags []Semver // injected; nil → default `git tag -l v*` provider
 }
 
 // GateSummary records one gate's dry-run disposition.
@@ -30,6 +35,7 @@ type DryRunReport struct {
 	Scan          scanner.ScanResult `json:"scan"`
 	Lockstep      LockstepResult     `json:"lockstep"`
 	Retention     RetentionPlan      `json:"retention"`
+	Smoke         SmokeReport        `json:"smoke"`
 	Gates         []GateSummary      `json:"gates"`
 	WouldPublish  bool               `json:"would_publish"` // always false in dry-run
 	WouldRefuseOn []string           `json:"would_refuse_on,omitempty"`
@@ -51,23 +57,33 @@ func DryRun(req DryRunRequest) (DryRunReport, error) {
 	scan := scanBundle(req.RepoRoot, bundle)
 	report.Scan = scan
 
+	// The DEV polarity is the one the SOURCE TREE must satisfy: adr-19 keeps the
+	// version keys out of the committed manifests, so a public check here would
+	// accuse a correct repository of drift and prescribe the exact key the ADR
+	// forbids. The public polarity belongs over the rendered payload, where
+	// RenderPayload applies it to its own output.
 	vlPath := filepath.Join(req.RepoRoot, versionLocationRelPath)
-	lockstep := CheckLockstep(TreePublic, req.RepoRoot, vlPath)
+	lockstep := CheckLockstep(TreeDev, req.RepoRoot, vlPath)
 	report.Lockstep = lockstep
 
-	version := resolveVersion(req.VersionOverride, req.RepoRoot, lockstep)
-	report.Version = version
+	report.Version = req.Version
+	report.Retention = computeRetentionForReport(req.Version, req)
 
-	report.Retention = computeRetentionForReport(version, req)
+	// The smoke reads the RESOLVED BUNDLE, not the working tree: a file present
+	// in the tree but excluded from the payload is exactly the break it exists
+	// to catch. It subsumes itd-65's placeholder `plugin.json-parse` gate, which
+	// asserted a strict subset of what the light tier asserts.
+	smoke := SmokeLight(NewBundleTree(bundle))
+	report.Smoke = smoke
 
 	report.Gates = []GateSummary{
 		{Name: "secret+pii-scan", Status: "ran", Detail: scanDetail(scan)},
 		{Name: "marker-block", Status: "not_implemented", Detail: "Phase-5 deferred"},
-		{Name: "plugin.json-parse", Status: "not_implemented", Detail: "Phase-5 deferred"},
+		{Name: "installability-smoke", Status: "ran", Detail: smokeDetail(smoke)},
 		{Name: "documentation-auditor", Status: "not_implemented", Detail: "Phase-5 deferred"},
 	}
 
-	report.WouldRefuseOn = wouldRefuseOn(bundle, scan, lockstep, report.Retention)
+	report.WouldRefuseOn = wouldRefuseOn(bundle, scan, lockstep, report.Retention, smoke)
 	report.WouldPublish = false
 	return report, nil
 }
@@ -84,46 +100,6 @@ func scanBundle(repoRoot string, bundle Bundle) scanner.ScanResult {
 	}
 	res, _ := sc.ScanBundle(files)
 	return res
-}
-
-// resolveVersion picks the version input: an explicit override, else the
-// lockstep primary version when readable.
-func resolveVersion(override, repoRoot string, lockstep LockstepResult) string {
-	if override != "" {
-		return override
-	}
-	if lockstep.OK {
-		if v := primaryVersion(repoRoot); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// primaryVersion reads the primary version string via the version-location
-// contract (best-effort; empty when unreadable).
-func primaryVersion(repoRoot string) string {
-	vlPath := filepath.Join(repoRoot, versionLocationRelPath)
-	decision, err := loadJSON(vlPath)
-	if err != nil {
-		return ""
-	}
-	mp, ptr, verr := validateVersionLocation(decision)
-	if verr != "" {
-		return ""
-	}
-	doc, err := loadJSON(filepath.Join(repoRoot, mp))
-	if err != nil {
-		return ""
-	}
-	v, present := resolvePointer(doc, ptr)
-	if !present {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
 }
 
 // computeRetentionForReport builds the retention preview, resolving the existing
@@ -144,8 +120,9 @@ func computeRetentionForReport(version string, req DryRunRequest) RetentionPlan 
 }
 
 // wouldRefuseOn collects everything a real ship WOULD block on: scan hard-fails,
-// bundle rejections, lockstep drift/unreadable, and retention refusal.
-func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResult, retention RetentionPlan) []string {
+// bundle rejections, lockstep drift/unreadable, retention refusal, and an
+// uninstallable declared surface.
+func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResult, retention RetentionPlan, smoke SmokeReport) []string {
 	var reasons []string
 	if scan.Unavailable {
 		reasons = append(reasons, "scanner unavailable: "+scan.UnavailableReason)
@@ -165,6 +142,7 @@ func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResu
 	if retention.Refused {
 		reasons = append(reasons, "retention refused: "+retention.RefusalReason)
 	}
+	reasons = append(reasons, smokeRefusals(smoke)...)
 	return reasons
 }
 

@@ -342,12 +342,13 @@ Preview the public launch bundle and release gates (read-only)
 
 Cut a release: derive the version and the record set from what shipped (exit 1 when the cut refuses)
 
-**Usage:** `abcd launch ship [--changelog-json <file|->] [flags]`
+**Usage:** `abcd launch ship [--changelog-json <file|->] [--payload-dir <dir>] [flags]`
 
 **Flags:**
 
 ```
       --changelog-json string   path to the host-composed changelog JSON (or - for stdin); absent runs the deterministic emit step
+      --payload-dir string      stage the versioned release payload in this directory (must be empty and outside the repository)
 ```
 
 ### `abcd memory`

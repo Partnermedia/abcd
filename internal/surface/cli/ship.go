@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/changelog"
+	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/core/release"
+	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"github.com/REPPL/abcd-cli/internal/termsafe"
 	"github.com/spf13/cobra"
 )
@@ -29,12 +33,114 @@ func emitCut(repoRoot string) (release.Cut, error) {
 // two things a core must never reach for itself — the untrusted payload, and the
 // clock. The date lands in a durable release heading, so it is an argument a test
 // can pin rather than a wall-clock read buried in a writer.
-func ingestCut(repoRoot string, raw []byte) (release.IngestResult, error) {
+func ingestCut(repoRoot string, raw []byte, at time.Time) (release.IngestResult, error) {
 	current, err := SurfaceSnapshot(repoRoot)
 	if err != nil {
 		return release.IngestResult{}, err
 	}
-	return release.Ingest(repoRoot, current, raw, time.Now())
+	return release.Ingest(repoRoot, current, raw, at)
+}
+
+// shipResult is what the ingest step reports: the release record that landed,
+// plus the staged payload when one was asked for. The IngestResult is embedded
+// so its JSON shape is unchanged for a ship that stages nothing — the payload is
+// an addition to the report, not a new dialect of it.
+type shipResult struct {
+	release.IngestResult
+	Payload *launch.PayloadRenderResult `json:"payload,omitempty"`
+}
+
+// renderReleasePayload stages the versioned release payload for a completed cut.
+//
+// It is the one place the derived version crosses from the cut into a manifest.
+// Everything the core needs is assembled HERE — the version from the cut, the
+// tier from the version delta, the date from the same clock the heading was
+// dated with, the source commit from git — because internal/core/launch must not
+// read a clock or shell out to decide what a durable artefact says.
+func renderReleasePayload(repoRoot, dest string, cut release.Cut, at time.Time) (launch.PayloadRenderResult, error) {
+	next, err := launch.ParseSemver(strings.TrimPrefix(cut.NextTag, "v"))
+	if err != nil {
+		return launch.PayloadRenderResult{}, err
+	}
+	prev, err := launch.ParseSemver(strings.TrimPrefix(cut.BaseTag, "v"))
+	if err != nil {
+		return launch.PayloadRenderResult{}, err
+	}
+	sha, err := gitutil.Run(repoRoot, "rev-parse", "HEAD")
+	if err != nil {
+		return launch.PayloadRenderResult{}, err
+	}
+	return launch.RenderPayload(launch.PayloadRenderRequest{
+		RepoRoot: repoRoot,
+		Dest:     dest,
+		Version:  next.String(),
+		Entry: launch.ChangelogEntry{
+			Tier:      launch.BumpTier(prev, next),
+			Reason:    bumpReason(cut),
+			Date:      at,
+			SourceSHA: sha,
+		},
+	})
+}
+
+// publishedVersion is the version a launch would publish: the version of the
+// newest dated CHANGELOG heading (adr-37), which is the release auto-release.yml
+// turns into a tag.
+//
+// It is resolved at the front door rather than inside internal/core/launch for
+// two reasons. adr-19 leaves no version key in the committed manifests, so there
+// is nothing there for the launch core to read; and the one reader of that
+// heading lives in internal/core/changelog, which imports launch — so the front
+// door is the only place the two can meet without a cycle.
+//
+// An absent or unreadable release record yields the empty string, which the
+// retention gate reports as a refusal. Naming no version is the honest answer; a
+// launch preview must never invent one.
+func publishedVersion(repoRoot string) string {
+	v, found, err := changelog.LatestChangelogVersion(repoRoot)
+	if err != nil || !found {
+		return ""
+	}
+	return v.String()
+}
+
+// changelogPath names the release record the ingest step writes. The ship verb
+// holds its pre-ingest bytes so a refused render can put them back.
+func changelogPath(repoRoot string) string {
+	return filepath.Join(repoRoot, "CHANGELOG.md")
+}
+
+// rollbackCut undoes a cut whose payload render refused: it restores the
+// pre-ingest release record and removes the staging directory the precheck
+// proved was empty or absent, so nothing outside the render's own output is
+// touched.
+//
+// It returns the sentence appended to the refusal rather than an error, because
+// what an operator reading exit 2 most needs to know is whether a durable write
+// survived — and a rollback that itself failed is the one case where they must
+// recover by hand.
+func rollbackCut(repoRoot, dest string, before []byte) string {
+	var failures []string
+	if err := fsutil.WriteFileAtomicPreserveMode(changelogPath(repoRoot), before); err != nil {
+		failures = append(failures, "CHANGELOG.md: "+scrubPaths(err))
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		failures = append(failures, "the payload destination: "+scrubPaths(err))
+	}
+	if len(failures) > 0 {
+		return "\n  THE ROLLBACK FAILED — recover by hand: " + strings.Join(failures, "; ")
+	}
+	return "\n  the release record was rolled back and nothing was staged"
+}
+
+// bumpReason is the human sentence adr-20's changelog entry records: the impact
+// that decided the version and the records that carried it, so a published
+// manifest says WHY it is this version and not merely what it is.
+func bumpReason(cut release.Cut) string {
+	if len(cut.DecidedBy) == 0 {
+		return string(cut.Impact)
+	}
+	return string(cut.Impact) + ": " + strings.Join(cut.DecidedBy, ", ")
 }
 
 // newLaunchShipCommand builds `abcd launch ship`, the release-cut write verb.
@@ -64,14 +170,22 @@ func ingestCut(repoRoot string, raw []byte) (release.IngestResult, error) {
 //	   diagnostic is path-scrubbed. Nothing is written on this path.
 func newLaunchShipCommand(asJSON *bool) *cobra.Command {
 	var changelogJSON string
+	var payloadDir string
 	cmd := &cobra.Command{
-		Use:   "ship [--changelog-json <file|->]",
+		Use:   "ship [--changelog-json <file|->] [--payload-dir <dir>]",
 		Short: "Cut a release: derive the version and the record set from what shipped (exit 1 when the cut refuses)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			// The payload is rendered by the INGEST step, from a version only a
+			// completed cut has. Asking the emit step for one is an operand
+			// error, refused before anything is read or staged.
+			if payloadDir != "" && changelogJSON == "" {
+				return &exitError{Code: 2, Msg: "abcd launch ship: --payload-dir needs --changelog-json — " +
+					"the release payload is staged by the ingest step, which the deterministic emit step does not run"}
 			}
 			// Read the payload before anything else: it is untrusted host input,
 			// and reading it through the shared guarded-operand path keeps the
@@ -82,9 +196,42 @@ func newLaunchShipCommand(asJSON *bool) *cobra.Command {
 				return &exitError{Code: 2, Msg: "abcd launch ship: " + scrubPaths(err)}
 			}
 			if raw != nil {
-				res, err := ingestCut(cwd, raw)
+				// Every render refusal that does not need a version is made
+				// BEFORE the ingest step writes the dated heading. That heading
+				// is a durable release record: a render that refuses after it
+				// lands leaves a release in flight, and every retry is then
+				// refused for being in flight. The version-free half of the
+				// render is therefore run first, and it writes nothing.
+				var before []byte
+				if payloadDir != "" {
+					if _, perr := launch.PrecheckPayload(cwd, payloadDir); perr != nil {
+						return &exitError{Code: 2, Msg: "abcd launch ship: " + scrubPaths(perr)}
+					}
+					before, err = os.ReadFile(changelogPath(cwd))
+					if err != nil {
+						return &exitError{Code: 2, Msg: "abcd launch ship: " + scrubPaths(err)}
+					}
+				}
+				at := time.Now()
+				ingested, err := ingestCut(cwd, raw, at)
 				if err != nil {
 					return &exitError{Code: 2, Msg: "abcd launch ship: " + scrubPaths(err)}
+				}
+				res := shipResult{IngestResult: ingested}
+				// Stage only behind a written record: a refused cut has no
+				// version to stamp, and a refused document must leave the
+				// filesystem exactly as it found it.
+				if payloadDir != "" && ingested.Written {
+					staged, rerr := renderReleasePayload(cwd, payloadDir, ingested.Cut, at)
+					if rerr != nil {
+						// The precheck cleared everything version-free, so a
+						// refusal here is version-shaped and rare — but the
+						// record is already on disk, so it is rolled back rather
+						// than left as an untaggable release in flight.
+						return &exitError{Code: 2, Msg: "abcd launch ship: " + scrubPaths(rerr) +
+							rollbackCut(cwd, payloadDir, before)}
+					}
+					res.Payload = &staged
 				}
 				if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 					renderIngest(w, res)
@@ -114,6 +261,8 @@ func newLaunchShipCommand(asJSON *bool) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&changelogJSON, "changelog-json", "",
 		"path to the host-composed changelog JSON (or - for stdin); absent runs the deterministic emit step")
+	cmd.Flags().StringVar(&payloadDir, "payload-dir", "",
+		"stage the versioned release payload in this directory (must be empty and outside the repository)")
 	return cmd
 }
 
@@ -186,7 +335,7 @@ func renderCut(w io.Writer, verb string, cut release.Cut) {
 // The cut is rendered FIRST and unchanged, so the two halves of one verb read
 // identically — an operator comparing a dry preview with the ship that followed
 // is comparing the same lines, not two dialects of the same report.
-func renderIngest(w io.Writer, res release.IngestResult) {
+func renderIngest(w io.Writer, res shipResult) {
 	renderCut(w, "abcd launch ship", res.Cut)
 	if !res.Written {
 		return
@@ -194,6 +343,14 @@ func renderIngest(w io.Writer, res release.IngestResult) {
 	fmt.Fprintf(w, "  wrote:      %s\n", res.Path)
 	fmt.Fprintf(w, "    %s\n", res.Heading)
 	fmt.Fprintf(w, "    %d line(s), citing %s\n", res.Lines, termsafe.Sanitize(strings.Join(res.Cited, ", ")))
+	if res.Payload == nil {
+		return
+	}
+	// The staged path is an operator-supplied absolute location, so it is
+	// reported through the same sanitiser every other outside string uses.
+	fmt.Fprintf(w, "  payload:    %s\n", termsafe.Sanitize(res.Payload.Dest))
+	fmt.Fprintf(w, "    %d file(s), version %s in %s\n",
+		res.Payload.Files, res.Payload.Version, strings.Join(res.Payload.Manifests, ", "))
 }
 
 // guardLine renders the guardrail verdict, keeping a REFUSED guard visually

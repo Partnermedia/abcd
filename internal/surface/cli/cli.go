@@ -107,7 +107,10 @@ func NewRootCommand() *cobra.Command {
 			if !launchDryRun {
 				return fmt.Errorf("abcd launch: pass --dry-run to preview the bundle (publishing is not wired at this stage)")
 			}
-			rep, err := launch.DryRun(launch.DryRunRequest{RepoRoot: cwd})
+			rep, err := launch.DryRun(launch.DryRunRequest{
+				RepoRoot: cwd,
+				Version:  publishedVersion(cwd),
+			})
 			if err != nil {
 				return err
 			}

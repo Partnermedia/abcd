@@ -9,10 +9,12 @@ import (
 
 // ShipRequest is the input to a ship run.
 type ShipRequest struct {
-	RepoRoot        string
-	VersionOverride string
-	AllowDirty      bool
-	ExistingTags    []Semver
+	RepoRoot string
+	// Version is the release version, supplied by the caller for the reason
+	// DryRunRequest.Version states: adr-19 leaves nothing in the tree to read.
+	Version      string
+	AllowDirty   bool
+	ExistingTags []Semver
 }
 
 // ShipReport is the outcome of a ship run. It stops at WouldPublish before any
@@ -23,6 +25,7 @@ type ShipReport struct {
 	Scan         scanner.ScanResult `json:"scan"`
 	Lockstep     LockstepResult     `json:"lockstep"`
 	Retention    RetentionPlan      `json:"retention"`
+	Smoke        SmokeReport        `json:"smoke"`
 	Blocked      bool               `json:"blocked"`
 	BlockReasons []string           `json:"block_reasons,omitempty"`
 	WouldPublish bool               `json:"would_publish"` // true iff all gates pass
@@ -50,17 +53,20 @@ func Ship(req ShipRequest) (ShipReport, error) {
 	scan := scanBundle(req.RepoRoot, bundle)
 	report.Scan = scan
 
+	// The source tree is checked under the DEV polarity, for the reason DryRun
+	// states: adr-19 keeps the version out of the committed manifests, and the
+	// public polarity is proved over the rendered payload instead.
 	vlPath := filepath.Join(req.RepoRoot, versionLocationRelPath)
-	lockstep := CheckLockstep(TreePublic, req.RepoRoot, vlPath)
+	lockstep := CheckLockstep(TreeDev, req.RepoRoot, vlPath)
 	report.Lockstep = lockstep
 
-	version := resolveVersion(req.VersionOverride, req.RepoRoot, lockstep)
-	report.Version = version
-	report.Retention = computeRetentionForReport(version, DryRunRequest{
-		RepoRoot: req.RepoRoot, VersionOverride: req.VersionOverride, ExistingTags: req.ExistingTags,
+	report.Version = req.Version
+	report.Retention = computeRetentionForReport(req.Version, DryRunRequest{
+		RepoRoot: req.RepoRoot, Version: req.Version, ExistingTags: req.ExistingTags,
 	})
 
-	report.BlockReasons = wouldRefuseOn(bundle, scan, lockstep, report.Retention)
+	report.Smoke = SmokeLight(NewBundleTree(bundle))
+	report.BlockReasons = wouldRefuseOn(bundle, scan, lockstep, report.Retention, report.Smoke)
 	if len(report.BlockReasons) > 0 {
 		report.Blocked = true
 		report.WouldPublish = false
