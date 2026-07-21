@@ -1,0 +1,3 @@
+# Keep-both union merge for the changelog: parallel PRs each append to
+# [Unreleased], so a literal merge conflicts. The union driver keeps both sides.
+CHANGELOG.md merge=union

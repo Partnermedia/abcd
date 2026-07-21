@@ -40,6 +40,11 @@ called out in a **Breaking** section.
   and — for visibility and docs-target — refreshes the `.gitignore` block and
   marker files so nothing is left inconsistent. A re-install with no such flag
   is still an exact no-op and never clobbers a valid value.
+- **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
+  A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
+  refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
+  guard; a genuine prose title still files. The shared typo heuristic is now
+  record-id aware (`iss`/`itd`/`spc`), which also sharpens `abcd capture`.
 
 ## [0.3.0] - 2026-07-18
 
