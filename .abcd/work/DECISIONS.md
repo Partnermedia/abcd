@@ -623,3 +623,20 @@ parallel-agent merge contention bites.
   `/abcd:intent`'s interview script: `plan` is never run without the human's
   explicit in-session confirmation). Escalation path if violations appear: an
   `ac_confirmed_by:` field is lint-legal today and slots in as a fifth check.
+- 2026-07-21 — itd-66 (`launch-payload-render-parity`) is DEFERRED to a follow-up
+  after the derived-versioning + auto-changelog + distribution programme. itd-67's
+  own AC frames its installability smoke as "light … later upgraded to call"
+  itd-66's deep tier, so the split is clean: this programme builds the light tier
+  and positions the surface-resolution seam so itd-66's deep render, `.abcd/**`
+  leak-proof assertion, symlink resolution, parity diff, and isolated-subprocess
+  deep smoke slot in as a drop-in upgrade rather than a rewrite. Ordering: this
+  programme -> itd-66. Recorded in spc-11's "itd-66 is deferred" section.
+- 2026-07-21 — itd-67's "a phase completed since the last launch -> minor" bump
+  heuristic is SUPERSEDED by itd-73's `impact` derivation (spc-10). The bump falls
+  out of the records' declared `impact`, not out of phase membership; spc-11
+  consumes the derived number and never computes one. Recorded so the two intents
+  do not both claim version selection.
+- 2026-07-21 — `launch ship` does not tag. It writes the dated `## [X.Y.Z] - <date>`
+  heading in the reviewed ship PR; the unchanged `auto-release.yml` greps it on
+  merge and creates the tag. ADR-37 is preserved, not superseded: the reviewed ship
+  IS the release decision, and the bot-on-main alternative stays rejected.

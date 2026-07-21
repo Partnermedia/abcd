@@ -1,7 +1,7 @@
 ---
 id: itd-67
 slug: installable-versioned-plugin
-spec_id: null
+spec_id: spc-11
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
