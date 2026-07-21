@@ -10,6 +10,16 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The published plugin now ships its agents and hooks.** The launch payload's
+  include list named neither the `agents/` nor the `hooks/` surface directory,
+  so the released bundle omitted both — the plugin installed without its agents
+  and without its hook wiring. Both directories are added to the payload
+  includes, and a bundle-completeness check now fails if any auto-discovered
+  plugin-surface directory present on disk is neither included nor explicitly
+  excluded with a reason, so a newly-added surface can never be silently dropped.
+
 ### Added
 
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
