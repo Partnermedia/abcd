@@ -1,9 +1,18 @@
 # CLI reference
 
-**Planned generated reference — not yet wired.** This directory is a placeholder
-for an auto-generated command reference (intended to be produced from the Cobra
-command tree in `internal/surface/cli/` and kept fresh in CI). That generation
-pipeline does not exist yet — there are no generated pages here.
+The full command reference lives in [`commands.md`](commands.md): every
+user-facing `abcd` command with its usage line, summary, and flags.
 
-Until it ships, the authoritative CLI reference is the binary's own help:
-`abcd --help` and `abcd <verb> --help` (e.g. `abcd disembark --help`).
+That page is generated from the Cobra command tree in `internal/surface/cli`, so
+it always matches the binary. A drift test regenerates the tree on every `go test`
+run and fails the build whenever the committed page and the tree disagree, so the
+reference stays in step with the code.
+
+To refresh the page after changing a command, run:
+
+```bash
+go generate ./internal/surface/cli
+```
+
+For interactive help, the binary also documents itself: `abcd --help` and
+`abcd <verb> --help` (e.g. `abcd disembark --help`).
