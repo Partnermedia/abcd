@@ -2,6 +2,7 @@ package ahoy
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -331,22 +332,26 @@ var requiredHookCommand = map[string]string{
 // structurally sound, else a one-line reason. Read-only; never mutates.
 func verifyHookManifest(pluginRoot string) string {
 	path := filepath.Join(pluginRoot, "hooks", "hooks.json")
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return "file absent"
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
+	// Keep the symlink pre-check: it yields a DISTINCT reason that ReadGuarded's
+	// O_NOFOLLOW would otherwise collapse into a raw ELOOP -> "read failed".
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		return "leaf is a symlink (refusing to follow)"
 	}
-	if !fi.Mode().IsRegular() {
-		return "not a regular file"
-	}
-	if fi.Size() > 256*1024 {
-		return "file size exceeds 256KB cap"
-	}
-	data, err := os.ReadFile(path)
+	// ReadGuarded validates regular-file + size cap on the SAME descriptor it
+	// reads, closing the Lstat->ReadFile swap window (iss-109). Map its sentinels
+	// back to the existing reason strings, unchanged.
+	data, err := fsutil.ReadGuarded(path, 256*1024)
 	if err != nil {
-		return "read failed"
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular):
+			return "not a regular file"
+		case errors.Is(err, fsutil.ErrTooBig):
+			return "file size exceeds 256KB cap"
+		case os.IsNotExist(err):
+			return "file absent"
+		default:
+			return "read failed"
+		}
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
