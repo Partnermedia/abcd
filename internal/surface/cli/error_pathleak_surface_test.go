@@ -61,6 +61,221 @@ func TestJSONErrorEnvelopeNoAbsolutePathLeak(t *testing.T) {
 	}
 }
 
+// TestJSONSuccessEnvelopeNoAbsolutePathLeak is the iss-81 detector: a path-echoing
+// verb's SUCCESS envelope must not carry an absolute developer-identity path either.
+// The iss-76 scrub only sanitises the ERROR surface, so a verb that renders a
+// filesystem locator on the success path (capture's `path` field; resolve/wontfix's
+// `path`; list's per-issue `path`) leaks the absolute repo path straight into machine
+// output. The contract is repo-relative everywhere: the field stays a useful locator
+// but is never absolute.
+func TestJSONSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
+	cases := []struct {
+		name string
+		// prep establishes state a verb needs (e.g. an open issue to resolve).
+		prep func(t *testing.T)
+		args []string
+	}{
+		{
+			name: "capture success path",
+			args: []string{"capture", "a defect", "--json"},
+		},
+		{
+			name: "resolve success path",
+			prep: func(t *testing.T) {
+				var so, se bytes.Buffer
+				if code := Run([]string{"capture", "to resolve", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
+					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
+				}
+			},
+			args: []string{"capture", "resolve", "iss-1", "handled", "--json"},
+		},
+		{
+			name: "wontfix success path",
+			prep: func(t *testing.T) {
+				var so, se bytes.Buffer
+				if code := Run([]string{"capture", "to wontfix", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
+					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
+				}
+			},
+			args: []string{"capture", "wontfix", "iss-1", "declined", "--json"},
+		},
+		{
+			name: "list issue path",
+			prep: func(t *testing.T) {
+				var so, se bytes.Buffer
+				if code := Run([]string{"capture", "to list", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
+					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
+				}
+			},
+			args: []string{"capture", "list", "--all", "--json"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			t.Chdir(repo)
+			if tc.prep != nil {
+				tc.prep(t)
+			}
+			var stdout, stderr bytes.Buffer
+			code := Run(tc.args, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("expected a zero exit; code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			// Every "path" string anywhere in the success envelope must be
+			// repo-relative: never absolute, never containing the repo root.
+			paths := collectPaths(t, stdout.Bytes())
+			if len(paths) == 0 {
+				t.Fatalf("no path field found in the success envelope:\n%s", stdout.String())
+			}
+			for _, p := range paths {
+				if filepath.IsAbs(p) {
+					t.Fatalf("success envelope leaked an absolute path %q:\n%s", p, stdout.String())
+				}
+				if strings.Contains(p, repo) {
+					t.Fatalf("success envelope leaked the repo root inside %q:\n%s", p, stdout.String())
+				}
+			}
+		})
+	}
+}
+
+// collectPaths walks a JSON success envelope and returns every value of a field
+// named "path" (case-insensitive), at any nesting depth, so the detector can
+// assert none is absolute.
+func collectPaths(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("success output not JSON-shaped: %v\noutput: %q", err, string(raw))
+	}
+	var out []string
+	var walk func(any)
+	walk = func(n any) {
+		switch node := n.(type) {
+		case map[string]any:
+			for k, val := range node {
+				if s, ok := val.(string); ok && strings.EqualFold(k, "path") && s != "" {
+					out = append(out, s)
+				}
+				walk(val)
+			}
+		case []any:
+			for _, e := range node {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	return out
+}
+
+// TestMemoryIngestSuccessEnvelopeNoAbsolutePathLeak is the iss-81 detector for the
+// STRONGER surface: a successful `memory ingest` builds its citation from the
+// source's origin, which was the absolute EvalSymlinks-resolved path — so the
+// success `--json` envelope emitted citation.origin as an absolute (and, for a
+// ~/… source, home-rooted) developer path. Every string in the success envelope
+// must be free of an absolute path and of the repo root.
+func TestMemoryIngestSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	src := filepath.Join(repo, "article.txt")
+	if err := os.WriteFile(src, []byte("Rotate tokens every 24 hours.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pages := filepath.Join(repo, "pages.json")
+	if err := os.WriteFile(pages, []byte(`[{"type":"topic","domain":"auth","slug":"tokens","body":"# Rotation\nRotate tokens every 24 hours."}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"memory", "ingest", src, "--pages-json", pages, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected a zero exit; code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	// The citation.origin must exist (so this assertion is not vacuous) and be
+	// repo-relative like every other string in the envelope.
+	var env struct {
+		Citation map[string]any `json:"citation"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil {
+		t.Fatalf("success output not JSON-shaped: %v\n%s", err, stdout.String())
+	}
+	origin, _ := env.Citation["origin"].(string)
+	if origin == "" {
+		t.Fatalf("citation.origin missing — detector would be vacuous:\n%s", stdout.String())
+	}
+	for _, s := range collectStrings(t, stdout.Bytes()) {
+		if filepath.IsAbs(s) {
+			t.Fatalf("success envelope leaked an absolute path %q:\n%s", s, stdout.String())
+		}
+		if strings.Contains(s, repo) {
+			t.Fatalf("success envelope leaked the repo root inside %q:\n%s", s, stdout.String())
+		}
+	}
+}
+
+// collectStrings walks a JSON document and returns every string value at any
+// depth (map values and array elements), so a detector can assert none carries
+// an absolute path.
+func collectStrings(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("output not JSON-shaped: %v\noutput: %q", err, string(raw))
+	}
+	var out []string
+	var walk func(any)
+	walk = func(n any) {
+		switch node := n.(type) {
+		case string:
+			out = append(out, node)
+		case map[string]any:
+			for _, val := range node {
+				walk(val)
+			}
+		case []any:
+			for _, e := range node {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	return out
+}
+
+// TestMemoryIngestErrorNoAbsolutePathLeakOutsideRoots is the iss-81 detector for the
+// ingest error path: materialFromLocal embeds an EvalSymlinks-resolved ABSOLUTE
+// source path in its IngestError. When the source lies OUTSIDE cwd and home, the
+// iss-76 scrub (which only redacts those two roots) cannot see it, so the absolute
+// path reaches the --json error envelope. The path must be rendered repo-relative.
+func TestMemoryIngestErrorNoAbsolutePathLeakOutsideRoots(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	// A source outside both cwd (repo) and home — the scrub's two roots.
+	outside := t.TempDir()
+	missing := filepath.Join(outside, "secret-notes.txt")
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"memory", "ingest", missing, "--json"}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected a non-zero exit for a missing source; stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	var env struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(stderr.Bytes(), &env); err != nil {
+		t.Fatalf("--json error not JSON-shaped: %v\nstderr: %q", err, stderr.String())
+	}
+	if strings.Contains(env.Error, outside) {
+		t.Fatalf("ingest envelope leaked the absolute source path %q:\n%s", outside, env.Error)
+	}
+	if !strings.Contains(env.Error, "secret-notes.txt") {
+		t.Fatalf("ingest envelope dropped the file basename for context:\n%s", env.Error)
+	}
+}
+
 // TestCaptureSymlinkErrorNoPathLeak reproduces the security-review finding that
 // the fix must also cover: capture's allocator embeds an ABSOLUTE ledger path via
 // fmt.Errorf("%w … %s") — not an os.PathError — so a typed walk misses it. A

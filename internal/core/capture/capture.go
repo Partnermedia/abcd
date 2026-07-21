@@ -94,7 +94,7 @@ type Issue struct {
 	WontfixReason  string      `json:"wontfix_reason,omitempty"`
 	ResolvedBy     *ResolvedBy `json:"resolved_by,omitempty"`
 	Status         State       `json:"status"` // derived from folder
-	Path           string      `json:"path"`   // absolute
+	Path           string      `json:"path"`   // repo-relative locator (iss-81)
 	Body           string      `json:"body"`
 	// BlockedByOpen is the derived subset of BlockedBy whose targets are still in
 	// open/ (the priority projection populated by List/Status). Not a stored

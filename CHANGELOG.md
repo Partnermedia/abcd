@@ -124,6 +124,16 @@ called out in a **Breaking** section.
   the single guarded open (`O_NOFOLLOW` + regular-file on the open fd + size cap),
   and every structured signal — the manifest's reason strings and the
   `.gitignore` overwrite refusals — is preserved unchanged.
+- **Machine (`--json`) output no longer leaks an absolute local path.** The
+  error-only path scrub covered failures but not the success envelope, so
+  `capture`, `capture resolve`/`wontfix`, and `capture list` echoed the absolute
+  ledger path in their `path` field; a successful `memory ingest` recorded the
+  absolute (and, for a `~/…` source, home-rooted) source path in its
+  `citation.origin`; and a `memory ingest` failure on a source outside the
+  working directory embedded an absolute source path the scrub could not reach.
+  Every such locator is now rendered repo-relative — in machine output and in the
+  persisted citation alike — so no verb emits a developer-identity path into
+  machine output.
 
 ### Added
 
