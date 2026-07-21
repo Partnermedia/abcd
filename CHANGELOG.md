@@ -35,6 +35,12 @@ called out in a **Breaking** section.
   error told the user to "run `abcd install`" — a verb that does not exist. The
   remediation now names `abcd ahoy install`, the verb that actually bootstraps
   the store (iss-58).
+- **`abcd ahoy` no longer overclaims `managed-repo` for a stray `.abcd/`
+  directory (iss-88).** Folder classification treated the mere presence of an
+  `.abcd/` directory as a strong managed signal, so a repo with an unregistered,
+  markerless `.abcd/` reported `managed-repo`. Only index registration or a
+  marker block now promotes a folder to managed; a stray `.abcd/` reports
+  `unmanaged-repo` (or `unmanaged-folder` outside a git repo).
 - **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
   A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
   refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
