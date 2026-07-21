@@ -90,6 +90,99 @@ func TestStepConfigValuesRefusesToClobberMalformedConfig(t *testing.T) {
 	}
 }
 
+// writeValidConfig seeds a fully-valid .abcd/config.json for the four install
+// values, so stepConfigValues loads them as already-valid (no config gaps).
+func writeValidConfig(t *testing.T, dir, visibility, docsTarget, oracleBackend string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(configPath(dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := map[string]any{
+		"repo":   map[string]any{"visibility": visibility},
+		"docs":   map[string]any{"target": docsTarget},
+		"oracle": map[string]any{"backend": oracleBackend},
+	}
+	if err := writeConfig(dir, cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestStepConfigValuesExplicitOverrideForcesAlreadyValidSlot is the iss-107
+// detector: a repo whose visibility is already persisted (and valid, so no
+// config gap) must still honour an explicitly-passed --visibility override,
+// overwriting the value and echoing the change — not silently no-op. This
+// exercises the --yes/non-interactive path (RefusingPrompter never consulted
+// because every slot is already valid).
+func TestStepConfigValuesExplicitOverrideForcesAlreadyValidSlot(t *testing.T) {
+	dir := t.TempDir()
+	writeValidConfig(t, dir, "private", "both", "host-delegated")
+
+	a := &applyCtx{
+		cwd:        dir,
+		approved:   map[GapCategory]bool{}, // no config gap => category not approved
+		gapPresent: map[string]bool{},      // no config.*_missing gaps
+		overrides:  map[string]string{"visibility": "public"},
+		prompter:   RefusingPrompter{},
+		autoYes:    true,
+	}
+
+	cfg := a.stepConfigValues()
+	if cfg == nil {
+		t.Fatal("stepConfigValues returned nil for a valid config")
+	}
+	if cfg.Visibility != "public" {
+		t.Errorf("visibility override dropped: got %q, want public", cfg.Visibility)
+	}
+	// The change must be persisted to config.json.
+	m, err := readConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := stringVal(subMap(m, "repo"), "visibility"); v != "public" {
+		t.Errorf("config.json visibility = %q, want public", v)
+	}
+	// The change must be echoed to the user.
+	if len(a.changes) == 0 {
+		t.Errorf("no change echoed for an explicit override")
+	}
+}
+
+// TestStepConfigValuesNoOverrideLeavesValidValue guards the other side of the
+// contract: with NO override flag, an already-valid persisted value is left
+// untouched (a silent no-op — no write, no echoed change).
+func TestStepConfigValuesNoOverrideLeavesValidValue(t *testing.T) {
+	dir := t.TempDir()
+	writeValidConfig(t, dir, "private", "both", "host-delegated")
+	before, err := os.ReadFile(configPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := &applyCtx{
+		cwd:        dir,
+		approved:   map[GapCategory]bool{},
+		gapPresent: map[string]bool{},
+		overrides:  nil, // no override
+		prompter:   RefusingPrompter{},
+		autoYes:    true,
+	}
+
+	cfg := a.stepConfigValues()
+	if cfg == nil || cfg.Visibility != "private" {
+		t.Fatalf("already-valid visibility not preserved: %+v", cfg)
+	}
+	if len(a.changes) != 0 {
+		t.Errorf("a no-op re-install echoed a change: %v", a.changes)
+	}
+	after, err := os.ReadFile(configPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("no-op re-install rewrote config.json")
+	}
+}
+
 // TestInstallAdoptsIdentityPinInteractively guards that the advisory identity
 // pin can be adopted through a later interactive `ahoy install`, as the gap's
 // fix hint advertises — the "already_up_to_date" early return must not short

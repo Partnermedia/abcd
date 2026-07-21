@@ -70,6 +70,16 @@ called out in a **Breaking** section.
   never read back (`"`, `\`, control) are refused at pin time with a clear remedy
   — keeping the commit guard zero-dependency rather than delegating it to a
   possibly-stale binary.
+- **`abcd ahoy install` now honours an explicit config-value flag on an
+  already-configured repo (apply-as-update).** Passing `--visibility`,
+  `--docs-target`, `--oracle-backend`, or `--scan-deep` on a repo whose value
+  was already set and valid was silently dropped: the persisted value
+  short-circuited the install before the override was consulted. An
+  explicitly-passed flag whose value differs from the persisted one now
+  overwrites it, echoes the change (`changed: visibility: private -> public`),
+  and — for visibility and docs-target — refreshes the `.gitignore` block and
+  marker files so nothing is left inconsistent. A re-install with no such flag
+  is still an exact no-op and never clobbers a valid value.
 - **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
   A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
   refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s

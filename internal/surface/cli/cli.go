@@ -1441,6 +1441,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd ahoy install — %s\n", res.Status)
+				for _, c := range res.Changes {
+					fmt.Fprintf(w, "  changed: %s\n", c)
+				}
 				for _, p := range res.Writes {
 					fmt.Fprintf(w, "  wrote: %s\n", p)
 				}

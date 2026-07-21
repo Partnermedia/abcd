@@ -96,6 +96,7 @@ type InstallOptions struct {
 type InstallResult struct {
 	Status             string   `json:"status"` // already_up_to_date | clean | partial | aborted
 	Writes             []string `json:"writes"`
+	Changes            []string `json:"changes,omitempty"`   // value overwrites an explicit override forced ("visibility: private -> public")
 	Remaining          []string `json:"remaining"`           // required+resolvable gap ids left
 	DeclinedCategories []string `json:"declined_categories"` // sorted category wire values
 }

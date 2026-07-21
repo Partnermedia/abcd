@@ -52,12 +52,14 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	}
 	_ = adopted
 
-	// Idempotency: zero required+resolvable gaps => exact no-op. The one
-	// exception is the advisory git-identity pin, which install adopts through an
-	// interactive confirmation (never under --yes): fall through so a later
-	// `ahoy install` on an otherwise-clean repo can still pin, as the gap's fix
-	// hint advertises.
-	if len(actionable(det.Gaps)) == 0 && !(!opts.Yes && pinAdoptable(det.Gaps)) {
+	// Idempotency: zero required+resolvable gaps => exact no-op. Two exceptions
+	// fall through: the advisory git-identity pin, which install adopts through an
+	// interactive confirmation (never under --yes), as the gap's fix hint
+	// advertises; and an explicit value override that differs from the persisted
+	// config, which forces an apply-as-update on an otherwise-clean repo (iss-107).
+	if len(actionable(det.Gaps)) == 0 &&
+		!(!opts.Yes && pinAdoptable(det.Gaps)) &&
+		!overridesWouldChange(abs, opts.ValueOverrides) {
 		return InstallResult{Status: "already_up_to_date"}, nil
 	}
 
@@ -99,6 +101,7 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	return InstallResult{
 		Status:             status,
 		Writes:             ac.writes,
+		Changes:            ac.changes,
 		Remaining:          remaining,
 		DeclinedCategories: declined,
 	}, nil
@@ -114,7 +117,12 @@ type applyCtx struct {
 	prompter   Prompter
 	gapPresent map[string]bool
 	writes     []string
-	autoYes    bool // --yes: every category auto-approved without interaction
+	changes    []string // human-readable value changes an explicit override forced
+	autoYes    bool     // --yes: every category auto-approved without interaction
+
+	visibilityForced bool     // an explicit --visibility override overwrote a valid value
+	docsTargetForced bool     // an explicit --docs-target override overwrote a valid value
+	markerRetract    []string // marker files a narrowed docs-target override de-selected
 }
 
 func (a *applyCtx) note(path string) { a.writes = append(a.writes, path) }
@@ -175,42 +183,42 @@ func (a *applyCtx) stepSkeleton() {
 // stepConfigValues collects and persists the four config values. Returns nil on
 // partial install (config-change declined and a required value missing).
 func (a *applyCtx) stepConfigValues() *InstallConfig {
-	// Nothing to collect if there are no config gaps and category not approved.
 	hasConfigGap := a.has("config.visibility_missing") || a.has("config.docs_target_missing") ||
 		a.has("config.oracle_backend_missing") || a.has("config.scan_deep_missing")
-	cfgMap, cfgErr := readConfig(a.cwd)
-	if cfgErr != nil {
-		// config.json exists but is malformed JSON. Collecting values and writing
-		// them back would rebuild the file from scratch, DESTROYING whatever the
-		// user had. Refuse to touch a file we cannot parse and report a partial
-		// install so the operator repairs it by hand.
+
+	// Load any already-valid persisted values. ok=false means config.json is
+	// malformed JSON: collecting values and writing them back would rebuild the
+	// file from scratch, DESTROYING whatever the user had. Refuse to touch a file
+	// we cannot parse and report a partial install so the operator repairs it.
+	ic, ok := loadPersistedInstallConfig(a.cwd)
+	if !ok {
 		return nil
 	}
-	repo := subMap(cfgMap, "repo")
-	docs := subMap(cfgMap, "docs")
-	oracle := subMap(cfgMap, "oracle")
-	scan := subMap(cfgMap, "scan")
 
-	// Load any already-valid persisted values.
-	ic := &InstallConfig{}
-	if v, ok := stringVal(repo, "visibility"); ok && inSet(v, visibilityChoices) {
-		ic.Visibility = v
-	}
-	if v, ok := stringVal(docs, "target"); ok && inSet(v, docsTargetChoices) {
-		ic.DocsTarget = v
-	}
-	if v, ok := stringVal(oracle, "backend"); ok && inSet(v, oracleBackendChoices) {
-		ic.OracleBackend = v
-	}
-	if v, ok := boolVal(scan, "deep"); ok {
-		vv := v
-		ic.ScanDeep = &vv
+	// An explicitly-passed value override forces its slot even when the persisted
+	// value is already valid, overwriting it and echoing the change (iss-107). The
+	// shared applyOverride path covers all four config slots, so a re-install with
+	// an explicit flag is never silently dropped; a re-install with NO override
+	// leaves an already-valid value untouched (a silent no-op).
+	oldDocsTarget := ic.DocsTarget
+	visForced := a.applyOverride("visibility", visibilityChoices, &ic.Visibility)
+	docsForced := a.applyOverride("docs_target", docsTargetChoices, &ic.DocsTarget)
+	oracleForced := a.applyOverride("oracle_backend", oracleBackendChoices, &ic.OracleBackend)
+	scanForced := a.applyScanDeepOverride(ic)
+	forced := visForced || docsForced || oracleForced || scanForced
+	a.visibilityForced = visForced  // stepVisibility must refresh .gitignore for a new visibility
+	a.docsTargetForced = docsForced // stepMarker must re-plant markers for a new docs target
+	if docsForced {
+		// Narrowing the target set (e.g. both -> claude_md, or -> skip) leaves the
+		// de-selected file's block orphaned; stepMarker retracts it so nothing is
+		// left inconsistent.
+		a.markerRetract = markerFilesDropped(oldDocsTarget, ic.DocsTarget)
 	}
 
-	if !hasConfigGap {
-		return ic // all values already valid; nothing to collect
+	if !hasConfigGap && !forced {
+		return ic // all values already valid and no override forced a change
 	}
-	if !a.approved[ConfigChange] {
+	if hasConfigGap && !a.approved[ConfigChange] {
 		// Category declined; a required value is missing.
 		return nil
 	}
@@ -241,8 +249,9 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 
 	// Persist into the config map (read-modify-write). Re-read defensively; if the
 	// file turned malformed since the first read, refuse rather than clobber it.
-	cfgMap, cfgErr = readConfig(a.cwd)
+	cfgMap, cfgErr := readConfig(a.cwd)
 	if cfgErr != nil {
+		a.rollbackForced()
 		return nil
 	}
 	if cfgMap == nil {
@@ -254,10 +263,24 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	if ic.ScanDeep != nil {
 		setSub(cfgMap, "scan", "deep", *ic.ScanDeep)
 	}
-	if err := writeConfig(a.cwd, cfgMap); err == nil {
-		a.note(configPath(a.cwd))
+	if err := writeConfig(a.cwd, cfgMap); err != nil {
+		// The write did not land; do not echo a change or let downstream steps
+		// reconcile .gitignore/markers against a config value that was not saved.
+		a.rollbackForced()
+		return nil
 	}
+	a.note(configPath(a.cwd))
 	return ic
+}
+
+// rollbackForced discards the effects of a forced override whose config write did
+// not land, so the echoed change and the downstream reconciliation steps never
+// claim a change that was not persisted.
+func (a *applyCtx) rollbackForced() {
+	a.changes = nil
+	a.visibilityForced = false
+	a.docsTargetForced = false
+	a.markerRetract = nil
 }
 
 // resolveValue picks a config value: an override wins, else the prompter.
@@ -270,9 +293,115 @@ func (a *applyCtx) resolveValue(key string, choices []string, def string) string
 	return a.prompter.Prompt(key, choices, def)
 }
 
-// stepVisibility rewrites the .gitignore block for the chosen visibility.
+// loadPersistedInstallConfig returns the already-valid persisted config values.
+// A missing or invalid slot is left zero; a malformed config.json yields
+// ok=false so callers refuse to touch a file they cannot parse.
+func loadPersistedInstallConfig(cwd string) (*InstallConfig, bool) {
+	cfgMap, err := readConfig(cwd)
+	if err != nil {
+		return nil, false
+	}
+	ic := &InstallConfig{}
+	if v, ok := stringVal(subMap(cfgMap, "repo"), "visibility"); ok && inSet(v, visibilityChoices) {
+		ic.Visibility = v
+	}
+	if v, ok := stringVal(subMap(cfgMap, "docs"), "target"); ok && inSet(v, docsTargetChoices) {
+		ic.DocsTarget = v
+	}
+	if v, ok := stringVal(subMap(cfgMap, "oracle"), "backend"); ok && inSet(v, oracleBackendChoices) {
+		ic.OracleBackend = v
+	}
+	if v, ok := boolVal(subMap(cfgMap, "scan"), "deep"); ok {
+		vv := v
+		ic.ScanDeep = &vv
+	}
+	return ic, true
+}
+
+// applyOverride force-sets *dst to an explicit, valid override for key when it
+// differs from the current value, echoing the change and reporting whether it
+// changed the slot. An empty slot is left for the collect-missing path (no
+// overwrite, no echo); a missing/invalid override, or one already equal to the
+// current value, is a no-op — so a plain re-install never clobbers (iss-107).
+func (a *applyCtx) applyOverride(key string, choices []string, dst *string) bool {
+	if *dst == "" {
+		return false
+	}
+	v, ok := a.overrides[key]
+	if !ok || v == "" || !inSet(v, choices) || *dst == v {
+		return false
+	}
+	a.echoChange(key, *dst, v)
+	*dst = v
+	return true
+}
+
+// applyScanDeepOverride is applyOverride for the boolean scan.deep slot. It only
+// forces an already-set value; an unset slot is left for the conditional
+// collect-missing path.
+func (a *applyCtx) applyScanDeepOverride(ic *InstallConfig) bool {
+	if ic.ScanDeep == nil {
+		return false
+	}
+	v, ok := a.overrides["scan_deep"]
+	if !ok || (v != "true" && v != "false") {
+		return false
+	}
+	want := v == "true"
+	if *ic.ScanDeep == want {
+		return false
+	}
+	from := "false"
+	if *ic.ScanDeep {
+		from = "true"
+	}
+	a.echoChange("scan_deep", from, v)
+	ic.ScanDeep = &want
+	return true
+}
+
+// echoChange records a human-readable "key: from -> to" line so an explicit
+// override that overwrites an already-valid value is surfaced, not silent.
+func (a *applyCtx) echoChange(key, from, to string) {
+	a.changes = append(a.changes, fmt.Sprintf("%s: %s -> %s", key, from, to))
+}
+
+// overridesWouldChange reports whether any explicit value override differs from
+// the currently-persisted config — the signal that an otherwise up-to-date repo
+// still has work to do, so Install must not short-circuit as already_up_to_date
+// (iss-107). A malformed config is treated as "no change": stepConfigValues
+// refuses to touch it.
+func overridesWouldChange(cwd string, overrides map[string]string) bool {
+	if len(overrides) == 0 {
+		return false
+	}
+	ic, ok := loadPersistedInstallConfig(cwd)
+	if !ok {
+		return false
+	}
+	differs := func(key string, choices []string, cur string) bool {
+		v, ok := overrides[key]
+		return ok && v != "" && cur != "" && inSet(v, choices) && cur != v
+	}
+	if differs("visibility", visibilityChoices, ic.Visibility) ||
+		differs("docs_target", docsTargetChoices, ic.DocsTarget) ||
+		differs("oracle_backend", oracleBackendChoices, ic.OracleBackend) {
+		return true
+	}
+	if v, ok := overrides["scan_deep"]; ok && (v == "true" || v == "false") && ic.ScanDeep != nil {
+		if *ic.ScanDeep != (v == "true") {
+			return true
+		}
+	}
+	return false
+}
+
+// stepVisibility rewrites the .gitignore block for the chosen visibility. It
+// also runs when an explicit --visibility override forced a new value on an
+// otherwise up-to-date repo (iss-107), so the .gitignore never drifts from the
+// freshly-set visibility.
 func (a *applyCtx) stepVisibility(cfg *InstallConfig) {
-	if !a.approved[ConfigChange] || cfg == nil || cfg.Visibility == "" {
+	if (!a.approved[ConfigChange] && !a.visibilityForced) || cfg == nil || cfg.Visibility == "" {
 		return
 	}
 	wrote, err := applyVisibilityBlock(a.cwd, cfg.Visibility)
@@ -362,7 +491,10 @@ func (a *applyCtx) registerRepo(sha string) {
 
 // stepMarker plants/refreshes the block in the docs.target files.
 func (a *applyCtx) stepMarker(cfg *InstallConfig) {
-	if !a.approved[PluginOwned] {
+	// Also runs when an explicit --docs-target override forced a new value on an
+	// otherwise up-to-date repo (iss-107), so the marker block lands in the newly
+	// chosen target file.
+	if !a.approved[PluginOwned] && !a.docsTargetForced {
 		return
 	}
 	target := docsTargetDefault
@@ -381,6 +513,30 @@ func (a *applyCtx) stepMarker(cfg *InstallConfig) {
 			a.note(path)
 		}
 	}
+	// Retract the block from files a narrowed docs-target override de-selected,
+	// so a target change (e.g. both -> claude_md, or -> skip) leaves no orphan.
+	for _, name := range a.markerRetract {
+		path := filepath.Join(a.cwd, name)
+		if wrote, ok := removeMarkerFile(path); ok && wrote {
+			a.note(path)
+		}
+	}
+}
+
+// markerFilesDropped returns the marker files targeted by from but no longer by
+// to — the blocks a docs-target narrowing orphans.
+func markerFilesDropped(from, to string) []string {
+	keep := map[string]bool{}
+	for _, n := range markerTargets(to) {
+		keep[n] = true
+	}
+	var dropped []string
+	for _, n := range markerTargets(from) {
+		if !keep[n] {
+			dropped = append(dropped, n)
+		}
+	}
+	return dropped
 }
 
 // stepSymlink installs the owned PATH symlink. It refuses to clobber a foreign
