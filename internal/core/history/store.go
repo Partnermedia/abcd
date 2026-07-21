@@ -68,7 +68,7 @@ func ownedDirsReal(rootSHA string) (string, error) {
 	tdir := filepath.Join(repoDir, "transcripts")
 	for _, d := range []string{root, repoDir, tdir} {
 		if !fsutil.IsRealDir(d) {
-			return "", &StorePathError{Path: d, Msg: "not a real directory (absent or symlink); run abcd install to bootstrap the store"}
+			return "", &StorePathError{Path: d, Msg: "not a real directory (absent or symlink); run `abcd ahoy install` to bootstrap the store"}
 		}
 	}
 	return tdir, nil
