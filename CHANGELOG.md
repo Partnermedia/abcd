@@ -12,6 +12,15 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Generated CLI reference with a drift gate** (iss-47). `docs/reference/cli/`
+  now holds `commands.md`, a per-command Markdown reference walked deterministically
+  from the Cobra command tree (`cli.GenerateReference`) — usage line, summary, and
+  flags for every user-facing verb, with the operator-internal hook subtree omitted.
+  Refresh it with `go generate ./internal/surface/cli`; a `go test` drift gate
+  regenerates the tree and fails the build whenever the committed page and the tree
+  disagree, so the reference can never silently go stale. The walker is hand-rolled
+  over stdlib and the existing Cobra dependency — no new module dependency.
+
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
   verb reporting whether an intent may be implemented now: planned
   (directory-as-truth), enumerable Acceptance Criteria, a bidirectional spec
