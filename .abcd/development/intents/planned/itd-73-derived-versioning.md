@@ -1,7 +1,7 @@
 ---
 id: itd-73
 slug: derived-versioning
-spec_id: null
+spec_id: spc-10
 kind: standalone
 suggested_kind: null
 reclassification_history: []
