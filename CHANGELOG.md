@@ -53,6 +53,15 @@ called out in a **Breaking** section.
   some followed a symlink to its target's content or read an endless/oversized
   file unbounded, and a symlinked registry surfaced a raw, path-leaking error;
   all are refused consistently, closing a class of `lstat`→`read` swap windows.
+- **The last three ahoy reads route through the guarded primitive, closing a
+  residual read-time TOCTOU.** The hook-manifest check and the two `.gitignore`
+  reads (one at the attacker-influenced working-directory boundary) each ran a
+  separate `lstat`, regular-file, and size-cap check and then a distinct
+  `os.ReadFile`, so a type or symlink swap in the window between the check and the
+  read was not refused on the descriptor that was read. All three now read through
+  the single guarded open (`O_NOFOLLOW` + regular-file on the open fd + size cap),
+  and every structured signal — the manifest's reason strings and the
+  `.gitignore` overwrite refusals — is preserved unchanged.
 
 ### Added
 
