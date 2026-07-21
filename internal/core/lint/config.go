@@ -60,6 +60,10 @@ type RuleConfig struct {
 	// SpecsDir is the spec_lifecycle specs subdirectory (relative to a root),
 	// mirroring IntentsDir. Default "specs".
 	SpecsDir string `json:"specs_dir"`
+	// IssuesDir is the issue_id_unique ledger root (repo-relative), holding the
+	// open/, resolved/, and wontfix/ status directories. Default .abcd/work/issues.
+	// It lies outside Roots — the rule reads the ledger and runs once.
+	IssuesDir string `json:"issues_dir"`
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.
 	Allowlist []string `json:"allowlist"`

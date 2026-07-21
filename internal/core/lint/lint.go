@@ -45,6 +45,9 @@ var (
 	// Intent id embedded in a filename or a superseded_by value.
 	intentIDRe   = regexp.MustCompile(`itd-\d+`)
 	intentFileRe = regexp.MustCompile(`^itd-\d+.*\.md$`)
+	// Issue id embedded in a ledger filename (issue_id_unique).
+	issueIDRe   = regexp.MustCompile(`iss-\d+`)
+	issueFileRe = regexp.MustCompile(`^iss-\d+.*\.md$`)
 	// Surface registry Command cell: the bare "/abcd" top-level, or "/abcd:<name>".
 	surfaceCmdRe = regexp.MustCompile(`^/abcd(?::([a-z0-9-]+))?$`)
 	// receipt_gate arming inputs are release-time and become externally supplied
@@ -73,6 +76,9 @@ var (
 		"drafts": true, "planned": true, "shipped": true,
 		"disciplines": true, "superseded": true,
 	}
+	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
+	// scans all three for a duplicated iss-N id).
+	issueStatusDirs = []string{"open", "resolved", "wontfix"}
 )
 
 // Lint runs every enabled check family against the record under repoRoot and
@@ -224,6 +230,17 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, gl...)
+	}
+
+	// issue_id_unique scans the issue ledger (.abcd/work/issues/{open,resolved,
+	// wontfix} — outside cfg.Roots) for an iss-N id claimed by two or more files,
+	// so it too runs once here.
+	if iiCfg, ok := cfg.Rules["issue_id_unique"]; ok && iiCfg.Enabled {
+		ii, err := checkIssueIDUnique(repoRoot, iiCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ii...)
 	}
 
 	sortFindings(findings)
@@ -1125,11 +1142,21 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 	return out, nil
 }
 
-// validateIntentIDUnique flags every file in a colliding set, not just one:
-// the linter cannot know which claimant is authoritative, and flagging a single
-// file would imply the others are fine.
+// validateIntentIDUnique flags a duplicated intent id, delegating to the shared
+// validateIDUnique primitive (the issue-id rule uses the same logic).
 func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmField, idFiles map[string][]string, severity string) []Finding {
 	id := intentIDRe.FindString(name)
+	return validateIDUnique(repoRoot, rel, id, "intent", "intent_lifecycle", severity, fields, idFiles)
+}
+
+// validateIDUnique flags every file in a colliding id set, not just one: the
+// linter cannot know which claimant is authoritative, and flagging a single file
+// would imply the others are fine. It is the one primitive behind both the
+// intent-id (intent_lifecycle) and issue-id (issue_id_unique) uniqueness rules —
+// an id is a record's identity across its register and must be unique within it.
+// noun names the record kind in the message; ruleID and severity tag the emitted
+// Finding. idFiles maps each id to the repo-absolute paths that claim it.
+func validateIDUnique(repoRoot, rel, id, noun, ruleID, severity string, fields map[string]fmField, idFiles map[string][]string) []Finding {
 	claimants := idFiles[id]
 	if len(claimants) < 2 {
 		return nil
@@ -1147,10 +1174,69 @@ func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmFiel
 		line = f.line
 	}
 	return []Finding{{
-		File: rel, Line: line, RuleID: "intent_lifecycle", Severity: severity,
-		Message: "duplicate intent id " + id + "; also claimed by " + strings.Join(others, ", ") +
-			" — an id is the intent's identity across the record and must be unique",
+		File: rel, Line: line, RuleID: ruleID, Severity: severity,
+		Message: "duplicate " + noun + " id " + id + "; also claimed by " + strings.Join(others, ", ") +
+			" — an id is the " + noun + "'s identity across the record and must be unique",
 	}}
+}
+
+// checkIssueIDUnique flags any iss-N id claimed by two or more files across the
+// issue ledger's status directories (open/, resolved/, wontfix/). The capture
+// allocator rejects a duplicate on the reservation path, but a hand-added issue
+// file that bypassed it — how a past iss-56 collision arose — slips straight
+// through; this is the record-lint backstop that catches it. It is the issue-side
+// mirror of the intent-id uniqueness rule and shares the same validateIDUnique
+// primitive. The ledger lives outside cfg.Roots, so the rule runs once, not
+// per-root. A missing ledger is not an error — it yields no findings.
+func checkIssueIDUnique(repoRoot string, cfg RuleConfig) ([]Finding, error) {
+	issuesDir := cfg.IssuesDir
+	if issuesDir == "" {
+		issuesDir = ".abcd/work/issues"
+	}
+	issuesRoot := filepath.Join(repoRoot, issuesDir)
+	if _, err := os.Stat(issuesRoot); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Track every file each iss-N id claims across the three status dirs: an id is
+	// the issue's identity across the ledger, and a bypassed-allocator file (or two
+	// parallel branches) can land the same id silently otherwise.
+	idFiles := map[string][]string{}
+	var files []string
+	for _, sub := range issueStatusDirs {
+		entries, err := os.ReadDir(filepath.Join(issuesRoot, sub))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !issueFileRe.MatchString(e.Name()) {
+				continue
+			}
+			fileAbs := filepath.Join(issuesRoot, sub, e.Name())
+			id := issueIDRe.FindString(e.Name())
+			idFiles[id] = append(idFiles[id], fileAbs)
+			files = append(files, fileAbs)
+		}
+	}
+
+	var out []Finding
+	for _, fileAbs := range files {
+		id := issueIDRe.FindString(filepath.Base(fileAbs))
+		content, err := os.ReadFile(fileAbs)
+		if err != nil {
+			return nil, err
+		}
+		rel := repoRel(repoRoot, fileAbs)
+		fields := frontmatterFields(strings.Split(string(content), "\n"))
+		out = append(out, validateIDUnique(repoRoot, rel, id, "issue", "issue_id_unique", cfg.Severity, fields, idFiles)...)
+	}
+	return out, nil
 }
 
 func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, severity string) []Finding {
