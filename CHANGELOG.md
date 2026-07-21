@@ -28,6 +28,19 @@ called out in a **Breaking** section.
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
 
+### Fixed
+
+- **`abcd ahoy install` now honours an explicit config-value flag on an
+  already-configured repo (apply-as-update).** Passing `--visibility`,
+  `--docs-target`, `--oracle-backend`, or `--scan-deep` on a repo whose value
+  was already set and valid was silently dropped: the persisted value
+  short-circuited the install before the override was consulted. An
+  explicitly-passed flag whose value differs from the persisted one now
+  overwrites it, echoes the change (`changed: visibility: private -> public`),
+  and — for visibility and docs-target — refreshes the `.gitignore` block and
+  marker files so nothing is left inconsistent. A re-install with no such flag
+  is still an exact no-op and never clobbers a valid value.
+
 ## [0.3.0] - 2026-07-18
 
 ### Security
