@@ -35,6 +35,15 @@ called out in a **Breaking** section.
   reusing `agent-finding`. `agent-observation` parallels it ("an agent
   observed") without being tied to one run mode (iss-57).
 
+- **`issue_id_unique` record-lint rule — a duplicate issue id is a blocker.**
+  The lint pass now scans the issue ledger's three status directories
+  (`open/`, `resolved/`, `wontfix/`) and flags any `iss-N` id claimed by two or
+  more files, mirroring the existing intent-id uniqueness check (both share one
+  `validateIDUnique` primitive). The capture allocator already rejects a
+  duplicate on the reservation path, but a hand-added issue file that bypassed
+  it slipped straight through until now; this is the backstop that catches it.
+  Every file in a colliding set is flagged, since the linter cannot know which
+  claimant is authoritative.
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
   verb reporting whether an intent may be implemented now: planned
   (directory-as-truth), enumerable Acceptance Criteria, a bidirectional spec
