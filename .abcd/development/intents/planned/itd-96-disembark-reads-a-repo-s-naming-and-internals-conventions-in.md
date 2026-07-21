@@ -7,6 +7,7 @@ suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: minor
+impact: additive
 ---
 
 # Disembark Reads A Repo's Naming And Internals Conventions Into Its Lifeboat
