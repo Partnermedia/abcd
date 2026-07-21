@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-104"
 slug: "intent-quoted-text-create-treats-any-non-subcommand-first-to"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"

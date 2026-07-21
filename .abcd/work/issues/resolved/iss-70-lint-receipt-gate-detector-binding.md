@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-70"
 slug: "lint-receipt-gate-detector-binding"
 severity: "major"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

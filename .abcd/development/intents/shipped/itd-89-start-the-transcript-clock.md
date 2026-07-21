@@ -7,6 +7,7 @@ suggested_kind: null
 reclassification_history: []
 builds_on: [itd-3]
 severity: critical
+impact: additive
 related_adrs: [adr-29]
 ---
 

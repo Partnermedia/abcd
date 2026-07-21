@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-65"
 slug: "scanner-serialized-secret-crossleak"
 severity: "critical"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

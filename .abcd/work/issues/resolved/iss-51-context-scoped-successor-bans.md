@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-51"
 slug: "context-scoped-successor-bans"
 severity: "minor"
+impact: breaking
 category: "process"
 source: "agent-finding"
 found_during: "2026-07-09 practice/MVP/tool extraction"

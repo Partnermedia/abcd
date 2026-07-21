@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 severity: major
+impact: additive
 ---
 
 # abcd Knows What Kind of Folder You're In

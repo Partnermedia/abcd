@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-61"
 slug: "launch-payload-drops-skills"
 severity: "major"
+impact: internal
 category: "drift"
 source: "agent-finding"
 found_during: "autonomous-run"

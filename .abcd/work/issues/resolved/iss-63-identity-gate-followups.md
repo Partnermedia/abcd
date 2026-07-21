@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-63"
 slug: "identity-gate-followups"
 severity: "minor"
+impact: fix
 category: "future-work-seed"
 source: "agent-finding"
 found_during: "iss-62-security-review"

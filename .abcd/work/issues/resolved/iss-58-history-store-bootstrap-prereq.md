@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-58"
 slug: "history-store-bootstrap-prereq"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "agent-finding"
 found_during: "autonomous-run"

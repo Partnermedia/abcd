@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-9"
 slug: "glossary-terminology-path"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

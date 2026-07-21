@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-109"
 slug: "ahoy-manual-guard-reads-carry-a-residual-lstat-readfile-toct"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"

@@ -61,15 +61,18 @@ type RuleConfig struct {
 	Fields []string `json:"fields"`
 	// Exempt is the directory_coverage glob allowlist.
 	Exempt []string `json:"exempt"`
-	// IntentsDir is the intent_lifecycle intents subdirectory (relative to a root).
-	// spec_lifecycle also reads it to resolve the intent corpus its specs link to.
+	// IntentsDir is the intents subdirectory (relative to a root) read by the
+	// intent-tree rules, intent_lifecycle and intent_impact_valid. Rules that name
+	// the same directory share one scan of it. spec_lifecycle also reads it to
+	// resolve the intent corpus its specs link to.
 	IntentsDir string `json:"intents_dir"`
 	// SpecsDir is the spec_lifecycle specs subdirectory (relative to a root),
 	// mirroring IntentsDir. Default "specs".
 	SpecsDir string `json:"specs_dir"`
-	// IssuesDir is the issue_id_unique ledger root (repo-relative), holding the
-	// open/, resolved/, and wontfix/ status directories. Default .abcd/work/issues.
-	// It lies outside Roots — the rule reads the ledger and runs once.
+	// IssuesDir is the issue-ledger root (repo-relative) read by the ledger rules,
+	// issue_id_unique and issue_impact_valid; it holds the open/, resolved/, and
+	// wontfix/ status directories. Default .abcd/work/issues. It lies outside Roots
+	// — the rules read the ledger and run once, sharing one scan of it.
 	IssuesDir string `json:"issues_dir"`
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.

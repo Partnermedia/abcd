@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-88"
 slug: "managed-repo-label-overclaims"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "agent-finding"
 found_during: "2026-07-13 B1 dogfood: prepare-this-repo audit of Manuscripts"

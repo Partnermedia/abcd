@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-106"
 slug: "gl002-stripinlinecode-restores-the-whole-line-on-an-unpaired"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"

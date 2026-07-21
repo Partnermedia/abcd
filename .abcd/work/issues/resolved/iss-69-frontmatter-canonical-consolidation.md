@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-69"
 slug: "frontmatter-canonical-consolidation"
 severity: "minor"
+impact: fix
 category: "tech-debt"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

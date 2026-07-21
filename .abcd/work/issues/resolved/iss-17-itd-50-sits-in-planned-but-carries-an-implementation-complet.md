@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-17"
 slug: "itd-50-sits-in-planned-but-carries-an-implementation-complet"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"

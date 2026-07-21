@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-97"
 slug: "detect-unbounded-marker-reads"
 severity: "minor"
+impact: internal
 category: "security"
 source: "agent-finding"
 found_during: "iss-95 adversarial security review"

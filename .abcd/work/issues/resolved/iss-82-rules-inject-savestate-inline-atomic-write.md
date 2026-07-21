@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-82"
 slug: "rules-inject-savestate-inline-atomic-write"
 severity: "minor"
+impact: internal
 category: "tech-debt"
 source: "user-observation"
 found_during: "2026-07-12 iss-79 correctness review"

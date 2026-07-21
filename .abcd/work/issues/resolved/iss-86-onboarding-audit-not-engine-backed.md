@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-86"
 slug: "onboarding-audit-not-engine-backed"
 severity: "major"
+impact: additive
 category: "future-work-seed"
 source: "agent-finding"
 found_during: "2026-07-13 B1 dogfood: prepare-this-repo audit of Manuscripts"

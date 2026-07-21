@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-20"
 slug: "launch-cluster-unscheduled"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"

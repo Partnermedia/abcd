@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-74"
 slug: "duplicate-iss-56-id"
 severity: "major"
+impact: additive
 category: "bug"
 source: "user-observation"
 found_during: "abcd-run-design"

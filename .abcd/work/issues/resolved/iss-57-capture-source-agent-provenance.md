@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-57"
 slug: "capture-source-agent-provenance"
 severity: "minor"
+impact: additive
 category: "observation"
 source: "agent-finding"
 found_during: "autonomous-run"

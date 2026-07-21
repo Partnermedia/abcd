@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-81"
 slug: "machine-output-abspath-beyond-error-scrub"
 severity: "minor"
+impact: fix
 category: "bug"
 source: "user-observation"
 found_during: "2026-07-12 iss-76 security re-review"

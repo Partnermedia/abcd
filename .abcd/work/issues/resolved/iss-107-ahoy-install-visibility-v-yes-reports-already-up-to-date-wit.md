@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-107"
 slug: "ahoy-install-visibility-v-yes-reports-already-up-to-date-wit"
 severity: "minor"
+impact: fix
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"

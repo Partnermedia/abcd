@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-77"
 slug: "launch-payload-omits-agents-hooks"
 severity: "major"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "2026-07-12 /abcd:run iss-31"

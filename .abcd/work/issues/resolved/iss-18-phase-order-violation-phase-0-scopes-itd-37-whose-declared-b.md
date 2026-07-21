@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-18"
 slug: "phase-order-violation-phase-0-scopes-itd-37-whose-declared-b"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"
