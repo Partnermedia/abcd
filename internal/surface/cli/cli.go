@@ -1075,6 +1075,14 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			// Quoted text (no sub-verb) files a new draft — the symmetric create path
 			// (itd-46). Bare invocation stays read-only status + help (never mutates).
 			if len(args) > 0 {
+				// Guard: a mistyped subcommand (e.g. `intent lnk itd-5`) must not be
+				// swallowed as draft text and filed. Mirrors the capture guard
+				// (unrecognized-input-never-writes, iss-29); genuine prose still files.
+				if sug, ok := suspectedTypoedSubcommand(cmd, args); ok {
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"unknown intent subcommand %q; did you mean %q? (nothing created — reword the text if you meant to file a draft)",
+						args[0], sug)}
+				}
 				return createIntentFromText(cmd, cwd, strings.Join(args, " "), *asJSON)
 			}
 			v, err := intent.Status(cwd)
@@ -1433,6 +1441,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd ahoy install — %s\n", res.Status)
+				for _, c := range res.Changes {
+					fmt.Fprintf(w, "  changed: %s\n", c)
+				}
 				for _, p := range res.Writes {
 					fmt.Fprintf(w, "  wrote: %s\n", p)
 				}
@@ -1853,17 +1864,24 @@ var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 // ^iss-[0-9]+$ schema constraint).
 var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
 
+// recordIDRe matches any abcd record id (issue, intent, or spec). It is used
+// only by suspectedTypoedSubcommand's shape check — distinct from issIDRe, which
+// validates a real iss-only --blocked-by token — so the typo guard recognises a
+// subcommand call in either verb family (capture's iss-N ids, intent's itd/spc
+// ids) without loosening iss-id validation elsewhere.
+var recordIDRe = regexp.MustCompile(`^(iss|itd|spc)-[0-9]+$`)
+
 // suspectedTypoedSubcommand reports the nearest real subverb when args[0] is a
 // near-miss for one (edit distance 1–2) and the invocation shape resembles a
 // subcommand call rather than free-text prose: a lone token, or a token
-// followed by an issue id. It is deliberately high-precision so it never
-// refuses a legitimate free-text capture whose first word merely resembles a
-// verb — those carry no trailing iss-id and are multi-word.
+// followed by a record id. It is deliberately high-precision so it never
+// refuses a legitimate free-text create whose first word merely resembles a
+// verb — those carry no trailing record id and are multi-word.
 func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false
 	}
-	shapedLikeSubcommand := len(args) == 1 || issIDRe.MatchString(args[1])
+	shapedLikeSubcommand := len(args) == 1 || recordIDRe.MatchString(args[1])
 	if !shapedLikeSubcommand {
 		return "", false
 	}

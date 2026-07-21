@@ -100,7 +100,9 @@ func classify(cwd string, id RepoIdentity, idx *historyIndex) (FolderKind, map[s
 	gitRepo := isDir(filepath.Join(cwd, ".git"))
 	signals["git_repo"] = gitRepo
 
-	strong := registered || abcdDir || markerFired
+	// A bare .abcd/ directory is not a managed signal on its own (iss-88): only
+	// index registration or a marker block promotes a folder to managed-repo.
+	strong := registered || markerFired
 	switch {
 	case strong:
 		return ManagedRepo, signals

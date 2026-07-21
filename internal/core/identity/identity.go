@@ -9,6 +9,7 @@
 package identity
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -118,21 +119,55 @@ func WritePin(root string, p Pin) error {
 	if p.Name == "" || p.Email == "" {
 		return fmt.Errorf("identity pin requires both name and email")
 	}
+	// The self-contained pre-commit identity guard reads the pin with a naive
+	// sed that captures the raw bytes between the JSON quotes and compares them
+	// literally to `git config`, so the stored value must round-trip through that
+	// sed. Two things ensure it (iss-63): the pin is marshalled WITHOUT HTML
+	// escaping (below), so &, <, > — legal in a git user.name like
+	// "Marks & Spencer" — are stored literally rather than escaped; and the
+	// characters JSON must escape regardless (a double-quote, a backslash, or a
+	// control character), which the sed can never read back, are refused here so
+	// a pin can never hold one and fail-close a correct identity. This keeps the
+	// hook zero-dependency rather than delegating the gate to a possibly-stale
+	// binary.
+	if unpinnable(p.Name) {
+		return fmt.Errorf("identity pin name must not contain a double-quote, backslash, or control character (it breaks the self-contained pre-commit identity guard); adjust git config user.name")
+	}
+	if unpinnable(p.Email) {
+		return fmt.Errorf("identity pin email must not contain a double-quote, backslash, or control character; adjust git config user.email")
+	}
 	path := filepath.Join(root, PinRelPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
+	// Marshal WITHOUT HTML escaping (so &, <, > survive literally) and route the
+	// bytes through the canonical atomic primitive (temp + fchmod + fsync +
+	// rename + parent-dir fsync): a plain in-place os.WriteFile truncates the pin
+	// before rewriting it — a crash mid-write leaves a corrupt or empty
+	// identity.json — and it follows a symlink at path. json.Encoder appends the
+	// trailing newline.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(p); err != nil {
 		return err
 	}
-	// Route through the canonical atomic primitive (temp + fchmod + fsync + rename
-	// + parent-dir fsync): a plain in-place os.WriteFile truncates the pin before
-	// rewriting it — a crash mid-write leaves a corrupt or empty identity.json, and
-	// it follows a symlink at path. This is the fifth writer the iss-32
-	// consolidation missed (the guard only flags divergent atomic primitives, not a
-	// non-atomic write).
-	return fsutil.WriteFileAtomic(path, append(data, '\n'), 0o644)
+	return fsutil.WriteFileAtomic(path, buf.Bytes(), 0o644)
+}
+
+// unpinnable reports whether s holds a character the identity pin cannot safely
+// carry: a double-quote or backslash (which JSON must always escape) or a
+// control character — none of which the self-contained pre-commit hook's sed can
+// read back to compare against `git config` (iss-63). Characters like &, <, >
+// are pinnable because WritePin marshals without HTML escaping.
+func unpinnable(s string) bool {
+	for _, r := range s {
+		if r == '"' || r == '\\' || r < 0x20 {
+			return true
+		}
+	}
+	return false
 }
 
 // EffectiveIdentity returns the author identity git would stamp on a commit in

@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestDiscoverRepoRootIgnoresInheritedWorkTree is the attack-input test for the
@@ -15,7 +17,9 @@ func TestDiscoverRepoRootIgnoresInheritedWorkTree(t *testing.T) {
 		t.Skip("git not available")
 	}
 	repo := t.TempDir()
-	if out, err := exec.Command("git", "-C", repo, "init").CombinedOutput(); err != nil {
+	gitInit := exec.Command("git", "-C", repo, "init")
+	gitInit.Env = gittest.Env(t)
+	if out, err := gitInit.CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 	other := t.TempDir()

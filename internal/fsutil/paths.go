@@ -4,8 +4,32 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"syscall"
 )
+
+// RepoRel renders target as a path relative to base — the repo root, or the
+// working directory — so machine output never carries an absolute
+// developer-identity path (iss-81). A target outside base yields a "../…" form,
+// which is acceptable: the contract is only that the result is never an absolute
+// /Users/<name>/… path. It falls back to the base name when a relative form
+// cannot be computed (a different volume, a relative target, or an empty base)
+// and to target unchanged when target is already relative. A non-path value that
+// merely looks absolute-free (e.g. a URL) is returned untouched.
+func RepoRel(base, target string) string {
+	if target == "" {
+		return target
+	}
+	if base != "" {
+		if rel, err := filepath.Rel(base, target); err == nil {
+			return rel
+		}
+	}
+	if filepath.IsAbs(target) {
+		return filepath.Base(target)
+	}
+	return target
+}
 
 // notPresent reports whether a stat/open error means the path cannot exist: it
 // is absent (ErrNotExist), or a component of its prefix is not a directory

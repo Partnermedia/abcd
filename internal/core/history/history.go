@@ -78,9 +78,9 @@ func (e *RedactionResidualError) Error() string {
 // fail-closed: if a hard_fail span survives redaction it returns a
 // *RedactionResidualError and writes nothing.
 //
-// Precondition: the transcripts/ dir must already exist (abcd install created
-// it). Capture re-validates that the store's owned dirs are real directories;
-// it never creates the index or meta.
+// Precondition: the transcripts/ dir must already exist (abcd ahoy install
+// created it). Capture re-validates that the store's owned dirs are real
+// directories; it never creates the index or meta.
 func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (CaptureResult, error) {
 	// Boundary validation — external inputs.
 	if !rootSHARe.MatchString(rootSHA) {

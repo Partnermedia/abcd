@@ -64,8 +64,8 @@ var validCategories = map[Category]bool{
 
 var validSources = map[Source]bool{
 	"plan-review": true, "impl-review": true, "manual-test": true,
-	"review-followup": true, "agent-finding": true, "user-observation": true,
-	"drift-detection": true, "memory-curation": true,
+	"review-followup": true, "agent-finding": true, "agent-observation": true,
+	"user-observation": true, "drift-detection": true, "memory-curation": true,
 }
 
 // ResolvedBy is an optional structured pointer to what resolved an issue.
@@ -94,7 +94,7 @@ type Issue struct {
 	WontfixReason  string      `json:"wontfix_reason,omitempty"`
 	ResolvedBy     *ResolvedBy `json:"resolved_by,omitempty"`
 	Status         State       `json:"status"` // derived from folder
-	Path           string      `json:"path"`   // absolute
+	Path           string      `json:"path"`   // repo-relative locator (iss-81)
 	Body           string      `json:"body"`
 	// BlockedByOpen is the derived subset of BlockedBy whose targets are still in
 	// open/ (the priority projection populated by List/Status). Not a stored

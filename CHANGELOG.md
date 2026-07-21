@@ -10,8 +10,50 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The published plugin now ships its agents and hooks.** The launch payload's
+  include list named neither the `agents/` nor the `hooks/` surface directory,
+  so the released bundle omitted both — the plugin installed without its agents
+  and without its hook wiring. Both directories are added to the payload
+  includes, and a bundle-completeness check now fails if any auto-discovered
+  plugin-surface directory present on disk is neither included nor explicitly
+  excluded with a reason, so a newly-added surface can never be silently dropped.
+### Changed
+
+- **The record-lint banlist now requires a machine-readable successor and
+  context.** Every `banned_tokens` entry must declare a non-empty `successor`
+  (what to use instead of the retired token) and a non-empty `allow_context`
+  (where the token is legitimately allowed); a config whose entry omits either
+  is rejected at load rather than lints with a replacement that lived only in
+  prose. Each finding auto-cites its successor, so the reader is told the
+  replacement inline. The bundled record-lint and docs-lint banlists carry the
+  new fields.
+
 ### Added
 
+- **Generated CLI reference with a drift gate** (iss-47). `docs/reference/cli/`
+  now holds `commands.md`, a per-command Markdown reference walked deterministically
+  from the Cobra command tree (`cli.GenerateReference`) — usage line, summary, and
+  flags for every user-facing verb, with the operator-internal hook subtree omitted.
+  Refresh it with `go generate ./internal/surface/cli`; a `go test` drift gate
+  regenerates the tree and fails the build whenever the committed page and the tree
+  disagree, so the reference can never silently go stale. The walker is hand-rolled
+  over stdlib and the existing Cobra dependency — no new module dependency.
+- **`agent-observation` is now a valid `--source` value for `abcd capture`.**
+  An autonomous run's self-observation had no honest surfacing channel and was
+  reusing `agent-finding`. `agent-observation` parallels it ("an agent
+  observed") without being tied to one run mode (iss-57).
+
+- **`issue_id_unique` record-lint rule — a duplicate issue id is a blocker.**
+  The lint pass now scans the issue ledger's three status directories
+  (`open/`, `resolved/`, `wontfix/`) and flags any `iss-N` id claimed by two or
+  more files, mirroring the existing intent-id uniqueness check (both share one
+  `validateIDUnique` primitive). The capture allocator already rejects a
+  duplicate on the reservation path, but a hand-added issue file that bypassed
+  it slipped straight through until now; this is the backstop that catches it.
+  Every file in a colliding set is flagged, since the linter cannot know which
+  claimant is authoritative.
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
   verb reporting whether an intent may be implemented now: planned
   (directory-as-truth), enumerable Acceptance Criteria, a bidirectional spec
@@ -27,6 +69,52 @@ called out in a **Breaking** section.
   intent is routed to: the human confirms the press release, resolves open
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
+
+### Fixed
+
+- **The history-store bootstrap error names the verb that exists.** When a
+  transcript capture found the store's owned directories absent, the preflight
+  error told the user to "run `abcd install`" — a verb that does not exist. The
+  remediation now names `abcd ahoy install`, the verb that actually bootstraps
+  the store (iss-58).
+- **`abcd ahoy` no longer overclaims `managed-repo` for a stray `.abcd/`
+  directory (iss-88).** Folder classification treated the mere presence of an
+  `.abcd/` directory as a strong managed signal, so a repo with an unregistered,
+  markerless `.abcd/` reported `managed-repo`. Only index registration or a
+  marker block now promotes a folder to managed; a stray `.abcd/` reports
+  `unmanaged-repo` (or `unmanaged-folder` outside a git repo).
+- **The identity pin round-trips through the self-contained commit guard.** The
+  pin was stored with Go's default JSON encoder, which escapes `&`, `<`, `>` (and
+  always `"`, `\`, control characters); the pre-commit identity guard reads the
+  raw bytes between the quotes with a naive parse, so an escaped value never
+  matched `git config` and fail-closed a correctly configured identity (e.g. a
+  `user.name` of `Marks & Spencer`). The pin is now marshalled without HTML
+  escaping so `&`/`<`/`>` are stored literally, and the characters a parse can
+  never read back (`"`, `\`, control) are refused at pin time with a clear remedy
+  — keeping the commit guard zero-dependency rather than delegating it to a
+  possibly-stale binary.
+- **`abcd ahoy install` now honours an explicit config-value flag on an
+  already-configured repo (apply-as-update).** Passing `--visibility`,
+  `--docs-target`, `--oracle-backend`, or `--scan-deep` on a repo whose value
+  was already set and valid was silently dropped: the persisted value
+  short-circuited the install before the override was consulted. An
+  explicitly-passed flag whose value differs from the persisted one now
+  overwrites it, echoes the change (`changed: visibility: private -> public`),
+  and — for visibility and docs-target — refreshes the `.gitignore` block and
+  marker files so nothing is left inconsistent. A re-install with no such flag
+  is still an exact no-op and never clobbers a valid value.
+- **GL002 no longer fires a spurious blocker when a line has a closed inline-code
+  span before a stray backtick.** `stripInlineCode` restored the entire original
+  line whenever it reached end-of-line with an unpaired backtick, un-masking an
+  enforced synonym that sat inside an earlier, correctly-closed span. It now
+  blanks matched backtick pairs only and leaves a trailing unpaired backtick (and
+  its tail) literal, so the earlier span stays masked (iss-106). Full CommonMark
+  double-backtick span parsing remains out of scope.
+- **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
+  A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
+  refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
+  guard; a genuine prose title still files. The shared typo heuristic is now
+  record-id aware (`iss`/`itd`/`spc`), which also sharpens `abcd capture`.
 
 ## [0.3.0] - 2026-07-18
 
@@ -53,6 +141,25 @@ called out in a **Breaking** section.
   some followed a symlink to its target's content or read an endless/oversized
   file unbounded, and a symlinked registry surfaced a raw, path-leaking error;
   all are refused consistently, closing a class of `lstat`→`read` swap windows.
+- **The last three ahoy reads route through the guarded primitive, closing a
+  residual read-time TOCTOU.** The hook-manifest check and the two `.gitignore`
+  reads (one at the attacker-influenced working-directory boundary) each ran a
+  separate `lstat`, regular-file, and size-cap check and then a distinct
+  `os.ReadFile`, so a type or symlink swap in the window between the check and the
+  read was not refused on the descriptor that was read. All three now read through
+  the single guarded open (`O_NOFOLLOW` + regular-file on the open fd + size cap),
+  and every structured signal — the manifest's reason strings and the
+  `.gitignore` overwrite refusals — is preserved unchanged.
+- **Machine (`--json`) output no longer leaks an absolute local path.** The
+  error-only path scrub covered failures but not the success envelope, so
+  `capture`, `capture resolve`/`wontfix`, and `capture list` echoed the absolute
+  ledger path in their `path` field; a successful `memory ingest` recorded the
+  absolute (and, for a `~/…` source, home-rooted) source path in its
+  `citation.origin`; and a `memory ingest` failure on a source outside the
+  working directory embedded an absolute source path the scrub could not reach.
+  Every such locator is now rendered repo-relative — in machine output and in the
+  persisted citation alike — so no verb emits a developer-identity path into
+  machine output.
 
 ### Added
 

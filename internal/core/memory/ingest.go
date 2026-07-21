@@ -110,7 +110,7 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	}
 	ingestedAt := now.Format("2006-01-02")
 
-	material, err := acquireSource(req.Source, req.Fetcher, req.PDFExtractor)
+	material, err := acquireSource(root, req.Source, req.Fetcher, req.PDFExtractor)
 	if err != nil {
 		return IngestResult{}, err
 	}
@@ -482,7 +482,7 @@ func isURL(source string) bool {
 	return u.Scheme == "http" || u.Scheme == "https"
 }
 
-func acquireSource(source string, fetcher Fetcher, pdf PDFExtractor) (sourceMaterial, error) {
+func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (sourceMaterial, error) {
 	if isURL(source) {
 		var fetched FetchedSource
 		var err error
@@ -500,7 +500,7 @@ func acquireSource(source string, fetcher Fetcher, pdf PDFExtractor) (sourceMate
 		}
 		return materialFromFetched(source, fetched, pdf)
 	}
-	return materialFromLocal(source, pdf)
+	return materialFromLocal(repoRoot, source, pdf)
 }
 
 // blockedFetchIP reports whether ip is in a range that must never be fetched
@@ -648,7 +648,7 @@ func readFetchedResponse(rawURL string, resp *http.Response) (FetchedSource, err
 	return FetchedSource{FinalURL: final, Headers: headers, Body: body}, nil
 }
 
-func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) {
+func materialFromLocal(repoRoot, source string, pdf PDFExtractor) (sourceMaterial, error) {
 	expanded := source
 	// Expand only a leading "~" or "~/…" to the home dir. A "~user" form is NOT the
 	// caller's home and must not be mangled into home+"user" — leave it literal.
@@ -659,27 +659,39 @@ func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) 
 	}
 	abs, err := filepath.Abs(expanded)
 	if err != nil {
-		return sourceMaterial{}, newIngestError("source path is invalid: %q (%v)", source, err)
+		return sourceMaterial{}, newIngestError("source path is invalid: %q (%v)", fsutil.RepoRel(repoRoot, expanded), err)
 	}
 	resolved := abs
 	if r, err := filepath.EvalSymlinks(abs); err == nil {
 		resolved = r
 	}
+	// A source may lie outside the repo; render it repo-relative once and use that
+	// everywhere its path reaches machine output or a persisted citation, so no
+	// absolute developer-identity path is ever emitted (iss-81). The bare
+	// filesystem-error reason is stripped too, so a *PathError cannot re-embed the
+	// absolute path a repo-relative message deliberately dropped.
+	//
+	// Relativise `abs`, NOT the EvalSymlinks-resolved path: repoRoot comes from the
+	// working directory in its logical (unresolved) form, so relativising a resolved
+	// path would diverge under any symlinked prefix (macOS /var→/private/var) and
+	// produce a "../../…/private/var/…" locator that re-embeds the absolute location.
+	// `resolved` still drives the actual stat/read below.
+	rel := fsutil.RepoRel(repoRoot, abs)
 	st, err := os.Stat(resolved)
 	if err != nil {
-		return sourceMaterial{}, newIngestError("source path is invalid: %q (%v)", source, err)
+		return sourceMaterial{}, newIngestError("source path is invalid: %q (%v)", rel, bareErr(err))
 	}
 	if !st.Mode().IsRegular() {
-		return sourceMaterial{}, newIngestError("source path is not a regular file (directories, devices and symlinks-to-special are rejected): %s", resolved)
+		return sourceMaterial{}, newIngestError("source path is not a regular file (directories, devices and symlinks-to-special are rejected): %s", rel)
 	}
 	// Cap the local read the same as the URL path, so a huge local file cannot be
 	// slurped whole into memory before any text/NUL sniffing.
 	if st.Size() > maxFetchBytes {
-		return sourceMaterial{}, newIngestError("source file exceeds the %d-byte cap: %s", maxFetchBytes, resolved)
+		return sourceMaterial{}, newIngestError("source file exceeds the %d-byte cap: %s", maxFetchBytes, rel)
 	}
 	raw, err := os.ReadFile(resolved)
 	if err != nil {
-		return sourceMaterial{}, newIngestError("cannot read source: %s (%v)", resolved, err)
+		return sourceMaterial{}, newIngestError("cannot read source: %s (%v)", rel, bareErr(err))
 	}
 	isPDF := strings.ToLower(filepath.Ext(resolved)) == ".pdf" || strings.HasPrefix(string(raw), "%PDF-")
 	if isPDF {
@@ -687,9 +699,9 @@ func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) 
 		if err != nil {
 			return sourceMaterial{}, err
 		}
-		return sourceMaterial{origin: resolved, text: text, rawBytes: raw, ext: ".pdf", sourceClass: "external_pdf", title: filepath.Base(resolved)}, nil
+		return sourceMaterial{origin: rel, text: text, rawBytes: raw, ext: ".pdf", sourceClass: "external_pdf", title: filepath.Base(resolved)}, nil
 	}
-	text, err := decodeText(raw, resolved)
+	text, err := decodeText(raw, rel)
 	if err != nil {
 		return sourceMaterial{}, err
 	}
@@ -697,7 +709,7 @@ func materialFromLocal(source string, pdf PDFExtractor) (sourceMaterial, error) 
 	if ext == "" {
 		ext = ".txt"
 	}
-	return sourceMaterial{origin: resolved, text: text, rawBytes: raw, ext: ext, sourceClass: "external_article", title: filepath.Base(resolved)}, nil
+	return sourceMaterial{origin: rel, text: text, rawBytes: raw, ext: ext, sourceClass: "external_article", title: filepath.Base(resolved)}, nil
 }
 
 func materialFromFetched(rawURL string, fetched FetchedSource, pdf PDFExtractor) (sourceMaterial, error) {

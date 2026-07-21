@@ -6,6 +6,7 @@ severity: "minor"
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"
+resolution: "Routed the three residual Lstat->ReadFile ahoy reads (verifyHookManifest, gitignore.go x2) through fsutil.ReadGuarded — single O_NOFOLLOW|O_NONBLOCK open validating regular-file+size on the read fd — closing the read-time TOCTOU. Sentinels mapped back to existing signals: verifyHookManifest reason strings and the .gitignore refusals preserved unchanged; distinct symlink pre-checks kept as belt-and-suspenders. Structural detector (no bare os.ReadFile in ahoy) watched fail->pass; per-site FIFO/oversize signal tests added. Sibling of iss-97."
 ---
 
 ahoy manual-guard reads carry a residual Lstat->ReadFile TOCTOU: verifyHookManifest (store.go), and gitignore.go read sites (~72, ~181) each do Lstat+IsRegular+size-cap then a separate os.ReadFile, so a type/symlink swap between check and read is not refused on the same fd. iss-97 converged the six bare-unguarded ahoy reads onto fsutil.ReadGuarded (single-fd O_NOFOLLOW|O_NONBLOCK+cap); these three were left because their structured signals (verifyHookManifest reason strings; gitignore bool flags + the write-path oversize refusal) need preserving, so the convergence is not mechanical. Route them through ReadGuarded too, preserving those signals, to close the TOCTOU and reach one guarded-read mechanism. Sibling of iss-97.

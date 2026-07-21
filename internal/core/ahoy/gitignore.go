@@ -2,6 +2,7 @@ package ahoy
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -56,20 +57,10 @@ func gitignoreBlockDrifts(cwd, visibility string) bool {
 		return false
 	}
 	path := filepath.Join(cwd, ".gitignore")
-	fi, err := os.Lstat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return true // persisted visibility but no policy applied
-		}
-		return true
-	}
-	if fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
-		return true
-	}
-	if fi.Size() > gitignoreMaxBytes {
-		return true
-	}
-	raw, err := os.ReadFile(path)
+	// ReadGuarded folds the absent / symlink / non-regular / oversize / unreadable
+	// cases into one guarded open (iss-109): every one is drift here (fail-closed),
+	// so no distinct signal is lost by collapsing the manual Lstat guard into it.
+	raw, err := fsutil.ReadGuarded(path, gitignoreMaxBytes)
 	if err != nil {
 		return true
 	}
@@ -148,40 +139,34 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 	}
 	path := filepath.Join(cwd, ".gitignore")
 
-	fi, err := os.Lstat(path)
-	absent := false
-	if err != nil {
-		if os.IsNotExist(err) {
-			absent = true
-		} else {
-			return false, err
-		}
-	}
-	if !absent {
-		if fi.Mode()&os.ModeSymlink != 0 {
-			return false, &ahoyError{"refusing to overwrite symlinked .gitignore"}
-		}
-		if !fi.Mode().IsRegular() {
-			return false, &ahoyError{"refusing to overwrite non-regular .gitignore"}
-		}
-		if fi.Size() > gitignoreMaxBytes {
-			return false, &ahoyError{"refusing to overwrite oversize .gitignore"}
-		}
+	// Keep the symlink pre-check: it yields a DISTINCT refusal that ReadGuarded's
+	// O_NOFOLLOW would otherwise collapse into a raw ELOOP passthrough error.
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return false, &ahoyError{"refusing to overwrite symlinked .gitignore"}
 	}
 
-	if absent {
+	// ReadGuarded validates regular-file + size cap on the SAME descriptor it
+	// reads, closing the Lstat->ReadFile swap window (iss-109). Its sentinels map
+	// back to the existing refusals, and os.IsNotExist keeps the fresh-write path.
+	raw, err := fsutil.ReadGuarded(path, gitignoreMaxBytes)
+	switch {
+	case err == nil:
+		// existing regular file within cap — fall through to the round-trip below
+	case os.IsNotExist(err):
 		eol := "\n"
 		body := strings.Join(canonicalGitignoreBlock(visibility), eol) + eol
-		if err := fsutil.WriteFileAtomicPreserveMode(path, []byte(body)); err != nil {
-			return false, err
+		if werr := fsutil.WriteFileAtomicPreserveMode(path, []byte(body)); werr != nil {
+			return false, werr
 		}
 		return true, nil
-	}
-
-	raw, err := os.ReadFile(path)
-	if err != nil {
+	case errors.Is(err, fsutil.ErrNotRegular):
+		return false, &ahoyError{"refusing to overwrite non-regular .gitignore"}
+	case errors.Is(err, fsutil.ErrTooBig):
+		return false, &ahoyError{"refusing to overwrite oversize .gitignore"}
+	default:
 		return false, err
 	}
+
 	eol := gitignoreEOL(raw)
 	withoutBlocks := removeGitignoreBlocks(string(raw), eol)
 	trimmedLeft := strings.TrimRight(withoutBlocks, "\r\n")

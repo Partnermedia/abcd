@@ -4,11 +4,15 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 func mustGitID(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = gittest.Env(t)
+	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }

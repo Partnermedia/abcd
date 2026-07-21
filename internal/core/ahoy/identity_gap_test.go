@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/identity"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 func idGitRepo(t *testing.T, name, email string) string {
@@ -26,7 +27,9 @@ func idGitRepo(t *testing.T, name, email string) string {
 
 func idMustGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = gittest.Env(t)
+	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }

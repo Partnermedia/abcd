@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // probeRepo builds an isolated one-commit git repo for the disembark verbs to
@@ -24,8 +25,7 @@ func probeRepo(t *testing.T) string {
 	for _, args := range [][]string{{"init", "-q"}, {"commit", "-q", "--allow-empty", "-m", "root"}} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = repo
-		cmd.Env = append(os.Environ(),
-			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		cmd.Env = append(gittest.Env(t),
 			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
 			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 		)

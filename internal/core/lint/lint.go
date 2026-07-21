@@ -45,6 +45,9 @@ var (
 	// Intent id embedded in a filename or a superseded_by value.
 	intentIDRe   = regexp.MustCompile(`itd-\d+`)
 	intentFileRe = regexp.MustCompile(`^itd-\d+.*\.md$`)
+	// Issue id embedded in a ledger filename (issue_id_unique).
+	issueIDRe   = regexp.MustCompile(`iss-\d+`)
+	issueFileRe = regexp.MustCompile(`^iss-\d+.*\.md$`)
 	// Surface registry Command cell: the bare "/abcd" top-level, or "/abcd:<name>".
 	surfaceCmdRe = regexp.MustCompile(`^/abcd(?::([a-z0-9-]+))?$`)
 	// receipt_gate arming inputs are release-time and become externally supplied
@@ -73,6 +76,9 @@ var (
 		"drafts": true, "planned": true, "shipped": true,
 		"disciplines": true, "superseded": true,
 	}
+	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
+	// scans all three for a duplicated iss-N id).
+	issueStatusDirs = []string{"open", "resolved", "wontfix"}
 )
 
 // Lint runs every enabled check family against the record under repoRoot and
@@ -224,6 +230,17 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, gl...)
+	}
+
+	// issue_id_unique scans the issue ledger (.abcd/work/issues/{open,resolved,
+	// wontfix} — outside cfg.Roots) for an iss-N id claimed by two or more files,
+	// so it too runs once here.
+	if iiCfg, ok := cfg.Rules["issue_id_unique"]; ok && iiCfg.Enabled {
+		ii, err := checkIssueIDUnique(repoRoot, iiCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ii...)
 	}
 
 	sortFindings(findings)
@@ -925,6 +942,14 @@ func compileTokens(tokens []BannedToken) ([]tokenCheck, error) {
 	return checks, nil
 }
 
+// bannedTokenMessage renders a banned-token finding message, auto-citing the
+// entry's machine-readable successor (iss-51 decision c) so the finding always
+// tells the reader what to use instead. LoadConfig guarantees a non-empty
+// successor, so the citation is always present.
+func bannedTokenMessage(t BannedToken) string {
+	return t.Message + " (successor: " + t.Successor + ")"
+}
+
 // checkBannedTokens implements check family A.
 func checkBannedTokens(rel string, lines []string, mask []bool, checks []tokenCheck) []Finding {
 	var out []Finding
@@ -941,7 +966,7 @@ func checkBannedTokens(rel string, lines []string, mask []bool, checks []tokenCh
 			}
 			out = append(out, Finding{
 				File: rel, Line: i + 1, RuleID: c.token.ID,
-				Severity: c.token.Severity, Message: c.token.Message,
+				Severity: c.token.Severity, Message: bannedTokenMessage(c.token),
 			})
 		}
 	}
@@ -1125,11 +1150,21 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 	return out, nil
 }
 
-// validateIntentIDUnique flags every file in a colliding set, not just one:
-// the linter cannot know which claimant is authoritative, and flagging a single
-// file would imply the others are fine.
+// validateIntentIDUnique flags a duplicated intent id, delegating to the shared
+// validateIDUnique primitive (the issue-id rule uses the same logic).
 func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmField, idFiles map[string][]string, severity string) []Finding {
 	id := intentIDRe.FindString(name)
+	return validateIDUnique(repoRoot, rel, id, "intent", "intent_lifecycle", severity, fields, idFiles)
+}
+
+// validateIDUnique flags every file in a colliding id set, not just one: the
+// linter cannot know which claimant is authoritative, and flagging a single file
+// would imply the others are fine. It is the one primitive behind both the
+// intent-id (intent_lifecycle) and issue-id (issue_id_unique) uniqueness rules —
+// an id is a record's identity across its register and must be unique within it.
+// noun names the record kind in the message; ruleID and severity tag the emitted
+// Finding. idFiles maps each id to the repo-absolute paths that claim it.
+func validateIDUnique(repoRoot, rel, id, noun, ruleID, severity string, fields map[string]fmField, idFiles map[string][]string) []Finding {
 	claimants := idFiles[id]
 	if len(claimants) < 2 {
 		return nil
@@ -1147,10 +1182,69 @@ func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmFiel
 		line = f.line
 	}
 	return []Finding{{
-		File: rel, Line: line, RuleID: "intent_lifecycle", Severity: severity,
-		Message: "duplicate intent id " + id + "; also claimed by " + strings.Join(others, ", ") +
-			" — an id is the intent's identity across the record and must be unique",
+		File: rel, Line: line, RuleID: ruleID, Severity: severity,
+		Message: "duplicate " + noun + " id " + id + "; also claimed by " + strings.Join(others, ", ") +
+			" — an id is the " + noun + "'s identity across the record and must be unique",
 	}}
+}
+
+// checkIssueIDUnique flags any iss-N id claimed by two or more files across the
+// issue ledger's status directories (open/, resolved/, wontfix/). The capture
+// allocator rejects a duplicate on the reservation path, but a hand-added issue
+// file that bypassed it — how a past iss-56 collision arose — slips straight
+// through; this is the record-lint backstop that catches it. It is the issue-side
+// mirror of the intent-id uniqueness rule and shares the same validateIDUnique
+// primitive. The ledger lives outside cfg.Roots, so the rule runs once, not
+// per-root. A missing ledger is not an error — it yields no findings.
+func checkIssueIDUnique(repoRoot string, cfg RuleConfig) ([]Finding, error) {
+	issuesDir := cfg.IssuesDir
+	if issuesDir == "" {
+		issuesDir = ".abcd/work/issues"
+	}
+	issuesRoot := filepath.Join(repoRoot, issuesDir)
+	if _, err := os.Stat(issuesRoot); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Track every file each iss-N id claims across the three status dirs: an id is
+	// the issue's identity across the ledger, and a bypassed-allocator file (or two
+	// parallel branches) can land the same id silently otherwise.
+	idFiles := map[string][]string{}
+	var files []string
+	for _, sub := range issueStatusDirs {
+		entries, err := os.ReadDir(filepath.Join(issuesRoot, sub))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !issueFileRe.MatchString(e.Name()) {
+				continue
+			}
+			fileAbs := filepath.Join(issuesRoot, sub, e.Name())
+			id := issueIDRe.FindString(e.Name())
+			idFiles[id] = append(idFiles[id], fileAbs)
+			files = append(files, fileAbs)
+		}
+	}
+
+	var out []Finding
+	for _, fileAbs := range files {
+		id := issueIDRe.FindString(filepath.Base(fileAbs))
+		content, err := os.ReadFile(fileAbs)
+		if err != nil {
+			return nil, err
+		}
+		rel := repoRel(repoRoot, fileAbs)
+		fields := frontmatterFields(strings.Split(string(content), "\n"))
+		out = append(out, validateIDUnique(repoRoot, rel, id, "issue", "issue_id_unique", cfg.Severity, fields, idFiles)...)
+	}
+	return out, nil
 }
 
 func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, severity string) []Finding {
@@ -1582,26 +1676,31 @@ func frontmatterBodyStart(lines []string) int {
 
 // stripInlineCode blanks the contents of single-backtick inline code spans (and
 // their delimiters) so a forbidden synonym named inside a code span is a mention,
-// not a match. Unpaired backticks leave the remainder untouched.
+// not a match. It blanks matched backtick pairs only; a trailing unpaired backtick
+// and its tail are left literal so an earlier, correctly-closed span stays blanked
+// (double-backtick spans are out of scope — this masks single-backtick pairs).
 func stripInlineCode(line string) string {
 	b := []rune(line)
 	out := make([]rune, len(b))
 	copy(out, b)
-	inSpan := false
+	// open tracks the index of an as-yet-unclosed opening backtick; -1 when none.
+	open := -1
 	for i, r := range b {
-		if r == '`' {
-			out[i] = ' '
-			inSpan = !inSpan
+		if r != '`' {
 			continue
 		}
-		if inSpan {
-			out[i] = ' '
+		if open < 0 {
+			open = i // provisional opener; blanked only once its pair closes
+			continue
 		}
+		// Closing backtick: blank the delimiters and the span between them.
+		for j := open; j <= i; j++ {
+			out[j] = ' '
+		}
+		open = -1
 	}
-	if inSpan {
-		// Unpaired backtick: nothing was a real span — restore the tail.
-		return line
-	}
+	// A leftover unpaired backtick (open >= 0) and its tail stay literal, so the
+	// earlier paired spans that were already blanked are preserved.
 	return string(out)
 }
 

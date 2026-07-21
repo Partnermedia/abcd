@@ -43,7 +43,7 @@ func TestLoadConfig(t *testing.T) {
 	path := filepath.Join(dir, "record-lint.json")
 	body := `{
       "roots": ["rec"],
-      "banned_tokens": [{"id":"t1","pattern":"foo","message":"no foo","severity":"blocker","allow_context":["ok"]}],
+      "banned_tokens": [{"id":"t1","pattern":"foo","message":"no foo","severity":"blocker","successor":"bar","allow_context":["ok"]}],
       "rules": {"no_git_metadata": {"enabled": true, "severity": "blocker", "fields": ["created"]}}
     }`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
@@ -58,6 +58,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if len(cfg.BannedTokens) != 1 || cfg.BannedTokens[0].ID != "t1" {
 		t.Errorf("banned_tokens = %v", cfg.BannedTokens)
+	}
+	if cfg.BannedTokens[0].Successor != "bar" {
+		t.Errorf("banned_tokens[0].Successor = %q, want bar", cfg.BannedTokens[0].Successor)
 	}
 	if r := cfg.Rules["no_git_metadata"]; !r.Enabled || r.Fields[0] != "created" {
 		t.Errorf("no_git_metadata rule = %+v", r)
@@ -367,6 +370,55 @@ func TestIntentLifecycleDuplicateID(t *testing.T) {
 	for _, f := range fs {
 		if filepath.Base(f.File) == "itd-91-unique.md" {
 			t.Errorf("unexpected finding on unique intent: %+v", f)
+		}
+	}
+}
+
+// A hand-added issue file that bypassed the capture allocator can land an iss-N
+// id another file already claims (how a past iss-56 collision arose — the
+// allocator only rejects duplicates on the reservation path). The id is the
+// issue's identity across the ledger, so a duplicate is a blocker on BOTH files:
+// neither is authoritative, and a cross-reference cannot tell which iss-N it
+// means. The rule scans all three status dirs (open/, resolved/, wontfix/).
+func TestIssueIDUniqueDuplicate(t *testing.T) {
+	root := t.TempDir()
+	base := ".abcd/work/issues"
+
+	// Same id, different slugs, different status dirs -- the real collision shape.
+	writeFile(t, root, base+"/open/iss-56-first-one.md", "---\nid: \"iss-56\"\n---\n# one\n")
+	writeFile(t, root, base+"/resolved/iss-56-second-one.md", "---\nid: \"iss-56\"\n---\n# two\n")
+	// A collision within a single status dir must be caught too.
+	writeFile(t, root, base+"/open/iss-70-here.md", "---\nid: \"iss-70\"\n---\n# a\n")
+	writeFile(t, root, base+"/wontfix/iss-70-there.md", "---\nid: \"iss-70\"\n---\n# b\n")
+	// A unique id must stay clean.
+	writeFile(t, root, base+"/open/iss-71-unique.md", "---\nid: \"iss-71\"\n---\n# ok\n")
+
+	cfg := Config{
+		Rules: map[string]RuleConfig{
+			"issue_id_unique": {Enabled: true, Severity: "blocker", IssuesDir: ".abcd/work/issues"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every file in a colliding set is flagged -- flagging only one would imply
+	// the other is the "right" one, which the linter cannot know.
+	dupes := []string{
+		filepath.Join(base, "open", "iss-56-first-one.md"),
+		filepath.Join(base, "resolved", "iss-56-second-one.md"),
+		filepath.Join(base, "open", "iss-70-here.md"),
+		filepath.Join(base, "wontfix", "iss-70-there.md"),
+	}
+	for _, f := range dupes {
+		if !hasFinding(fs, f, "issue_id_unique", 2) { // the id: line
+			t.Errorf("expected duplicate-id finding on %s:2; got %+v", f, fs)
+		}
+	}
+	for _, f := range fs {
+		if filepath.Base(f.File) == "iss-71-unique.md" {
+			t.Errorf("unexpected finding on unique issue: %+v", f)
 		}
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestVersionJSON proves the CLI -> core -> JSON round-trip the Phase 0 exit
@@ -262,6 +264,74 @@ func TestAhoyInstallWiredAndIdempotent(t *testing.T) {
 	}
 }
 
+// TestAhoyInstallExplicitOverrideAppliesAsUpdate proves the iss-107 fix end to
+// end through the CLI: an explicit --visibility on an already-configured repo is
+// applied-as-update (not silently no-op'd by the already_up_to_date short
+// circuit), the change is echoed, and it reaches config.json.
+func TestAhoyInstallExplicitOverrideAppliesAsUpdate(t *testing.T) {
+	repo := hermeticRepo(t)
+
+	// First install pins visibility=private and reaches a clean state.
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	// Re-install with an explicit --visibility public: must NOT no-op.
+	out := runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "public", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--json")
+	var res struct {
+		Status  string   `json:"status"`
+		Changes []string `json:"changes"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("re-install output not JSON: %v\n%s", err, out)
+	}
+	if res.Status == "already_up_to_date" {
+		t.Fatalf("explicit override silently no-op'd: status=%q\n%s", res.Status, out)
+	}
+	if len(res.Changes) == 0 {
+		t.Fatalf("no change echoed for an explicit override:\n%s", out)
+	}
+	body, err := os.ReadFile(filepath.Join(repo, ".abcd", "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"visibility": "public"`) {
+		t.Fatalf("visibility override not persisted to config.json:\n%s", body)
+	}
+}
+
+// TestAhoyInstallDocsTargetNarrowingRetractsOrphan proves the apply-as-update
+// leaves no orphan: narrowing docs-target from both to claude_md via an explicit
+// override removes the now-de-selected AGENTS.md marker block (iss-107).
+func TestAhoyInstallDocsTargetNarrowingRetractsOrphan(t *testing.T) {
+	repo := hermeticRepo(t)
+
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+	agents := filepath.Join(repo, "AGENTS.md")
+	if body, err := os.ReadFile(agents); err != nil || !strings.Contains(string(body), "<!-- BEGIN ABCD -->") {
+		t.Fatalf("precondition: AGENTS.md must have a marker block after both-target install (err=%v)", err)
+	}
+
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "claude_md",
+		"--oracle-backend", "host-delegated", "--json")
+
+	body, err := os.ReadFile(agents)
+	if err != nil {
+		t.Fatalf("AGENTS.md read: %v", err)
+	}
+	if strings.Contains(string(body), "<!-- BEGIN ABCD -->") {
+		t.Fatalf("orphaned AGENTS.md marker block not retracted after narrowing docs-target:\n%s", body)
+	}
+	if claude, err := os.ReadFile(filepath.Join(repo, "CLAUDE.md")); err != nil || !strings.Contains(string(claude), "<!-- BEGIN ABCD -->") {
+		t.Fatalf("CLAUDE.md marker block must survive the narrowing (err=%v)", err)
+	}
+}
+
 func runCLI(t *testing.T, args ...string) []byte {
 	t.Helper()
 	return runCLIStdin(t, "", args...)
@@ -286,7 +356,9 @@ func runCLIStdin(t *testing.T, stdin string, args ...string) []byte {
 func gitCmd(t *testing.T, repo string, args ...string) string {
 	t.Helper()
 	full := append([]string{"-C", repo}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	cmd := exec.Command("git", full...)
+	cmd.Env = gittest.Env(t)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -312,7 +384,7 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 	gitCmd(t, repo, "commit", "-m", "init")
 	t.Chdir(repo)
 
-	// Create the store dir exactly as `abcd install` would (Capture never
+	// Create the store dir exactly as `abcd ahoy install` would (Capture never
 	// bootstraps it).
 	rootSHA := gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
 	tdir := filepath.Join(home, ".abcd", "history", rootSHA, "transcripts")
@@ -430,7 +502,7 @@ func runCLIErr(t *testing.T, args ...string) ([]byte, error) {
 const docsLintConfig = `{
   "roots": ["docs"],
   "banned_tokens": [
-    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","message":"change-narration"}
+    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","message":"change-narration","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"]}
   ],
   "rules": {
     "links_resolve": {"enabled": true, "severity": "blocker"},
