@@ -29,7 +29,6 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	if err != nil {
 		return CaptureResult{}, err
 	}
-	_ = repoRoot
 	if err := mutationPreamble(issuesRoot); err != nil {
 		return CaptureResult{}, err
 	}
@@ -52,6 +51,9 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		_ = cancelReservation(placeholder)
 		return CaptureResult{}, err
 	}
+	// Machine output carries a repo-relative locator, never an absolute
+	// developer-identity path (iss-81).
+	result.Path = fsutil.RepoRel(repoRoot, result.Path)
 	return result, nil
 }
 
@@ -133,7 +135,6 @@ func transition(repoRoot, issuesRoot, issID, field, note string, target State) (
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	_ = rr
 	if err := mutationPreamble(ir); err != nil {
 		return TransitionResult{}, err
 	}
@@ -189,6 +190,9 @@ func transition(repoRoot, issuesRoot, issID, field, note string, target State) (
 	if err != nil {
 		return TransitionResult{}, err
 	}
+	// Machine output carries a repo-relative locator, never an absolute
+	// developer-identity path (iss-81).
+	result.Path = fsutil.RepoRel(rr, result.Path)
 	return result, nil
 }
 
@@ -219,7 +223,7 @@ func commitTransition(src, dst, newContent, expected string) error {
 // N plus a roster of unparseable files. Read-only: no preamble, no dir
 // creation, tolerant of a virgin/absent ledger.
 func List(req ListRequest) (ListResult, error) {
-	_, ir, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	repoRoot, ir, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -233,13 +237,29 @@ func List(req ListRequest) (ListResult, error) {
 	issues, skipped := scanLedger(ir, state)
 	sortIssues(issues)
 	prioritise(issues, openIDSet(ir))
+	relativiseLedgerPaths(repoRoot, issues, skipped)
 	return ListResult{Issues: issues, Skipped: skipped}, nil
+}
+
+// relativiseLedgerPaths rewrites every ledger Path in place to a repo-relative
+// locator, so no --json envelope echoes an absolute developer-identity path
+// (iss-81). It covers the structured Path field; a SkipRecord.Error string that
+// wraps an os.ReadFile failure can still carry an absolute path, which the CLI
+// text surface sanitises via termsafe but the --json surface does not — tracked
+// separately from this locator fix.
+func relativiseLedgerPaths(repoRoot string, issues []Issue, skipped []SkipRecord) {
+	for i := range issues {
+		issues[i].Path = fsutil.RepoRel(repoRoot, issues[i].Path)
+	}
+	for i := range skipped {
+		skipped[i].Path = fsutil.RepoRel(repoRoot, skipped[i].Path)
+	}
 }
 
 // Status is a pure read: counts per status dir plus up to 10 most-recent open
 // issues (newest first). Guaranteed no mutation.
 func Status(req StatusRequest) (StatusResult, error) {
-	_, ir, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	repoRoot, ir, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
 	if err != nil {
 		return StatusResult{}, err
 	}
@@ -261,6 +281,7 @@ func Status(req StatusRequest) (StatusResult, error) {
 	// Derived-priority view over the recent slice: unblocked first, then severity.
 	prioritise(open, openIDs)
 	res.RecentOpen = open
+	relativiseLedgerPaths(repoRoot, res.RecentOpen, res.Skipped)
 	return res, nil
 }
 

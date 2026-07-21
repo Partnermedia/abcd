@@ -476,7 +476,7 @@ func TestMaterialFromLocalSizeCap(t *testing.T) {
 	// trip the downstream NUL-byte check, so a bare "err != nil" would pass even
 	// with the cap removed (false pin). The "exceeds" message is produced only by
 	// the size guard, so this fails on revert.
-	_, err = materialFromLocal(big, nil)
+	_, err = materialFromLocal("", big, nil)
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("an over-cap local file must be rejected by the size cap, got: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestMaterialFromLocalTildeUser(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "real.txt"), []byte("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := materialFromLocal("~/real.txt", nil); err != nil {
+	if _, err := materialFromLocal("", "~/real.txt", nil); err != nil {
 		t.Fatalf("~/real.txt must expand to the home dir and be found: %v", err)
 	}
 	// Create home/baduser/real.txt — the file a MANGLED "~baduser" would resolve
@@ -502,7 +502,7 @@ func TestMaterialFromLocalTildeUser(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "baduser", "real.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := materialFromLocal("~baduser/real.txt", nil); err == nil {
+	if _, err := materialFromLocal("", "~baduser/real.txt", nil); err == nil {
 		t.Fatal("~baduser must be left literal, not expanded to home+baduser (which would wrongly succeed)")
 	}
 }

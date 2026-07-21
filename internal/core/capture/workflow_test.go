@@ -247,7 +247,8 @@ func TestResolveTransition(t *testing.T) {
 	if tr.FromStatus != StateOpen || tr.ToStatus != StateResolved {
 		t.Fatalf("transition = %+v", tr)
 	}
-	if _, err := os.Stat(res.Path); !os.IsNotExist(err) {
+	// res.Path is repo-relative (iss-81); re-root it to check the source moved.
+	if _, err := os.Stat(filepath.Join(repo, res.Path)); !os.IsNotExist(err) {
 		t.Errorf("source still present at %s", res.Path)
 	}
 	lr, _ := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateResolved})

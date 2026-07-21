@@ -53,6 +53,16 @@ called out in a **Breaking** section.
   some followed a symlink to its target's content or read an endless/oversized
   file unbounded, and a symlinked registry surfaced a raw, path-leaking error;
   all are refused consistently, closing a class of `lstat`→`read` swap windows.
+- **Machine (`--json`) output no longer leaks an absolute local path.** The
+  error-only path scrub covered failures but not the success envelope, so
+  `capture`, `capture resolve`/`wontfix`, and `capture list` echoed the absolute
+  ledger path in their `path` field; a successful `memory ingest` recorded the
+  absolute (and, for a `~/…` source, home-rooted) source path in its
+  `citation.origin`; and a `memory ingest` failure on a source outside the
+  working directory embedded an absolute source path the scrub could not reach.
+  Every such locator is now rendered repo-relative — in machine output and in the
+  persisted citation alike — so no verb emits a developer-identity path into
+  machine output.
 
 ### Added
 

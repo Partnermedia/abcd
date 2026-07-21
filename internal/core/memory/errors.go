@@ -11,7 +11,26 @@
 // (Ask, Bare, and the read half of Ingest) never heal drift — they report it.
 package memory
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"os"
+)
+
+// bareErr strips a filesystem error down to its reason, dropping any absolute
+// path a *PathError/*LinkError would otherwise re-embed in machine output
+// (iss-81). The caller renders the path itself, repo-relative.
+func bareErr(err error) error {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) {
+		return le.Err
+	}
+	return err
+}
 
 // IngestError is a pre-dispatch ingest failure — raised BEFORE any
 // memory-store write (bad source path, fetch failure, binary source, zero
