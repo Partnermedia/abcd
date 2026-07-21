@@ -1,12 +1,13 @@
 ---
 id: itd-95
 slug: disembark-grounds-a-lifeboat-s-open-questions-on-a-repo-s-to
-spec_id: null
-kind: null
+spec_id: spc-12
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: minor
+impact: additive
 ---
 
 # Disembark Grounds A Lifeboat's Open Questions On A Repo's TODO And FIXME Markers
