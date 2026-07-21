@@ -84,6 +84,13 @@ called out in a **Breaking** section.
   and — for visibility and docs-target — refreshes the `.gitignore` block and
   marker files so nothing is left inconsistent. A re-install with no such flag
   is still an exact no-op and never clobbers a valid value.
+- **GL002 no longer fires a spurious blocker when a line has a closed inline-code
+  span before a stray backtick.** `stripInlineCode` restored the entire original
+  line whenever it reached end-of-line with an unpaired backtick, un-masking an
+  enforced synonym that sat inside an earlier, correctly-closed span. It now
+  blanks matched backtick pairs only and leaves a trailing unpaired backtick (and
+  its tail) literal, so the earlier span stays masked (iss-106). Full CommonMark
+  double-backtick span parsing remains out of scope.
 - **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
   A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
   refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s

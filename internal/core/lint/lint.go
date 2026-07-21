@@ -1582,26 +1582,31 @@ func frontmatterBodyStart(lines []string) int {
 
 // stripInlineCode blanks the contents of single-backtick inline code spans (and
 // their delimiters) so a forbidden synonym named inside a code span is a mention,
-// not a match. Unpaired backticks leave the remainder untouched.
+// not a match. It blanks matched backtick pairs only; a trailing unpaired backtick
+// and its tail are left literal so an earlier, correctly-closed span stays blanked
+// (double-backtick spans are out of scope — this masks single-backtick pairs).
 func stripInlineCode(line string) string {
 	b := []rune(line)
 	out := make([]rune, len(b))
 	copy(out, b)
-	inSpan := false
+	// open tracks the index of an as-yet-unclosed opening backtick; -1 when none.
+	open := -1
 	for i, r := range b {
-		if r == '`' {
-			out[i] = ' '
-			inSpan = !inSpan
+		if r != '`' {
 			continue
 		}
-		if inSpan {
-			out[i] = ' '
+		if open < 0 {
+			open = i // provisional opener; blanked only once its pair closes
+			continue
 		}
+		// Closing backtick: blank the delimiters and the span between them.
+		for j := open; j <= i; j++ {
+			out[j] = ' '
+		}
+		open = -1
 	}
-	if inSpan {
-		// Unpaired backtick: nothing was a real span — restore the tail.
-		return line
-	}
+	// A leftover unpaired backtick (open >= 0) and its tail stay literal, so the
+	// earlier paired spans that were already blanked are preserved.
 	return string(out)
 }
 

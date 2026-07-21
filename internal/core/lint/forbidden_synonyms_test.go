@@ -164,6 +164,37 @@ func TestForbiddenSynonymsSourceOfTruth(t *testing.T) {
 	}
 }
 
+// TestStripInlineCodePairedSpanBeforeStrayBacktick is the iss-106 detector: a line
+// with a CLOSED inline-code span containing an enforced synonym, followed by a
+// single STRAY (unpaired) trailing backtick, must still have the closed span
+// blanked. The old tail handling restored the whole original line on any unpaired
+// backtick, un-masking the earlier span's token and firing a spurious GL002.
+func TestStripInlineCodePairedSpanBeforeStrayBacktick(t *testing.T) {
+	// `epic` is a closed span; the later lone backtick is unpaired.
+	in := "The `epic` token is retired but the ` here is stray."
+	got := stripInlineCode(in)
+	if strings.Contains(got, "epic") {
+		t.Errorf("closed span not blanked before a stray backtick: %q -> %q", in, got)
+	}
+}
+
+// TestForbiddenSynonymsClosedSpanThenStrayBacktick is the higher-level iss-106
+// guard: the full GL002 check must not flag a synonym that sits inside a closed
+// inline-code span merely because a stray backtick follows later on the line.
+func TestForbiddenSynonymsClosedSpanThenStrayBacktick(t *testing.T) {
+	root := t.TempDir()
+	glossaryTerm(t, root, "spec", []string{"epic"})
+	writeFile(t, root, "rec/stray.md", "# t\n\nThe `epic` token is retired but the ` is stray.\n")
+
+	fs, err := Lint(fsCfg([]string{"epic"}, nil, nil), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "GL002"); n != 0 {
+		t.Fatalf("expected 0 GL002 findings (synonym is inside a closed code span), got %d: %+v", n, fs)
+	}
+}
+
 // TestForbiddenSynonymsRealGlossary wires the real record-lint config against the
 // real glossary and asserts the swept corpus is clean — deleting the rule, its
 // enforcement of 'epic', or reintroducing an epic noun in live prose fails here.
