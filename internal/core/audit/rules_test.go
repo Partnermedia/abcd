@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // --- fixture repo builder ---------------------------------------------------
@@ -32,7 +33,7 @@ func newFixtureRepo(t *testing.T) *repoBuilder {
 func git(t *testing.T, root string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	cmd.Env = gittest.Env(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
 	}

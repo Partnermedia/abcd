@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 func writeFile(t *testing.T, root, rel, content string) {
@@ -210,7 +212,9 @@ func TestSymlinkToRepoRootDoesNotLeakDenied(t *testing.T) {
 // target is the content that would actually ship.
 func TestGitignoredSymlinkTargetExcluded(t *testing.T) {
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+	gitInit := exec.Command("git", "-C", root, "init")
+	gitInit.Env = gittest.Env(t)
+	if out, err := gitInit.CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 	writeFile(t, root, ".gitignore", ".env\n")
@@ -249,7 +253,9 @@ func TestGitignoredSymlinkTargetExcluded(t *testing.T) {
 // strips GIT_WORK_TREE, so the probe answers about `root`.
 func TestCheckIgnoredStrictIgnoresInheritedWorkTree(t *testing.T) {
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+	gitInit := exec.Command("git", "-C", root, "init")
+	gitInit.Env = gittest.Env(t)
+	if out, err := gitInit.CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 	writeFile(t, root, ".gitignore", ".env\n")

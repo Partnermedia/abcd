@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // isolate points git at empty global/system config so the test only sees the
@@ -36,6 +38,7 @@ func gitRepo(t *testing.T, name, email string) string {
 func runGitT(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = gittest.Env(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}

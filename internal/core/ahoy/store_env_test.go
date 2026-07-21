@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestRunGitIgnoresInheritedGitDir proves an inherited GIT_DIR cannot redirect
@@ -18,7 +20,9 @@ func TestRunGitIgnoresInheritedGitDir(t *testing.T) {
 	}
 	repoA := idGitRepo(t, "A", "a@example.com")
 	idMustGit(t, repoA, "commit", "--allow-empty", "-m", "root-A")
-	outA, err := exec.Command("git", "-C", repoA, "rev-list", "--max-parents=0", "HEAD").Output()
+	revList := exec.Command("git", "-C", repoA, "rev-list", "--max-parents=0", "HEAD")
+	revList.Env = gittest.Env(t)
+	outA, err := revList.Output()
 	if err != nil {
 		t.Fatalf("ground-truth rev-list on repoA: %v", err)
 	}
