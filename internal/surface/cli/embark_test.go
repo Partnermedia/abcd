@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // embarkSourceRepo builds a one-commit git repo carrying an embarkable record (an
@@ -36,8 +37,7 @@ func embarkSourceRepo(t *testing.T) string {
 	run := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = repo
-		cmd.Env = append(os.Environ(),
-			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		cmd.Env = append(gittest.Env(t),
 			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
 			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 		)

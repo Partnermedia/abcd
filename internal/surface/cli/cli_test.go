@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestVersionJSON proves the CLI -> core -> JSON round-trip the Phase 0 exit
@@ -286,7 +288,9 @@ func runCLIStdin(t *testing.T, stdin string, args ...string) []byte {
 func gitCmd(t *testing.T, repo string, args ...string) string {
 	t.Helper()
 	full := append([]string{"-C", repo}, args...)
-	out, err := exec.Command("git", full...).CombinedOutput()
+	cmd := exec.Command("git", full...)
+	cmd.Env = gittest.Env(t)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}

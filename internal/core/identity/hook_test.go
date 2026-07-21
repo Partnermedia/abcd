@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // locateHook finds the committed .githooks/pre-commit by walking up from the
@@ -16,7 +18,9 @@ func locateHook(t *testing.T) string {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash unavailable")
 	}
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	topLevel := exec.Command("git", "rev-parse", "--show-toplevel")
+	topLevel.Env = gittest.Env(t)
+	out, err := topLevel.Output()
 	if err != nil {
 		t.Skip("not in a git checkout")
 	}
@@ -44,13 +48,9 @@ func hookGit(t *testing.T, dir string, env []string, args ...string) error {
 func TestPreCommitHook_IdentityGate(t *testing.T) {
 	hook := locateHook(t)
 	// Isolate from the machine's git global/system config and ~/.abcd corpus so
-	// the hook only sees the temp repo.
-	home := t.TempDir()
-	env := append(os.Environ(),
-		"GIT_CONFIG_GLOBAL="+os.DevNull,
-		"GIT_CONFIG_SYSTEM="+os.DevNull,
-		"HOME="+home,
-	)
+	// the hook only sees the temp repo (gittest.Env pins HOME/XDG to a temp dir
+	// and neutralises global/system config).
+	env := gittest.Env(t)
 
 	cases := []struct {
 		name      string

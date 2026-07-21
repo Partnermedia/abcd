@@ -3,6 +3,8 @@ package launch
 import (
 	"os/exec"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 func mustParse(t *testing.T, v string) Semver {
@@ -65,11 +67,16 @@ func TestRetentionRefusesOnNewerExisting(t *testing.T) {
 // retention plan and collapse against a real v1.2.3. Only release cores survive.
 func TestGitExistingTagsExcludesPrerelease(t *testing.T) {
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init").CombinedOutput(); err != nil {
+	env := gittest.Env(t)
+	gitInit := exec.Command("git", "-C", root, "init")
+	gitInit.Env = env
+	if out, err := gitInit.CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
 	mustGit := func(args ...string) {
-		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = env
+		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
 	}

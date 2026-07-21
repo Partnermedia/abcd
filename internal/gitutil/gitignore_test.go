@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/REPPL/abcd-cli/internal/gittest"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
@@ -13,7 +14,7 @@ import (
 func runGit(t *testing.T, repo string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	cmd.Env = gittest.Env(t)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -29,7 +30,7 @@ func newRepo(t *testing.T, gitignore string) string {
 	dir := t.TempDir()
 	cmd := exec.Command("git", "init", "-q")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	cmd.Env = gittest.Env(t)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/history"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // sessionEndRepo builds an isolated git repo with one commit (so it has a
@@ -23,8 +24,7 @@ func sessionEndRepo(t *testing.T) (repo, rootSHA string) {
 		t.Skip("git not on PATH")
 	}
 	repo = t.TempDir()
-	env := append(os.Environ(),
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+	env := append(gittest.Env(t),
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 	)
