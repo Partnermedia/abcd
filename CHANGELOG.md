@@ -30,6 +30,10 @@ called out in a **Breaking** section.
   regenerates the tree and fails the build whenever the committed page and the tree
   disagree, so the reference can never silently go stale. The walker is hand-rolled
   over stdlib and the existing Cobra dependency — no new module dependency.
+- **`agent-observation` is now a valid `--source` value for `abcd capture`.**
+  An autonomous run's self-observation had no honest surfacing channel and was
+  reusing `agent-finding`. `agent-observation` parallels it ("an agent
+  observed") without being tied to one run mode (iss-57).
 
 - **`abcd intent ready <itd-N>` — the implement-readiness gate.** A read-only
   verb reporting whether an intent may be implemented now: planned
