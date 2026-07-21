@@ -35,6 +35,11 @@ called out in a **Breaking** section.
   error told the user to "run `abcd install`" — a verb that does not exist. The
   remediation now names `abcd ahoy install`, the verb that actually bootstraps
   the store (iss-58).
+- **`abcd intent "<text>"` no longer files a draft from a mistyped subcommand.**
+  A near-miss for an intent subverb (`intent paln`, `intent lnk itd-5`) is
+  refused with a did-you-mean and writes nothing, mirroring `abcd capture`'s
+  guard; a genuine prose title still files. The shared typo heuristic is now
+  record-id aware (`iss`/`itd`/`spc`), which also sharpens `abcd capture`.
 
 ## [0.3.0] - 2026-07-18
 
