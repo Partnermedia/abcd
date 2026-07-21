@@ -28,6 +28,15 @@ called out in a **Breaking** section.
   questions, and accepts, edits, or strikes every acceptance criterion before
   `abcd intent plan` is run as their sign-off act.
 
+### Fixed
+
+- **`abcd ahoy` no longer overclaims `managed-repo` for a stray `.abcd/`
+  directory (iss-88).** Folder classification treated the mere presence of an
+  `.abcd/` directory as a strong managed signal, so a repo with an unregistered,
+  markerless `.abcd/` reported `managed-repo`. Only index registration or a
+  marker block now promotes a folder to managed; a stray `.abcd/` reports
+  `unmanaged-repo` (or `unmanaged-folder` outside a git repo).
+
 ## [0.3.0] - 2026-07-18
 
 ### Security

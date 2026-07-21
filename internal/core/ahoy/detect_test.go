@@ -65,7 +65,10 @@ func TestClassifyUnmanagedRepo(t *testing.T) {
 	}
 }
 
-func TestClassifyManagedRepoByAbcdDir(t *testing.T) {
+// TestClassifyAbcdDirInRepoIsNotManaged pins iss-88: a git repo carrying a stray
+// .abcd/ directory but no index registration and no marker block is an
+// unmanaged-repo, not a managed-repo — the .abcd/ dir alone never promotes.
+func TestClassifyAbcdDirInRepoIsNotManaged(t *testing.T) {
 	setupHermetic(t)
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o755); err != nil {
@@ -78,8 +81,29 @@ func TestClassifyManagedRepoByAbcdDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if det.FolderKind != ManagedRepo {
-		t.Errorf("kind = %q, want %q", det.FolderKind, ManagedRepo)
+	if det.FolderKind != UnmanagedRepo {
+		t.Errorf("kind = %q, want %q", det.FolderKind, UnmanagedRepo)
+	}
+}
+
+// TestClassifyStrayAbcdDirIsNotManaged pins iss-88: a bare .abcd/ directory with
+// no index registration and no marker block must NOT overclaim managed-repo. With
+// no .git present it is an unmanaged folder.
+func TestClassifyStrayAbcdDirIsNotManaged(t *testing.T) {
+	setupHermetic(t)
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	det, err := Detect(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.FolderKind == ManagedRepo {
+		t.Errorf("stray .abcd/ overclaims managed: kind = %q, want not %q", det.FolderKind, ManagedRepo)
+	}
+	if det.FolderKind != UnmanagedFolder {
+		t.Errorf("kind = %q, want %q", det.FolderKind, UnmanagedFolder)
 	}
 }
 
@@ -149,6 +173,12 @@ func TestDetectHookManifestGapOnBrokenPlugin(t *testing.T) {
 
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A marker block makes the folder genuinely managed (post iss-88 the .abcd/
+	// dir alone no longer promotes), so the deeper gap checks run.
+	body := "# Project\n\n<!-- BEGIN ABCD -->\nx\n<!-- END ABCD -->\n"
+	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	det, err := Detect(dir)
