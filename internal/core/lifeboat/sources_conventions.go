@@ -25,6 +25,8 @@ func conventionSources() []Source {
 		convSurfacesSource{},
 		convOutOfScopeSource{},
 		convGlossarySource{},
+		convNamingSource{},
+		convInternalsSource{},
 		convOpenQuestionsSource{},
 		convIssuesSource{},
 		convWhatWorkedSource{},
@@ -441,6 +443,30 @@ func (convOutOfScopeSource) Probe(ctx *SourceContext) Evidence {
 // convGlossaryDocNames are the glossary spellings checked outside docs/.
 var convGlossaryDocNames = []string{"GLOSSARY.md", "GLOSSARY", "glossary.md"}
 
+// convDocsEntryWithPrefix returns the repo-relative path of the first entry
+// directly under docs/ whose lower-cased name starts with prefix, or "". It is
+// the docs/ convention several adapters share: a project that keeps its glossary
+// or its naming rules under docs/ names the page after the thing it documents.
+func convDocsEntryWithPrefix(ctx *SourceContext, prefix string) string {
+	for _, name := range ctx.ListDir("docs") {
+		if strings.HasPrefix(strings.ToLower(name), prefix) {
+			return "docs/" + name
+		}
+	}
+	return ""
+}
+
+// convGlossaryDoc returns the glossary document a repository carries — a
+// conventional spelling at the root, else a docs/glossary* page — or "". It is
+// the single definition of "where the glossary lives", read both by the glossary
+// adapter that owns the section and by the naming adapter that falls back to it.
+func convGlossaryDoc(ctx *SourceContext) string {
+	if p := ctx.FindFirst(convGlossaryDocNames...); p != "" {
+		return p
+	}
+	return convDocsEntryWithPrefix(ctx, "glossary")
+}
+
 // convGlossarySource partially grounds "glossary" from a glossary document under
 // docs/ or at the repo root. Blank when none exists.
 type convGlossarySource struct{}
@@ -449,26 +475,223 @@ func (convGlossarySource) Section() Section { return "glossary" }
 func (convGlossarySource) Tier() Tier       { return TierConventions }
 
 func (convGlossarySource) Probe(ctx *SourceContext) Evidence {
-	if p := ctx.FindFirst(convGlossaryDocNames...); p != "" {
+	if p := convGlossaryDoc(ctx); p != "" {
 		return Evidence{
 			Status:     StatusPartial,
 			Confidence: ConfidenceMedium,
 			Sources:    []string{p},
 		}
 	}
-	for _, name := range ctx.ListDir("docs") {
-		if strings.HasPrefix(strings.ToLower(name), "glossary") {
-			return Evidence{
-				Status:     StatusPartial,
-				Confidence: ConfidenceMedium,
-				Sources:    []string{"docs/" + name},
-			}
-		}
-	}
 	return blank(
 		[]string{"GLOSSARY.md", "docs/glossary*"},
 		"What terms does this project define? No glossary document found.",
 	)
+}
+
+// convNamingDocNames are the dedicated naming-document spellings checked outside
+// docs/. The list is short because there is no strong standard: a project that
+// rules on names usually writes one file and calls it NAMING.
+var convNamingDocNames = []string{"NAMING.md", "NAMING", "naming.md"}
+
+// convNamingSource partially grounds "constraints/naming" from a dedicated
+// naming document, falling back to the glossary. A project that never wrote a
+// naming registry usually encodes its reserved vocabulary in its glossary, so
+// the glossary is real evidence for naming — weaker, because a glossary defines
+// terms rather than ruling on what may be renamed, and cited with that
+// qualifier so the section is never mistaken for a copy of the glossary row.
+//
+// The ceiling is StatusPartial in both cases: neither a naming page nor a
+// glossary enumerates a project's full reserved vocabulary. The strength of the
+// signal is carried by Confidence, not by inflating the status.
+type convNamingSource struct{}
+
+func (convNamingSource) Section() Section { return "constraints/naming" }
+func (convNamingSource) Tier() Tier       { return TierConventions }
+
+func (convNamingSource) Probe(ctx *SourceContext) Evidence {
+	p := ctx.FindFirst(convNamingDocNames...)
+	if p == "" {
+		p = convDocsEntryWithPrefix(ctx, "naming")
+	}
+	if p != "" {
+		return Evidence{
+			Status:     StatusPartial,
+			Confidence: ConfidenceMedium,
+			Sources:    []string{p},
+		}
+	}
+	if g := convGlossaryDoc(ctx); g != "" {
+		return Evidence{
+			Status:     StatusPartial,
+			Confidence: ConfidenceLow,
+			Sources:    []string{g + " (glossary fallback — no dedicated naming document)"},
+		}
+	}
+	return blank(
+		[]string{
+			"naming document (" + strings.Join(convNamingDocNames, ", ") + ")",
+			"docs/naming*",
+			"GLOSSARY.md", "docs/glossary*",
+		},
+		"What names and reserved vocabulary are fixed? No naming document and no glossary found.",
+	)
+}
+
+// convArchitectureDocNames are the architecture-document spellings checked as a
+// single file, in preference order.
+var convArchitectureDocNames = []string{
+	"ARCHITECTURE.md", "ARCHITECTURE", "architecture.md", "docs/architecture.md",
+}
+
+// convArchitectureDirs are the conventional homes for architecture prose spread
+// across several files, in preference order. The last is the Diátaxis
+// explanation quadrant, which is where a repo following that scheme puts it.
+var convArchitectureDirs = []string{
+	"docs/architecture", "docs/design", "docs/explanation",
+}
+
+// convLayoutRoots are the directory names that hold a project's own packages —
+// the second, independent internals signal, and the one every codebase has
+// whether or not it wrote its architecture down.
+var convLayoutRoots = []string{"internal", "pkg", "src", "lib", "cmd", "app"}
+
+// maxLayoutCitations caps how many package entries the layout scan cites. Beyond
+// it the scan keeps counting — the headline stays truthful — but stops citing,
+// so a monorepo with thousands of packages cannot dump them all into a brief
+// section.
+const maxLayoutCitations = 50
+
+// convDirHasMarkdown reports whether a repo-relative directory holds at least one
+// Markdown file — the test that separates a real documentation tree from an
+// empty or placeholder one.
+func convDirHasMarkdown(ctx *SourceContext, dir string) bool {
+	if !ctx.IsDir(dir) {
+		return false
+	}
+	for _, name := range ctx.ListDir(dir) {
+		low := strings.ToLower(name)
+		if strings.HasSuffix(low, ".md") || strings.HasSuffix(low, ".markdown") {
+			return true
+		}
+	}
+	return false
+}
+
+// convLayoutPackages returns the "<root>/<pkg>/" entries implied by walked file
+// paths: the top two segments of every file beneath a recognised source root,
+// unique and sorted. A file sitting directly in a root names no package, so it
+// contributes nothing.
+func convLayoutPackages(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		seg := strings.Split(p, "/")
+		if len(seg) < 3 {
+			continue
+		}
+		for _, root := range convLayoutRoots {
+			if seg[0] == root {
+				out = append(out, seg[0]+"/"+seg[1]+"/")
+				break
+			}
+		}
+	}
+	return dedupeSorted(out)
+}
+
+// convInternalsSource partially grounds "internals" from what a team wrote about
+// its own architecture and from the package layout a rescuer must navigate. The
+// two signals are independent: either alone is evidence, and together they are
+// the strongest reading available without a record.
+//
+// The ceiling is StatusPartial by construction: an architecture document plus a
+// package listing describes the shape of a system, not its internals chapters.
+// Which signals were found moves the confidence instead.
+type convInternalsSource struct{}
+
+func (convInternalsSource) Section() Section { return "internals" }
+func (convInternalsSource) Tier() Tier       { return TierConventions }
+
+func (s convInternalsSource) Probe(ctx *SourceContext) Evidence {
+	return s.probeLimited(ctx, maxWalkFiles)
+}
+
+// probeLimited is Probe with the walk cap injected, so the truncation branch is
+// exercisable by a test at an affordable scale. The shipped cap stays a const:
+// adapters run concurrently, and a mutable package-level cap would be shared
+// state between them.
+func (convInternalsSource) probeLimited(ctx *SourceContext, walkLimit int) Evidence {
+	docPath := ctx.FindFirst(convArchitectureDocNames...)
+	docDir := ""
+	if docPath == "" {
+		for _, dir := range convArchitectureDirs {
+			if convDirHasMarkdown(ctx, dir) {
+				docDir = dir
+				break
+			}
+		}
+	}
+	paths, truncated := ctx.walkFilesLimited(".", walkLimit)
+	pkgs := convLayoutPackages(paths)
+
+	// Loud staging: a walk the bounds cut short saw only part of the tree, so a
+	// rescuer never mistakes a partial layout for the whole one — and the note is
+	// owed whether or not the truncated walk happened to reach a package first.
+	truncatedNote := ""
+	if truncated {
+		truncatedNote = fmt.Sprintf("walk cap (%d entries, %d levels deep) cut the layout scan short", walkLimit, maxWalkDepth)
+	}
+
+	if docPath == "" && docDir == "" && len(pkgs) == 0 {
+		searched := []string{
+			"architecture document (" + strings.Join(convArchitectureDocNames, ", ") + ")",
+			"architecture trees (" + strings.Join(convArchitectureDirs, ", ") + ")",
+			"package layout under " + strings.Join(convLayoutRoots, ", "),
+		}
+		// A blank is a first-class result only while it is trustworthy (adr-35),
+		// so a scan that never reached the source roots says so rather than
+		// claiming there are none.
+		question := "How is this system built internally? No architecture document and no recognisable package layout."
+		if truncated {
+			searched = append(searched, truncatedNote+"; the rest of the tree was not walked")
+			question = "How is this system built internally? No architecture document, and no package layout in the part of the tree the scan reached — it did not reach all of it."
+		}
+		return blank(searched, question)
+	}
+
+	var sources []string
+	// Layout alone is the weakest reading: it says where the code is, never why.
+	confidence := ConfidenceLow
+	switch {
+	case docPath != "":
+		// The same prose measure convContextSource applies to a README, so a
+		// scaffolded ARCHITECTURE.md is not mistaken for a written one.
+		if data, ok := ctx.ReadFile(docPath); ok && convProseBytes(data) >= convGroundedProseBytes {
+			sources = append(sources, docPath)
+			confidence = ConfidenceHigh
+		} else {
+			sources = append(sources, docPath+" (near-empty)")
+			confidence = ConfidenceMedium
+		}
+	case docDir != "":
+		sources = append(sources, docDir+"/")
+		confidence = ConfidenceMedium
+	}
+
+	if truncated {
+		sources = append(sources, truncatedNote+"; packages beyond it were not seen")
+	}
+	if len(pkgs) > 0 {
+		if len(pkgs) > maxLayoutCitations {
+			sources = append(sources, fmt.Sprintf("%d further package(s) counted but not cited (citation cap %d)", len(pkgs)-maxLayoutCitations, maxLayoutCitations))
+			pkgs = pkgs[:maxLayoutCitations]
+		}
+		sources = append(sources, pkgs...)
+	}
+	return Evidence{
+		Status:     StatusPartial,
+		Confidence: confidence,
+		Sources:    dedupeSorted(sources),
+	}
 }
 
 // convMarkerNames are the in-code work markers recognised as open questions,

@@ -570,7 +570,13 @@ func hasConventions(c *SourceContext) bool {
 	candidates = append(candidates, convGlossaryDocNames...) // convGlossarySource
 	candidates = append(candidates, convPlatformFiles...)    // convPlatformSource (Dockerfile, Makefile, go.mod, package.json)
 	candidates = append(candidates, convADRDirs...)          // convADRsSource
-	for _, ml := range convManifestLocks {                   // convDependenciesSource
+	candidates = append(candidates, convNamingDocNames...)   // convNamingSource
+	// convInternalsSource: an architecture document, an architecture tree, or the
+	// package layout on its own is grounding evidence for internals.
+	candidates = append(candidates, convArchitectureDocNames...)
+	candidates = append(candidates, convArchitectureDirs...)
+	candidates = append(candidates, convLayoutRoots...)
+	for _, ml := range convManifestLocks { // convDependenciesSource
 		candidates = append(candidates, ml.manifest)
 	}
 	return c.FindFirst(candidates...) != ""

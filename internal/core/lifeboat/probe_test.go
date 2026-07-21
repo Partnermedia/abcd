@@ -247,15 +247,22 @@ func TestWalkFilesStopsAtTheDepthCap(t *testing.T) {
 // full strength: a probe of a marker-bearing tree must leave every file's
 // contents unchanged and add or remove nothing. The marker adapter reads every
 // file in the tree, so byte-level proof — not a path/size fingerprint — is what
-// makes "point it at an archived project, touch nothing" true.
+// makes "point it at an archived project, touch nothing" true. The fixture
+// carries every signal the whole-tree adapters consult — work markers, a naming
+// document, an architecture document, and a package tree — so one fixture proves
+// the property for all of them.
 func TestProbeLeavesEveryFileByteIdentical(t *testing.T) {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
-		"README.md":     "# demo\n\nA demo project kept for the probe.\n",
-		"go.mod":        "module example.com/demo\n\ngo 1.22\n",
-		"src/a.go":      "package a\n\n// TODO: handle the retry case\n",
-		"src/b.go":      "package a\n\n// FIXME: this leaks a connection\n",
-		"docs/notes.md": "Notes about the demo.\n",
+		"README.md":               "# demo\n\nA demo project kept for the probe.\n",
+		"go.mod":                  "module example.com/demo\n\ngo 1.22\n",
+		"src/a.go":                "package a\n\n// TODO: handle the retry case\n",
+		"src/b.go":                "package a\n\n// FIXME: this leaks a connection\n",
+		"docs/notes.md":           "Notes about the demo.\n",
+		"NAMING.md":               "# Naming\n\nA voyage is never called a run.\n",
+		"ARCHITECTURE.md":         "# Architecture\n\nA core, and a shell that formats it.\n",
+		"internal/core/core.go":   "package core\n",
+		"internal/store/store.go": "package store\n",
 	})
 	before := fileHashes(t, dir)
 	if _, err := Probe(dir); err != nil {
