@@ -1,5 +1,5 @@
 ---
-id: spc-11
+id: spc-13
 slug: disembark-reads-a-repo-s-naming-and-internals-conventions-in
 intent: itd-96
 ---
@@ -7,7 +7,7 @@ intent: itd-96
 
 ## Summary
 
-spc-11 delivers itd-96: two conventions-tier `Source` adapters that ground
+spc-13 delivers itd-96: two conventions-tier `Source` adapters that ground
 `constraints/naming` and `internals` on the files a team naturally writes — a
 `NAMING.md` or naming page under `docs/` for naming, an `ARCHITECTURE.md` or
 architecture/explanation tree plus the package layout for internals. A
@@ -22,15 +22,15 @@ it.
   `convNamingSource` (`constraints/naming`) and `convInternalsSource`
   (`internals`), both `TierConventions`, both siblings of `convGlossarySource`.
 - **Registration** (`conventionSources()` in `probe.go`): one line each. With
-  spc-10's `convOpenQuestionsSource` this brings the conventions tier to
+  spc-12's `convOpenQuestionsSource` this brings the conventions tier to
   fourteen adapters.
 - **Tier gate** (`hasConventions` in `probe.go`): the new adapters' own name
   lists are appended to the candidate union, per the comment that already
   forbids narrowing the gate below what the adapters read — otherwise a repo
   carrying *only* a `NAMING.md` or `ARCHITECTURE.md` would have the whole Tier-1
   set skipped and blank falsely.
-- **Depends on spc-10** for `(*SourceContext).WalkFiles`, which
-  `convInternalsSource` uses for its layout scan. spc-11 stacks on spc-10; it
+- **Depends on spc-12** for `(*SourceContext).WalkFiles`, which
+  `convInternalsSource` uses for its layout scan. spc-13 stacks on spc-12; it
   does not re-land the primitive.
 - **No mapping change, no new dependency.**
 
@@ -105,7 +105,7 @@ This matches the mapping row's conventions prediction, which stays unedited.
 |---|---|
 | Naming vs glossary — what is naming's distinct source? | A **dedicated** naming document (`NAMING.md`, `docs/naming*`) is naming's primary source; the glossary is an explicitly-qualified **fallback** at lower confidence. The two sections are distinct rows with distinct evidence strings; no second `glossary` adapter is added. |
 | Which paths map to `internals`? | `ARCHITECTURE.md` (and spellings) → `docs/architecture.md` → `docs/architecture/` → `docs/design/` → `docs/explanation/`, in that preference order, plus the package layout as an independent second signal. |
-| What counts as "package layout", and the missing primitive? | Top-two path segments under `internal`, `pkg`, `src`, `lib`, `cmd`, `app`, gathered with spc-10's `WalkFiles`. A bounded recursive walk is needed (a top-level `ListDir` cannot see `internal/core/lifeboat`), and it is the shared primitive both intents asked for — landed once, in spc-10. |
+| What counts as "package layout", and the missing primitive? | Top-two path segments under `internal`, `pkg`, `src`, `lib`, `cmd`, `app`, gathered with spc-12's `WalkFiles`. A bounded recursive walk is needed (a top-level `ListDir` cannot see `internal/core/lifeboat`), and it is the shared primitive both intents asked for — landed once, in spc-12. |
 | Extraction heuristics and status thresholds | The existing `convProseBytes` ≥ `convGroundedProseBytes` threshold separates real architecture prose from a stub. Status ceilings at `StatusPartial` for both sections (the mapping contract's conventions prediction); the distinction lives in `Confidence`. |
 | Confidence levels | Naming: medium (dedicated doc) / low (glossary fallback). Internals: high (real prose) / medium (thin doc) / low (layout only). |
 | Reserved-vocabulary spellings | `NAMING.md`, `NAMING`, `naming.md`, and any `docs/` entry whose name starts with `naming` (case-insensitive). Heading-shape sniffing inside a glossary is *not* attempted — it would guess at a convention that has no standard. |
@@ -119,7 +119,7 @@ This matches the mapping row's conventions prediction, which stays unedited.
   citing the doc and the layout entries.
 - **Neither → honest blanks** — a bare fixture asserts both sections blank with
   populated `Searched` and a non-empty `Question`.
-- **Read-only** — the byte-for-byte tree-invariance test from spc-10 covers the
+- **Read-only** — the byte-for-byte tree-invariance test from spc-12 covers the
   whole probe, both new adapters included.
 - **No duplicate `glossary` adapter** — a glossary-only fixture asserts
   `glossary` is still grounded by `convGlossarySource`, that

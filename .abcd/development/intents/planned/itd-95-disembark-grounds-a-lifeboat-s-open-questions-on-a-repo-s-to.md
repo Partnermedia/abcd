@@ -1,7 +1,7 @@
 ---
 id: itd-95
 slug: disembark-grounds-a-lifeboat-s-open-questions-on-a-repo-s-to
-spec_id: spc-10
+spec_id: spc-12
 kind: standalone
 suggested_kind: null
 reclassification_history: []

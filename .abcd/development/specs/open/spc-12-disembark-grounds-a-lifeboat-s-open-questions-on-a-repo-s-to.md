@@ -1,5 +1,5 @@
 ---
-id: spc-10
+id: spc-12
 slug: disembark-grounds-a-lifeboat-s-open-questions-on-a-repo-s-to
 intent: itd-95
 ---
@@ -7,7 +7,7 @@ intent: itd-95
 
 ## Summary
 
-spc-10 delivers itd-95: a conventions-tier `Source` adapter that grounds
+spc-12 delivers itd-95: a conventions-tier `Source` adapter that grounds
 `evidence/open-questions` on the in-code work markers a team left in its source
 tree, plus the bounded recursive-walk primitive the adapter needs. A repository
 with no `.abcd/` record but a codebase full of `TODO:` and `FIXME:` now reports

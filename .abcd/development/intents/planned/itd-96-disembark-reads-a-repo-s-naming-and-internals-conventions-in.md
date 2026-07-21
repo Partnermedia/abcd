@@ -1,7 +1,7 @@
 ---
 id: itd-96
 slug: disembark-reads-a-repo-s-naming-and-internals-conventions-in
-spec_id: spc-11
+spec_id: spc-13
 kind: standalone
 suggested_kind: null
 reclassification_history: []
