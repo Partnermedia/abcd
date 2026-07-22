@@ -17,6 +17,13 @@ plugin surface, and a future MCP server share one engine.
   entered the terminal folders since the anchor tag. It owns the enum so the
   lints that GATE the judgement (`core/lint`), the ledger reader that VALIDATES
   it (`core/capture`), and the derivation that CONSUMES it cannot drift apart.
+- **`core/surface/`** — the compatibility surface as DATA: the snapshot of every
+  command, flag, and manifest entry a consumer binds to, and the diff that names
+  what a release narrowed. It shares a word with the `surface/` front-door tier
+  and nothing else — that tier is about transports, this package is about what
+  those transports expose — so it is cobra-free like the rest of `core/`. The
+  walk that reads the live command tree needs cobra and therefore lives in
+  `surface/cli`, which hands its result in; the dependency never points back.
 - **`core/lifeboat/`** — the brief↔lifeboat contract. `mapping.go` is the single
   source of truth for which brief section a lifeboat fills from which source
   tier, and it is rendered into the brief's `00-meta.md` with a test asserting

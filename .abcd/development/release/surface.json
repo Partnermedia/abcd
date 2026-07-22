@@ -1,0 +1,586 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "path": "abcd",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "json",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd ahoy",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy doctor",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy dry-run",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy identity-check",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy install",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "adopt",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "docs-target",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "oracle-backend",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "refuse-adopt",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "scan-deep",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "visibility",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "yes",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd ahoy uninstall",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd audit",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "root",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd capture",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "blocked-by",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "category",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "found-at",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "found-during",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "severity",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "slug",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "source",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd capture list",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "all",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "open",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "resolved",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "wontfix",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd capture resolve",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd capture wontfix",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd disembark",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd disembark coverage",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd disembark graveyard",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "lessons-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd disembark oracle",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "oracle-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd disembark pack",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd disembark plan",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd disembark press-release",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "press-release-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd disembark principles",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "principles-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd disembark probe",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd docs",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd docs lint",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "config",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "root",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd embark",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd embark from",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd embark probe",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd history",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd history capture",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "kind",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "session",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd history list",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd history show",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd hook",
+      "hidden": true,
+      "flags": []
+    },
+    {
+      "path": "abcd hook prompt-router",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd hook prompt-router-reset",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd hook session-end",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd hook session-start",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent link",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent new",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent plan",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent ready",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent review",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent review ingest",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "verdict-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd launch",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "dry-run",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd memory",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd memory ask",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "file-back",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "page-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "top-n",
+          "shorthand": "",
+          "type": "int",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd memory ingest",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "keep-original",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "pages-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd memory lint",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd rules",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd spec",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd spec close",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd version",
+      "hidden": false,
+      "flags": []
+    }
+  ],
+  "manifest": [
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "$schema"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "name"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "owner.name"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "owner.url"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "plugins[abcd].description"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "plugins[abcd].name"
+    },
+    {
+      "file": ".claude-plugin/marketplace.json",
+      "key": "plugins[abcd].source"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "$schema"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "author.name"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "author.url"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "description"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "homepage"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "keywords"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "license"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "name"
+    },
+    {
+      "file": ".claude-plugin/plugin.json",
+      "key": "repository"
+    }
+  ]
+}

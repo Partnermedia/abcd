@@ -12,11 +12,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"github.com/REPPL/abcd-cli/internal/surface/cli"
 )
 
 func main() {
-	root, err := repoRoot()
+	root, err := moduleRoot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "abcd-gen-cli-ref:", err)
 		os.Exit(1)
@@ -33,22 +34,16 @@ func main() {
 	fmt.Println("wrote", cli.ReferencePagePath)
 }
 
-// repoRoot walks up from the working directory to the module root (the directory
-// holding go.mod), so the generator writes to the same page whether it is invoked
-// via `go generate` (cwd is the package dir) or directly from the repo root.
-func repoRoot() (string, error) {
-	dir, err := os.Getwd()
+// moduleRoot resolves the module root from the working directory, so the
+// generator writes to the same page whether it is invoked via `go generate` (cwd
+// is the package dir) or directly from the repo root. The walk itself lives in
+// fsutil, shared with abcd-gen-surface: two generators anchoring on go.mod by
+// two separate walks is one walk too many, and a divergence between them would
+// send the two drift-checked artefacts to different directories.
+func moduleRoot() (string, error) {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found above %s", dir)
-		}
-		dir = parent
-	}
+	return fsutil.ModuleRoot(cwd)
 }
