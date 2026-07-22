@@ -19,10 +19,13 @@ per-verb bare renders (`/abcd:ahoy`, `/abcd:capture`, …). Each per-verb bare
 render is scoped to its own command's surface; this board is the *cross-verb*
 answer to "what's the state of my abcd project right now?".
 
-The `/abcd` surface routes every verb through the transport-agnostic core (the
+Binary-backed `/abcd:` verbs route through the transport-agnostic core (the
 Cobra CLI is the front door today; an MCP server follows later, per
-[adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) — it no longer
-hides any bundled dependency behind the wrapper.
+[adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)). Not every verb
+does: `consult` and `ingest` run entirely as host-side markdown over the
+operator-level sources corpus (`~/.abcd/sources/`) and never invoke the binary,
+and `prepare-this-repo` is an interim bridge that shells out to `abcd audit`
+for part of its work and handles the rest host-side.
 
 ## Sub-verbs and aliases
 
@@ -62,16 +65,17 @@ therefore satisfy SD001 rather than tripping it. (Had they instead introduced
 divergent behaviour, they would be forbidden sub-verbs and the design would be
 reconsidered — the gate is real, not a rubber stamp.)
 
-## spc-17 stub replacement (investigation-gated)
+## Predecessor spc-17 stub replacement (investigation-gated)
 
-itd-20 was planned assuming a spc-17 probe stub for the bare top-level command
-would be *replaced*. Investigation found NO such stub: the spc-17 work is
-credited with probe/bare renders for the *sub-verb* surfaces. The `disembark`,
+itd-20 was planned assuming a predecessor-store spc-17 probe stub for the bare
+top-level command would be *replaced*. Investigation found NO such stub: the
+predecessor's spc-17 work is credited with probe/bare renders for the *sub-verb*
+surfaces. The `disembark`,
 `embark`, `launch`, and `intent` CLI verbs all ship today, and each has its
 plugin command file present (`commands/abcd/disembark.md`, `embark.md`,
 `launch.md`, `intent.md`). `commands/abcd/` ships `ahoy`, `audit`, `capture`,
 `consult`, `disembark`, `docs`, `embark`, `history`, `ingest`, `intent`,
-`launch`, `memory`, `prepare-this-repo`, and `version` (14 files). The investigation found no spc-17 probe STUB behind the
+`launch`, `memory`, `prepare-this-repo`, and `version` (14 files). The investigation found no predecessor spc-17 probe STUB behind the
 top-level command to replace — the "stub replacement" premise is therefore
 recorded here as not-applicable. The top-level command file itself is present
 today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
@@ -161,8 +165,8 @@ Therefore section (3) is PERMANENTLY the `no dev-sync record` known-state line
 in v1 — the dev-sync-staleness signal does **not** function until a state
 substrate exists. This is an ALLOWED terminal state, recorded here and in the
 itd-20 intent so it is not read as a shipped capability. Adding a dev-sync
-state substrate is explicitly OUT of scope for spc-83.2 (and named in the .5
-out-of-scope update).
+state substrate is explicitly OUT of scope for the predecessor's spc-83.2 (and
+named in that predecessor spec's .5 out-of-scope update).
 
 ## Performance bounds (NFR)
 

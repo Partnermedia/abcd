@@ -1,6 +1,6 @@
 # `/abcd:memory` — Multi-Upstream Curated Knowledge Substrate
 
-User-facing command for the per-project compounding-curated knowledge substrate at `.abcd/memory/`. Design target per itd-36 (idea-1 final shape after 5-round adversarial oracle review); the write core (ingest/ask/bare) is spc-38's (the memory write core) and the lint family spc-39's (the memory-coverage lints + the `MQ`/`MS`/`ML` codes). itd-36 sits in `intents/planned/` — delivery state is the intent lifecycle's, not this page's (see the [brief README's provenance note](../README.md)).
+User-facing command for the per-project compounding-curated knowledge substrate at `.abcd/memory/`. Design target per itd-36 (idea-1 final shape after 5-round adversarial oracle review); the write core (ingest/ask/bare) traces to the predecessor store's spc-38 (the memory write core) and the lint family to the predecessor store's spc-39 (the memory-coverage lints + the `MQ`/`MS`/`ML` codes). Every bare `spc-38`/`spc-39` on this page is a predecessor-store id cited as provenance — this repo's spec store holds only spc-2..spc-13, and none of these ids names a spec in it. itd-36 sits in `intents/planned/` — delivery state is the intent lifecycle's, not this page's (see the [brief README's provenance note](../README.md)).
 
 For the **substrate spec** (page-class enum, source-class taxonomy, curator behaviour, lifecycle class, integration with itd-26 loot), see [`05-internals/07-memory.md`](../05-internals/07-memory.md). This file is the surface contract: what the user types and what happens.
 
@@ -54,6 +54,7 @@ DISTIL (host-delegated: the host agent is the distiller, supplying the
     ▼
 WRITE
   - .abcd/memory/<type>_<domain>_<slug>.md (new pages or updates)
+  - .abcd/memory/README.md (store skeleton, scaffolded on first write)
   - .abcd/memory/index.md (regenerated catalog)
   - .abcd/memory/log.md (append: ## [YYYY-MM-DD HH:MM] external_pdf | <slug> — <summary>)
   - .abcd/memory/contradictions.md (if curator surfaces conflict with existing pages)
@@ -98,7 +99,7 @@ Only `lint-<utc-ts>/report.{json,md}` is written by the shipped store (spc-39's 
 
 ## 4. Composition with adjacent surfaces
 
-- **`/abcd:disembark`** exports curated project memory/provenance into the lifeboat (designed behaviour; itd-36 doesn't change disembark's source-mapping). What the lifeboat is specified to carry is the curated provenance surface named in [`02-disembark.md §5`](02-disembark.md) — `research/pitfalls.{json,md}`, `assets/_manifest.json`'s provenance/classification, and root `_provenance.json` — **not** a verbatim `.abcd/memory/` payload; declaring an exact `.abcd/memory/`-verbatim payload is deferred to the disembark spec that wires the lifeboat packer (adr-28). The recovery-humility framing on disembark/embark applies: the lifeboat is the floor of recoverable theory, not theory itself.
+- **`/abcd:disembark`** exports curated project memory/provenance into the lifeboat (designed behaviour; itd-36 doesn't change disembark's source-mapping). What the lifeboat is specified to carry is the curated provenance surface named in [`02-disembark.md §5`](02-disembark.md) — root `_provenance.json` (the lifeboat marker and manifest) and `coverage.{json,md}` (per-section grounded/partial/blank status) — **not** a verbatim `.abcd/memory/` payload; declaring an exact `.abcd/memory/`-verbatim payload is deferred to the disembark spec that wires the lifeboat packer (adr-28). The recovery-humility framing on disembark/embark applies: the lifeboat is the floor of recoverable theory, not theory itself.
 - **`/abcd:embark`** unpacks a lifeboat's record families into the receiving repo; carrying `.abcd/memory/` forward is designed behaviour. Source-class enum carries forward; receiver runs `/abcd:memory lint` (spc-39) post-unpack to verify quotation budgets and licences haven't drifted.
 - **`/abcd:launch`** does **not** consume the provenance substrate's licence gate (adr-28): the public launch payload excludes `.abcd/**` — including `.abcd/memory/**` — wholesale as policy, so launch never publishes the files the gate checks. The restrictive-licence gate's real consumer is the **lifeboat** (`/abcd:disembark`, above), the surface that publishes curated project memory/provenance; the later-phase gate is designed to refuse publish on restrictive-licence files and warn on `licence: unknown`. At launch the gate is future/inert — launch excludes `.abcd/**` wholesale, so `/abcd:launch dry-run` surfaces no licence-gate verdict (its dry-run gates are the secret/PII scan, marker-block, installability smoke, and documentation-auditor; see [`04-launch.md § 2`](04-launch.md#2-curated-release-artefact-default-deny) and adr-28).
 - **`/abcd:dredge`** (a later phase, itd-25) writes synthesis output to `.abcd/memory/<type>_<domain>_<slug>.md` with `source.class: dredge_synthesis`. Distinct verb (storage vs operation per dredge-pushback in idea-1 R4); shared destination namespace.
@@ -108,7 +109,7 @@ Only `lint-<utc-ts>/report.{json,md}` is written by the shipped store (spc-39's 
 
 | Item | Cost |
 |---|---|
-| Schema extension | 3 new sibling files (`index.md`, `log.md`, `contradictions.md`) + typed `source:` frontmatter; no migration of existing flat-named files |
+| Schema extension | 4 new sibling files (`README.md`, `index.md`, `log.md`, `contradictions.md`) + typed `source:` frontmatter; no migration of existing flat-named files |
 | Curator role on `principle-distiller` | Role extension (Phase 6 design-target agent per [`05-internals/01-agents.md`](../05-internals/01-agents.md), not yet shipped; itd-31 precedent — the design-target agent roster stays at 16) |
 | Provenance/licence substrate | Separable spec at [`05-internals/09-provenance-substrate.md`](../05-internals/09-provenance-substrate.md); shared with the later-phase itd-26 loot |
 | Lifeboat licence-gate extension (adr-28) | `.abcd/memory/sources/` allowlist + restrictive-licence detection over the lifeboat's gated payload (`/abcd:disembark`); NOT a launch payload gate — launch excludes `.abcd/**` wholesale, so the gate is future/inert at launch |

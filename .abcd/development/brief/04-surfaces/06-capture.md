@@ -80,14 +80,14 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 
 ## 5. Implementation status
 
-- **Library primitives:** delivered by `spc-20-issue-ledger-primitives-iss-n-allocator`.
+- **Library primitives:** delivered by the predecessor's `spc-20-issue-ledger-primitives-iss-n-allocator` (predecessor store).
   The API the command surface consumes is the Go package
   `internal/core/capture` (allocator, find, read, build, mutate; capture,
   resolve, wontfix, list, status) — a port of the predecessor's `_issue_lib`
   and `issue_workflow` primitives.
-- **Command flow:** delivered by `spc-21-abcdcapture-command-flow-text-ingest`.
-- **Legacy `.abcd/.work.local/` scratch migration:** design target per `spc-22-workissuesmd-migration-promote-legacy` — a later phase, not yet built (rides the `dev-sync` surface, § 3).
-- **intent-fidelity-reviewer cross-check:** delivered by `spc-23-intent-fidelity-reviewer-extension`.
+- **Command flow:** delivered by the predecessor's `spc-21-abcdcapture-command-flow-text-ingest` (predecessor store).
+- **Legacy `.abcd/.work.local/` scratch migration:** design target per the predecessor's `spc-22-workissuesmd-migration-promote-legacy` (predecessor store) — a later phase, not yet built (rides the `dev-sync` surface, § 3).
+- **intent-fidelity-reviewer cross-check:** delivered by the predecessor's `spc-23-intent-fidelity-reviewer-extension` (predecessor store); the reviewer surface ships as `agents/intent-fidelity-reviewer.md`.
 - **`promote <iss-N>` bridge:** the command-orchestrated flow leans on
   `abcd intent "<text>"`, delivered by `spc-7-abcd-intent-quoted-text-create-symmetric`
   (itd-46). The issue body is handed to that create path, which files a new draft;

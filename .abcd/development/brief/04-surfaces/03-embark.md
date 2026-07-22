@@ -29,8 +29,8 @@
 
 Bare `/abcd:embark` prints dispatcher help only — never mutates state. The two **shipped** sub-verbs:
 
-- **`/abcd:embark from <path>`** — unpack the lifeboat at `<path>` into the current repo. Path is required, and it is always an explicit path to a destination a disembark wrote — **there is no `home` shorthand** (adr-35: there is no in-tree lifeboat home to expand it to). The round-trip / self-test case is `disembark pack <repo> <dest>` followed by `embark from <dest>`. *(Design target, not yet shipped: the flag-shaped modifiers `--force` — override conflict refusal, `--archive` — copy input lifeboat verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` before unpacking, and `--refresh-audit` — re-run oracle product audit instead of trusting cached. The shipped `from` takes no flags.)*
-- **`/abcd:embark probe <path>`** — inspect a lifeboat at `<path>` without unpacking: show what would land where, run schema/audit checks, write nothing.
+- **`/abcd:embark from <path> [target]`** — unpack the lifeboat at `<path>` into `[target]`, which defaults to the working directory when omitted. `<path>` is required, and it is always an explicit path to a destination a disembark wrote — **there is no `home` shorthand** (adr-35: there is no in-tree lifeboat home to expand it to). The round-trip / self-test case is `disembark pack <repo> <dest>` followed by `embark from <dest>`. *(Design target, not yet shipped: the flag-shaped modifiers `--force` — override conflict refusal, `--archive` — copy input lifeboat verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` before unpacking, and `--refresh-audit` — re-run oracle product audit instead of trusting cached. The shipped `from` takes no flags.)*
+- **`/abcd:embark probe <path> [target]`** — inspect what the lifeboat at `<path>` would write into `[target]` (defaulting to the working directory) without unpacking: show what would land where, run schema/audit checks, write nothing.
 
 Design-target sub-verb (not yet shipped):
 
@@ -70,7 +70,7 @@ Embark is a deterministic Go run: it reads the lifeboat, plans, refuses on any c
 
 ## 4. Conflict UX
 
-When the target already has files that the lifeboat would write, **core returns the conflict set and the surface renders it as a single bulk prompt** — never a per-file barrage, and never a file written by core (adr-35):
+When the target already has files that the lifeboat would write, **core returns the conflict set and the surface renders it as a single bulk report** — never a per-file barrage, and never a file written by core (adr-35). The shipped `from` **writes nothing** on any conflict and exits non-zero; the surface relays the bulk report so the user resolves the conflicts and re-runs:
 
 ```
 embark detected N conflicts across the record families:
@@ -78,14 +78,12 @@ embark detected N conflicts across the record families:
   • 2 .abcd/work/issues/
   • 1 .abcd/development/decisions/adrs/
 
-How to resolve all conflicts?
-  → keep target (skip everything in lifeboat that conflicts)
-  → replace target (lifeboat wins everywhere)
-  → merge where possible, prompt otherwise (a per-file prompt for each conflict)
-  → abort (surface prints the conflict list; nothing is written)
+nothing was written — resolve the conflicts and re-run.
 ```
 
-Single decision, transparent (shows scope before asking). The conflict list is a value core hands back; if the operator wants it on disk, the surface writes it — core does not.
+The conflict list is a value core hands back; if the operator wants it on disk, the surface writes it — core does not.
+
+*(Design target, not yet shipped: `embark from <path> --force` turns that bulk report into a single resolution prompt — keep target (skip everything in lifeboat that conflicts) / replace target (lifeboat wins everywhere) / merge where possible, prompt otherwise / abort (surface prints the conflict list; nothing is written) — and applies the chosen resolution uniformly. Single decision, transparent (shows scope before asking). The shipped `from` takes no flags and offers no resolution choice.)*
 
 ## 6. Acceptance
 
@@ -96,13 +94,13 @@ Single decision, transparent (shows scope before asking). The conflict list is a
 > criteria (`from`, `probe`, bare invocation, the conflict refusal) hold today.
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:embark`, **then** the dispatcher prints help listing the shipped sub-verbs (`from`, `probe`) and the global `--json` flag — bare invocation never mutates state.
-- **Given** a lifeboat at `<path>` and a conflict-free target, **when** `/abcd:embark from <path>` runs, **then** the four record families (ADRs, issues, intents, specs) land at their canonical locations, the current abcd marker block is re-injected into the target `CLAUDE.md`, and everything else in the lifeboat informs the report but is never written.
+- **Given** a lifeboat at `<path>` and a conflict-free target, **when** `/abcd:embark from <path> [target]` runs (the target defaulting to the working directory when omitted), **then** the four record families (ADRs, issues, intents, specs) land at their canonical locations under the target, the current abcd marker block is re-injected into the target `CLAUDE.md`, and everything else in the lifeboat informs the report but is never written.
 - **Given** a repo disembarked to `<dest>`, **when** `embark from <dest>` runs in an empty target, **then** the round-trip completes with no shorthand and no special case — `<dest>` is an ordinary explicit path. (There is no `home`, and no sub-verb resolves one; matches disembark's parallel rule for sub-verb-agnostic resolution.)
 - **Given** a target holding a file that conflicts with a planned write, **when** `/abcd:embark from <path>` runs, **then** the command refuses, core returns the conflict list **without writing any file**, and the surface renders it as one bulk report — a target that merely holds unrelated files is not a conflict.
 - **Given** a non-empty target with conflicts and `--force`, **when** `embark from <path> --force` runs, **then** the bulk conflict prompt fires once with a summary of all conflicts, and the chosen resolution is applied uniformly.
 - **Given** the user runs `/abcd:embark scan`, **when** the command completes, **then** the directories found carrying a parseable `_provenance.json` are listed ranked by mtime with their detected source repo, no unpacking occurs, and the user is shown candidates ready to pass to `embark from <path>`. *(What `scan` searches is settled; **where** it searches is the open question above, and this criterion cannot be made checkable until that is decided.)*
 - **Given** the user runs `/abcd:embark scan --deep`, **when** the command completes, **then** the search widens — the exact widening depends on the same open question.
-- **Given** the user runs `/abcd:embark probe <path>`, **when** the command completes, **then** the lifeboat at `<path>` is inspected (file tree, schema validation, would-be writes), no target mutation occurs, and the user sees a report ready to inform the decision to run `embark from <path>`.
+- **Given** the user runs `/abcd:embark probe <path> [target]` (the target defaulting to the working directory when omitted), **when** the command completes, **then** the lifeboat at `<path>` is inspected against the target (file tree, schema validation, would-be writes), no target mutation occurs, and the user sees a report ready to inform the decision to run `embark from <path> [target]`.
 - *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP installed on the embarker, **when** `embark from <path>` runs, **then** the user is asked whether to register the workspace with RP and the choice is applied.
 - *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP *not* installed, **when** `embark from <path>` runs, **then** the command warns gracefully and continues without failing.
 - **Given** the user passes `--refresh-audit`, **when** `embark from <path> --refresh-audit` runs, **then** the oracle product audit re-runs against the current lifeboat content and the drift vs the disembark-time audit is reported.
