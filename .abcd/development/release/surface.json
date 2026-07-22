@@ -454,6 +454,13 @@
           "type": "string",
           "required": false,
           "hidden": false
+        },
+        {
+          "name": "payload-dir",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
         }
       ]
     },

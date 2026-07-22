@@ -132,7 +132,7 @@ func resolvePointer(doc any, pointer string) (any, bool) {
 	}
 	cur := doc
 	for _, raw := range strings.Split(pointer, "/")[1:] {
-		tok := strings.ReplaceAll(strings.ReplaceAll(raw, "~1", "/"), "~0", "~")
+		tok := unescapePointerToken(raw)
 		switch c := cur.(type) {
 		case map[string]any:
 			v, ok := c[tok]
@@ -151,6 +151,14 @@ func resolvePointer(doc any, pointer string) (any, bool) {
 		}
 	}
 	return cur, true
+}
+
+// unescapePointerToken decodes one RFC-6901 reference token (~1 → /, ~0 → ~).
+// The order matters and is the spec's: decoding ~0 first would turn "~01" into
+// "~1" and then into "/". It is shared by the pointer reader here and the
+// pointer writer in render.go so the two can never disagree about a token.
+func unescapePointerToken(raw string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(raw, "~1", "/"), "~0", "~")
 }
 
 func atoiIndex(tok string) (int, bool) {

@@ -29,6 +29,9 @@ Then summarise the JSON for the user:
 - `version` — the version the release would carry.
 - `files` — how many files the bundle would include.
 - `scan.hard_fails` — secret/PII findings that would block the release.
+- `smoke.ok` — whether the payload would install: both plugin manifests parse,
+  the marketplace source resolves, and every declared command, agent, skill and
+  hook path is carried. `smoke.findings` names any path that is not.
 - `would_publish` — whether every gate passes.
 - `would_refuse_on` — if non-empty, the gates that would refuse, so the user
   knows what to fix before a real launch.
@@ -92,7 +95,21 @@ Write the agent's payload to a file and hand it back to the binary:
 
 ```bash
 abcd launch ship --changelog-json <path>   # or - for stdin
+abcd launch ship --changelog-json <path> --payload-dir <dir>   # also stage the payload
 ```
+
+With `--payload-dir` the binary additionally stages the release payload in that
+directory — an empty directory outside the repository — with the derived version
+stamped into the payload's copies of `plugin.json` and `marketplace.json`. The
+repository's own manifests are never touched: they carry no version, and the
+version belongs to the artefact. The staged payload is proved consistent before
+the command returns, so a stamp that missed a pinned location is a refusal rather
+than a published half-state. Every refusal the staging step can make is checked
+BEFORE the dated heading is written, and a refusal that slips past that check
+rolls the heading back — so a ship that exits non-zero leaves no release record
+behind for the next attempt to trip over. Without the flag nothing is staged;
+`--payload-dir` on its own (no `--changelog-json`) is an operand error, because
+only a completed cut has a version to stamp.
 
 The binary re-derives the cut, then proves the prose describes it — the
 **completeness bijection**: the set of record ids the payload cites must equal

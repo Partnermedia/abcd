@@ -175,6 +175,33 @@ and copy the binary anywhere on your `PATH`. Every release is built and
 published by CI from the exact tagged commit, with the checksums generated
 over the same bytes that are uploaded.
 
+## Plugin
+
+This repository is also its own plugin marketplace, so a compatible agent
+harness can install the `/abcd:*` surface — the commands under
+[`commands/`](commands/), the agents under [`agents/`](agents/) and the hook
+wiring in [`hooks/`](hooks/) — straight from it. Add the marketplace, then
+install the plugin:
+
+```text
+/plugin marketplace add REPPL/abcd-cli
+/plugin install abcd@abcd-marketplace
+```
+
+`abcd-marketplace` is the marketplace name declared in
+[`.claude-plugin/`](.claude-plugin/); `abcd` is the single plugin it lists,
+sourced from the repository root. Pull the current state of the marketplace with:
+
+```text
+/plugin update abcd
+```
+
+The marketplace is served from the repository itself, so an install tracks the
+repository rather than a versioned artefact: the manifests here carry no version
+key, and a release publishes the `abcd` binaries and their checksums. The
+commands drive the `abcd` binary, so keep the [install](#install) above in place
+alongside the plugin.
+
 ## Build
 
 ```bash

@@ -17,7 +17,10 @@ func writeLockstepTree(t *testing.T, root, primaryVer, marketVer, changelogVer s
 	} else {
 		writeFile(t, root, ".claude-plugin/plugin.json", `{"name": "abcd", "version": "`+primaryVer+`"}`)
 	}
-	mk := `{"plugins": [{"name": "abcd"`
+	// source is not part of the lockstep contract, but a listing without one is
+	// not a well-formed marketplace entry — the installability smoke reads the
+	// same manifest, so the fixture carries the canonical adr-28 "./".
+	mk := `{"plugins": [{"name": "abcd", "source": "./"`
 	if marketVer != "" {
 		mk += `, "version": "` + marketVer + `"`
 	}

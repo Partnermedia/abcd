@@ -7,7 +7,7 @@
 The shipped verb surface is the `--dry-run` flag on `abcd launch` — a read-only preview of the bundle and gates. Bare `abcd launch` never mutates state: it refuses (exit 1) with a hint to pass `--dry-run`; a bare-as-status render is a design target, unshipped. The sub-verb design:
 
 - **`/abcd:launch ship`** — **partly shipped: the RELEASE CUT only** (itd-73 derived versioning + itd-67's changelog slice). `abcd launch ship` derives the version and the record set from what shipped since the newest tag, runs the surface guardrail, and — with `--changelog-json` — validates the host-composed prose against the record set (the completeness bijection) and writes the dated `CHANGELOG.md` heading `.github/workflows/auto-release.yml` turns into a tag; `commands/abcd/launch.md` carries the emit → compose → ingest orchestration and the `release-changelog-composer` agent it dispatches. The ARTEFACT half stays a design target (itd-65 gate suite + itd-72 publishing): `internal/core/launch` carries the `Ship` engine, unwired, and the verb neither packages, commits, tags, nor publishes. The design for that half: cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers `--allow-dirty` and `--allow-doc-warnings` belong to this sub-verb's design; the shipped verb accepts only `--dry-run` and the global `--json`. There is no version flag — the version is derived, never authored ([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md), see [§ 3](#3-versioning--marketplace)).
-- **`/abcd:launch dry-run`** — shipped as the `--dry-run` flag (the plugin command `commands/abcd/launch.md` maps its `[dry-run]` argument hint onto `abcd launch --dry-run`; the binary has no `dry-run` subcommand). **Report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the remaining gates (marker-block, `plugin.json` parse, documentation-auditor) are the gate-suite intent's (itd-65) and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the full `ship` verb's behaviour (itd-65 + itd-72), not dry-run's.
+- **`/abcd:launch dry-run`** — shipped as the `--dry-run` flag (the plugin command `commands/abcd/launch.md` maps its `[dry-run]` argument hint onto `abcd launch --dry-run`; the binary has no `dry-run` subcommand). **Report-only preview, always exit-0** (a preview never blocks). It runs the parts of the pre-flight suite that exist today: as of spc-64 the **secret + PII scan gate** (the native scanners, see [§ 1](#1-pre-flight-gates)) runs for real in report-only mode and prints what it *would* refuse on (a finding, or a fail-closed reason such as "scanner unavailable"); the **installability smoke** runs for real at its light tier (see [§ 1](#1-pre-flight-gates)); the remaining gates (marker-block, documentation-auditor) are the gate-suite intent's (itd-65) and render as "(not yet implemented)". It also produces the would-be artefact manifest, without writing the release artefact. dry-run is **not** "ship minus publish": running the *full* gate suite and **hard-failing** on a finding (exit non-zero) is the full `ship` verb's behaviour (itd-65 + itd-72), not dry-run's.
 
 ## 1. Pre-flight gates
 
@@ -17,7 +17,10 @@ The shipped verb surface is the `--dry-run` flag on `abcd launch` — a read-onl
 - **TruffleHog** — opt-in deep scan when `scan.deep=true` — hard-fail (live credential verification)
 - **Hook compliance** check — warn-fail
 - **Marker block sanity** — hard-fail on malformed
-- **`plugin.json` parse + `marketplace.json` references** — hard-fail
+- **Installability smoke** (`plugin.json` parse + `marketplace.json` references) — hard-fail. Two tiers over ONE surface resolution (`internal/core/launch/installsurface.go`), so the deeper tier upgrades the assertions and never redefines the surface:
+  - **The declared surface** is the UNION of two registers, because the plugin-manifest schema defines every explicit key as declaring entries *in addition to* the convention directory: **convention** — `commands/**/*.md`, `agents/*.md` (a flat glob; iss-110 is the evidence), `skills/*/SKILL.md`, `hooks/hooks.json` — and **manifest** — the optional `commands`/`agents`/`skills`/`hooks` keys in `plugin.json`. A hook's `$CLAUDE_PLUGIN_ROOT`-rooted command adds the payload file it invokes; the plugin executable itself is install-supplied, so its absence from the payload proves nothing. Every entry records which register declared it. This is NOT the compatibility surface (`internal/core/surface`), which records manifest KEYS and discards values; installability is the mirror question, over the values.
+  - **Light tier** (itd-67, shipped) — both manifests parse, each local marketplace `source` resolves to a manifest whose name matches the listing, and every declared path the payload is responsible for is carried. Resolution reads the **resolved bundle**, so a file present in the tree but excluded from the payload fails here. `dry-run` reports it; `RenderPayload` refuses on it, because the render is the only step that materialises an artefact.
+  - **Deep tier** (itd-66, deferred) — over the same resolved list: import every shipped entrypoint and render each command's help/frontmatter in an isolated subprocess rooted at the rendered payload.
 - **Dirty tree** — refuse unless `--allow-dirty`
 - **OWASP / vulnerability check** (folded into the pre-flight suite) — warn-fail
 - **Documentation auditor** (subagent) — runs over `docs/` to verify user-facing documentation is well-formed before release — warn-fail
@@ -79,11 +82,10 @@ the spc-77.1 decision artifact
 (`.abcd/config/version-location.json`)
 as `manifest_path` + `json_pointer` (see
 [adr-19](../../decisions/adrs/0019-plugin-json-version-carve-out.md)). The
-artifact is absent from the tree, and the shipped lockstep checker fails closed
-on it — `dry-run` reports the lockstep contract unreadable — until spc-77.1
-records the decision; a
-`blocked: true` decision has no schema-valid location, so version-writing
-refuses and the escalation stands. Concretely, `ship`:
+artifact records spc-77.1's ACCEPT outcome — `.claude-plugin/plugin.json` at
+`/version` — and the shipped lockstep checker fails closed when it is missing or
+malformed; a `blocked: true` decision has no schema-valid location, so
+version-writing refuses and the escalation stands. Concretely, `ship`:
 
 1. Stamps the bumped version into the **release artefact** at the selected
    `manifest_path` + `json_pointer` — the manifest renderer reads the decision
