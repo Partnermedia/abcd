@@ -650,3 +650,27 @@ parallel-agent merge contention bites.
   enum-checked on read, and a third definition of the impact enum is exactly what
   spc-10 exists to prevent. capture -> changelog is the import direction (no
   cycle: changelog imports launch/frontmatter/gitutil only).
+
+- 2026-07-21 — The mapping table's per-tier status columns are a **ceiling**,
+  not merely a prediction. Every conventions adapter already honours its row
+  (`convGlossarySource` returns partial where the row says partial;
+  `convPlatformSource` returns grounded where it says grounded), so itd-95's
+  and itd-96's three new adapters cap at `StatusPartial` — the value all three
+  rows predict — and carry signal strength in `Confidence` instead. Rejected:
+  returning `StatusGrounded` for a dedicated `NAMING.md` or a prose-bearing
+  `ARCHITECTURE.md`, which would have made the rendered brief table wrong and
+  required editing `mapping.go`, the brief-to-lifeboat contract both intents
+  put out of scope. Every acceptance bar asks only for "non-blank", so the
+  ceiling satisfies them. Revisit only by amending the mapping row first.
+
+- 2026-07-21 — A probe walk of a foreign tree must be bounded in **three**
+  dimensions, not one. itd-95 shipped `WalkFiles` with a regular-file cap; an
+  independent security review of the itd-96 branch showed both remaining
+  dimensions were exploitable — a tree of directories holding no regular file
+  never reaches a file cap, and `os.Root` re-resolves each directory from the
+  containment root one component at a time, making a directory chain quadratic
+  in its depth (depth-1500 did not finish in two minutes). Directories are now
+  counted against the same cap and descent is capped at `maxWalkDepth`. The
+  general rule: any new whole-tree traversal states which of {entries, depth,
+  aggregate bytes} bounds it, because a per-item cap and a count cap multiply
+  and their product is not a bound.

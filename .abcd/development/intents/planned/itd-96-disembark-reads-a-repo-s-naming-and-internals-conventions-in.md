@@ -1,12 +1,13 @@
 ---
 id: itd-96
 slug: disembark-reads-a-repo-s-naming-and-internals-conventions-in
-spec_id: null
-kind: null
+spec_id: spc-13
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: minor
+impact: additive
 ---
 
 # Disembark Reads A Repo's Naming And Internals Conventions Into Its Lifeboat
