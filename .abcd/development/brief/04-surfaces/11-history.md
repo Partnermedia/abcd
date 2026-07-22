@@ -5,8 +5,10 @@ redact-on-write archive of raw session transcripts, keyed on the repo's
 **root-commit SHA**. The store lives outside the repo at
 `~/.abcd/history/<root-sha>/transcripts/`, with a per-repo `meta.json`
 (`root_commit`, `name`, `github`, and a corpus block) alongside it. `list` and
-`show` **perform zero writes**; `capture` is the only write path, and it redacts
-on write — no live secret or absolute home path survives capture.
+`show` **perform zero writes**; the store has two write paths — the explicit
+`capture` sub-verb and the automatic `abcd hook session-end` entrypoint wired on
+the SessionEnd event (`hooks/hooks.json`) — and both redact on write, so no live
+secret or absolute home path survives capture.
 
 ## Sub-verbs
 

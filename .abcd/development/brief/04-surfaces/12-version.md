@@ -13,8 +13,8 @@ emits `{ "name": "abcd", "version": "<version>" }`. The plugin command
 (`commands/abcd/version.md`) reads the JSON and tells the user the `name` and
 `version`. Without `--json`, bare `abcd version` prints the version string only
 (e.g. `abcd dev` in a development build) — it does **not** render a status board;
-the bare-status convention is scoped to `ahoy`/`capture`/`memory` and bare
-`abcd`, not to `version`.
+the bare-status convention is scoped to `ahoy`/`capture`/`intent`/`memory`/`spec`
+and bare `abcd`, not to `version`.
 
 ## Where the version comes from
 

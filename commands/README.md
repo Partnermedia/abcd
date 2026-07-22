@@ -7,9 +7,9 @@ engine.
 
 - `abcd.md` → `/abcd` — the read-only where-am-i status board (`abcd --json`).
 - `abcd/<verb>.md` → `/abcd:<verb>` — one file per verb. The shipped set is the
-  13 files in [`abcd/`](abcd/): `ahoy`, `audit`, `capture`, `consult`,
-  `disembark`, `docs`, `embark`, `history`, `ingest`, `launch`, `memory`,
-  `prepare-this-repo`, `version`.
+  14 files in [`abcd/`](abcd/): `ahoy`, `audit`, `capture`, `consult`,
+  `disembark`, `docs`, `embark`, `history`, `ingest`, `intent`, `launch`,
+  `memory`, `prepare-this-repo`, `version`.
 
 Commands stay thin: they call `abcd <verb> --json` and format the result; they
 never reimplement behaviour that belongs in the core.

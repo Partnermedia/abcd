@@ -15,8 +15,11 @@ The shipped verb surface is one sub-verb, `lint`:
 
 Bare `abcd docs` prints command usage (its one sub-verb, `lint`) — it does **not**
 render a status board; the bare-status convention is scoped to `ahoy`/`capture`/
-`memory` and bare `abcd`, not to `docs`. The global `--json` flag emits the
-machine-readable finding list.
+`memory`/`intent`/`spec` and bare `abcd`, not to `docs`. The global `--json` flag
+emits the machine-readable finding list, and `docs lint` additionally accepts two
+local flags: `--config` (path to the `docs-lint.json` it loads, default
+`<root>/.abcd/docs-lint.json`) and `--root` (repo root to lint, default the
+current working directory).
 
 ## What it checks
 
@@ -31,6 +34,11 @@ machine-readable finding list.
 - **Stray root markdown** — no stray markdown at the repo root (it belongs under
   `docs/`; the allowed root files are the fixed set — README, CHANGELOG,
   CONTRIBUTING, etc.).
+- **Host-agnostic prose** — user-facing docs must not name a specific agent
+  harness or bundled tool. This repo's `.abcd/docs-lint.json` defines a family of
+  `harness/*` banned tokens (each a **blocker**) that catch such names, so the
+  published surface stays host-agnostic; the `<!-- docs-lint: allow -->` escape
+  covers the sanctioned exception (attribution).
 
 ## Output
 

@@ -104,9 +104,10 @@ records `glossary_terms_used: core/voyage, core/persona`.
 ## Lifeboat forward requirement (grill Q6)
 
 The lifeboat must pack EVERY phase retrospective a voyage produced, so the full
-reflection arc travels between voyages. disembark/embark are unbuilt (spc-17
-stubs), so this is a **documented forward requirement on the future disembark
-spec** — NOT a behaviour this surface implements. It is recorded here and in the
+reflection arc travels between voyages. Because `/abcd:reflect` is a design
+target and produces no retrospectives yet, this is a **documented forward
+requirement on the disembark pack** — NOT a behaviour this surface implements.
+It is recorded here and in the
 itd-24 intent acceptance so a later reader treats it as a requirement, not a
 shipped capability.
 

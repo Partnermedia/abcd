@@ -67,12 +67,11 @@ reconsidered — the gate is real, not a rubber stamp.)
 itd-20 was planned assuming a spc-17 probe stub for the bare top-level command
 would be *replaced*. Investigation found NO such stub: the spc-17 work is
 credited with probe/bare renders for the *sub-verb* surfaces. The `disembark`,
-`embark`, `launch`, and `intent` CLI verbs all ship today; of their plugin
-command files, `disembark`, `embark`, and `launch` are present while `intent`
-has no `commands/abcd/intent.md` yet (iss-105 — the intent verb is CLI-only).
-`commands/abcd/` ships `ahoy`, `audit`, `capture`, `consult`, `disembark`,
-`docs`, `embark`, `history`, `ingest`, `launch`, `memory`, `prepare-this-repo`,
-and `version` (13 files). The investigation found no spc-17 probe STUB behind the
+`embark`, `launch`, and `intent` CLI verbs all ship today, and each has its
+plugin command file present (`commands/abcd/disembark.md`, `embark.md`,
+`launch.md`, `intent.md`). `commands/abcd/` ships `ahoy`, `audit`, `capture`,
+`consult`, `disembark`, `docs`, `embark`, `history`, `ingest`, `intent`,
+`launch`, `memory`, `prepare-this-repo`, and `version` (14 files). The investigation found no spc-17 probe STUB behind the
 top-level command to replace — the "stub replacement" premise is therefore
 recorded here as not-applicable. The top-level command file itself is present
 today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
@@ -138,9 +137,10 @@ linked intents, or any spec store.
 ## Staleness thresholds (decided here)
 
 **Design target (itd-20; unbuilt).** No disembark-age, staleness, capping, or
-timeout logic exists in the shipped binary — the status path is five `isDir`
-checks (`.git`, `.abcd/development`, and the three work tiers;
-`internal/core/core.go`) with no directory walks or thresholds.
+timeout logic exists in the shipped binary — the status path is an existence
+check on `.git` (so gitfile worktrees and submodules count as git repos) plus
+`isDir` checks on `.abcd/development` and the three work tiers
+(`internal/core/core.go`) with no directory walks or thresholds.
 
 | Signal | Threshold | Rationale |
 |--------|-----------|-----------|
@@ -185,8 +185,9 @@ writes. **Design target (itd-20):** the two tests that would prove this — a
 static zero-mutation lint over the status-render module and an fs-snapshot test
 that asserts a render over a populated fixture repo mutates nothing at run
 time — are unbuilt. The shipped status path (`internal/core/core.go`, `Status`)
-has only `TestStatusBareDir` and `TestStatusWithRecordAndGit`
-(`internal/core/core_test.go`), which assert field values on temp dirs; there is
+has `TestStatusBareDir`, `TestStatusGitfileWorktree`, and
+`TestStatusWithRecordAndGit` (`internal/core/core_test.go`), which assert field
+values on temp dirs; there is
 no distinct status-render module yet.
 
 ## Related documentation

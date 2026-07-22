@@ -7,11 +7,12 @@ the three-tier `.abcd/` layout, a nameless working-conventions section in
 manage repositories directly, so the command does by hand what the CLI will
 later take over, in a shape the CLI can adopt without unpicking.
 
-It is a **host-delegated command**: no Go verb backs it, there is no bare-status
-render and no binary sub-verbs. The whole workflow runs in the host agent from
-the markdown in [`commands/abcd/prepare-this-repo.md`](../../../../commands/abcd/prepare-this-repo.md);
-the abcd binary is never invoked. It takes no argument — it always operates on
-the current repository.
+It is a **host-delegated command**: no dedicated Go verb backs it and there is
+no bare-status render. The workflow runs in the host agent from the markdown in
+[`commands/abcd/prepare-this-repo.md`](../../../../commands/abcd/prepare-this-repo.md),
+invoking the binary's read-only `abcd audit --json` for the engine-backed
+conformance core. It takes no argument — it always operates on the current
+repository.
 
 ## What it does
 
@@ -30,23 +31,22 @@ the current repository.
 
 ## Flow
 
-Five phases, each gated on the one before:
+Four phases, each gated on the one before:
 
-1. **Refuse unless owned** — origin-remote ownership check; stop if it fails.
-2. **Orient** — read the abcd record from `$ABCD` (the abcd checkout, three
+0. **Refuse unless owned** — origin-remote ownership check; stop if it fails.
+1. **Orient** — read the abcd record from `$ABCD` (the abcd checkout, three
    levels up from the command file): the three-tier README, the brief,
    principles, ADRs, intents, `docs/` Diátaxis rules, and the lint configs as
    patterns.
-3. **Audit** — run `abcd audit --json` for the engine-backed conformance core
+2. **Audit** — run `abcd audit --json` for the engine-backed conformance core
    (the five convention rules), supplement it with the structure/principles
    judgement the binary does not make, write the gap report to the target's
    `.abcd/.work.local/scratch/`, and present it before any change.
-4. **Adopt** — create the three tiers with a repo-specific `CONTEXT.md`, migrate
+3. **Adopt** — create the three tiers with a repo-specific `CONTEXT.md`, migrate
    any historical `.work/` layout to the new tiers (propose then wait for sign-off;
    never leave a repo with both the old and new working-state homes), merge into
-   `AGENTS.md`, offer the commit gates.
-5. **Attribution (opt-in)** — install the AI-disclosure hook only if the user
-   says the repo requires it.
+   `AGENTS.md`, offer the commit gates, and — only where the user says the repo
+   requires AI disclosure — install the attribution hook (opt-in).
 
 When abcd's own record has conflicting sources, the command trusts a fixed
 authority order: `AGENTS.md`, then `work/CONTEXT.md`'s live-constraints section,
