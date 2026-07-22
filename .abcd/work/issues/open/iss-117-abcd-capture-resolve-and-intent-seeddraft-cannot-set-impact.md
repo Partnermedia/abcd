@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-111"
+id: "iss-117"
 slug: "abcd-capture-resolve-and-intent-seeddraft-cannot-set-impact"
 severity: "major"
 category: "inconsistency"
