@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: null
 reclassification_history: []
 severity: major
+impact: additive
 ---
 
 # abcd Loads Its Own Rules On Demand

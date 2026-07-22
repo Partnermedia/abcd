@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-32"
 slug: "atomic-write-consolidation"
 severity: "major"
+impact: fix
 category: "tech-debt"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"

@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-11"
 slug: "agent-count-drift"
 severity: "minor"
+impact: internal
 category: "inconsistency"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

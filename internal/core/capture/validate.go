@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/core/changelog"
+	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 )
 
 // knownFields is the additionalProperties:false allow-list from
@@ -16,6 +19,12 @@ var knownFields = map[string]bool{
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
 	"resolved_by": true, "blocked_by": true,
+	// impact is the product judgement the derived version and the generated
+	// changelog are computed from (spc-10). It is optional here — an open issue
+	// has not been judged yet, and the record-lint blocker issue_impact_valid is
+	// what gates the move into resolved/ — but it must be a KNOWN property, or
+	// the reader drops every judged record as malformed.
+	"impact": true,
 	// created/updated are no longer written, but legacy ledgers still carry
 	// them. Tolerate (accept, then drop) them on read so an existing committed
 	// ledger is not rejected as an unknown property; the reader ignores their
@@ -74,6 +83,29 @@ func validateStrict(fm map[string]any) error {
 	}
 	if strings.TrimSpace(fm["found_during"].(string)) == "" {
 		return fmt.Errorf("%w: found_during must be non-empty", ErrMalformedFrontmatter)
+	}
+
+	// impact is optional but, when written, is checked against the ONE shared
+	// enum (internal/core/changelog) rather than a private copy — the same enum
+	// the record lint gates on and the release derivation consumes, so all three
+	// can never disagree about what a legal judgement is.
+	//
+	// A YAML null reads as ABSENT rather than as a value, via the repo's one null
+	// test (frontmatter.IsNull) — the same test the record-lint blocker
+	// issue_impact_valid applies. Both gates must reach the same verdict on one
+	// value: an open issue written `impact: null` ("not judged yet", the schema's
+	// own convention) would otherwise pass the lint and then be refused here,
+	// failing `abcd capture resolve` on a record nothing is wrong with.
+	if v, present := fm["impact"]; present {
+		s, isStr := v.(string)
+		if !isStr {
+			return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, "impact")
+		}
+		if !frontmatter.IsNull(s) {
+			if _, err := changelog.ParseImpact(s); err != nil {
+				return fmt.Errorf("%w: %v", ErrMalformedFrontmatter, err)
+			}
+		}
 	}
 
 	// Optional scalar strings.

@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-14"
 slug: "stale-intent-section-deeplinks"
 severity: "nitpick"
+impact: internal
 category: "documentation"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

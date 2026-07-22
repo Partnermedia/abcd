@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-3"
 slug: "phase-membership-vs-lifecycle"
 severity: "critical"
+impact: internal
 category: "inconsistency"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

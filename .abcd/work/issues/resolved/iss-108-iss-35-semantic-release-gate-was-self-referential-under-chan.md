@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-108"
 slug: "iss-35-semantic-release-gate-was-self-referential-under-chan"
 severity: "minor"
+impact: internal
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"

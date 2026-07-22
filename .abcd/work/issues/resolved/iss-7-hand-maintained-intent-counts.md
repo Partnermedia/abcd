@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-7"
 slug: "hand-maintained-intent-counts"
 severity: "major"
+impact: internal
 category: "drift"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

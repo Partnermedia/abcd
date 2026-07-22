@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-79"
 slug: "storeoriginal-inline-atomic-write"
 severity: "minor"
+impact: fix
 category: "tech-debt"
 source: "agent-finding"
 found_during: "2026-07-12 /abcd:run iss-32 review"

@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-72"
 slug: "core-isgitrepo-misses-worktrees"
 severity: "nitpick"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

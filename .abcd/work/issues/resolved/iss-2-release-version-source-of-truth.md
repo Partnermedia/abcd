@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-2"
 slug: "release-version-source-of-truth"
 severity: "critical"
+impact: internal
 category: "inconsistency"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

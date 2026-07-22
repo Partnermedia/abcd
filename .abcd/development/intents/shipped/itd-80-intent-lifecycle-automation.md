@@ -9,6 +9,7 @@ reclassification_history: []
 builds_on: [itd-34, itd-1]
 related_adrs: [adr-25, adr-26, adr-27]
 severity: major
+impact: additive
 ---
 
 # An Intent Ships Itself: `planned → shipped` Follows Its Spec Closing, With A Fidelity Audit Attached

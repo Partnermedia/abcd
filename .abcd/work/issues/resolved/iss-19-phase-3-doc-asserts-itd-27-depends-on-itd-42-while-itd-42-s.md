@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-19"
 slug: "phase-3-doc-asserts-itd-27-depends-on-itd-42-while-itd-42-s"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"

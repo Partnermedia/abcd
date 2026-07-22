@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-36"
 slug: "retired-name-banlist"
 severity: "critical"
+impact: internal
 category: "drift"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"

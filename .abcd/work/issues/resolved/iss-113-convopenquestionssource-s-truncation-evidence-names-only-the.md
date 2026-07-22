@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-113"
 slug: "convopenquestionssource-s-truncation-evidence-names-only-the"
 severity: "nitpick"
+impact: internal
 category: "tech-debt"
 source: "impl-review"
 found_during: "itd-96 P1 review"

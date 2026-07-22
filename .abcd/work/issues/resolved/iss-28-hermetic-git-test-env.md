@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-28"
 slug: "hermetic-git-test-env"
 severity: "major"
+impact: internal
 category: "future-work-seed"
 source: "agent-finding"
 found_during: "external agent finding, recorded 2026-07-08"

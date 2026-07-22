@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-22"
 slug: "itd-6-lifecycle-look"
 severity: "minor"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"

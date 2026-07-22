@@ -15,6 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/REPPL/abcd-cli/internal/core/changelog"
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
@@ -79,7 +80,25 @@ var (
 	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
 	// scans all three for a duplicated iss-N id).
 	issueStatusDirs = []string{"open", "resolved", "wontfix"}
+	// intentImpactValues and issueImpactValues render the legal impact set an
+	// error message offers. They are composed from the shared enum's constants
+	// (internal/core/changelog) rather than spelled as literals, so a rename there
+	// is a compile error here instead of a stale message. The intent list omits
+	// internal: an intent is press-release-first, so "invisible to users" is not a
+	// judgement it can make.
+	intentImpactValues = joinImpacts(changelog.ImpactAdditive, changelog.ImpactBreaking, changelog.ImpactFix)
+	issueImpactValues  = joinImpacts(changelog.ImpactAdditive, changelog.ImpactBreaking, changelog.ImpactFix, changelog.ImpactInternal)
 )
+
+// joinImpacts renders an impact set the way the shared parser's own errors do,
+// so every message about the enum reads alike.
+func joinImpacts(impacts ...changelog.Impact) string {
+	parts := make([]string, 0, len(impacts))
+	for _, i := range impacts {
+		parts = append(parts, string(i))
+	}
+	return strings.Join(parts, "|")
+}
 
 // Lint runs every enabled check family against the record under repoRoot and
 // returns the findings sorted deterministically. An error is returned only for
@@ -154,12 +173,37 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			findings = append(findings, dc...)
 		}
 
+		// The intent-tree rules (intent_lifecycle, intent_impact_valid) read the
+		// SAME bucket tree, so it is scanned once per distinct intents_dir and each
+		// rule validates the records that scan produced. A rule is never a second
+		// walk of a tree another rule already read.
+		intentTrees := map[string]intentTree{}
+		scanIntents := func(dir string) (intentTree, error) {
+			if t, ok := intentTrees[dir]; ok {
+				return t, nil
+			}
+			t, err := scanIntentTree(repoRoot, rootAbs, dir, cfg)
+			if err != nil {
+				return intentTree{}, err
+			}
+			intentTrees[dir] = t
+			return t, nil
+		}
+
 		if intentCfg, ok := cfg.Rules["intent_lifecycle"]; ok && intentCfg.Enabled {
-			il, err := checkIntentLifecycle(repoRoot, rootAbs, intentCfg, cfg)
+			tree, err := scanIntents(intentsDirOf(intentCfg))
 			if err != nil {
 				return nil, err
 			}
-			findings = append(findings, il...)
+			findings = append(findings, checkIntentLifecycle(repoRoot, tree, intentCfg)...)
+		}
+
+		if impactCfg, ok := cfg.Rules["intent_impact_valid"]; ok && impactCfg.Enabled {
+			tree, err := scanIntents(intentsDirOf(impactCfg))
+			if err != nil {
+				return nil, err
+			}
+			findings = append(findings, checkIntentImpact(tree, impactCfg)...)
 		}
 
 		if specCfg, ok := cfg.Rules["spec_lifecycle"]; ok && specCfg.Enabled {
@@ -232,15 +276,37 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 		findings = append(findings, gl...)
 	}
 
-	// issue_id_unique scans the issue ledger (.abcd/work/issues/{open,resolved,
-	// wontfix} — outside cfg.Roots) for an iss-N id claimed by two or more files,
-	// so it too runs once here.
+	// The issue-ledger rules (issue_id_unique, issue_impact_valid) read the SAME
+	// ledger (.abcd/work/issues/{open,resolved,wontfix} — outside cfg.Roots), so it
+	// is scanned once per distinct issues_dir here and each rule validates the
+	// records that scan produced.
+	issueLedgers := map[string]issueLedger{}
+	scanIssues := func(dir string) (issueLedger, error) {
+		if l, ok := issueLedgers[dir]; ok {
+			return l, nil
+		}
+		l, err := scanIssueLedger(repoRoot, dir)
+		if err != nil {
+			return issueLedger{}, err
+		}
+		issueLedgers[dir] = l
+		return l, nil
+	}
+
 	if iiCfg, ok := cfg.Rules["issue_id_unique"]; ok && iiCfg.Enabled {
-		ii, err := checkIssueIDUnique(repoRoot, iiCfg)
+		ledger, err := scanIssues(issuesDirOf(iiCfg))
 		if err != nil {
 			return nil, err
 		}
-		findings = append(findings, ii...)
+		findings = append(findings, checkIssueIDUnique(repoRoot, ledger, iiCfg)...)
+	}
+
+	if impactCfg, ok := cfg.Rules["issue_impact_valid"]; ok && impactCfg.Enabled {
+		ledger, err := scanIssues(issuesDirOf(impactCfg))
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, checkIssueImpact(ledger, impactCfg)...)
 	}
 
 	sortFindings(findings)
@@ -1085,15 +1151,44 @@ func checkDirectoryCoverage(repoRoot, rootAbs string, cfg RuleConfig) ([]Finding
 	return out, nil
 }
 
-// checkIntentLifecycle implements check family F.
-func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]Finding, error) {
-	intentsDir := cfg.IntentsDir
-	if intentsDir == "" {
-		intentsDir = "intents"
+// intentRecord is one intent file as the intent-tree rules see it: its
+// repo-relative path, the bucket directory that IS its lifecycle state, its
+// basename (which carries the id), and its parsed frontmatter.
+type intentRecord struct {
+	rel    string
+	bucket string
+	name   string
+	fields map[string]fmField
+}
+
+// intentTree is ONE scan of the intent buckets, shared by every rule that reads
+// the tree (intent_lifecycle, intent_impact_valid). records excludes the
+// historically-exempt files (contentExempt), because every rule over this tree
+// is a content check; known and idFiles index EVERY intent file found anywhere
+// beneath it, exempt or not, because a superseded_by target and an id collision
+// must resolve against the whole corpus.
+type intentTree struct {
+	records []intentRecord
+	known   map[string]bool
+	idFiles map[string][]string
+}
+
+// intentsDirOf resolves a rule's intents subdirectory (relative to a record
+// root), defaulting to "intents". It is shared so every intent-tree rule spells
+// the default once and two rules configured alike scan one tree, not two.
+func intentsDirOf(cfg RuleConfig) string {
+	if cfg.IntentsDir == "" {
+		return "intents"
 	}
+	return cfg.IntentsDir
+}
+
+// scanIntentTree reads the intent buckets once. A missing intents/ directory is
+// soft (no records, no error), mirroring the rest of the record lint.
+func scanIntentTree(repoRoot, rootAbs, intentsDir string, top Config) (intentTree, error) {
 	intentsRoot := filepath.Join(rootAbs, intentsDir)
 	if _, err := os.Stat(intentsRoot); err != nil {
-		return nil, nil
+		return intentTree{}, nil
 	}
 
 	// Collect every intent id that exists as a file in any bucket, so the
@@ -1116,9 +1211,9 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 
 	buckets, err := os.ReadDir(intentsRoot)
 	if err != nil {
-		return nil, err
+		return intentTree{}, err
 	}
-	var out []Finding
+	tree := intentTree{known: known, idFiles: idFiles}
 	for _, b := range buckets {
 		if !b.IsDir() || !intentBuckets[b.Name()] {
 			continue
@@ -1127,7 +1222,7 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 		bucketDir := filepath.Join(intentsRoot, bucket)
 		entries, err := os.ReadDir(bucketDir)
 		if err != nil {
-			return nil, err
+			return intentTree{}, err
 		}
 		for _, e := range entries {
 			if e.IsDir() || !intentFileRe.MatchString(e.Name()) {
@@ -1136,18 +1231,88 @@ func checkIntentLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) 
 			fileAbs := filepath.Join(bucketDir, e.Name())
 			content, err := os.ReadFile(fileAbs)
 			if err != nil {
-				return nil, err
+				return intentTree{}, err
 			}
 			rel := repoRel(repoRoot, fileAbs)
 			fields := frontmatterFields(strings.Split(string(content), "\n"))
 			if contentExempt(rel, fields, top) {
 				continue
 			}
-			out = append(out, validateIntent(rel, bucket, fields, known, cfg.Severity)...)
-			out = append(out, validateIntentIDUnique(repoRoot, rel, e.Name(), fields, idFiles, cfg.Severity)...)
+			tree.records = append(tree.records, intentRecord{
+				rel: rel, bucket: bucket, name: e.Name(), fields: fields,
+			})
 		}
 	}
-	return out, nil
+	return tree, nil
+}
+
+// checkIntentLifecycle implements check family F over an already-scanned tree.
+func checkIntentLifecycle(repoRoot string, tree intentTree, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, r := range tree.records {
+		out = append(out, validateIntent(r.rel, r.bucket, r.fields, tree.known, cfg.Severity)...)
+		out = append(out, validateIntentIDUnique(repoRoot, r.rel, r.name, r.fields, tree.idFiles, cfg.Severity)...)
+	}
+	return out
+}
+
+// checkIntentImpact implements intent_impact_valid: an intent may not sit in
+// shipped/ without a valid, non-internal impact (spc-10, plan outcome 8).
+//
+// WHY the gate is the move into shipped/ and nothing earlier: the judgement is
+// made when the intent is shaped, but it only becomes load-bearing when the
+// intent enters the release set the version is derived from, and a draft nobody
+// has designed yet cannot answer it honestly. Requiring it in drafts/ would
+// trade a real signal for ceremony.
+//
+// WHY a value present OUTSIDE shipped/ is still validated: absence in drafts/ is
+// "not decided yet", but `impact: braking` is not an undecided judgement, it is
+// a wrong one. Caught in the bucket where it was written it is a typo the author
+// fixes; caught only at the shipped/ gate it is archaeology. The two failures
+// are therefore split — presence is gated at the terminal bucket, legality
+// everywhere.
+//
+// WHY internal fails on an intent although it is legal on an issue: an intent is
+// press-release-first — it exists because a user can be told about it — so
+// "invisible to users" is a category error on an intent rather than a valid
+// judgement. Plumbing belongs on an issue, which may be internal.
+//
+// `impact: null` reads as absent, matching the rest of the intent schema, where
+// null is how a record says "this field does not apply yet" (kind, spec_id).
+func checkIntentImpact(tree intentTree, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, r := range tree.records {
+		f := r.fields["impact"]
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		add := func(msg string) {
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: "intent_impact_valid",
+				Severity: cfg.Severity, Message: msg,
+			})
+		}
+		if isNull(f.value) {
+			if r.bucket == "shipped" {
+				add("shipped: impact must be set explicitly to one of " + intentImpactValues +
+					" — it decides the derived version, and there is no default")
+			}
+			continue
+		}
+		impact, err := changelog.ParseImpact(f.value)
+		if err != nil {
+			add("invalid impact '" + f.value + "': an intent must declare exactly one of " +
+				intentImpactValues + " (lower-case, no surrounding whitespace)")
+			continue
+		}
+		if impact == changelog.ImpactInternal {
+			add("impact must not be internal on an intent: a press-release-first intent is " +
+				"user-facing by definition — declare one of " + intentImpactValues +
+				", or record the work as an issue instead")
+		}
+	}
+	return out
 }
 
 // validateIntentIDUnique flags a duplicated intent id, delegating to the shared
@@ -1188,39 +1353,60 @@ func validateIDUnique(repoRoot, rel, id, noun, ruleID, severity string, fields m
 	}}
 }
 
-// checkIssueIDUnique flags any iss-N id claimed by two or more files across the
-// issue ledger's status directories (open/, resolved/, wontfix/). The capture
-// allocator rejects a duplicate on the reservation path, but a hand-added issue
-// file that bypassed it — how a past iss-56 collision arose — slips straight
-// through; this is the record-lint backstop that catches it. It is the issue-side
-// mirror of the intent-id uniqueness rule and shares the same validateIDUnique
-// primitive. The ledger lives outside cfg.Roots, so the rule runs once, not
-// per-root. A missing ledger is not an error — it yields no findings.
-func checkIssueIDUnique(repoRoot string, cfg RuleConfig) ([]Finding, error) {
-	issuesDir := cfg.IssuesDir
-	if issuesDir == "" {
-		issuesDir = ".abcd/work/issues"
+// issueRecord is one issue file as the ledger rules see it: its repo-relative
+// path, the status directory that IS its lifecycle state, its iss-N id, and its
+// parsed frontmatter.
+type issueRecord struct {
+	rel    string
+	status string
+	id     string
+	fields map[string]fmField
+}
+
+// issueLedger is ONE scan of the issue ledger's status directories, shared by
+// every rule that reads it (issue_id_unique, issue_impact_valid). idFiles maps
+// each iss-N id to the repo-absolute paths claiming it.
+type issueLedger struct {
+	records []issueRecord
+	idFiles map[string][]string
+}
+
+// issuesDirOf resolves a rule's issue-ledger root (repo-relative), defaulting to
+// .abcd/work/issues. It is shared so every ledger rule spells the default once
+// and two rules configured alike scan one ledger, not two.
+func issuesDirOf(cfg RuleConfig) string {
+	if cfg.IssuesDir == "" {
+		return ".abcd/work/issues"
 	}
+	return cfg.IssuesDir
+}
+
+// scanIssueLedger reads the ledger's status directories (open/, resolved/,
+// wontfix/) once. The ledger lives outside cfg.Roots, so its rules run once, not
+// per-root. A missing ledger, or a missing status directory within it, is not an
+// error — it simply contributes no records.
+func scanIssueLedger(repoRoot, issuesDir string) (issueLedger, error) {
 	issuesRoot := filepath.Join(repoRoot, issuesDir)
 	if _, err := os.Stat(issuesRoot); err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return issueLedger{}, nil
 		}
-		return nil, err
+		return issueLedger{}, err
 	}
 
 	// Track every file each iss-N id claims across the three status dirs: an id is
 	// the issue's identity across the ledger, and a bypassed-allocator file (or two
 	// parallel branches) can land the same id silently otherwise.
-	idFiles := map[string][]string{}
-	var files []string
+	ledger := issueLedger{idFiles: map[string][]string{}}
+	type pending struct{ status, abs string }
+	var files []pending
 	for _, sub := range issueStatusDirs {
 		entries, err := os.ReadDir(filepath.Join(issuesRoot, sub))
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, err
+			return issueLedger{}, err
 		}
 		for _, e := range entries {
 			if e.IsDir() || !issueFileRe.MatchString(e.Name()) {
@@ -1228,23 +1414,83 @@ func checkIssueIDUnique(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 			}
 			fileAbs := filepath.Join(issuesRoot, sub, e.Name())
 			id := issueIDRe.FindString(e.Name())
-			idFiles[id] = append(idFiles[id], fileAbs)
-			files = append(files, fileAbs)
+			ledger.idFiles[id] = append(ledger.idFiles[id], fileAbs)
+			files = append(files, pending{status: sub, abs: fileAbs})
 		}
 	}
 
-	var out []Finding
-	for _, fileAbs := range files {
-		id := issueIDRe.FindString(filepath.Base(fileAbs))
-		content, err := os.ReadFile(fileAbs)
+	for _, p := range files {
+		content, err := os.ReadFile(p.abs)
 		if err != nil {
-			return nil, err
+			return issueLedger{}, err
 		}
-		rel := repoRel(repoRoot, fileAbs)
-		fields := frontmatterFields(strings.Split(string(content), "\n"))
-		out = append(out, validateIDUnique(repoRoot, rel, id, "issue", "issue_id_unique", cfg.Severity, fields, idFiles)...)
+		ledger.records = append(ledger.records, issueRecord{
+			rel:    repoRel(repoRoot, p.abs),
+			status: p.status,
+			id:     issueIDRe.FindString(filepath.Base(p.abs)),
+			fields: frontmatterFields(strings.Split(string(content), "\n")),
+		})
 	}
-	return out, nil
+	return ledger, nil
+}
+
+// checkIssueIDUnique flags any iss-N id claimed by two or more files across the
+// issue ledger's status directories (open/, resolved/, wontfix/). The capture
+// allocator rejects a duplicate on the reservation path, but a hand-added issue
+// file that bypassed it — how a past iss-56 collision arose — slips straight
+// through; this is the record-lint backstop that catches it. It is the issue-side
+// mirror of the intent-id uniqueness rule and shares the same validateIDUnique
+// primitive.
+func checkIssueIDUnique(repoRoot string, ledger issueLedger, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, r := range ledger.records {
+		out = append(out, validateIDUnique(repoRoot, r.rel, r.id, "issue", "issue_id_unique", cfg.Severity, r.fields, ledger.idFiles)...)
+	}
+	return out
+}
+
+// checkIssueImpact implements issue_impact_valid: an issue may not sit in
+// resolved/ without a valid impact (spc-10, plan outcome 8).
+//
+// It is the issue-side mirror of intent_impact_valid, with one deliberate
+// difference: internal is a LEGAL judgement here. Most resolved issues are
+// plumbing — a TOCTOU fix, an atomic-write hardening, a lint internal — that no
+// user can be told about, and a rule that refused internal would either force
+// that work into a user-facing changelog or push authors into a mislabel.
+//
+// Absence gates only the terminal bucket (resolved/), while legality is checked
+// wherever a value is written, for the same reason as on the intent side: an
+// open issue has not been judged yet, but a misspelt judgement is wrong the
+// moment it is typed. `impact: null` reads as absent, matching the schema
+// convention that null means "does not apply yet". The message for a malformed
+// value is the shared parser's own, so the lint and the derivation describe the
+// same defect in the same words.
+func checkIssueImpact(ledger issueLedger, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, r := range ledger.records {
+		f := r.fields["impact"]
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		add := func(msg string) {
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: "issue_impact_valid",
+				Severity: cfg.Severity, Message: msg,
+			})
+		}
+		if isNull(f.value) {
+			if r.status == "resolved" {
+				add("resolved: impact must be set explicitly to one of " + issueImpactValues +
+					" — it decides the derived version and the changelog line, and there is no default")
+			}
+			continue
+		}
+		if _, err := changelog.ParseImpact(f.value); err != nil {
+			add(err.Error())
+		}
+	}
+	return out
 }
 
 func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, severity string) []Finding {

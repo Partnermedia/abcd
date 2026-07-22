@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-15"
 slug: "capture-vs-record-lint"
 severity: "critical"
+impact: internal
 category: "tech-debt"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

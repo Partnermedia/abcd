@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-67"
 slug: "intent-lifecycle-fidelity-gaps"
 severity: "major"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-8"
 slug: "out-of-scope-stale-corpus"
 severity: "major"
+impact: internal
 category: "drift"
 source: "review-followup"
 found_during: "roadmap-consistency-review"

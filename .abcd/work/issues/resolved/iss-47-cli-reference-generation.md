@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-47"
 slug: "cli-reference-generation"
 severity: "minor"
+impact: additive
 category: "future-work-seed"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"

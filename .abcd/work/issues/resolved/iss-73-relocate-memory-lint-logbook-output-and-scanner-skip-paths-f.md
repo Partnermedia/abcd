@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-73"
 slug: "relocate-memory-lint-logbook-output-and-scanner-skip-paths-f"
 severity: "minor"
+impact: internal
 category: "tech-debt"
 source: "user-observation"
 found_during: "abcd-run-design"

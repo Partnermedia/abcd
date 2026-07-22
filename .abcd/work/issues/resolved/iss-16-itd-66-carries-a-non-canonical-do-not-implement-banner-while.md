@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-16"
 slug: "itd-66-carries-a-non-canonical-do-not-implement-banner-while"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "agent-finding"
 found_during: "intent-dependency-sweep"

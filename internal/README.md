@@ -11,7 +11,12 @@ plugin surface, and a future MCP server share one engine.
 - **`core/`** — the engine. One package per capability; no stdout, prompt text,
   or transport coupling. Currently: identity/version and the read-only status
   snapshot. Grows per phase (ahoy, launch, capture, memory, intent, brief,
-  review, spec, run, lifeboat, history).
+  review, spec, run, lifeboat, history, changelog).
+- **`core/changelog/`** — release derivation. Holds `impact`, the one product
+  judgement a record declares, and derives the next SemVer from the records that
+  entered the terminal folders since the anchor tag. It owns the enum so the
+  lints that GATE the judgement (`core/lint`), the ledger reader that VALIDATES
+  it (`core/capture`), and the derivation that CONSUMES it cannot drift apart.
 - **`core/lifeboat/`** — the brief↔lifeboat contract. `mapping.go` is the single
   source of truth for which brief section a lifeboat fills from which source
   tier, and it is rendered into the brief's `00-meta.md` with a test asserting

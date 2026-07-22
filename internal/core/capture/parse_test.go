@@ -85,3 +85,54 @@ func TestValidateStrictTypeChecksResolvedBy(t *testing.T) {
 		t.Fatalf("valid resolved_by rejected: %v", err)
 	}
 }
+
+// TestValidateStrictImpact pins the issue schema against the impact field
+// (spc-10): the ledger's own records carry it, so a reader that rejects it as an
+// unknown property silently drops every resolved issue out of `abcd capture`.
+// The value is checked against the one shared enum, exactly as severity,
+// category, and source are, so a mislabel is caught on read rather than at the
+// release cut.
+func TestValidateStrictImpact(t *testing.T) {
+	base := func() map[string]any {
+		return map[string]any{
+			"schema_version": 1,
+			"id":             "iss-1",
+			"slug":           "x",
+			"severity":       "minor",
+			"category":       "bug",
+			"source":         "agent-finding",
+			"found_during":   "review",
+		}
+	}
+	for _, v := range []string{"additive", "breaking", "fix", "internal"} {
+		fm := base()
+		fm["impact"] = v
+		if err := validateStrict(fm); err != nil {
+			t.Errorf("impact %q rejected: %v", v, err)
+		}
+	}
+	for _, v := range []any{"braking", "Additive", 42} {
+		fm := base()
+		fm["impact"] = v
+		if err := validateStrict(fm); err == nil {
+			t.Errorf("invalid impact %#v was accepted", v)
+		}
+	}
+	// The YAML nulls read as ABSENT, not as a malformed value — the same verdict
+	// the record-lint blocker issue_impact_valid reaches through
+	// frontmatter.IsNull. One value must not be legal to one gate and malformed
+	// to the other: `impact: null` on an open issue would otherwise pass the lint
+	// and then fail `abcd capture resolve` on the very record it judged fine.
+	for _, v := range []string{"", "null", "~"} {
+		fm := base()
+		fm["impact"] = v
+		if err := validateStrict(fm); err != nil {
+			t.Errorf("null-ish impact %q rejected: %v", v, err)
+		}
+	}
+	// Absent stays legal: an open issue has not been judged yet, and the
+	// record-lint blocker is what gates the move into resolved/.
+	if err := validateStrict(base()); err != nil {
+		t.Fatalf("absent impact rejected: %v", err)
+	}
+}

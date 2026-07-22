@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-68"
 slug: "spec-store-hardening"
 severity: "minor"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "clean-slate-sweep"

@@ -67,5 +67,9 @@ func coreLess(a, b Semver) bool {
 	return a.Patch < b.Patch
 }
 
-// coreGreater reports whether a is strictly newer than b by core version.
-func coreGreater(a, b Semver) bool { return coreLess(b, a) }
+// CoreGreater reports whether a is strictly newer than b by core version. It is
+// exported because release ordering is decided in more than one place — the
+// retention plan here and the tag anchor the changelog derivation resolves — and
+// a second hand-rolled field comparison would be a second, silently divergent
+// definition of "newer".
+func CoreGreater(a, b Semver) bool { return coreLess(b, a) }

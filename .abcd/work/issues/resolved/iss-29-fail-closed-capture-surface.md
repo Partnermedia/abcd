@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-29"
 slug: "fail-closed-capture-surface"
 severity: "major"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"

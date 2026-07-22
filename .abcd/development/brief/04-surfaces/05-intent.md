@@ -226,6 +226,7 @@ kind: null               # set by /abcd:intent plan: "standalone" | "bundle-memb
 suggested_kind: null     # advisory, written by capture-time LLM classifier; can be ignored
 bundle: null             # for kind: bundle-member, the bundle ID
 spec_id: null            # or spc-N (set by /abcd:intent plan)
+impact: null             # "additive" | "breaking" | "fix" — the compatibility judgement the derived version is computed from. Never "internal" (a press-release-first intent is user-facing by definition), and required before the intent may move to shipped/
 reclassification_history: []   # appended to by /abcd:intent reclassify (kind changes only)
 surface_history: []            # appended when an intent's user-facing surface shape changes (e.g., skill → sub-verb, top-level command → sub-verb, command → flag) WITHOUT changing kind. Distinct from reclassification_history. Schema: { date, from, to, reason }. Hand-edited or written by future tooling.
 ---

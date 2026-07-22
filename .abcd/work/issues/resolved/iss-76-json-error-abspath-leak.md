@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-76"
 slug: "json-error-abspath-leak"
 severity: "minor"
+impact: fix
 category: "bug"
 source: "agent-finding"
 found_during: "2026-07-12 /abcd:run iss-29 security review"

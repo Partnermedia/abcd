@@ -32,7 +32,7 @@ func ComputeRetention(published Semver, existing []Semver) RetentionPlan {
 
 	// (1) Refuse on any strictly-newer existing release.
 	for _, e := range existing {
-		if coreGreater(e, published) {
+		if CoreGreater(e, published) {
 			plan.Refused = true
 			plan.RefusalReason = "existing release " + e.Tag() +
 				" is newer than the published " + published.Tag() +
@@ -59,7 +59,7 @@ func ComputeRetention(published Semver, existing []Semver) RetentionPlan {
 		// (3) Keep the max-Patch version in the line; the rest are pruned.
 		best := versions[0]
 		for _, v := range versions[1:] {
-			if coreGreater(v, best) {
+			if CoreGreater(v, best) {
 				best = v
 			}
 		}

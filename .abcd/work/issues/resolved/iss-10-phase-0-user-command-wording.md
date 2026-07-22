@@ -3,6 +3,7 @@ schema_version: 1
 id: "iss-10"
 slug: "phase-0-user-command-wording"
 severity: "major"
+impact: internal
 category: "inconsistency"
 source: "review-followup"
 found_during: "roadmap-consistency-review"
