@@ -350,20 +350,6 @@ abcd/
 │   └── …                               # plus operator-internal commands
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command
 │   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.
-├── skills/                             # see 08-skills.md — abcd ships ZERO user-facing skills.
-│   #                                   # The entries below are plugin-runtime workflow files that each
-│   #                                   # command points at internally; they are NOT user-facing skills
-│   #                                   # surfaced under /abcd:. The only would-be user-facing skill
-│   #                                   # (/abcd:grill) is a /abcd:intent grill sub-verb. A later phase
-│   #                                   # may introduce new user-facing skills here.
-│   ├── abcd-ahoy/{SKILL.md, workflow.md}
-│   ├── abcd-disembark/{SKILL.md, workflow.md}
-│   ├── abcd-embark/{SKILL.md, workflow.md}
-│   ├── abcd-launch/{SKILL.md, workflow.md}
-│   ├── abcd-intent/{SKILL.md, workflow.md}
-│   ├── abcd-capture/{SKILL.md, workflow.md}
-│   ├── commit-attribution/SKILL.md
-│   └── secrets-and-pii/SKILL.md        # consolidated pii-protection + secret-scan
 ├── agents/                             # 10 agents — see 01-agents.md (markdown, host-delegated)
 │   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-fidelity-reviewer.md
 │   ├── lifeboat-oracle.md / press-release-composer.md / principle-distiller.md

@@ -126,7 +126,7 @@ Grill offers to draft an ADR only when all three Pocock clauses pass:
 hard-to-reverse + surprising-without-context + real-trade-off. If any clause fails, no offer
 is made. ADRs are written to `.abcd/development/decisions/adrs/` with atomic write.
 
-See `skills/abcd-intent-grill/phase-1-glossary-mode.md` for the complete write-back protocol.
+The complete write-back protocol is a **design target** of `/abcd:intent grill`'s glossary-aware mode; no shipped file documents it yet.
 
 ---
 

@@ -193,5 +193,5 @@ no distinct status-render module yet.
 ## Related documentation
 
 - Naming / SD001 discipline: [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md)
-- Intent: `itd-20` (`../intents/…/itd-20-top-level-abcd-dispatcher.md`)
+- Intent: [`itd-20`](../../intents/planned/itd-20-top-level-abcd-dispatcher.md)
 - The per-verb bare renders this board complements: [`05-intent.md`](05-intent.md), [`01-ahoy.md`](01-ahoy.md)

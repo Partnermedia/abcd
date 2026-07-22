@@ -14,7 +14,7 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 | `/abcd:capture list --resolved` | Query the ledger for resolved issues | — |
 | `/abcd:capture list --wontfix` | Query the ledger for wontfix issues | — |
 | `/abcd:capture list --all` | Query the ledger across all three states | — |
-| `/abcd:capture promote <iss-N>` | Promote an issue to an intent draft: skill-orchestrated (never a `capture promote` CLI sub-verb), it hands the issue body to `abcd intent "<text>"`, which files a new draft under `intents/drafts/` seeded from that text. The reciprocal four-field back-link (`source_issue`/`promoted_to` scalars + `related_issues` ↔ `related_intents` lists) onto the `iss-N` record is written by hand — no engine verb writes that edge. | (issue stays; intent created in `drafts/`) |
+| `/abcd:capture promote <iss-N>` | Promote an issue to an intent draft: command-orchestrated (never a `capture promote` CLI sub-verb), it hands the issue body to `abcd intent "<text>"`, which files a new draft under `intents/drafts/` seeded from that text. The reciprocal back-link (`promoted_to` scalar + `related_issues` ↔ `related_intents` lists) onto the `iss-N` record is written by hand — no engine verb writes that edge. | (issue stays; intent created in `drafts/`) |
 | `/abcd:capture resolve <iss-N> "<resolution-note>"` | Mark issue resolved | `open/` → `resolved/` |
 | `/abcd:capture wontfix <iss-N> "<reason>"` | Explicit non-action decision | `open/` → `wontfix/` |
 
@@ -66,13 +66,13 @@ Body is free-form: details, suggested fix, links to context.
 
 ## 3. Legacy scratch migration
 
-A later phase, not yet built — the migration rides the `abcd dev-sync work` surface ([`02-disembark.md`](02-disembark.md)); the shipped Go ledger engine reserves a migrator-only `ForceID` seam for it. On first run of `abcd dev-sync work` after install (or first `/abcd:ahoy` upgrade), the command parses a free-form scratch buffer under `.abcd/.work.local/` entry-by-entry and promotes each to a corresponding `.abcd/work/issues/open/iss-N-<slug>.md`. Idempotent. The original scratch buffer under `.abcd/.work.local/` is preserved as a staging buffer (still works for ad-hoc scribbles; subsequent entries promoted on the next `abcd dev-sync work`).
+A later phase, not yet built — the migration rides the `abcd dev-sync work` surface ([`08-abcd.md`](08-abcd.md)); the shipped Go ledger engine reserves a migrator-only `ForceID` seam for it. On first run of `abcd dev-sync work` after install (or first `/abcd:ahoy` upgrade), the command parses a free-form scratch buffer under `.abcd/.work.local/` entry-by-entry and promotes each to a corresponding `.abcd/work/issues/open/iss-N-<slug>.md`. Idempotent. The original scratch buffer under `.abcd/.work.local/` is preserved as a staging buffer (still works for ad-hoc scribbles; subsequent entries promoted on the next `abcd dev-sync work`).
 
 ## 4. Acceptance
 
 - **Given** an abcd-installed repo, **when** the user runs `/abcd:capture "review nitpick: T7 cache_ttl_days dead-config alternative"`, **then** a new file `.abcd/work/issues/open/iss-N-<slug>.md` exists with frontmatter populated and the captured text in the body.
 - **Given** an existing issue at `.abcd/work/issues/open/iss-3-foo.md`, **when** the user runs `/abcd:capture resolve iss-3 "fixed in spc-7 task 4"`, **then** the file moves to `.abcd/work/issues/resolved/iss-3-foo.md` with the resolution recorded.
-- **Given** an existing issue, **when** the user runs `/abcd:capture promote iss-N`, **then** the issue body is handed to `abcd intent "<text>"`, which files a new draft intent under `intents/drafts/` seeded from that text; the reciprocal four-field back-link (`source_issue`/`promoted_to` scalars + `related_issues` ↔ `related_intents` lists) is recorded by hand, since no engine verb writes that edge.
+- **Given** an existing issue, **when** the user runs `/abcd:capture promote iss-N`, **then** the issue body is handed to `abcd intent "<text>"`, which files a new draft intent under `intents/drafts/` seeded from that text; the reciprocal back-link (`promoted_to` scalar + `related_issues` ↔ `related_intents` lists) is recorded by hand, since no engine verb writes that edge.
 - **Given** a fresh `/abcd:ahoy` upgrade with an existing scratch buffer under `.abcd/.work.local/`, **when** `dev-sync` runs (a later phase, not yet built — § 3), **then** every entry in that scratch buffer is promoted to the structured ledger with provenance noting "migrated from `.abcd/.work.local/` scratch".
 - **Given** a ledger containing 5 open issues, **when** the user runs `/abcd:capture list --open` (the flag is explicit — there is no implicit default), **then** the output lists all 5 with id, state, severity, and slug, in derived-priority order — unblocked issues first, then severity (`critical` → `nitpick`); rows blocked by an open dependency are demoted and annotated with their open blockers.
 - **Given** a ledger with a mix of open, resolved, and wontfix issues, **when** the user runs `/abcd:capture list --all`, **then** every issue across all three states is listed; the equivalent unfiltered CLI form `abcd capture list` (no flag) instead exits 2 with a "choose a filter" message.
@@ -88,8 +88,8 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 - **Command flow:** delivered by `spc-21-abcdcapture-command-flow-text-ingest`.
 - **Legacy `.abcd/.work.local/` scratch migration:** design target per `spc-22-workissuesmd-migration-promote-legacy` — a later phase, not yet built (rides the `dev-sync` surface, § 3).
 - **intent-fidelity-reviewer cross-check:** delivered by `spc-23-intent-fidelity-reviewer-extension`.
-- **`promote <iss-N>` bridge:** the skill-orchestrated flow leans on
+- **`promote <iss-N>` bridge:** the command-orchestrated flow leans on
   `abcd intent "<text>"`, delivered by `spc-7-abcd-intent-quoted-text-create-symmetric`
   (itd-46). The issue body is handed to that create path, which files a new draft;
-  the reciprocal four-field back-link onto the `iss-N` record is written by hand —
+  the reciprocal back-link onto the `iss-N` record is written by hand —
   no engine verb writes that edge.

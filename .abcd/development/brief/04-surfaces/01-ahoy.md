@@ -8,7 +8,7 @@ cannot drift apart.
 
 ## Sub-verbs
 
-Bare `/abcd:ahoy` shows status + help only — never mutates state. The
+Bare `/abcd:ahoy` shows read-only status only — never mutates state. The
 `/abcd:ahoy` slash command dispatches only this bare read-only pass and names
 the CLI for anything that writes; the sub-verbs below ship on the CLI as
 `abcd ahoy <sub-verb>`. Current sub-verbs:
@@ -23,11 +23,13 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
 - **`/abcd:ahoy dry-run`** — run the detection pass and render the
   `DetectionResult` envelope as JSON (per spc-16 T1 — JSON ONLY; no
   unified-diff renderer). Never mutates state.
-- **`/abcd:ahoy doctor`** — run the **full** detection pass and report every
-  gap read-only, including user-scope state (history store, `index.json`,
-  symlink, hook) that `install` touches but never otherwise
-  re-validates.
-  Distinct from bare invocation, which only shows summary status + help.
+- **`/abcd:ahoy doctor`** — run the **full** detection pass plus a read-only
+  audit pass, and report the gap counts for each. The text render shows the
+  detection-gap and audit-gap counts; the JSON envelope carries full per-gap
+  detail, including user-scope state (history store, `index.json`, symlink,
+  hook) that `install` touches but never otherwise re-validates.
+  Distinct from bare invocation, which shows the folder kind, plugin-root
+  status, root SHA, and gap count.
 - **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
   does not match `.abcd/config/identity.json` (the commit-identity gate).
   Read-only; a CLI-only operator/CI check with no slash-command surface.
@@ -88,13 +90,13 @@ detection pass** and differ only in what they do with its output:
 
 | Sub-verb | Detection | Then |
 |---|---|---|
-| bare `/abcd:ahoy` | full | render summary + help, no gap detail |
-| `doctor` | full | render every gap read-only |
+| bare `/abcd:ahoy` | full | render folder kind, plugin-root status, root SHA, gap count — no gap detail |
+| `doctor` | full | render detection- and audit-gap counts (full per-gap detail in the JSON envelope) |
 | `dry-run` | full | render the canonical `DetectionResult` JSON envelope (per spc-16 T1 — no unified-diff) |
 | `install` | full | run the apply pass over the gaps |
 
 This means **idempotency is a property of detection, not of a version stamp.**
-A check compares *actual state* (`git check-ignore -v`, `readlink`, file
+A check compares *actual state* (`.gitignore` block compare, `readlink`, file
 presence, hook-config grep, `index.json` lookup) — never `setup_version` alone.
 If a user hand-deletes the marker block while `setup_version` is current,
 detection still reports it `missing` and `install` repairs it.
@@ -298,8 +300,8 @@ notes the orphaned-predecessor possibility in the summary.
 CLAUDE.md/AGENTS.md and the `/usr/local/bin/abcd` symlink **if it points at this
 plugin** (otherwise leave it alone). `hooks/hooks.json` is plugin-static per
 spc-14 T7 — uninstall NEVER mutates it (per spc-16 T1 brief amendment).
-**Leaves the entire `.abcd/` namespace intact** (meta, config, corpus, rules,
-development/, memory/, lifeboat/, logbook/, rp/) and the history store. Deeper
+**Leaves the entire `.abcd/` namespace intact** (`config/`, `config.json`,
+`rules.json`, `development/`, `work/`, `memory/`) and the history store. Deeper
 removal (`/abcd:ahoy destroy`) comes in a later phase as itd-10.
 
 **Uninstall ↔ install is a tested round-trip invariant:** after `uninstall`
@@ -315,11 +317,13 @@ plugin_root_status, repo_identity, signals, gaps}` so the plugin command
 (`commands/abcd/ahoy.md`) summarises state off `folder_kind` + `gaps` and
 names `abcd ahoy install` for anything actionable.
 
-**Doctor (`/abcd:ahoy doctor`):** runs the detection pass and reports every gap
-read-only, grouped by category. Unlike bare invocation it shows full gap detail
-including user-state checks — the history store exists and is writable, the
-`index.json` entry matches this root SHA, the PATH symlink and hook manifest
-are intact, and any stale/duplicate `index.json` entries.
+**Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only
+audit pass. The text render shows two counts — detection gaps and audit gaps.
+The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
+detection gaps cover user-state checks (the history store exists and is
+writable, the `index.json` entry matches this root SHA, the PATH symlink and
+hook manifest are intact), while the audit pass reconciles the registered
+history-store `path` against `index.json` read-only (a stale registered path).
 The check users reach for after a repo rename, a machine migration, or "why
 aren't my transcripts showing up." Never mutates state, never auto-fixes
 user-scope app-state.
@@ -327,9 +331,10 @@ user-scope app-state.
 ## Acceptance
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:ahoy`,
-  **then** the dispatcher runs the detection pass and shows summary install
-  status (installed?, plugin version, marker drift state, visibility) plus the
-  available sub-verbs with suggested next actions — and never mutates state.
+  **then** the dispatcher runs the detection pass and shows the folder kind,
+  plugin-root status, root SHA, and gap count, plus a next-step line for the
+  folder kind (naming `/abcd:ahoy install` on an unmanaged repo) — and never
+  mutates state.
 - **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy
   install` runs to completion, **then** the two-file repo carve-out
   (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written,
@@ -375,9 +380,9 @@ user-scope app-state.
   plugin_root_status, repo_identity, signals, gaps}` per spc-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
-  registered history-store `path` no longer matches `index.json`, **then** the
-  user-state gap is reported read-only with both paths cited, and no files are
-  modified.
+  registered history-store `path` no longer matches `index.json`, **then** an
+  audit gap citing both paths appears under `audit_gaps` in the JSON envelope,
+  reported read-only, and no files are modified.
 - **Given** a fresh machine with no `~/.abcd/`, **when** `/abcd:ahoy install`
   runs in a repo, **then** `~/.abcd/` is bootstrapped — the `history/` store
   (directory + `index.json` with `schema`/`description` header) — before the

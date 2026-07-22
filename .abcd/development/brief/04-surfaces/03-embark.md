@@ -27,7 +27,7 @@
 
 ## Sub-verbs
 
-Bare `/abcd:embark` shows status + help only — never mutates state. The two **shipped** sub-verbs:
+Bare `/abcd:embark` prints dispatcher help only — never mutates state. The two **shipped** sub-verbs:
 
 - **`/abcd:embark from <path>`** — unpack the lifeboat at `<path>` into the current repo. Path is required, and it is always an explicit path to a destination a disembark wrote — **there is no `home` shorthand** (adr-35: there is no in-tree lifeboat home to expand it to). The round-trip / self-test case is `disembark pack <repo> <dest>` followed by `embark from <dest>`. *(Design target, not yet shipped: the flag-shaped modifiers `--force` — override conflict refusal, `--archive` — copy input lifeboat verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` before unpacking, and `--refresh-audit` — re-run oracle product audit instead of trusting cached. The shipped `from` takes no flags.)*
 - **`/abcd:embark probe <path>`** — inspect a lifeboat at `<path>` without unpacking: show what would land where, run schema/audit checks, write nothing.
@@ -73,18 +73,15 @@ Embark is a deterministic Go run: it reads the lifeboat, plans, refuses on any c
 When the target already has files that the lifeboat would write, **core returns the conflict set and the surface renders it as a single bulk prompt** — never a per-file barrage, and never a file written by core (adr-35):
 
 ```
-embark detected N conflicts across:
-  • 3 native spec store files
-  • 1 CLAUDE.md (will inject markers if 'merge')
-  • 2 .abcd/memory/ files
+embark detected N conflicts across the record families:
+  • 3 .abcd/development/specs/
+  • 2 .abcd/work/issues/
   • 1 .abcd/development/decisions/adrs/
-  • 1 .abcd/development/brief/README.md (existing brief vs incoming press release)
 
 How to resolve all conflicts?
   → keep target (skip everything in lifeboat that conflicts)
   → replace target (lifeboat wins everywhere)
-  → merge where possible, prompt otherwise (CLAUDE.md gets marker injection;
-    ADRs/specs/memory get per-file prompt)
+  → merge where possible, prompt otherwise (a per-file prompt for each conflict)
   → abort (surface prints the conflict list; nothing is written)
 ```
 
@@ -106,8 +103,8 @@ Single decision, transparent (shows scope before asking). The conflict list is a
 - **Given** the user runs `/abcd:embark scan`, **when** the command completes, **then** the directories found carrying a parseable `_provenance.json` are listed ranked by mtime with their detected source repo, no unpacking occurs, and the user is shown candidates ready to pass to `embark from <path>`. *(What `scan` searches is settled; **where** it searches is the open question above, and this criterion cannot be made checkable until that is decided.)*
 - **Given** the user runs `/abcd:embark scan --deep`, **when** the command completes, **then** the search widens — the exact widening depends on the same open question.
 - **Given** the user runs `/abcd:embark probe <path>`, **when** the command completes, **then** the lifeboat at `<path>` is inspected (file tree, schema validation, would-be writes), no target mutation occurs, and the user sees a report ready to inform the decision to run `embark from <path>`.
-- **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP installed on the embarker, **when** `embark from <path>` runs, **then** the user is asked whether to register the workspace with RP and the choice is applied.
-- **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP *not* installed, **when** `embark from <path>` runs, **then** the command warns gracefully and continues without failing.
+- *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP installed on the embarker, **when** `embark from <path>` runs, **then** the user is asked whether to register the workspace with RP and the choice is applied.
+- *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP *not* installed, **when** `embark from <path>` runs, **then** the command warns gracefully and continues without failing.
 - **Given** the user passes `--refresh-audit`, **when** `embark from <path> --refresh-audit` runs, **then** the oracle product audit re-runs against the current lifeboat content and the drift vs the disembark-time audit is reported.
 - *(Design target, not yet shipped.)* **Given** an `embark from <path>` run completes, **then** `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` exists with `source_path`, `source_manifest_sha256`, `timestamp`, and `files_written` populated (per [§ 7](#7-voyage-layout-embarkdisembark-provenance-and-history)); `embark/from/<timestamp>/` is absent unless `--archive` was passed.
 - **Given** an `embark from <path> --archive` run completes, **then** the input lifeboat is copied verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` and the path is referenced from `provenance.json`.
