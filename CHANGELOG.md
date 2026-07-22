@@ -10,16 +10,9 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
-### Fixed
+## [0.4.0] - 2026-07-22
 
-- **The published plugin now ships its agents and hooks.** The launch payload's
-  include list named neither the `agents/` nor the `hooks/` surface directory,
-  so the released bundle omitted both — the plugin installed without its agents
-  and without its hook wiring. Both directories are added to the payload
-  includes, and a bundle-completeness check now fails if any auto-discovered
-  plugin-surface directory present on disk is neither included nor explicitly
-  excluded with a reason, so a newly-added surface can never be silently dropped.
-### Changed
+### Breaking
 
 - **The record-lint banlist now requires a machine-readable successor and
   context.** Every `banned_tokens` entry must declare a non-empty `successor`
@@ -72,6 +65,13 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The published plugin now ships its agents and hooks.** The launch payload's
+  include list named neither the `agents/` nor the `hooks/` surface directory,
+  so the released bundle omitted both — the plugin installed without its agents
+  and without its hook wiring. Both directories are added to the payload
+  includes, and a bundle-completeness check now fails if any auto-discovered
+  plugin-surface directory present on disk is neither included nor explicitly
+  excluded with a reason, so a newly-added surface can never be silently dropped.
 - **The history-store bootstrap error names the verb that exists.** When a
   transcript capture found the store's owned directories absent, the preflight
   error told the user to "run `abcd install`" — a verb that does not exist. The
