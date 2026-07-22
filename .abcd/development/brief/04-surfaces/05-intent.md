@@ -31,7 +31,7 @@ Every intent has a `kind` declared in frontmatter, set at `/abcd:intent plan` ti
 | `kind` | Has press release? | Lives in | Maps to | Examples |
 |---|---|---|---|---|
 | `standalone` | Yes | `drafts/` → `planned/` → `shipped/` | One spec (1:1) | itd-3, itd-4, itd-7, most of the corpus |
-| `bundle-member` | Yes | Same as standalone, with `bundle: <id>` linking members | Shared spec with bundle-mates (N:1) | (no live bundles in any phase — see [`intents/README.md`](../../intents/README.md#bundles) for retired bundle history) |
+| `bundle-member` | Yes | Same as standalone, with `bundle: <id>` linking members | Shared spec with bundle-mates (N:1) | itd-20, itd-24, itd-63, itd-69 (bundle `spc-83-operator-surfaces`, in `planned/` — committed but unscheduled, named in no phase doc); see [`intents/README.md`](../../intents/README.md#bundles) |
 | `discipline` | **No** — uses `## Rule` instead | `disciplines/` | No spec; imposes acceptance gates on every other spec | itd-1 (AC gate), itd-5 (prompt-quality) |
 
 **`kind` is binding once set at plan time.** Late changes go through `/abcd:intent reclassify <itd-N> --kind <new-kind>` — a later phase (no `reclassify` sub-verb ships; the binary exposes `link`, `new`, `plan`, `ready`, `review`) — which records the change in the intent's frontmatter `reclassification_history` and surfaces it for reviewer review.
@@ -237,7 +237,7 @@ Discipline-kind intents use a different template — see § 1 "Discipline format
 
 ## 4. Persona registry
 
-See [`01-product/05-personas.md`](../01-product/05-personas.md) for the canonical persona registry (SSOT). A press release attributes its customer quote to a persona from that roster, and the `persona_registry` lint rule checks that every quote attribution resolves to it; the codified abcd principle (no real names, no "hypothetical user") lives in the canonical persona file.
+`.abcd/development/personas.json` is the machine-checked persona roster (SSOT): the `persona_registry` lint rule resolves every press-release quote attribution against the names in that JSON file (its path is set by `.abcd/record-lint.json`). The prose page [`01-product/05-personas.md`](../01-product/05-personas.md) describes the roster and carries the codified abcd principle (no real names, no "hypothetical user"), but defers to `personas.json` as the roster's home — the lint checks the JSON, not the page.
 
 ## 5. Frontmatter fields (spc-3 (predecessor store) additions — a later phase)
 

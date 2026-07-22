@@ -26,8 +26,9 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
 - **`/abcd:ahoy doctor`** — run the **full** detection pass plus a read-only
   audit pass, and report the gap counts for each. The text render shows the
   detection-gap and audit-gap counts; the JSON envelope carries full per-gap
-  detail, including user-scope state (history store, `index.json`, symlink,
-  hook) that `install` touches but never otherwise re-validates.
+  detail, including the user-scope state (history store, `index.json`, symlink,
+  hook) that the shared detection pass validates on every sub-verb — doctor's
+  distinct contribution is the read-only audit pass layered on top.
   Distinct from bare invocation, which shows the folder kind, plugin-root
   status, root SHA, and gap count.
 - **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
@@ -332,9 +333,10 @@ user-scope app-state.
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:ahoy`,
   **then** the dispatcher runs the detection pass and shows the folder kind,
-  plugin-root status, root SHA, and gap count, plus a next-step line for the
-  folder kind (naming `/abcd:ahoy install` on an unmanaged repo) — and never
-  mutates state.
+  plugin-root status, root SHA, and gap count, plus a next-step line on the
+  unmanaged kinds (naming `/abcd:ahoy install` on an `unmanaged-repo`, "nothing
+  to act on" on an `unmanaged-folder`); a `managed-repo` prints the four status
+  lines with no next-step line — and never mutates state.
 - **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy
   install` runs to completion, **then** the two-file repo carve-out
   (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written,

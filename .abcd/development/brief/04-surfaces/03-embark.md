@@ -60,7 +60,7 @@ There is no emptiness gate. A conflict is per-file: a target that merely carries
 
 Embark is a deterministic Go run: it reads the lifeboat, plans, refuses on any conflict, then writes the record families plus the `CLAUDE.md` marker. No interactive scaffolder, no Python, and no LLM agent sit in the write path.
 
-0. **Read lifeboat:** the record families — ADRs (`docs/adrs/`), issues (`activity/issues/`), intents (`rescue/intents/`), specs (`rescue/specs/`) — plus the report-only files `_provenance.json`, `press-release.{json,md}`, `principles.{json,md}`, `coverage.{json,md}`, `brief/**`, `rescue/spine.md`, `graveyard/**`, and the post-pack `audit/**` oracle audit. The lifeboat is untrusted input: embark verifies its `manifest_sha256` against the on-disk tree and refuses a symlink or oversize file anywhere inside.
+0. **Read lifeboat:** the record families — ADRs (`docs/adrs/`), issues (`activity/issues/`), intents (`rescue/intents/`), specs (`rescue/specs/`) — plus the report-only files `_provenance.json`, `press-release.{json,md}`, `principles.{json,md}`, `coverage.{json,md}`, `brief/**`, `rescue/spine.md`, `graveyard/**`, and the post-pack `audit/**` oracle audit. The lifeboat is untrusted input: embark verifies its `manifest_sha256` against the on-disk tree — every hashed file, i.e. the tree minus the post-pack synthesis layer the manifest deliberately excludes (`_provenance.json`, `press-release.{json,md}`, `principles.{json,md}`, `audit/**`, `graveyard/lessons.json`, `graveyard/low-confidence/**`) — and refuses a symlink or oversize file anywhere inside. A tampered hashed record or an added stray file is refused; the excluded report-only files sit outside the manifest seal and carry their own per-entry integrity (cite-or-be-dropped, registered-verdict gate), not the hash.
 1. **Plan.** Map each record file to its target path and classify it `create`, `unchanged` (byte-identical), or a conflict. On **any** conflict embark writes nothing and refuses ([§ 4](#4-conflict-ux)).
 2. **Write the record families verbatim** to their canonical target locations — ADRs to `.abcd/development/decisions/adrs/`, issues to `.abcd/work/issues/`, intents to `.abcd/development/intents/`, specs to `.abcd/development/specs/` — through two-layer containment (an `os.Root` boundary plus independent lexical path validation), skipping `unchanged` files. Bucketed families keep their source bucket (issues by state; intents into `drafts`/`planned`/`shipped`/`disciplines`/`superseded`; specs into `open`/`closed`). Terminology, docs, and `.abcd/memory/` are **not** embark families — they do not travel.
 3. **Re-inject the current abcd marker block** into the target `CLAUDE.md` between BEGIN/END markers (idempotent) — never AGENTS.md, and never a verbatim copy of lifeboat prose. The block is the modular-rules-loader block (per itd-3); principles surface through the rules loader's domain rules on demand by prompt-keyword recall.
@@ -73,13 +73,15 @@ Embark is a deterministic Go run: it reads the lifeboat, plans, refuses on any c
 When the target already has files that the lifeboat would write, **core returns the conflict set and the surface renders it as a single bulk report** — never a per-file barrage, and never a file written by core (adr-35). The shipped `from` **writes nothing** on any conflict and exits non-zero; the surface relays the bulk report so the user resolves the conflicts and re-runs:
 
 ```
-embark detected N conflicts across the record families:
-  • 3 .abcd/development/specs/
-  • 2 .abcd/work/issues/
-  • 1 .abcd/development/decisions/adrs/
+2 conflict(s) (nothing was written):
+  • .abcd/development/specs/open/spc-12.md  (exists-differs)
+  • .abcd/work/issues/open/iss-7.md  (exists-differs)
 
-nothing was written — resolve the conflicts and re-run.
+nothing was written — resolve the conflicts and re-run
 ```
+
+The report is a per-file list — one line per conflicting target path with its
+conflict kind (`exists-differs`) — not a per-family count roll-up.
 
 The conflict list is a value core hands back; if the operator wants it on disk, the surface writes it — core does not.
 

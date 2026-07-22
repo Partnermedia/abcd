@@ -21,8 +21,11 @@ secret or absolute home path survives capture.
   has several records) or by record filename.
 - **`/abcd:history capture [<transcript-file>|-]`** — redact and store a raw
   transcript, read from a file or from stdin (`-`). Capture is **fail-closed on
-  redaction** and **idempotent on content hash** (re-capturing identical content
-  does not duplicate). Flags: `--kind` (`native` | `specstory-import`, default
+  redaction** and **idempotent on the (content hash, session id, kind) triple**
+  (re-capturing identical content under the same `--session` and `--kind` is a
+  no-op; the same content under a different session id or kind writes a new
+  record, so a second session is never mis-attributed to the first). Flags:
+  `--kind` (`native` | `specstory-import`, default
   `native`) and `--session` (the record's session id; defaults to the transcript
   filename, and is **required** when reading from stdin).
 
