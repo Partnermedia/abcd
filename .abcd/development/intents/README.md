@@ -35,7 +35,7 @@ Every intent has a `kind` declared in frontmatter, set at `/abcd:intent plan` ti
 | `kind` | Has press release? | Lives in | Maps to | Examples |
 |---|---|---|---|---|
 | `standalone` | Yes | `drafts/` → `planned/` → `shipped/` | One spec (1:1) | itd-3, itd-4, itd-7, most of the corpus |
-| `bundle-member` | Yes | Same as standalone, with `bundle: <id>` linking members | Shared spec with bundle-mates (N:1) | (no live bundles — `tier-0-audit-substrate` dissolved 2026-05-07; itd-31 promoted to standalone, itd-32 superseded) |
+| `bundle-member` | Yes | Same as standalone, with `bundle: <id>` linking members | Shared spec with bundle-mates (N:1) | itd-20, itd-24, itd-63, itd-69 (bundle `spc-83-operator-surfaces`, in `planned/` — unscheduled); see [Bundles](#bundles) |
 | `discipline` | **No** — uses `## Rule` instead | `disciplines/` | No spec; imposes acceptance gates on every other spec | itd-1 (AC gate), itd-5 (prompt-quality) |
 
 Standalone is the default (~60% of the corpus). Bundle-members ship together as one spec. Disciplines are cross-cutting rules with no user moment of their own; they apply to every other spec as inherited acceptance gates.
@@ -251,6 +251,7 @@ Active bundles (sets of intents that ship as one shared spec via multi-arg `/abc
 
 | Bundle ID | Members | Why a bundle |
 |---|---|---|
+| `spc-83-operator-surfaces` | itd-20, itd-24, itd-63, itd-69 (all `planned/`, `spec_id: null`) | The operator-facing surface set that couples through the plugin manifest/metadata lockstep — top-level dispatcher (itd-20), reflect (itd-24), setup-wizard (itd-63), and plugin-metadata lockstep (itd-69) share one spec. Committed but unscheduled: named in no phase doc's `## Scope`, and `spec_id` is still `null` (the shared spec is not yet minted). |
 | ~~`tier-0-audit-substrate`~~ (dissolved 2026-05-07) | ~~itd-31 + itd-32~~ | The bundle premise (unified `/abcd:audit` surface bundling all review/audit roles into one verb's subverbs) was dissolved when the round-2 command-structure review split the three intent-fidelity-reviewer roles into three distinct verbs under `/abcd:intent` (review/consistency/shape). itd-31 promoted to standalone; itd-32 superseded by itd-31. |
 
 Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); membership is bidirectional (verified by the record lint). When a bundle's shared spec closes, all member intents move from `planned/` to `shipped/` together.

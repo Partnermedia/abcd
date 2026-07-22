@@ -674,3 +674,30 @@ parallel-agent merge contention bites.
   general rule: any new whole-tree traversal states which of {entries, depth,
   aggregate bytes} bounds it, because a per-item cap and a count cap multiply
   and their product is not a bound.
+
+- 2026-07-22 — A release is a release regardless of path: the clean-cutover
+  manual roll follows the SAME two-commit release-branch shape as a derived
+  ship (the content commit, then a receipts commit carrying the sha-keyed
+  PROMOTE receipts for docs-currency-reviewer and iss35-brief-surface-crosscheck).
+  The v0.4.0 roll landed as one commit with no receipts; the receipt gate
+  refused fail-closed — its first genuine firing, and correct. Recovery uses
+  the workflow's own escape hatch (tag on the receipts commit; content = tag^).
+  Rejected: weakening the required-gates list to unblock the tag — that edits
+  the release contract the whole programme was built to preserve.
+
+- 2026-07-22 — Detector findings are triaged adversarially BEFORE fixing, and
+  the numbers justify it: the full-depth iss35 crosscheck returned 102
+  discrepancies; independent refuters confirmed 95 and killed 7 (two
+  cross-direction duplicates, two wrong-reality, three legitimately
+  staged/exempt). 93% precision is high enough to trust the detector and low
+  enough that unfiltered fixing would have written seven falsehoods into the
+  record. The refutation criteria are the detector's own exemptions plus
+  adr-5; the refuters re-probe the binary rather than trusting the finding.
+
+- 2026-07-22 — When a brief is agreed upfront, it is a TARGET document; it
+  becomes the state document claim-by-claim, at ship time, because shipping
+  includes the brief row edit (spec-moves-with-the-surface). Unbuilt design
+  lives in intents or under an explicit staged marking — never as unmarked
+  present-tense brief prose. The 95 confirmed discrepancies are that ratchet
+  skipped at scale; the crosscheck is the measuring instrument; promoting the
+  principle to a mechanical discipline is the open follow-up (iss-121, iss-122).

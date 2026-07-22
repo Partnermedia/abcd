@@ -8,7 +8,7 @@ cannot drift apart.
 
 ## Sub-verbs
 
-Bare `/abcd:ahoy` shows status + help only — never mutates state. The
+Bare `/abcd:ahoy` shows read-only status only — never mutates state. The
 `/abcd:ahoy` slash command dispatches only this bare read-only pass and names
 the CLI for anything that writes; the sub-verbs below ship on the CLI as
 `abcd ahoy <sub-verb>`. Current sub-verbs:
@@ -23,11 +23,14 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
 - **`/abcd:ahoy dry-run`** — run the detection pass and render the
   `DetectionResult` envelope as JSON (per spc-16 T1 — JSON ONLY; no
   unified-diff renderer). Never mutates state.
-- **`/abcd:ahoy doctor`** — run the **full** detection pass and report every
-  gap read-only, including user-scope state (history store, `index.json`,
-  symlink, hook) that `install` touches but never otherwise
-  re-validates.
-  Distinct from bare invocation, which only shows summary status + help.
+- **`/abcd:ahoy doctor`** — run the **full** detection pass plus a read-only
+  audit pass, and report the gap counts for each. The text render shows the
+  detection-gap and audit-gap counts; the JSON envelope carries full per-gap
+  detail, including the user-scope state (history store, `index.json`, symlink,
+  hook) that the shared detection pass validates on every sub-verb — doctor's
+  distinct contribution is the read-only audit pass layered on top.
+  Distinct from bare invocation, which shows the folder kind, plugin-root
+  status, root SHA, and gap count.
 - **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
   does not match `.abcd/config/identity.json` (the commit-identity gate).
   Read-only; a CLI-only operator/CI check with no slash-command surface.
@@ -58,7 +61,7 @@ and itd-40), then `install` acts on the matching kind:
 
 | Folder kind | What `install` does | `.abcd/` written |
 |---|---|---|
-| **`managed-repo`** | a git repo abcd already manages — run the repo install flow below (idempotent update) | repo-scope `.abcd/config.json` (with the `meta` setup block) + `.abcd/rules.json` per spc-16 T1 (no `meta.json` at repo scope; setup metadata lives at `config.json["meta"]`). Plus the CLAUDE.md/AGENTS.md marker block. See [`05-internals/03-configuration.md` § The two `.abcd/` scopes](../05-internals/03-configuration.md#the-two-abcd-scopes). |
+| **`managed-repo`** | a git repo abcd already manages — run the repo install flow below (idempotent update) | repo-scope `.abcd/config.json` (with the `meta` setup block) + `.abcd/rules.json` per spc-16 T1 (no `meta.json` at repo scope; setup metadata lives at `config.json["meta"]`). Plus `.abcd/config/identity.json` when the git-identity pin is adopted (per iss-62 — a `config-change` write) and the CLAUDE.md/AGENTS.md marker block. See [`05-internals/03-configuration.md` § The two `.abcd/` scopes](../05-internals/03-configuration.md#the-two-abcd-scopes). |
 | **`unmanaged-repo`** | a git repo with no abcd yet — bare `/abcd:ahoy` offers `install` to adopt it; `install` runs the same repo flow | same as `managed-repo` |
 | **`unmanaged-folder`** | not a git repo — nothing to act on; reports and stops | none |
 
@@ -88,13 +91,13 @@ detection pass** and differ only in what they do with its output:
 
 | Sub-verb | Detection | Then |
 |---|---|---|
-| bare `/abcd:ahoy` | full | render summary + help, no gap detail |
-| `doctor` | full | render every gap read-only |
+| bare `/abcd:ahoy` | full | render folder kind, plugin-root status, root SHA, gap count — no gap detail |
+| `doctor` | full | render detection- and audit-gap counts (full per-gap detail in the JSON envelope) |
 | `dry-run` | full | render the canonical `DetectionResult` JSON envelope (per spc-16 T1 — no unified-diff) |
 | `install` | full | run the apply pass over the gaps |
 
 This means **idempotency is a property of detection, not of a version stamp.**
-A check compares *actual state* (`git check-ignore -v`, `readlink`, file
+A check compares *actual state* (`.gitignore` block compare, `readlink`, file
 presence, hook-config grep, `index.json` lookup) — never `setup_version` alone.
 If a user hand-deletes the marker block while `setup_version` is current,
 detection still reports it `missing` and `install` repairs it.
@@ -138,7 +141,10 @@ Steps, run in parallel where independent:
 4. **Identity** — `git rev-list --max-parents=0 HEAD` → root SHA. Cross-check
    against `~/.abcd/history/index.json`: is this SHA registered?
    Is there a sibling entry with a matching name/github but a *different* root
-   SHA (the re-founding signal — see below)?
+   SHA (the re-founding signal — see below)? Separately, compare the git author
+   identity a commit would use against the committed `.abcd/config/identity.json`
+   pin (iss-62), emitting a `git_identity.unpinned` / `.mismatch` / `.unset` /
+   `.uncheckable` `config-change` gap.
 5. **History-store wiring** — does the `~/.abcd/history/` store (abcd's native
    local redacted transcript corpus, per
    [adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)) exist at all
@@ -157,7 +163,10 @@ Steps, run in parallel where independent:
 9. **Hook manifest verification** (verify-only per spc-16 T1) — VERIFY that
    `hooks/hooks.json` is present in the plugin install AND contains the three
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
-   each referencing the expected prompt-router hook commands. A missing or
+   each referencing the expected prompt-router hook commands. The shipped
+   manifest also wires `abcd hook session-start` (a second `SessionStart`
+   command) and `abcd hook session-end` (a fourth `SessionEnd` event);
+   verification covers only the three prompt-router commands above. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.
@@ -170,7 +179,7 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 | `category` | Examples | Apply behaviour |
 |---|---|---|
 | `safe-autocreate` | `.abcd/` skeleton, history-store dirs (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt |
-| `config-change` | visibility, oracle adapter, PATH symlink | transparent confirm; skip-if-set with "current value" notice |
+| `config-change` | visibility, oracle adapter, PATH symlink, git-identity pin | transparent confirm; skip-if-set with "current value" notice |
 | `plugin-owned` | CLAUDE.md/AGENTS.md marker block (per itd-3); `hooks/hooks.json` manifest verification (verify-only per spc-16 T1) | silent overwrite on marker drift; non-resolvable diagnostic for malformed/missing manifest |
 | `dependency` | opt-in scanners: `gitleaks`, `trufflehog` install | offer brew with ONE category-level approval covering the opt-in scanners (per spc-16 T1 — per-CATEGORY, not per-tool) |
 | `user-state` | `index.json` entry, re-founding, stale/duplicate entries | guided; never auto-edit user-scope app-state, report extras read-only |
@@ -190,6 +199,16 @@ that artefact ships — to canonical files under `defaults/` too.
 `install` = detection pass, then apply pass. The apply pass walks the gaps
 grouped by category, asks **one** category-level approval question per
 category present, and applies the approved categories' gaps.
+
+Non-interactive override flags pre-answer the prompts: `--yes` approves every
+resolvable category without prompting, `--adopt` / `--refuse-adopt` decide the
+unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
+`both` | `skip`) sets the marker target, `--oracle-backend`
+(`host-delegated` | `native` | `cli` | `api` | `mcp`) sets the oracle,
+`--scan-deep` (`true` | `false`) toggles the deep scan, and `--visibility`
+(`private` | `public`) sets repo visibility. `--yes` does not adopt an
+unmanaged repo or pin an unset git identity — those still need `--adopt` and an
+interactive confirmation.
 
 1. Run the detection pass (above).
 2. **Dependency gaps** (`dependency`) — surface brew/pip commands for missing
@@ -282,8 +301,8 @@ notes the orphaned-predecessor possibility in the summary.
 CLAUDE.md/AGENTS.md and the `/usr/local/bin/abcd` symlink **if it points at this
 plugin** (otherwise leave it alone). `hooks/hooks.json` is plugin-static per
 spc-14 T7 — uninstall NEVER mutates it (per spc-16 T1 brief amendment).
-**Leaves the entire `.abcd/` namespace intact** (meta, config, corpus, rules,
-development/, memory/, lifeboat/, logbook/, rp/) and the history store. Deeper
+**Leaves the entire `.abcd/` namespace intact** (`config/`, `config.json`,
+`rules.json`, `development/`, `work/`, `memory/`) and the history store. Deeper
 removal (`/abcd:ahoy destroy`) comes in a later phase as itd-10.
 
 **Uninstall ↔ install is a tested round-trip invariant:** after `uninstall`
@@ -295,15 +314,17 @@ acceptance criterion, not just prose — see § Acceptance.
 canonical `DetectionResult` envelope as JSON (per spc-16 T1 — JSON ONLY; no
 unified-diff renderer in this command surface). Exits without writing. The
 JSON envelope shape is `{folder_kind, adopted, root_sha,
-plugin_root_status, repo_identity, signals, gaps}` so consumers can drive
-the Claude Code skill's two-pass approval protocol off `folder_kind` +
-`gaps`.
+plugin_root_status, repo_identity, signals, gaps}` so the plugin command
+(`commands/abcd/ahoy.md`) summarises state off `folder_kind` + `gaps` and
+names `abcd ahoy install` for anything actionable.
 
-**Doctor (`/abcd:ahoy doctor`):** runs the detection pass and reports every gap
-read-only, grouped by category. Unlike bare invocation it shows full gap detail
-including user-state checks — the history store exists and is writable, the
-`index.json` entry matches this root SHA, the PATH symlink and hook manifest
-are intact, and any stale/duplicate `index.json` entries.
+**Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only
+audit pass. The text render shows two counts — detection gaps and audit gaps.
+The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
+detection gaps cover user-state checks (the history store exists and is
+writable, the `index.json` entry matches this root SHA, the PATH symlink and
+hook manifest are intact), while the audit pass reconciles the registered
+history-store `path` against `index.json` read-only (a stale registered path).
 The check users reach for after a repo rename, a machine migration, or "why
 aren't my transcripts showing up." Never mutates state, never auto-fixes
 user-scope app-state.
@@ -311,19 +332,23 @@ user-scope app-state.
 ## Acceptance
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:ahoy`,
-  **then** the dispatcher runs the detection pass and shows summary install
-  status (installed?, plugin version, marker drift state, visibility) plus the
-  available sub-verbs with suggested next actions — and never mutates state.
+  **then** the dispatcher runs the detection pass and shows the folder kind,
+  plugin-root status, root SHA, and gap count, plus a next-step line on the
+  unmanaged kinds (naming `/abcd:ahoy install` on an `unmanaged-repo`, "nothing
+  to act on" on an `unmanaged-folder`); a `managed-repo` prints the four status
+  lines with no next-step line — and never mutates state.
 - **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy
   install` runs to completion, **then** the two-file repo carve-out
-  (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written, the
+  (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written,
+  `.abcd/config/identity.json` is pinned when the git-identity gate is adopted
+  (per iss-62), the
   visibility-driven `.gitignore` allowlist entries are present, the
   history-store dirs + `index.json` entry are present, the
   CLAUDE.md/AGENTS.md marker block from
   `internal/core/ahoy/defaults/claude-md-marker-block.md` is installed, and the
-  `hooks/hooks.json` check runs verify-only (never mutated) — the manifest
-  itself is a later-phase artefact; its absence surfaces as a non-resolvable
-  `plugin-owned` diagnostic gap.
+  `hooks/hooks.json` check runs verify-only (never mutated) — the manifest is
+  plugin-static per spc-14 T7, and a missing or malformed manifest surfaces as
+  a non-resolvable `plugin-owned` diagnostic gap.
 - **Given** a repo with `install` already run, **when** `/abcd:ahoy install`
   runs again with no state changes, **then** the detection pass reports zero
   actionable gaps, the message reads "already up to date", and nothing is written.
@@ -357,9 +382,9 @@ user-scope app-state.
   plugin_root_status, repo_identity, signals, gaps}` per spc-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
-  registered history-store `path` no longer matches `index.json`, **then** the
-  user-state gap is reported read-only with both paths cited, and no files are
-  modified.
+  registered history-store `path` no longer matches `index.json`, **then** an
+  audit gap citing both paths appears under `audit_gaps` in the JSON envelope,
+  reported read-only, and no files are modified.
 - **Given** a fresh machine with no `~/.abcd/`, **when** `/abcd:ahoy install`
   runs in a repo, **then** `~/.abcd/` is bootstrapped — the `history/` store
   (directory + `index.json` with `schema`/`description` header) — before the

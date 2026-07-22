@@ -350,30 +350,14 @@ abcd/
 │   └── …                               # plus operator-internal commands
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command
 │   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.
-├── skills/                             # see 08-skills.md — abcd ships ZERO user-facing skills.
-│   #                                   # The entries below are plugin-runtime workflow files that each
-│   #                                   # command points at internally; they are NOT user-facing skills
-│   #                                   # surfaced under /abcd:. The only would-be user-facing skill
-│   #                                   # (/abcd:grill) is a /abcd:intent grill sub-verb. A later phase
-│   #                                   # may introduce new user-facing skills here.
-│   ├── abcd-ahoy/{SKILL.md, workflow.md}
-│   ├── abcd-disembark/{SKILL.md, workflow.md}
-│   ├── abcd-embark/{SKILL.md, workflow.md}
-│   ├── abcd-launch/{SKILL.md, workflow.md}
-│   ├── abcd-intent/{SKILL.md, workflow.md}
-│   ├── abcd-capture/{SKILL.md, workflow.md}
-│   ├── commit-attribution/SKILL.md
-│   └── secrets-and-pii/SKILL.md        # consolidated pii-protection + secret-scan
-├── agents/                             # 16 agents — see 01-agents.md (markdown, host-delegated)
-│   ├── flow-essence.md / decision-archaeologist.md / review-collator.md / chat-distiller.md
-│   ├── principle-distiller.md / artefact-curator.md / brief-composer.md / press-release-composer.md
-│   ├── lifeboat-oracle.md / code-rescuer.md / issue-scout.md / embark-scaffolder.md
-│   ├── launch-gatekeeper.md / intent-fidelity-reviewer.md / documentation-auditor.md
-│   └── reflection-composer.md          # /abcd:reflect retrospective composer (itd-24)
-└── hooks/                              # Claude Code event hooks — thin shims that shell to the binary
-    ├── hooks.json                      # UserPromptSubmit → prompt-router; SessionStart / PreCompact → reset
-    ├── prompt_router_hook              # CARL-style rule injector (per itd-3); reads .abcd/rules.json + plugin defaults
-    └── prompt_router_reset             # per-session dedup-state reset (SessionStart / PreCompact)
+├── agents/                             # 10 agents — see 01-agents.md (markdown, host-delegated)
+│   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-fidelity-reviewer.md
+│   ├── lifeboat-oracle.md / press-release-composer.md / principle-distiller.md
+│   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
+│   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
+└── hooks/                              # Claude Code event hooks — each command shells directly to the binary
+    └── hooks.json                      # UserPromptSubmit → hook prompt-router; SessionStart → prompt-router-reset + session-start;
+                                        # PreCompact → prompt-router-reset; SessionEnd → session-end
 ```
 
 The core is organised one package per capability under `internal/core/`, and the

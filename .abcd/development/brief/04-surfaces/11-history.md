@@ -5,8 +5,10 @@ redact-on-write archive of raw session transcripts, keyed on the repo's
 **root-commit SHA**. The store lives outside the repo at
 `~/.abcd/history/<root-sha>/transcripts/`, with a per-repo `meta.json`
 (`root_commit`, `name`, `github`, and a corpus block) alongside it. `list` and
-`show` **perform zero writes**; `capture` is the only write path, and it redacts
-on write — no live secret or absolute home path survives capture.
+`show` **perform zero writes**; the store has two write paths — the explicit
+`capture` sub-verb and the automatic `abcd hook session-end` entrypoint wired on
+the SessionEnd event (`hooks/hooks.json`) — and both redact on write, so no live
+secret or absolute home path survives capture.
 
 ## Sub-verbs
 
@@ -19,8 +21,11 @@ on write — no live secret or absolute home path survives capture.
   has several records) or by record filename.
 - **`/abcd:history capture [<transcript-file>|-]`** — redact and store a raw
   transcript, read from a file or from stdin (`-`). Capture is **fail-closed on
-  redaction** and **idempotent on content hash** (re-capturing identical content
-  does not duplicate). Flags: `--kind` (`native` | `specstory-import`, default
+  redaction** and **idempotent on the (content hash, session id, kind) triple**
+  (re-capturing identical content under the same `--session` and `--kind` is a
+  no-op; the same content under a different session id or kind writes a new
+  record, so a second session is never mis-attributed to the first). Flags:
+  `--kind` (`native` | `specstory-import`, default
   `native`) and `--session` (the record's session id; defaults to the transcript
   filename, and is **required** when reading from stdin).
 

@@ -16,12 +16,14 @@ abcd audit --json
 ```
 
 emits `{ "findings": [ … ], "skipped": [ … ] }`. Each finding carries a stable
-`ruleId`, a `severity` (`error` or `warn`), a `file` and `line`, a `message`, and
-a `fix`. `skipped` names rules whose enablement condition was not met (e.g.
-`docs-currency` where there is no `docs/`), so a not-applicable rule reads as
-skipped, not failed. Without `--json`, `abcd audit` prints a grouped,
-doctor-style human report (severity glyph, rule id, `file:line`, message, indented
-fix) and a summary tail.
+`ruleId`, a `severity` (`error` or `warn`), a `file`, a `message`, a `fix`, and a
+`policyInfo` rationale; content-scanning rules (`docs-currency`, `privacy-hygiene`)
+additionally carry a `line`, while path-presence findings omit it. `skipped` names
+rules whose enablement condition was not met (e.g. `docs-currency` where there is
+no `docs/`), so a not-applicable rule reads as skipped, not failed. Without
+`--json`, `abcd audit` prints a grouped, doctor-style human report (severity glyph,
+rule id, `file:line`, message, indented fix) and a summary tail. The `--root` flag
+audits a repo other than the current working directory.
 
 The exit code is Conftest's tri-state: `0` clean, `1` warnings only, `2` any
 error — so `abcd audit` gates a repo's CI as well as backing onboarding.

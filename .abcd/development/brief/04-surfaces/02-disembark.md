@@ -1,15 +1,6 @@
 # `/abcd:disembark` — Pack a Lifeboat
 
-> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** This chapter still describes the **in-tree** disembark model. Four of its claims are no longer the decision, and the reconciled prose lands with the packer (the `disembark` verb and `commands/abcd/disembark.md` now ship — with the out-of-tree, coverage-experiment model of adr-35, not this chapter's in-tree prose):
->
-> | This chapter says | adr-35 decides |
-> |---|---|
-> | Packs into the current repo's `.abcd/lifeboat/`; `to home` is the ergonomic default | **Read-only and out-of-tree**: `disembark pack <source-repo> <dest>`. The source is **never** written to — a test hashes its tree before and after. There is no `home`. |
-> | Operations log at `.abcd/development/voyage/` (in-tree, per adr-4) | `voyage/` moves to the **operator level**, `~/.abcd/voyage/<source-root-sha>/`, keyed like the history store — never committed. This dissolves the `privacy-hygiene` collision (voyage records absolute source paths). |
-> | Re-running overwrites the previous snapshot with a `.bak` safety net | A **destination safety gate**: refuse unless the destination is absent, empty, or carries a parseable `_provenance.json`. **Never overwrite a directory abcd did not produce.** |
-> | The oracle returns a `"sufficient"` verdict | `"sufficient"` was a member of **no registered enum**. The oracle returns the registered `{SHIP, NEEDS_WORK, MAJOR_RETHINK}`. |
->
-> adr-35 also inverts the build: **`probe` → a coverage report, across a corpus, before `pack` exists at all** (itd-88). The brief carries only what abcd could ground, each claim citing its source; a first-class `coverage.{json,md}` carries what is missing, what was searched, and the question a human must answer.
+> **Model of record: [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The packer is read-only and out-of-tree (`disembark pack <source-repo> <dest>`; the source is never written to — a test hashes its tree before and after), the voyage log lives at the operator level (`~/.abcd/voyage/<source-root-sha>/`, never committed), a destination safety gate refuses any directory abcd did not produce, and the oracle returns the registered `{SHIP, NEEDS_WORK, MAJOR_RETHINK}` verdicts. The coverage experiment (itd-88) leads: the brief carries only what abcd could ground, each claim citing its source; `coverage.{json,md}` carry what is missing, what was searched, and the question a human must answer.
 
 > **Phase ownership** ([adr-33](../../decisions/adrs/0033-launch-phase-ownership-tiered.md)): the packer and the round-trip ship in [Phase 6](../../roadmap/phases/phase-6-lifeboat.md). The **coverage experiment (itd-88) is pulled out of Phase 6** and sequenced ahead of it, per adr-35.
 
@@ -17,155 +8,102 @@
 
 ## Sub-verbs
 
-Bare `/abcd:disembark` shows status + help only — never mutates state. Current sub-verbs (as the shipped binary exposes them):
+Bare `/abcd:disembark` prints the sub-verb list and flags only — never mutates state. Current sub-verbs (as the shipped binary exposes them):
 
-- **`/abcd:disembark pack <source-repo> <dest>`** — pack a lifeboat from `<source-repo>` to `<dest>`. Both paths are positional and required, and there is **no `home` shorthand**: the lifeboat lands out-of-tree at an operator-chosen destination and the source repo is never written to (adr-35). The flow described in § 1 below is this sub-verb's behaviour.
-- **`/abcd:disembark probe <source-repo>`** — read-only inspection of the source: which brief sections it can ground, which come back blank, and what was searched. Emits the coverage report (`coverage.{json,md}`, adr-35); writes nothing into `<source-repo>`. Ships **ahead of the packer** (itd-88) and is the experiment's readout.
-- **`/abcd:disembark plan <source-repo>`** — the dry-run: the full lifeboat file set a pack would write, without writing anything.
+- **`/abcd:disembark pack <source-repo> <dest>`** — pack a lifeboat from `<source-repo>` to `<dest>`. Both paths are positional and required, and there is **no `home` shorthand**: the lifeboat lands out-of-tree at an operator-chosen destination and the source repo is never written to (adr-35). Its deterministic flow is described in § 1 below.
+- **`/abcd:disembark probe [source-repo]`** — read-only inspection of the source (the repo argument is optional and defaults to the current directory): which brief sections it can ground, which come back blank, and what was searched. Renders the coverage report to stdout and writes nothing into `<source-repo>`; `coverage.{json,md}` are written only by `pack` (adr-35). It is the coverage experiment's readout (itd-88).
+- **`/abcd:disembark plan [source-repo]`** — the dry-run (the repo argument is optional and defaults to the current directory): the full lifeboat file set a pack would write, without writing anything.
 - **`/abcd:disembark coverage <report.json>…`** — aggregate probe reports into the cross-repo section×repo coverage table.
 - **Synthesis sub-verbs over a packed lifeboat** — `graveyard` (validate host-produced lesson JSON and write the survivors, cite-or-be-dropped), `oracle` (audit a packed lifeboat against its source repo — a registered verdict + cited findings), `press-release` (compose the lifeboat's press release), and `principles` (distil principles from the ADRs). Each is deterministic-or-validate-host-JSON.
 - **Later phase: `to-spec-kit <path>`** — export shipped intents to GitHub Spec Kit format alongside the lifeboat (per itd-23); not yet shipped.
 
-## 1. Architecture (Phase 0 dev-sync + three passes)
+## 1. Architecture (a single deterministic pass)
+
+`disembark pack <source-repo> <dest>` is one deterministic Go run. It reads the source (never writing to it) and lands every byte under `<dest>`:
 
 ```
-PHASE 0 — DEV-SYNC (see 05-internals/03-configuration.md § 2)
-  abcd dev-sync runs per-source enabled flags (each source is an opt-in adapter over a native default):
-    • reviews → render reviews via the wired oracle adapter (host-delegated
-                default; native / CLI / API / MCP opt-in)  → .abcd/work/reviews/
-    • memory  → distil memory backend  (Claude / OpenCode / ...) → .abcd/memory/
-    • work    → curate .work/                            → .abcd/work/{issues,notes}/
-    • rp      → RP workspace pull (opt-in RP adapter only, per itd-7) → .abcd/rp/workspace.json
-  Idempotent (content-hash dedup).
+INVENTORY (read-only)
+  walk the source and its record families → the planned lifeboat file set,
+  each brief section grounded from the source per internal/core/lifeboat/mapping.go,
+  plus a per-section coverage report (grounded | partial | blank)
                            │
                            ▼
-PROBE & CONFIRM
-  the disembark probe entrypoint (internal/core) runs all adapters' probe() in parallel
-  → ActiveSources list (reads curated .abcd/work/, not raw sources)
-  → AskUserQuestion (transparent): confirm assets/docs sources
+DESTINATION SAFETY GATE
+  refuse unless <dest> is absent, empty, or carries a parseable _provenance.json
+  → never overwrite a directory abcd did not produce (adr-35)
                            │
                            ▼
-PASS A — settled artefacts (4 agents in parallel, newest-first, JSON-out)
-  • flow-essence            → rescue/spec-essence.json
-  • decision-archaeologist  → research/decisions-timeline.json
-  • review-collator         → research/reviews-consolidated.json
-  • code-rescuer*           → research/code-principles.json
+SECRET SCAN (before any write)
+  scan the planned bytes; a hard-fail secret refuses the whole pack — never redact
                            │
                            ▼
-PASS B — targeted chat fill (chat-distiller, one call per unresolved spine entry)
-  • git-blame spec windows  → time-window index
-  • filtered transcripts    → research/rationale-fills.json
-                              research/unrecorded-decisions.json
-                              delta research/pitfalls.json
+WRITE
+  write to a staging directory, then swap it into <dest>; _provenance.json is
+  written last — the commit marker and the gate key for a later re-pack
                            │
                            ▼
-PASS C — distil, compose, audit (sequential)
-  • principle-distiller     → principles.json
-  • artefact-curator        → docs/, assets/_manifest.json
-  • brief-composer          → README.json
-  • press-release-composer  → press-release.json
-       ↳ oracle product audit → audit/press-release-oracle-<ts>.json
-         (host-delegated by default; opt-in oracle adapter when wired; findings appended to press-release.md)
-  • render                  → .md files from .json sources
-  • lifeboat-oracle         → audit/oracle-<ts>.json
-                              findings appended to README rendering
-  • documentation-auditor (subagent, pre-pack) → audit/documentation-audit-<ts>.json
+VOYAGE LINE (operator-local)
+  append one line to ~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl;
+  a failed append never fails the pack — the written _provenance.json is authoritative
 ```
 
-\* code-rescuer reads source via a wired oracle adapter if available, else spec-driven git-window file selection. Outputs principles only — never copies code into the lifeboat (`--with-code` comes in a later phase as itd-8).
+The pack dispatches no agents and runs no LLM passes. The synthesis artefacts — `press-release.{json,md}`, `principles.{json,md}`, the oracle audit, and the validated graveyard lessons — are written by the separate synthesis sub-verbs run over an already-packed lifeboat, each deterministic-or-validate-host-JSON.
 
 ## 2. Recency rule
 
 Hard rule: later structural artefacts supersede earlier ones — spec numbers, ADR `Superseded-By` headers, file mtimes, git log. **Never resolve recency semantically.**
 
-When structure and content disagree (e.g., later spec mentions earlier decision approvingly without restating it), **route to chat-distiller in Pass B**: receives the relevant time-windowed transcripts, emits a finding for the unrecorded-decisions report. (Risk: Pass B becomes load-bearing for correctness; transcript signal density resolved in Phase 0 (`../../research/notes/transcript-sampling.md`); Pass B viability gates are a design target (itd-11, draft) — not yet encoded in the build sequence.)
-
-## 3. Agent context budget
-
-Each agent estimates input tokens before dispatch:
-
-- Under `disembark.maxAgentTokens` (default 100,000) → one shot
-- Over → stream + summarise (map-reduce: per-input summary, then merge pass)
-
-Pass B's chat-distiller is exempt (already streams by per-spine-entry queries). Phase 0 sampling measures actual sizes on the corpus before locking the strategy.
-
-## 4. Backgrounded execution
-
-- `disembark to <path>` launches as a background task via `harness.run_background()`.
-- After each agent run, writes checkpoint to `.abcd/logbook/disembark/<timestamp>/_state.json` (forensic record only — see resume note below).
-- `harness.schedule()` schedules a wake-up every ~5 minutes to surface a one-line summary ("Pass B: 12/30 spine entries resolved").
-- Ctrl-c interrupts cleanly; re-running `disembark to <path>` starts fresh. **Note:** abcd does not ship a resume verb. The checkpoint exists for forensic purposes (post-mortem on a failed run); a future intent may add a `resume` sub-verb if real-world friction emerges.
-- Final report at completion.
+When structure and content disagree (e.g., a later spec mentions an earlier decision approvingly without restating it), the shipped pack records the structural answer only. *(Design target, not yet shipped: route such disagreements to a transcript-reading distiller agent that emits a finding for the unrecorded-decisions report — viability gated on itd-11 (draft); transcript signal density per `../../research/notes/transcript-sampling.md`.)*
 
 ## 5. Output shape
 
-> **The shape below is the packer's target and is not yet built** — the section list it assumes is exactly what the coverage experiment (itd-88) exists to revise, so expect it to change before the packer is written to it. Two rows are already settled by adr-35: `coverage.{json,md}` is first-class (what could *not* be grounded, what was searched, and the question a human must answer), and `graveyard/` is a section of its own.
+`disembark plan [source-repo]` lists exactly what a pack writes, and the pack writes that same tree to `<dest>`. Each path derives from the brief-section → lifeboat-path mapping in `internal/core/lifeboat/mapping.go`: a section grounds into its file where the source supports it, and `coverage.{json,md}` record every section that stays blank, what was searched, and the question a human must answer. `graveyard/` is a section of its own (adr-35).
 
 ```
 <dest>/                                 # operator-chosen, outside the source repo (adr-35)
-├── coverage.json                       # FIRST-CLASS: per-section status (grounded|partial|blank), evidence, what was searched
+├── _provenance.json                    # the lifeboat marker and re-pack gate key (written last): schema_version, generator, source name and root SHA, tiers present, manifest_sha256 over every other file, omissions
+├── coverage.json                       # per-section status (grounded|partial|blank), evidence, what was searched
 ├── coverage.md                         # rendered
-├── graveyard/                          # what the project tried and abandoned (three layers, cite-or-be-dropped)
-├── README.md                           # rendered from README.json (brief-composer + oracle findings)
-├── README.json
-├── press-release.md                    # rendered from press-release.json (+ product-audit findings appended)
-├── press-release.json                  # the embark interview contract
-├── principles.md                       # rendered from principles.json
-├── principles.json
-├── rescue/
-│   ├── extraction.md                   # only if --with-code (itd-8, a later phase)
-│   ├── spec-plan.md                    # rendered (rebuild plan)
-│   ├── spec-essence.json               # spine
-│   ├── spec-essence.md                 # rendered
-│   └── specs/                          # verbatim copies of the native spec store's spec files
-├── research/
-│   ├── decisions-timeline.{json,md}
-│   ├── pitfalls.{json,md}              # source memory + Pass B deltas
-│   ├── reviews-consolidated.{json,md}
-│   ├── rationale-fills.{json,md}
-│   ├── unrecorded-decisions.{json,md}
-│   └── code-principles.{json,md}       # from code-rescuer
+├── brief/                              # the brief, section by section, grounded from the source
+│   ├── 01-product/ … 06-delivery/      # press-release, context, mental-model, scope, personas; constraints; evidence; surfaces; internals; delivery
+│   └── glossary/
+├── graveyard/                          # what the project tried and abandoned
+│   ├── abandoned.json
+│   └── archaeology.json
+├── rescue/                             # the spine: the intent corpus where one exists, else the commit history
+│   ├── spine.md                        # commit-history spine, written where no record store exists
+│   ├── intents/{drafts,planned,shipped,superseded,disciplines}/   # intent corpus, verbatim
+│   └── specs/{open,closed}/            # spec store, verbatim
 ├── docs/
-│   ├── adrs/                           # verbatim ADR copies
-│   ├── terminology.md                  # rendered from .abcd/development/brief/glossary/<context>/<term>.md (per itd-27 / spc-3, adr-30)
-│   ├── claude-md-snapshot.md
-│   └── tutorials/ guides/ reference/ explanation/   # verbatim from source docs/
-├── assets/
-│   ├── logos/ charts/ screenshots/
-│   └── _manifest.json                  # source path → lifeboat path, caption, provenance, classification (keep/adapt/drop)
-├── audit/
-│   ├── oracle-<timestamp>.{json,md}                # lifeboat-oracle (content fidelity)
-│   ├── press-release-oracle-<timestamp>.{json,md}  # press-release-composer's product audit
-│   └── documentation-audit-<timestamp>.{json,md}   # documentation-auditor (subagent pre-pack)
-├── activity/                           # curated issue ledger snapshot (per itd-4)
-│   └── issues/{open,resolved,wontfix}/
-└── _provenance.json                    # current snapshot's provenance (sources probed, adapter runs, agent runs, oracle backend used, schema_version). Hash matches the manifest_sha256 in voyage/disembark/history.jsonl for this run; cumulative history lives in voyage/, not here.
+│   └── adrs/                           # ADRs copied verbatim
+└── activity/
+    └── issues/{open,resolved,wontfix}/ # curated issue ledger snapshot
 ```
 
-The lifeboat is written out-of-tree to `<dest>` (adr-35), so the source repo has nothing to gitignore. (Superseded: this line previously said the lifeboat is gitignored unless `visibility=private`, which assumed the in-tree home.)
+The synthesis sub-verbs add the rest over an already-packed lifeboat: `press-release` writes `press-release.{json,md}`, `principles` writes `principles.{json,md}`, `oracle` writes the audit, and `graveyard` validates and writes the lesson JSON. None of these exist at pack time.
+
+The lifeboat is written out-of-tree to `<dest>` (adr-35), so the source repo has nothing to gitignore.
 
 ## 6. Per-phase acceptance
 
 Each phase passes when **both gates** succeed:
 
 1. **Oracle gate**: `lifeboat-oracle` audit on phase outputs returns a registered review verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`, per `05-internals/01-agents.md § Verdict-tag protocol`) with specific findings (not vague approval); the gate passes on `SHIP`. The oracle is **host-delegated by default** (per [adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)); an opt-in oracle adapter (native / CLI / API / MCP) runs the audit when wired — never blocks.
-2. **Round-trip gate**: phase outputs feed cleanly into the next phase's expected inputs (e.g., Pass A's `spec-essence.json` validates against schema and is consumed by Pass B's chat-distiller without parse errors).
+2. **Round-trip gate**: stage outputs feed cleanly into the next stage's expected inputs (e.g., a packed lifeboat verifies against its manifest and is consumed by the synthesis sub-verbs — `oracle`, `principles`, `press-release`, `graveyard` — without parse errors).
 
 Acceptance is checked across the validation corpus (`.abcd/corpus.json` — a design target; the file is not yet in the tree), with documented per-repo exemptions where a feature genuinely doesn't apply.
 
 ## 7. Acceptance
 
-> **Open question (adr-35):** bare `/abcd:disembark` previously reported "where the lifeboat lives", which was answerable only because the home was fixed and in-tree. With an operator-chosen `<dest>`, the destination path must come from somewhere, and adr-35 pins the `history.jsonl` line to `manifest_sha256`, file list, oracle backend, and verdict — it does **not** say the line records the destination. **Decide:** does a `disembark/history.jsonl` entry carry the destination path (and does bare invocation resolve `<source-root-sha>` from the cwd, given disembark is otherwise not cwd-based)? The first bullet below assumes yes on both counts.
+> **Open question (adr-35):** the shipped `history.jsonl` line records schema version, event, timestamp, `manifest_sha256`, source name, source root SHA, destination, file count, and bytes — so the destination a bare-invocation readout would need is already persisted. **Decide:** does bare invocation resolve `<source-root-sha>` from the cwd (as `probe` and `plan` already default to it) and read the voyage log? The design-target marker on the first bullet below is gated on that decision.
 
-- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:disembark`, **then** the dispatcher reads the voyage log at `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` and shows when the source last disembarked and where that snapshot was written, the available sub-verbs (`pack <source-repo> <dest>`, `probe`, `plan`; later phase: `to-spec-kit`), and suggested next actions — bare invocation never mutates state.
+- **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:disembark`, **then** the dispatcher prints the available sub-verbs (`pack <source-repo> <dest>`, `probe`, `plan`, `coverage`, `oracle`, `graveyard`, `press-release`, `principles`; later phase: `to-spec-kit`) and flags only — bare invocation never mutates state. *(Design target, gated on the adr-35 open question above: once the `history.jsonl` line's destination field and the cwd `<source-root-sha>` resolution are decided, bare invocation also reads the voyage log at `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` and shows when the source last disembarked and where that snapshot was written, plus suggested next actions.)*
 - **Given** any source repo, **when** any sub-verb runs against it (`probe`, `plan`, or a full pack), **then** the source tree is byte-for-byte identical afterwards — a test hashes the tree before and after (adr-35: disembark is read-only). There is no `home`, and no path under `<source-repo>` is ever a destination.
 - **Given** a corpus repo with an intent corpus, ADRs, and a memory backend present, **when** `/abcd:disembark pack <source-repo> <dest>` runs to completion, **then** `<dest>` contains all sections in [§ 5](#5-output-shape) and the oracle audit returns a registered verdict of `SHIP` with specific findings.
 - **Given** a corpus repo where one source is sparse (e.g., a repo with no intent corpus), **when** a full pack runs, **then** the run **succeeds**: the affected section is omitted from the brief rather than fabricated, and `coverage.{json,md}` records it with `status: blank`, what was searched, and the question a human must answer — a blank is a first-class result, not a failure or an exemption footnote (adr-35).
-- **Given** the user runs `/abcd:disembark probe <source-repo>`, **when** the command completes, **then** all adapters' `probe()` runs in parallel, `coverage.{json,md}` is emitted with every brief section marked `grounded` / `partial` / `blank` plus what was searched, nothing is written into `<source-repo>`, and the run takes a small fraction of the time a full pack would take (no LLM dispatches).
+- **Given** the user runs `/abcd:disembark probe <source-repo>`, **when** the command completes, **then** all adapters' `probe()` runs in parallel, the coverage report is rendered to stdout (text, or JSON with `--json`) with every brief section marked `grounded` / `partial` / `blank` plus what was searched, nothing is written into `<source-repo>`, and the run takes a small fraction of the time a full pack would take (no LLM dispatches).
 - **Given** `probe` is run across the validation corpus, **when** the per-repo coverage reports are aggregated, **then** the aggregate reports the section-coverage delta between a rich-record repo and a git-only repo — the experiment's readout, and the evidence the packer's section list is built to (itd-88, adr-35).
-- **Given** the user runs `/abcd:disembark plan`, **when** the command completes, **then** the inventory + agent budget estimation runs end-to-end, the would-be writes are listed (file paths, agent dispatches, estimated tokens), nothing is written to `<source-repo>` or `<dest>`, and the report explicitly notes which Pass A/B/C agents would have been dispatched.
+- **Given** the user runs `/abcd:disembark plan`, **when** the command completes, **then** the source inventory runs end-to-end, the would-be writes are listed as file paths, and nothing is written to `<source-repo>` or `<dest>`.
 - **Given** a destination that is neither absent, nor an empty directory, nor one carrying a parseable `_provenance.json`, **when** a pack targets it, **then** the run **refuses** and writes nothing — abcd never overwrites a directory it did not produce (adr-35's destination safety gate; there is no `.bak`).
-- **Given** an agent's input estimate exceeds `disembark.maxAgentTokens`, **when** that agent dispatches, **then** the stream + summarise (map-reduce) path is taken instead of one-shot dispatch.
-- **Given** Phase 0 dev-sync fails on any source, **when** Pass C runs, **then** the affected Pass C agent runs in degraded mode and the disembark report flags the degradation explicitly.
-- **Given** any pack run completes, **when** the lifeboat is written, **then** a new line is appended to `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` with the run's `manifest_sha256`, file list, oracle backend used, and verdict (per [`03-embark.md § 7`](03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history)). The hash matches `_provenance.json` in the lifeboat for this run.
+- **Given** any pack run completes, **when** the lifeboat is written, **then** a new line is appended to `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` with the run's `schema_version`, event, timestamp, `manifest_sha256`, source name, source root SHA, destination, file **count**, and bytes written (per [`03-embark.md § 7`](03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history)). The line carries no oracle backend or verdict — nothing produces them yet, and an empty field would be a lie (adr-35); its `manifest_sha256` matches the lifeboat's own `_provenance.json`, whose hash pins every other packed file.
 - **Given** a `<dest>` carrying a parseable `_provenance.json` from a previous run, **when** a new snapshot lands there, **then** the previous snapshot is replaced AND its manifest remains in the voyage log — there is never a `lifeboat-v1/` / `lifeboat-v2/` directory; history is preserved in the manifest log, not in stale snapshots.
