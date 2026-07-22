@@ -207,6 +207,11 @@
       "flags": []
     },
     {
+      "path": "abcd changelog",
+      "hidden": false,
+      "flags": []
+    },
+    {
       "path": "abcd disembark",
       "hidden": false,
       "flags": []
@@ -434,6 +439,19 @@
           "name": "dry-run",
           "shorthand": "",
           "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd launch ship",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "changelog-json",
+          "shorthand": "",
+          "type": "string",
           "required": false,
           "hidden": false
         }

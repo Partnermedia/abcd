@@ -126,6 +126,12 @@ Record an explicit non-action decision (open/ -> wontfix/)
 
 **Usage:** `abcd capture wontfix <iss-N> <reason>`
 
+### `abcd changelog`
+
+Preview the next release cut — derived version, records, guardrail (read-only, no prose)
+
+**Usage:** `abcd changelog`
+
 ### `abcd disembark`
 
 Lifeboat tooling: coverage probe, pack dry-run, and out-of-tree pack
@@ -330,6 +336,18 @@ Preview the public launch bundle and release gates (read-only)
 
 ```
       --dry-run   preview the launch bundle and gates without publishing
+```
+
+#### `abcd launch ship`
+
+Cut a release: derive the version and the record set from what shipped (exit 1 when the cut refuses)
+
+**Usage:** `abcd launch ship [--changelog-json <file|->] [flags]`
+
+**Flags:**
+
+```
+      --changelog-json string   path to the host-composed changelog JSON (or - for stdin); absent runs the deterministic emit step
 ```
 
 ### `abcd memory`

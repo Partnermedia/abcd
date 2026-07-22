@@ -35,8 +35,8 @@ const (
 // the command-and-flag, or the manifest file and key that changed, in the form
 // the operator reads it in the tree.
 type Break struct {
-	Kind    BreakKind
-	Surface string
+	Kind    BreakKind `json:"kind"`
+	Surface string    `json:"surface"`
 }
 
 // String renders one break as the line a failing gate names it with. It says

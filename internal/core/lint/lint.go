@@ -1563,74 +1563,42 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 }
 
 // checkSpecLifecycle is the spec-side mirror of checkIntentLifecycle (check
-// family G). It discovers spec files under specs/{open,closed}/ and validates
-// each has a well-formed id/slug/intent link, that the named intent EXISTS in the
-// corpus, and — the load-bearing cross-check — that the intent points back at
-// this spec (bidirectional agreement). A missing specs/ directory is soft.
+// family G). It validates that each spec under specs/{open,closed}/ has a
+// well-formed id/slug/intent link, that the named intent EXISTS in the corpus,
+// and — the load-bearing cross-check — that the intent points back at this spec
+// (bidirectional agreement). A missing specs/ directory is soft.
+//
+// The two trees are read by ScanSpecLinks, the one traversal of the intent
+// buckets and the spec store, so this rule and the release cut's stale-intent
+// refusal can never disagree about what the record says.
 func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]Finding, error) {
 	specsDir := cfg.SpecsDir
 	if specsDir == "" {
 		specsDir = "specs"
 	}
-	specsRoot := filepath.Join(rootAbs, specsDir)
-	if _, err := os.Stat(specsRoot); err != nil {
+	if _, err := os.Stat(filepath.Join(rootAbs, specsDir)); err != nil {
 		return nil, nil // missing specs/ is soft, mirroring intent_lifecycle
 	}
 
-	// Index the intent corpus: which ids exist, and each intent's spec_id value.
-	// This is what lets a spec's link be checked for existence and back-agreement.
-	intentsDir := cfg.IntentsDir
-	if intentsDir == "" {
-		intentsDir = "intents"
+	rootRel, err := filepath.Rel(repoRoot, rootAbs)
+	if err != nil {
+		return nil, err
 	}
-	knownIntent := map[string]bool{}
-	intentSpecID := map[string]string{}
-	_ = filepath.WalkDir(filepath.Join(rootAbs, intentsDir), func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !intentFileRe.MatchString(d.Name()) {
-			return nil
-		}
-		content, rerr := os.ReadFile(path)
-		if rerr != nil {
-			return nil
-		}
-		fields := frontmatterFields(strings.Split(string(content), "\n"))
-		id := fields["id"].value
-		if !intentIDFullRe.MatchString(id) {
-			id = intentIDRe.FindString(d.Name())
-		}
-		if id != "" {
-			knownIntent[id] = true
-			intentSpecID[id] = fields["spec_id"].value
-		}
-		return nil
-	})
+	idx, err := ScanSpecLinks(repoRoot,
+		filepath.ToSlash(filepath.Join(rootRel, intentsDirOf(cfg))),
+		filepath.ToSlash(filepath.Join(rootRel, specsDir)), top)
+	if err != nil {
+		return nil, err
+	}
+	knownIntent := idx.KnownIntents()
+	intentSpecID := idx.IntentSpecID()
 
 	var out []Finding
-	for _, bucket := range []string{"open", "closed"} {
-		bucketDir := filepath.Join(specsRoot, bucket)
-		entries, err := os.ReadDir(bucketDir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
+	for _, spec := range idx.Specs {
+		if spec.exempt {
+			continue
 		}
-		for _, e := range entries {
-			if e.IsDir() || !specFileRe.MatchString(e.Name()) {
-				continue
-			}
-			fileAbs := filepath.Join(bucketDir, e.Name())
-			content, err := os.ReadFile(fileAbs)
-			if err != nil {
-				return nil, err
-			}
-			rel := repoRel(repoRoot, fileAbs)
-			fields := frontmatterFields(strings.Split(string(content), "\n"))
-			if contentExempt(rel, fields, top) {
-				continue
-			}
-			out = append(out, validateSpec(rel, fields, knownIntent, intentSpecID, cfg.Severity)...)
-		}
+		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, cfg.Severity)...)
 	}
 	return out, nil
 }

@@ -341,16 +341,11 @@ func runCLI(t *testing.T, args ...string) []byte {
 // payload from "-" (e.g. `history capture -`) can be exercised end-to-end.
 func runCLIStdin(t *testing.T, stdin string, args ...string) []byte {
 	t.Helper()
-	cmd := NewRootCommand()
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
-	cmd.SetIn(strings.NewReader(stdin))
-	cmd.SetArgs(args)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("execute %v: %v\n%s", args, err, out.String())
+	out, err := runCLIStdinErr(t, stdin, args...)
+	if err != nil {
+		t.Fatalf("execute %v: %v\n%s", args, err, out)
 	}
-	return out.Bytes()
+	return out
 }
 
 func gitCmd(t *testing.T, repo string, args ...string) string {
@@ -490,10 +485,19 @@ func TestCaptureBlockedByWiredAndAnnotated(t *testing.T) {
 // error, so a gate's non-zero exit can be asserted rather than fataled on.
 func runCLIErr(t *testing.T, args ...string) ([]byte, error) {
 	t.Helper()
+	return runCLIStdinErr(t, "", args...)
+}
+
+// runCLIStdinErr is the one harness the other three runners delegate to: stdin
+// bound, output captured, error returned rather than fataled. A gate whose
+// payload arrives on "-" needs both halves at once.
+func runCLIStdinErr(t *testing.T, stdin string, args ...string) ([]byte, error) {
+	t.Helper()
 	cmd := NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
+	cmd.SetIn(strings.NewReader(stdin))
 	cmd.SetArgs(args)
 	err := cmd.Execute()
 	return out.Bytes(), err

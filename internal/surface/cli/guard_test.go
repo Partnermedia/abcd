@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,66 +10,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// guardFixture is a hermetic throwaway repository for the end-to-end guardrail
-// test: the front door walks the LIVE cobra tree and reads the LIVE manifests
-// under a root, so the only honest exercise of it is a real repo with real
-// manifests, a real tag, and a real snapshot blob in that tag's tree.
+// guardFixture is this package's name for the shared hermetic git fixture,
+// gittest.Repo, plus the plugin manifests the surface walk reads. The front door
+// walks the LIVE cobra tree and reads the LIVE manifests under a root, so the
+// only honest exercise of it is a real repo with real manifests, a real tag, and
+// a real snapshot blob in that tag's tree.
 //
-// internal/core/changelog's fixture_test.go carries an equivalent unexported
-// helper. This is the second copy, kept because promoting it would mean
-// rewriting that package's tests; a third caller should consolidate the two into
-// an exported helper in internal/gittest rather than adding another.
+// It delegates to gittest.Repo rather than carrying its own copy: the fixture is
+// shared with internal/core/changelog and with the ship verb's tests, and three
+// private copies would drift apart.
 type guardFixture struct {
+	*gittest.Repo
 	t    *testing.T
 	root string
-	env  []string
 }
 
 func newGuardFixture(t *testing.T) *guardFixture {
 	t.Helper()
-	f := &guardFixture{t: t, root: t.TempDir(), env: gittest.Env(t)}
-	init := exec.Command("git", "-C", f.root, "init", "--initial-branch=main")
-	init.Env = f.env
-	if out, err := init.CombinedOutput(); err != nil {
-		t.Skipf("git init unavailable: %v (%s)", err, out)
-	}
-	return f
+	r := gittest.NewRepo(t)
+	return &guardFixture{Repo: r, t: t, root: r.Root()}
 }
 
-func (f *guardFixture) git(args ...string) {
-	f.t.Helper()
-	full := append([]string{
-		"-C", f.root,
-		"-c", "user.email=fixture@example.invalid",
-		"-c", "user.name=Fixture",
-		"-c", "commit.gpgsign=false",
-	}, args...)
-	cmd := exec.Command("git", full...)
-	cmd.Env = f.env
-	if out, err := cmd.CombinedOutput(); err != nil {
-		f.t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
+func (f *guardFixture) git(args ...string)  { f.Git(args...) }
+func (f *guardFixture) write(rel, c string) { f.Write(rel, c) }
+func (f *guardFixture) commit(msg string)   { f.Commit(msg) }
 
-func (f *guardFixture) write(rel, content string) {
-	f.t.Helper()
-	path := filepath.Join(f.root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		f.t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		f.t.Fatal(err)
-	}
-}
-
-func (f *guardFixture) commit(msg string) {
-	f.t.Helper()
-	f.git("add", "-A")
-	f.git("commit", "--allow-empty", "-m", msg)
-}
-
-// writeManifests plants the two plugin manifests the surface walk reads, so the
-// fixture's current snapshot is built from real files rather than a stub.
 func (f *guardFixture) writeManifests() {
 	f.t.Helper()
 	f.write(".claude-plugin/plugin.json", `{"name":"abcd","description":"fixture"}`+"\n")
