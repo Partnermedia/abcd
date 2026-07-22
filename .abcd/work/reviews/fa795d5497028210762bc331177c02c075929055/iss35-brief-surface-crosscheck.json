@@ -1,0 +1,16 @@
+{
+  "subject": { "digest": { "gitCommit": "fa795d5497028210762bc331177c02c075929055" } },
+  "verifier": { "id": "iss35-brief-surface-crosscheck@release" },
+  "timeVerified": "2026-07-22T20:13:46Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-4-8",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.4.0"
+  },
+  "categories": { "false-claim": 0, "undocumented-surface": 0, "fictional-layout": 0, "criterion-violation": 0, "stale-count": 0 },
+  "failing": [],
+  "_reviewProvenance": "Host-run agent-harness semantic review at full depth (17 brief surface docs, both directions, 22 independent checkers per run), four rounds over PR #132's reconciliation: 102 -> 52 -> 25 -> 9 findings, every finding adversarially triaged before fixing (15 refuted), 148 fixes verified against the shipped binary and source, all nine round-4 residue findings fixed and re-verified in a final pass (iss-121, iss-123 resolved). PROMOTE is the maintainer's decision recorded per verifier-selects-gates-decide: no fifth gating run was made, because the four-round geometric tail shows the unpinned-depth detector finds a fresh nonzero sample per run (iss-122, open, owns pinning the gate's scope, depth, and pass threshold). See PR #132 for the full trail; evidence retained in the local work tier."
+}

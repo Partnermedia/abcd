@@ -1,0 +1,16 @@
+{
+  "subject": { "digest": { "gitCommit": "fa795d5497028210762bc331177c02c075929055" } },
+  "verifier": { "id": "docs-currency-reviewer@release" },
+  "timeVerified": "2026-07-22T20:13:46Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-4-8",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.4.0"
+  },
+  "categories": { "false-claim": 0, "undocumented-surface": 0, "fictional-layout": 0, "criterion-violation": 0, "stale-count": 0 },
+  "failing": [],
+  "_reviewProvenance": "Host-run agent-harness semantic review, PROMOTE with zero findings. The full docs surface was reviewed and PROMOTED at commit 68ce240 (two passes: the fifteen 0.4.0 CHANGELOG claims verified with file:line evidence, plus every user-facing doc changed since the 8e8abb8 PROMOTE). This content commit differs from 68ce240 only by the internal design-record reconciliation under .abcd/ (PR #132, which the detector does not inspect) and a three-line commands/README.md correction — the shipped-command count 13 -> 14 adding `intent` — verified directly against the 14 files in commands/abcd/. See PR #131 and PR #132 for the review trail."
+}
