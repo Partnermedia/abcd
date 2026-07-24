@@ -118,21 +118,34 @@ at its first public release.
 
 ## Open Questions
 
-- **Which surface scaffolds it?** An `ahoy install` step, a new
-  `abcd launch setup` / `abcd release init` sub-verb, or an `embark`-time
-  record family? Leans toward an explicit, opt-in verb (release CI is a
-  deliberate, outward-facing addition, not part of bare install).
-- **How much is templated vs. copied?** A verbatim copy of abcd-cli's fixed
-  workflows risks drift as abcd's own evolve; a template needs per-repo
-  substitution (check-name list, module path, Go version). Prefer a template
-  with a lockstep test against abcd-cli's own workflows so the shipped pattern
-  can't silently diverge from the proven one.
-- **Private→public activation.** abcd-cli's gate was dormant while private and
-  activated on the public flip — which is *how the flaw stayed hidden*. Should
-  the scaffolded gate be exercisable while private (e.g. a dry-run mode) so a
-  managed repo discovers problems before going public?
-- **Relationship to itd-73** (derived versioning) — the scaffold should leave a
-  clean seam for the derived-version number to feed the CHANGELOG roll.
+_All four resolved in the 2026-07-24 maintainer grill (see DECISIONS.md,
+2026-07-24 entries). The PRD is synthesised from that interview; promotion is
+queued in `../../plans/2026-07-24-next-run-queue.md` (Track 1)._
+
+- **Which surface scaffolds it?** RESOLVED: a `launch` sub-verb (e.g.
+  `abcd launch scaffold`) — launch already owns how a release is cut and
+  gated; explicit and opt-in; extends the existing 04-launch chapter.
+  Rejected: new top-level verb (new surface to reconcile), `ahoy install`
+  step (release CI silently arriving with install is the non-deliberate path
+  this intent argues against), embark-time record family (couples to a
+  round-trip most managed repos won't use).
+- **How much is templated vs. copied?** RESOLVED: **self-scaffold parity** —
+  one template; abcd-cli's own `release.yml`/`auto-release.yml` are
+  regenerated from it (with abcd-cli's substitutions) and a test asserts the
+  tree matches the template output. The proven pattern and the shipped
+  template are one artifact by construction; every abcd release exercises the
+  exact machinery managed repos get. Rejected: lockstep diff test between two
+  hand-maintained artifacts; frozen verbatim copy.
+- **Private→public activation.** RESOLVED: **built-in rehearsal mode** — the
+  scaffold ships a `workflow_dispatch` dry-run that arms the full gate
+  against a simulated changelog roll and reviewed-content commit, asserts the
+  gate admits it, and publishes nothing. The runbook makes a green rehearsal
+  the precondition for the first real release.
+- **Relationship to itd-73** (derived versioning) — RESOLVED: the CHANGELOG
+  dated-heading format **is** the seam; `auto-release` keys on the newest
+  dated heading, so `launch ship`'s derived version is one optional producer
+  and a hand-rolled heading fires the same machinery. The scaffold stays
+  producer-agnostic.
 
 ## References
 
