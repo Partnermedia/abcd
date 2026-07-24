@@ -21,7 +21,7 @@
 ---
 
 <div align="center">
-  <p><a href="#roles">Roles</a> — <a href="#process">Process</a> — <a href="#resources">Resources</a></p>
+  <p><a href="#roles">Roles</a> — <a href="#artefacts">Artefacts</a> — <a href="#process">Process</a> — <a href="#resources">Resources</a></p>
 </div>
 
 ---
@@ -70,6 +70,8 @@ Some things the project needs aren't user-facing — cross-cutting rules every f
 # Process
 
 **It starts with the brief.** You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. `abcd` has a skill that ingests that material and produces a plain-language draft of your project's brief; the parts that feel fuzzy, you sharpen together with a *Socratic interview* the framework provides. By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about. Much of it is ambition rather than fact at this stage, and that's fine: The brief never bluffs, so those passages are marked accordingly.
+
+## Capturing intents
 
 **Ideas become intents.** From then on, whenever an idea arrives, capturing it is one line:
 
@@ -156,15 +158,19 @@ Acceptance criteria for each intent use three words to describe a checkable outc
 
 The reviewer is allowed to fail honestly. If a promise wasn't kept, it says so. If something was delivered but with a wrinkle worth your attention, it flags the wrinkle rather than glossing it. And if it genuinely couldn't tell from the repo, it says *that* — which is different from saying the promise wasn't met, and `abcd` insists on the distinction.
 
+## Capturing issues & thoughts
+
 While intents are at the core of `abcd`, you will sometimes find that a thought that *feels* relevant crosses your mind — a half-formed observation, a question for the team, a doubt about the brief, a behaviour you'd expect a user to notice — and you don't want to lose it. Instead of articulating an intent, `abcd` has a fast hatch for capturing it:
 
 ```bash
 abcd capture "<whatever crossed your mind>"
 ```
 
-One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with the next free id. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself.
+One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with the next free id. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself at this stage.
 
-Deciding what each capture actually *is* is your facilitator's job: They triage the open captures later and route each one — a bug gets fixed (finding first, fix after); a feature seed gets promoted into an intent draft; a doubt about the brief becomes a brief correction; a deliberate non-action is closed as `wontfix` with the reasoning recorded, so the question never gets re-litigated.
+`abcd capture` essentially decouples retention from classification. Intents demand press-release discipline — a named user, acceptance criteria, a *why*. Forcing a half-formed doubt through that discipline either kills the thought (too much ceremony, you let it go) or pollutes the intent corpus (you file something vague to avoid losing it). The *fast hatch* makes retention almost free — seconds, zero decisions — and defers the "*what is this?*" question to someone in the right seat at the right time.
+
+That "someone" is your technical facilitator, who triages those captures later: They sweep the open captures and route each one — a bug gets fixed (finding first, fix after); a feature seed gets promoted into an intent draft; a doubt about the brief becomes a brief correction; a deliberate non-action goes to `wontfix` with the reasoning recorded, so the question never gets re-litigated.
 
 
 # Resources
