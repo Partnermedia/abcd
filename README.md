@@ -37,17 +37,9 @@ AI coding is getting more powerful, yes one important group of people who most n
 </div>
 
 
-# How `abcd` works
-
-## Roles
+# Roles
 
 `abcd` is being shaped by what real two-person teams discover as they use it. In the initial version, both roles — the product thinker and the facilitator — are human. In a later version, `abcd` aims to offer an automated facilitator, so a product thinker can run the framework with an AI translator alongside their agentic team of AI-engineers.
-
-The product thinker and facilitator collaborate on artefacts that are sharedly owned, with others being autonomously generated and consumed by a team of AI-engineers. Two essential artefacts — an initial *briefing* document and set of articulated *intents* — are familiar teritory for product thinkers. `abcd` builds on those artefacts to *carry intent through to delivered reality*:
-
-1. a **brief** that always-current as the project's living canvas *(sharedly owned by the product thinker and the facilitator)*
-2. **press release** shaped intents *(user-facing and thus the domain of the product thinker)*
-3. **automated reviews** that grades delivered reality against the original promise *(owned by the AI-engineering team)*
 
 As a **product thinker**, you know who the user is. You know what *done* looks like when you see it. You know which trade-offs are acceptable and which would betray the point of the project. `abcd` is built around two moments where that judgement is decisive. First, at the start of a piece of work (when you set the *why* as an intent), and at the end (when you read the verdict on whether the *why* was delivered). What happens in between — turning your why into engineering work AI agents can act on — is the facilitator's job.
 
@@ -61,85 +53,100 @@ The **facilitator** is a *translator*, not an engineer-on-the-team in the tradit
 | Cross-cutting concerns the brief implies | — | derive and encode |
 | Reading the verdict when work ships | read; decide what to do next | investigate any *not delivered* findings |
 
-Contributing to the brief and writing intents-as-press-releases are the artefacts the product thinker writes.
 
-1. The **brief** answers *what is this whole thing about?* — purpose, scope, the vocabulary the project uses, what "good" looks like. It's edited in place as the project evolves, never re-versioned, so it stays alive instead of going stale in a folder.
-2. **Intents** answer *why does each user-facing change matter?* They're individually portable: Each one stands on its own, can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
+# Artefacts
 
-Some things the project needs aren't user-facing. Often, these are cross-cutting rules every feature must satisfy *(e.g., a privacy review, an accessibility checklist)*, or background plumbing that enables other capability. As a product thinker, you don't have to recognise or label those. That's the work of your facilitator who derives them from the brief and handles them as part of the engineering work.
+The product thinker and facilitator collaborate on artefacts that are jointly owned, with others generated and consumed autonomously by the AI-engineering team. Two of them — an initial *briefing* document and a set of articulated *intents* — are familiar territory for product thinkers; `abcd` builds on them, and adds a third, to *carry intent through to delivered reality*.
 
-## Process
+1. The **brief** *(owned jointly by the product thinker and the facilitator)* answers *what is this whole thing about?* — purpose, scope, the vocabulary the project uses, what "good" looks like. It makes one hard promise: **Everything it says reads true right now.** On day one, when the team has agreed a design but built nothing, most of the brief is ambition — and every ambitious passage is visibly marked as not yet real. As work ships, those markings come off one by one: the change that ships a capability also rewrites its passage in the brief to describe what actually exists (which is rarely word-for-word what was planned). The brief is never re-versioned and keeps no history — version control does that — so it earns its role as the project's living canvas one shipped change at a time.
 
-You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. `abcd` has a skill that ingests that material and produces a plain-language draft of your project's brief. You read it together. The parts that feel fuzzy, you sharpen with a Socratic interview the framework provides. By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about.
+2. **Intents** *(user-facing, and thus the product thinker's domain)* answer *why does each user-facing change matter?* Each is a one-page press release written as if the change had already shipped, with a named user feeling the difference, plus acceptance criteria in plain *Given / When / Then* language. Intents are how ambition travels into the brief: An intent is drafted, planned into engineering work, and built — and the same change that ships it updates the brief. Once its acceptance criteria are verifiably met, the intent is filed as shipped and becomes the permanent record of the *why*; the brief carries the *what is*; the engineering spec carries the *how*. Intents are individually portable: Each stands on its own and can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
 
-Once both of you have agreed on the brief, the facilitator begins to plan implementation while you continue to think of additional ideas and/or features. Capturing an intent is as simple as typing:
+3. **Automated reviews** *(owned by the AI-engineering team)* grade delivered reality against the original promise. When work lands, a fidelity review reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
+
+Some things the project needs aren't user-facing — cross-cutting rules every feature must satisfy *(e.g., a privacy review, an accessibility checklist)*, or background plumbing that enables other capability. Those skip the press-release treatment and go straight into the brief, under the same promise: Real, or visibly marked as not yet real. As a product thinker you don't have to recognise or label them — that's your facilitator's job.
+
+
+# Process
+
+**It starts with the brief.** You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. `abcd` has a skill that ingests that material and produces a plain-language draft of your project's brief; the parts that feel fuzzy, you sharpen together with a *Socratic interview* the framework provides. By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about. Much of it is ambition rather than fact at this stage, and that's fine: The brief never bluffs, so those passages are marked accordingly.
+
+**Ideas become intents.** From then on, whenever an idea arrives, capturing it is one line:
 
 ```bash
 abcd intent "<one-line idea>"
 ```
 
-Each captured intent is a press release, written as if the change has already shipped, with a named user feeling the difference. Your facilitator handles the rest of the lifecycle — turning your *why* into engineering work, surfacing cross-cutting concerns, and running the fidelity reviewer when the work lands. You stay in the seat where your judgement matters most: Setting the why at the start, and reading the verdict at the end.
+Your facilitator helps sharpen the press release and its acceptance criteria — the criteria are a hard gate, not a suggestion — then turns the intent into engineering work, surfaces the cross-cutting concerns it implies, and lets AI coding agents do the building. You stay in the seat where your judgement matters most: Setting the *why* at the start, and reading the verdict at the end.
 
-An idea is captured as a **press release** — written in present tense as if the change has already shipped, with a named user feeling the difference. Every intent declares **acceptance criteria** in plain "Given / When / Then" language — that's a hard gate, not a suggestion. Once you're ready to build it, your facilitator turns it into engineering work, and AI coding agents do the building. When the work lands, an automated reviewer reads each acceptance bullet against the actual shipped repository and writes the verdict back onto the intent itself.
+**Shipping closes the loop twice.** When the work lands, the fidelity review grades each acceptance bullet against the actual repository — the code, the configs, the tests, the docs — and writes the verdict onto the intent. And the same change updates the brief: The passage covering this capability loses its not-yet-real marking and is rewritten to describe what actually shipped. That second half is what keeps the brief honest — the true description of your project, one shipped change at a time, instead of a wish list nobody trusts.
 
 ```text
         ╭─────────────────────╮
-        │  Half-formed idea   │
-        ╰─────────────────────╯
-                  │
-                  ▼
-        ┌─────────────────────┐
-        │  Capture as a       │
-        │  press release —    │
-        │  what does the      │
-        │  user feel after    │
-        │  this ships?        │
-        └─────────────────────┘
-                  │
-                  ▼
-        ┌─────────────────────┐
-        │  Add acceptance     │
-        │  criteria — how     │
-        │  will we tell, on   │
-        │  the day, whether   │
-        │  it was delivered?  │
-        └─────────────────────┘
-                  │
-                  ▼
-            ╱───────────╲
-           ╱  Ready to   ╲ ── No ──┐
-           ╲  build it?  ╱         │  refine, or grill
-            ╲───────────╱          │  to stress-test
-                  │ Yes            │
-                  │ ◄──────────────┘
-                  ▼
-        ┌─────────────────────┐
-        │  Facilitator turns  │
-        │  the intent into    │
-        │  engineering work;  │
-        │  AI agents build it │
-        └─────────────────────┘
-                  │
-                  ▼
-        ┌─────────────────────┐
-        │  Fidelity review    │
-        │  reads each         │
-        │  acceptance bullet  │
-        │  against the actual │
-        │  shipped repo       │
-        └─────────────────────┘
-                  │
-                  ▼
-        ┌─────────────────────┐
-        │  Shipped — verdict  │
-        │  written back onto  │
-        │  the intent itself  │
+        │  Half-formed idea   │ ◄─────────────────────────┐
+        ╰─────────────────────╯                           │
+                  │                                       │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Capture as a       │                           │
+        │  press release —    │                           │
+        │  what does the      │                           │
+        │  user feel after    │                           │
+        │  this ships?        │                           │
+        └─────────────────────┘                           │
+                  │                                       │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Add acceptance     │                           │
+        │  criteria — how     │                           │
+        │  will we tell, on   │                           │
+        │  the day, whether   │                           │
+        │  it was delivered?  │                           │
+        └─────────────────────┘                           │
+                  │                                       │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Refine / grill —   │                           │
+        │  stress-test the    │                           │
+        │  why and the        │ ◄─────────┐               │
+        │  criteria until     │           │               │
+        │  both are clear     │           │ not yet       │
+        └─────────────────────┘           │ clear enough  │
+                  │                       │               │
+                  ▼                       │               │
+            ╱───────────╲                 │               │
+           ╱  Ready to   ╲ ── No ─────────┘               │
+           ╲  build it?  ╱                                │
+            ╲───────────╱                                 │
+                  │ Yes                                   │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Facilitator turns  │                           │
+        │  the intent into    │                           │
+        │  engineering work;  │                           │
+        │  AI agents build it │                           │
+        └─────────────────────┘                           │
+                  │                                       │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Fidelity review    │                           │
+        │  reads each         │                           │
+        │  acceptance bullet  │                           │
+        │  against the actual │                           │
+        │  shipped repo       │                           │
+        └─────────────────────┘                           │
+                  │                                       │
+                  ▼                                       │
+        ┌─────────────────────┐                           │
+        │  Shipped — verdict  │         next idea         │
+        │  on the intent; the │ ─────────────────────────►┘
+        │  brief passage is   │
+        │  rewritten to what  │
+        │  now exists         │
         └─────────────────────┘
 ```
 
-If something crosses your mind mid-flight that you don't want to lose — a half-formed observation, a question for the team, a doubt about the brief, a behaviour you'd expect a user to notice — abcd has a fast hatch for capturing it. You don't have to decide what kind of thing it is. Your facilitator triages those captures later.
-
-Acceptance criteria use three words to describe a checkable outcome.
+Acceptance criteria for each intent use three words to describe a checkable outcome.
 
 |  | What it pins down |
 |------|-------------------|
@@ -147,9 +154,17 @@ Acceptance criteria use three words to describe a checkable outcome.
 | **When** | The trigger — a single user or system action. |
 | **Then** | The observable outcome — something a human (or the fidelity reviewer) can check by *looking at the result*, not by reading the author's intent. |
 
-When the engineering work lands, `abcd` reads each acceptance bullet against the actual repository — the code, the configs, the tests, the docs — and grades them. The verdicts are written back onto the intent itself, in the same file as the press release. Your *why* and the *did-we-deliver-it* live in one place, side by side, for as long as the project does.
-
 The reviewer is allowed to fail honestly. If a promise wasn't kept, it says so. If something was delivered but with a wrinkle worth your attention, it flags the wrinkle rather than glossing it. And if it genuinely couldn't tell from the repo, it says *that* — which is different from saying the promise wasn't met, and `abcd` insists on the distinction.
+
+While intents are at the core of `abcd`, you will sometimes find that a thought that *feels* relevant crosses your mind — a half-formed observation, a question for the team, a doubt about the brief, a behaviour you'd expect a user to notice — and you don't want to lose it. Instead of articulating an intent, `abcd` has a fast hatch for capturing it:
+
+```bash
+abcd capture "<whatever crossed your mind>"
+```
+
+One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with the next free id. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself.
+
+Deciding what each capture actually *is* is your facilitator's job: They triage the open captures later and route each one — a bug gets fixed (finding first, fix after); a feature seed gets promoted into an intent draft; a doubt about the brief becomes a brief correction; a deliberate non-action is closed as `wontfix` with the reasoning recorded, so the question never gets re-litigated.
 
 
 # Resources
