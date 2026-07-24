@@ -701,3 +701,51 @@ parallel-agent merge contention bites.
   present-tense brief prose. The 95 confirmed discrepancies are that ratchet
   skipped at scale; the crosscheck is the measuring instrument; promoting the
   principle to a mechanical discipline is the open follow-up (iss-121, iss-122).
+
+- 2026-07-24 — iss-35 resolves: everything it stayed open for is verified
+  shipped (surface_coverage armed as blocker, 16 surface chapters incl.
+  docs/history/version, skills→commands relabel, machine-checked staged Status
+  column, crosscheck wired as release gate). The only residue is iss-122.
+  Decided in a maintainer grill interview this date.
+
+- 2026-07-24 — iss-122 design: the crosscheck gate gets a committed input
+  manifest (doc list, directions, checker count, prompt hash) with TIERED
+  depth — full depth for feature/breaking releases, Direction-B-only shallow
+  pass for patch. The receipt must echo the manifest hash AND the tier;
+  receipt_gate refuses a receipt whose tier mismatches the release's declared
+  impact. Automated refusal is PROCEDURAL ONLY (manifest/tier mismatch,
+  undispositioned findings); confirmed findings go to the maintainer, whose
+  PROMOTE with recorded dispositions is the gate (verifier-selects-gates-
+  decide). Rejected: hard-blocking on confirmed majors (a stochastic LLM
+  triage could block a release); never-worse ratchet (drift persists; tiers
+  make counts incomparable).
+
+- 2026-07-24 — itd-93 design settled in maintainer grill: (a) surface is a
+  `launch` sub-verb (extends 04-launch; rejected: new top-level verb, ahoy
+  install step, embark-time family); (b) SELF-SCAFFOLD PARITY — abcd-cli's own
+  release workflows are regenerated from the shipped template and a test
+  asserts parity, so the proven pattern and the template are one artifact
+  (rejected: lockstep diff test between two artifacts; frozen verbatim copy);
+  (c) built-in workflow_dispatch REHEARSAL mode — arms the full gate against a
+  simulated roll, publishes nothing; a green rehearsal is the runbook
+  precondition for the first real release; (d) the changelog dated-heading
+  format IS the itd-73 seam — `launch ship` is one optional producer.
+  Promotes standalone / severity minor, PRD synthesised from the interview
+  (no grandfathering); the 5 seeded ACs stand, amended for rehearsal mode.
+
+- 2026-07-24 — itd-28 gitleaks sign-off: Stage 2 runs through the scanner
+  seam — native patterns are the default engine, gitleaks is the stronger
+  opt-in adapter when the binary is present, and the hook reports which
+  engine ran (loud staging). CI's gitleaks pass stays the authoritative
+  backstop; iss-96 pattern parity folds into the spec. No new hard
+  dependency — adr-22 holds. Rejected: gitleaks as hard local dependency
+  (first adr-22 exception, per-machine install burden); CI-only Stage 2
+  (secrets reach pushed remote history before CI sees them).
+
+- 2026-07-24 — Next-run queue reshaped by the grill: the small consequences
+  fold into Track 1 (resolve iss-35; implement iss-122 pinning; amend +
+  promote itd-93 — promotion only, implementation later as its own focused
+  run); the spine stays friction fixes → itd-94 → walk fixes → itd-88.
+  itd-28 implements in the following run against the adapter decision.
+  Queue: plans/2026-07-24-next-run-queue.md (supersedes the 2026-07-18
+  queue file's pick-up role).
