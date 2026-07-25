@@ -138,8 +138,9 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 	sp, ok := store.ByIntent(intentID)
+	var mintWarning string
 	if !ok {
-		sp, err = spec.Create(repoRoot, intentID, it.Slug)
+		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug)
 		if err != nil {
 			return PlanResult{}, err
 		}
@@ -184,7 +185,7 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	it.SpecID = sp.ID
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
-	return PlanResult{Intent: it, Spec: sp}, nil
+	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning}, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned

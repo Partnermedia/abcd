@@ -214,6 +214,14 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			findings = append(findings, sl...)
 		}
 
+		if suCfg, ok := cfg.Rules["spec_id_unique"]; ok && suCfg.Enabled {
+			su, err := checkSpecIDUnique(repoRoot, rootAbs, suCfg, cfg)
+			if err != nil {
+				return nil, err
+			}
+			findings = append(findings, su...)
+		}
+
 		if fsCfg, ok := cfg.Rules["forbidden_synonyms"]; ok && fsCfg.Enabled {
 			fs, err := checkForbiddenSynonyms(repoRoot, rootAbs, fsCfg)
 			if err != nil {
@@ -1599,6 +1607,63 @@ func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([
 			continue
 		}
 		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, cfg.Severity)...)
+	}
+	return out, nil
+}
+
+// checkSpecIDUnique flags any spc-N id claimed by two or more spec-store files
+// across specs/{open,closed}/. The spec mint allocator now folds every git ref
+// into its max (recordid.MaxAcrossRefs), which closes the common
+// commit-then-branch collision, but two branches that both mint before either
+// commits still race (iss-115, iss-120) — and a hand-added spec file bypasses the
+// allocator entirely. This is the record-lint backstop that CI runs on the merged
+// PR's union, mirroring issue_id_unique/intent_lifecycle and sharing the one
+// validateIDUnique primitive. A malformed or absent id is spec_lifecycle's
+// concern, not this rule's, so only well-formed spc-N ids are compared; a
+// content-exempt spec is skipped exactly as spec_lifecycle skips it.
+func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]Finding, error) {
+	specsDir := cfg.SpecsDir
+	if specsDir == "" {
+		specsDir = "specs"
+	}
+	if _, err := os.Stat(filepath.Join(rootAbs, specsDir)); err != nil {
+		return nil, nil // missing specs/ is soft, mirroring spec_lifecycle
+	}
+	rootRel, err := filepath.Rel(repoRoot, rootAbs)
+	if err != nil {
+		return nil, err
+	}
+	idx, err := ScanSpecLinks(repoRoot,
+		filepath.ToSlash(filepath.Join(rootRel, intentsDirOf(cfg))),
+		filepath.ToSlash(filepath.Join(rootRel, specsDir)), top)
+	if err != nil {
+		return nil, err
+	}
+
+	// Track every file each well-formed spc-N id claims, then flag every member of
+	// a set of size > 1 via the shared primitive.
+	idFiles := map[string][]string{}
+	for _, spec := range idx.Specs {
+		if spec.exempt {
+			continue
+		}
+		id := spec.fields["id"].value
+		if !specIDFullRe.MatchString(id) {
+			continue
+		}
+		idFiles[id] = append(idFiles[id], filepath.Join(repoRoot, spec.Path))
+	}
+
+	var out []Finding
+	for _, spec := range idx.Specs {
+		if spec.exempt {
+			continue
+		}
+		id := spec.fields["id"].value
+		if !specIDFullRe.MatchString(id) {
+			continue
+		}
+		out = append(out, validateIDUnique(repoRoot, spec.Path, id, "spec", "spec_id_unique", cfg.Severity, spec.fields, idFiles)...)
 	}
 	return out, nil
 }

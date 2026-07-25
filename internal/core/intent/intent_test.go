@@ -213,7 +213,7 @@ func TestPlanReusesExistingSpecForIntent(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 	// Pre-create the spec for this intent; the draft is still an unlinked draft.
-	sp, err := spec.Create(root, "itd-10", "alpha")
+	sp, _, err := spec.Create(root, "itd-10", "alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
