@@ -1072,6 +1072,7 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 // lifecycle status board (never mutates); the `plan` and `link` sub-verbs carry
 // the mutations. Usage/lookup failures exit 2.
 func newIntentCommand(asJSON *bool) *cobra.Command {
+	var intentImpact string
 	intentCmd := &cobra.Command{
 		Use:   "intent [text]",
 		Short: "Intent lifecycle; bare invocation is read-only status, quoted text files a draft",
@@ -1092,7 +1093,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 						"unknown intent subcommand %q; did you mean %q? (nothing created — reword the text if you meant to file a draft)",
 						args[0], sug)}
 				}
-				return createIntentFromText(cmd, cwd, strings.Join(args, " "), *asJSON)
+				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
 			}
 			v, err := intent.Status(cwd)
 			if err != nil {
@@ -1111,6 +1112,11 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			})
 		},
 	}
+	// --impact stamps an optional product judgement onto the seeded draft. It is
+	// optional (a draft is "not judged yet"), but when set it is validated and
+	// travels unchanged to shipped/, where intent_impact_valid requires it — so the
+	// tool's own create->plan->ship path can produce a record that clears the gate.
+	intentCmd.Flags().StringVar(&intentImpact, "impact", "", "stamp the draft's product impact: additive|breaking|fix (optional)")
 
 	// new "<text>" — backwards-compatible alias for the sub-verb-free create path
 	// (itd-46, lean a): routes to the same create engine and warns on stderr that
@@ -1130,7 +1136,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(),
 				"WARNING: `abcd intent new` is deprecated; use `abcd intent \"<text>\"` (quoted text is the create signal).")
-			return createIntentFromText(cmd, cwd, strings.Join(args, " "), *asJSON)
+			return createIntentFromText(cmd, cwd, strings.Join(args, " "), "", *asJSON)
 		},
 	})
 
@@ -1234,8 +1240,8 @@ const ledgerDecisionRule = "  which ledger? half-formed observation, question, o
 // files a new draft via intent.CreateFromText and renders the created record. The
 // engine refuses empty/whitespace text and mints the id under the store lock, so
 // this surface stays a thin marshaller.
-func createIntentFromText(cmd *cobra.Command, cwd, text string, asJSON bool) error {
-	it, err := intent.CreateFromText(cwd, text)
+func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON bool) error {
+	it, err := intent.CreateFromText(cwd, text, impact)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
@@ -1786,9 +1792,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	listCmd.Flags().BoolVar(&lsAll, "all", false, "issues across all three states")
 	captureCmd.AddCommand(listCmd)
 
-	// resolve — open -> resolved with a note.
-	captureCmd.AddCommand(&cobra.Command{
-		Use:   "resolve <iss-N> <note>",
+	// resolve — open -> resolved with a note and a required product impact.
+	var resolveImpact string
+	resolveCmd := &cobra.Command{
+		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal>",
 		Short: "Mark an open issue resolved (open/ -> resolved/)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1796,7 +1803,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := capture.Resolve(capture.ResolveRequest{RepoRoot: cwd, ID: args[0], Resolution: args[1]})
+			res, err := capture.Resolve(capture.ResolveRequest{RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact})
 			if err != nil {
 				return err
 			}
@@ -1804,7 +1811,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, res.Path)
 			})
 		},
-	})
+	}
+	// resolved/ is gated by issue_impact_valid: the record carries the product
+	// judgement the version derivation reads, and there is no default. The flag is
+	// mandatory in effect — the core (capture.Resolve -> changelog.ParseImpact)
+	// refuses an empty impact — but it is not marked cobra-required, to keep the
+	// tree's no-required-flags invariant (TestLiveTreeMarksNoFlagRequired): the
+	// requirement is enforced semantically in the core, not by a usage annotation.
+	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
+	captureCmd.AddCommand(resolveCmd)
 
 	// wontfix — open -> wontfix with a reason.
 	captureCmd.AddCommand(&cobra.Command{

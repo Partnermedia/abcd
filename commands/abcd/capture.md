@@ -1,7 +1,7 @@
 ---
 name: capture
 description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | resolve <iss-N> <note> | wontfix <iss-N> <reason>"
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> | wontfix <iss-N> <reason>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -64,12 +64,19 @@ blocked by an open dependency are demoted and annotated `[blocked-by iss-N,…]`
 ## Resolve / wontfix
 
 ```bash
-abcd capture resolve <iss-N> "<resolution-note>" --json
+abcd capture resolve <iss-N> "<resolution-note>" --impact <additive|breaking|fix|internal> --json
 abcd capture wontfix <iss-N> "<reason>" --json
 ```
 
 Each moves the issue out of `open/` and records the note; report the `id` and
 the `from_status -> to_status` transition from the JSON.
+
+`resolve` requires `--impact`: a resolved issue is in the release set, so it
+carries the product judgement the version derivation reads (`additive`,
+`breaking`, `fix`, or `internal` — plumbing invisible to users). There is no
+default; an absent or misspelled impact is refused rather than guessed, so the
+record always satisfies the `issue_impact_valid` gate. `wontfix` takes no impact
+(a non-action ships nothing).
 
 Promoting an issue to an intent (`/abcd:capture promote <iss-N>`) is
 skill-orchestrated, not a binary sub-verb. It hands the issue body to the intent

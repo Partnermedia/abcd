@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/core/changelog"
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 // mutationPreamble runs the idempotent pre-mutation steps: sweep orphan
@@ -120,17 +121,30 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 	return CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}, nil
 }
 
-// Resolve moves an open issue to resolved/, writing the resolution note.
+// Resolve moves an open issue to resolved/, writing the resolution note and the
+// product impact. resolved/ is gated by issue_impact_valid, so the impact is
+// validated against the shared changelog enum up front (empty or invalid is
+// refused, never defaulted) and stamped bare alongside the note — the tool's own
+// resolve path can never mint a record its own blocker rejects.
 func Resolve(req ResolveRequest) (TransitionResult, error) {
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution, StateResolved)
+	impact, err := changelog.ParseImpact(req.Impact)
+	if err != nil {
+		return TransitionResult{}, fmt.Errorf("resolve: %w", err)
+	}
+	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
+		[]kv{{"impact", rawScalar(string(impact))}}, StateResolved)
 }
 
 // Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
+// wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no
+// judgement is stamped.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, StateWontfix)
+	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, StateWontfix)
 }
 
-func transition(repoRoot, issuesRoot, issID, field, note string, target State) (TransitionResult, error) {
+// transition moves an open issue to target, setting the defining note field and
+// any extra frontmatter fields (e.g. resolved/'s impact) in one atomic write.
+func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, target State) (TransitionResult, error) {
 	rr, ir, err := resolveRoots(repoRoot, issuesRoot)
 	if err != nil {
 		return TransitionResult{}, err
@@ -167,6 +181,12 @@ func transition(repoRoot, issuesRoot, issID, field, note string, target State) (
 		newContent, err := setScalarField(content, field, note)
 		if err != nil {
 			return err
+		}
+		for _, f := range extra {
+			newContent, err = setScalarField(newContent, f.key, f.val)
+			if err != nil {
+				return err
+			}
 		}
 
 		dst := filepath.Join(ir, statusDirName[target], filepath.Base(src))
