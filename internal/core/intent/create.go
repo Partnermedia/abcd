@@ -2,6 +2,7 @@ package intent
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -157,6 +158,15 @@ func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
 	scan := recordid.MaxAcrossRefs(repoRoot, "itd", []string{IntentsRelDir})
 	if scan.Max > max {
 		max = scan.Max
+	}
+	// Guard the max+1 below against int overflow: a hand-crafted MaxInt itd-N
+	// (a local file or a fetched remote-tracking ref carrying itd-<MaxInt>-x.md)
+	// parses to math.MaxInt with no error, so max+1 would wrap to math.MinInt and
+	// mint itd--9223372036854775808 — a malformed draft WriteFileAtomic persists
+	// before Validate runs, plus a mint DoS for the family. Refuse clearly instead,
+	// mirroring the capture allocator's ceiling guard.
+	if max >= math.MaxInt {
+		return "", "", fmt.Errorf("intent: itd-N counter near the integer ceiling (highest observed %d); refusing to allocate", max)
 	}
 	return fmt.Sprintf("itd-%d", max+1), scan.Warning(), nil
 }
