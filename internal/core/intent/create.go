@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/REPPL/abcd-cli/internal/core/changelog"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
@@ -35,10 +36,24 @@ const maxSlugLen = 60
 // null and whose spec_id is null) and passes Validate; a human expands it, then
 // `abcd intent plan` schedules it. This is the quoted-text create path itd-46
 // delivers — the create half of what spc-6 AC3 (promote) needs.
-func CreateFromText(repoRoot, text string) (Intent, error) {
+func CreateFromText(repoRoot, text, impact string) (Intent, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return Intent{}, fmt.Errorf("intent: refusing to create from empty text")
+	}
+	// impact is optional on a draft (intent_impact_valid gates the move into
+	// shipped/, not the seed), but when set it must be a legal, non-internal
+	// judgement — the same bar the gate applies at shipped/ — so the value the
+	// tool stamps travels unchanged to shipped/ and passes the blocker there. An
+	// invalid or internal impact is refused up front, never absorbed.
+	if impact != "" {
+		imp, err := changelog.ParseImpact(impact)
+		if err != nil {
+			return Intent{}, fmt.Errorf("intent: %w", err)
+		}
+		if imp == changelog.ImpactInternal {
+			return Intent{}, fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
+		}
 	}
 	slug, err := deriveIntentSlug(trimmed)
 	if err != nil {
@@ -62,7 +77,7 @@ func CreateFromText(repoRoot, text string) (Intent, error) {
 		if _, statErr := os.Lstat(abs); statErr == nil {
 			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
 		}
-		content := seedDraft(id, slug, trimmed)
+		content := seedDraft(id, slug, trimmed, impact)
 		if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("intent: writing %s: %w", rel, err)
 		}
@@ -140,7 +155,7 @@ func nextIntentID(repoRoot string) (string, error) {
 // minimal body carrying the seed text under Why This Matters, with the itd-1
 // discipline's Acceptance Criteria section left as a placeholder for the human to
 // fill before planning.
-func seedDraft(id, slug, text string) string {
+func seedDraft(id, slug, text, impact string) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("id: " + id + "\n")
@@ -151,6 +166,13 @@ func seedDraft(id, slug, text string) string {
 	b.WriteString("reclassification_history: []\n")
 	b.WriteString("builds_on: []\n")
 	b.WriteString("severity: minor\n")
+	// impact is written only when the caller declared one (validated in
+	// CreateFromText). It is bare — the machine-read enum the shipped-intent gate
+	// compares byte-for-byte — and travels unchanged to shipped/. An unset impact
+	// writes no line: a draft is "not judged yet", exactly like the null fields.
+	if impact != "" {
+		b.WriteString("impact: " + impact + "\n")
+	}
 	b.WriteString("---\n\n")
 	b.WriteString("# " + titleLine(text) + "\n\n")
 	b.WriteString("## Press Release\n\n")

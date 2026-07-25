@@ -27,13 +27,19 @@ and the intent↔spec links. Nothing is created or moved by this invocation.
 ## Create a draft
 
 ```bash
-abcd intent "<text>" --json
+abcd intent "<text>" [--impact <additive|breaking|fix>] --json
 ```
 
 Files `drafts/itd-N-<slug>.md` seeded from the text. Report the new `id` and
 `path`, and tell the user the seeded Acceptance Criteria section is a
 placeholder that must be replaced with real Given-When-Then bullets — via the
 planning interview below — before the draft can be planned.
+
+`--impact` is optional: a draft is "not judged yet", so an unset impact writes
+no field. When you do set it, the value is validated (one of `additive`,
+`breaking`, `fix` — never `internal`, since an intent is user-facing by
+definition) and stamped onto the draft, where it travels unchanged through
+planning to `shipped/`, which the `intent_impact_valid` gate requires.
 
 ## THE RULE: no implementation without a planned, specced intent
 

@@ -12,6 +12,15 @@ type kv struct {
 	val any
 }
 
+// rawScalar is a frontmatter value written verbatim — no surrounding quotes —
+// for a constrained, machine-read enum like `impact`. The frontmatter scanner is
+// a line reader that compares the value byte-for-byte, so a quoted `"fix"` reads
+// as a different string than the enum member `fix`; the enum fields must be bare.
+// Only values already validated against their enum reach here, and yamlScalar
+// still rejects any control char, so the verbatim path cannot inject a newline or
+// a second frontmatter key.
+type rawScalar string
+
 // yamlScalar encodes a scalar value as a safe YAML literal, mirroring
 // _issue_lib._yaml_scalar. Strings are double-quoted with backslash/dquote
 // escaping and reject any ASCII control char (< 0x20); ints render bare.
@@ -34,6 +43,17 @@ func yamlScalar(value any) (string, error) {
 		esc := strings.ReplaceAll(v, `\`, `\\`)
 		esc = strings.ReplaceAll(esc, `"`, `\"`)
 		return `"` + esc + `"`, nil
+	case rawScalar:
+		// Verbatim, but never a value that could break the frontmatter shape: reject
+		// any control char (a newline would inject a second key) and any character
+		// outside a bare enum token. The caller has already validated the value
+		// against its enum; this is defence in depth at the serialise boundary.
+		for _, r := range v {
+			if r < 0x20 || !(r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+				return "", fmt.Errorf("%w: unsafe raw scalar %q", ErrMalformedFrontmatter, string(v))
+			}
+		}
+		return string(v), nil
 	default:
 		return "", fmt.Errorf("%w: unsupported scalar type %T", ErrMalformedFrontmatter, value)
 	}

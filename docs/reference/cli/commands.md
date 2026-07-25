@@ -118,7 +118,13 @@ List issues by state (one of --open/--resolved/--wontfix/--all required)
 
 Mark an open issue resolved (open/ -> resolved/)
 
-**Usage:** `abcd capture resolve <iss-N> <note>`
+**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [flags]`
+
+**Flags:**
+
+```
+      --impact string   product impact: additive|breaking|fix|internal (required)
+```
 
 #### `abcd capture wontfix`
 
@@ -282,7 +288,13 @@ Show one stored transcript's metadata and redacted body
 
 Intent lifecycle; bare invocation is read-only status, quoted text files a draft
 
-**Usage:** `abcd intent [text]`
+**Usage:** `abcd intent [text] [flags]`
+
+**Flags:**
+
+```
+      --impact string   stamp the draft's product impact: additive|breaking|fix (optional)
+```
 
 #### `abcd intent link`
 

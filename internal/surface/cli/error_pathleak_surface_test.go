@@ -87,7 +87,7 @@ func TestJSONSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
 					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
 				}
 			},
-			args: []string{"capture", "resolve", "iss-1", "handled", "--json"},
+			args: []string{"capture", "resolve", "iss-1", "handled", "--impact", "fix", "--json"},
 		},
 		{
 			name: "wontfix success path",

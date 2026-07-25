@@ -199,7 +199,15 @@
     {
       "path": "abcd capture resolve",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "impact",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd capture wontfix",
@@ -391,7 +399,15 @@
     {
       "path": "abcd intent",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "impact",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd intent link",
