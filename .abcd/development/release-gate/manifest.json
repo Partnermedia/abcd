@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "detector": "iss35-brief-surface-crosscheck",
+  "_comment": "Pinned input manifest for the iss-35 brief<->surface cross-check (iss-122). This is the reproducibility anchor: two honest runs of the same tier mean the same thing because the doc list, the directions, the checker count, and the prompt are fixed here rather than chosen per run. A receipt echoes this file's sha256 as manifestHash; receipt_gate refuses a receipt whose manifestHash does not match this file's actual hash. Compute the hash with `printf 'sha256:'; shasum -a 256 .abcd/development/release-gate/manifest.json | cut -d' ' -f1`.",
+  "tiers": {
+    "full": "both directions over the full brief-doc list; required for a feature (additive) or breaking release",
+    "shallow": "Direction B only (surface->brief); sufficient for a patch (fix/internal) release"
+  },
+  "directions": [
+    {
+      "id": "A",
+      "name": "brief->surface",
+      "description": "per brief doc: verify every surface claim against the shipped binary/tree"
+    },
+    {
+      "id": "B",
+      "name": "surface->brief",
+      "description": "per real surface: find its documented home in the brief"
+    }
+  ],
+  "briefDocs": [
+    ".abcd/development/brief/04-surfaces/01-ahoy.md",
+    ".abcd/development/brief/04-surfaces/02-disembark.md",
+    ".abcd/development/brief/04-surfaces/03-embark.md",
+    ".abcd/development/brief/04-surfaces/04-launch.md",
+    ".abcd/development/brief/04-surfaces/05-intent.md",
+    ".abcd/development/brief/04-surfaces/06-capture.md",
+    ".abcd/development/brief/04-surfaces/07-memory.md",
+    ".abcd/development/brief/04-surfaces/08-abcd.md",
+    ".abcd/development/brief/04-surfaces/09-reflect.md",
+    ".abcd/development/brief/04-surfaces/10-docs.md",
+    ".abcd/development/brief/04-surfaces/11-history.md",
+    ".abcd/development/brief/04-surfaces/12-version.md",
+    ".abcd/development/brief/04-surfaces/13-consult.md",
+    ".abcd/development/brief/04-surfaces/14-ingest.md",
+    ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+    ".abcd/development/brief/04-surfaces/16-audit.md",
+    ".abcd/development/brief/05-internals/08-skills.md"
+  ],
+  "surfaces": [
+    {
+      "name": "CLI verb tree",
+      "kind": "binary",
+      "probe": "build bin/abcd-<goos>-<arch>; run `abcd --help` and `abcd <verb> --help`"
+    },
+    {
+      "name": "plugin command surface",
+      "kind": "commands",
+      "probe": "list commands/abcd/*.md (README excepted)"
+    },
+    {
+      "name": "plugin agent surface",
+      "kind": "agents",
+      "probe": "list agents/*.md (README excepted)"
+    },
+    {
+      "name": "hook entrypoints",
+      "kind": "hooks",
+      "probe": "read hooks/hooks.json"
+    },
+    {
+      "name": "skills surface",
+      "kind": "skills",
+      "probe": "list skills/ (abcd ships zero skills; the directory is empty or absent)"
+    }
+  ],
+  "checkerCount": 22,
+  "promptHash": "sha256:6b4a388e596e159a04f73417af8c2d08699968dd01031b9c08aeac65596d8064",
+  "prompt": {
+    "context": "Repo root: the current working directory — use repo-relative paths\nthroughout, never absolute local paths. Ground truth is the SHIPPED surface,\nverified empirically: build the binary (make build produces bin/abcd-<goos>-<arch>)\nand run it (`abcd --help` and `abcd <verb> --help`), and list commands/abcd/\nand skills/. abcd currently ships ZERO skills — the whole /abcd: surface is\ncommands under commands/abcd/ (ahoy, capture, consult, ingest, prepare-this-repo,\ndocs, history, launch, memory, version); skills/ is empty or absent. The brief's\nsurface chapters are .abcd/development/brief/04-surfaces/*.md and\n05-internals/08-skills.md. Report DISCREPANCIES ONLY — where record and reality\ndisagree, or one side is missing. A brief row explicitly marked staged (its\nStatus column is \"staged\") / probe-only / later-phase is NOT a discrepancy; an\nunmarked claim about a surface that does not exist IS. Do not fix anything.",
+    "directionA": "Direction A. Read ${doc} fully. Extract every checkable claim\nabout the shipped surface (verbs, sub-verbs, flags, skill names, counts,\nfile layouts, \"abcd ships N ...\" statements) and verify each against\nreality. Return item=\"${doc}\" and the discrepancy list.",
+    "directionB": "Direction B. The real surface \"${s.name}\" (${s.kind}) exists:\ninspect it (${s.probe}). Search the brief's surface chapters for its\ndocumented home (grep .abcd/development/brief/). If no brief row documents\nit — or the brief documents it under a wrong name/shape — that is a\ndiscrepancy. Return item=\"${s.name}\" and the discrepancy list (empty if\nproperly documented)."
+  }
+}
