@@ -63,9 +63,10 @@ func TestRegisterRepoConcurrentDoesNotLoseUpdate(t *testing.T) {
 }
 
 // TestBootstrapHistoryExclusiveCreate is the iss-101 bootstrap check-then-act
-// repro. The first bootstrapper pauses just before its create and lets a second
-// full bootstrap complete in that window. Post-fix (O_EXCL create) exactly one
-// wins the create and the other observes the existing file (no write); pre-fix
+// repro. The first bootstrapper pauses just before it publishes and lets a second
+// full bootstrap complete in that window. Post-fix the seed is published by an
+// atomic hard link (write temp, sync, os.Link), so exactly one link wins and the
+// other gets EEXIST and observes the existing file (no write); pre-fix
 // (check-then-act + last-rename-wins) both report a create.
 func TestBootstrapHistoryExclusiveCreate(t *testing.T) {
 	home := t.TempDir()
