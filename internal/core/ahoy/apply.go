@@ -457,35 +457,89 @@ func (a *applyCtx) stepHistory() {
 
 // registerRepo registers or refreshes this repo's entry in index.json by its
 // immutable root_commit. Re-founding lineage is only set on explicit confirm.
+//
+// The load-modify-write runs UNDER withHistoryLock with a re-load inside the lock
+// (iss-101), so two concurrent installs cannot drop a registration by racing
+// last-rename-wins. The re-founding confirmation, which can block on user input,
+// is asked BEFORE the lock is acquired — the lock is never held across a prompt.
+// The state that prompt validated (the candidate lineage exists and is still
+// linkable) is RE-CHECKED against the re-loaded index inside the lock: if a
+// concurrent install changed it, the lineage link the user approved against stale
+// state is refused rather than silently applied.
 func (a *applyCtx) registerRepo(sha string) {
 	idx, err := loadHistoryIndex()
 	if err != nil || idx == nil {
 		return
 	}
 	id := a.det.RepoIdentity
-	if e := indexEntry(idx, sha); e != nil {
-		e.Name, e.Github, e.Path = id.Name, id.Github, a.cwd // refresh mutable labels
-		if e.Status == "" {
-			e.Status = "active"
+
+	// Decide, OUTSIDE the lock, whether a re-founding prompt is needed. A prompt is
+	// only relevant for a not-yet-registered sha with a lineage candidate; the
+	// refresh path (sha already present) involves no prompt.
+	linkLineage := false
+	var candSHA string
+	if indexEntry(idx, sha) == nil {
+		if cand := findRefoundingCandidate(idx, id); cand != nil {
+			candSHA = cand.RootCommit
+			linkLineage = a.prompter.Confirm("Re-founded from " + shortSHA(candSHA) + "? Link lineage?")
 		}
-		_ = writeHistoryIndex(idx)
+	}
+
+	wrote := false
+	lineageConflict := false
+	_ = withHistoryLock(func() error {
+		// Re-load inside the lock: the pre-lock read may be stale after a concurrent
+		// install's write, and the mutation must build on the current index.
+		locked, lerr := loadHistoryIndex()
+		if lerr != nil || locked == nil {
+			return lerr
+		}
+		if e := indexEntry(locked, sha); e != nil {
+			e.Name, e.Github, e.Path = id.Name, id.Github, a.cwd // refresh mutable labels
+			if e.Status == "" {
+				e.Status = "active"
+			}
+			if werr := writeHistoryIndex(locked); werr != nil {
+				return werr
+			}
+			wrote = true
+			return nil
+		}
+		newEntry := historyRepo{RootCommit: sha, Name: id.Name, Github: id.Github, Path: a.cwd, Status: "active"}
+		if linkLineage {
+			// Re-check the answer-relevant state under the lock: the candidate we
+			// prompted about must still exist by its root_commit and still be
+			// linkable (not already superseded by a concurrent install). A changed
+			// state is a conflict — skip the lineage link rather than write one the
+			// user approved against a now-stale index.
+			cand := indexEntry(locked, candSHA)
+			if cand == nil || cand.SupersededBy != "" {
+				linkLineage = false
+				lineageConflict = true
+			} else {
+				newEntry.Supersedes = candSHA
+				cand.SupersededBy = sha
+				cand.Status = "superseded"
+			}
+		}
+		locked.Repos = append(locked.Repos, newEntry)
+		if werr := writeHistoryIndex(locked); werr != nil {
+			return werr
+		}
+		wrote = true
+		return nil
+	})
+	if lineageConflict {
+		// Surface the refused link rather than silently proceed: the re-founding
+		// candidate the user confirmed changed under the lock, so the repo is
+		// registered without the lineage link they approved against stale state.
+		a.changes = append(a.changes,
+			"history lineage: link to "+shortSHA(candSHA)+" skipped (candidate changed under concurrent install)")
+	}
+	if wrote {
 		if root, e2 := historyRoot(); e2 == nil {
 			a.note(filepath.Join(root, "index.json"))
 		}
-		return
-	}
-	newEntry := historyRepo{RootCommit: sha, Name: id.Name, Github: id.Github, Path: a.cwd, Status: "active"}
-	if cand := findRefoundingCandidate(idx, id); cand != nil {
-		if a.prompter.Confirm("Re-founded from " + shortSHA(cand.RootCommit) + "? Link lineage?") {
-			newEntry.Supersedes = cand.RootCommit
-			cand.SupersededBy = sha
-			cand.Status = "superseded"
-		}
-	}
-	idx.Repos = append(idx.Repos, newEntry)
-	_ = writeHistoryIndex(idx)
-	if root, e2 := historyRoot(); e2 == nil {
-		a.note(filepath.Join(root, "index.json"))
 	}
 }
 
