@@ -275,13 +275,14 @@ func withHistoryLock(fn func() error) error {
 }
 
 // bootstrapHistory creates ~/.abcd/history/ + index.json when absent. Idempotent.
-// The seed is published atomically by an exclusive hard link (iss-101): a
-// fully-formed temp file is written, then os.Link'd into place. link fails EEXIST
-// if index.json already exists, so under two concurrent bootstraps exactly one
-// wins and every other observes the existing file and reports no write — and,
-// unlike an O_EXCL create followed by a separate content write, no reader ever
-// observes a 0-byte index.json, so a concurrent loadHistoryIndex cannot parse-fail
-// and drop its own registration.
+// The seed is published atomically (iss-101): a fully-formed temp file is written,
+// synced, and os.Link'd into place. The link is the single-winner publish — it
+// fails EEXIST if index.json already exists, so under two concurrent bootstraps
+// exactly one wins and every other observes the existing file and reports no
+// write. Because the file only ever appears complete (the link, never a bare
+// create followed by a separate content write), a reader that races the bootstrap
+// sees either no file yet or the finished index — never a 0-byte one that would
+// make a concurrent loadHistoryIndex parse-fail and drop its own registration.
 func bootstrapHistory() (bool, error) {
 	root, err := historyRoot()
 	if err != nil {
