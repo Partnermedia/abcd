@@ -1,8 +1,8 @@
 ---
 id: itd-93
 slug: abcd-scaffolds-a-hardened-changelog-driven-release-gate-into
-spec_id: null
-kind: null
+spec_id: spc-14
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -14,17 +14,20 @@ severity: minor
 
 ## Press Release
 
-> _Facilitator-seeded draft — the product thinker owns the final press-release
-> framing._
+> _Design settled in the 2026-07-24 maintainer grill (see DECISIONS.md); the
+> four resolved decisions are folded below and recorded in § Open Questions._
 
 > **A repo abcd manages gets a release process that is correct the day it goes
 > public — no self-inflicted first-release failure.** Ask abcd to set up
-> releases and it lands a changelog-driven release gate: rolling `[Unreleased]`
-> into a dated version in a reviewed PR is the release decision, and on merge the
-> automation tags exactly that commit and publishes. The gate that verifies the
-> release is armed against the *reviewed content commit*, so the very first
-> public release cannot hit the receipt-vs-tag self-reference that once blocked
-> abcd's own.
+> releases and `abcd launch scaffold` lands a changelog-driven release gate:
+> rolling `[Unreleased]` into a dated version in a reviewed PR is the release
+> decision, and on merge the automation tags exactly that commit and publishes.
+> The gate that verifies the release is armed against the *reviewed content
+> commit*, so the very first public release cannot hit the receipt-vs-tag
+> self-reference that once blocked abcd's own. Before that first release the
+> operator runs a built-in rehearsal — a `workflow_dispatch` dry run that arms
+> the full gate against a simulated release and publishes nothing — so a green
+> rehearsal proves the gate works before it is ever trusted with a real tag.
 >
 > "I flipped my repo public and cut a release the same afternoon — it just
 > worked," said Alice, a solo founder. "I didn't have to discover, the hard
@@ -56,15 +59,33 @@ at its first public release.
 
 ## What's In Scope
 
-- **A scaffold path** (verb TBD — see Open Questions) that writes, into a
-  managed repo that lacks them, the fixed release machinery: a `release.yml`
-  (verify → build → publish, gate armed against the reviewed content commit) and
-  an `auto-release.yml` (detect newest dated CHANGELOG version → tag that commit
-  → call `release.yml`), both `GITHUB_TOKEN`-only and injection-safe.
+- **A `launch` sub-verb** (`abcd launch scaffold`), extending the existing
+  04-launch surface — which already owns how a release is cut and gated — that
+  writes, into a managed repo that lacks them, the fixed release machinery: a
+  `release.yml` (verify → build → publish, gate armed against the reviewed
+  content commit) and an `auto-release.yml` (detect newest dated CHANGELOG
+  version → tag that commit → call `release.yml`), both `GITHUB_TOKEN`-only and
+  injection-safe.
 - **The adr-37 policy, carried as a per-repo runbook**: the CHANGELOG is the
   release instrument; rolling `[Unreleased]` → `## [X.Y.Z] - <date>` in a
   reviewed PR is the release decision; the two-commit release-branch shape
   (roll → receipts) is documented so `HEAD^2^` resolution holds.
+- **Self-scaffold parity — one template, proven by abcd-cli's own release**:
+  the scaffold ships a single template, and abcd-cli's own
+  `release.yml`/`auto-release.yml` are regenerated from it (with abcd-cli's
+  substitutions) under a test that asserts the tree matches the template output.
+  The proven pattern and the shipped template are one artifact by construction,
+  so every abcd release exercises the exact machinery a managed repo receives.
+- **A built-in `workflow_dispatch` rehearsal mode**: the scaffolded workflow
+  carries a dry run that arms the full gate against a simulated changelog roll
+  and reviewed-content commit, asserts the gate admits it, and publishes
+  nothing. The runbook makes a green rehearsal the precondition for the first
+  real release.
+- **Producer-agnostic on the changelog seam**: the dated CHANGELOG heading *is*
+  the seam with derived versioning (itd-73). `auto-release` keys on the newest
+  dated heading, so `launch ship`'s derived version is one optional producer and
+  a hand-rolled heading fires the same machinery; the scaffold stays
+  producer-agnostic.
 - **The receipt/charter interop already fixed in abcd-cli**: the sha-keyed
   receipt-dir convention plus the `check-reviews` (RD001) exemption, so the two
   in-repo review conventions do not collide.
@@ -91,30 +112,48 @@ at its first public release.
 
 ## Acceptance Criteria
 
-> _BDD format, per the itd-1 discipline. Facilitator-seeded from the abcd-cli
-> fix; the product thinker should confirm the bar._
+> _BDD format, per the [itd-1 discipline](../disciplines/itd-1-acceptance-gates.md).
+> The bar was confirmed in the 2026-07-24 maintainer grill: the five seeded
+> criteria stand, amended for the rehearsal-mode decision (c), with a sixth
+> covering the rehearsal itself._
 
 - **Given** a managed GitHub repo with no release workflow, **when** the
-  operator runs the release-scaffold verb, **then** `release.yml`,
+  operator runs the `launch scaffold` sub-verb, **then** `release.yml`,
   `auto-release.yml`, and the release runbook are written, wired to the repo's
   own CI check names, and pass the repo's workflow audit (e.g. zizmor) with no
   injection or duplicate-key findings.
-- **Given** a repo with the scaffolded gate, **when** it cuts its first public
-  release (roll `[Unreleased]` → dated heading, merge), **then** the release
-  publishes — the gate is armed against the reviewed content commit and does
-  **not** hit the receipt-vs-tag self-reference (a test exercises the merge path
-  and asserts a published release, not a fail-closed gate).
+- **Given** a repo with the scaffolded gate **and a green `workflow_dispatch`
+  rehearsal on record**, **when** it cuts its first public release (roll
+  `[Unreleased]` → dated heading, merge), **then** the release publishes — the
+  gate is armed against the reviewed content commit and does **not** hit the
+  receipt-vs-tag self-reference (a test exercises the merge path and asserts a
+  published release, not a fail-closed gate).
 - **Given** a repo that configures **no** semantic detector, **when** it
   releases, **then** the deterministic gates alone admit the release and the
   receipt gate requires nothing (no host-run pass is silently treated as
   missing).
-- **Given** the machinery is already present and current, **when** the scaffold
-  verb runs again, **then** it reports a no-op and mutates nothing; **and given**
-  an operator hand-edited a scaffolded workflow, **when** the verb runs, **then**
-  it refuses or transparent-confirms rather than clobbering.
+- **Given** the machinery is already present and current, **when** the
+  `launch scaffold` sub-verb runs again, **then** it reports a no-op and mutates
+  nothing; **and given** an operator hand-edited a scaffolded workflow, **when**
+  the verb runs, **then** it refuses or transparent-confirms rather than
+  clobbering.
 - **Given** the scaffolded `check-reviews`/RD001 charter, **when** sha-keyed
   receipt directories exist, **then** they are exempt from the dated-review-dir
   shape (the abcd-cli collision does not recur in the managed repo).
+- **Given** the scaffolded rehearsal mode, **when** the operator triggers the
+  `workflow_dispatch` rehearsal, **then** the full gate is armed against a
+  simulated changelog roll and reviewed-content commit, the gate admits it, and
+  nothing is published — a green rehearsal proves the gate before the first real
+  release.
+
+## Prior Art
+
+- [adr-37](../../decisions/adrs/0037-changelog-driven-releases.md) — the
+  changelog-driven release policy this scaffolds.
+- iss-108 — the self-reference flaw, its abcd-cli fix (PR #99), and the verified
+  finding that no release machinery currently reaches managed repos.
+- `.abcd/development/release-gate/` — abcd-cli's own runbook + detectors, the
+  proven pattern to generalise.
 
 ## Open Questions
 
@@ -147,11 +186,6 @@ queued in `../../plans/2026-07-24-next-run-queue.md` (Track 1)._
   and a hand-rolled heading fires the same machinery. The scaffold stays
   producer-agnostic.
 
-## References
+## Audit Notes
 
-- [adr-37](../../decisions/adrs/0037-changelog-driven-releases.md) — the
-  changelog-driven release policy this scaffolds.
-- iss-108 — the self-reference flaw, its abcd-cli fix (PR #99), and the verified
-  finding that no release machinery currently reaches managed repos.
-- `.abcd/development/release-gate/` — abcd-cli's own runbook + detectors, the
-  proven pattern to generalise.
+_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
