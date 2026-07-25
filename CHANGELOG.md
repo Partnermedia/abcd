@@ -39,6 +39,27 @@ called out in a **Breaking** section.
   user-facing by definition). `capture wontfix` is unchanged — a non-action ships
   nothing, so `wontfix/` carries no impact.
 
+### Fixed
+
+- **Concurrent runs can no longer drop a repo registration or delete a
+  just-committed issue file** (iss-101, iss-102). Two `abcd ahoy install` runs
+  from different worktrees shared one `~/.abcd/history/index.json`, and its
+  registration was an unlocked load-modify-write: atomic rename kept the file
+  intact but the last writer clobbered the other's update, silently erasing a
+  repo entry or a re-founding lineage link. The history registry now serializes
+  its load-modify-write behind an inter-process lock and re-loads inside it, so
+  concurrent registrations compose instead of overwriting; the store bootstrap
+  creates `index.json` with an exclusive create, so exactly one racing run seeds
+  it. The re-founding lineage confirmation is still asked before the lock is
+  taken — never across an interactive prompt — and the state it validated is
+  re-checked under the lock, surfacing a conflict rather than writing a link the
+  user approved against a stale index. Separately, the capture ledger's orphan
+  sweep and its commit write now take the same ledger lock, closing a window in
+  which a capture stalled more than sixty seconds could have its committed issue
+  file swept away after the capture reported success. The inter-process lock is a
+  single shared primitive; the capture allocator and the history registry both
+  route through it.
+
 ## [0.4.0] - 2026-07-22
 
 ### Breaking
