@@ -12,6 +12,20 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **Record-id minting now sees every branch, and a spec-id uniqueness lint closes
+  the class** (iss-115, iss-120). Sequential ids (`iss-N`, `itd-N`, `spc-N`) were
+  minted from the local working tree only, so two branches cut from the same base
+  silently minted the same next id — invisible on each branch and surfacing only
+  at merge. Minting now folds in the highest id committed on every local and
+  remote-tracking branch (a single canonical refs-union scan), so once one branch
+  commits an id, the other mints past it. When git cannot be read over a present
+  repository the mint degrades to working-tree-only and says so loudly on stderr
+  (never a silent fallback); a directory that is not a repository has no branches
+  to collide with and mints quietly. The residual window — two branches that both
+  mint before either commits — is caught by the record-lint uniqueness rules on
+  the merged pull request, which now cover spec ids too: the new `spec_id_unique`
+  rule flags every file claiming a duplicate `spc-N`, mirroring the existing
+  `issue_id_unique` and intent-id guards.
 - **`abcd capture resolve` and `abcd intent "<text>"` can now stamp a product
   `impact`** (iss-117). A resolved issue and a shipped intent are in the release
   set, so the `issue_impact_valid` and `intent_impact_valid` record-lint blockers

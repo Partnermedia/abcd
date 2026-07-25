@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core/changelog"
+	"github.com/REPPL/abcd-cli/internal/core/recordid"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
@@ -42,7 +43,18 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		return CaptureResult{}, err
 	}
 
-	issID, placeholder, err := reservePath(issuesRoot, slugNorm, req.ForceID)
+	// Fold in the highest iss-N committed on any other git ref so two parallel
+	// branches cannot re-mint the same id once one has committed it (iss-115,
+	// iss-120). The scan runs outside the ledger lock (refs are immutable during
+	// this op) and yields a floor for reservePath; a degrade to working-tree-only
+	// is surfaced via MintWarning, never swallowed. A ledger outside the work tree
+	// (a non-default IssuesRoot) has no ref coverage, so it keeps tree-only minting.
+	scan := recordid.RefScan{}
+	if rel, relErr := filepath.Rel(repoRoot, issuesRoot); relErr == nil && !strings.HasPrefix(rel, "..") {
+		scan = recordid.MaxAcrossRefs(repoRoot, "iss", []string{filepath.ToSlash(rel)})
+	}
+
+	issID, placeholder, err := reservePath(issuesRoot, slugNorm, req.ForceID, scan.Max)
 	if err != nil {
 		return CaptureResult{}, err
 	}
@@ -55,6 +67,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	// Machine output carries a repo-relative locator, never an absolute
 	// developer-identity path (iss-81).
 	result.Path = fsutil.RepoRel(repoRoot, result.Path)
+	result.MintWarning = scan.Warning()
 	return result, nil
 }
 
