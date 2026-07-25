@@ -8,11 +8,23 @@ supersedes the pick-up role of
 (itd-93's readiness gates listed there are now cleared — see the 2026-07-24
 DECISIONS.md entries; that file remains the record of why they were gates).
 
-Run contract, unchanged: `make preflight` is the sole gate; ledger is
-capture-only; correctness + security reviews before each PR; one PR per item;
-never merge, never commit to main. Prioritisation lens (maintainer,
-2026-07-24): abcd is designed while being built — prefer work that speeds
-abcd's own build loop or gets new functionality into early dogfooded use.
+## Run contract
+
+- `backlog:` milestones — the tracks below, in order; each numbered item is a
+  milestone whose stable id is its issue/intent id.
+- `gate:` `make preflight` (sole deterministic authority); record edits also
+  pass `go run ./cmd/record-lint` (0 blockers).
+- `budget:` one item per burst; stop cleanly at the first bound reached.
+- `commit_trailer:` `Assisted-by: Claude:<model-id>` (kernel format; never
+  Co-Authored-By for AI).
+- `reviewers:` correctness `abcd:ruthless-reviewer`; security
+  `abcd:security-reviewer` on trust-boundary diffs (conservative classifier).
+- `strike_limit:` 3 (failed + died entries per item).
+- Ledger is capture-only; one PR per item; never merge, never commit to main.
+
+Prioritisation lens (maintainer, 2026-07-24): abcd is designed while being
+built — prefer work that speeds abcd's own build loop or gets new
+functionality into early dogfooded use.
 
 ## STOP conditions (this run)
 
@@ -57,12 +69,14 @@ Hitting one means stop and report, never push through (per the playbook):
    **Promotion only — implementation is NOT in this run** (feature-class;
    warrants its own focused run per the 2026-07-18 shape note).
 
-## Track 2 — itd-94 implement-readiness gate
+## Track 2 — itd-94 record catch-up (the verb already ships)
 
-`abcd intent ready <itd-N>` per spc-9: the four checks (bucket, acceptance
-criteria, spec link, spec body), strict exit-code contract, refusal with
-remedy. Self-contained, zero open questions. Lands the machine version of the
-run-curation discipline this very queue applies by hand.
+`abcd intent ready <itd-N>` is implemented and wired (verified 2026-07-24:
+exit 0 on a ready intent, exit 1 on a draft; the surface registry row and
+`commands/abcd/intent.md` carry it). Remaining work is the record, not code:
+run the intent-fidelity review against itd-94's acceptance criteria, close
+spc-9, move itd-94 to shipped/. If any criterion is NOT_MET, that finding is
+the work item — never re-implement what ships.
 
 ## Track 3 — probe hardening, then the itd-88 coverage experiment
 
@@ -70,11 +84,13 @@ run-curation discipline this very queue applies by hand.
    **iss-111** (open-question marker false positives), **iss-112** (unbounded
    ReadDir), **iss-114** (O(entries×depth) walk), **iss-116** (skip-set
    misses non-Go/Node ecosystems).
-2. **itd-88** (spc-3) — `/abcd:disembark probe` + `coverage`, read-only,
-   cite-or-be-dropped. Closing acceptance: a probe run over abcd-cli itself,
-   and at least one foreign repo, with the coverage report read as the
-   experiment's finding — the packer is built to whatever section list
-   survives.
+2. **itd-88** (spc-3) — the probe/coverage/pack surface substantially ships
+   (surface registry rows 2–3, M1–M5); what remains is the EXPERIMENT and the
+   record: run probe over abcd-cli itself and at least one foreign repo, read
+   the coverage report as the experiment's finding (the packer is built to
+   whatever section list survives), then close spc-3 behind the fidelity
+   review. M6 remnants (embark press-release interview, asset curation,
+   provenance ledger) stay design targets — not this run.
 
 ## Queued for the following run (not this one)
 
@@ -90,5 +106,9 @@ run-curation discipline this very queue applies by hand.
 
 - Ledger follow-ups from the 2026-07-18 file remain: iss-104, iss-105
   (itd-93-adjacent), iss-106 — drain candidates once triaged.
+- New captures from the 2026-07-25 document review: iss-124 (foreign-repo
+  review receipts, major — carries two design seeds, needs a maintainer
+  grill before implementation), iss-125 (Stage-1 hostname redaction,
+  blocked by iss-96). Not queued this run.
 - `planned/README.md`'s file listing has drifted from the directory
   (iss-38 class); fix opportunistically when touching that directory.
