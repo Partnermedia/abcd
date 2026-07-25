@@ -686,7 +686,11 @@ func modeWouldChange(opts InstallOptions, det DetectionResult) bool {
 		return false
 	}
 	if opts.Dev {
-		return kind != binTargetDevShim
+		// Only a switch away from the pinned symlink is a forced change. A missing
+		// entry is NOT forced: it flows through the symlink.missing gap so a declined
+		// ConfigChange approval is honoured (a fresh --dev must not bypass consent the
+		// way a plain install cannot). An existing dev shim is already correct.
+		return kind == binTargetOwnedSymlink
 	}
 	// Plain install: only a switch away from an existing dev shim is a forced
 	// change; a missing entry is handled by the symlink.missing gap, and an owned

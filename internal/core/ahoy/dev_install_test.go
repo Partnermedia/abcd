@@ -247,6 +247,35 @@ func TestUninstallRemovesDevShim(t *testing.T) {
 	}
 }
 
+// TestDevInstallRespectsDeclinedConfigChange pins the consent boundary: the PATH
+// entry is a ConfigChange, so a fresh --dev install must NOT write the shim when
+// that category is declined — exactly as a plain install honours the decline.
+func TestDevInstallRespectsDeclinedConfigChange(t *testing.T) {
+	setupHermetic(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	adopt := true
+	opts := InstallOptions{
+		Adopt: &adopt,
+		Dev:   true,
+		// Approve every resolvable category EXCEPT ConfigChange (the PATH entry).
+		ApprovedCategories: map[GapCategory]bool{
+			SafeAutocreate: true,
+			PluginOwned:    true,
+			UserState:      true,
+			Dependency:     true,
+		},
+	}
+	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(binTarget()); !os.IsNotExist(err) {
+		t.Errorf("--dev wrote the PATH shim despite a declined ConfigChange approval (consent bypass): %v", err)
+	}
+}
+
 func containsChange(changes []string, want string) bool {
 	for _, c := range changes {
 		if c == want {
