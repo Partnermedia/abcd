@@ -16,8 +16,15 @@ import (
 // mutationPreamble runs the idempotent pre-mutation steps: sweep orphan
 // placeholders and (re-)assert the symlink-refused directory shape. Read-only
 // entry points (List, Status) deliberately skip it.
+//
+// The orphan sweep runs UNDER the ledger lock (iss-102): a >60s-stalled capture
+// fills its reserved placeholder via commitCapture, which now also holds the
+// ledger lock, so the sweep's classify-then-unlink can no longer interleave with
+// a commit's fill and delete a just-committed issue file.
 func mutationPreamble(issuesRoot string) error {
-	if err := cleanOrphanPlaceholders(issuesRoot); err != nil {
+	if err := withLedgerLock(issuesRoot, func() error {
+		return cleanOrphanPlaceholders(issuesRoot)
+	}); err != nil {
 		return err
 	}
 	return ensureLedgerDirs(issuesRoot)
@@ -59,7 +66,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		return CaptureResult{}, err
 	}
 
-	result, err := commitCapture(req, issID, slugNorm, placeholder)
+	result, err := commitCapture(issuesRoot, req, issID, slugNorm, placeholder)
 	if err != nil {
 		_ = cancelReservation(placeholder)
 		return CaptureResult{}, err
@@ -71,7 +78,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	return result, nil
 }
 
-func commitCapture(req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", issID},
@@ -119,19 +126,32 @@ func commitCapture(req CaptureRequest, issID, slug, placeholder string) (Capture
 		return CaptureResult{}, err
 	}
 
-	// Guard the overwrite: the placeholder must still be the zero-byte file we
-	// reserved (expected_checksum = sha256("")).
-	_, checksum, err := readWithChecksum(placeholder)
+	// The checksum re-read + fill runs UNDER the ledger lock (iss-102): the orphan
+	// sweep (mutationPreamble) also holds this lock, so a >60s-stalled commit can no
+	// longer land its fill in the sweep's classify-then-unlink window and have the
+	// just-committed file deleted. If the sweep reclaimed the placeholder first, the
+	// re-read fails and the capture reports an error rather than a false success.
+	var result CaptureResult
+	err = withLedgerLock(issuesRoot, func() error {
+		// Guard the overwrite: the placeholder must still be the zero-byte file we
+		// reserved (expected_checksum = sha256("")).
+		_, checksum, rerr := readWithChecksum(placeholder)
+		if rerr != nil {
+			return rerr
+		}
+		if checksum != emptyChecksum {
+			return fmt.Errorf("%w: placeholder %s changed since reservation", ErrChecksumMismatch, placeholder)
+		}
+		if werr := fsutil.WriteFileAtomicPreserveMode(placeholder, []byte(content)); werr != nil {
+			return werr
+		}
+		result = CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}
+		return nil
+	})
 	if err != nil {
 		return CaptureResult{}, err
 	}
-	if checksum != emptyChecksum {
-		return CaptureResult{}, fmt.Errorf("%w: placeholder %s changed since reservation", ErrChecksumMismatch, placeholder)
-	}
-	if err := fsutil.WriteFileAtomicPreserveMode(placeholder, []byte(content)); err != nil {
-		return CaptureResult{}, err
-	}
-	return CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}, nil
+	return result, nil
 }
 
 // Resolve moves an open issue to resolved/, writing the resolution note and the

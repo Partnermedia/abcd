@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
@@ -227,25 +228,119 @@ func findRefoundingCandidate(idx *historyIndex, id RepoIdentity) *historyRepo {
 	return nil
 }
 
+// historyLockFilename is the ~/.abcd/history lock file guarding the index.json
+// load-modify-write. It sits beside index.json.
+const historyLockFilename = ".index.lock"
+
+// historyLockTimeout bounds acquisition of the history-index lock. A var (not
+// const) so a test can shorten it to exercise contention without a multi-second
+// wait, mirroring capture's lockTimeout.
+var historyLockTimeout = 5 * time.Second
+
+// afterHistoryReloadHook, when non-nil, fires inside withHistoryLock immediately
+// after the lock is acquired and before fn runs (fn re-loads the index under the
+// lock and writes it). It is a test-only seam (nil in production) used to force
+// the iss-101 lost-update interleaving deterministically: the goroutine that grabs
+// the lock pauses here, holding it, while another registration is admitted.
+var afterHistoryReloadHook func()
+
+// beforeHistoryIndexCreateHook, when non-nil, fires in bootstrapHistory just
+// before the atomic link that publishes index.json. Test-only seam (nil in
+// production) to force the iss-101 bootstrap check-then-act interleaving
+// deterministically.
+var beforeHistoryIndexCreateHook func()
+
+// withHistoryLock runs fn while holding the exclusive ~/.abcd/history lock, so a
+// registerRepo load-modify-write of index.json serializes across concurrent
+// `abcd ahoy install` runs from different worktrees (iss-101). It routes through
+// the shared fsutil.WithFileLock primitive; the lock file lives beside
+// index.json. The lock is NEVER held across an interactive prompt — callers do
+// any prompting before acquiring it and re-check the answer-relevant state inside
+// fn after re-loading.
+func withHistoryLock(fn func() error) error {
+	root, err := historyRoot()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	lockPath := filepath.Join(root, historyLockFilename)
+	return fsutil.WithFileLock(lockPath, historyLockTimeout, func() error {
+		if afterHistoryReloadHook != nil {
+			afterHistoryReloadHook()
+		}
+		return fn()
+	})
+}
+
 // bootstrapHistory creates ~/.abcd/history/ + index.json when absent. Idempotent.
+// The seed is published atomically (iss-101): a fully-formed temp file is written,
+// synced, and os.Link'd into place. The link is the single-winner publish — it
+// fails EEXIST if index.json already exists, so under two concurrent bootstraps
+// exactly one wins and every other observes the existing file and reports no
+// write. Because the file only ever appears complete (the link, never a bare
+// create followed by a separate content write), a reader that races the bootstrap
+// sees either no file yet or the finished index — never a 0-byte one that would
+// make a concurrent loadHistoryIndex parse-fail and drop its own registration.
 func bootstrapHistory() (bool, error) {
 	root, err := historyRoot()
 	if err != nil {
 		return false, err
 	}
-	if isDir(root) {
-		if _, err := os.Stat(filepath.Join(root, "index.json")); err == nil {
-			return false, nil
-		}
-	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return false, err
 	}
+	path := filepath.Join(root, "index.json")
+	// Fast path: already seeded (the common idempotent re-run).
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	}
 	idx := historyIndex{Schema: 1, Description: historyIndexDescription, Repos: []historyRepo{}}
-	return true, writeJSON(filepath.Join(root, "index.json"), idx)
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	data = append(data, '\n')
+
+	// Write a complete temp file first, then link it into place as the atomic,
+	// single-winner publish. The temp is always cleaned up.
+	tmp, err := os.CreateTemp(root, ".index-*.tmp")
+	if err != nil {
+		return false, err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+
+	if beforeHistoryIndexCreateHook != nil {
+		beforeHistoryIndexCreateHook()
+	}
+	if err := os.Link(tmpName, path); err != nil {
+		if os.IsExist(err) {
+			return false, nil // already seeded (or won by a concurrent run)
+		}
+		return false, err
+	}
+	return true, nil
 }
 
-// writeHistoryIndex persists idx.
+// writeHistoryIndex persists idx. It must be called from inside withHistoryLock
+// (registerRepo) so a re-loaded index is not clobbered by a concurrent writer.
 func writeHistoryIndex(idx *historyIndex) error {
 	root, err := historyRoot()
 	if err != nil {
