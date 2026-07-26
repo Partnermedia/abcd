@@ -54,6 +54,23 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The disembark probe's recursive file walk is bounded per directory, opens
+  each child in O(1), and skips the common ecosystems' dependency trees**
+  (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded
+  `ReadDir` (the same 50 000-entry guard `ListDir` uses), so a single directory
+  of millions of entries can no longer balloon memory before the file cap
+  applies. It holds a sub-root per directory (`os.Root.OpenRoot`) instead of
+  re-resolving every path from the containment root one component at a time, so a
+  deep tree costs O(entries) rather than O(entries × depth) — a 48 000-directory
+  depth-30 tree walks in ~1.4 s where the old walk took ~7 s, and the cost is now
+  independent of depth. The `os.Root` containment guarantee is unchanged: a
+  symlink is still refused rather than followed out of the tree. The skip set
+  widens beyond Node and Go to the common dependency, cache, and build-output
+  trees — Python (`.venv`, `venv`, `.tox`, `__pycache__`), Rust and generic
+  build output (`target`, `build`, `dist`), and CocoaPods (`Pods`) — so a
+  vendored `TODO` is no longer cited as the project's own open question, and a
+  large dot-prefixed dependency tree can no longer exhaust the walk cap before
+  the project's own `src/` is reached.
 - **The open-questions marker scan no longer reads documentation about markers as
   open questions** (iss-111). The pattern that grounds `evidence/open-questions`
   admitted a bare uppercase `TODO`/`FIXME` followed by whitespace, so on a
