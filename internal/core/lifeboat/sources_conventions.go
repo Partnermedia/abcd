@@ -701,21 +701,23 @@ func (convInternalsSource) probeLimited(ctx *SourceContext, walkLimit int) Evide
 // anchors each marker's trailing boundary (see convMarkerRe).
 var convMarkerNames = append(append([]string{}, convDelimitedMarkers...), convBareMarkers...)
 
-// convDelimitedMarkers must carry a trailing ':' or '(' to be recognised. TODO
-// and FIXME are the markers a project documents by name, so their bare-word form
-// (the marker followed by whitespace or end-of-line) is indistinguishable from
-// prose that merely mentions the marker — the dominant false-positive class on a
+// convDelimitedMarkers must carry a trailing ':' or '(' to be recognised. They
+// are the markers a project documents by name, so their bare-word form (the
+// marker followed by whitespace or end-of-line) is indistinguishable from prose
+// that merely mentions the marker — the dominant false-positive class on a
 // repository that documents its own conventions (iss-111). Requiring the
-// conventional delimiter (TODO: or TODO(alice):) keeps the genuine markers and
-// drops the mentions.
+// conventional trailing delimiter — a colon or an open-paren, as in an authored
+// marker naming its owner — keeps the genuine markers and drops the mentions.
+// (This comment states the markers as slice values below rather than inline, so
+// the scan does not cite its own prose.)
 var convDelimitedMarkers = []string{"TODO", "FIXME"}
 
 // convBareMarkers additionally match a bare word (a trailing whitespace or
-// end-of-line). XXX, HACK, and BUG are rarely written as bare uppercase words in
-// prose, so their bare form carries no measured false-positive cost, and the bare
-// spellings (XXX, // HACK around it, -- BUG --) are how these three are
-// conventionally written — requiring a delimiter would lose real markers for no
-// precision gain.
+// end-of-line). These three are rarely written as bare uppercase words in running
+// prose, so their bare form carries no measured false-positive cost, and that
+// bare spelling is how they are conventionally written — requiring a delimiter
+// would lose real markers for no precision gain. (Named only as slice values
+// below, for the same reason as convDelimitedMarkers.)
 var convBareMarkers = []string{"XXX", "HACK", "BUG"}
 
 // convMarkerRe matches one recognised marker on a line. The leading class is the
