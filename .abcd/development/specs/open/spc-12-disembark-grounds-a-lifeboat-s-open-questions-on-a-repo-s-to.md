@@ -42,27 +42,37 @@ falling through to a blank a rescuer has to fill from nothing.
 `fs.WalkDir(root.FS(), …)` walk — rather than inventing a second traversal
 idiom.
 
-- **Containment.** The walk runs over `c.root.FS()`, so `os.Root` refuses any
-  component that escapes the repository root, symlinked intermediates included.
-  A `nil` root (unopenable repository) returns `(nil, false)`.
+- **Containment.** The walk descends through a sub-root per directory
+  (`os.Root.OpenRoot`); `os.Root` refuses any component that escapes the
+  repository root, symlinked intermediates included, and a symlinked directory
+  is detected from its `ReadDir` type and skipped before it is ever opened. The
+  containment property holds unchanged while each child opens in O(1). A `nil`
+  root (unopenable repository) returns `(nil, false)`.
 - **Symlinks are skipped, never followed.** Unlike embark — where a symlink in a
   packed lifeboat is a trust violation and therefore fatal — a probe reads an
   arbitrary foreign tree where symlinks are ordinary. The walk skips symlinked
   entries (files and directories) and continues; it never errors on one.
-- **Skip set.** Directory names never descended into: `.git`, `node_modules`,
-  `vendor`, `generated`. These are dependency, VCS-internal, and generated
-  trees — never a team's own open questions, and the dominant cost of an
-  unfiltered walk.
-- **Caps, in three dimensions.** `maxWalkFiles` mirrors `maxDirEntries`
-  (50 000) and bounds regular files *and* directories visited: a tree of
-  directories holding nothing regular yields no path, so a file cap alone never
-  fires there and the walk would run to exhaustion over a foreign tree.
-  `maxWalkDepth` (32) bounds descent, because `os.Root` resolves every
-  directory from the containment root one component at a time — a chain of
-  directories costs the square of its depth, and a few thousand of them are
-  trivial to create and take minutes to traverse. Real trees are shallow, so
-  the depth cap prunes only pathological chains, and prunes the chain rather
-  than abandoning the tree. Any bound firing returns `truncated = true`.
+- **Skip set.** Directory names never descended into, matched by name at any
+  depth: `.git` (VCS); `node_modules` (Node); `vendor`, `generated`
+  (Go/generic); `.venv`, `venv`, `.tox`, `__pycache__` (Python); `target`,
+  `build`, `dist` (build/distribution output); `Pods` (CocoaPods). These are
+  dependency, VCS-internal, language-cache, and generated trees across the
+  common ecosystems — never a team's own open questions, and the dominant cost
+  of an unfiltered walk; walked as source, a vendored `TODO` is cited as this
+  project's own open question.
+- **Caps.** `maxWalkFiles` mirrors `maxDirEntries` (50 000) and bounds regular
+  files *and* directories visited: a tree of directories holding nothing regular
+  yields no path, so a file cap alone never fires there and the walk would run to
+  exhaustion over a foreign tree. `maxDirEntries` (50 000) is also the
+  per-directory read bound: each directory is read with a bounded `ReadDir` — the
+  one canonical guard `ListDir` uses — so a single directory of millions of
+  entries cannot balloon memory before the file cap applies. `maxWalkDepth` (32)
+  bounds descent: the walk holds a sub-root per directory (`os.Root.OpenRoot`),
+  so each child opens in O(1) and a chain costs O(depth) rather than the square
+  of its depth, but an unbounded chain is still an unbounded recursion and a
+  pathological cost, so the cap prunes it — pruning the chain rather than
+  abandoning the tree. Real trees are shallow. Any bound firing returns
+  `truncated = true`.
   Truncation is *reported*, never silent (loud-staging): an adapter that hits a
   cap says so in its cited evidence, and a blank drawn from a truncated walk
   says the walk was truncated.
@@ -134,8 +144,8 @@ The primitive therefore adds no second read path to audit.
 | Which markers? | `TODO`, `FIXME`, `XXX`, `HACK`, `BUG`; uppercase only; word-boundary anchored, trailing `:`/`(`/space/EOL. `NOTE`, `OPTIMIZE` excluded. |
 | Which tier — conventions or git? | **Conventions.** A working-tree file scan through the `SourceContext` file surface. The adapter never touches git, so it grounds a bare snapshot as readily as a working tree. |
 | Scan scope and the missing primitive | Option (a): add a bounded recursive-walk primitive, `WalkFiles`, to `SourceContext`. It is shared with itd-96, so the walk lands once. |
-| Which files to scan | Every regular file the walk yields, minus the skip set (`.git`, `node_modules`, `vendor`, `generated`), minus symlinks, minus binaries (NUL-byte heuristic), minus oversized files (`ReadFile`'s cap). |
-| Per-repo caps | `maxWalkFiles` = 50 000 files **and** 50 000 directories (mirrors `maxDirEntries`), `maxWalkDepth` = 32 levels of descent, `maxProbeReadBytes` per file, `maxMarkerScanBytes` = 512 MiB across the scan (reuses `maxPlanTotalBytes`), `maxMarkerCitations` = 200 citations. Every bound that fires is reported in the cited evidence. |
+| Which files to scan | Every regular file the walk yields, minus the skip set (`.git`, `node_modules`, `vendor`, `generated`, `.venv`, `venv`, `.tox`, `__pycache__`, `target`, `build`, `dist`, `Pods`), minus symlinks, minus binaries (NUL-byte heuristic), minus oversized files (`ReadFile`'s cap). |
+| Per-repo caps | `maxWalkFiles` = 50 000 files **and** 50 000 directories (mirrors `maxDirEntries`), `maxDirEntries` = 50 000 entries read per directory, `maxWalkDepth` = 32 levels of descent, `maxProbeReadBytes` per file, `maxMarkerScanBytes` = 512 MiB across the scan (reuses `maxPlanTotalBytes`), `maxMarkerCitations` = 200 citations. Every bound that fires is reported in the cited evidence. |
 | Output shape and framing | Headline count + up to 200 `path:line (MARKER)` citations, `dedupeSorted`. |
 | Dedup | `dedupeSorted` on the rendered citation string, so an identical `path:line (MARKER)` appears once. Multiple distinct markers in one file each keep their own line. |
 | Status and confidence thresholds | Ceiling `StatusPartial`. `ConfidenceMedium` at ≥ 10 markers, else `ConfidenceLow`. Never `StatusGrounded`. |
