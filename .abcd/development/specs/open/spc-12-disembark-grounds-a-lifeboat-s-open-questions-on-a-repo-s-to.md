@@ -93,16 +93,22 @@ The primitive therefore adds no second read path to audit.
 
 - **Recognised markers:** `TODO`, `FIXME`, `XXX`, `HACK`, `BUG` — uppercase
   only, matched by
-  `(^|[^A-Za-z0-9_-])(TODO|FIXME|XXX|HACK|BUG)(:|\(|\s|$)`. The leading class
-  is the word boundary that stops `TODO` matching inside `TODOS` or
-  `todo_list`; the trailing class admits the two conventional spellings
-  (`TODO:` and `TODO(alice):`) plus a bare word. The hyphen is excluded from
-  the leading class so the common redaction placeholder shape (`XXX-XXX-XXX`)
-  is rejected at every one of its triples — with the hyphen admitted, the last
-  triple matches on its leading `-` and a support phone number becomes a
-  fabricated open question. `NOTE` and `OPTIMIZE` are *not* recognised: `NOTE`
-  marks explanation rather than unfinished work, and `OPTIMIZE` is rare enough
-  that its false-positive cost exceeds its value.
+  `(^|[^A-Za-z0-9_-])(?:(TODO|FIXME)(?::|\()|(XXX|HACK|BUG)(?::|\(|\s|$))`.
+  The leading class is the word boundary that stops a marker matching inside a
+  longer identifier (`TODOS`, `todo_list`). The trailing boundary splits the
+  markers into two classes: `TODO` and `FIXME` require a trailing `:` or `(`
+  (the conventional `TODO:` and `TODO(alice):` spellings), because these are the
+  markers a project documents by name and their bare-word form is
+  indistinguishable from prose that merely mentions the marker (iss-111); `XXX`,
+  `HACK`, and `BUG` additionally admit a bare word (trailing whitespace or
+  end-of-line), because they are rarely written as bare uppercase words in prose
+  and the bare spelling is how they are conventionally written. The hyphen is
+  excluded from the leading class so the common redaction placeholder shape
+  (`XXX-XXX-XXX`) is rejected at every one of its triples — with the hyphen
+  admitted, the last triple matches on its leading `-` and a support phone
+  number becomes a fabricated open question. `NOTE` and `OPTIMIZE` are *not*
+  recognised: `NOTE` marks explanation rather than unfinished work, and
+  `OPTIMIZE` is rare enough that its false-positive cost exceeds its value.
 - **Binary files are skipped** by a NUL byte in the first 8 KiB — the
   conventional heuristic, and dependency-free. No extension allow-list is
   maintained.
@@ -141,7 +147,7 @@ The primitive therefore adds no second read path to audit.
 
 | Question | Decision |
 |---|---|
-| Which markers? | `TODO`, `FIXME`, `XXX`, `HACK`, `BUG`; uppercase only; word-boundary anchored, trailing `:`/`(`/space/EOL. `NOTE`, `OPTIMIZE` excluded. |
+| Which markers? | `TODO`, `FIXME`, `XXX`, `HACK`, `BUG`; uppercase only; word-boundary anchored. `TODO`/`FIXME` require a trailing `:`/`(` (a bare word reads as prose that names the marker, iss-111); `XXX`/`HACK`/`BUG` also admit a bare word (trailing space/EOL). `NOTE`, `OPTIMIZE` excluded. |
 | Which tier — conventions or git? | **Conventions.** A working-tree file scan through the `SourceContext` file surface. The adapter never touches git, so it grounds a bare snapshot as readily as a working tree. |
 | Scan scope and the missing primitive | Option (a): add a bounded recursive-walk primitive, `WalkFiles`, to `SourceContext`. It is shared with itd-96, so the walk lands once. |
 | Which files to scan | Every regular file the walk yields, minus the skip set (`.git`, `node_modules`, `vendor`, `generated`, `.venv`, `venv`, `.tox`, `__pycache__`, `target`, `build`, `dist`, `Pods`), minus symlinks, minus binaries (NUL-byte heuristic), minus oversized files (`ReadFile`'s cap). |

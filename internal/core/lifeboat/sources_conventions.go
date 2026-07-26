@@ -697,18 +697,54 @@ func (convInternalsSource) probeLimited(ctx *SourceContext, walkLimit int) Evide
 // convMarkerNames are the in-code work markers recognised as open questions,
 // uppercase only. NOTE and OPTIMIZE are deliberately absent: NOTE marks
 // explanation rather than unfinished work, and OPTIMIZE is rare enough that its
-// false-positive cost exceeds its value.
-var convMarkerNames = []string{"TODO", "FIXME", "XXX", "HACK", "BUG"}
+// false-positive cost exceeds its value. The set splits by how the pattern
+// anchors each marker's trailing boundary (see convMarkerRe).
+var convMarkerNames = append(append([]string{}, convDelimitedMarkers...), convBareMarkers...)
+
+// convDelimitedMarkers must carry a trailing ':' or '(' to be recognised. They
+// are the markers a project documents by name, so their bare-word form (the
+// marker followed by whitespace or end-of-line) is indistinguishable from prose
+// that merely mentions the marker — the dominant false-positive class on a
+// repository that documents its own conventions (iss-111). Requiring the
+// conventional trailing delimiter — a colon or an open-paren, as in an authored
+// marker naming its owner — keeps the genuine markers and drops the mentions.
+// (This comment states the markers as slice values below rather than inline, so
+// the scan does not cite its own prose.)
+var convDelimitedMarkers = []string{"TODO", "FIXME"}
+
+// convBareMarkers additionally match a bare word (a trailing whitespace or
+// end-of-line). These three are rarely written as bare uppercase words in running
+// prose, so their bare form carries no measured false-positive cost, and that
+// bare spelling is how they are conventionally written — requiring a delimiter
+// would lose real markers for no precision gain. (Named only as slice values
+// below, for the same reason as convDelimitedMarkers.)
+var convBareMarkers = []string{"XXX", "HACK", "BUG"}
 
 // convMarkerRe matches one recognised marker on a line. The leading class is the
-// word boundary that stops TODO matching inside TODOS or todo_list; the trailing
-// class admits the two conventional spellings (TODO: and TODO(alice):) plus a
-// bare word. The hyphen is excluded from the leading class so the redaction
-// placeholder shape (XXX-XXX-XXX) is rejected at every one of its triples —
-// without it the last triple matches on its leading hyphen and a support phone
-// number becomes a fabricated open question. Built from convMarkerNames so the
-// set and the pattern cannot drift, and compiled once.
-var convMarkerRe = regexp.MustCompile(`(^|[^A-Za-z0-9_-])(` + strings.Join(convMarkerNames, "|") + `)(:|\(|\s|$)`)
+// word boundary that stops a marker matching inside a longer identifier (TODOS,
+// todo_list); the hyphen is excluded from it so the redaction placeholder shape
+// (XXX-XXX-XXX) is rejected at every one of its triples — without that exclusion
+// the last triple matches on its leading hyphen and a support phone number
+// becomes a fabricated open question. The two marker classes differ only in their
+// trailing boundary: convDelimitedMarkers (captured in group 2) require ':' or
+// '('; convBareMarkers (group 3) also accept whitespace or end-of-line. Exactly
+// one of the two marker groups is non-empty on a match — convMarkerName reads
+// whichever fired. Built from the marker slices so the set and the pattern cannot
+// drift, and compiled once.
+var convMarkerRe = regexp.MustCompile(
+	`(^|[^A-Za-z0-9_-])` +
+		`(?:(` + strings.Join(convDelimitedMarkers, "|") + `)(?::|\()` +
+		`|(` + strings.Join(convBareMarkers, "|") + `)(?::|\(|\s|$))`)
+
+// convMarkerName returns the marker a convMarkerRe match captured. The pattern
+// puts a delimited marker in group 2 and a bare-allowed marker in group 3, and
+// exactly one is non-empty.
+func convMarkerName(m []string) string {
+	if m[2] != "" {
+		return m[2]
+	}
+	return m[3]
+}
 
 // maxMarkerCitations caps how many path:line citations the marker scan reports.
 // Beyond it the scan keeps counting — the headline stays truthful — but stops
@@ -805,7 +841,7 @@ func (convOpenQuestionsSource) probeLimited(ctx *SourceContext, budget int) Evid
 			hits++
 			markers++
 			if len(citations) < maxMarkerCitations {
-				citations = append(citations, fmt.Sprintf("%s:%d (%s)", p, i+1, m[2]))
+				citations = append(citations, fmt.Sprintf("%s:%d (%s)", p, i+1, convMarkerName(m)))
 			}
 		}
 		if hits > 0 {
