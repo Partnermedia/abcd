@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
 const lockFilename = ".iss-alloc.lock"
@@ -23,6 +26,12 @@ const orphanAgeThreshold = 60 * time.Second
 // lockTimeout is the default flock acquisition budget. A var (not const) so a
 // test can shorten it to exercise contention without a multi-second wait.
 var lockTimeout = 5 * time.Second
+
+// beforeOrphanRemoveHook, when non-nil, fires immediately before the sweep
+// unlinks a classified orphan placeholder. It is a test-only seam (nil in
+// production, zero overhead) used to force the iss-102 commit-in-the-unlink-window
+// interleaving deterministically.
+var beforeOrphanRemoveHook func(cand string)
 
 var rePlaceholderName = regexp.MustCompile(`^iss-[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?\.md$`)
 var reMaxIssN = regexp.MustCompile(`^iss-([0-9]+)(?:-[a-z0-9-]+)?\.md$`)
@@ -69,32 +78,37 @@ func safeMkdirLeaf(target string) error {
 }
 
 // withLedgerLock runs fn while holding the exclusive allocator flock, so every
-// ledger mutation — id allocation AND status transitions — serializes on one
-// lock. It creates the ledger dirs, opens the lock with the symlink/regular-file
-// guards, acquires the flock within lockTimeout, runs fn, then releases.
+// ledger mutation — id allocation, status transitions, AND the capture commit
+// write — serializes on one lock. It creates the ledger dirs, then routes through
+// the shared fsutil.WithFileLock primitive (the one-canonical inter-process
+// load-modify-write lock), mapping its sentinels back to the capture-facing
+// ErrAllocatorContention / ErrPathUnsafe the ledger callers already test.
 func withLedgerLock(issuesRoot string, fn func() error) error {
 	if err := ensureLedgerDirs(issuesRoot); err != nil {
 		return err
 	}
 	lockPath := filepath.Join(issuesRoot, lockFilename)
-	lockFd, err := safeOpenLockFd(lockPath)
-	if err != nil {
-		return err
+	err := fsutil.WithFileLock(lockPath, lockTimeout, fn)
+	switch {
+	case errors.Is(err, fsutil.ErrLockContention):
+		return fmt.Errorf("%w: could not acquire allocator lock within %s", ErrAllocatorContention, lockTimeout)
+	case errors.Is(err, fsutil.ErrLockPathUnsafe):
+		return fmt.Errorf("%w: allocator lock path is unsafe: %s", ErrPathUnsafe, lockPath)
 	}
-	defer syscall.Close(lockFd)
-
-	if err := acquireFlock(lockFd, lockTimeout); err != nil {
-		return err
-	}
-	defer syscall.Flock(lockFd, syscall.LOCK_UN)
-
-	return fn()
+	return err
 }
 
 // reservePath reserves an iss-N id and creates a zero-byte placeholder under
 // open/, mirroring reserve_issue_path: flock -> scan max N -> O_EXCL create
 // with bump-retry. When forceID is non-empty it demands that exact id.
-func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+//
+// refFloor is the highest iss-N observed across other git refs
+// (recordid.MaxAcrossRefs), computed by the caller before the lock: the reserved
+// id starts at max(local max N, refFloor)+1, so a branch that has already
+// committed a higher id is not re-minted (iss-115, iss-120). It is a floor, not a
+// substitute for the local scan — the local scan alone sees uncommitted mints in
+// this worktree, and the O_EXCL bump-retry still resolves any residual clash.
+func reservePath(issuesRoot, slug, forceID string, refFloor int) (string, string, error) {
 	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
 	// to build a path or create a placeholder — a traversal id (../../evil) must
 	// never touch the filesystem outside the ledger, even transiently.
@@ -121,6 +135,9 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		}
 
 		maxN := maxIssN(issuesRoot)
+		if refFloor > maxN {
+			maxN = refFloor
+		}
 		// Guard the id arithmetic below (maxN+1+attempt) against int overflow: a
 		// hand-crafted MaxInt-adjacent filename would otherwise wrap to a negative
 		// "iss--N" that fails reIssID, creating a bogus placeholder that only fails
@@ -148,54 +165,6 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		return "", "", err
 	}
 	return resID, resTarget, nil
-}
-
-// safeOpenLockFd opens the allocator lock with O_NOFOLLOW and verifies it is a
-// regular file, refusing a symlinked or non-regular lock path.
-func safeOpenLockFd(lockPath string) (int, error) {
-	fd, err := syscall.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_NOFOLLOW, 0o644)
-	if err != nil {
-		if err == syscall.ELOOP {
-			return -1, fmt.Errorf("%w: allocator lock path is a symlink: %s", ErrPathUnsafe, lockPath)
-		}
-		return -1, err
-	}
-	var st syscall.Stat_t
-	if err := syscall.Fstat(fd, &st); err != nil {
-		syscall.Close(fd)
-		return -1, err
-	}
-	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
-		syscall.Close(fd)
-		return -1, fmt.Errorf("%w: allocator lock path is not a regular file: %s", ErrPathUnsafe, lockPath)
-	}
-	return fd, nil
-}
-
-// acquireFlock polls for an exclusive flock until timeout elapses.
-func acquireFlock(fd int, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	backoff := 5 * time.Millisecond
-	for {
-		err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			return nil
-		}
-		if err != syscall.EWOULDBLOCK && err != syscall.EAGAIN {
-			return err
-		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return fmt.Errorf("%w: could not acquire allocator lock within %s", ErrAllocatorContention, timeout)
-		}
-		if backoff > remaining {
-			backoff = remaining
-		}
-		time.Sleep(backoff)
-		if backoff < 100*time.Millisecond {
-			backoff *= 2
-		}
-	}
 }
 
 // createPlaceholder does an O_EXCL|O_NOFOLLOW create of the placeholder file.
@@ -338,6 +307,12 @@ func cleanOrphanPlaceholders(issuesRoot string) error {
 		}
 		if !orphanStillRemovable(cand, cfi) {
 			continue
+		}
+		// Test-only seam (nil in production): fires in the residual window between
+		// the pre-unlink re-check and the unlink, to force the documented iss-102
+		// interleaving where a stalled commit's fill lands here.
+		if beforeOrphanRemoveHook != nil {
+			beforeOrphanRemoveHook(cand)
 		}
 		os.Remove(cand)
 	}

@@ -23,7 +23,7 @@ func TestReservePathRefusesOverflowingCounter(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ir, "open", name), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	id, target, err := reservePath(ir, "note", "")
+	id, target, err := reservePath(ir, "note", "", 0)
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("reservePath must refuse an overflowing counter, got id=%q target=%q err=%v", id, target, err)
 	}

@@ -1,11 +1,13 @@
 package ahoy
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
@@ -122,6 +124,94 @@ func binTarget() string {
 	return "/usr/local/bin/abcd"
 }
 
+// ---------------------------------------------------------------------------
+// dev-mode shim (abcd ahoy install --dev)
+// ---------------------------------------------------------------------------
+
+// devShimMarker is the identifying first-comment line of the dev shim. Detection
+// recognises the shim by this marker (never mistaking it for a foreign occupant),
+// and uninstall removes only a file that carries it.
+const devShimMarker = "# abcd-dev-shim"
+
+// shSingleQuote wraps s for safe interpolation inside single quotes in a POSIX
+// shell, so a source-repo path containing a quote cannot break out of the string.
+func shSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// renderDevShim returns the POSIX-sh track-latest shim body. On every call it
+// rebuilds abcd from sourceRepo's tip into freshBin and execs it; a failed build
+// fails loudly and NEVER execs a stale binary (loud-staging). The absolute paths
+// live only inside this installed file (outside any repo), never in a committed
+// artefact.
+func renderDevShim(sourceRepo, freshBin string) string {
+	return "#!/bin/sh\n" +
+		devShimMarker + " (managed by `abcd ahoy install --dev`)\n" +
+		"# Rebuilds abcd from the source tip on every call, then execs the fresh\n" +
+		"# binary. A broken build fails loudly and never execs a stale binary.\n" +
+		"# Do not edit; run `abcd ahoy install` to pin a built binary instead.\n" +
+		"ABCD_DEV_REPO=" + shSingleQuote(sourceRepo) + "\n" +
+		"ABCD_DEV_BIN=" + shSingleQuote(freshBin) + "\n" +
+		"if ! go build -C \"$ABCD_DEV_REPO\" -o \"$ABCD_DEV_BIN\" ./cmd/abcd; then\n" +
+		"\tprintf 'abcd dev shim: build failed in %s — refusing to run a stale binary\\n' \"$ABCD_DEV_REPO\" >&2\n" +
+		"\texit 1\n" +
+		"fi\n" +
+		"exec \"$ABCD_DEV_BIN\" \"$@\"\n"
+}
+
+// devShimPrefix is the exact opening of a shim renderDevShim produced: the
+// shebang followed immediately by the marker line. Recognition requires this
+// prefix — not a substring match anywhere in the file — so a foreign file that
+// merely mentions the marker in its body is never mistaken for ours.
+var devShimPrefix = []byte("#!/bin/sh\n" + devShimMarker)
+
+// isDevShimFile reports whether path is a regular file we wrote as the dev shim.
+// Uses the same guarded read as the rest of ahoy, so a symlink leaf or an
+// oversized/irregular file reads as "not our shim" rather than being followed.
+func isDevShimFile(path string) bool {
+	data, err := fsutil.ReadGuarded(path, maxAhoyFileBytes)
+	if err != nil {
+		return false
+	}
+	return bytes.HasPrefix(data, devShimPrefix)
+}
+
+// binTargetKind classifies what currently occupies the PATH target.
+type binTargetKind int
+
+const (
+	binTargetAbsent       binTargetKind = iota // nothing there
+	binTargetOwnedSymlink                      // our symlink -> the pinned binary
+	binTargetDevShim                           // our dev-mode rebuild-then-exec shim
+	binTargetForeign                           // something else; never clobber it
+)
+
+// classifyBinTarget inspects the PATH target and reports whether it is absent,
+// our owned pinned symlink, our dev shim, or a foreign occupant.
+func classifyBinTarget(target, pluginRoot string) binTargetKind {
+	fi, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return binTargetAbsent
+		}
+		return binTargetForeign // present but unstattable: treat as foreign, never clobber
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		dest, err := os.Readlink(target)
+		if err != nil {
+			return binTargetForeign
+		}
+		if resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
+			return binTargetOwnedSymlink
+		}
+		return binTargetForeign
+	}
+	if isDevShimFile(target) {
+		return binTargetDevShim
+	}
+	return binTargetForeign
+}
+
 func isDir(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
@@ -227,25 +317,119 @@ func findRefoundingCandidate(idx *historyIndex, id RepoIdentity) *historyRepo {
 	return nil
 }
 
+// historyLockFilename is the ~/.abcd/history lock file guarding the index.json
+// load-modify-write. It sits beside index.json.
+const historyLockFilename = ".index.lock"
+
+// historyLockTimeout bounds acquisition of the history-index lock. A var (not
+// const) so a test can shorten it to exercise contention without a multi-second
+// wait, mirroring capture's lockTimeout.
+var historyLockTimeout = 5 * time.Second
+
+// afterHistoryReloadHook, when non-nil, fires inside withHistoryLock immediately
+// after the lock is acquired and before fn runs (fn re-loads the index under the
+// lock and writes it). It is a test-only seam (nil in production) used to force
+// the iss-101 lost-update interleaving deterministically: the goroutine that grabs
+// the lock pauses here, holding it, while another registration is admitted.
+var afterHistoryReloadHook func()
+
+// beforeHistoryIndexCreateHook, when non-nil, fires in bootstrapHistory just
+// before the atomic link that publishes index.json. Test-only seam (nil in
+// production) to force the iss-101 bootstrap check-then-act interleaving
+// deterministically.
+var beforeHistoryIndexCreateHook func()
+
+// withHistoryLock runs fn while holding the exclusive ~/.abcd/history lock, so a
+// registerRepo load-modify-write of index.json serializes across concurrent
+// `abcd ahoy install` runs from different worktrees (iss-101). It routes through
+// the shared fsutil.WithFileLock primitive; the lock file lives beside
+// index.json. The lock is NEVER held across an interactive prompt — callers do
+// any prompting before acquiring it and re-check the answer-relevant state inside
+// fn after re-loading.
+func withHistoryLock(fn func() error) error {
+	root, err := historyRoot()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	lockPath := filepath.Join(root, historyLockFilename)
+	return fsutil.WithFileLock(lockPath, historyLockTimeout, func() error {
+		if afterHistoryReloadHook != nil {
+			afterHistoryReloadHook()
+		}
+		return fn()
+	})
+}
+
 // bootstrapHistory creates ~/.abcd/history/ + index.json when absent. Idempotent.
+// The seed is published atomically (iss-101): a fully-formed temp file is written,
+// synced, and os.Link'd into place. The link is the single-winner publish — it
+// fails EEXIST if index.json already exists, so under two concurrent bootstraps
+// exactly one wins and every other observes the existing file and reports no
+// write. Because the file only ever appears complete (the link, never a bare
+// create followed by a separate content write), a reader that races the bootstrap
+// sees either no file yet or the finished index — never a 0-byte one that would
+// make a concurrent loadHistoryIndex parse-fail and drop its own registration.
 func bootstrapHistory() (bool, error) {
 	root, err := historyRoot()
 	if err != nil {
 		return false, err
 	}
-	if isDir(root) {
-		if _, err := os.Stat(filepath.Join(root, "index.json")); err == nil {
-			return false, nil
-		}
-	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return false, err
 	}
+	path := filepath.Join(root, "index.json")
+	// Fast path: already seeded (the common idempotent re-run).
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	}
 	idx := historyIndex{Schema: 1, Description: historyIndexDescription, Repos: []historyRepo{}}
-	return true, writeJSON(filepath.Join(root, "index.json"), idx)
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	data = append(data, '\n')
+
+	// Write a complete temp file first, then link it into place as the atomic,
+	// single-winner publish. The temp is always cleaned up.
+	tmp, err := os.CreateTemp(root, ".index-*.tmp")
+	if err != nil {
+		return false, err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+
+	if beforeHistoryIndexCreateHook != nil {
+		beforeHistoryIndexCreateHook()
+	}
+	if err := os.Link(tmpName, path); err != nil {
+		if os.IsExist(err) {
+			return false, nil // already seeded (or won by a concurrent run)
+		}
+		return false, err
+	}
+	return true, nil
 }
 
-// writeHistoryIndex persists idx.
+// writeHistoryIndex persists idx. It must be called from inside withHistoryLock
+// (registerRepo) so a re-loaded index is not clobbered by a concurrent writer.
 func writeHistoryIndex(idx *historyIndex) error {
 	root, err := historyRoot()
 	if err != nil {
