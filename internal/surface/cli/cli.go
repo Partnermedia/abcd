@@ -1427,6 +1427,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "abcd ahoy — %s\n", res.FolderKind)
 				fmt.Fprintf(w, "  plugin root: %s\n", res.PluginRootStatus)
 				fmt.Fprintf(w, "  root sha:    %s\n", res.RootSHA)
+				if mode, _ := res.Signals["install_mode"].(string); mode != "" {
+					fmt.Fprintf(w, "  install:     %s\n", mode)
+				}
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				// Classification is read-only; the human report names the
 				// next step per folder kind (itd-40 AC2/AC3).
@@ -1445,6 +1448,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 		yes           bool
 		adopt         bool
 		refuseAdopt   bool
+		dev           bool
 		visibility    string
 		docsTarget    string
 		oracleBackend string
@@ -1459,7 +1463,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, visibility, docsTarget, oracleBackend, scanDeep)
+			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, visibility, docsTarget, oracleBackend, scanDeep)
 			if err != nil {
 				return err
 			}
@@ -1487,6 +1491,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	installCmd.Flags().BoolVar(&yes, "yes", false, "approve every resolvable change category without prompting")
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
+	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
 	installCmd.Flags().StringVar(&visibility, "visibility", "", "repo visibility: private | public")
 	installCmd.Flags().StringVar(&docsTarget, "docs-target", "", "marker target: claude_md | agents_md | both | skip")
 	installCmd.Flags().StringVar(&oracleBackend, "oracle-backend", "", "oracle backend: host-delegated | native | cli | api | mcp")
@@ -1590,8 +1595,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 // installOptionsFromFlags validates the install flags and builds InstallOptions.
 // Only explicitly-set value flags become overrides; unset values fall through to
 // the prompter (interactive) or its default (non-interactive).
-func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt bool, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
-	opts := ahoy.InstallOptions{Yes: yes}
+func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev bool, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
+	opts := ahoy.InstallOptions{Yes: yes, Dev: dev}
 	if adopt && refuseAdopt {
 		return opts, fmt.Errorf("abcd ahoy install: --adopt and --refuse-adopt are mutually exclusive")
 	}

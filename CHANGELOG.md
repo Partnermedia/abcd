@@ -12,6 +12,19 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd ahoy install --dev` — a track-latest dogfood install mode** (iss-75).
+  Normal `ahoy install` symlinks the pinned built binary, so tracking live
+  development meant hand-rolling a `~/.local/bin/abcd` wrapper that ran
+  `go build -C <repo> && exec` on every call. That manual workaround now dies:
+  `--dev` installs a shim at the same `PATH` target that rebuilds abcd from the
+  source tip on every invocation and execs the fresh binary. A broken build fails
+  loudly and never execs a stale binary (loud-staging). `abcd ahoy` status reports
+  the mode as `install: dev (tip build)`, detected from the installed shim itself
+  (never recorded in the tracked repo config, so it can never go stale), so a dev
+  install is never invisible. Installing over an existing
+  install applies-as-update in either direction — `--dev` replaces the pinned
+  symlink with the shim, a plain re-install restores the symlink — and a foreign
+  occupant is still never clobbered.
 - **Record-id minting now sees every branch, and a spec-id uniqueness lint closes
   the class** (iss-115, iss-120). Sequential ids (`iss-N`, `itd-N`, `spc-N`) were
   minted from the local working tree only, so two branches cut from the same base

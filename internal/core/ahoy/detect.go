@@ -46,6 +46,10 @@ func Detect(cwd string) (DetectionResult, error) {
 		pluginStatus = "resolved"
 	}
 
+	// The PATH-target install mode is a machine-scope fact independent of folder
+	// kind, surfaced so status reports "dev (tip build)" honestly (never invisible).
+	signals["install_mode"] = detectInstallMode(pluginRoot, pluginOK)
+
 	res := DetectionResult{
 		FolderKind:       kind,
 		RootSHA:          identity.RootSHA,
@@ -377,6 +381,11 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 		return nil
 	}
 	if fi.Mode()&modeSymlink == 0 {
+		if isDevShimFile(target) {
+			// Our own track-latest dev shim (abcd ahoy install --dev) — a valid
+			// install, not a foreign occupant. Surfaced via the install_mode signal.
+			return nil
+		}
 		return []Gap{{
 			ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
 			Title: "non-symlink at " + target, Detail: "A regular file occupies the PATH symlink target.",
@@ -395,6 +404,24 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 		Title: "foreign symlink at " + target, Detail: target + " -> " + dest + " (expected " + expected + ").",
 		FixHint: "Resolve manually; ahoy refuses to clobber.", Required: false, Resolvable: false,
 	}}
+}
+
+// detectInstallMode reports the current PATH-target install mode: "dev (tip
+// build)" when the track-latest shim occupies it, "pinned" when our owned symlink
+// does, and "" when the target is absent, foreign, or the plugin root is
+// unresolved (nothing to attribute a mode to).
+func detectInstallMode(pluginRoot string, pluginOK bool) string {
+	if !pluginOK {
+		return ""
+	}
+	switch classifyBinTarget(binTarget(), pluginRoot) {
+	case binTargetDevShim:
+		return "dev (tip build)"
+	case binTargetOwnedSymlink:
+		return "pinned"
+	default:
+		return ""
+	}
 }
 
 func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {

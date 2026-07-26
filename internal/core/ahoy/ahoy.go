@@ -90,6 +90,11 @@ type InstallOptions struct {
 	Yes                bool                 // approve every resolvable category
 	ApprovedCategories map[GapCategory]bool // nil => interactive; explicit => partial subset
 	ValueOverrides     map[string]string    // visibility/docs_target/oracle_backend/scan_deep
+	// Dev requests the track-latest dogfood mode: the PATH entry becomes a shim
+	// that rebuilds abcd from the source tip on every call and execs the fresh
+	// binary (failing loudly on a broken build), instead of a symlink to the
+	// pinned built binary. --dev.
+	Dev bool
 }
 
 // InstallResult is the outcome of Install.
