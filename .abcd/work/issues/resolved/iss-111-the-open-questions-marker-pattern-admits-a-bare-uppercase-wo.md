@@ -7,7 +7,7 @@ category: "tech-debt"
 source: "impl-review"
 found_during: "itd-95 P1 review"
 found_at: "internal/core/lifeboat/sources_conventions.go"
-resolution: "Marker pattern now splits by trailing boundary: TODO/FIXME require ':' or '(', XXX/HACK/BUG keep the bare word (option 2 of the two recorded). On this repo the durable-record documentation FP corpus dropped 18 to 3 (the 3 survivors are prose that literally quotes 'TODO:' with the colon, irreducible for this mechanism); 100% of the bare-word 'mentions a marker' FP class killed. All colon-form fixture markers preserved; only the bare 'FIXME check this' and '# TODO' pinning spellings reclassified to reject, correctly, as indistinguishable from prose. spc-12 pattern description amended in the same change."
+resolution: "Marker pattern now splits by trailing boundary: TODO/FIXME require ':' or '(', XXX/HACK/BUG keep the bare word (option 2 of the two recorded). On this repo the durable-record documentation FP corpus (scope: .abcd/development/) dropped from 14 to 3 (the 3 survivors are prose that literally quotes the colon form, irreducible for this mechanism); 100% of the bare-word 'mentions a marker' FP class killed. All colon-form fixture markers preserved; only the bare 'FIXME check this' and '# TODO' pinning spellings reclassified to reject, correctly, as indistinguishable from prose. spc-12 pattern description amended in the same change."
 impact: fix
 ---
 

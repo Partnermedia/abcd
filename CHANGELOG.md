@@ -31,8 +31,10 @@ called out in a **Breaking** section.
   open questions** (iss-111). The pattern that grounds `evidence/open-questions`
   admitted a bare uppercase `TODO`/`FIXME` followed by whitespace, so on a
   repository that documents its own conventions every prose mention of a marker
-  was cited as a work marker — 18 such false positives across the durable record
-  on this repository, all documentation, none a real marker. `TODO` and `FIXME`
+  was cited as a work marker — 14 such false positives across the durable record
+  (`.abcd/development/`) on this repository, all documentation, none a real
+  marker, down to 3 after the fix (each an irreducible prose quotation of the
+  literal `TODO:` form). `TODO` and `FIXME`
   now require a trailing `:` or `(` (the conventional `TODO:` / `TODO(alice):`
   spellings), which is how genuine markers are almost always written; `XXX`,
   `HACK`, and `BUG` still admit their conventional bare form, because they are
