@@ -76,5 +76,77 @@ The honesty discipline is the other half. A rescue tool that invents a plausible
 
 ## Audit Notes
 
-<!-- abcd-review: OWED receipt=rcp-4d07032fc6ab -->
-Fidelity review OWED (receipt rcp-4d07032fc6ab).
+<!-- abcd-review: INGESTED receipt=rcp-4d07032fc6ab -->
+Fidelity review — receipt rcp-4d07032fc6ab (verifier abcd:intent-fidelity-reviewer claude-fable-5).
+
+Provenance: abcd:intent-fidelity-reviewer@claude-fable-5 · rubric_hash sha256:bda482993615f6ee00d06f9649bff9c9bc8f22c989683386437eea4db28369b2 · prompt_hash sha256:95792472ae74ca0469f69a51c618946e0d33cb1380032460099ed4b469d67e86
+Input attestations: diff:docs/itd-88-coverage-experiment @ 7b24b98befbd20440b335a96d0154bd33cbcec6e: internal/core/lifeboat/ (probe/coverage/plan/pack/graveyard), internal/surface/cli/cli.go disembark wiring, commands/abcd/disembark.md, .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md@-; rubric:.abcd/.work.local/reviews/rcp-4d07032fc6ab.request.md@sha256:bda482993615f6ee00d06f9649bff9c9bc8f22c989683386437eea4db28369b2;
+
+Acceptance rollup: MET 6 · MET_WITH_CONCERNS 2 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: Live probe of a git-only fixture (git init, one revert, nothing else) exits 0 and renders all 23 sections with every blank carrying its searched list and a human question; completeness and question-on-every-blank are test-enforced.
+  evidence: cmd: go run ./cmd/abcd disembark probe <git-only fixture> (exit 0) — "grounded 1 · partial 4 · blank 18  (of 23 sections) … searched: glossary, naming registry, reserved-vocabulary tables / ? Nothing probed grounds constraints/naming; a human must supply it."
+  evidence: internal/core/lifeboat/probe_test.go:353 — "func TestProbeNeverBlankSectionCarriesAQuestion"
+  evidence: internal/core/lifeboat/probe_test.go:322 — "func TestProbeReportsEverySection"
+- ac-2 — MET: TestProbeLeavesEveryFileByteIdentical sha256-hashes every file before and after a probe and fails on any rewrite/create/remove; it and TestProbeNeverMutatesTheSource ran green (go test -run …, PASS), and all reads go through a contained read-only os.Root.
+  evidence: internal/core/lifeboat/probe_test.go:254 — "func TestProbeLeavesEveryFileByteIdentical … t.Errorf(\"probe rewrote %s (sha256 %s -> %s)\""
+  evidence: cmd: go test -run 'TestProbeLeavesEveryFileByteIdentical|TestProbeNeverMutatesTheSource' ./internal/core/lifeboat/ — "--- PASS: TestProbeLeavesEveryFileByteIdentical / --- PASS: TestProbeNeverMutatesTheSource"
+  evidence: internal/core/lifeboat/probe.go:102 — "Probe must be side-effect-free and must never write to the source repository"
+- ac-3 — MET: The anti-fiction rule is test-enforced (every non-blank row must cite evidence) and a live JSON sweep over abcd-cli, cobra, and requests found zero grounded/partial rows without a citation.
+  evidence: internal/core/lifeboat/grounding_test.go:105-108 — "if s.Status != StatusBlank && len(s.Evidence) == 0 { t.Errorf(\"section %s is %s but cites no evidence\""
+  evidence: cmd: disembark probe --json over abcd-cli/cobra/requests, checked for evidence-less non-blank rows — "non-blank rows missing evidence: NONE (all three repos)"
+- ac-4 — MET: Live `disembark coverage self.json cobra.json requests.json` renders one 23-section × 3-repo status table, the per-repo probe summaries put the delta in numbers (grounded 21 vs 4 vs 3), and the research note states it as 17–18 grounded sections.
+  evidence: cmd: go run ./cmd/abcd disembark coverage <3 reports> (exit 0) — "brief section  abcd-cli  cobra  requests  verdict … 0 of 23 sections are blank in every probed repo."
+  evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:39-42 — "Keeping an abcd-native record is worth roughly **17–18 grounded sections**"
+  evidence: internal/core/lifeboat/coverage.go:203 — "func Aggregate(covs []Coverage) AggregateReport"
+- ac-5 — MET: TestProbeIsDeterministic requires byte-identical JSON across two probes and ran green, and a live double probe of this repository produced byte-identical output under cmp.
+  evidence: internal/core/lifeboat/probe_test.go:385 — "func TestProbeIsDeterministic … if string(ja) != string(jb)"
+  evidence: cmd: disembark probe . --json twice, cmp — "DETERMINISTIC: byte-identical"
+- ac-6 — MET_WITH_CONCERNS: A live git-only fixture grounds graveyard at (git, high) with only the git tier present, and TestProbeGraveyardFromGitAlone enforces it — but grounded status requires a revert: deletions alone yield partial (this repository itself scored partial), and the parenthetical's unmerged-branches and removed-dependencies signals live in the packer's archaeology layer, not the probe's grounding decision.
+  evidence: cmd: disembark probe <git-only fixture> — "tiers present: git … + graveyard grounded (git, high) / evidence: 1 files deleted (e.g. f.txt), 1 reverted commits"
+  evidence: internal/core/lifeboat/grounding_test.go:115 — "func TestProbeGraveyardFromGitAlone"
+  evidence: internal/core/lifeboat/sources_git.go:81-89 — "deletions without any revert are only partial evidence, not a grounded graveyard"
+  evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:118-120 — "only `partial (git, medium)` on this repository (40 deletions, no reverts detected)"
+- ac-7 — MET: IngestLessons drops any lesson whose evidence refs resolve to no layer-1/2 finding id ("no valid evidence refs") and TestIngestLessonsCiteOrDropped asserts the uncited lesson is dropped while the cited one is written; the test ran green.
+  evidence: internal/core/lifeboat/graveyard_lessons.go:116 — "drop(\"no valid evidence refs\")"
+  evidence: internal/core/lifeboat/graveyard_lessons_test.go:96 — "func TestIngestLessonsCiteOrDropped … Evidence: []string{\"no-such-id\"} … res.Dropped != 1"
+  evidence: cmd: go test -run TestIngestLessonsCiteOrDropped ./internal/core/lifeboat/ — "--- PASS: TestIngestLessonsCiteOrDropped"
+- ac-8 — MET_WITH_CONCERNS: One code path holds — Pack calls the same Plan the dry-run renders (pack.go:84) — and parity is test-enforced as a hash chain (dry-run manifest hash = ManifestSHA256(planned files) = provenance hash = independent re-hash of the written tree), all green; the caveats are that the shipped verbs are `plan`/`pack <repo> <dest>` rather than the promised `dry-run`/`to <dest>`, and the parity assertion spans TestPlanManifestReportsHashAndTotals plus TestPackProvenanceHashVerifies rather than one direct plan-vs-written-files comparison.
+  evidence: internal/core/lifeboat/pack.go:84 — "lb, err := Plan(repoAbs)"
+  evidence: internal/core/lifeboat/pack_test.go:96 — "func TestPackProvenanceHashVerifies … does not verify against the written tree"
+  evidence: internal/core/lifeboat/plan_test.go:741-743 — "if m.ManifestSHA256 != ManifestSHA256(lb.Files) { t.Error(\"manifest hash disagrees with the file set\")"
+  evidence: internal/surface/cli/cli.go:387-388 — "Use: \"plan [repo]\" … without writing anything (dry run)"
+
+Gap audit:
+- honoured:
+  - Probe before pack, read-only and out-of-tree — reads a repo without touching it
+    evidence: internal/core/lifeboat/probe_test.go:254 — "TestProbeLeavesEveryFileByteIdentical"
+    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:24-25 — "Both were byte-identical after probing"
+  - A blank is a first-class result: what was searched and the question a human must answer
+    evidence: internal/core/lifeboat/coverage.go:112-121 — "searched: … / ? %s"
+    evidence: cmd: disembark probe <git-only fixture> — "every one of 18 blanks carries searched + question"
+  - The cross-repo table answers what keeping a record is worth, in a number
+    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:39-42 — "grounds **21 of 23** … the two git-plus-conventions repositories ground **4** and **3**"
+  - Stable, aggregatable coverage schema with schema_version, enforced at the aggregate
+    evidence: internal/core/lifeboat/coverage.go:16 — "SchemaVersion int `json:\"schema_version\"`"
+    evidence: internal/surface/cli/cli.go:369-375 — "missing schema_version … upgrade abcd"
+  - Graveyard as a first-class section with a code-enforced cite-or-be-dropped validator
+    evidence: internal/core/lifeboat/graveyard_lessons.go:116 — "drop(\"no valid evidence refs\")"
+  - Packer built after the aggregate settled the section list
+    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:77-78 — "the packer is built to all 23 brief sections"
+- diverged:
+  - Packer surface promised as `disembark <repo> to <dest>` with `dry-run`; shipped as `disembark plan [repo]` and `disembark pack <repo> <dest>`
+    evidence: .abcd/development/intents/shipped/itd-88-lifeboat-coverage-experiment.md:41 — "The packer (`disembark <repo> to <dest>`)"
+    evidence: internal/surface/cli/cli.go:413 — "Use: \"pack <repo> <dest>\""
+  - Graveyard grounding is narrower than the four-signal promise: only reverts ground; deletions alone are partial; unmerged branches and removed dependencies feed the pack-path archaeology, not the probe's grounding
+    evidence: internal/core/lifeboat/sources_git.go:81-89 — "deletions without any revert are only partial evidence"
+    evidence: internal/core/lifeboat/graveyard_archaeology_test.go:146 — "TestArchUnmergedBranchesOrderedByDivergence"
+  - Press release headlines `/abcd:disembark probe` and `/abcd:disembark coverage`; the markdown command surface documents only plan and pack — probe/coverage ship as CLI verbs only
+    evidence: commands/abcd/disembark.md:4 — "argument-hint: \"<source-repo> <dest> | plan <source-repo>\""
+    evidence: internal/surface/cli/cli.go:306 — "Use: \"probe [repo]\""
+  - The recorded delta compares record-rich against git+conventions repos, not a strictly git-only repo; the corpus is two foreign repositories
+    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:134-137 — "suggestive but not yet a trustworthy population — the finding here is a first reading"
+- missing:
+  - Pass B ships as a declared exemption in `_provenance.json`, never a silent gap — no exemption field or marker exists anywhere in the lifeboat package or the Provenance struct
+    evidence: internal/core/lifeboat/plan.go:65-80 — "type Provenance struct { SchemaVersion … Omissions } — no exemption field; grep 'exemption' across internal/core/lifeboat/ returns nothing"
