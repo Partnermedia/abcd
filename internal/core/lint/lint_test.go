@@ -423,6 +423,46 @@ func TestIssueIDUniqueDuplicate(t *testing.T) {
 	}
 }
 
+func TestSpecIDUniqueDuplicate(t *testing.T) {
+	root := t.TempDir()
+	base := "rec/specs"
+
+	// The real collision shape: two branches each minted spc-10 with a different
+	// slug and different linked intent, then merged. Both files claim spc-10.
+	writeFile(t, root, base+"/open/spc-10-alpha.md", "---\nid: spc-10\nslug: alpha\nintent: itd-70\n---\n# a\n")
+	writeFile(t, root, base+"/closed/spc-10-beta.md", "---\nid: spc-10\nslug: beta\nintent: itd-80\n---\n# b\n")
+	// A unique id must stay clean under this rule.
+	writeFile(t, root, base+"/open/spc-11-solo.md", "---\nid: spc-11\nslug: solo\nintent: itd-90\n---\n# c\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"spec_id_unique": {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every file in the colliding set is flagged — flagging only one would imply
+	// the other is authoritative, which the linter cannot know.
+	dupes := []string{
+		filepath.Join(base, "open", "spc-10-alpha.md"),
+		filepath.Join(base, "closed", "spc-10-beta.md"),
+	}
+	for _, f := range dupes {
+		if !hasFinding(fs, f, "spec_id_unique", 2) { // the id: line
+			t.Errorf("expected duplicate-id finding on %s:2; got %+v", f, fs)
+		}
+	}
+	for _, f := range fs {
+		if filepath.Base(f.File) == "spc-11-solo.md" && f.RuleID == "spec_id_unique" {
+			t.Errorf("unexpected spec_id_unique finding on unique spec: %+v", f)
+		}
+	}
+}
+
 func TestExemptions(t *testing.T) {
 	root := t.TempDir()
 	// A banned token in an exempt_paths file → no finding.
