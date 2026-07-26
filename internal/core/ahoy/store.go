@@ -1,6 +1,7 @@
 package ahoy
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -121,6 +122,94 @@ func binTarget() string {
 		return v
 	}
 	return "/usr/local/bin/abcd"
+}
+
+// ---------------------------------------------------------------------------
+// dev-mode shim (abcd ahoy install --dev)
+// ---------------------------------------------------------------------------
+
+// devShimMarker is the identifying first-comment line of the dev shim. Detection
+// recognises the shim by this marker (never mistaking it for a foreign occupant),
+// and uninstall removes only a file that carries it.
+const devShimMarker = "# abcd-dev-shim"
+
+// shSingleQuote wraps s for safe interpolation inside single quotes in a POSIX
+// shell, so a source-repo path containing a quote cannot break out of the string.
+func shSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// renderDevShim returns the POSIX-sh track-latest shim body. On every call it
+// rebuilds abcd from sourceRepo's tip into freshBin and execs it; a failed build
+// fails loudly and NEVER execs a stale binary (loud-staging). The absolute paths
+// live only inside this installed file (outside any repo), never in a committed
+// artefact.
+func renderDevShim(sourceRepo, freshBin string) string {
+	return "#!/bin/sh\n" +
+		devShimMarker + " (managed by `abcd ahoy install --dev`)\n" +
+		"# Rebuilds abcd from the source tip on every call, then execs the fresh\n" +
+		"# binary. A broken build fails loudly and never execs a stale binary.\n" +
+		"# Do not edit; run `abcd ahoy install` to pin a built binary instead.\n" +
+		"ABCD_DEV_REPO=" + shSingleQuote(sourceRepo) + "\n" +
+		"ABCD_DEV_BIN=" + shSingleQuote(freshBin) + "\n" +
+		"if ! go build -C \"$ABCD_DEV_REPO\" -o \"$ABCD_DEV_BIN\" ./cmd/abcd; then\n" +
+		"\tprintf 'abcd dev shim: build failed in %s — refusing to run a stale binary\\n' \"$ABCD_DEV_REPO\" >&2\n" +
+		"\texit 1\n" +
+		"fi\n" +
+		"exec \"$ABCD_DEV_BIN\" \"$@\"\n"
+}
+
+// devShimPrefix is the exact opening of a shim renderDevShim produced: the
+// shebang followed immediately by the marker line. Recognition requires this
+// prefix — not a substring match anywhere in the file — so a foreign file that
+// merely mentions the marker in its body is never mistaken for ours.
+var devShimPrefix = []byte("#!/bin/sh\n" + devShimMarker)
+
+// isDevShimFile reports whether path is a regular file we wrote as the dev shim.
+// Uses the same guarded read as the rest of ahoy, so a symlink leaf or an
+// oversized/irregular file reads as "not our shim" rather than being followed.
+func isDevShimFile(path string) bool {
+	data, err := fsutil.ReadGuarded(path, maxAhoyFileBytes)
+	if err != nil {
+		return false
+	}
+	return bytes.HasPrefix(data, devShimPrefix)
+}
+
+// binTargetKind classifies what currently occupies the PATH target.
+type binTargetKind int
+
+const (
+	binTargetAbsent       binTargetKind = iota // nothing there
+	binTargetOwnedSymlink                      // our symlink -> the pinned binary
+	binTargetDevShim                           // our dev-mode rebuild-then-exec shim
+	binTargetForeign                           // something else; never clobber it
+)
+
+// classifyBinTarget inspects the PATH target and reports whether it is absent,
+// our owned pinned symlink, our dev shim, or a foreign occupant.
+func classifyBinTarget(target, pluginRoot string) binTargetKind {
+	fi, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return binTargetAbsent
+		}
+		return binTargetForeign // present but unstattable: treat as foreign, never clobber
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		dest, err := os.Readlink(target)
+		if err != nil {
+			return binTargetForeign
+		}
+		if resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
+			return binTargetOwnedSymlink
+		}
+		return binTargetForeign
+	}
+	if isDevShimFile(target) {
+		return binTargetDevShim
+	}
+	return binTargetForeign
 }
 
 func isDir(p string) bool {

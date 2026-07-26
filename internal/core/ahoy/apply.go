@@ -57,9 +57,16 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	// interactive confirmation (never under --yes), as the gap's fix hint
 	// advertises; and an explicit value override that differs from the persisted
 	// config, which forces an apply-as-update on an otherwise-clean repo (iss-107).
+	// An explicit --dev (or a plain install over an existing dev shim) forces an
+	// apply-as-update on an otherwise-clean repo, the same way an explicit value
+	// override does (iss-107): the requested install mode differs from what is on
+	// disk, so there is work to do even with zero gaps.
+	modeForced := modeWouldChange(opts, det)
+
 	if len(actionable(det.Gaps)) == 0 &&
 		!(!opts.Yes && pinAdoptable(det.Gaps)) &&
-		!overridesWouldChange(abs, opts.ValueOverrides) {
+		!overridesWouldChange(abs, opts.ValueOverrides) &&
+		!modeForced {
 		return InstallResult{Status: "already_up_to_date"}, nil
 	}
 
@@ -73,6 +80,8 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		prompter:   p,
 		gapPresent: gapIDSet(det.Gaps),
 		autoYes:    opts.Yes,
+		devMode:    opts.Dev,
+		modeForced: modeForced,
 	}
 
 	// Ordered apply steps.
@@ -119,6 +128,8 @@ type applyCtx struct {
 	writes     []string
 	changes    []string // human-readable value changes an explicit override forced
 	autoYes    bool     // --yes: every category auto-approved without interaction
+	devMode    bool     // --dev: install the track-latest shim instead of the symlink
+	modeForced bool     // the requested install mode differs from the on-disk state
 
 	visibilityForced bool     // an explicit --visibility override overwrote a valid value
 	docsTargetForced bool     // an explicit --docs-target override overwrote a valid value
@@ -593,27 +604,98 @@ func markerFilesDropped(from, to string) []string {
 	return dropped
 }
 
-// stepSymlink installs the owned PATH symlink. It refuses to clobber a foreign
-// binary. Default: yes for private, no for public.
+// stepSymlink installs the PATH entry: an owned symlink to the pinned binary
+// (default), or the track-latest dev shim under --dev. It runs on a fresh install
+// (the symlink.missing gap) or when a mode switch was forced on an already-present
+// owned entry (apply-as-update, iss-107). It refuses to clobber a foreign binary.
 func (a *applyCtx) stepSymlink() {
-	if !a.approved[ConfigChange] || !a.has("symlink.missing") {
-		return
-	}
 	if a.det.pluginRoot == "" {
 		return
 	}
-	target := binTarget()
-	source := pluginBinaryPath(a.det.pluginRoot)
-	// Refuse to clobber anything already present.
-	if _, err := os.Lstat(target); err == nil {
+	gapDriven := a.approved[ConfigChange] && a.has("symlink.missing")
+	if !gapDriven && !a.modeForced {
 		return
+	}
+	target := binTarget()
+	kind := classifyBinTarget(target, a.det.pluginRoot)
+	if kind == binTargetForeign {
+		return // never clobber something we do not own
+	}
+	if a.devMode {
+		a.installDevShim(target, kind)
+		return
+	}
+	a.installPinnedSymlink(target, kind)
+}
+
+// installDevShim writes the track-latest shim, replacing an owned pinned symlink
+// if one is there. An existing dev shim is left as-is (idempotent).
+func (a *applyCtx) installDevShim(target string, kind binTargetKind) {
+	if kind == binTargetDevShim {
+		return
+	}
+	if kind == binTargetOwnedSymlink {
+		if err := os.Remove(target); err != nil {
+			return
+		}
+		a.echoChange("install_mode", "pinned", "dev")
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return
 	}
+	content := renderDevShim(a.det.pluginRoot, pluginBinaryPath(a.det.pluginRoot))
+	// Atomic no-follow write (rename over the target), matching the rest of the
+	// store: a symlink pre-planted at the leaf is replaced, never written through,
+	// and the executable bit is set via fchmod on the temp descriptor.
+	if err := fsutil.WriteFileAtomic(target, []byte(content), 0o755); err != nil {
+		return
+	}
+	a.note(target)
+}
+
+// installPinnedSymlink writes the owned symlink to the pinned binary, replacing a
+// dev shim if one is there. An existing owned symlink is left as-is (idempotent).
+func (a *applyCtx) installPinnedSymlink(target string, kind binTargetKind) {
+	if kind == binTargetOwnedSymlink {
+		return
+	}
+	if kind == binTargetDevShim {
+		if err := os.Remove(target); err != nil {
+			return
+		}
+		a.echoChange("install_mode", "dev", "pinned")
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return
+	}
+	source := pluginBinaryPath(a.det.pluginRoot)
 	if err := os.Symlink(source, target); err == nil {
 		a.note(target)
 	}
+}
+
+// modeWouldChange reports whether the requested install mode differs from the
+// on-disk PATH target, so an otherwise up-to-date repo still has work to do. A
+// foreign occupant is never touched, so it never counts as a change.
+func modeWouldChange(opts InstallOptions, det DetectionResult) bool {
+	if det.pluginRoot == "" {
+		return false
+	}
+	kind := classifyBinTarget(binTarget(), det.pluginRoot)
+	if kind == binTargetForeign {
+		return false
+	}
+	if opts.Dev {
+		// Only a switch away from the pinned symlink is a forced change. A missing
+		// entry is NOT forced: it flows through the symlink.missing gap so a declined
+		// ConfigChange approval is honoured (a fresh --dev must not bypass consent the
+		// way a plain install cannot). An existing dev shim is already correct.
+		return kind == binTargetOwnedSymlink
+	}
+	// Plain install: only a switch away from an existing dev shim is a forced
+	// change; a missing entry is handled by the symlink.missing gap, and an owned
+	// symlink is already correct.
+	return kind == binTargetDevShim
 }
 
 // stepRules writes the per-repo .abcd/rules.json override skeleton when absent.
@@ -683,7 +765,17 @@ func Uninstall(cwd string) (UninstallReceipt, error) {
 	case lerr != nil:
 		receipt.Symlink.Note = "absent"
 	case fi.Mode()&os.ModeSymlink == 0:
-		receipt.Symlink.Note = "not a symlink; left untouched"
+		// A regular file: our own dev shim (remove it — it is ours), else foreign.
+		if isDevShimFile(target) {
+			if err := os.Remove(target); err == nil {
+				receipt.Symlink.Removed = true
+				receipt.Symlink.Note = "removed dev shim"
+			} else {
+				receipt.Symlink.Note = "remove failed"
+			}
+		} else {
+			receipt.Symlink.Note = "not a symlink; left untouched"
+		}
 	case !ok:
 		receipt.Symlink.Note = "plugin root unresolved; left untouched"
 	default:
@@ -750,6 +842,9 @@ func Status(cwd string) (string, error) {
 	fmt.Fprintf(&b, "plugin root: %s\n", det.PluginRootStatus)
 	if det.RootSHA != "" {
 		fmt.Fprintf(&b, "root sha: %s\n", shortSHA(det.RootSHA))
+	}
+	if mode, _ := det.Signals["install_mode"].(string); mode != "" {
+		fmt.Fprintf(&b, "install: %s\n", mode)
 	}
 	act := actionable(det.Gaps)
 	switch det.FolderKind {
