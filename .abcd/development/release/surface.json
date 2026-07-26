@@ -46,6 +46,13 @@
           "hidden": false
         },
         {
+          "name": "dev",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "docs-target",
           "shorthand": "",
           "type": "string",

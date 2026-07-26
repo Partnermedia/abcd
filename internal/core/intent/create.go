@@ -2,6 +2,7 @@ package intent
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/changelog"
+	"github.com/REPPL/abcd-cli/internal/core/recordid"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
@@ -36,10 +38,10 @@ const maxSlugLen = 60
 // null and whose spec_id is null) and passes Validate; a human expands it, then
 // `abcd intent plan` schedules it. This is the quoted-text create path itd-46
 // delivers — the create half of what spc-6 AC3 (promote) needs.
-func CreateFromText(repoRoot, text, impact string) (Intent, error) {
+func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
-		return Intent{}, fmt.Errorf("intent: refusing to create from empty text")
+		return Intent{}, "", fmt.Errorf("intent: refusing to create from empty text")
 	}
 	// impact is optional on a draft (intent_impact_valid gates the move into
 	// shipped/, not the seed), but when set it must be a legal, non-internal
@@ -49,23 +51,25 @@ func CreateFromText(repoRoot, text, impact string) (Intent, error) {
 	if impact != "" {
 		imp, err := changelog.ParseImpact(impact)
 		if err != nil {
-			return Intent{}, fmt.Errorf("intent: %w", err)
+			return Intent{}, "", fmt.Errorf("intent: %w", err)
 		}
 		if imp == changelog.ImpactInternal {
-			return Intent{}, fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
+			return Intent{}, "", fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
 		}
 	}
 	slug, err := deriveIntentSlug(trimmed)
 	if err != nil {
-		return Intent{}, err
+		return Intent{}, "", err
 	}
 
 	var created Intent
+	var mintWarning string
 	err = withIntentMintLock(repoRoot, func() error {
-		id, err := nextIntentID(repoRoot)
+		id, warn, err := nextIntentID(repoRoot)
 		if err != nil {
 			return err
 		}
+		mintWarning = warn
 		draftsDirAbs := filepath.Join(repoRoot, IntentsRelDir, BucketDrafts)
 		if err := ensureRealDir(draftsDirAbs, filepath.Join(IntentsRelDir, BucketDrafts)); err != nil {
 			return err
@@ -92,9 +96,9 @@ func CreateFromText(repoRoot, text, impact string) (Intent, error) {
 		return nil
 	})
 	if err != nil {
-		return Intent{}, err
+		return Intent{}, "", err
 	}
-	return created, Validate(created)
+	return created, mintWarning, Validate(created)
 }
 
 // deriveIntentSlug lowercases the text, collapses non-[a-z0-9] runs to a single
@@ -119,9 +123,14 @@ func deriveIntentSlug(text string) (string, error) {
 var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 // nextIntentID returns the next free itd-N: max N over every intent file in every
-// bucket, plus one. Called under the mint lock so the scan and the subsequent
-// write are one critical section (no two concurrent creates observe the same max).
-func nextIntentID(repoRoot string) (string, error) {
+// bucket AND over intent filenames on every other git ref, plus one. Called under
+// the mint lock so the working-tree scan and the subsequent write are one critical
+// section (no two concurrent creates in the same worktree observe the same max).
+// Folding in recordid.MaxAcrossRefs is what stops two parallel branches from
+// re-minting the same itd-N once one has committed it (iss-115, iss-120). The
+// returned mintWarning is non-empty (and MUST be surfaced) when the ref scan
+// degraded to working-tree-only, so the fallback is never silent.
+func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
 	max := 0
 	for _, bucket := range Buckets {
 		dir := filepath.Join(repoRoot, IntentsRelDir, bucket)
@@ -146,7 +155,20 @@ func nextIntentID(repoRoot string) (string, error) {
 			}
 		}
 	}
-	return fmt.Sprintf("itd-%d", max+1), nil
+	scan := recordid.MaxAcrossRefs(repoRoot, "itd", []string{IntentsRelDir})
+	if scan.Max > max {
+		max = scan.Max
+	}
+	// Guard the max+1 below against int overflow: a hand-crafted MaxInt itd-N
+	// (a local file or a fetched remote-tracking ref carrying itd-<MaxInt>-x.md)
+	// parses to math.MaxInt with no error, so max+1 would wrap to math.MinInt and
+	// mint itd--9223372036854775808 — a malformed draft WriteFileAtomic persists
+	// before Validate runs, plus a mint DoS for the family. Refuse clearly instead,
+	// mirroring the capture allocator's ceiling guard.
+	if max >= math.MaxInt {
+		return "", "", fmt.Errorf("intent: itd-N counter near the integer ceiling (highest observed %d); refusing to allocate", max)
+	}
+	return fmt.Sprintf("itd-%d", max+1), scan.Warning(), nil
 }
 
 // seedDraft renders the canonical draft skeleton: the full draft frontmatter set

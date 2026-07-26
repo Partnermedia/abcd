@@ -12,6 +12,33 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd ahoy install --dev` — a track-latest dogfood install mode** (iss-75).
+  Normal `ahoy install` symlinks the pinned built binary, so tracking live
+  development meant hand-rolling a `~/.local/bin/abcd` wrapper that ran
+  `go build -C <repo> && exec` on every call. That manual workaround now dies:
+  `--dev` installs a shim at the same `PATH` target that rebuilds abcd from the
+  source tip on every invocation and execs the fresh binary. A broken build fails
+  loudly and never execs a stale binary (loud-staging). `abcd ahoy` status reports
+  the mode as `install: dev (tip build)`, detected from the installed shim itself
+  (never recorded in the tracked repo config, so it can never go stale), so a dev
+  install is never invisible. Installing over an existing
+  install applies-as-update in either direction — `--dev` replaces the pinned
+  symlink with the shim, a plain re-install restores the symlink — and a foreign
+  occupant is still never clobbered.
+- **Record-id minting now sees every branch, and a spec-id uniqueness lint closes
+  the class** (iss-115, iss-120). Sequential ids (`iss-N`, `itd-N`, `spc-N`) were
+  minted from the local working tree only, so two branches cut from the same base
+  silently minted the same next id — invisible on each branch and surfacing only
+  at merge. Minting now folds in the highest id committed on every local and
+  remote-tracking branch (a single canonical refs-union scan), so once one branch
+  commits an id, the other mints past it. When git cannot be read over a present
+  repository the mint degrades to working-tree-only and says so loudly on stderr
+  (never a silent fallback); a directory that is not a repository has no branches
+  to collide with and mints quietly. The residual window — two branches that both
+  mint before either commits — is caught by the record-lint uniqueness rules on
+  the merged pull request, which now cover spec ids too: the new `spec_id_unique`
+  rule flags every file claiming a duplicate `spc-N`, mirroring the existing
+  `issue_id_unique` and intent-id guards.
 - **`abcd capture resolve` and `abcd intent "<text>"` can now stamp a product
   `impact`** (iss-117). A resolved issue and a shipped intent are in the release
   set, so the `issue_impact_valid` and `intent_impact_valid` record-lint blockers
@@ -44,6 +71,24 @@ called out in a **Breaking** section.
   vendored `TODO` is no longer cited as the project's own open question, and a
   large dot-prefixed dependency tree can no longer exhaust the walk cap before
   the project's own `src/` is reached.
+- **Concurrent runs can no longer drop a repo registration or delete a
+  just-committed issue file** (iss-101, iss-102). Two `abcd ahoy install` runs
+  from different worktrees shared one `~/.abcd/history/index.json`, and its
+  registration was an unlocked load-modify-write: atomic rename kept the file
+  intact but the last writer clobbered the other's update, silently erasing a
+  repo entry or a re-founding lineage link. The history registry now serializes
+  its load-modify-write behind an inter-process lock and re-loads inside it, so
+  concurrent registrations compose instead of overwriting; the store bootstrap
+  creates `index.json` with an exclusive create, so exactly one racing run seeds
+  it. The re-founding lineage confirmation is still asked before the lock is
+  taken — never across an interactive prompt — and the state it validated is
+  re-checked under the lock, surfacing a conflict rather than writing a link the
+  user approved against a stale index. Separately, the capture ledger's orphan
+  sweep and its commit write now take the same ledger lock, closing a window in
+  which a capture stalled more than sixty seconds could have its committed issue
+  file swept away after the capture reported success. The inter-process lock is a
+  single shared primitive; the capture allocator and the history registry both
+  route through it.
 
 ## [0.4.0] - 2026-07-22
 

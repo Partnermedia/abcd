@@ -55,6 +55,7 @@ Install or update abcd in this repo (idempotent)
 
 ```
       --adopt                   adopt an unmanaged repo without prompting
+      --dev                     track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary
       --docs-target string      marker target: claude_md | agents_md | both | skip
       --oracle-backend string   oracle backend: host-delegated | native | cli | api | mcp
       --refuse-adopt            decline to adopt an unmanaged repo

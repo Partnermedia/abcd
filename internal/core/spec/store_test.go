@@ -19,7 +19,7 @@ const (
 
 func TestNextIDEmptyRepo(t *testing.T) {
 	root := t.TempDir()
-	got, err := NextID(root)
+	got, _, err := NextID(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestNextIDReservedByIntent(t *testing.T) {
 	writeFile(t, root, intentsBase+"/shipped/itd-3-rules-loader.md",
 		"---\nid: itd-3\nslug: rules-loader\nspec_id: spc-1\nkind: standalone\n---\n# ok\n")
 
-	got, err := NextID(root)
+	got, _, err := NextID(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestNextIDMaxAcrossSpecsAndIntents(t *testing.T) {
 	writeFile(t, root, intentsBase+"/planned/itd-20-x.md",
 		"---\nid: itd-20\nslug: x\nspec_id: spc-2-thing\nkind: standalone\n---\n# ok\n")
 
-	got, err := NextID(root)
+	got, _, err := NextID(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestNextIDMaxAcrossSpecsAndIntents(t *testing.T) {
 
 func TestCreateRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	sp, err := Create(root, "itd-9", "my-feature")
+	sp, _, err := Create(root, "itd-9", "my-feature")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,20 +97,20 @@ func TestCreateRoundTrip(t *testing.T) {
 
 func TestCreateRejectsBadIntent(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Create(root, "itd-../../etc", "slug"); err == nil {
+	if _, _, err := Create(root, "itd-../../etc", "slug"); err == nil {
 		t.Fatal("Create with traversal intent id must fail")
 	}
-	if _, err := Create(root, "spc-1", "slug"); err == nil {
+	if _, _, err := Create(root, "spc-1", "slug"); err == nil {
 		t.Fatal("Create with non-itd intent id must fail")
 	}
 }
 
 func TestCreateRejectsBadSlug(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Create(root, "itd-9", "../../etc"); err == nil {
+	if _, _, err := Create(root, "itd-9", "../../etc"); err == nil {
 		t.Fatal("Create with traversal slug must fail")
 	}
-	if _, err := Create(root, "itd-9", "Bad Slug"); err == nil {
+	if _, _, err := Create(root, "itd-9", "Bad Slug"); err == nil {
 		t.Fatal("Create with non-kebab slug must fail")
 	}
 }
@@ -146,7 +146,7 @@ func TestLoadRejectsTraversalID(t *testing.T) {
 
 func TestCloseMovesOpenToClosed(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Create(root, "itd-9", "my-feature"); err != nil {
+	if _, _, err := Create(root, "itd-9", "my-feature"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +179,7 @@ func TestCloseMovesOpenToClosed(t *testing.T) {
 // clobbering a same-name spec already sitting in closed/.
 func TestCloseRefusesWhenClosedTargetExists(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Create(root, "itd-9", "my-feature"); err != nil {
+	if _, _, err := Create(root, "itd-9", "my-feature"); err != nil {
 		t.Fatal(err)
 	}
 	// A same-name spec already occupies closed/.
@@ -227,7 +227,7 @@ func TestNextIDRejectsUnreservableSpecID(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, intentsBase+"/planned/itd-20-x.md",
 		"---\nid: itd-20\nslug: x\nspec_id: spc-oops\nkind: standalone\n---\n# ok\n")
-	if _, err := NextID(root); err == nil {
+	if _, _, err := NextID(root); err == nil {
 		t.Fatal("NextID must fail closed on a spec_id with no reservable number, not silently drop it")
 	}
 }
@@ -277,7 +277,7 @@ func TestCreateConcurrentMintsDistinctIDs(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start // release all goroutines together to maximise the collision window
-			sp, err := Create(root, "itd-1", fmt.Sprintf("slug-%d", i))
+			sp, _, err := Create(root, "itd-1", fmt.Sprintf("slug-%d", i))
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

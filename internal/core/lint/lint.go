@@ -5,6 +5,8 @@
 package lint
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/REPPL/abcd-cli/internal/core/changelog"
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/REPPL/abcd-cli/internal/core/launch"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
@@ -34,6 +37,24 @@ const (
 	severityBlocker = "blocker"
 	severityWarn    = "warn"
 )
+
+// The two crosscheck depths a receipt can declare (iss-122). "full" runs both
+// directions over the whole brief-doc list; "shallow" runs Direction B only. A
+// full receipt satisfies any release; a shallow one satisfies only a patch
+// (fix/internal) release.
+const (
+	releaseTierFull    = "full"
+	releaseTierShallow = "shallow"
+)
+
+// releaseGateManifestPath is the committed input manifest that pins the iss-35
+// crosscheck's scope and depth (iss-122). Its PRESENCE in the content tree is
+// the era marker: receipts written before the manifest existed are judged by the
+// pre-manifest rules, and the manifest-era refusals (manifestHash, tier, and
+// findings-disposition) arm only when this file is present at the armed commit.
+// The path is fixed rather than config-driven so a committer cannot silence the
+// new refusals by blanking a config field.
+const releaseGateManifestPath = ".abcd/development/release-gate/manifest.json"
 
 var (
 	// Inline markdown link: [text](target). Also matches the link part of an
@@ -212,6 +233,14 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 				return nil, err
 			}
 			findings = append(findings, sl...)
+		}
+
+		if suCfg, ok := cfg.Rules["spec_id_unique"]; ok && suCfg.Enabled {
+			su, err := checkSpecIDUnique(repoRoot, rootAbs, suCfg, cfg)
+			if err != nil {
+				return nil, err
+			}
+			findings = append(findings, su...)
 		}
 
 		if fsCfg, ok := cfg.Rules["forbidden_synonyms"]; ok && fsCfg.Enabled {
@@ -706,6 +735,19 @@ type receipt struct {
 	Policy struct {
 		Detector string `json:"detector"`
 	} `json:"policy"`
+	// Tier and ManifestHash are the two manifest-era fields (iss-122), read only
+	// when the committed release-gate manifest exists. Tier is the crosscheck depth
+	// the run used ("full" or "shallow"); ManifestHash is the sha256 the run pinned
+	// its inputs against, which must equal the committed manifest's actual hash.
+	Tier         string `json:"tier"`
+	ManifestHash string `json:"manifestHash"`
+	// Failing is the findings the run recorded. It already existed in the receipt
+	// schema (an informational VSA field); the manifest-era gate now READS it to
+	// require that each finding carries a disposition. Only the disposition is
+	// inspected — the gate never judges a finding's content or severity.
+	Failing []struct {
+		Disposition string `json:"disposition"`
+	} `json:"failing"`
 }
 
 // checkReceiptGate is the fail-closed, release-time verification of the semantic
@@ -736,6 +778,29 @@ func checkReceiptGate(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	}
 	if len(cfg.RequiredGates) == 0 {
 		return failClosed("receipt_gate is enabled but lists no required gates; the release gate fails closed"), nil
+	}
+
+	// Manifest era (iss-122): the committed input manifest pins the crosscheck's
+	// scope and depth, so once it exists a receipt must echo its hash and a
+	// sufficient tier, and any recorded finding must carry a disposition. Its
+	// presence in the content tree is the era marker — a receipt/commit that
+	// predates the manifest is judged by the pre-manifest rules only. Read it from
+	// repoRoot, the checked-out content tree the gate is armed against.
+	manifestBytes, manifestErr := os.ReadFile(filepath.Join(repoRoot, releaseGateManifestPath))
+	var manifestEra bool
+	var expectedManifestHash, requiredTier string
+	switch {
+	case manifestErr == nil:
+		manifestEra = true
+		expectedManifestHash = hashManifest(manifestBytes)
+		requiredTier = requiredReleaseTier(repoRoot)
+	case os.IsNotExist(manifestErr):
+		manifestEra = false
+	default:
+		// The manifest exists but cannot be read — never fall through to the
+		// pre-manifest rules on an I/O error, which would silently drop the new
+		// refusals; fail closed.
+		return failClosed("receipt_gate cannot read the release-gate manifest " + releaseGateManifestPath + ": " + manifestErr.Error()), nil
 	}
 
 	var out []Finding
@@ -781,9 +846,122 @@ func checkReceiptGate(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		}
 		if strings.TrimSpace(r.JudgeModel) == "" {
 			add(rel, "'"+gate+"' receipt pins no judge model; a floating judge is not auditable")
+			continue
+		}
+		if !manifestEra {
+			// Pre-manifest era: the receipt is judged by the rules above only, so a
+			// historical receipt that carries no tier/manifestHash/disposition stays
+			// valid for its own commit.
+			continue
+		}
+		// Manifest-era refusals — PROCEDURAL only (iss-122). None of these judge a
+		// finding's content or severity: confirmed findings route to the maintainer,
+		// whose PROMOTE with recorded dispositions is the gate.
+		if r.ManifestHash != expectedManifestHash {
+			add(rel, "'"+gate+"' receipt manifestHash '"+r.ManifestHash+"' does not match the committed release-gate manifest ("+expectedManifestHash+"); the run's pinned inputs are not this release's")
+			continue
+		}
+		if !tierSufficient(r.Tier, requiredTier) {
+			add(rel, "'"+gate+"' receipt tier '"+r.Tier+"' is insufficient for a "+requiredTier+"-tier release; run the crosscheck at "+requiredTier+" depth")
+			continue
+		}
+		for _, f := range r.Failing {
+			if strings.TrimSpace(f.Disposition) == "" {
+				add(rel, "'"+gate+"' receipt carries a finding with no recorded disposition; every finding must record a disposition before release")
+				break
+			}
 		}
 	}
 	return out, nil
+}
+
+// hashManifest renders the release-gate manifest's canonical hash — sha256 over
+// its exact committed bytes, the same convention the receipt's promptHash and
+// the binary provenance use. Rendered as "sha256:<hex>" so a receipt's
+// manifestHash is reproducible with `shasum -a 256`.
+func hashManifest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// tierSufficient reports whether a receipt's declared crosscheck depth covers
+// the depth this release requires. A full run satisfies any release; a shallow
+// run satisfies only a shallow (patch) release; an empty or unrecognised tier is
+// never sufficient (fail closed — an unpinned depth is not auditable).
+func tierSufficient(receiptTier, requiredTier string) bool {
+	switch receiptTier {
+	case releaseTierFull:
+		return true
+	case releaseTierShallow:
+		return requiredTier == releaseTierShallow
+	default:
+		return false
+	}
+}
+
+// requiredReleaseTier is the crosscheck depth this release must have run at,
+// derived from the release's impact class: an additive or breaking release
+// requires the full crosscheck; a fix/internal (patch) release is covered by the
+// shallow Direction-B pass. When the impact cannot be classified at gate time,
+// it returns the strict tier (full) so only a full receipt passes — fail closed,
+// never a silent shallow pass.
+func requiredReleaseTier(repoRoot string) string {
+	impact, ok := releaseImpact(repoRoot)
+	if !ok {
+		return releaseTierFull
+	}
+	if impact == changelog.ImpactAdditive || impact == changelog.ImpactBreaking {
+		return releaseTierFull
+	}
+	return releaseTierShallow
+}
+
+// releaseImpact classifies the release currently at HEAD by the strongest impact
+// among the records it shipped — the same signal the version itself is derived
+// from (changelog-driven versioning, adr-37), read at gate time from git state
+// release.yml already provides. The version NUMBER alone cannot carry this
+// pre-1.0: an additive feature and a fix both bump the patch component while the
+// repo is 0.x, so only the shipped records' impact frontmatter distinguishes a
+// feature release from a patch release. The base is the newest release tag
+// strictly older than the current CHANGELOG version, so the cut is exactly this
+// release. ok=false means the impact could not be read (no version, no prior
+// tag, or git unavailable) and the caller must fall back to the strict tier.
+func releaseImpact(repoRoot string) (changelog.Impact, bool) {
+	cur, ok, err := changelog.LatestChangelogVersion(repoRoot)
+	if err != nil || !ok {
+		return "", false
+	}
+	tags, err := launch.GitExistingTags(repoRoot)
+	if err != nil {
+		return "", false
+	}
+	var base launch.Semver
+	haveBase := false
+	for _, t := range tags {
+		if !launch.CoreGreater(cur, t) {
+			continue // t is the current release or newer, not a prior base
+		}
+		if !haveBase || launch.CoreGreater(t, base) {
+			base, haveBase = t, true
+		}
+	}
+	if !haveBase {
+		return "", false
+	}
+	records, err := changelog.ShippedSince(repoRoot, base.Tag())
+	if err != nil {
+		return "", false
+	}
+	// An added record with a missing or malformed impact ranks below every real
+	// impact, so it would silently pull the cut's max down to internal and let a
+	// shallow receipt through. The version derivation refuses such a cut upstream
+	// (changelog.Derive, RefusalUnlabelledRecord); honour the same invariant here
+	// so the tier gate is fail-closed on its own — an unclassifiable cut falls back
+	// to the strict full tier rather than being read as a patch.
+	if len(records.UnlabelledAdded()) > 0 {
+		return "", false
+	}
+	return records.Impact(), true
 }
 
 // checkGateLockstep asserts the release-gate runbook's deterministic-gate list
@@ -1599,6 +1777,63 @@ func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([
 			continue
 		}
 		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, cfg.Severity)...)
+	}
+	return out, nil
+}
+
+// checkSpecIDUnique flags any spc-N id claimed by two or more spec-store files
+// across specs/{open,closed}/. The spec mint allocator now folds every git ref
+// into its max (recordid.MaxAcrossRefs), which closes the common
+// commit-then-branch collision, but two branches that both mint before either
+// commits still race (iss-115, iss-120) — and a hand-added spec file bypasses the
+// allocator entirely. This is the record-lint backstop that CI runs on the merged
+// PR's union, mirroring issue_id_unique/intent_lifecycle and sharing the one
+// validateIDUnique primitive. A malformed or absent id is spec_lifecycle's
+// concern, not this rule's, so only well-formed spc-N ids are compared; a
+// content-exempt spec is skipped exactly as spec_lifecycle skips it.
+func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]Finding, error) {
+	specsDir := cfg.SpecsDir
+	if specsDir == "" {
+		specsDir = "specs"
+	}
+	if _, err := os.Stat(filepath.Join(rootAbs, specsDir)); err != nil {
+		return nil, nil // missing specs/ is soft, mirroring spec_lifecycle
+	}
+	rootRel, err := filepath.Rel(repoRoot, rootAbs)
+	if err != nil {
+		return nil, err
+	}
+	idx, err := ScanSpecLinks(repoRoot,
+		filepath.ToSlash(filepath.Join(rootRel, intentsDirOf(cfg))),
+		filepath.ToSlash(filepath.Join(rootRel, specsDir)), top)
+	if err != nil {
+		return nil, err
+	}
+
+	// Track every file each well-formed spc-N id claims, then flag every member of
+	// a set of size > 1 via the shared primitive.
+	idFiles := map[string][]string{}
+	for _, spec := range idx.Specs {
+		if spec.exempt {
+			continue
+		}
+		id := spec.fields["id"].value
+		if !specIDFullRe.MatchString(id) {
+			continue
+		}
+		idFiles[id] = append(idFiles[id], filepath.Join(repoRoot, spec.Path))
+	}
+
+	var out []Finding
+	for _, spec := range idx.Specs {
+		if spec.exempt {
+			continue
+		}
+		id := spec.fields["id"].value
+		if !specIDFullRe.MatchString(id) {
+			continue
+		}
+		out = append(out, validateIDUnique(repoRoot, spec.Path, id, "spec", "spec_id_unique", cfg.Severity, spec.fields, idFiles)...)
 	}
 	return out, nil
 }

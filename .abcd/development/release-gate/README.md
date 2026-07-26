@@ -42,7 +42,9 @@ against the exact commit to be tagged:
    the Direction-A semantic half of the iss-35 graduation: the brief's surface
    *prose* (flags, sub-verbs, exit codes, schema fields, counts) vs. the shipped
    binary's actual behaviour. The deterministic Direction-B half is the
-   `surface_coverage` `record-lint` rule and already runs in CI.
+   `surface_coverage` `record-lint` rule and already runs in CI. Its scope and
+   depth are pinned by [`manifest.json`](manifest.json) — see *Pinned inputs and
+   tiered depth* below.
 
 ## Recording the semantic verdict
 
@@ -76,6 +78,60 @@ filename: the `<gate>.json` at `.abcd/work/reviews/<sha>/` must carry
 `policy.detector` equal to `<gate>`. This stops one genuine PROMOTE receipt from
 being copied across every gate's path to satisfy them all — each gate needs its
 own receipt from its own detector.
+
+## Pinned inputs and tiered depth
+
+The cross-check runs against a **committed input manifest**,
+[`manifest.json`](manifest.json), which pins the reproducibility inputs: the
+17-document brief-doc list, the two directions (A: brief→surface, B:
+surface→brief), the checker count (22 = 17 brief docs + 5 surfaces), and the
+prompt (context plus both direction templates, with the prompt's own
+`sha256`). Two honest runs of the same tier therefore mean the same thing —
+the maintainer no longer chooses the scope per run. The
+[`brief-surface-crosscheck.js`](brief-surface-crosscheck.js) detector consumes
+this manifest as its input rather than composing an ad-hoc list.
+
+Depth is **tiered by the release's impact class**:
+
+- **`full`** — both directions over the whole brief-doc list — is required for a
+  **feature (additive) or breaking** release.
+- **`shallow`** — Direction B only — is sufficient for a **patch (fix/internal)**
+  release.
+
+The impact class is derived at gate time from the shipped records — the same
+signal the version itself derives from (changelog-driven versioning, adr-37).
+The version *number* alone cannot carry it while abcd is pre-1.0: an additive
+feature and a fix both bump the patch component at 0.x, so only the records'
+`impact` frontmatter tells a feature release apart from a patch one. The gate
+reads the strongest impact in the cut between the newest release tag older than
+the current CHANGELOG version and `HEAD`.
+
+A manifest-era receipt therefore carries two further fields alongside the ones
+above:
+
+- **`manifestHash`** — the `sha256` of `manifest.json` the run pinned its inputs
+  against.
+- **`tier`** — `full` or `shallow`, the depth the run used.
+
+`receipt_gate` adds three **procedural** refusals once the manifest exists in the
+release's content tree:
+
+1. `manifestHash` does not equal `manifest.json`'s actual hash — the run's pinned
+   inputs are not this release's.
+2. `tier` is insufficient for the release's impact class — a shallow receipt on a
+   feature or breaking release.
+3. A `failing` entry carries no `disposition` — an un-triaged finding.
+
+None of these judges a finding's **content or severity**. Confirmed findings
+route to the maintainer, whose PROMOTE with recorded dispositions is the gate
+(verifier-selects-gates-decide); the gate does not hard-block on a confirmed
+major and keeps no never-worse ratchet across tiers.
+
+**Era gating.** The manifest's presence in the armed content tree is the era
+marker. The three refusals above arm only when `manifest.json` is present at the
+gate's armed commit, so receipts written before the manifest existed — the
+receipts committed under `.abcd/work/reviews/` for earlier releases — stay valid
+for their own commits, judged by the checks that predate the manifest.
 
 The `receipt_gate` rule is **disabled by default** — it must never fire on
 ordinary PRs/pushes, only at release time — and is armed by `release.yml`, which
