@@ -1154,6 +1154,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
+			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
 				fmt.Fprintf(w, "  intent: %s\n", res.Intent.Path)
@@ -1241,13 +1242,25 @@ const ledgerDecisionRule = "  which ledger? half-formed observation, question, o
 // engine refuses empty/whitespace text and mints the id under the store lock, so
 // this surface stays a thin marshaller.
 func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON bool) error {
-	it, err := intent.CreateFromText(cwd, text, impact)
+	it, mintWarning, err := intent.CreateFromText(cwd, text, impact)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
+	emitMintWarning(cmd, mintWarning)
 	return render(cmd.OutOrStdout(), asJSON, it, func(w io.Writer) {
 		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, it.Path)
 	})
+}
+
+// emitMintWarning prints a record-id mint degrade note to stderr (loud-staging:
+// a stage that degraded to working-tree-only minting must say so, never silently
+// fall back). The note is engine-produced and path-free; it is sanitised anyway
+// before it touches the terminal. Empty warnings emit nothing.
+func emitMintWarning(cmd *cobra.Command, warning string) {
+	if warning == "" {
+		return
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+termsafe.Sanitize(warning))
 }
 
 // newIntentReviewCommand builds `abcd intent review`: `ingest --verdict-json`
@@ -1742,6 +1755,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, res.Path)
 			})

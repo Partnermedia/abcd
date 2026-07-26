@@ -16,7 +16,7 @@ import (
 func TestCreateFromTextSeedsDraft(t *testing.T) {
 	root := t.TempDir()
 
-	it, err := CreateFromText(root, "I want users to feel the card respects their time", "")
+	it, _, err := CreateFromText(root, "I want users to feel the card respects their time", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestCreateFromTextAllocatesNextID(t *testing.T) {
 	writeFile(t, root, plannedDir+"/itd-9-beta.md",
 		"---\nid: itd-9\nslug: beta\nspec_id: spc-1\nkind: standalone\n---\n# beta\n")
 
-	it, err := CreateFromText(root, "another product intent", "")
+	it, _, err := CreateFromText(root, "another product intent", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestCreateFromTextAllocatesNextID(t *testing.T) {
 func TestCreateFromTextRefusesEmpty(t *testing.T) {
 	root := t.TempDir()
 	for _, in := range []string{"", "   ", "\t\n"} {
-		if _, err := CreateFromText(root, in, ""); err == nil {
+		if _, _, err := CreateFromText(root, in, ""); err == nil {
 			t.Fatalf("CreateFromText(%q) must be refused", in)
 		}
 	}
@@ -87,7 +87,7 @@ func TestCreateFromTextRefusesEmpty(t *testing.T) {
 // over a freshly seeded draft — the "abcd audit stays green" guarantee.
 func TestCreateFromTextPassesRecordLint(t *testing.T) {
 	root := t.TempDir()
-	if _, err := CreateFromText(root, "seeded from a quoted-text capture", ""); err != nil {
+	if _, _, err := CreateFromText(root, "seeded from a quoted-text capture", ""); err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
 	cfg := lint.Config{

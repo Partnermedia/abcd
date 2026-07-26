@@ -94,7 +94,14 @@ func withLedgerLock(issuesRoot string, fn func() error) error {
 // reservePath reserves an iss-N id and creates a zero-byte placeholder under
 // open/, mirroring reserve_issue_path: flock -> scan max N -> O_EXCL create
 // with bump-retry. When forceID is non-empty it demands that exact id.
-func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+//
+// refFloor is the highest iss-N observed across other git refs
+// (recordid.MaxAcrossRefs), computed by the caller before the lock: the reserved
+// id starts at max(local max N, refFloor)+1, so a branch that has already
+// committed a higher id is not re-minted (iss-115, iss-120). It is a floor, not a
+// substitute for the local scan — the local scan alone sees uncommitted mints in
+// this worktree, and the O_EXCL bump-retry still resolves any residual clash.
+func reservePath(issuesRoot, slug, forceID string, refFloor int) (string, string, error) {
 	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
 	// to build a path or create a placeholder — a traversal id (../../evil) must
 	// never touch the filesystem outside the ledger, even transiently.
@@ -121,6 +128,9 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		}
 
 		maxN := maxIssN(issuesRoot)
+		if refFloor > maxN {
+			maxN = refFloor
+		}
 		// Guard the id arithmetic below (maxN+1+attempt) against int overflow: a
 		// hand-crafted MaxInt-adjacent filename would otherwise wrap to a negative
 		// "iss--N" that fails reIssID, creating a bogus placeholder that only fails
