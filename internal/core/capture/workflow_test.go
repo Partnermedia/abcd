@@ -42,7 +42,7 @@ func TestTransitionSerializesOnLedgerLock(t *testing.T) {
 	lockTimeout = 200 * time.Millisecond
 	defer func() { lockTimeout = orig }()
 
-	_, err = Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x"})
+	_, err = Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("transition must serialize on the ledger lock (expect contention while held), got err=%v", err)
 	}
@@ -259,7 +259,7 @@ func TestResolveTransition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9"})
+	tr, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9", Impact: "fix"})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -282,11 +282,11 @@ func TestResolveConflictAndUnknown(t *testing.T) {
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
 	})
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done"}); err != nil {
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	// Already resolved -> conflict.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again"}); !errors.Is(err, ErrTransitionConflict) {
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again", Impact: "fix"}); !errors.Is(err, ErrTransitionConflict) {
 		t.Fatalf("want ErrTransitionConflict, got %v", err)
 	}
 	// Unknown id.
@@ -381,7 +381,7 @@ func TestStatusCountsAndRecentOpen(t *testing.T) {
 		ids = append(ids, res.ID)
 	}
 	// Resolve the first one.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done"}); err != nil {
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
@@ -584,7 +584,7 @@ func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
 
 	// Resolve the blocker: iss-2 becomes unblocked and sorts to the front by its
 	// critical severity.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed"}); err != nil {
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	lr2, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})

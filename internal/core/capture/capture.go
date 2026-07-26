@@ -133,6 +133,11 @@ type ResolveRequest struct {
 	IssuesRoot string
 	ID         string
 	Resolution string
+	// Impact is the product judgement resolved/ requires (issue_impact_valid):
+	// one of the shared changelog enum's values (additive|breaking|fix|internal).
+	// There is no default — an empty or invalid value is refused, never invented,
+	// so a resolved record the tool mints always satisfies its own blocker.
+	Impact string
 }
 
 // WontfixRequest moves an open issue to wontfix/.

@@ -10,6 +10,21 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **`abcd capture resolve` and `abcd intent "<text>"` can now stamp a product
+  `impact`** (iss-117). A resolved issue and a shipped intent are in the release
+  set, so the `issue_impact_valid` and `intent_impact_valid` record-lint blockers
+  require a valid `impact` on those records — but the verbs that mint them had no
+  way to set one, so the tool's own path produced records its own gates rejected.
+  `capture resolve` now takes a mandatory `--impact <additive|breaking|fix|internal>`
+  (there is no default: an absent or misspelled value is refused, not guessed),
+  and `abcd intent "<text>"` takes an optional `--impact <additive|breaking|fix>`
+  that is stamped onto the seeded draft and travels unchanged through planning to
+  `shipped/`. `internal` is rejected on an intent (a press-release-first intent is
+  user-facing by definition). `capture wontfix` is unchanged — a non-action ships
+  nothing, so `wontfix/` carries no impact.
+
 ## [0.4.0] - 2026-07-22
 
 ### Breaking
