@@ -7,6 +7,8 @@ category: "tech-debt"
 source: "agent-observation"
 found_during: "v0.4.0 release gate"
 found_at: ".abcd/development/release-gate/brief-surface-crosscheck.js"
+resolution: "Pinned the iss-35 crosscheck gate's scope and depth: a committed input manifest (manifest.json) fixes the 17 brief docs, both directions, 22 checkers, and the prompt hash; receipt_gate gains additive tier and manifestHash fields and three procedural refusals (manifestHash mismatch, tier insufficient for the release's impact class, undispositioned finding), all era-gated on the manifest's presence so historical receipts stay valid. Impact class derived at gate time from the shipped records (changelog-driven versioning), since the version number alone cannot tell a pre-1.0 feature from a fix."
+impact: internal
 ---
 
 The iss35 crosscheck's scope and depth are unpinned, so the gate is not reproducible: v0.3.0's receipt records zero findings four days ago while a full-depth run (17 brief docs, both directions, 22 checkers) returns 102 discrepancies, and the receipt's own promptHash field is the literal 'no-pinned-prompt' admission. The maintainer choosing briefDocs per run means two honest runs of the same gate can disagree by two orders of magnitude; the gate needs a pinned input manifest and depth so a PROMOTE means the same thing every release.
