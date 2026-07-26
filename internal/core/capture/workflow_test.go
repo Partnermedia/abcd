@@ -61,7 +61,7 @@ func TestReservePathRejectsUnsafeForceID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"../../evil", "iss-1/x", "iss-1 ", "not-an-id", "iss-1/../../evil"} {
-		id, target, err := reservePath(ir, "note", bad)
+		id, target, err := reservePath(ir, "note", bad, 0)
 		if err == nil {
 			t.Fatalf("reservePath must reject unsafe ForceID %q before any fs op (got id=%q target=%q)", bad, id, target)
 		}

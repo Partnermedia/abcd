@@ -9,8 +9,15 @@
 // VSA-shaped receipt (see this directory's README.md and the design of record,
 // ../plans/2026-07-11-iss35-semantic-release-gate.md).
 //
-// Invoke with args = { briefDocs: [<repo-relative paths>],
-//                      surfaces: [{ name, kind, probe }] }.
+// Invoke with args = the pinned input manifest
+// (.abcd/development/release-gate/manifest.json): { briefDocs, surfaces, prompt,
+// ... }. The manifest is the reproducibility anchor (iss-122) — the doc list,
+// the directions, the checker count, and the prompt (context + both direction
+// templates) are fixed there rather than composed ad hoc here, so two honest
+// runs of the same tier mean the same thing. The receipt echoes the manifest's
+// sha256 as manifestHash and the depth it ran at as tier; receipt_gate refuses a
+// receipt whose manifestHash mismatches or whose tier is too shallow for the
+// release's impact class.
 export const meta = {
   name: 'iss35-brief-surface-crosscheck',
   description: 'Bidirectional brief↔surface reconciliation detector (iss-35 semantic gate)',
@@ -35,31 +42,18 @@ const FINDINGS = {
       }, required: ['where','claim','reality','class'] } },
   }, required: ['item','discrepancies'],
 }
-const CTX = `Repo root: the current working directory — use repo-relative paths
-throughout, never absolute local paths. Ground truth is the SHIPPED surface,
-verified empirically: build the binary (make build produces bin/abcd-<goos>-<arch>)
-and run it (\`abcd --help\` and \`abcd <verb> --help\`), and list commands/abcd/
-and skills/. abcd currently ships ZERO skills — the whole /abcd: surface is
-commands under commands/abcd/ (ahoy, capture, consult, ingest, prepare-this-repo,
-docs, history, launch, memory, version); skills/ is empty or absent. The brief's
-surface chapters are .abcd/development/brief/04-surfaces/*.md and
-05-internals/08-skills.md. Report DISCREPANCIES ONLY — where record and reality
-disagree, or one side is missing. A brief row explicitly marked staged (its
-Status column is "staged") / probe-only / later-phase is NOT a discrepancy; an
-unmarked claim about a surface that does not exist IS. Do not fix anything.`
+// Prompt text comes from the manifest, not from here: the context and both
+// direction templates are pinned in manifest.json (with their own promptHash) so
+// the prompt cannot drift between runs. The templates carry ${...} placeholders
+// as literal text; fill them per checker.
+const CTX = input.prompt.context
+const fill = (tmpl, subs) =>
+  Object.entries(subs).reduce((s, [k, v]) => s.split('${' + k + '}').join(v), tmpl)
 const briefFindings = input.briefDocs.map(doc => () => agent(
-  `${CTX}\n\nDirection A. Read ${doc} fully. Extract every checkable claim
-about the shipped surface (verbs, sub-verbs, flags, skill names, counts,
-file layouts, "abcd ships N ..." statements) and verify each against
-reality. Return item="${doc}" and the discrepancy list.`,
+  `${CTX}\n\n${fill(input.prompt.directionA, { doc })}`,
   { label: `brief:${doc.split('/').pop()}`, phase: 'CheckBrief', schema: FINDINGS }))
 const surfFindings = input.surfaces.map(s => () => agent(
-  `${CTX}\n\nDirection B. The real surface "${s.name}" (${s.kind}) exists:
-inspect it (${s.probe}). Search the brief's surface chapters for its
-documented home (grep .abcd/development/brief/). If no brief row documents
-it — or the brief documents it under a wrong name/shape — that is a
-discrepancy. Return item="${s.name}" and the discrepancy list (empty if
-properly documented).`,
+  `${CTX}\n\n${fill(input.prompt.directionB, { 's.name': s.name, 's.kind': s.kind, 's.probe': s.probe })}`,
   { label: `surface:${s.name}`, phase: 'CheckSurface', schema: FINDINGS }))
 const all = (await parallel([...briefFindings, ...surfFindings]))
   .filter(Boolean)

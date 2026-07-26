@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/REPPL/abcd-cli/internal/core/recordid"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
@@ -90,17 +92,28 @@ func parseSpec(relPath, content, bucket string) (Spec, error) {
 // NextID mints the next spec id. The rule is:
 //
 //	max(N over existing spec-store files ∪ N over every intent's spec_id
-//	frontmatter across .abcd/development/intents/**) + 1
+//	frontmatter across .abcd/development/intents/** ∪ N over spec-store filenames
+//	on every other git ref) + 1
 //
 // Scanning the intents is what keeps a freshly minted spec from colliding with
 // a reservation: itd-3 shipped with spec_id: spc-1 but has no spec-store file,
 // so a spec-only scan would hand out spc-1 again. Folding intent reservations in
 // means the first minted id is spc-2 while that reservation stands.
-func NextID(repoRoot string) (string, error) {
+//
+// Scanning every git ref (recordid.MaxAcrossRefs) is what keeps two parallel
+// branches from re-minting the same spc-N: once branch A commits spc-10, branch
+// B's ref scan sees it even though the file is absent from B's working tree
+// (iss-115, iss-120). The returned mintWarning is non-empty (and MUST be
+// surfaced) when that ref scan degraded to working-tree-only — git absent, not a
+// repo, or a failed ref query — so the fallback is never silent. The cross-ref
+// scan reads spec-store FILENAMES only; a spec_id reservation committed in an
+// intent's frontmatter on another branch is not folded in (that narrower window
+// is left to the record-lint uniqueness rules on the merged PR).
+func NextID(repoRoot string) (id, mintWarning string, err error) {
 	max := 0
 	store, err := Load(repoRoot)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, sp := range store.Specs {
 		if n := specNum(sp.ID); n > max {
@@ -109,12 +122,25 @@ func NextID(repoRoot string) (string, error) {
 	}
 	reserved, err := maxIntentSpecNum(repoRoot)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if reserved > max {
 		max = reserved
 	}
-	return fmt.Sprintf("spc-%d", max+1), nil
+	scan := recordid.MaxAcrossRefs(repoRoot, "spc", []string{SpecsRelDir})
+	if scan.Max > max {
+		max = scan.Max
+	}
+	// Guard the max+1 below against int overflow: a hand-crafted MaxInt spc-N
+	// (a local file or a fetched remote-tracking ref carrying spc-<MaxInt>-x.md)
+	// parses to math.MaxInt with no error, so max+1 would wrap to math.MinInt and
+	// mint spc--9223372036854775808 — a malformed record WriteFileAtomic persists
+	// before Validate runs, plus a mint DoS for the family. Refuse clearly instead,
+	// mirroring the capture allocator's ceiling guard.
+	if max >= math.MaxInt {
+		return "", "", fmt.Errorf("spec: spc-N counter near the integer ceiling (highest observed %d); refusing to allocate", max)
+	}
+	return fmt.Sprintf("spc-%d", max+1), scan.Warning(), nil
 }
 
 // maxIntentSpecNum returns the highest N across every intent's spec_id
@@ -173,12 +199,14 @@ func maxIntentSpecNum(repoRoot string) (int, error) {
 // Create mints an id via NextID and writes specs/open/spc-N-<slug>.md with the
 // intent link in frontmatter. Both the intent id and the slug are validated
 // before any path is built (the slug becomes a filename). The write is atomic.
-func Create(repoRoot, intentID, slug string) (Spec, error) {
+// The returned mintWarning is non-empty when the refs-union scan degraded to
+// working-tree-only minting; the caller MUST surface it (never swallow it).
+func Create(repoRoot, intentID, slug string) (Spec, string, error) {
 	if !intentIDRe.MatchString(intentID) {
-		return Spec{}, fmt.Errorf("spec: intent id %q must match ^itd-[0-9]+$", intentID)
+		return Spec{}, "", fmt.Errorf("spec: intent id %q must match ^itd-[0-9]+$", intentID)
 	}
 	if !slugRe.MatchString(slug) {
-		return Spec{}, fmt.Errorf("spec: slug %q must be kebab-case", slug)
+		return Spec{}, "", fmt.Errorf("spec: slug %q must be kebab-case", slug)
 	}
 	// Mint and write under the exclusive mint lock: NextID scans the store for
 	// max N and this writes spc-N-<slug>.md, so without serialization two
@@ -187,11 +215,13 @@ func Create(repoRoot, intentID, slug string) (Spec, error) {
 	// clobber guard detects it. Holding the lock across the scan+write makes the
 	// second run see the first's file and mint N+1.
 	var sp Spec
+	var mintWarning string
 	err := withMintLock(repoRoot, func() error {
-		id, err := NextID(repoRoot)
+		id, warn, err := NextID(repoRoot)
 		if err != nil {
 			return err
 		}
+		mintWarning = warn
 		openDir := filepath.Join(repoRoot, SpecsRelDir, StatusOpen)
 		if err := ensureDir(openDir, filepath.Join(SpecsRelDir, StatusOpen)); err != nil {
 			return err
@@ -211,9 +241,9 @@ func Create(repoRoot, intentID, slug string) (Spec, error) {
 		return nil
 	})
 	if err != nil {
-		return Spec{}, err
+		return Spec{}, "", err
 	}
-	return sp, Validate(sp)
+	return sp, mintWarning, Validate(sp)
 }
 
 // withMintLock runs fn while holding an exclusive advisory lock over the spec
