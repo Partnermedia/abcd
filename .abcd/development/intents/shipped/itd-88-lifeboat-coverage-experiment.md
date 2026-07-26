@@ -7,6 +7,7 @@ suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: major
+impact: additive
 related_adrs: [adr-35]
 ---
 
@@ -75,4 +76,5 @@ The honesty discipline is the other half. A rescue tool that invents a plausible
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+<!-- abcd-review: OWED receipt=rcp-4d07032fc6ab -->
+Fidelity review OWED (receipt rcp-4d07032fc6ab).
