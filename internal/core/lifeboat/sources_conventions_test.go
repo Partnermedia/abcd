@@ -434,6 +434,31 @@ func TestConvOpenQuestionsIgnoresRedactionPlaceholders(t *testing.T) {
 	}
 }
 
+// TestConvOpenQuestionsIgnoresProseMentioningMarkers holds the iss-111 contract:
+// a repository that documents its own conventions mentions TODO and FIXME by name
+// in prose, and those mentions are not the team's open questions. A bare TODO or
+// FIXME followed by whitespace reads exactly like such a mention, so the scan must
+// come back blank rather than fabricate open questions out of the documentation.
+func TestConvOpenQuestionsIgnoresProseMentioningMarkers(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"go.mod": "module example.com/documented\n\ngo 1.22\n",
+		"CONTRIBUTING.md": "# Conventions\n\n" +
+			"Leave a TODO for unfinished work and a FIXME where a bug hides.\n" +
+			"We grep for TODO and FIXME markers before every release.\n",
+	})
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ev := convSourceForSection(t, "evidence/open-questions").Probe(ctx)
+	if ev.Status != StatusBlank {
+		t.Fatalf("prose that merely names markers gives status %s, want blank; fabricated evidence %v", ev.Status, ev.Sources)
+	}
+}
+
 // TestConvMarkerRePinsTheRecognisedSpellings pins the marker pattern against the
 // spellings it must accept and the near-misses it must reject, so the word
 // boundary cannot be loosened or tightened without a test saying so.
@@ -441,9 +466,7 @@ func TestConvMarkerRePinsTheRecognisedSpellings(t *testing.T) {
 	match := []string{
 		"// TODO: handle the retry case",
 		"//TODO: no space after the slashes",
-		"# TODO",
 		"- TODO: a list item",
-		"* FIXME check this",
 		"FIXME(alice): leaks a connection",
 		"-- BUG --",
 		"// HACK around the driver",
@@ -455,6 +478,15 @@ func TestConvMarkerRePinsTheRecognisedSpellings(t *testing.T) {
 		"XXX-XXX-XXX",
 		"TODOS are not markers",
 		"todo_list := nil",
+		// iss-111: TODO and FIXME require a trailing ':' or '('. A bare word is
+		// indistinguishable from prose that merely names the marker — the
+		// false-positive class that swamped a repo documenting its own
+		// conventions — so these documentation mentions must not match.
+		"# TODO",
+		"* FIXME check this",
+		"names TODO and FIXME markers as a read",
+		"a codebase dense with TODO markers",
+		"the TODO and FIXME conventions this project follows",
 	}
 	for _, line := range match {
 		if convMarkerRe.FindStringSubmatch(line) == nil {
@@ -463,7 +495,7 @@ func TestConvMarkerRePinsTheRecognisedSpellings(t *testing.T) {
 	}
 	for _, line := range reject {
 		if m := convMarkerRe.FindStringSubmatch(line); m != nil {
-			t.Errorf("convMarkerRe matches %q as a %s marker", line, m[2])
+			t.Errorf("convMarkerRe matches %q as a %s marker", line, convMarkerName(m))
 		}
 	}
 }

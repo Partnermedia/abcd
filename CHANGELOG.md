@@ -25,6 +25,20 @@ called out in a **Breaking** section.
   user-facing by definition). `capture wontfix` is unchanged — a non-action ships
   nothing, so `wontfix/` carries no impact.
 
+### Fixed
+
+- **The open-questions marker scan no longer reads documentation about markers as
+  open questions** (iss-111). The pattern that grounds `evidence/open-questions`
+  admitted a bare uppercase `TODO`/`FIXME` followed by whitespace, so on a
+  repository that documents its own conventions every prose mention of a marker
+  was cited as a work marker — 18 such false positives across the durable record
+  on this repository, all documentation, none a real marker. `TODO` and `FIXME`
+  now require a trailing `:` or `(` (the conventional `TODO:` / `TODO(alice):`
+  spellings), which is how genuine markers are almost always written; `XXX`,
+  `HACK`, and `BUG` still admit their conventional bare form, because they are
+  rarely written as bare words in prose and carry no measured false-positive
+  cost.
+
 ## [0.4.0] - 2026-07-22
 
 ### Breaking
