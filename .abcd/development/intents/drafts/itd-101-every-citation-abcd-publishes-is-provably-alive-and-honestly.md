@@ -22,11 +22,22 @@ impact: additive
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- Given `abcd docs lint` runs in the commit gate, when the citations family evaluates, then it uses zero network: footnote structure (marker-definition bijection, and every crosswalk table row carrying at least one footnote), URL/DOI syntax, and source-domain policy come from committed config and the committed baseline.
+- Given `abcd docs cite refresh` runs, when it writes the baseline, then each URL entry records the final resolved address, when it was checked, and whether verification was automatic or manual (with its date) — never how.
+- Given a baseline entry older than 180 days, when docs lint runs, then it warns; given one older than 365 days, when the release gate runs, then it blocks; human-verified entries age on the same clock and re-enter the manual queue when stale.
+- Given a source that blocks automated fetchers, when the maintainer clears the manual queue, then a printed checklist plus a confirm verb writes the dated receipt; the later generated checklist page hands back a receipt file the same verb ingests — one receipt schema for both rungs.
+- Given a specialist link checker is adopted later, then it slots behind the refresh seam as an adapter without changing gate semantics — internal basic first, SOTA dependency later.
 
 ## Open Questions
 
-_None recorded yet._
+- The generated checklist page's receipt-file format details (settled only as: same schema as the confirm verb writes).
+- Where the scheduled-CI refresh wrapper lands when it earns its own sign-off (explicitly out of this intent's scope, per the 2026-07-27 grill).
+
+## Grill Settlements (2026-07-27)
+
+- Refresh is manual now, surfaced by ahoy status and release-preflight nagging; a scheduled-CI wrapper is a later, separately signed-off change.
+- Staleness policy: warn at 180 days in docs lint; blocker at 365 days at the release gate only — commits are never calendar-blocked.
+- The row-has-footnote structural rule deferred from spc-15 is homed here (DECISIONS 2026-07-27): implemented in this intent or not at all.
 
 ## Audit Notes
 
