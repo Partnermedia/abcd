@@ -9,12 +9,10 @@ package cli
 // `docs lint` — the gate is the customer, these verbs are how it gets fed.
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -56,7 +54,10 @@ func newCiteRefreshCommand(asJSON *bool) *cobra.Command {
 			}
 			res, err := cite.Refresh(cite.RefreshRequest{RepoRoot: root, Config: cfg})
 			if err != nil {
-				return &exitError{Code: 2, Msg: "docs cite refresh: " + err.Error()}
+				// scrubPaths, not err.Error(): a *PathError from an unreadable
+				// page carries an ABSOLUTE path, and concatenating its string
+				// destroys the type the scrubber needs to redact it (iss-81).
+				return &exitError{Code: 2, Msg: "docs cite refresh: " + scrubPaths(err)}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderRefresh(w, res)
@@ -103,7 +104,7 @@ func renderRefresh(w io.Writer, res cite.RefreshResult) {
 		}
 		fmt.Fprintf(w, "\n  abcd docs cite confirm <url> [<url>...]\n")
 	}
-	fmt.Fprintf(w, "\nbaseline written: %s\n", res.BaselinePath)
+	fmt.Fprintf(w, "\nbaseline written: %s\n", termsafe.Sanitize(res.BaselinePath))
 }
 
 func newCiteConfirmCommand(asJSON *bool) *cobra.Command {
@@ -134,7 +135,7 @@ func newCiteConfirmCommand(asJSON *bool) *cobra.Command {
 			case receiptPath != "":
 				receipt, err = cite.LoadReceipt(receiptPath)
 				if err != nil {
-					return &exitError{Code: 2, Msg: "docs cite confirm: " + citeErrorDetail(err, receiptPath)}
+					return &exitError{Code: 2, Msg: "docs cite confirm: " + scrubPaths(err)}
 				}
 			case len(args) > 0:
 				receipt.SchemaVersion = cite.ReceiptSchemaVersion
@@ -147,14 +148,14 @@ func newCiteConfirmCommand(asJSON *bool) *cobra.Command {
 
 			res, err := cite.Confirm(cite.ConfirmRequest{RepoRoot: root, Config: cfg, Receipt: receipt})
 			if err != nil {
-				return &exitError{Code: 2, Msg: "docs cite confirm: " + err.Error()}
+				return &exitError{Code: 2, Msg: "docs cite confirm: " + scrubPaths(err)}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				for _, u := range res.Recorded {
 					fmt.Fprintf(w, "  confirmed %s\n", termsafe.Sanitize(u))
 				}
 				fmt.Fprintf(w, "abcd docs cite confirm — %d receipt(s) recorded in %s\n",
-					len(res.Recorded), res.BaselinePath)
+					len(res.Recorded), termsafe.Sanitize(res.BaselinePath))
 			})
 		},
 	}
@@ -199,7 +200,7 @@ func loadCiteConfig(verb, rootDir, configPath string) (string, lint.Config, erro
 				"%s: config not found at %s — run in a prepared repo or pass --config", verb, ref)}
 		}
 		return "", lint.Config{}, &exitError{Code: 2, Msg: fmt.Sprintf(
-			"%s: cannot read config %s: %s", verb, ref, citeErrorDetail(err, ref))}
+			"%s: cannot read config %s: %s", verb, ref, scrubPaths(err))}
 	}
 	return root, cfg, nil
 }
@@ -208,27 +209,28 @@ func loadCiteConfig(verb, rootDir, configPath string) (string, lint.Config, erro
 //
 // It lives on this side of the boundary because internal/core/lint imports
 // internal/core/launch for its semver, so the measurement cannot be taken inside
-// the gate it feeds. Everything is soft: a repo with no docs-lint config, or one
-// that has not armed the citation rule, gets a nil preflight and the gate
-// reports itself as not run rather than inventing a pass.
+// the gate it feeds.
+//
+// Exactly one condition yields a nil preflight — "this repo has not armed the
+// citation gate" — and it is either a docs-lint config that is genuinely absent
+// or one that leaves the rule disabled. Everything else that goes wrong is
+// reported as UNREADABLE and refuses, because a config that plainly arms the rule
+// and then fails to parse must not be rendered as "no gate here": that would wave
+// a release through on a false statement about a real requirement.
 func citationPreflight(repoRoot string) *launch.CitationPreflight {
 	cfg, err := lint.LoadConfig(filepath.Join(repoRoot, ".abcd", "docs-lint.json"))
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil // no docs-lint config at all: the gate is simply not adopted
+		}
+		return &launch.CitationPreflight{Unreadable: scrubPaths(err)}
 	}
 	if rc, ok := cfg.Rules["citation_baseline"]; !ok || !rc.Enabled {
 		return nil
 	}
 	sum, err := lint.CitationAgeSummary(cfg, repoRoot)
 	if err != nil {
-		// An unreadable baseline is not "no gate" — it is a record a release must
-		// not proceed on, so it is reported as a present-but-empty one whose
-		// citations all lack receipts, which refuses.
-		cited, cerr := lint.CollectCitedURLs(cfg, repoRoot)
-		if cerr != nil {
-			return nil
-		}
-		return &launch.CitationPreflight{Present: true, Cited: len(cited), Missing: len(cited)}
+		return &launch.CitationPreflight{Unreadable: scrubPaths(err)}
 	}
 	return &launch.CitationPreflight{
 		Present:         sum.Present,
@@ -241,15 +243,4 @@ func citationPreflight(repoRoot string) *launch.CitationPreflight {
 		ApproachingURLs: sum.ApproachingURLs,
 		OverdueURLs:     sum.OverdueURLs,
 	}
-}
-
-// citeErrorDetail strips the path-bearing wrapper off a filesystem error. A
-// *PathError embeds the ABSOLUTE path, which must never reach machine output
-// (iss-29); its inner Err is the bare cause.
-func citeErrorDetail(err error, ref string) string {
-	var pe *os.PathError
-	if errors.As(err, &pe) {
-		return ref + ": " + pe.Err.Error()
-	}
-	return strings.TrimSpace(err.Error())
 }

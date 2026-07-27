@@ -69,7 +69,10 @@ func CitationAgeSummary(cfg Config, repoRoot string) (CitationSummary, error) {
 // yet is a state a status line must be able to describe. A MALFORMED one is
 // still an error — a record the gate cannot read is not a health report.
 func CitationAgeSummaryAt(cfg Config, repoRoot string, now time.Time) (CitationSummary, error) {
-	relPath, warnDays, blockDays := CitationPolicy(cfg)
+	relPath, warnDays, blockDays, err := CitationPolicy(cfg)
+	if err != nil {
+		return CitationSummary{}, err
+	}
 
 	cited, err := CollectCitedURLs(cfg, repoRoot)
 	if err != nil {
@@ -107,7 +110,7 @@ func CitationAgeSummaryAt(cfg Config, repoRoot string, now time.Time) (CitationS
 		if perr != nil {
 			continue // unreachable: LoadBaseline validated the date
 		}
-		age := daysBetween(checked, now)
+		age := DaysBetween(checked, now)
 		if age >= warnDays {
 			sum.Stale++
 		}

@@ -89,6 +89,29 @@ func TestCitationGateBlocksOnBrokenAndUnreceipted(t *testing.T) {
 	}
 }
 
+// TestCitationGateRefusesAnUnmeasurableBaseline keeps a broken config from
+// reading as "no gate here". A repo whose docs-lint config plainly arms the rule
+// but fails to parse must not have its release wave through with the gate
+// reported as unarmed — that is a false statement about a real requirement.
+func TestCitationGateRefusesAnUnmeasurableBaseline(t *testing.T) {
+	gate, refusals := runCitationGate(t, &CitationPreflight{Unreadable: "docs-lint.json: invalid character '}'"})
+	if gate.Status != "ran" {
+		t.Fatalf("status = %q, want ran", gate.Status)
+	}
+	if !strings.Contains(gate.Detail, "could not be measured") {
+		t.Errorf("detail = %q, want it to say the baseline could not be measured", gate.Detail)
+	}
+	var refused bool
+	for _, r := range refusals {
+		if strings.Contains(r, "citation") {
+			refused = true
+		}
+	}
+	if !refused {
+		t.Fatalf("refusals = %v, want an unmeasurable baseline to refuse", refusals)
+	}
+}
+
 // TestCitationGatePassesOnAHealthyBaseline pins that a current record refuses
 // nothing at all.
 func TestCitationGatePassesOnAHealthyBaseline(t *testing.T) {

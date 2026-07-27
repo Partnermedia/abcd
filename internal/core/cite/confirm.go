@@ -123,7 +123,10 @@ func Confirm(req ConfirmRequest) (ConfirmResult, error) {
 		return ConfirmResult{}, &ConfirmError{"citation receipt confirms nothing"}
 	}
 
-	relPath, _, _ := lint.CitationPolicy(req.Config)
+	relPath, _, _, err := lint.CitationPolicy(req.Config)
+	if err != nil {
+		return ConfirmResult{}, err
+	}
 	absPath := filepath.Join(req.RepoRoot, filepath.FromSlash(relPath))
 
 	cited, err := lint.CollectCitedURLs(req.Config, req.RepoRoot)
@@ -154,7 +157,7 @@ func Confirm(req ConfirmRequest) (ConfirmResult, error) {
 			return ConfirmResult{}, &ConfirmError{
 				"cannot confirm " + c.URL + ": verified_on " + strconv.Quote(on) + " is not a " + dateLayout + " date"}
 		}
-		if daysBetween(when, now) < 0 {
+		if lint.DaysBetween(when, now) < 0 {
 			return ConfirmResult{}, &ConfirmError{
 				"cannot confirm " + c.URL + ": verified_on " + on + " is in the future"}
 		}

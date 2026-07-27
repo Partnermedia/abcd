@@ -61,9 +61,17 @@ called out in a **Breaking** section.
   --release-gate` promotes an overdue citation from a warning to a blocker — the
   flag is the trust root, so a repository cannot defang its own release by editing
   a committed config, and an ordinary commit is never blocked by the calendar.
-- **The citation gate is armed for this repository.** All 51 cited URLs in
-  `docs/` carry a receipt or a queue entry, and four citations that had silently
-  drifted behind redirects now name the address they actually resolve to.
+  The flag is built and tested but **not yet passed by `release.yml`**, which
+  still runs the plain `abcd docs lint`; wiring it into the release workflow is a
+  CI change needing its own sign-off, and until it lands the 365-day threshold
+  warns at release time rather than blocking.
+- **The citation gate is armed for this repository.** 50 of the 51 URLs cited
+  under `docs/` carry a receipt, and four citations that had silently drifted
+  behind redirects now name the address they actually resolve to. One source
+  answers HTTP 403 to any automated fetcher and is waiting in the manual queue,
+  so `abcd docs lint` reports it as unreceipted until a maintainer opens it and
+  runs `abcd docs cite confirm`. A refusal is not a fabricated receipt: the gate
+  reporting a link nobody has verified is the mechanism working.
 - **A schema-versioned citation baseline at `.abcd/citations-baseline.json`.**
   Per cited URL it records the final resolved address, when it was last checked,
   the outcome, and whether verification was automatic or manual with its date.

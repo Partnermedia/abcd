@@ -21,10 +21,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 )
+
+// RefreshError is a refused refresh — a distinct type so a caller can tell a
+// refusal to write from an I/O fault without string matching.
+type RefreshError struct{ msg string }
+
+func (e *RefreshError) Error() string { return e.msg }
 
 // dateLayout matches the baseline's date precision. The staleness policy is
 // measured in days, so an instant would add churn to a committed file for no
@@ -144,7 +151,10 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 		parallel = defaultParallel
 	}
 
-	relPath, warnDays, _ := lint.CitationPolicy(req.Config)
+	relPath, warnDays, _, err := lint.CitationPolicy(req.Config)
+	if err != nil {
+		return RefreshResult{}, err
+	}
 	absPath := filepath.Join(req.RepoRoot, filepath.FromSlash(relPath))
 
 	cited, err := lint.CollectCitedURLs(req.Config, req.RepoRoot)
@@ -193,6 +203,10 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 	res.Fetched = len(jobs)
 
 	checked := runChecks(checker, toCheck, parallel)
+	// succeeded counts the checks that actually reached a document. It is the
+	// signal the wholesale-failure guard below reads: a blocked source is not a
+	// success, but it is not evidence of a broken network either.
+	succeeded := 0
 
 	for _, j := range jobs {
 		out := checked[j.ref.URL]
@@ -201,6 +215,7 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 		})
 		switch out.Status {
 		case StatusOK:
+			succeeded++
 			final := out.FinalURL
 			if final == "" {
 				final = j.ref.URL
@@ -221,11 +236,36 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 				Outcome: lint.OutcomeBroken, Verification: lint.VerificationAutomatic, VerifiedOn: stamp,
 			}
 		case StatusBlocked:
+			// A refusal is not a failed network: the host answered.
+			succeeded++
 			if j.had {
 				next[j.ref.URL] = j.prev
 			}
 			res.Queue = append(res.Queue, QueueItem{URL: j.ref.URL, Detail: out.Detail, Sites: j.ref.Sites})
+		default:
+			// The seam is exported, so a later adapter is a producer this package
+			// does not control. An unrecognised status must stop the run: falling
+			// through would drop the URL from BOTH the baseline and the queue,
+			// which is the one outcome nothing downstream could detect.
+			return RefreshResult{}, &RefreshError{"checker returned an unrecognised status " +
+				strconv.Quote(string(out.Status)) + " for " + j.ref.URL}
 		}
+	}
+
+	// A run in which NOTHING succeeded is a broken network, not fifty dead
+	// citations. Check collapses a DNS failure, a refused connection and a
+	// timeout into the same StatusBroken as a genuine 404, so committing such a
+	// run would rewrite every entry as broken — stale human receipts included,
+	// since those are re-checked and so are not covered by the blocked branch —
+	// and the gate would then block every commit until someone reverted the file
+	// by hand. Refuse before writing; the operator keeps the record they had.
+	//
+	// It binds only when there WAS a record to protect: a first run over
+	// genuinely dead citations has nothing to lose and is allowed to write one.
+	if len(previous) > 0 && res.Fetched > 0 && succeeded == 0 && res.Preserved == 0 {
+		return RefreshResult{}, &RefreshError{"every one of the " + strconv.Itoa(res.Fetched) +
+			" citation(s) checked failed, which is a broken network far more often than a broken corpus; " +
+			"the existing baseline is left untouched. Check connectivity and re-run"}
 	}
 
 	citedSet := map[string]bool{}
@@ -255,15 +295,9 @@ func stale(e lint.BaselineEntry, now time.Time, warnDays int) bool {
 	if err != nil {
 		return true // unparsable is not current; re-check it
 	}
-	return daysBetween(checked, now) >= warnDays
-}
-
-// daysBetween counts whole calendar days, both ends normalised to UTC midnight,
-// matching the gate's arithmetic exactly.
-func daysBetween(from, to time.Time) int {
-	f := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
-	t := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
-	return int(t.Sub(f).Hours() / 24)
+	// The gate's own arithmetic, not a second copy: the verb must call an entry
+	// stale on exactly the day the lint will.
+	return lint.DaysBetween(checked, now) >= warnDays
 }
 
 // runChecks fans the checks out over a bounded worker pool and collects them

@@ -342,3 +342,88 @@ func TestRefreshRefusesAMalformedBaseline(t *testing.T) {
 		t.Fatal("Refresh overwrote a baseline it could not read")
 	}
 }
+
+// TestRefreshRefusesToCommitATotalFailure is the record-preservation clause.
+//
+// Check collapses a DNS failure, a refused connection and a timeout into the same
+// StatusBroken as a genuine 404, so a run made with the VPN down or behind a
+// captive portal would otherwise rewrite EVERY entry as broken — including stale
+// human receipts, which are re-checked and so are not protected by the blocked
+// branch — and commit it before the operator saw the transcript. The gate would
+// then block every commit in the repo until someone reverted the file by hand.
+func TestRefreshRefusesToCommitATotalFailure(t *testing.T) {
+	root := citeRepo(t, "https://example.org/a", "https://example.org/b")
+	good := map[string]lint.BaselineEntry{
+		"https://example.org/a": {FinalURL: "https://example.org/a", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+		"https://example.org/b": {FinalURL: "https://example.org/b", LastChecked: "2025-01-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationManual, VerifiedOn: "2025-01-01"},
+	}
+	writeBaseline(t, root, good)
+
+	offline := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/a": {Status: StatusBroken, Detail: "dial tcp: no such host"},
+		"https://example.org/b": {Status: StatusBroken, Detail: "dial tcp: no such host"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: offline, Now: now}); err == nil {
+		t.Fatal("Refresh committed a run in which nothing succeeded")
+	}
+
+	entries := loadBaseline(t, root).Entries
+	for url, want := range good {
+		got := entries[url]
+		got.URL = ""
+		if got != want {
+			t.Fatalf("%s = %+v, want the prior record untouched %+v", url, got, want)
+		}
+	}
+}
+
+// TestRefreshStillRecordsAnIsolatedBrokenLink keeps that guard narrow: a dead
+// link among live ones is exactly what the baseline exists to record.
+func TestRefreshStillRecordsAnIsolatedBrokenLink(t *testing.T) {
+	root := citeRepo(t, "https://example.org/a", "https://example.org/gone")
+	writeBaseline(t, root, map[string]lint.BaselineEntry{
+		"https://example.org/a": {FinalURL: "https://example.org/a", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+	})
+	checker := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/gone": {Status: StatusBroken, Detail: "HTTP 404 Not Found"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if got := loadBaseline(t, root).Entries["https://example.org/gone"]; got.Outcome != lint.OutcomeBroken {
+		t.Fatalf("entry = %+v, want outcome broken", got)
+	}
+}
+
+// TestRefreshCommitsATotalFailureOnAFirstRun keeps the guard from deadlocking a
+// repo whose citations really are all dead: with no prior record to protect,
+// there is nothing to lose by writing one.
+func TestRefreshCommitsATotalFailureOnAFirstRun(t *testing.T) {
+	root := citeRepo(t, "https://example.org/gone")
+	checker := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/gone": {Status: StatusBroken, Detail: "HTTP 404 Not Found"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if got := loadBaseline(t, root).Entries["https://example.org/gone"]; got.Outcome != lint.OutcomeBroken {
+		t.Fatalf("entry = %+v, want outcome broken", got)
+	}
+}
+
+// TestRefreshRefusesAnUnknownCheckerStatus closes the seam's silent-drop hole.
+// Status and Checker are exported for the adapter spc-17 AC 5 calls for; one
+// returning anything else would otherwise omit the URL from BOTH the baseline and
+// the queue, with no error anywhere.
+func TestRefreshRefusesAnUnknownCheckerStatus(t *testing.T) {
+	root := citeRepo(t, "https://example.org/a")
+	rogue := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/a": {Status: Status("probably-fine")},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: rogue, Now: now}); err == nil {
+		t.Fatal("Refresh accepted an unrecognised checker status")
+	}
+}

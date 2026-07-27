@@ -16,6 +16,7 @@ package lint
 // syntax/policy/baseline rule inherits it.
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -50,11 +51,22 @@ const (
 // It exists so the refresh verb and the gate read the SAME policy: the verb
 // decides which entries are stale enough to re-check from the very number the
 // lint will later warn on, rather than from a second copy of 180 that drifts.
-func CitationPolicy(cfg Config) (baselinePath string, warnDays, blockDays int) {
+//
+// It is also the containment choke point for the one config value that steers a
+// WRITE. `.abcd/docs-lint.json` is a committed file, so a contributor controls
+// it; `abcd docs cite refresh` then hands `baseline` to SaveBaseline, which
+// MkdirAll's the parent. Without the check below, a `baseline` of
+// "../../../etc/x.json" turns a routine refresh into an arbitrary-file-write
+// primitive that escapes the repository. Every reader and both writers resolve
+// the path through here, so one check covers all four.
+func CitationPolicy(cfg Config) (baselinePath string, warnDays, blockDays int, err error) {
 	rc := cfg.Rules[ruleCitationBaseline]
 	baselinePath = strings.TrimSpace(rc.Baseline)
 	if baselinePath == "" {
 		baselinePath = DefaultBaselinePath
+	}
+	if cerr := containedRepoPath(baselinePath); cerr != nil {
+		return "", 0, 0, &configError{ruleCitationBaseline + ": baseline " + quote(baselinePath) + " " + cerr.Error()}
 	}
 	warnDays, blockDays = rc.WarnAfterDays, rc.BlockAfterDays
 	if warnDays <= 0 {
@@ -63,7 +75,26 @@ func CitationPolicy(cfg Config) (baselinePath string, warnDays, blockDays int) {
 	if blockDays <= 0 {
 		blockDays = defaultCitationBlockDays
 	}
-	return baselinePath, warnDays, blockDays
+	return baselinePath, warnDays, blockDays, nil
+}
+
+// containedRepoPath refuses a config-supplied path that is not a plain,
+// repo-relative location. Absolute paths, Windows volume and UNC forms, and any
+// path whose cleaned form climbs out with ".." are all refused rather than
+// normalised — a config that asks to write outside the repo is a mistake or an
+// attack, and silently rewriting it to something safe would hide both.
+func containedRepoPath(rel string) error {
+	if filepath.IsAbs(rel) || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, `\`) {
+		return errors.New("is absolute; it must be a repo-relative path")
+	}
+	if vol := filepath.VolumeName(filepath.FromSlash(rel)); vol != "" {
+		return errors.New("names a volume; it must be a repo-relative path")
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return errors.New("escapes the repository root")
+	}
+	return nil
 }
 
 // defaultCrosswalkHeading is the narrowest identification heuristic that matches
@@ -435,9 +466,12 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 		// enables the rule before it has any citations is not in violation.
 		return nil, nil
 	}
-	rel := cfg.Baseline
-	if strings.TrimSpace(rel) == "" {
-		rel = DefaultBaselinePath
+	// Resolve through the shared policy so the containment check binds here too:
+	// a config that points the baseline outside the repo is refused by the gate,
+	// not only by the verb that writes it.
+	rel, _, _, err := CitationPolicy(Config{Rules: map[string]RuleConfig{ruleCitationBaseline: cfg}})
+	if err != nil {
+		return nil, err
 	}
 
 	base, err := LoadBaseline(filepath.Join(repoRoot, filepath.FromSlash(rel)))
@@ -482,7 +516,13 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 		if !ok {
 			out = append(out, Finding{
 				File: ref.file, Line: ref.line, RuleID: ruleCitationBaseline, Severity: cfg.Severity,
-				Message: "cited URL " + ref.url + " is not in the citation baseline; run `abcd docs cite refresh`",
+				// Both verbs, deliberately. The ONE state that produces a missing
+				// entry is a source that refuses automated fetchers: the refresh
+				// queued it and wrote nothing by design, so naming refresh alone
+				// sends the maintainer round a loop that cannot terminate.
+				Message: "cited URL " + ref.url + " is not in the citation baseline; run " +
+					"`abcd docs cite refresh` — or, if the source refuses automated fetchers, " +
+					"open it and record it with `abcd docs cite confirm " + ref.url + "`",
 			})
 			continue
 		}
@@ -508,7 +548,7 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 		if perr != nil {
 			continue // unreachable: LoadBaseline validated the date
 		}
-		age := daysBetween(checked, now)
+		age := DaysBetween(checked, now)
 		switch {
 		case age >= blockDays:
 			out = append(out, Finding{
@@ -529,10 +569,16 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 	return out, nil
 }
 
-// daysBetween counts whole calendar days, both ends normalised to UTC midnight.
+// DaysBetween counts whole calendar days, both ends normalised to UTC midnight.
 // Comparing instants would make the 180-day boundary depend on the hour the gate
 // happened to run.
-func daysBetween(from, to time.Time) int {
+//
+// It is exported because the refresh verb decides which entries are stale enough
+// to re-check and MUST get the same answer as the gate that will later warn on
+// them. Two copies of this arithmetic is two chances for a boundary to drift,
+// which would surface as a URL the verb thinks current and the gate thinks
+// overdue, with nothing to say which is right.
+func DaysBetween(from, to time.Time) int {
 	f := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
 	t := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
 	return int(t.Sub(f).Hours() / 24)
