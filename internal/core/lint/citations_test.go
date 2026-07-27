@@ -252,6 +252,72 @@ func TestCitationURLSyntaxScopedToCitations(t *testing.T) {
 	}
 }
 
+// TestCitationDOIMentionIsAnchored is the false-positive budget for the DOI
+// check. "DOI" is an ordinary English word in citation prose, and the resolvable
+// https://doi.org/... form is a URL, not a bare DOI. Claiming either as a
+// malformed DOI would make a blocker-severity rule fire on correct citations.
+func TestCitationDOIMentionIsAnchored(t *testing.T) {
+	root := citeRepo(t, map[string]string{
+		"docs/doi.md": "# DOI\n\nA.[^a] B.[^b] C.[^c] D.[^d]\n\n" +
+			"[^a]: Lewis, P., NeurIPS 2020, DOI https://doi.org/10.48550/arXiv.2005.11401.\n\n" +
+			"[^b]: A standard with a DOI and a stable URL, https://example.org/a.\n\n" +
+			"[^c]: Report, 2024. No DOI is assigned; see https://example.org/c.\n\n" +
+			"[^d]: Paper, DOI 10.1145/3586183.3606763.\n",
+	})
+	findings, err := LintAt(citeConfig("citation_url_syntax", RuleConfig{}), root, fixedNow)
+	if err != nil {
+		t.Fatalf("LintAt: %v", err)
+	}
+	if got := findingsFor(findings, "citation_url_syntax"); len(got) != 0 {
+		t.Errorf("correct citations were flagged as malformed DOIs: %+v", got)
+	}
+}
+
+// TestCitationDefinitionContinuationLines closes a silent gate hole: a footnote
+// definition wrapped across lines still cites everything below its first line.
+// Dropping the continuation would let a malformed address — or one the baseline
+// records as broken — through the gate unexamined, which is worse than a noisy
+// rule because it fails OPEN.
+func TestCitationDefinitionContinuationLines(t *testing.T) {
+	root := citeRepo(t, map[string]string{
+		"docs/wrapped.md": "# Wrapped\n\nA.[^a] B.[^b]\n\n" +
+			"[^a]: Author, Title, a long citation that wraps,\n" +
+			"  see http://nohost/ for the record.\n\n" +
+			"[^b]: Short, https://example.org/b.\n\n" +
+			"Ordinary prose resumes here, mentioning http://alsonohost/ harmlessly.\n",
+	})
+	findings, err := LintAt(citeConfig("citation_url_syntax", RuleConfig{}), root, fixedNow)
+	if err != nil {
+		t.Fatalf("LintAt: %v", err)
+	}
+	got := findingsFor(findings, "citation_url_syntax")
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 finding (the wrapped nohost URL), got %d: %+v", len(got), got)
+	}
+	if !strings.Contains(got[0].Message, "http://nohost/") {
+		t.Errorf("finding should name the continuation-line URL; got %q", got[0].Message)
+	}
+	// The continuation line, not the definition's opening line.
+	if got[0].Line != 6 {
+		t.Errorf("finding anchored at line %d, want 6 (the continuation line)", got[0].Line)
+	}
+}
+
+// TestCitationBaselineDedupesIdenticalRefs: one line citing the same URL twice
+// is one problem, and must not be reported twice.
+func TestCitationBaselineDedupesIdenticalRefs(t *testing.T) {
+	root := baselineRepo(t,
+		"# Cites\n\nA.[^a]\n\n[^a]: S, https://example.org/gone and mirror https://example.org/gone.\n",
+		`{"schema_version":1,"entries":{}}`)
+	findings, err := LintAt(citeConfig("citation_baseline", RuleConfig{}), root, fixedNow)
+	if err != nil {
+		t.Fatalf("LintAt: %v", err)
+	}
+	if got := findingsFor(findings, "citation_baseline"); len(got) != 1 {
+		t.Fatalf("want 1 finding for one URL cited twice on one line, got %d: %+v", len(got), got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // citation_source_policy
 // ---------------------------------------------------------------------------

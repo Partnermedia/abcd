@@ -63,9 +63,13 @@ var (
 	// A bare URL. Citations in this corpus are written bare, never as markdown
 	// links, so the scan is for the scheme rather than for link syntax.
 	citationURLRe = regexp.MustCompile("https?://[^\\s<>\"'`]+")
-	// A DOI mention. Requiring the delimiter after "doi" keeps the prose word
-	// ("a paper with a DOI, or a specification") out of the match.
-	doiMentionRe = regexp.MustCompile(`(?i)\bdoi[:\s]\s*(\S+)`)
+	// A DOI mention: the word, a delimiter, and a token that at least STARTS
+	// like a DOI. Anchoring on the "10" prefix is what keeps ordinary prose out
+	// of a blocker-severity rule — "a paper with a DOI and a stable URL" and "no
+	// DOI is assigned" both put an English word after the delimiter, and the
+	// resolvable https://doi.org/10.x form is a URL the syntax check already
+	// judges. A token that starts 10 but breaks the grammar is still caught.
+	doiMentionRe = regexp.MustCompile(`(?i)\bdoi[:\s]\s*(10\S*)`)
 	// The DOI grammar: a registrant prefix and a non-empty suffix.
 	doiShapeRe = regexp.MustCompile(`^10\.\d{4,9}/\S+$`)
 )
@@ -101,20 +105,32 @@ type pageCitations struct {
 // because this repo's own records contain exactly that decoy.
 func parseCitations(rel string, lines []string, mask []bool) pageCitations {
 	var p pageCitations
+	inDef := false
 	for i, raw := range lines {
 		if mask[i] {
+			inDef = false
 			continue
 		}
 		line := stripInlineCode(raw)
 		lineNo := i + 1
 
-		// A definition line contributes its id as a definition, and its TAIL is
-		// the citation corpus. The head is skipped for marker scanning so a
-		// definition never counts as a reference to itself.
+		// A definition line contributes its id, and its TAIL is citation corpus.
+		// The head is excluded from marker scanning so a definition never counts
+		// as a reference to itself.
 		rest := line
-		if m := footnoteDefRe.FindStringSubmatchIndex(line); m != nil {
+		switch m := footnoteDefRe.FindStringSubmatchIndex(line); {
+		case m != nil:
 			p.defs = append(p.defs, footnoteRef{id: line[m[2]:m[3]], line: lineNo})
 			rest = line[m[1]:]
+			inDef = true
+		case inDef && isDefContinuation(raw):
+			// A wrapped definition is still the same citation, so its later
+			// lines stay corpus. Dropping them would fail OPEN — a malformed or
+			// baseline-broken address below the fold would never be examined.
+		default:
+			inDef = false
+		}
+		if inDef {
 			p.urls = append(p.urls, scanCitedURLs(rel, rest, lineNo)...)
 			p.dois = append(p.dois, scanCitedDOIs(rel, rest, lineNo)...)
 		}
@@ -123,6 +139,16 @@ func parseCitations(rel string, lines []string, mask []bool) pageCitations {
 		}
 	}
 	return p
+}
+
+// isDefContinuation reports whether a line continues the footnote definition
+// above it. Indented and non-blank is the convention: a blank line or a line
+// starting at column zero ends the definition and returns the page to prose.
+func isDefContinuation(raw string) bool {
+	if strings.TrimSpace(raw) == "" {
+		return false
+	}
+	return raw[0] == ' ' || raw[0] == '\t'
 }
 
 // scanCitedURLs extracts the bare URLs from a citation line, trimmed of the
@@ -422,7 +448,14 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 	}
 
 	var out []Finding
+	// One citation site is one problem. A URL repeated on the same line (a
+	// source and its mirror) would otherwise emit byte-identical findings.
+	reported := map[citedRef]bool{}
 	for _, ref := range refs {
+		if reported[ref] {
+			continue
+		}
+		reported[ref] = true
 		e, ok := base.Entries[ref.url]
 		if !ok {
 			out = append(out, Finding{
