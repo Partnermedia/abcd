@@ -50,7 +50,11 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"hazard named inside a quoted argument never fires. Command strings passed\n" +
 			"to `eval` or `sh -c` are not parsed: a hazard hidden inside one is not\n" +
 			"seen. That is a known limit of this version, not a claim of coverage.\n\n" +
-			"The candidate comes from --command, or from stdin when the flag is absent.",
+			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
+			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
+			"a double-quoted --command argument before this verb starts, so a candidate\n" +
+			"containing a command substitution would run at check time. A quoted-delimiter\n" +
+			"heredoc (`abcd guard check <<'EOF'` ... `EOF`) passes it through untouched.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			candidate, err := guardCandidate(cmd, command)
@@ -118,10 +122,15 @@ func newGuardHookCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// failOpen is the single exit for every non-decision path, so the
 			// contract cannot be violated by forgetting one of them.
+			// Exit 1, not 0, is what makes this LOUD. A pre-tool-use hook that
+			// exits 0 has its stderr discarded, so the warning would exist and
+			// nobody would ever see it; a non-zero, non-blocking status both lets
+			// the command run and puts the warning in front of a human. Only the
+			// blocking status (2) stops anything.
 			failOpen := func(format string, a ...any) error {
 				fmt.Fprintf(cmd.ErrOrStderr(),
 					"abcd guard: NOT CHECKED — "+format+". This command runs UNGUARDED.\n", a...)
-				return nil
+				return &exitError{Code: 1}
 			}
 
 			raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
@@ -235,6 +244,12 @@ func guardHealthLine(h ahoy.GuardHealth) string {
 			state = "OFF — disabled in " + guard.RepoRelPath
 		}
 		return state
+	}
+	// Without a plugin root the manifest was never opened and the binary was never
+	// looked for. Saying "hook not installed" here would accuse an install that
+	// may be perfectly armed, so the line reports what is unknown instead.
+	if !h.PluginRootResolved {
+		return "UNKNOWN — " + h.Detail
 	}
 	var missing []string
 	if !h.HookInstalled {

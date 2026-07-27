@@ -76,6 +76,11 @@ func TestGuardHookWarnAllowsAndSurfaces(t *testing.T) {
 // TestGuardHookFailsOpenLoud is AC 1 at the adapter: every input the adapter
 // cannot turn into a decision allows the command AND says so unmissably. A silent
 // allow would leave a session unguarded with nobody told; a block would brick it.
+//
+// "Unmissable" is why the exit code is 1 and not 0. A pre-tool-use hook that
+// exits 0 has its stderr discarded — the warning would exist and nobody would
+// ever see it. A non-zero, non-blocking status is the one channel that both lets
+// the command run and puts the warning in front of a human.
 func TestGuardHookFailsOpenLoud(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -104,8 +109,11 @@ func TestGuardHookFailsOpenLoud(t *testing.T) {
 			dir := guardRepo(t)
 			_, stderr, code := runGuard(tc.stdin(t, dir), "guard", "hook")
 
-			if code != 0 {
-				t.Errorf("must fail OPEN (exit 0), got %d", code)
+			if code == 2 {
+				t.Errorf("must fail OPEN: the blocking status must never come from a non-decision")
+			}
+			if code == 0 {
+				t.Errorf("must fail LOUD: exit 0 discards the hook's stderr, so the warning would never be seen")
 			}
 			if !strings.Contains(stderr, "abcd guard") {
 				t.Errorf("must fail LOUD: stderr must carry an abcd guard warning; stderr = %q", stderr)
