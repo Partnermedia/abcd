@@ -121,10 +121,12 @@ func tokenize(line string) ([]segment, error) {
 		case c == '\n':
 			flushSegment()
 			i++
-			// A pending heredoc body starts on the next line and is DATA, not
-			// commands: writing a document that names a hazard must never read
-			// as running one.
-			if len(pending) > 0 {
+			// A pending heredoc body starts once the command LINE is complete,
+			// and is DATA, not commands: writing a document that names a hazard
+			// must never read as running one. A line ending in a list operator
+			// is not complete, so the body waits — what follows it is still
+			// command text.
+			if len(pending) > 0 && !lastList {
 				i = skipHeredocBodies(line, i, pending)
 				pending = nil
 			}
