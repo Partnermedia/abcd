@@ -12,6 +12,24 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd guard` — the shell-hazard guard, wired into a live session** (itd-103,
+  spc-16). `abcd guard check --command "<line>"` evaluates one candidate command
+  against the hazard registry and reports allow, warn, or block: a blocker exits
+  1 and answers with the plain-language why and the safe successor, a warn exits
+  0 with the warning rendered, and a guard that cannot be evaluated at all exits
+  2 rather than letting silence read as clearance. `abcd guard hook` is the host
+  adapter: it reads a pre-tool-use hook payload, refuses a matching command with
+  the successor as the block message, and lets everything else through. The
+  installed hook entry wraps the binary call so a missing or broken abcd **fails
+  open, loudly** — the command runs and the session carries an unmissable
+  UNGUARDED warning, never a silent no-op and never a stuck session. `abcd ahoy`
+  gains a `guard:` line reporting the three things that can independently be
+  false — hook installed, binary reachable, registry loadable — plus a
+  deliberately disabled registry, so a broken guard is visible from outside the
+  session too. Per-repo overrides stay committed and reviewable in
+  `.abcd/guard.json`; there is no in-session escape. Command strings passed to
+  `eval` or `sh -c` are not parsed — a stated limit of this version, carried in
+  the command reference.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
