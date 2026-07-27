@@ -1,0 +1,484 @@
+package lint
+
+// The citations lint family: spc-17's zero-network commit gate.
+//
+// Every rule here reads only the committed markdown, the committed config, and
+// the committed baseline. Nothing dials out. That is the whole design bet — a
+// gate that touches the network is a gate that flakes, and a flaky gate gets
+// disabled, so the live checking is banished to `abcd docs cite refresh` and
+// what it learned arrives here as a reviewable committed record.
+//
+// Scoping note that governs three of the five rules: the CITATION CORPUS of a
+// page is its footnote definitions, not its prose. A URL in a body paragraph is
+// a link (links_resolve's business); a URL on a `[^id]: ...` line is a citation.
+// Judging prose as citation is how a source-policy rule acquires a false-positive
+// rate nobody will tolerate, so the parse draws that line once, here, and every
+// syntax/policy/baseline rule inherits it.
+
+import (
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Citation rule ids. They are separate rules rather than one family switch so a
+// repo can adopt the structural checks (which need no baseline) long before it
+// has a baseline to enforce.
+const (
+	ruleCitationFootnotes      = "citation_footnotes"
+	ruleCitationCrosswalkRows  = "citation_crosswalk_rows"
+	ruleCitationURLSyntax      = "citation_url_syntax"
+	ruleCitationSourcePolicy   = "citation_source_policy"
+	ruleCitationBaseline       = "citation_baseline"
+	ruleCitationBaselineOverdu = "citation_baseline_overdue"
+)
+
+// The staleness policy from spc-17's grill settlements. Both are defaults a
+// repo may tighten in config; neither is invented here.
+const (
+	defaultCitationWarnDays  = 180
+	defaultCitationBlockDays = 365
+)
+
+// defaultCrosswalkHeading is the narrowest identification heuristic that matches
+// the real crosswalk: a table counts only when its nearest preceding heading
+// names itself a crosswalk. Anchoring on the heading rather than on "any table
+// in docs/" is what keeps every ordinary directory-map and comparison table in
+// the corpus out of the rule's reach.
+const defaultCrosswalkHeading = `(?i)crosswalk`
+
+var (
+	// A footnote definition opens a line: [^id]: ...
+	footnoteDefRe = regexp.MustCompile(`^\s{0,3}\[\^([^\]\s]+)\]:`)
+	// A footnote marker anywhere in prose: [^id]. The caret is what separates
+	// this from a reference-style link definition ([label]: url), which is a
+	// different syntax the rule must not claim.
+	footnoteMarkerRe = regexp.MustCompile(`\[\^([^\]\s]+)\]`)
+	// An ATX heading, used to find the section a table sits in.
+	atxHeadingRe = regexp.MustCompile(`^\s{0,3}#{1,6}\s+(.*\S)\s*$`)
+	// A bare URL. Citations in this corpus are written bare, never as markdown
+	// links, so the scan is for the scheme rather than for link syntax.
+	citationURLRe = regexp.MustCompile("https?://[^\\s<>\"'`]+")
+	// A DOI mention. Requiring the delimiter after "doi" keeps the prose word
+	// ("a paper with a DOI, or a specification") out of the match.
+	doiMentionRe = regexp.MustCompile(`(?i)\bdoi[:\s]\s*(\S+)`)
+	// The DOI grammar: a registrant prefix and a non-empty suffix.
+	doiShapeRe = regexp.MustCompile(`^10\.\d{4,9}/\S+$`)
+)
+
+// footnoteRef is one marker or definition occurrence.
+type footnoteRef struct {
+	id   string
+	line int // 1-based
+}
+
+// citedRef is one URL cited on a footnote-definition line, with where it was
+// cited so a finding can point at it.
+type citedRef struct {
+	url  string
+	file string
+	line int // 1-based
+}
+
+// pageCitations is one page's citation parse, produced once and shared by every
+// citation rule so a page is never scanned twice for the same thing.
+type pageCitations struct {
+	markers []footnoteRef
+	defs    []footnoteRef
+	urls    []citedRef
+	dois    []citedRef
+}
+
+// parseCitations reads a page's footnote structure and citation corpus.
+//
+// mask excludes fenced code; stripInlineCode (shared with the banned-token
+// family) excludes backticked spans. Between them, a regexp character class
+// like [^A-Za-z] in documentation is not mistaken for a citation — which matters
+// because this repo's own records contain exactly that decoy.
+func parseCitations(rel string, lines []string, mask []bool) pageCitations {
+	var p pageCitations
+	for i, raw := range lines {
+		if mask[i] {
+			continue
+		}
+		line := stripInlineCode(raw)
+		lineNo := i + 1
+
+		// A definition line contributes its id as a definition, and its TAIL is
+		// the citation corpus. The head is skipped for marker scanning so a
+		// definition never counts as a reference to itself.
+		rest := line
+		if m := footnoteDefRe.FindStringSubmatchIndex(line); m != nil {
+			p.defs = append(p.defs, footnoteRef{id: line[m[2]:m[3]], line: lineNo})
+			rest = line[m[1]:]
+			p.urls = append(p.urls, scanCitedURLs(rel, rest, lineNo)...)
+			p.dois = append(p.dois, scanCitedDOIs(rel, rest, lineNo)...)
+		}
+		for _, m := range footnoteMarkerRe.FindAllStringSubmatch(rest, -1) {
+			p.markers = append(p.markers, footnoteRef{id: m[1], line: lineNo})
+		}
+	}
+	return p
+}
+
+// scanCitedURLs extracts the bare URLs from a citation line, trimmed of the
+// sentence punctuation that abuts them in real prose.
+func scanCitedURLs(rel, s string, line int) []citedRef {
+	var out []citedRef
+	for _, raw := range citationURLRe.FindAllString(s, -1) {
+		if u := trimCitedURL(raw); u != "" {
+			out = append(out, citedRef{url: u, file: rel, line: line})
+		}
+	}
+	return out
+}
+
+// scanCitedDOIs extracts DOI mentions from a citation line.
+func scanCitedDOIs(rel, s string, line int) []citedRef {
+	var out []citedRef
+	for _, m := range doiMentionRe.FindAllStringSubmatch(s, -1) {
+		out = append(out, citedRef{url: strings.Trim(m[1], ".,;:"), file: rel, line: line})
+	}
+	return out
+}
+
+// trimCitedURL strips trailing sentence punctuation from a bare URL.
+//
+// Citations end sentences, sit inside parentheses, and are separated by
+// semicolons, so the raw scheme match over-reaches by a character or two almost
+// every time. A closing bracket is stripped only when it is unbalanced — URLs
+// legitimately contain balanced parentheses, and eating one would invent a
+// broken address the baseline could never match.
+func trimCitedURL(s string) string {
+	for len(s) > 0 {
+		switch s[len(s)-1] {
+		case '.', ',', ';', ':', '!', '?', '"', '\'':
+			s = s[:len(s)-1]
+			continue
+		case ')':
+			if strings.Count(s, ")") > strings.Count(s, "(") {
+				s = s[:len(s)-1]
+				continue
+			}
+		case ']':
+			if strings.Count(s, "]") > strings.Count(s, "[") {
+				s = s[:len(s)-1]
+				continue
+			}
+		}
+		return s
+	}
+	return s
+}
+
+// checkCitationFootnotes enforces the marker/definition bijection.
+//
+// Both directions are findings. An unresolved marker is an obviously broken
+// citation; an unreferenced definition is the subtler failure — a source the
+// page still lists but no longer claims anything from, which is how a reference
+// page quietly stops meaning what it says.
+func checkCitationFootnotes(rel string, p pageCitations, cfg RuleConfig) []Finding {
+	var out []Finding
+
+	defined := map[string]int{}
+	for _, d := range p.defs {
+		if n := defined[d.id]; n > 0 {
+			out = append(out, Finding{
+				File: rel, Line: d.line, RuleID: ruleCitationFootnotes, Severity: cfg.Severity,
+				Message: "footnote definition [^" + d.id + "] is declared more than once; one definition per citation",
+			})
+		}
+		defined[d.id]++
+	}
+
+	referenced := map[string]bool{}
+	seen := map[string]bool{}
+	for _, m := range p.markers {
+		referenced[m.id] = true
+		if defined[m.id] == 0 && !seen[m.id] {
+			seen[m.id] = true
+			out = append(out, Finding{
+				File: rel, Line: m.line, RuleID: ruleCitationFootnotes, Severity: cfg.Severity,
+				Message: "footnote marker [^" + m.id + "] has no definition on this page",
+			})
+		}
+	}
+	for _, d := range p.defs {
+		if !referenced[d.id] {
+			out = append(out, Finding{
+				File: rel, Line: d.line, RuleID: ruleCitationFootnotes, Severity: cfg.Severity,
+				Message: "footnote definition [^" + d.id + "] is never referenced; a citation nothing claims from is dead weight",
+			})
+		}
+	}
+	return out
+}
+
+// checkCitationCrosswalkRows implements the rule deferred from spc-15: every
+// body row of a crosswalk table carries at least one footnote.
+//
+// A crosswalk maps an outside term to this project's position on it. The whole
+// artefact's authority rests on the outside half being sourced, so an uncited
+// row is not a formatting slip — it is an unsupported claim about someone else's
+// vocabulary. Identification is by the table's nearest preceding heading, the
+// narrowest heuristic that selects the real crosswalk and no ordinary table.
+func checkCitationCrosswalkRows(rel string, lines []string, mask []bool, cfg RuleConfig) ([]Finding, error) {
+	pattern := cfg.CrosswalkHeading
+	if strings.TrimSpace(pattern) == "" {
+		pattern = defaultCrosswalkHeading
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, &configError{ruleCitationCrosswalkRows + ": crosswalk_heading is not a valid regexp: " + err.Error()}
+	}
+
+	var out []Finding
+	inCrosswalk := false
+	for i := 0; i < len(lines); i++ {
+		if mask[i] {
+			continue
+		}
+		if m := atxHeadingRe.FindStringSubmatch(lines[i]); m != nil {
+			// A heading closes the previous section and opens a new one, so a
+			// crosswalk's scope ends where the next heading begins.
+			inCrosswalk = re.MatchString(m[1])
+			continue
+		}
+		if !inCrosswalk || !isTableHeader(lines, mask, i) {
+			continue
+		}
+		// i is the header row; i+1 is the separator; body rows follow.
+		for r := i + 2; r < len(lines) && !mask[r] && strings.Contains(lines[r], "|"); r++ {
+			if len(tableCells(lines[r])) == 0 {
+				continue
+			}
+			if footnoteMarkerRe.MatchString(stripInlineCode(lines[r])) {
+				continue
+			}
+			out = append(out, Finding{
+				File: rel, Line: r + 1, RuleID: ruleCitationCrosswalkRows, Severity: cfg.Severity,
+				Message: "crosswalk row carries no footnote; every row's established meaning needs a cited primary source",
+			})
+		}
+		// Skip past the table just consumed.
+		for i+1 < len(lines) && !mask[i+1] && strings.Contains(lines[i+1], "|") {
+			i++
+		}
+	}
+	return out, nil
+}
+
+// isTableHeader reports whether line i opens a markdown table — a pipe row
+// followed by a separator row. Both conditions are required: a lone pipe in
+// prose is not a table, and isTableSeparator alone accepts a blank line.
+func isTableHeader(lines []string, mask []bool, i int) bool {
+	if !strings.Contains(lines[i], "|") || i+1 >= len(lines) || mask[i+1] {
+		return false
+	}
+	sep := lines[i+1]
+	return strings.Contains(sep, "|") && strings.Contains(sep, "-") && isTableSeparator(sep)
+}
+
+// checkCitationURLSyntax checks that cited addresses are well-formed. It reads
+// the citation corpus only — prose URLs belong to links_resolve.
+func checkCitationURLSyntax(p pageCitations, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, ref := range p.urls {
+		if why := malformedURL(ref.url); why != "" {
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationURLSyntax, Severity: cfg.Severity,
+				Message: "cited URL " + ref.url + " is not well-formed: " + why,
+			})
+		}
+	}
+	for _, ref := range p.dois {
+		if !doiShapeRe.MatchString(ref.url) {
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationURLSyntax, Severity: cfg.Severity,
+				Message: "cited DOI " + ref.url + " is not well-formed: expected 10.<registrant>/<suffix>",
+			})
+		}
+	}
+	return out
+}
+
+// malformedURL returns why a cited URL is unusable, or "" when it is fine.
+func malformedURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err.Error()
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "scheme is not http(s)"
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "no host"
+	}
+	if strings.ContainsAny(host, " \t") {
+		return "host contains whitespace"
+	}
+	// A citation must name a resolvable public host. A dotless host is a
+	// hostname on someone's private network, never a source anyone else can read.
+	if !strings.Contains(host, ".") || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return "host " + host + " is not a fully-qualified domain"
+	}
+	return ""
+}
+
+// checkCitationSourcePolicy refuses citations to configured aggregator domains.
+//
+// The list is committed config and ships EMPTY: this repo documents its
+// admission rule in prose ("no single-author coinages, no aggregators") but
+// nowhere names a domain, and a gate must not invent a blacklist its project
+// never agreed to. The rule is the mechanism; the policy is the maintainer's.
+func checkCitationSourcePolicy(p pageCitations, cfg RuleConfig) []Finding {
+	if len(cfg.RefusedDomains) == 0 {
+		return nil
+	}
+	refused := make([]string, 0, len(cfg.RefusedDomains))
+	for _, d := range cfg.RefusedDomains {
+		if d = normaliseHost(d); d != "" {
+			refused = append(refused, d)
+		}
+	}
+
+	var out []Finding
+	for _, ref := range p.urls {
+		u, err := url.Parse(ref.url)
+		if err != nil {
+			continue // malformed addresses are citation_url_syntax's finding, not a second one here
+		}
+		host := normaliseHost(u.Hostname())
+		for _, d := range refused {
+			// Subdomains count: refusing an aggregator must not be defeated by
+			// citing its blog. subdomain host.
+			if host == d || strings.HasSuffix(host, "."+d) {
+				out = append(out, Finding{
+					File: ref.file, Line: ref.line, RuleID: ruleCitationSourcePolicy, Severity: cfg.Severity,
+					Message: "cited source " + ref.url + " is on the refused domain " + d + "; cite the primary source instead",
+				})
+				break
+			}
+		}
+	}
+	return out
+}
+
+// normaliseHost lower-cases a host and drops a leading www., so one config entry
+// covers the ways the same publisher is written.
+func normaliseHost(h string) string {
+	h = strings.ToLower(strings.TrimSpace(h))
+	h = strings.TrimSuffix(h, ".")
+	return strings.TrimPrefix(h, "www.")
+}
+
+// checkCitationBaseline enforces the committed baseline offline.
+//
+// now is a parameter rather than a wall-clock read so the staleness arithmetic
+// is testable at its exact boundaries; the caller (LintAt) owns the clock.
+func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now time.Time) ([]Finding, error) {
+	if len(refs) == 0 {
+		// Nothing cites, so there is nothing to have a receipt for. A repo that
+		// enables the rule before it has any citations is not in violation.
+		return nil, nil
+	}
+	rel := cfg.Baseline
+	if strings.TrimSpace(rel) == "" {
+		rel = DefaultBaselinePath
+	}
+
+	base, err := LoadBaseline(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Fail closed, but as ONE finding: a per-URL storm here would bury
+			// the single action that fixes all of them.
+			return []Finding{{
+				File: rel, Line: 0, RuleID: ruleCitationBaseline, Severity: cfg.Severity,
+				Message: "citation baseline not found, but " + strconv.Itoa(len(refs)) +
+					" citation(s) need one; run `abcd docs cite refresh` to create it",
+			}}, nil
+		}
+		return nil, err
+	}
+
+	warnDays := cfg.WarnAfterDays
+	if warnDays <= 0 {
+		warnDays = defaultCitationWarnDays
+	}
+	blockDays := cfg.BlockAfterDays
+	if blockDays <= 0 {
+		blockDays = defaultCitationBlockDays
+	}
+	overdueSeverity := cfg.OverdueSeverity
+	if strings.TrimSpace(overdueSeverity) == "" {
+		// The commit gate never calendar-blocks (spc-17). The release gate is
+		// what promotes this, by setting the field.
+		overdueSeverity = severityWarn
+	}
+
+	var out []Finding
+	for _, ref := range refs {
+		e, ok := base.Entries[ref.url]
+		if !ok {
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationBaseline, Severity: cfg.Severity,
+				Message: "cited URL " + ref.url + " is not in the citation baseline; run `abcd docs cite refresh`",
+			})
+			continue
+		}
+		switch {
+		case e.Outcome == OutcomeBroken:
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationBaseline, Severity: cfg.Severity,
+				Message: "cited URL " + ref.url + " is recorded broken in the citation baseline (checked " + e.LastChecked + ")",
+			})
+		case e.FinalURL != ref.url:
+			// Offline drift: the baseline knows where this address ends up, and
+			// the page still cites the old one. Citing the pre-redirect address
+			// is how a citation survives its own source moving, right up until
+			// the redirect is retired.
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationBaseline, Severity: cfg.Severity,
+				Message: "cited URL " + ref.url + " resolves to " + e.FinalURL +
+					"; cite the final address the baseline recorded",
+			})
+		}
+
+		checked, perr := e.Checked()
+		if perr != nil {
+			continue // unreachable: LoadBaseline validated the date
+		}
+		age := daysBetween(checked, now)
+		switch {
+		case age >= blockDays:
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationBaselineOverdu, Severity: overdueSeverity,
+				Message: "citation " + ref.url + " was last checked " + e.LastChecked + " (" +
+					strconv.Itoa(age) + " days ago, past the " + strconv.Itoa(blockDays) +
+					"-day release threshold); run `abcd docs cite refresh`",
+			})
+		case age >= warnDays:
+			out = append(out, Finding{
+				File: ref.file, Line: ref.line, RuleID: ruleCitationBaseline, Severity: severityWarn,
+				Message: "citation " + ref.url + " was last checked " + e.LastChecked + " (" +
+					strconv.Itoa(age) + " days ago, past the " + strconv.Itoa(warnDays) +
+					"-day staleness threshold); run `abcd docs cite refresh`",
+			})
+		}
+	}
+	return out, nil
+}
+
+// daysBetween counts whole calendar days, both ends normalised to UTC midnight.
+// Comparing instants would make the 180-day boundary depend on the hour the gate
+// happened to run.
+func daysBetween(from, to time.Time) int {
+	f := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+	t := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+	return int(t.Sub(f).Hours() / 24)
+}

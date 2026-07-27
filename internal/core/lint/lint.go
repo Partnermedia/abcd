@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -127,6 +128,14 @@ func joinImpacts(impacts ...changelog.Impact) string {
 // roster that is missing, unparsable, or empty); a walkable-but-missing root
 // is skipped, not an error.
 func Lint(cfg Config, repoRoot string) ([]Finding, error) {
+	return LintAt(cfg, repoRoot, time.Now())
+}
+
+// LintAt is Lint with the clock supplied by the caller. Only the citation
+// baseline's staleness arithmetic reads it, but it is a parameter rather than a
+// wall-clock read inside the check so the 180- and 365-day boundaries are
+// testable exactly, and so a gate's verdict is a function of its inputs.
+func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 	var findings []Finding
 
 	tokenChecks, err := compileTokens(cfg.BannedTokens)
@@ -140,6 +149,23 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 	linksOn = linksOn && linksCfg.Enabled
 	gitMetaOn = gitMetaOn && gitMetaCfg.Enabled
 	brittleOn = brittleOn && brittleCfg.Enabled
+
+	// The citation family shares ONE parse of each page (footnote structure plus
+	// the citation corpus), so a page is read once no matter how many of the five
+	// rules are armed. citedRefs accumulates across every root because the
+	// baseline is a single repo-wide record, checked once after the walk.
+	citeFootCfg, citeFootOn := cfg.Rules[ruleCitationFootnotes]
+	citeRowsCfg, citeRowsOn := cfg.Rules[ruleCitationCrosswalkRows]
+	citeURLCfg, citeURLOn := cfg.Rules[ruleCitationURLSyntax]
+	citePolicyCfg, citePolicyOn := cfg.Rules[ruleCitationSourcePolicy]
+	citeBaseCfg, citeBaseOn := cfg.Rules[ruleCitationBaseline]
+	citeFootOn = citeFootOn && citeFootCfg.Enabled
+	citeRowsOn = citeRowsOn && citeRowsCfg.Enabled
+	citeURLOn = citeURLOn && citeURLCfg.Enabled
+	citePolicyOn = citePolicyOn && citePolicyCfg.Enabled
+	citeBaseOn = citeBaseOn && citeBaseCfg.Enabled
+	citeParseOn := citeFootOn || citeURLOn || citePolicyOn || citeBaseOn
+	var citedRefs []citedRef
 
 	personaCfg, personaOn := cfg.Rules["persona_registry"]
 	personaOn = personaOn && personaCfg.Enabled
@@ -183,6 +209,29 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			}
 			if brittleOn {
 				findings = append(findings, checkBrittleRefs(rel, lines, mask, brittleCfg)...)
+			}
+
+			if citeParseOn {
+				page := parseCitations(rel, lines, mask)
+				if citeFootOn {
+					findings = append(findings, checkCitationFootnotes(rel, page, citeFootCfg)...)
+				}
+				if citeURLOn {
+					findings = append(findings, checkCitationURLSyntax(page, citeURLCfg)...)
+				}
+				if citePolicyOn {
+					findings = append(findings, checkCitationSourcePolicy(page, citePolicyCfg)...)
+				}
+				if citeBaseOn {
+					citedRefs = append(citedRefs, page.urls...)
+				}
+			}
+			if citeRowsOn {
+				cw, err := checkCitationCrosswalkRows(rel, lines, mask, citeRowsCfg)
+				if err != nil {
+					return nil, err
+				}
+				findings = append(findings, cw...)
 			}
 		}
 
@@ -336,6 +385,17 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, checkIssueImpact(ledger, impactCfg)...)
+	}
+
+	// citation_baseline is repo-wide: one committed record answers for every
+	// citation in every root, so it is loaded once here rather than per page,
+	// against the refs the walk collected.
+	if citeBaseOn {
+		cb, err := checkCitationBaseline(repoRoot, citedRefs, citeBaseCfg, now)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, cb...)
 	}
 
 	sortFindings(findings)
