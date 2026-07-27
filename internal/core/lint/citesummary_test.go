@@ -3,6 +3,7 @@ package lint
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -165,5 +166,79 @@ func TestArmCitationOverdueBlocksAtTheReleaseGate(t *testing.T) {
 	armed := findingsFor(release, ruleCitationBaselineOverdu)
 	if len(armed) != 1 || armed[0].Severity != severityBlocker {
 		t.Fatalf("release gate findings = %+v, want one blocker", armed)
+	}
+}
+
+// TestCitationPolicyRefusesAnEscapingBaselinePath is the containment gate on the
+// one config value that steers a WRITE. `.abcd/docs-lint.json` is committed, so
+// a contributor controls it; without this check a `../../..` baseline path turns
+// `abcd docs cite refresh` into an arbitrary-file-write primitive that also
+// MkdirAll's its way out of the repository.
+func TestCitationPolicyRefusesAnEscapingBaselinePath(t *testing.T) {
+	bad := []string{
+		"../../../ESCAPED/pwned.json",
+		"..",
+		"a/../../b.json",
+		"/etc/abcd-baseline.json",
+		`\\server\share\x.json`,
+	}
+	for _, p := range bad {
+		cfg := Config{Rules: map[string]RuleConfig{ruleCitationBaseline: {Enabled: true, Baseline: p}}}
+		if _, _, _, err := CitationPolicy(cfg); err == nil {
+			t.Errorf("CitationPolicy accepted an escaping baseline path %q", p)
+		}
+	}
+
+	good := []string{"", ".abcd/citations-baseline.json", "docs/x/y.json", "./.abcd/b.json"}
+	for _, p := range good {
+		cfg := Config{Rules: map[string]RuleConfig{ruleCitationBaseline: {Enabled: true, Baseline: p}}}
+		got, _, _, err := CitationPolicy(cfg)
+		if err != nil {
+			t.Errorf("CitationPolicy refused a contained baseline path %q: %v", p, err)
+			continue
+		}
+		if got == "" {
+			t.Errorf("CitationPolicy(%q) returned an empty path", p)
+		}
+	}
+}
+
+// TestMissingBaselineEntryNamesBothVerbs closes a remediation dead end. The one
+// state that produces a missing entry is a source that refuses automated
+// fetchers: refresh queued it and wrote nothing by design, so telling the
+// maintainer to run refresh sends them round a loop that cannot terminate. Only
+// `confirm` clears it, and the message has to say so.
+func TestMissingBaselineEntryNamesBothVerbs(t *testing.T) {
+	root := summaryRepo(t, map[string]BaselineEntry{}, "https://e.org/blocked")
+	fs, err := LintAt(summaryConfig(), root, fixedNow)
+	if err != nil {
+		t.Fatalf("LintAt: %v", err)
+	}
+	got := findingsFor(fs, ruleCitationBaseline)
+	if len(got) != 1 {
+		t.Fatalf("findings = %+v, want one", got)
+	}
+	if !strings.Contains(got[0].Message, "cite confirm") {
+		t.Errorf("message = %q, want it to name `abcd docs cite confirm` — refresh alone cannot clear this", got[0].Message)
+	}
+	if !strings.Contains(got[0].Message, "cite refresh") {
+		t.Errorf("message = %q, want it to name `abcd docs cite refresh` too", got[0].Message)
+	}
+}
+
+// TestCitationAgeSummaryRefusesAnEscapingBaselinePath proves the containment
+// check binds on the read path too, not only where the write happens.
+func TestCitationAgeSummaryRefusesAnEscapingBaselinePath(t *testing.T) {
+	root := summaryRepo(t, nil, "https://e.org/a")
+	cfg := summaryConfig()
+	rc := cfg.Rules[ruleCitationBaseline]
+	rc.Baseline = "../../../escaped.json"
+	cfg.Rules[ruleCitationBaseline] = rc
+
+	if _, err := CitationAgeSummaryAt(cfg, root, fixedNow); err == nil {
+		t.Fatal("CitationAgeSummaryAt accepted an escaping baseline path")
+	}
+	if _, err := LintAt(cfg, root, fixedNow); err == nil {
+		t.Fatal("LintAt accepted an escaping baseline path")
 	}
 }

@@ -20,6 +20,12 @@ import "strconv"
 // A nil pointer means the repo has not armed the citation gate, and the gate
 // reports itself as not run rather than silently passing.
 type CitationPreflight struct {
+	// Unreadable, when non-empty, means the measurement could not be taken at
+	// all — a docs-lint config that arms the rule but does not parse, or a
+	// baseline the loader refuses. It is a separate state from "not armed"
+	// because reporting a broken gate as an absent one is a false statement
+	// about a real requirement, and it refuses.
+	Unreadable string
 	// Present reports whether a baseline exists at all.
 	Present bool
 	// Cited, Recorded and Missing describe coverage.
@@ -46,6 +52,10 @@ func citationGate(pre *CitationPreflight) GateSummary {
 			Status: "not_implemented",
 			Detail: "citation_baseline is not armed in this repo's docs-lint config",
 		}
+	}
+	if pre.Unreadable != "" {
+		return GateSummary{Name: "citation-baseline", Status: "ran",
+			Detail: "the citation baseline could not be measured: " + pre.Unreadable}
 	}
 	if !pre.Present && pre.Cited > 0 {
 		return GateSummary{Name: "citation-baseline", Status: "ran",
@@ -76,6 +86,10 @@ func citationGate(pre *CitationPreflight) GateSummary {
 func citationRefusals(pre *CitationPreflight) []string {
 	if pre == nil {
 		return nil
+	}
+	if pre.Unreadable != "" {
+		return []string{"citation baseline: could not be measured (" + pre.Unreadable +
+			"); a release must not proceed on a gate that did not run"}
 	}
 	var out []string
 	if !pre.Present && pre.Cited > 0 {

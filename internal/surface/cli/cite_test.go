@@ -228,3 +228,77 @@ func TestDocsLintReleaseGatePromotesOverdue(t *testing.T) {
 		t.Fatalf("want a citation_baseline_overdue blocker, got %+v", res.Findings)
 	}
 }
+
+// TestDocsCiteLeaksNoAbsolutePath is the iss-29/iss-81 detector for the cite
+// verbs. A dangling symlink under a configured root makes the collector return a
+// *PathError carrying an ABSOLUTE path; concatenating its .Error() into a message
+// destroys the type before the scrubber can redact it, and a developer-identity
+// path ends up in output someone pastes into a public issue.
+func TestDocsCiteLeaksNoAbsolutePath(t *testing.T) {
+	root, cfg := citeRepo(t, "https://example.org/a")
+	if err := os.Symlink(filepath.Join(root, "docs", "nowhere.md"), filepath.Join(root, "docs", "dangling.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	for _, args := range [][]string{
+		{"docs", "cite", "refresh", "--json", "--config", cfg, "--root", root},
+		{"docs", "cite", "confirm", "https://example.org/a", "--json", "--config", cfg, "--root", root},
+	} {
+		out, err := runCLIErr(t, args...)
+		if err == nil {
+			t.Fatalf("`%v` unexpectedly succeeded over an unreadable page\n%s", args, out)
+		}
+		combined := err.Error() + string(out)
+		if strings.Contains(combined, root) {
+			t.Errorf("`%v` leaked the absolute repo path:\n%s", args, combined)
+		}
+	}
+}
+
+// TestDocsCiteSanitisesTheBaselinePath keeps a config-supplied string from
+// injecting terminal escapes into the transcript. Every other untrusted value on
+// this render path is sanitised; this one reaches it from `.abcd/docs-lint.json`.
+func TestDocsCiteSanitisesTheBaselinePath(t *testing.T) {
+	root := t.TempDir()
+	cfg := filepath.Join(root, "docs-lint.json")
+	body := "{\"roots\": [\"docs\"], \"banned_tokens\": [], \"rules\": {\"citation_baseline\": " +
+		"{\"enabled\": true, \"severity\": \"blocker\", \"baseline\": \".abcd/\\u001b[31mb.json\"}}}"
+	if err := os.WriteFile(cfg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "p.md"), []byte("# P\n\nNo citations.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runCLIErr(t, "docs", "cite", "refresh", "--config", cfg, "--root", root)
+	if strings.Contains(string(out), "\x1b") {
+		t.Errorf("the baseline path reached the terminal with a raw escape:\n%q", out)
+	}
+}
+
+// TestDocsCiteRefusesAnEscapingBaselinePath is the end-to-end half of the
+// containment gate: a committed config must not be able to make the refresh
+// write outside the repository.
+func TestDocsCiteRefusesAnEscapingBaselinePath(t *testing.T) {
+	root := t.TempDir()
+	cfg := filepath.Join(root, "docs-lint.json")
+	body := `{"roots": ["docs"], "banned_tokens": [], "rules": {"citation_baseline":
+	  {"enabled": true, "severity": "blocker", "baseline": "../../../ESCAPED/pwned.json"}}}`
+	if err := os.WriteFile(cfg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "p.md"),
+		[]byte("# P\n\nA claim.[^a]\n\n[^a]: S, https://example.org/a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := runCLIErr(t, "docs", "cite", "refresh", "--config", cfg, "--root", root); err == nil {
+		t.Fatalf("refresh accepted an escaping baseline path\n%s", out)
+	}
+}
