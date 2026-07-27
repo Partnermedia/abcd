@@ -30,6 +30,15 @@ plugin surface, and a future MCP server share one engine.
   the two agree. The table is a *hypothesis*: `abcd disembark probe` measures the
   same sections against real repositories in the same `grounded`/`partial`/`blank`
   vocabulary, and the evidence is expected to revise it (adr-35, itd-88).
+- **`core/guard/`** — the shell-hazard registry. Bundled hazard entries (id,
+  command-position pattern over shell tokens, blocker/warn tier, safe successor,
+  plain-language why) plus the deterministic allow/warn/block decision a harness
+  hook calls before a command runs. Matching is token-aware and command-position
+  only, so a hazard named inside a quoted argument never fires; every bundled
+  entry ships known-bad and known-good fixtures, and the admission gate test
+  holds each one to its own corpus (100% true-negative floor, at least 40%
+  known-good). Fail-open-loud on a broken guard belongs to the hook shim, not
+  here.
 - **`surface/cli/`** — the default front door: a Cobra command tree that calls
   `core` and formats results as text or `--json`. Holds no business logic.
 - **`surface/mcp/`** *(later)* — an additive front door exposing the same core
