@@ -1,5 +1,17 @@
 # Product — The Why and What
 
+## Identity (canonical)
+
+The single recorded home for how abcd names itself. Every public surface —
+README strapline, plugin manifest description, the AGENTS.md opening — renders
+from these three lines; a surface that says something else is drift (iss-143's
+finding), fixed by re-rendering from here or by deliberately changing this block.
+
+- **Title:** abcd — Agent-Based Configuration for Development
+- **Tagline:** A host-agnostic configuration layer for intent-driven development.
+- **Pitch:** A single Go binary that carries the why from idea to shipped
+  reality, usable as a plugin in compatible agent harnesses.
+
 This chapter states what abcd IS for the people who use it: the press release that
 frames the product, the context it grew from, the mental model everything else
 rests on, the scope it bounds, and the personas that voice intent quotes. Read

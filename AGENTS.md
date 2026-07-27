@@ -47,7 +47,7 @@ For internals see `.abcd/development/brief/05-internals/03-configuration.md`.
 <!-- END ABCD -->
 
 abcd (Agent-Based Configuration for Development) is a Go CLI and an agent-harness
-plugin: a host-agnostic **configuration layer for development**. A single
+plugin: a host-agnostic **configuration layer for intent-driven development**. A single
 `abcd` binary holds all behaviour in a transport-agnostic core; the CLI, the
 markdown plugin surface, and (later) an MCP server are thin front doors onto it.
 
