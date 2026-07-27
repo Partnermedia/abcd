@@ -9,8 +9,11 @@ loader injecting the same registry's entries before shell-heavy work.
 
 - **`/abcd:guard check`** — evaluate one candidate command line and report the
   decision. The candidate comes from `--command "<line>"` or from stdin. The
-  plugin command (`commands/abcd/guard.md`) invokes
-  `abcd guard check --json --command "<line>"` and reports the decision.
+  plugin command (`commands/abcd/guard.md`) passes it on **stdin**, inside a
+  quoted-delimiter heredoc: a candidate interpolated into a double-quoted
+  `--command` argument is expanded by the shell before the guard starts, so a
+  command substitution inside it would run at check time — the one moment the
+  check exists to prevent. `--command` stays for literals a human typed.
 - **`abcd guard hook`** — the host adapter. It reads a pre-tool-use hook payload
   on stdin, applies the same decision, and maps it onto the host's block/allow
   protocol. It is invoked by `hooks/hooks.json`, not by hand.

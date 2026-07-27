@@ -144,4 +144,15 @@ func TestGuardShimPropagatesRealDecisions(t *testing.T) {
 	if stderr, _ := runShim(t, command, fakePluginRoot(t, "exit 0")); strings.Contains(stderr, "UNGUARDED") {
 		t.Errorf("a working guard must not cry wolf; stderr = %q", stderr)
 	}
+	// Exit 1 is the adapter's own fail-open-loud status: it RAN, it could not
+	// decide, and it allowed. The shim must pass that through untouched — adding
+	// its own "FAILED TO RUN" on top would tell the reader a lie about which part
+	// broke.
+	stderr, code := runShim(t, command, fakePluginRoot(t, `echo "abcd guard: NOT CHECKED" >&2; exit 1`))
+	if code == 2 {
+		t.Errorf("the adapter's fail-open status must never become a block; got %d", code)
+	}
+	if strings.Contains(stderr, "FAILED TO RUN") {
+		t.Errorf("a binary that ran and reported must not be described as failing to run; stderr = %q", stderr)
+	}
 }

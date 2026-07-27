@@ -12,13 +12,21 @@ command performs **zero writes**.
 
 ## `check` — decide one command
 
-Run:
+Pass the candidate on **stdin**, inside a quoted-delimiter heredoc:
 
 ```bash
-abcd guard check --json --command "<the command line>"
+abcd guard check --json <<'ABCD_GUARD_EOF'
+<the command line, verbatim, on one or more lines>
+ABCD_GUARD_EOF
 ```
 
-The candidate may also be piped on stdin when no `--command` is given.
+Never interpolate the candidate into `--command "…"`. The shell expands a
+double-quoted argument before `abcd` ever starts, so a candidate containing
+`$(…)` or a backtick would **execute at check time** — the exact moment the check
+exists to prevent — and an embedded `"` would break the quoting outright. The
+quoted delimiter (`<<'ABCD_GUARD_EOF'`, quotes included) switches expansion off,
+so the candidate reaches the guard as written. Use `--command` only for a literal
+you typed yourself.
 
 Then report the JSON to the user:
 
@@ -67,8 +75,8 @@ To check whether the guard is actually armed in this repo, run `abcd ahoy` and
 read its `guard:` line: it reports whether the hook is installed, whether the
 binary is reachable, and whether the registry loads.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd guard check --json --command "<command>"` from the repo root,
-or tell the user to build it with `make build`.
+If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd guard
+check --json` from the repo root, with the same quoted-delimiter heredoc on
+stdin, or tell the user to build it with `make build`.
 
 **User input:** $ARGUMENTS

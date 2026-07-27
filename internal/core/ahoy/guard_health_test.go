@@ -140,6 +140,39 @@ func TestGuardHealthRegistryUnloadable(t *testing.T) {
 	}
 }
 
+// TestGuardHealthUnresolvablePluginRootAssertsNothing is the honesty rule: when
+// the plugin root cannot be resolved, the manifest is never opened and the binary
+// is never looked for, so ahoy knows NOTHING about the hook wiring. Reporting
+// "hook not installed" there would accuse a plugin install that may be perfectly
+// armed — the state a dev build (`go run ./cmd/abcd`) is in every time.
+func TestGuardHealthUnresolvablePluginRootAssertsNothing(t *testing.T) {
+	setupHermetic(t)
+	t.Setenv("ABCD_PLUGIN_ROOT", t.TempDir()) // no hooks/ layout: not a plugin root
+	dir := t.TempDir()
+	managedRepoAt(t, dir)
+
+	det, err := Detect(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.PluginRootStatus != "missing" {
+		t.Fatalf("fixture is wrong: plugin root resolved as %q", det.PluginRootStatus)
+	}
+	if det.Guard.PluginRootResolved {
+		t.Error("an unresolvable plugin root must be reported as such, not folded into the other checks")
+	}
+	if hasGap(det.Gaps, "guard.hook_missing") || hasGap(det.Gaps, "guard.binary_unreachable") {
+		t.Errorf("ahoy must not accuse a manifest it never opened; gaps = %v", gapIDs(det.Gaps))
+	}
+	if !strings.Contains(det.Guard.Detail, "plugin root") {
+		t.Errorf("the reason must name what is actually unknown; detail = %q", det.Guard.Detail)
+	}
+	// The registry is a repo fact and stays answerable regardless of the plugin.
+	if !det.Guard.RegistryLoadable {
+		t.Error("the registry is readable without a plugin root and must still be reported")
+	}
+}
+
 // TestGuardHealthDisabledIsReported is the committed escape hatch: a repo that
 // deliberately turned the guard off is not broken, but the fact must still be on
 // the status board — a disabled guard that looks armed is the failure mode.

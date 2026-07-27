@@ -19,11 +19,20 @@ const guardHookCommand = "guard hook"
 // inside the session — so the state has to be visible from outside it too
 // (itd-103 AC 1, spc-16 "Fail-open-loud and health").
 type GuardHealth struct {
+	// PluginRootResolved reports whether the plugin root was found at all. It
+	// gates the two checks below: without it the manifest is never opened and the
+	// binary is never looked for, so HookInstalled and BinaryReachable carry no
+	// information. A report that folded "not checked" into "false" would accuse a
+	// plugin install that may be perfectly armed — the state every dev build that
+	// runs from source is in.
+	PluginRootResolved bool `json:"plugin_root_resolved"`
 	// HookInstalled reports whether the plugin's hook manifest declares the
-	// pre-tool-use entry that runs the guard.
+	// pre-tool-use entry that runs the guard. Meaningful only when
+	// PluginRootResolved.
 	HookInstalled bool `json:"hook_installed"`
 	// BinaryReachable reports whether the binary that entry invokes exists and
 	// is executable. When it is not, the shim fails open on every command.
+	// Meaningful only when PluginRootResolved.
 	BinaryReachable bool `json:"binary_reachable"`
 	// RegistryLoadable reports whether the bundled defaults merged with this
 	// repo's .abcd/guard.json parse and validate. When they do not, the guard
@@ -44,7 +53,7 @@ type GuardHealth struct {
 // Healthy reports whether commands in a session are actually being checked: the
 // hook runs, the binary it calls exists, and the registry loads.
 func (g GuardHealth) Healthy() bool {
-	return g.HookInstalled && g.BinaryReachable && g.RegistryLoadable
+	return g.PluginRootResolved && g.HookInstalled && g.BinaryReachable && g.RegistryLoadable
 }
 
 // detectGuardHealth answers the three questions for one repo. It never returns an
@@ -54,8 +63,9 @@ func (g GuardHealth) Healthy() bool {
 func detectGuardHealth(cwd, pluginRoot string, pluginOK bool) GuardHealth {
 	var h GuardHealth
 	var reasons []string
+	h.PluginRootResolved = pluginOK
 	if !pluginOK {
-		reasons = append(reasons, "plugin root not resolvable, so the hook manifest cannot be read")
+		reasons = append(reasons, "plugin root not resolvable, so the hook manifest cannot be read and the guard wiring is unknown")
 	} else {
 		h.HookInstalled = manifestArmsGuard(pluginRoot)
 		h.BinaryReachable = isExecutableFile(pluginBinaryPath(pluginRoot))
@@ -92,6 +102,12 @@ const guardRegistryUnloadableReason = guard.RepoRelPath + " does not load, so th
 // config, and a missing hook entry means a broken or stale plugin install.
 func detectGuardGaps(h GuardHealth) []Gap {
 	var gaps []Gap
+	// Without a plugin root neither wiring check ran, and a gap is an assertion.
+	// The sibling detections (detectPathSymlink, detectHookManifest) stay silent
+	// in this state for the same reason; plugin.root_missing already reports it.
+	if !h.PluginRootResolved {
+		return registryGap(h)
+	}
 	if !h.HookInstalled {
 		gaps = append(gaps, Gap{
 			ID: "guard.hook_missing", Category: PluginOwned, Scope: "machine",
@@ -108,16 +124,23 @@ func detectGuardGaps(h GuardHealth) []Gap {
 			FixHint: "Reinstall the abcd plugin, or run `abcd ahoy install`.", Required: false, Resolvable: false,
 		})
 	}
-	if !h.RegistryLoadable {
-		gaps = append(gaps, Gap{
-			ID: "guard.registry_unloadable", Category: ConfigChange, Scope: "repo",
-			Title:    "hazard registry does not load",
-			Detail:   guardRegistryUnloadableReason,
-			FixHint:  "Fix or remove " + guard.RepoRelPath + "; `abcd guard check --command ls` names the parse error.",
-			Required: false, Resolvable: false,
-		})
+	return append(gaps, registryGap(h)...)
+}
+
+// registryGap is the repo-scoped half of the guard report. It is separate because
+// it stays answerable whatever the plugin state is: the registry is read from the
+// repo, not from the plugin.
+func registryGap(h GuardHealth) []Gap {
+	if h.RegistryLoadable {
+		return nil
 	}
-	return gaps
+	return []Gap{{
+		ID: "guard.registry_unloadable", Category: ConfigChange, Scope: "repo",
+		Title:    "hazard registry does not load",
+		Detail:   guardRegistryUnloadableReason,
+		FixHint:  "Fix or remove " + guard.RepoRelPath + "; `abcd guard check --command ls` names the parse error.",
+		Required: false, Resolvable: false,
+	}}
 }
 
 // manifestArmsGuard reports whether the plugin's hook manifest declares a

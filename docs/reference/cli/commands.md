@@ -279,6 +279,10 @@ to `eval` or `sh -c` are not parsed: a hazard hidden inside one is not
 seen. That is a known limit of this version, not a claim of coverage.
 
 The candidate comes from --command, or from stdin when the flag is absent.
+Prefer stdin for a command line you did not type yourself: the shell expands
+a double-quoted --command argument before this verb starts, so a candidate
+containing a command substitution would run at check time. A quoted-delimiter
+heredoc (`abcd guard check <<'EOF'` ... `EOF`) passes it through untouched.
 
 **Flags:**
 
