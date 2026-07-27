@@ -347,6 +347,43 @@ func TestScaffoldIdempotentAndRefusesHandEdit(t *testing.T) {
 	}
 }
 
+// TestRefusalAbortReportMatchesDisk pins the report-vs-disk contract on the
+// all-or-nothing abort path: when one file is hand-edited (refused) and another
+// is still absent, the run writes NOTHING and the report must not claim the absent
+// file was written — it is reported as skipped and remains absent on disk.
+func TestRefusalAbortReportMatchesDisk(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "go.mod"), "module example.com/x\n\ngo 1.22\n")
+	gitInit(t, dir, "main")
+
+	// auto-release.yml exists and differs (a hand-edit); release.yml is absent.
+	autoPath := filepath.Join(dir, filepath.FromSlash(AutoReleaseYMLPath))
+	relPath := filepath.Join(dir, filepath.FromSlash(ReleaseYMLPath))
+	mustWrite(t, autoPath, "# hand-edited auto-release\n")
+
+	rep, err := Scaffold(Request{RepoRoot: dir})
+	if err == nil {
+		t.Fatal("a hand-edited sibling must abort the run with ErrScaffoldBlocked")
+	}
+	if rep.Wrote != 0 {
+		t.Errorf("nothing must be written on the abort path, got wrote=%d", rep.Wrote)
+	}
+	// The absent file must NOT be reported as written, and must still be absent.
+	for _, f := range rep.Files {
+		if f.Path == ReleaseYMLPath {
+			if f.Status == StatusWritten {
+				t.Errorf("release.yml was NOT written but the report says %q", f.Status)
+			}
+			if f.Status != StatusSkipped {
+				t.Errorf("an unwritten planned file must report as %q, got %q", StatusSkipped, f.Status)
+			}
+		}
+	}
+	if _, statErr := os.Stat(relPath); !os.IsNotExist(statErr) {
+		t.Error("release.yml must remain absent on disk after an aborted run")
+	}
+}
+
 // TestDeriveRepoFactsRejectsHostileInputs proves the substitution inputs are
 // sanitised before they can reach the YAML — a crafted go.mod or ref name falls
 // back to the safe default rather than injecting workflow content.
