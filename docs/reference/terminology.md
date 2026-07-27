@@ -74,7 +74,7 @@ glossed inline rather than deep-linked.
 
 [^react]: Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., and Cao, Y., "ReAct: Synergizing Reasoning and Acting in Language Models", ICLR 2023, DOI 10.48550/arXiv.2210.03629. The loop shape is defined independently in OpenAI's Agents SDK ("Running agents", https://openai.github.io/openai-agents-python/running_agents/) and Anthropic's tool-use documentation (https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works).
 
-[^ap2]: "Agent Payments Protocol Specification", v0.2, https://ap2-protocol.org/ap2/specification/; launch announcement, Google Cloud, 16 September 2025, https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol; contributed to the FIDO Alliance, 28 April 2026, https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/. Adjacent: x402 (x402 Foundation under the Linux Foundation, https://www.x402.org/) and the Agentic Commerce Protocol (OpenAI and Stripe, https://www.agenticcommerce.dev/) — the latter's "ACP" abbreviation collides with IBM's Agent Communication Protocol, which merged into A2A in August 2025 (https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/).
+[^ap2]: "Agent Payments Protocol Specification", v0.2, https://ap2-protocol.org/ap2/specification/; launch announcement, Google Cloud, 16 September 2025, https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol; contributed to the FIDO Alliance, 28 April 2026, https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/. Adjacent: x402 (under Linux Foundation governance, https://www.x402.org/) and the Agentic Commerce Protocol (OpenAI and Stripe, https://www.agenticcommerce.dev/) — the latter's "ACP" abbreviation collides with IBM's Agent Communication Protocol, which merged into A2A in August 2025 (https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/).
 
 [^skills]: "Agent Skills — Specification", https://agentskills.io/specification; specification repository, https://github.com/agentskills/agentskills (Apache-2.0 code, CC-BY-4.0 documentation). Unversioned, with no formal draft/final designation; at least one field is marked Experimental; no standards-body stewardship is stated on the primary sources.
 
@@ -86,17 +86,17 @@ glossed inline rather than deep-linked.
 
 [^auto]: Franklin, S. and Graesser, A., "Is It an Agent, or Just a Program?: A Taxonomy for Autonomous Agents", ATAL 1996 (Springer LNCS 1193, 1997), DOI 10.1007/BFb0013570. See also Wooldridge and Jennings under multi-agent systems.
 
-[^ce]: LangChain, "The Rise of Context Engineering", 23 June 2025, https://www.langchain.com/blog/the-rise-of-context-engineering; Anthropic, "Effective context engineering for AI agents", 29 September 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents.
+[^ce]: LangChain, "The rise of 'context engineering'", 23 June 2025, https://blog.langchain.com/the-rise-of-context-engineering/; Anthropic, "Effective context engineering for AI agents", 29 September 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents.
 
-[^durable]: Microsoft, "What is Durable Task?", https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task; Temporal, "Understanding Temporal", https://docs.temporal.io/evaluate/understanding-temporal; Restate, "Durable Execution", https://docs.restate.dev/concepts/durable_execution/.
+[^durable]: Microsoft, "What is Durable Task?", https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task; Temporal, "Understanding Temporal", https://docs.temporal.io/evaluate/understanding-temporal; Restate, "Key Concepts: Durable Execution", https://docs.restate.dev/concepts/durable_execution/.
 
-[^evals]: OpenAI, "Evals", https://developers.openai.com/api/docs/guides/evals; Anthropic, "Define success criteria and build evaluations", https://platform.claude.com/docs/en/test-and-evaluate/develop-tests; Liang, P., et al., "Holistic Evaluation of Language Models", Transactions on Machine Learning Research, 2023, DOI 10.48550/arXiv.2211.09110.
+[^evals]: OpenAI, "Working with evals", https://developers.openai.com/api/docs/guides/evals; Anthropic, "Define success criteria and build evaluations", https://platform.claude.com/docs/en/test-and-evaluate/develop-tests; Liang, P., et al., "Holistic Evaluation of Language Models", Transactions on Machine Learning Research, 2023, DOI 10.48550/arXiv.2211.09110.
 
 [^ground]: Microsoft, "Grounding Data Design for AI Workloads on Azure", https://learn.microsoft.com/en-us/azure/well-architected/ai/grounding-data-design; Google, "Grounding with Google Search", Gemini API documentation, https://ai.google.dev/gemini-api/docs/google-search. Distinct from the symbol-grounding problem of cognitive science. <!-- docs-lint: allow -->
 
 [^guard]: Rebedea, T., et al., "NeMo Guardrails: A Toolkit for Controllable and Safe LLM Applications with Programmable Rails", EMNLP 2023 System Demonstrations, DOI 10.18653/v1/2023.emnlp-demo.40; OpenAI Agents SDK, "Guardrails", https://openai.github.io/openai-agents-python/guardrails/; AWS, "Amazon Bedrock Guardrails", https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html.
 
-[^hitl]: European Commission High-Level Expert Group on AI, "Ethics Guidelines for Trustworthy AI", 2019, DOI 10.2759/346720, https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai; Regulation (EU) 2024/1689 (the AI Act), Article 14 "Human oversight", https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng. ISO/IEC 22989:2022 is sometimes cited for this term but does not define it.
+[^hitl]: European Commission High-Level Expert Group on AI, "Ethics Guidelines for Trustworthy AI", 2019, DOI 10.2759/346720, https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai; Regulation (EU) 2024/1689 (the AI Act), Article 14 "Human oversight", https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng. ISO/IEC 22989:2022 is sometimes cited for this term, but its defined-terms clause does not include it.
 
 [^mem]: AWS, "Add memory to your Amazon Bedrock AgentCore agent", https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html; Google, "Memory: Long-term knowledge with MemoryService", Agent Development Kit documentation, https://adk.dev/sessions/memory/; research antecedent: Park, J. S., et al., "Generative Agents: Interactive Simulacra of Human Behavior", UIST 2023, DOI 10.1145/3586183.3606763.
 
@@ -106,7 +106,7 @@ glossed inline rather than deep-linked.
 
 [^otel]: OpenTelemetry, GenAI semantic conventions, pinned at semantic-conventions v1.41.1 (May 2026), https://github.com/open-telemetry/semantic-conventions/releases; the dedicated successor repository, https://github.com/open-telemetry/semantic-conventions-genai, declares `Status: Development` and has no tagged release as of July 2026.
 
-[^orch]: OpenAI Agents SDK, "Orchestrating multiple agents", https://openai.github.io/openai-agents-python/multi_agent/; Microsoft, "Semantic Kernel Agent Orchestration", https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/agent-orchestration/; Anthropic, "Building effective agents", https://www.anthropic.com/engineering/building-effective-agents.
+[^orch]: OpenAI Agents SDK, "Agent orchestration", https://openai.github.io/openai-agents-python/multi_agent/; Microsoft, "Semantic Kernel Agent Orchestration", https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/agent-orchestration/; Anthropic, "Building effective agents", https://www.anthropic.com/engineering/building-effective-agents.
 
 [^pac]: Open Policy Agent documentation (a CNCF graduated project), https://www.openpolicyagent.org/docs; NIST, SP 800-207, "Zero Trust Architecture", 2020, DOI 10.6028/NIST.SP.800-207 (defines the policy engine as the component that decides access).
 
@@ -118,4 +118,4 @@ glossed inline rather than deep-linked.
 
 [^tamper]: IETF, RFC 9162, "Certificate Transparency Version 2.0", December 2021, DOI 10.17487/RFC9162, https://www.rfc-editor.org/rfc/rfc9162 — cited as the transferable verifiable-log primitive, not as an agentic-AI standard.
 
-[^tooluse]: OpenAI, "Function calling", https://developers.openai.com/api/docs/guides/function-calling; Anthropic, "Tool use with Claude", https://platform.claude.com/docs/en/docs/build-with-claude/tool-use; Google, "Function calling", Gemini API documentation, https://ai.google.dev/gemini-api/docs/function-calling. <!-- docs-lint: allow -->
+[^tooluse]: OpenAI, "Function calling", https://developers.openai.com/api/docs/guides/function-calling; Anthropic, "Tool use with Claude", https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview; Google, "Function calling", Gemini API documentation, https://ai.google.dev/gemini-api/docs/function-calling. <!-- docs-lint: allow -->
