@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/urlguard"
 )
 
 // ingest.go — the ingest flow from 07-memory.md §1:
@@ -503,78 +503,13 @@ func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (
 	return materialFromLocal(repoRoot, source, pdf)
 }
 
-// blockedFetchIP reports whether ip is in a range that must never be fetched
-// during memory ingest: loopback (127/8, ::1), link-local (169.254/16, fe80::/10
-// unicast and multicast), private (10/8, 172.16/12, 192.168/16, fc00::/7 via
-// net.IP.IsPrivate), the unspecified address, and any multicast address. This is
-// the SSRF guard that keeps cloud metadata endpoints (e.g. 169.254.169.254) and
-// internal services out of reach.
-func blockedFetchIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
-		return true
-	}
-	// NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embed an IPv4 destination in an
-	// IPv6 address the checks above do not flag; a metadata/loopback/private IPv4
-	// wrapped in one of these would otherwise slip through. Extract the embedded
-	// v4 and re-check it (embeddedIPv4 returns nil for a v4, so no recursion loop).
-	if v4 := embeddedIPv4(ip); v4 != nil {
-		return blockedFetchIP(v4)
-	}
-	return false
-}
-
-// embeddedIPv4 returns the IPv4 address a NAT64 (64:ff9b::/96) or 6to4 (2002::/16)
-// IPv6 address embeds, or nil when ip is not one of those transition forms. Scope
-// is the WELL-KNOWN prefixes only: deprecated IPv4-compatible (::/96, non-routable)
-// and site-specific NAT64 prefixes (RFC 8215) are out of scope — the DNS64 default
-// is the well-known /96 covered here. v4-mapped ::ffff:/96 needs no extraction (the
-// standard IsPrivate/IsLoopback checks already fold through To4()).
-func embeddedIPv4(ip net.IP) net.IP {
-	v6 := ip.To16()
-	if v6 == nil || ip.To4() != nil {
-		return nil // not IPv6 (a plain v4 or v4-mapped needs no extraction)
-	}
-	// NAT64 well-known prefix 64:ff9b::/96 → last 4 bytes are the v4.
-	if v6[0] == 0x00 && v6[1] == 0x64 && v6[2] == 0xff && v6[3] == 0x9b &&
-		v6[4] == 0 && v6[5] == 0 && v6[6] == 0 && v6[7] == 0 &&
-		v6[8] == 0 && v6[9] == 0 && v6[10] == 0 && v6[11] == 0 {
-		return net.IPv4(v6[12], v6[13], v6[14], v6[15])
-	}
-	// 6to4 prefix 2002::/16 → bytes 2..5 are the v4.
-	if v6[0] == 0x20 && v6[1] == 0x02 {
-		return net.IPv4(v6[2], v6[3], v6[4], v6[5])
-	}
-	return nil
-}
-
-// guardFetchHost refuses a host that is an internal/metadata name or that
-// resolves to a blocked address. It runs before the initial request and on every
-// redirect hop. An IP literal is checked directly (no DNS); a name is rejected
-// outright when it is an *.internal / metadata name, otherwise every resolved
-// address is checked.
+// guardFetchHost refuses a host the shared SSRF guard blocks, re-typed as an
+// IngestError so every ingest failure a caller sees is one error type. The guard
+// itself lives in internal/urlguard — the canonical home shared with the citation
+// refresh's fetcher, so the two fetch paths cannot drift apart.
 func guardFetchHost(host string) error {
-	h := strings.ToLower(strings.TrimSuffix(host, "."))
-	if h == "" {
-		return newIngestError("refusing to fetch a URL with no host")
-	}
-	if h == "metadata" || h == "metadata.google.internal" || strings.HasSuffix(h, ".internal") {
-		return newIngestError("refusing to fetch internal/metadata host %q", host)
-	}
-	if ip := net.ParseIP(h); ip != nil {
-		if blockedFetchIP(ip) {
-			return newIngestError("refusing to fetch %q: address %s is link-local, loopback, private, or metadata range", host, ip)
-		}
-		return nil
-	}
-	ips, err := net.LookupIP(h)
-	if err != nil {
-		return newIngestError("cannot resolve host %q: %v", host, err)
-	}
-	for _, ip := range ips {
-		if blockedFetchIP(ip) {
-			return newIngestError("refusing to fetch %q: it resolves to %s (link-local, loopback, private, or metadata range)", host, ip)
-		}
+	if err := urlguard.CheckHost(host); err != nil {
+		return newIngestError("%s", err.Error())
 	}
 	return nil
 }
@@ -592,16 +527,7 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 	// guard above and the transport's own resolution.
 	dialer := &net.Dialer{
 		Timeout: fetchTimeoutSeconds * time.Second,
-		Control: func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				host = address
-			}
-			if ip := net.ParseIP(host); ip != nil && blockedFetchIP(ip) {
-				return newIngestError("refusing to connect to %s: link-local, loopback, private, or metadata range", ip)
-			}
-			return nil
-		},
+		Control: urlguard.DialControl(urlguard.BlockedIP),
 	}
 	client := &http.Client{
 		Timeout:   fetchTimeoutSeconds * time.Second,
