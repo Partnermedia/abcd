@@ -133,6 +133,19 @@ func containedRepoPath(rel string) error {
 // It is the same shape internal/core/launch/bundle.go uses for symlinked bundle
 // entries: EvalSymlinks both sides, then filepath.Rel and refuse on "..".
 func resolvedInsideRoot(root, target string) error {
+	_, err := containedRealPath(root, target)
+	return err
+}
+
+// containedRealPath is resolvedInsideRoot's other half: it returns the RESOLVED
+// path as well as the verdict, so a caller that is about to read the file can
+// read the thing containment actually judged rather than re-resolving it.
+//
+// That distinction matters for the read guard. O_NOFOLLOW refuses every symlink
+// leaf, which would break the legitimate in-repo bridge (CLAUDE.md -> AGENTS.md);
+// opening the RESOLVED path instead keeps the no-follow protection meaningful
+// while still allowing a link that lands inside the repository.
+func containedRealPath(root, target string) (string, error) {
 	realRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		realRoot = filepath.Clean(root)
@@ -153,15 +166,15 @@ func resolvedInsideRoot(root, target string) error {
 	}
 	realProbe, err := filepath.EvalSymlinks(probe)
 	if err != nil {
-		return errors.New("cannot be resolved: " + filepath.Base(probe) + ": " + bareCause(err))
+		return "", errors.New("cannot be resolved: " + filepath.Base(probe) + ": " + bareCause(err))
 	}
 	real := filepath.Join(append([]string{realProbe}, tail...)...)
 
 	relToRoot, err := filepath.Rel(realRoot, real)
 	if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
-		return errors.New("resolves outside the repository root through a symlink")
+		return "", errors.New("resolves outside the repository root through a symlink")
 	}
-	return nil
+	return real, nil
 }
 
 // bareCause strips a *PathError's absolute path, leaving the reason. A message

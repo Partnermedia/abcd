@@ -93,6 +93,13 @@ type CheckOutcome struct {
 // rules as the contract and leaves the producer replaceable, so a specialist
 // link checker can later arrive as an adapter satisfying this one method without
 // any gate semantics changing.
+//
+// An implementer owes two things beyond the obvious. The Status must be one of
+// the three declared values — anything else stops the run rather than being
+// quietly dropped. And on StatusBroken it should set Answered to say whether a
+// host actually replied, because that is the bit the refresh uses to tell a dead
+// citation from a dead network, and nothing else can recover it. Omitting it on
+// StatusOK or StatusBlocked is harmless: those two entail an answer.
 type Checker interface {
 	Check(rawURL string) CheckOutcome
 }

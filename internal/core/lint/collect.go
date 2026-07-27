@@ -13,11 +13,18 @@ package lint
 // (markdownFiles, fenceMask, parseCitations) rather than new parsing.
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
+
+// citationPageSizeLimit caps one page read. Containment answers "does this path
+// land inside the repo"; it says nothing about how big what it lands on is, and
+// this collector's output is fetched over the network — so the read is bounded
+// too. A documentation page is prose; eight mebibytes is far beyond any real one.
+const citationPageSizeLimit = 8 << 20
 
 // CitationSite is one place a URL is cited: a repo-relative page and a 1-based
 // line. A URL cited from several pages carries one site per occurrence, so the
@@ -68,11 +75,18 @@ func CollectCitedURLs(cfg Config, repoRoot string) ([]CitedURL, error) {
 			// contained root and still drags an outside file's citations into
 			// the fetch and then into the committed baseline. Containment is
 			// about where a path LANDS, so an in-repo symlink still resolves.
-			if err := resolvedInsideRoot(repoRoot, fileAbs); err != nil {
+			realPath, err := containedRealPath(repoRoot, fileAbs)
+			if err != nil {
 				return nil, &configError{"cited page " + quote(repoRel(repoRoot, fileAbs)) + " " + err.Error() +
 					"; the citation collector reads only inside the repository"}
 			}
-			content, err := os.ReadFile(fileAbs)
+			// ReadGuarded, not os.ReadFile: the regular-file check refuses a
+			// device and the cap bounds the read, neither of which containment
+			// can supply — a committed page that is simply enormous lands inside
+			// the repo and passes every path check. It opens the RESOLVED path,
+			// because O_NOFOLLOW would otherwise refuse the legitimate in-repo
+			// bridge that containment just approved.
+			content, err := fsutil.ReadGuarded(realPath, citationPageSizeLimit)
 			if err != nil {
 				return nil, err
 			}

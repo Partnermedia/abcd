@@ -4,7 +4,54 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+// TestCollectCitedURLsCapsAPageRead is the bound containment cannot supply. A
+// committed page that is simply enormous is INSIDE the repository and resolves
+// to itself, so every path check passes and an unguarded read pulls the whole
+// thing into memory. The collector feeds a network fetch, so it reads through
+// the guarded primitive that already exists for exactly this.
+func TestCollectCitedURLsCapsAPageRead(t *testing.T) {
+	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
+	huge := make([]byte, citationPageSizeLimit+1)
+	for i := range huge {
+		huge[i] = 'x'
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "huge.md"), huge, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CollectCitedURLs(Config{Roots: []string{"docs"}}, root); err == nil {
+		t.Fatal("CollectCitedURLs read a page past the size cap")
+	}
+}
+
+// TestCollectCitedURLsRefusesANonRegularPage covers the other half of the same
+// guard: a page that is a device rather than a file. Here containment already
+// refuses it (a device resolves outside the repo), so this pins the combination
+// rather than the cap — neither check alone should be relied on.
+func TestCollectCitedURLsRefusesANonRegularPage(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero on this platform")
+	}
+	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "docs", "boom.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := CollectCitedURLs(Config{Roots: []string{"docs"}}, root)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("CollectCitedURLs read a character device as a page")
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("CollectCitedURLs hung reading a character device")
+	}
+}
 
 // TestCollectCitedURLsRefusesAnEscapingRoot closes an exfiltration path this
 // branch opened. Reading outside the repo via `roots` was inert while the lint

@@ -214,7 +214,13 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 		res.Outcomes = append(res.Outcomes, Outcome{
 			URL: j.ref.URL, Status: out.Status, FinalURL: out.FinalURL, Detail: out.Detail,
 		})
-		if out.Answered {
+		// StatusOK and StatusBlocked ENTAIL an answer — a 2xx cannot exist
+		// without one, and "blocked" is defined by a status code. Only
+		// StatusBroken is genuinely ambiguous, so only there does the checker's
+		// own bit decide. This is not inference from a proxy; it is what those
+		// two statuses mean, and it keeps a third-party adapter that omits the
+		// field from refusing a run in which every check succeeded.
+		if out.Answered || out.Status == StatusOK || out.Status == StatusBlocked {
 			answered++
 		}
 		switch out.Status {
