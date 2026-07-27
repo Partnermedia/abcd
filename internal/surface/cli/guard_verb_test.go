@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/core/guard"
 )
 
 // runGuard drives the guard verbs through the real exit-code mapping with stdin
@@ -187,6 +189,30 @@ func TestGuardCheckOversizedCandidateIsAFault(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "too long") {
 		t.Errorf("the fault must say the candidate did not fit; stderr = %q", stderr)
+	}
+}
+
+// TestGuardCheckRefusesToAnswerFromADisabledRegistry closes the scriptable half
+// of the kill switch. A CI job or script using this verb as a gate got a bare
+// `allow`, exit 0, indistinguishable from a real clearance, for a command an
+// entry blocks. A disabled registry means nothing was evaluated, which is the
+// verb's own definition of a fault — not an answer.
+func TestGuardCheckRefusesToAnswerFromADisabledRegistry(t *testing.T) {
+	dir := guardRepo(t)
+	cfg := `{"schema_version":1,"disabled":true,"entries":{}}`
+	if err := os.WriteFile(filepath.Join(dir, ".abcd", "guard.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := runGuard("", "guard", "check", "--command", "cd scratch && rm -rf *")
+
+	if code != 2 {
+		t.Errorf("a disabled registry checked nothing and must be a fault (exit 2), got %d", code)
+	}
+	if strings.Contains(stdout, "allow") {
+		t.Errorf("a disabled registry must never render as a clearance; stdout = %q", stdout)
+	}
+	if !strings.Contains(stderr, guard.RepoRelPath) {
+		t.Errorf("the fault must name the file that turned the guard off; stderr = %q", stderr)
 	}
 }
 

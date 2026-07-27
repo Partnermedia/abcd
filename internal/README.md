@@ -39,8 +39,9 @@ plugin surface, and a future MCP server share one engine.
   holds each one to its own corpus (100% true-negative floor, at least 40%
   known-good). An allow means no entry matched, never that a command is safe: a
   hazard reached another way — a string handed to an interpreter (`eval`,
-  `sh -c`), a launcher outside the small `wrappers` set, a backtick substitution,
-  or a form no entry describes — is not seen. That limit is stated here and in
+  `sh -c`), a launcher outside the small `wrappers` set, a launcher inside it
+  carrying its own flags (only the wrapper NAME is stepped over), a backtick
+  substitution, or a form no entry describes — is not seen. That limit is stated here and in
   the `abcd guard check` reference doc, never left implicit. `Load` reads the
   working tree, so a `disabled: true` takes effect before it is reviewed; the
   front door compensates by making a disabled registry loud rather than silent.

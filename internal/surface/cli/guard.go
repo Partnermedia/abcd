@@ -52,8 +52,10 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"command is safe. The guard reads command names it can see in command\n" +
 			"position, so a hazard reached any other way is not seen: a command string\n" +
 			"handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper\n" +
-			"outside the small known set, one inside a backtick substitution, or a\n" +
-			"dangerous form no entry describes. Coverage is what the registry names.\n\n" +
+			"the guard does not step over (or a known wrapper carrying its own flags —\n" +
+			"`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), one inside a\n" +
+			"backtick substitution, or a dangerous form no entry describes. Coverage is\n" +
+			"what the registry names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
 			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
 			"a double-quoted --command argument before this verb starts, so a candidate\n" +
@@ -68,6 +70,15 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			reg, err := loadGuardRegistry()
 			if err != nil {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("guard check: %s", scrubPaths(err))}
+			}
+			// A disabled registry evaluated nothing, so there is no answer to
+			// render — and a bare `allow` here is indistinguishable from a real
+			// clearance to the CI job or script using this verb as a gate. Same
+			// category as an unparsable command line: the question could not be
+			// answered, so say that rather than answer it wrongly.
+			if reg.Disabled {
+				return &exitError{Code: 2, Msg: fmt.Sprintf(
+					"guard check: the hazard registry is switched off in %s; nothing was checked", guard.RepoRelPath)}
 			}
 			dec, err := reg.Check(candidate)
 			if err != nil {
@@ -258,8 +269,10 @@ func guardHealthLine(h ahoy.GuardHealth) string {
 	if h.Healthy() {
 		state := fmt.Sprintf("armed (%d hazards)", h.Entries)
 		if h.Disabled {
-			// Loadable and wired, but switched off by a committed override. Not a
-			// fault, and not something to report as protection either.
+			// Loadable and wired, but switched off in .abcd/guard.json. Not a
+			// fault, and not something to report as protection either. The file is
+			// read from the working tree, so this can be true before anyone has
+			// reviewed the edit that made it true (iss-147).
 			state = "OFF — disabled in " + guard.RepoRelPath
 		}
 		return state

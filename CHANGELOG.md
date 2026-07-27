@@ -32,9 +32,12 @@ called out in a **Breaking** section.
   in that one file and nowhere else — no flag, environment variable, or prompt
   disarms the guard for a session, so the change lands in a diff. An allow means
   no entry matched, never that a command is safe: a hazard reached another way —
-  a string handed to an interpreter (`eval`, `sh -c`), a launcher outside the
-  small known set, a backtick substitution, or a form no entry describes — is not
+  a string handed to an interpreter (`eval`, `sh -c`), a launcher the guard does
+  not step over, a backtick substitution, or a form no entry describes — is not
   seen. Coverage is what the registry names, and the command reference says so.
+  A registry that is switched off answers `abcd guard check` with a fault rather
+  than a clearance, so a script using the verb as a gate cannot be waved through
+  by an edit to `.abcd/guard.json`.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
