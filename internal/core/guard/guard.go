@@ -178,8 +178,27 @@ func Validate(r Registry) error {
 		if strings.TrimSpace(e.Why) == "" {
 			return fmt.Errorf("%w: entry %s has no why", ErrInvalidEntry, id)
 		}
+		// An empty flag group can never be satisfied, so it would silently
+		// defang the entry rather than fail loudly — the one failure mode a
+		// guard must not have.
+		for i, group := range e.Pattern.Flags {
+			if !hasAlternative(group) {
+				return fmt.Errorf("%w: entry %s flag group %d is empty and could never match", ErrInvalidEntry, id, i)
+			}
+		}
 	}
 	return nil
+}
+
+// hasAlternative reports whether a flag group holds at least one usable
+// alternative, so neither "" nor "|" can pass as a constraint.
+func hasAlternative(group string) bool {
+	for _, alt := range strings.Split(group, "|") {
+		if strings.TrimSpace(alt) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func validEntryID(id string) bool {

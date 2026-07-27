@@ -152,6 +152,15 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 			want: ErrInvalidEntry,
 		},
 		{
+			// An empty flag group can never be satisfied, so it would silently
+			// defang the entry it belongs to — the exact failure a guard must
+			// never have (a guard that stops refusing looks identical to one
+			// with nothing to refuse).
+			name: "flag group that can never match",
+			body: `{"schema_version":1,"entries":{"git-clean":{"pattern":{"flags":["-f","|"]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
 			name: "entry id that could build a path",
 			body: `{"schema_version":1,"entries":{"../escape":{"tier":"warn","pattern":{"command":"x"},"why":"w","successor":"s"}}}`,
 			want: ErrInvalidEntry,
