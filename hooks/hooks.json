@@ -9,6 +9,9 @@
         {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook session-start"}
       ]}
     ],
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" guard hook; s=$?; [ $s -eq 0 ] || [ $s -eq 2 ] || { echo \"abcd guard: FAILED TO RUN (exit $s) — shell commands run UNGUARDED in this session; run 'abcd ahoy' to see guard health\" >&2; exit 1; }; exit $s"}]}
+    ],
     "PreCompact": [
       {"hooks": [{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"}]}
     ],
