@@ -167,9 +167,13 @@ jobs:
       && needs.detect.outputs.need_release == 'true'
       && (needs.tag.result == 'success' || needs.tag.result == 'skipped')
     permissions:
+<%- if .Abcd %>
       contents: write        # release.yml: create the Release + verify the tag
       id-token: write        # release.yml: OIDC for build-provenance attestation
       attestations: write    # release.yml: publish + read back the attestations
+<%- else %>
+      contents: write        # release.yml: create the Release + verify the tag
+<%- end %>
     uses: ./.github/workflows/release.yml
     with:
       tag: v${{ needs.detect.outputs.version }}
