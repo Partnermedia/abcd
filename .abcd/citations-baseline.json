@@ -257,6 +257,14 @@
       "verification": "automatic",
       "verified_on": "2026-07-27"
     },
+    "https://openai.com/index/unlocking-the-codex-harness/": {
+      "url": "https://openai.com/index/unlocking-the-codex-harness/",
+      "final_url": "https://openai.com/index/unlocking-the-codex-harness/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
     "https://openai.github.io/openai-agents-python/guardrails/": {
       "url": "https://openai.github.io/openai-agents-python/guardrails/",
       "final_url": "https://openai.github.io/openai-agents-python/guardrails/",
