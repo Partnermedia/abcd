@@ -763,3 +763,98 @@ parallel-agent merge contention bites.
   branches mint before either commits) is accepted behind the armed detectors on
   the merged PR union.
 - 2026-07-26 — itd-100 grill settled: crosswalk is a mapping not a registry (no canonical native definitions; gloss-only rows, docs/** links only, pending iss-40); alphabetical + thematic mini-index; footnote citations with per-line docs-lint allow for vendor names; British English. Positions: A2A and AP2/payments both WATCHING (AP2 via new capture — record silent, REJECTS never invented; x402 + OpenAI/Stripe ACP folded into the AP2 footnote); policy engine folded into policy-as-code row; agent skills is the sole REJECTS (brief 08-skills commands-only rule). Rejected-term admissions blessed (agentic workflow, ANP, AGNTCY, Verifiable Intent, harness engineering, ISO 22989-as-HITL-anchor). LinkedIn anecdote omitted from itd-100. Two OpenAI harness URLs await maintainer read before ship.
+
+- 2026-07-14 (review): REJECTED a "super-reviewer" verb gated on a second model
+  backend. Its motivating rationale does not survive: self-preference under genuine
+  authorship is weak or absent (arXiv 2606.20093, gap -5.1pp, CI crosses zero), and
+  the bias that DOES exist on code is a context-framing artefact, not model identity
+  (arXiv 2603.04582). CHOSEN instead: a fresh-context, off-policy, same-model
+  reviewer — re-present the diff in a new session as an artefact of unknown
+  authorship. Captures the only measured debiasing effect, costs nothing, needs no
+  second subscription, and removes the two-tier UX problem entirely. A second model,
+  when present, is used for disagreement-as-triage per adr-25 asymmetric trust and
+  itd-81 — NEVER a panel or a vote (nine judges = 2.18 effective votes; on code,
+  consensus underperforms the naive baseline — the "popularity trap", arXiv 2510.21513).
+- 2026-07-14 (review): REJECTED per-commit review as the unit. No serious tool does it
+  (all per-PR); findings on WIP commits are false positives by construction; cost is
+  $75-500 per PR-equivalent at published frontier rates. Unit of review is the BRANCH
+  DIFF. Also rejected: spec-conformance as a BLOCKING gate — best agent scores 44.4%
+  on the easier adjacent task (SpecBench) and no precision/recall for
+  implementation-vs-spec is published anywhere. It ships advisory only, per
+  verifier-selects-gates-decide. Full evidence:
+  .abcd/development/research/2026-07-14-cross-model-review.md
+- 2026-07-14 (research): REJECTED building an authoritative benchmark from abcd's own
+  data. Three independently fatal defects: (1) the corpus is n=2 labelled triples, both
+  graded by the model that wrote the code, with exactly one NOT_MET; (2) circularity —
+  the system would generate the spec, write the code, judge conformance AND supply the
+  labels, and self-preference appears perplexity-driven so it SURVIVES swapping model
+  family; (3) N=1 has no methodological remedy (Epoch attacks SWE-bench Verified for
+  concentration at 12 repos; we have one). Arithmetic also fails: ~500 oracle-backed
+  tasks needed to resolve model differences, in-situ A/B needs 2,200-15,500 paired
+  observations. CHOSEN instead: a task-quality instrument + methodology, validated
+  against an EXTERNAL reference — OpenAI's 731-task SWE-bench Pro audit. Ground truth
+  must originate outside the tool (executable test or retrospective event oracle, never
+  an LLM judge). Template is Aider polyglot: the tool supplies the harness and
+  distribution; ground truth comes from outside (225 external Exercism exercises).
+- 2026-07-14 (research): ADOPTED pre-registration of acceptance criteria — hash +
+  timestamp at spec time, BEFORE any code. The novelty claim is that abcd writes the
+  specification before the code exists, which is exactly the defect that killed
+  SWE-bench Verified (35.5% of audited tasks demanded implementation details never
+  stated in the problem) and SWE-bench Pro (retracted 2026-07-08). Without a commitment
+  artefact the claim is unprovable and CANNOT be retrofitted — every intent shipped
+  without it is lost evidence. The primitive exists (receipt_id already hashes the AC
+  section, excluding Audit Notes).
+- 2026-07-14 (review): ADOPTED splitting the conformance reviewer into a terse binary
+  verdict call and a SEPARATE explanation call. Asking for verdict+explanation+fix in
+  one call drives GPT-4o's false-negative rate from 26.2% to 73.2% (HumanEval) and
+  35.9% to 87.9% (MBPP) — it does not find more bugs, it REJECTS CORRECT CODE
+  (arXiv 2603.00539, Springer Automated Software Engineering). All five abcd agents
+  currently do the forbidden thing. Largest measured effect size in the research and
+  free to apply. Also adopted: fix-guided verification filter (execute the proposed fix
+  as a counterfactual; if no test outcome changes, the rejection was hallucinated —
+  FNR 54.8% -> 16.3%). Full evidence:
+  .abcd/development/research/2026-07-14-research-platform-benchmarks.md
+- 2026-07-14 (research, UNVERIFIED): the SWE-bench Pro audit figures (27.4% automated /
+  34.1% human) and the SWE-bench Verified figures (>=59.4% flawed tests / 35.5% hidden
+  implementation details) come from SECONDARY sources — openai.com 403s to the research
+  fetcher. These numbers are the reference standard the proposed paper is scored
+  against. VERIFY AGAINST THE PRIMARY before writing anything. Do not cite the decimals
+  until read first-hand.
+- 2026-07-14 (research, CORRECTION — supersedes the two entries above): the SWE-bench
+  figures are now VERIFIED against OpenAI's primary posts, and one claim is WITHDRAWN.
+  The "35.5% of audited tasks demanded implementation details never stated" figure DOES
+  NOT EXIST in the primary — it came from secondary reporting. OpenAI's real taxonomy
+  for SWE-bench Pro (% of full dataset, agent-flagged / human-flagged, read per-bar from
+  the chart's aria-labels): overly strict tests 14.4/17.8; low-coverage tests 4.1/9.4;
+  misleading prompt 6.3/7.5; miscellaneous 1.9/1.2; UNDERSPECIFIED PROMPT 0.6/0.8.
+  Underspecification is the SMALLEST category (~1%); "overly strict tests" is the largest
+  by ~20x. CONSEQUENCE: the pitch "abcd's specs-before-code prevents the underspecification
+  that killed these benchmarks" is aimed at a 1% defect and is DEAD. The surviving claim is
+  stronger and is what the work now defends: SWE-bench's oracle (a merged PR's tests) is
+  authored independently of, and after, the task statement, so it can demand what the spec
+  never said — whereas in abcd THE ACCEPTANCE CRITERIA ARE THE ORACLE, so the oracle cannot
+  exceed the spec. abcd therefore cannot OVER-reject; it can only UNDER-check (the
+  low-coverage failure, 4-9%), which compounds with judges over-accepting AI-written code
+  by up to 1.91x. Claim to defend: "a spec-derived oracle cannot over-reject; it can only
+  under-check — and under-checking is measurable." Verified figures: SWE-bench Verified
+  (2026-02-23) 27.6% subset audited, >=59.4% flawed tests, 138 problems x >=6 engineers;
+  SWE-bench Pro (2026-07-08, retracted) 731-task split, 200 (27.4%) agent-flagged vs 249
+  (34.1%) human-flagged — the two audits disagree by ~7 points, i.e. automated task-quality
+  auditing UNDER-DETECTS relative to humans.
+- 2026-07-14 (process): TWICE this session a research pass reported a paper as saying
+  something it did not (a fabricated cross-family finding; the non-existent 35.5% figure;
+  and SpecBench described as "deferring" conformance when it scopes code out permanently).
+  RULE: for any number that will be load-bearing in a design doc or paper, open the PRIMARY
+  before citing it. Secondary reporting of benchmark figures has been wrong every time it
+  was checked in this session.
+- 2026-07-14 (layout): ADOPTED "default to the local tier when in doubt". An artefact
+  whose home is unclear (tool exports, oracle/review output, traces, intermediate
+  analysis) goes to .abcd/.work.local/scratch/ or logs/ FIRST — never the repo root,
+  never a tracked directory on a guess. Promotion to .abcd/work/ or
+  .abcd/development/ is cheap and always available later; demotion is not, because a
+  wrongly-committed artefact is already in the history. Guessing upward is
+  irreversible; guessing downward costs nothing. Prompted by a RepoPrompt oracle export
+  landing in a top-level prompt-exports/ during this session (moved to
+  .abcd/.work.local/scratch/prompt-exports/). Recorded in AGENTS.md § Working-tree
+  layout, the canonical home, rather than a new doc.
+- 2026-07-27 (salvage): the four 2026-07-13/14 ideation-session entries above are appended out of chronological order — recovered from an unmerged ideation branch during branch cleanup, together with their research/plan docs; the /abcd:ideate seed from that session is re-recorded as itd-104 (its branch-local iss-93 capture id had collided with main's iss-93 and is retired unused).
