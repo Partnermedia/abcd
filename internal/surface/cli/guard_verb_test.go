@@ -170,6 +170,26 @@ func TestGuardCheckEmptyFlagDoesNotFallThroughToStdin(t *testing.T) {
 	}
 }
 
+// TestGuardCheckOversizedCandidateIsAFault closes the quietest way to get a
+// clearance you did not earn: pad a command past the stdin cap and the guard used
+// to answer on the prefix it happened to read. A candidate that does not fit is
+// a candidate that was not checked.
+func TestGuardCheckOversizedCandidateIsAFault(t *testing.T) {
+	guardRepo(t)
+	padded := strings.Repeat("# padding\n", (maxGuardStdinBytes/10)+1) + "cd scratch && rm -rf *\n"
+	stdout, stderr, code := runGuard(padded, "guard", "check")
+
+	if code != 2 {
+		t.Errorf("a truncated candidate must be a fault (exit 2), got %d (stdout %q)", code, stdout)
+	}
+	if strings.Contains(stdout, "allow") {
+		t.Errorf("a prefix must never be rendered as a clearance; stdout = %q", stdout)
+	}
+	if !strings.Contains(stderr, "too long") {
+		t.Errorf("the fault must say the candidate did not fit; stderr = %q", stderr)
+	}
+}
+
 // TestGuardCheckMalformedRepoConfigIsAFault holds the same line for the config:
 // a broken .abcd/guard.json must be loud, never a fallback to "no guard".
 func TestGuardCheckMalformedRepoConfigIsAFault(t *testing.T) {

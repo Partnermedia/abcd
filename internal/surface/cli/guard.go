@@ -47,9 +47,13 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"cannot be evaluated at all (an unparsable command line, a malformed\n" +
 			"registry) exits 2, so a caller never reads silence as clearance.\n\n" +
 			"Matching is shell-token-aware and applies in command position only, so a\n" +
-			"hazard named inside a quoted argument never fires. Command strings passed\n" +
-			"to `eval` or `sh -c` are not parsed: a hazard hidden inside one is not\n" +
-			"seen. That is a known limit of this version, not a claim of coverage.\n\n" +
+			"hazard named inside a quoted argument never fires.\n\n" +
+			"An allow means no registry entry matched — it is never a statement that a\n" +
+			"command is safe. The guard reads command names it can see in command\n" +
+			"position, so a hazard reached any other way is not seen: a command string\n" +
+			"handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper\n" +
+			"outside the small known set, one inside a backtick substitution, or a\n" +
+			"dangerous form no entry describes. Coverage is what the registry names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
 			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
 			"a double-quoted --command argument before this verb starts, so a candidate\n" +
@@ -163,6 +167,14 @@ func newGuardHookCommand() *cobra.Command {
 			if err != nil {
 				return failOpen("the hazard registry did not load (%s)", scrubPaths(err))
 			}
+			// A disabled registry allows everything, which makes it an unguarded
+			// session — and it is the CHEAPEST one to reach: the other unguarded
+			// states need a broken install, this one needs a single file write.
+			// It is not a fault (someone chose it, and the choice sits in a file a
+			// reviewer can read), but it must never pass for protection.
+			if reg.Disabled {
+				return failOpen("the hazard registry is switched off in %s", guard.RepoRelPath)
+			}
 			dec, err := reg.Check(candidate)
 			if err != nil {
 				return failOpen("the command line could not be parsed (%s)", scrubPaths(err))
@@ -209,9 +221,16 @@ func guardCandidate(cmd *cobra.Command, flag string) (string, error) {
 		}
 		return flag, nil
 	}
-	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxGuardStdinBytes))
+	// Read ONE byte past the cap so an overflow is detectable. Truncating to the
+	// cap and answering on the prefix is the quietest possible way to hand out a
+	// clearance nobody earned: pad a command past the limit and the tail — the
+	// part that matters — is never tokenised.
+	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxGuardStdinBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("reading the candidate command from stdin failed: %w", err)
+	}
+	if len(raw) > maxGuardStdinBytes {
+		return "", fmt.Errorf("the candidate command is too long (over %d bytes); it was not checked", maxGuardStdinBytes)
 	}
 	candidate := strings.TrimRight(string(raw), "\r\n")
 	if strings.TrimSpace(candidate) == "" {
