@@ -12,6 +12,24 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
+  (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
+  lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
+  gate armed against the reviewed **content** commit so the first public release
+  cannot hit the receipt-vs-tag self-reference), `.github/workflows/auto-release.yml`
+  (newest dated CHANGELOG heading → tag that commit → call `release.yml`), and the
+  adr-37 runbook — wired to the repo's own default branch and Go version,
+  `GITHUB_TOKEN`-only and injection-safe. The workflows ship from a **single
+  embedded template** that abcd-cli's own release workflows are regenerated from
+  (self-scaffold parity, proven by a byte-exact test), so every abcd release
+  exercises the exact machinery a managed repo receives. The scaffolded
+  `release.yml` carries a `workflow_dispatch` **rehearsal** that arms the full gate
+  against a simulated changelog roll and reviewed-content commit and publishes
+  nothing — a green rehearsal is the runbook precondition for the first real
+  release. A bare repo with no semantic detector degrades cleanly to the
+  deterministic gates and a generic build. The verb is idempotent and fail-safe: a
+  re-run on current machinery is a no-op, a hand-edited file is refused rather than
+  clobbered (unless `--confirm`), and it refuses rather than half-writing.
 - **A public terminology crosswalk at `docs/reference/terminology.md`** (itd-100).
   One reference page maps 26 established agentic-AI terms — protocols, the core
   loop, context, safety, governance, operations — to abcd's position on each:

@@ -130,6 +130,10 @@ func NewRootCommand() *cobra.Command {
 	// BUNDLE, this cuts the RELEASE (version + changelog record set). They hang
 	// off one command because they gate the same event.
 	launchCmd.AddCommand(newLaunchShipCommand(&asJSON))
+	// `scaffold` writes the changelog-driven release machinery (release.yml,
+	// auto-release.yml, runbook) into a managed repo that lacks it (itd-93). It
+	// extends 04-launch because launch already owns how a release is cut and gated.
+	launchCmd.AddCommand(newLaunchScaffoldCommand(&asJSON))
 	root.AddCommand(launchCmd)
 
 	root.AddCommand(newChangelogCommand(&asJSON))
