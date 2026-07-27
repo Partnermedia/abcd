@@ -135,6 +135,26 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cat"},
 		},
 		{
+			name: "a blank line does not break a list continuation",
+			line: "cd scratch &&\n\nrm -rf *",
+			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
+		},
+		{
+			name: "a comment line does not break a list continuation",
+			line: "cd scratch &&\n# note\nrm -rf *",
+			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
+		},
+		{
+			name: "a quoted heredoc delimiter may be exotic",
+			line: "cat <<'---'\nrm -rf *\n---\nls",
+			want: []string{"0:cat", "1:ls"},
+		},
+		{
+			name: "an arithmetic shift is not a heredoc",
+			line: "echo $((1<<20))\ncd scratch",
+			want: []string{"0:echo|$", "0:1<<20", "1:cd|scratch"},
+		},
+		{
 			name: "a herestring is an argument, not a heredoc",
 			line: `grep foo <<< "rm -rf *"`,
 			want: []string{"0:grep|foo|<<<|rm -rf *"},

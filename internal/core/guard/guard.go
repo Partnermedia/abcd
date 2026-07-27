@@ -72,9 +72,11 @@ type Fixtures struct {
 }
 
 // Entry is one hazard. The map key in Registry.Entries is its id; ID is filled
-// from that key on load, so the key is always authoritative.
+// from that key on load, so the key is always authoritative — a declared id is
+// accepted (the documented entry shape spells one out) and then overwritten,
+// never used to rename the entry.
 type Entry struct {
-	ID        string   `json:"-"`
+	ID        string   `json:"id,omitempty"`
 	Pattern   Pattern  `json:"pattern"`
 	Tier      string   `json:"tier"`
 	Successor string   `json:"successor"`

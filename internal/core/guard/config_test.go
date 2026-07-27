@@ -100,6 +100,20 @@ func TestLoadAddsRepoEntry(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsADeclaredEntryID keeps the documented entry shape loadable: an
+// override may spell out the id it is already keyed by. The map key stays
+// authoritative — a mismatched id must not rename the entry.
+func TestLoadAcceptsADeclaredEntryID(t *testing.T) {
+	root := writeOverride(t, `{"schema_version":1,"entries":{"git-clean":{"id":"git-clean","tier":"blocker"}}}`)
+	r, err := Load(root)
+	if err != nil {
+		t.Fatalf("an entry declaring its own id must load, got %v", err)
+	}
+	if r.Entries["git-clean"].ID != "git-clean" || r.Entries["git-clean"].Tier != TierBlocker {
+		t.Fatalf("entry = %+v, want the keyed id and the override's tier", r.Entries["git-clean"])
+	}
+}
+
 func TestLoadHonoursCommittedKillSwitch(t *testing.T) {
 	root := writeOverride(t, `{"schema_version":1,"disabled":true}`)
 	r, err := Load(root)

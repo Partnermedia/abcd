@@ -130,10 +130,12 @@ func tokenize(line string) ([]segment, error) {
 				i = skipHeredocBodies(line, i, pending)
 				pending = nil
 			}
+			// lastList is NOT cleared here: a blank or comment-only line after a
+			// list operator does not end the list, and every token-producing
+			// branch clears the flag as soon as real content arrives.
 			if !lastList {
 				chain++
 			}
-			lastList = false
 		case c == '#' && !hasCur:
 			// A comment starts only at a word boundary (POSIX): `url/#frag` is
 			// part of the token, a bare `#` runs to the end of the line.
@@ -148,12 +150,22 @@ func tokenize(line string) ([]segment, error) {
 			lastList = false
 			i += 3
 		case c == '<' && strings.HasPrefix(line[i:], "<<"):
-			// A heredoc redirection (`<<`, `<<-`).
-			flushToken()
+			// A heredoc redirection (`<<`, `<<-`) — but only when a delimiter
+			// word follows. `$((1<<20))` is an arithmetic shift, and taking it
+			// for a heredoc would swallow every later line as body text and
+			// silently unguard them.
 			hd, next, err := readHeredocDelim(line, i+2)
 			if err != nil {
 				return nil, err
 			}
+			if !hd.quoted && !isDelimStart(hd.delim) {
+				cur = append(cur, '<', '<')
+				hasCur = true
+				lastList = false
+				i += 2
+				continue
+			}
+			flushToken()
 			pending = append(pending, hd)
 			i = next
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
@@ -183,6 +195,20 @@ func tokenize(line string) ([]segment, error) {
 type heredoc struct {
 	delim     string
 	stripTabs bool
+	// quoted records that the delimiter word carried quotes, which makes it a
+	// delimiter beyond doubt however exotic it looks (`<<'---'`).
+	quoted bool
+}
+
+// isDelimStart reports whether a word looks like a here-document delimiter: an
+// unquoted one starts with a letter or an underscore, which is what separates
+// `cat <<EOF` from the `<<` of an arithmetic shift.
+func isDelimStart(delim string) bool {
+	if delim == "" {
+		return false
+	}
+	c := delim[0]
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // readHeredocDelim reads the delimiter word after a `<<` at pos, honouring the
@@ -210,6 +236,7 @@ func readHeredocDelim(line string, pos int) (heredoc, int, error) {
 				return heredoc{}, 0, fmt.Errorf("%w: unterminated quote in heredoc delimiter", ErrUnparsableCommand)
 			}
 			w = append(w, line[pos+1:j]...)
+			hd.quoted = true
 			pos = j + 1
 			continue
 		case '\\':

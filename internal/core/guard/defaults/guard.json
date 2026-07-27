@@ -19,7 +19,9 @@
           "cd worktree && rm -r -f build",
           "cd scratch &&\nrm -rf *",
           "if cd scratch; then rm -rf *; fi",
-          "for d in a b; do cd $d && rm -rf *; done"
+          "for d in a b; do cd $d && rm -rf *; done",
+          "cd scratch &&\n\nrm -rf *",
+          "echo $((1<<20)) > size.txt\ncd scratch && rm -rf *"
         ],
         "known_good": [
           "./bin/abcd-darwin-arm64 capture \"agent ran cd scratch && rm -rf * — one failed cd from disaster\"",
@@ -27,7 +29,9 @@
           "cd scratch && ls -la",
           "cd scratch && rm ./notes.txt",
           "cat > NOTES.md <<'EOF'\ncd scratch && rm -rf *\nEOF",
-          "cd scratch\nrm -rf ./build"
+          "cd scratch\nrm -rf ./build",
+          "tee NOTES.md <<'---'\ncd scratch && rm -rf *\n---",
+          "cd scratch && rm -f ./notes.txt"
         ]
       }
     },
