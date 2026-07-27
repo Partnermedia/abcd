@@ -62,6 +62,16 @@ func CollectCitedURLs(cfg Config, repoRoot string) ([]CitedURL, error) {
 			return nil, err
 		}
 		for _, fileAbs := range mdFiles {
+			// Containing the ROOT is not enough. WalkDir yields a symlinked .md
+			// as an ordinary file and os.ReadFile follows it, so a committed
+			// `docs/leak.md -> ../private/notes.md` sits inside a perfectly
+			// contained root and still drags an outside file's citations into
+			// the fetch and then into the committed baseline. Containment is
+			// about where a path LANDS, so an in-repo symlink still resolves.
+			if err := resolvedInsideRoot(repoRoot, fileAbs); err != nil {
+				return nil, &configError{"cited page " + quote(repoRel(repoRoot, fileAbs)) + " " + err.Error() +
+					"; the citation collector reads only inside the repository"}
+			}
 			content, err := os.ReadFile(fileAbs)
 			if err != nil {
 				return nil, err
