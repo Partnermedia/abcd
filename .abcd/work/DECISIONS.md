@@ -858,3 +858,4 @@ parallel-agent merge contention bites.
   .abcd/.work.local/scratch/prompt-exports/). Recorded in AGENTS.md § Working-tree
   layout, the canonical home, rather than a new doc.
 - 2026-07-27 (salvage): the four 2026-07-13/14 ideation-session entries above are appended out of chronological order — recovered from an unmerged ideation branch during branch cleanup, together with their research/plan docs; the /abcd:ideate seed from that session is re-recorded as itd-104 (its branch-local iss-93 capture id had collided with main's iss-93 and is retired unused).
+- 2026-07-27 — itd-93 parity tension resolved: Branch A. The scaffold template is the single source for release.yml/auto-release.yml; abcd-cli's live workflows are regenerated from it; the only sanctioned live diff is the additive workflow_dispatch rehearsal (trigger + non-publishing dry-run job). Rejected: substitution-gating the rehearsal off for abcd (weakens the parity guarantee on the one novel component).
