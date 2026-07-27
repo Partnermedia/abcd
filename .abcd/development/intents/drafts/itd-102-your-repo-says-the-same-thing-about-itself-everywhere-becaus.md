@@ -22,11 +22,20 @@ impact: additive
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- Given repo onboarding runs (the install or prepare flow), when the identity interview completes, then title, tagline, and pitch land in a parseable markdown identity block (fixed bullet shape) whose location the repo's abcd config records — markdown stays the single source of truth.
+- Given a rendered surface (README strapline, manifest description, conventions-file opening) diverges from the identity block, when the positioning check runs, then a warn-tier finding names the exact drifted line; per-repo config may upgrade the finding to blocker.
+- Given drift is found, then abcd never rewrites a surface autonomously — re-rendering from the block is always a proposed diff a human adopts.
+- Given abcd-cli itself, then the check points at the brief product chapter's existing Identity section unchanged, and iss-143 (the three-variant drift) is the acceptance corpus the check must catch.
 
 ## Open Questions
 
-_None recorded yet._
+- Interview wording and which surfaces are registered for checking by default beyond the canonical three.
+- Whether the pitch is required or optional at onboarding (title and tagline are required).
+
+## Grill Settlements (2026-07-27)
+
+- Identity home is a parseable markdown block, not a structured JSON file — consistent with markdown-as-single-source-of-truth; the config records only where the block lives.
+- The check is warn-tier by default (highlight, never gate) and per-repo upgradeable; autonomous rewriting is permanently out.
 
 ## Audit Notes
 

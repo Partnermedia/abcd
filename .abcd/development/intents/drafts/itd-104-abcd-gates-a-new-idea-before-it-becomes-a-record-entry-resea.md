@@ -22,11 +22,20 @@ impact: additive
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- Given a one-line idea, when the user runs the intent or capture verb, then no ideate step is required or suggested as blocking — ideate is an optional verb, never a pre-capture gate; the routing help names it for big, unproven ideas.
+- Given /abcd:ideate runs, then it executes three legs in order: primary-source research (every load-bearing claim checked against its primary), a record grill (does the brief, an intent, an ADR, or a principle already cover, contradict, or supersede this?), and an adversarial review that is fresh-context and off-policy — conducted by a session that did not do the research, receiving the idea as an artefact of unknown authorship.
+- Given a verdict, then the decision is recorded with rejected alternatives whether the idea survives or dies; only a surviving idea graduates to a draft intent.
+- Given the record grill leg runs, then a hit on an existing record entry (covered, contradicted, or superseded) is cited by id in the verdict — the check-the-record-first step that killed one of the three ideas in the proven manual run.
 
 ## Open Questions
 
-_None recorded yet._
+- The verdict's schema and where it is stored (ledger entry vs a dedicated ideate record family) — a spec-time decision.
+- Whether ideate can consume a lifeboat or external document as the idea source.
+
+## Grill Settlements (2026-07-27)
+
+- Optional verb, never a gate: capture friction stays at one line, and the routing help carries the nudge.
+- The adversarial leg codifies the fresh-context, off-policy, unknown-authorship pattern — the only measured debiasing effect, per the salvaged 2026-07-14 research record.
 
 ## Audit Notes
 
