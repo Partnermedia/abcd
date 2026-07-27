@@ -134,7 +134,7 @@
         "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"]
       },
       "why": "`git clean` deletes untracked files outright — anything never added to git, including local notes and scratch output, is gone with no copy in the repository.",
-      "successor": "List what would go first (`git clean --dry-run`) and move anything worth keeping aside; delete only files you created yourself.",
+      "successor": "See what is untracked first (`git status --ignored`), move anything worth keeping aside, and delete only files you created yourself.",
       "fixtures": {
         "known_bad": [
           "git clean -fd",
