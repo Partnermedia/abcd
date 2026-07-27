@@ -1,0 +1,76 @@
+package lint
+
+// The citation collector: the one place that answers "what does this repo cite?"
+//
+// The gate and the refresh verb must agree on that set exactly. If the refresh
+// fetched a different set — a second scraper with its own idea of where a
+// citation lives — every disagreement would surface as a permanent lint finding
+// nobody could clear: a URL the gate demands a receipt for and the refresh never
+// visits. So the walk lives here once, LintAt's citation family and
+// `abcd docs cite refresh` both read it, and the two cannot drift.
+//
+// It is a thin composition of the primitives the lint already uses
+// (markdownFiles, fenceMask, parseCitations) rather than new parsing.
+
+import (
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// CitationSite is one place a URL is cited: a repo-relative page and a 1-based
+// line. A URL cited from several pages carries one site per occurrence, so the
+// manual queue can tell the maintainer where to look.
+type CitationSite struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
+}
+
+// CitedURL is one distinct cited address and everywhere it is cited.
+type CitedURL struct {
+	URL   string         `json:"url"`
+	Sites []CitationSite `json:"sites"`
+}
+
+// CollectCitedURLs walks cfg.Roots and returns the repo's distinct cited URLs,
+// sorted by address so a refresh run and its baseline diff are deterministic.
+//
+// "Cited" means what the lint means by it: a URL on a footnote-definition line
+// (including its wrapped continuation lines), never one in body prose. A missing
+// root is skipped rather than an error, matching Lint.
+func CollectCitedURLs(cfg Config, repoRoot string) ([]CitedURL, error) {
+	sites := map[string][]CitationSite{}
+	for _, root := range cfg.Roots {
+		rootAbs := filepath.Join(repoRoot, root)
+		mdFiles, err := markdownFiles(rootAbs)
+		if err != nil {
+			return nil, err
+		}
+		for _, fileAbs := range mdFiles {
+			content, err := os.ReadFile(fileAbs)
+			if err != nil {
+				return nil, err
+			}
+			rel := repoRel(repoRoot, fileAbs)
+			lines := strings.Split(string(content), "\n")
+			page := parseCitations(rel, lines, fenceMask(lines))
+			for _, ref := range page.urls {
+				site := CitationSite{File: ref.file, Line: ref.line}
+				// A URL repeated on one line (a source and its mirror) is one
+				// site, not two — the queue would otherwise print it twice.
+				if existing := sites[ref.url]; len(existing) > 0 && existing[len(existing)-1] == site {
+					continue
+				}
+				sites[ref.url] = append(sites[ref.url], site)
+			}
+		}
+	}
+
+	out := make([]CitedURL, 0, len(sites))
+	for u, s := range sites {
+		out = append(out, CitedURL{URL: u, Sites: s})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URL < out[j].URL })
+	return out, nil
+}

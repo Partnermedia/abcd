@@ -44,6 +44,28 @@ const (
 	defaultCitationBlockDays = 365
 )
 
+// CitationPolicy resolves the citation-baseline settings a repo's config
+// declares, filling in spc-17's defaults for anything it leaves unset.
+//
+// It exists so the refresh verb and the gate read the SAME policy: the verb
+// decides which entries are stale enough to re-check from the very number the
+// lint will later warn on, rather than from a second copy of 180 that drifts.
+func CitationPolicy(cfg Config) (baselinePath string, warnDays, blockDays int) {
+	rc := cfg.Rules[ruleCitationBaseline]
+	baselinePath = strings.TrimSpace(rc.Baseline)
+	if baselinePath == "" {
+		baselinePath = DefaultBaselinePath
+	}
+	warnDays, blockDays = rc.WarnAfterDays, rc.BlockAfterDays
+	if warnDays <= 0 {
+		warnDays = defaultCitationWarnDays
+	}
+	if blockDays <= 0 {
+		blockDays = defaultCitationBlockDays
+	}
+	return baselinePath, warnDays, blockDays
+}
+
 // defaultCrosswalkHeading is the narrowest identification heuristic that matches
 // the real crosswalk: a table counts only when its nearest preceding heading
 // names itself a crosswalk. Anchoring on the heading rather than on "any table
