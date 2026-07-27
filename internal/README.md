@@ -24,6 +24,12 @@ plugin surface, and a future MCP server share one engine.
   those transports expose — so it is cobra-free like the rest of `core/`. The
   walk that reads the live command tree needs cobra and therefore lives in
   `surface/cli`, which hands its result in; the dependency never points back.
+- **`core/cite/`** — the live half of the citation gate: the bounded fetcher and
+  the refresh that writes the committed baseline `core/lint` then enforces with
+  zero network. It is the only place abcd dials out on behalf of documentation,
+  and it holds the seam a specialist link checker would later slot into — the
+  baseline schema and the lint rules are the contract, the fetcher is a
+  replaceable producer.
 - **`core/lifeboat/`** — the brief↔lifeboat contract. `mapping.go` is the single
   source of truth for which brief section a lifeboat fills from which source
   tier, and it is rendered into the brief's `00-meta.md` with a test asserting

@@ -30,6 +30,40 @@ called out in a **Breaking** section.
   without an entry, none recorded broken, none whose recorded final address has
   drifted from what the page cites, and a 180-day staleness warning. Each rule
   is opt-in per repo, and the whole family is inert until configured.
+- **`abcd docs cite refresh` — the one verb that fetches, so the gate never has
+  to** (itd-101, spc-17). It collects every cited URL through the same collector
+  the lint uses, gives each exactly one bounded attempt, and rewrites the
+  committed baseline. It never retries — a run's cost cannot become a function of
+  how many links are failing, nor a burst against a struggling host — and it never
+  reads a response body, because liveness is a property of the status line and a
+  citation to a huge file should cost a response header, not a download. Sources
+  that refuse automated fetchers (401, 403, 406, 429) are **not** recorded as
+  broken: a refusal says the fetcher may not look, which is a different fact from
+  the source being gone, so those URLs get no invented entry and are printed as a
+  manual checklist naming exactly where each is cited. A current human-verified
+  receipt is preserved verbatim and not even re-requested; once it ages past the
+  staleness threshold it is re-checked like any other, because human and machine
+  verifications share one clock. Receipts for addresses the documentation no
+  longer cites are dropped.
+- **`abcd docs cite confirm` — recording that a human cleared a queued link.**
+  Name the URLs, or pass `--receipt` with a receipt file; both assemble the same
+  schema, so the generated checklist page that lands later is a different producer
+  of one input rather than a second pathway. Only URLs the documentation actually
+  cites can be confirmed, and one bad line refuses the whole receipt rather than
+  half-applying it. The receipt records **that** a human verified a citation and
+  **when**, never how — the schema declares no such field and decoding rejects
+  unknown keys outright.
+- **The citation baseline surfaces where maintainers already look.** `abcd ahoy`
+  reports its coverage and age on one line in any repo that has armed the rule;
+  `abcd launch --dry-run` gains a `citation-baseline` gate that names entries
+  approaching the staleness blocker while still letting a release cut, and refuses
+  on ones that are overdue, broken, or unreceipted. `abcd docs lint
+  --release-gate` promotes an overdue citation from a warning to a blocker — the
+  flag is the trust root, so a repository cannot defang its own release by editing
+  a committed config, and an ordinary commit is never blocked by the calendar.
+- **The citation gate is armed for this repository.** All 51 cited URLs in
+  `docs/` carry a receipt or a queue entry, and four citations that had silently
+  drifted behind redirects now name the address they actually resolve to.
 - **A schema-versioned citation baseline at `.abcd/citations-baseline.json`.**
   Per cited URL it records the final resolved address, when it was last checked,
   the outcome, and whether verification was automatic or manual with its date.
