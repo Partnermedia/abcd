@@ -26,6 +26,54 @@ func TestCollectCitedURLsRefusesAnEscapingRoot(t *testing.T) {
 	}
 }
 
+// TestCollectCitedURLsRefusesASymlinkedFile closes the half the root-level check
+// misses. Containing the configured ROOT does nothing about a symlinked page
+// INSIDE it: WalkDir yields a symlinked .md as an ordinary file and os.ReadFile
+// follows it, so `docs/leak.md -> ../private/notes.md` is read, its URLs are
+// fetched by the live checker, and they are written verbatim into the committed
+// baseline — the exact harm the root check was added to prevent.
+func TestCollectCitedURLsRefusesASymlinkedFile(t *testing.T) {
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "notes.md")
+	if err := os.WriteFile(secret,
+		[]byte("# S\n\nA claim.[^a]\n\n[^a]: S, https://secret.example.invalid/leak\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
+	if err := os.Symlink(secret, filepath.Join(root, "docs", "leak.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	refs, err := CollectCitedURLs(Config{Roots: []string{"docs"}}, root)
+	if err == nil {
+		for _, r := range refs {
+			if r.URL == "https://secret.example.invalid/leak" {
+				t.Fatal("a symlinked page leaked an outside-repo URL into the cited set")
+			}
+		}
+		t.Fatal("CollectCitedURLs read a page that resolves outside the repository")
+	}
+}
+
+// TestCollectCitedURLsAllowsAnInRepoSymlink keeps the containment about WHERE a
+// path lands, not about symlinks being suspicious — this repo's own
+// CLAUDE.md -> AGENTS.md bridge must keep working.
+func TestCollectCitedURLsAllowsAnInRepoSymlink(t *testing.T) {
+	root := citeRepo(t, map[string]string{
+		"docs/real.md": "# R\n\nA claim.[^a]\n\n[^a]: S, https://example.org/a\n",
+	})
+	if err := os.Symlink(filepath.Join(root, "docs", "real.md"), filepath.Join(root, "docs", "bridge.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	refs, err := CollectCitedURLs(Config{Roots: []string{"docs"}}, root)
+	if err != nil {
+		t.Fatalf("CollectCitedURLs refused an in-repo symlink: %v", err)
+	}
+	if len(refs) != 1 || refs[0].URL != "https://example.org/a" {
+		t.Fatalf("refs = %+v, want the one cited URL", refs)
+	}
+}
+
 // TestCollectCitedURLsRefusesASymlinkedRoot is the same containment against the
 // filesystem rather than the string.
 func TestCollectCitedURLsRefusesASymlinkedRoot(t *testing.T) {
