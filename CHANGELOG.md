@@ -12,6 +12,32 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A citations family in `abcd docs lint`, with zero network in the gate**
+  (itd-101, spc-17). Cited references rot silently — pages retitle, URLs
+  redirect, whole platforms announce their own shutdown — but a gate that dials
+  out to notice is a gate that flakes. So the checking splits in two. The lint
+  side, landing here, reads only committed markdown, committed config, and a
+  committed baseline: `citation_footnotes` holds a page's footnote markers and
+  definitions in bijection (an unreferenced definition counts, being the way a
+  reference page quietly stops meaning what it says); `citation_crosswalk_rows`
+  requires every crosswalk table row to carry a footnote; `citation_url_syntax`
+  checks cited URLs and DOIs are well-formed; and `citation_source_policy`
+  refuses aggregator domains named in config — a list that ships empty, because
+  naming one is a project's editorial policy and never something the gate
+  invents on its behalf. A page's citations are its footnote definitions, not
+  its prose, so ordinary body links stay `links_resolve`'s business.
+  `citation_baseline` enforces the committed record offline — no cited URL
+  without an entry, none recorded broken, none whose recorded final address has
+  drifted from what the page cites, and a 180-day staleness warning. Each rule
+  is opt-in per repo, and the whole family is inert until configured.
+- **A schema-versioned citation baseline at `.abcd/citations-baseline.json`.**
+  Per cited URL it records the final resolved address, when it was last checked,
+  the outcome, and whether verification was automatic or manual with its date.
+  It records nothing about *how* a human verified, and cannot be made to: the
+  schema declares no such field, and loading rejects unknown keys outright, so a
+  hand-added `method` or transcript is a refusal rather than a quietly-kept
+  note. Manual entries age on the same clock as automatic ones, so a human
+  confirmation buys no exemption from going stale.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
