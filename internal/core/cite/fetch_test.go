@@ -77,6 +77,53 @@ func TestCheckRefusesARedirectLoop(t *testing.T) {
 	}
 }
 
+// TestCheckAnsweredSeparatesADeadLinkFromADeadNetwork pins the bit the refresh's
+// wholesale-failure guard depends on. StatusBroken alone cannot tell "the host
+// replied 404" from "nothing replied", and the guard destroys or preserves a
+// committed baseline on that difference — so the checker, which is the only code
+// that knows, has to carry it.
+//
+// The redirect cases are the subtle ones: `client.Do` returns an ERROR when the
+// chain is refused, yet a host plainly answered with a 3xx to get there.
+func TestCheckAnsweredSeparatesADeadLinkFromADeadNetwork(t *testing.T) {
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ok.Close()
+	notFound := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer notFound.Close()
+	forbidden := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer forbidden.Close()
+	loop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/loop", http.StatusFound)
+	}))
+	defer loop.Close()
+
+	answered := []string{ok.URL, notFound.URL, forbidden.URL, loop.URL}
+	for _, target := range answered {
+		if got := testChecker(5 * time.Second).Check(target); !got.Answered {
+			t.Errorf("%s: Answered = false, but a host replied (status %q, %s)", target, got.Status, got.Detail)
+		}
+	}
+
+	// Nothing on the other end: a closed port is a transport failure, and the
+	// guard must be able to see that no host answered.
+	dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := dead.URL
+	dead.Close()
+	if got := testChecker(2 * time.Second).Check(deadURL); got.Answered {
+		t.Errorf("%s: Answered = true, but nothing was listening", deadURL)
+	}
+	// An SSRF refusal never reaches a host at all.
+	if got := NewHTTPChecker().Check("http://169.254.169.254/x"); got.Answered {
+		t.Error("a guard refusal reported that a host answered")
+	}
+}
+
 // TestCheckBlockedStatusesRouteToTheManualQueue pins the exact classification.
 // These four say "an automated fetcher may not read this", which is a different
 // fact from "this link is dead" — recording them as broken would be a lie the
