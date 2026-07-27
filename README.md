@@ -4,7 +4,7 @@
 
   <h1>Agent-Based Configuration for Development</h1>
 
-  <p>An opinionated, intent-driven development framework for <a href="https://x.com/signulll/status/2030404483897815089">product thinkers</a>.</p>
+  <p>A host-agnostic configuration layer for intent-driven development.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
   <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>

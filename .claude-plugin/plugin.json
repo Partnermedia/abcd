@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "abcd",
-  "description": "Host-agnostic configuration layer for development — a single Go binary that carries the why from idea to shipped reality, usable as a plugin in compatible agent harnesses.",
+  "description": "A host-agnostic configuration layer for intent-driven development — a single Go binary that carries the why from idea to shipped reality, usable as a plugin in compatible agent harnesses.",
   "author": {
     "name": "REPPL",
     "url": "https://github.com/REPPL"
