@@ -26,10 +26,15 @@ called out in a **Breaking** section.
   gains a `guard:` line reporting the three things that can independently be
   false — hook installed, binary reachable, registry loadable — plus a
   deliberately disabled registry, so a broken guard is visible from outside the
-  session too. Per-repo overrides stay committed and reviewable in
-  `.abcd/guard.json`; there is no in-session escape. Command strings passed to
-  `eval` or `sh -c` are not parsed — a stated limit of this version, carried in
-  the command reference.
+  session too. Every unguarded state is loud, including the deliberate one: a
+  registry switched off in `.abcd/guard.json` makes each command it lets through
+  carry the warning, so "off" can never pass for "clear". Per-repo overrides live
+  in that one file and nowhere else — no flag, environment variable, or prompt
+  disarms the guard for a session, so the change lands in a diff. An allow means
+  no entry matched, never that a command is safe: a hazard reached another way —
+  a string handed to an interpreter (`eval`, `sh -c`), a launcher outside the
+  small known set, a backtick substitution, or a form no entry describes — is not
+  seen. Coverage is what the registry names, and the command reference says so.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify

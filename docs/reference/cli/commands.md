@@ -274,9 +274,14 @@ cannot be evaluated at all (an unparsable command line, a malformed
 registry) exits 2, so a caller never reads silence as clearance.
 
 Matching is shell-token-aware and applies in command position only, so a
-hazard named inside a quoted argument never fires. Command strings passed
-to `eval` or `sh -c` are not parsed: a hazard hidden inside one is not
-seen. That is a known limit of this version, not a claim of coverage.
+hazard named inside a quoted argument never fires.
+
+An allow means no registry entry matched — it is never a statement that a
+command is safe. The guard reads command names it can see in command
+position, so a hazard reached any other way is not seen: a command string
+handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper
+outside the small known set, one inside a backtick substitution, or a
+dangerous form no entry describes. Coverage is what the registry names.
 
 The candidate comes from --command, or from stdin when the flag is absent.
 Prefer stdin for a command line you did not type yourself: the shell expands

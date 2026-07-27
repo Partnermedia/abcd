@@ -57,18 +57,36 @@ also surfaces as a gap (`guard.hook_missing`, `guard.binary_unreachable`,
 
 ## Registry and overrides
 
-The hazard entries are bundled in the binary and merged with a repo's committed
+The hazard entries are bundled in the binary and merged with a repo's
 `.abcd/guard.json` — a dedicated file rather than a rules-loader domain, so a
 rules kill switch can never silently disable a safety guard. An entry key
 overrides one field or declares a new hazard; `{"disabled": true}` switches the
-guard off. There is **no in-session override**: turning a guard off is a change
-someone can review.
+guard off.
 
-## Known limit
+There is **no flag, environment variable, or prompt** that disarms the guard for
+a session: the file is the only route, so the change lands in a diff. What the
+file is *not*, today, is verified as committed — `guard.Load` reads the working
+tree, so an edit takes effect on the next command, before review. The mitigation
+is loudness rather than enforcement: a disabled registry makes every command it
+lets through carry an UNGUARDED warning naming the file, and `abcd ahoy` reports
+`OFF`. Closing the gap properly (refusing a `disabled: true` that is not in
+`HEAD`) is a core-side change to `guard.Load`, tracked as an issue.
 
-Command strings passed to `eval` or `sh -c` are not parsed, so a hazard hidden
-inside one is not seen. It is stated in the `abcd guard check` reference doc and
-in the package map, never left implicit.
+## What an allow means
+
+An allow means **no registry entry matched** — never that a command is safe. The
+guard reads command names it can see in command position, so a hazard reached any
+other way is not seen:
+
+- a command string handed to an interpreter (`eval`, `sh -c`);
+- one launched through a wrapper outside the small known set (`sudo`, `doas`,
+  `command`, `env`, `nohup`, `time`) — `xargs`, `timeout`, `exec` are not in it;
+- one inside a backtick substitution (`$(…)` is followed, backticks are not);
+- a dangerous form no entry describes.
+
+Coverage is what the registry names. The registry grows from reality: a
+facilitator who sees something scary captures it, and recurring captures are
+promoted into the bundled defaults through the admission gate.
 
 ## References
 

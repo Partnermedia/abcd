@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/core/guard"
 )
 
 // preToolUse builds the host's PreToolUse payload for a Bash tool call. The
@@ -122,21 +124,32 @@ func TestGuardHookFailsOpenLoud(t *testing.T) {
 	}
 }
 
-// TestGuardHookHonoursTheCommittedKillSwitch is AC 2's escape hatch: the only way
-// out is a committed, reviewable per-repo config, and when it is set the guard
-// allows without pretending to be broken.
-func TestGuardHookHonoursTheCommittedKillSwitch(t *testing.T) {
+// TestGuardHookAnnouncesADisabledRegistry is AC 1 applied to the escape hatch.
+// A disabled registry allows everything, which makes it an unguarded session —
+// and an unguarded session that says nothing is the one failure mode this whole
+// feature exists to prevent. It is not a FAULT (someone chose it, and the choice
+// is in a file a reviewer can see), but it must never pass for protection.
+//
+// It matters more than the other unguarded states, not less: those need a broken
+// install, while this one needs a single file write that the guard itself allows.
+func TestGuardHookAnnouncesADisabledRegistry(t *testing.T) {
 	dir := guardRepo(t)
 	cfg := `{"schema_version":1,"disabled":true,"entries":{}}`
 	if err := os.WriteFile(filepath.Join(dir, ".abcd", "guard.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code := runGuard(preToolUse(t, "Bash", "cd scratch && rm -rf *", dir), "guard", "hook")
+	_, stderr, code := runGuard(preToolUse(t, "Bash", "cd scratch && rm -rf *", dir), "guard", "hook")
 
-	if code != 0 {
-		t.Errorf("a committed kill switch must allow; got exit %d (stderr %q)", code, stderr)
+	if code == 2 {
+		t.Error("a disabled registry allows: it must never produce the blocking status")
 	}
-	if stdout != "" || stderr != "" {
-		t.Errorf("a deliberate disable is not a fault and must stay quiet; stdout=%q stderr=%q", stdout, stderr)
+	if code == 0 {
+		t.Error("exit 0 discards the hook's stderr, so a disabled guard would run in silence")
+	}
+	if !strings.Contains(stderr, guard.RepoRelPath) {
+		t.Errorf("the warning must name the file that turned the guard off; stderr = %q", stderr)
+	}
+	if !strings.Contains(stderr, "UNGUARDED") {
+		t.Errorf("a disabled guard is an unguarded session and must say so; stderr = %q", stderr)
 	}
 }

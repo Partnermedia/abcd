@@ -62,14 +62,34 @@ is never silently absent.
 
 ## Registry and overrides
 
-The bundled hazards ship inside the binary. A repo overrides them in a committed,
-reviewable file, `.abcd/guard.json`: add an entry key to change one field (for
+The bundled hazards ship inside the binary. A repo overrides them in one file in
+the repository, `.abcd/guard.json`: add an entry key to change one field (for
 example `{"tier": "warn"}`) or to declare a new hazard, and set
-`{"disabled": true}` to switch the guard off entirely. There is no in-session
-override — turning a guard off is a change someone can review.
+`{"disabled": true}` to switch the guard off entirely.
 
-Command strings passed to `eval` or `sh -c` are not parsed, so a hazard hidden
-inside one is not seen. Say so if a user asks about coverage.
+There is no flag, environment variable, or prompt that turns the guard off for a
+session — the file is the only route, so the change lands in a diff someone
+reviews. Two things follow, and both must be said plainly if a user asks. The
+file is read from the working tree, so an edit takes effect on the very next
+command, before anyone has reviewed it. And a repo whose guard is switched off is
+an unguarded session: every command it lets through carries an UNGUARDED warning
+naming the file, so the state cannot pass unnoticed.
+
+**Never write `.abcd/guard.json` on your own initiative.** Disabling or
+retiering a hazard is the user's decision to make and to review.
+
+### What an allow does and does not mean
+
+An allow means **no registry entry matched**. It is never a statement that a
+command is safe. The guard reads command names it can see in command position, so
+a hazard reached any other way is not seen: a command string handed to an
+interpreter (`eval`, `sh -c`), one launched through a wrapper outside the small
+known set, one inside a backtick substitution, or a dangerous form no entry
+describes. Coverage is what the registry names. Say exactly this if a user asks
+about coverage — never that the guard cleared the command.
+
+A candidate too long to read is refused (exit 2), not answered on the part that
+fitted.
 
 To check whether the guard is actually armed in this repo, run `abcd ahoy` and
 read its `guard:` line: it reports whether the hook is installed, whether the
