@@ -86,6 +86,16 @@ Development material lives under `.abcd/`; `docs/` is user-facing only.
 - `.abcd/.work.local/` — **local ephemeral** (gitignored): `NEXT.md` handover,
   `scratch/`, `logs/`. Per-worktree, so it never merge-conflicts.
 
+**Default to the local tier when in doubt.** Any artefact whose home is unclear —
+tool exports, oracle/review output, traces, intermediate analysis — goes to
+`.abcd/.work.local/scratch/` (or `logs/` for run output) **first**. Never to the
+repo root, and never into a tracked directory on a guess. Promotion is cheap and
+always available: an artefact that proves durable is moved up to `.abcd/work/` or
+`.abcd/development/` later, in a change that says why. Demotion is not — an
+artefact committed to the wrong tier is already in the history, and a stray
+top-level directory is a `stray_root_docs` finding. **Guessing upward is
+irreversible; guessing downward costs nothing.**
+
 ## Boundaries
 
 - **Transport-agnostic core.** `internal/core` never writes to stdout or knows a
