@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -123,11 +122,11 @@ func Confirm(req ConfirmRequest) (ConfirmResult, error) {
 		return ConfirmResult{}, &ConfirmError{"citation receipt confirms nothing"}
 	}
 
-	relPath, _, _, err := lint.CitationPolicy(req.Config)
+	policy, err := lint.CitationPolicy(req.Config, req.RepoRoot)
 	if err != nil {
 		return ConfirmResult{}, err
 	}
-	absPath := filepath.Join(req.RepoRoot, filepath.FromSlash(relPath))
+	relPath, absPath := policy.BaselineRel, policy.BaselinePath
 
 	cited, err := lint.CollectCitedURLs(req.Config, req.RepoRoot)
 	if err != nil {

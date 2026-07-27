@@ -42,7 +42,21 @@ type CitedURL struct {
 func CollectCitedURLs(cfg Config, repoRoot string) ([]CitedURL, error) {
 	sites := map[string][]CitationSite{}
 	for _, root := range cfg.Roots {
+		// Containment matters HERE in a way it does not for a reporting lint.
+		// What this collector returns is fetched over the network and then
+		// persisted into the committed baseline — a file the workflow expects the
+		// maintainer to push. A `roots` of "../private" in the committed config
+		// would therefore fetch every URL in a sibling directory and publish the
+		// list. The lint's own walk is a separate, pre-existing path.
+		if err := containedRepoPath(root); err != nil {
+			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
+				"; the citation collector reads only inside the repository"}
+		}
 		rootAbs := filepath.Join(repoRoot, root)
+		if err := resolvedInsideRoot(repoRoot, rootAbs); err != nil {
+			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
+				"; the citation collector reads only inside the repository"}
+		}
 		mdFiles, err := markdownFiles(rootAbs)
 		if err != nil {
 			return nil, err

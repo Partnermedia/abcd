@@ -34,7 +34,7 @@ func (s *stubChecker) Check(rawURL string) CheckOutcome {
 		out.URL = rawURL
 		return out
 	}
-	return CheckOutcome{URL: rawURL, Status: StatusOK, FinalURL: rawURL}
+	return CheckOutcome{URL: rawURL, Status: StatusOK, FinalURL: rawURL, Answered: true}
 }
 
 func (s *stubChecker) askedFor(rawURL string) bool {
@@ -133,7 +133,7 @@ func TestRefreshWritesAliveEntries(t *testing.T) {
 func TestRefreshRecordsBroken(t *testing.T) {
 	root := citeRepo(t, "https://example.org/gone")
 	checker := &stubChecker{answers: map[string]CheckOutcome{
-		"https://example.org/gone": {Status: StatusBroken, Detail: "HTTP 404 Not Found"},
+		"https://example.org/gone": {Status: StatusBroken, Answered: true, Detail: "HTTP 404 Not Found"},
 	}}
 
 	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
@@ -157,7 +157,7 @@ func TestRefreshRecordsBroken(t *testing.T) {
 func TestRefreshRoutesBlockedToTheQueueWithoutInventingAnEntry(t *testing.T) {
 	root := citeRepo(t, "https://paywalled.example.org/x")
 	checker := &stubChecker{answers: map[string]CheckOutcome{
-		"https://paywalled.example.org/x": {Status: StatusBlocked, Detail: "HTTP 403 Forbidden"},
+		"https://paywalled.example.org/x": {Status: StatusBlocked, Answered: true, Detail: "HTTP 403 Forbidden"},
 	}}
 
 	res, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now})
@@ -246,7 +246,7 @@ func TestRefreshKeepsAStaleManualReceiptWhenTheFetchIsStillBlocked(t *testing.T)
 	writeBaseline(t, root, map[string]lint.BaselineEntry{"https://paywalled.example.org/x": stale})
 
 	checker := &stubChecker{answers: map[string]CheckOutcome{
-		"https://paywalled.example.org/x": {Status: StatusBlocked, Detail: "HTTP 403 Forbidden"},
+		"https://paywalled.example.org/x": {Status: StatusBlocked, Answered: true, Detail: "HTTP 403 Forbidden"},
 	}}
 	res, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now})
 	if err != nil {
@@ -379,6 +379,61 @@ func TestRefreshRefusesToCommitATotalFailure(t *testing.T) {
 	}
 }
 
+// TestRefreshGuardSurvivesAPreservedReceipt is the hole a preserved-entry count
+// opened. A preserved receipt was never fetched, so it says NOTHING about
+// connectivity — yet counting it as evidence meant any repo that had ever used
+// `confirm`, which is the designed steady state for robot-refusing sources,
+// silently lost the whole protection.
+func TestRefreshGuardSurvivesAPreservedReceipt(t *testing.T) {
+	root := citeRepo(t, "https://example.org/a", "https://example.org/b", "https://paywalled.example.org/x")
+	good := map[string]lint.BaselineEntry{
+		"https://example.org/a": {FinalURL: "https://example.org/a", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+		"https://example.org/b": {FinalURL: "https://example.org/b", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+		// Current manual receipt: preserved, never fetched.
+		"https://paywalled.example.org/x": {FinalURL: "https://paywalled.example.org/x", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationManual, VerifiedOn: "2026-07-01"},
+	}
+	writeBaseline(t, root, good)
+
+	offline := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/a": {Status: StatusBroken, Detail: "dial tcp: no such host"},
+		"https://example.org/b": {Status: StatusBroken, Detail: "dial tcp: no such host"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: offline, Now: now}); err == nil {
+		t.Fatal("one preserved receipt disabled the wholesale-failure guard")
+	}
+	entries := loadBaseline(t, root).Entries
+	for url, want := range good {
+		got := entries[url]
+		got.URL = ""
+		if got != want {
+			t.Fatalf("%s = %+v, want the prior record untouched %+v", url, got, want)
+		}
+	}
+}
+
+// TestRefreshRecordsASoleGenuine404 is the guard's opposite failure. A 404 is an
+// ANSWER, so a repo whose only citation is really dead must be able to record
+// that — not be told forever to check a connection that is working.
+func TestRefreshRecordsASoleGenuine404(t *testing.T) {
+	root := citeRepo(t, "https://example.org/gone")
+	writeBaseline(t, root, map[string]lint.BaselineEntry{
+		"https://example.org/gone": {FinalURL: "https://example.org/gone", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+	})
+	checker := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/gone": {Status: StatusBroken, Answered: true, Detail: "HTTP 404 Not Found"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
+		t.Fatalf("a genuine 404 was misdiagnosed as a broken network: %v", err)
+	}
+	if got := loadBaseline(t, root).Entries["https://example.org/gone"]; got.Outcome != lint.OutcomeBroken {
+		t.Fatalf("entry = %+v, want outcome broken", got)
+	}
+}
+
 // TestRefreshStillRecordsAnIsolatedBrokenLink keeps that guard narrow: a dead
 // link among live ones is exactly what the baseline exists to record.
 func TestRefreshStillRecordsAnIsolatedBrokenLink(t *testing.T) {
@@ -388,7 +443,7 @@ func TestRefreshStillRecordsAnIsolatedBrokenLink(t *testing.T) {
 			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
 	})
 	checker := &stubChecker{answers: map[string]CheckOutcome{
-		"https://example.org/gone": {Status: StatusBroken, Detail: "HTTP 404 Not Found"},
+		"https://example.org/gone": {Status: StatusBroken, Answered: true, Detail: "HTTP 404 Not Found"},
 	}}
 	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -404,7 +459,7 @@ func TestRefreshStillRecordsAnIsolatedBrokenLink(t *testing.T) {
 func TestRefreshCommitsATotalFailureOnAFirstRun(t *testing.T) {
 	root := citeRepo(t, "https://example.org/gone")
 	checker := &stubChecker{answers: map[string]CheckOutcome{
-		"https://example.org/gone": {Status: StatusBroken, Detail: "HTTP 404 Not Found"},
+		"https://example.org/gone": {Status: StatusBroken, Answered: true, Detail: "HTTP 404 Not Found"},
 	}}
 	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: checker, Now: now}); err != nil {
 		t.Fatalf("Refresh: %v", err)
