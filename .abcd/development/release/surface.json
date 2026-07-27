@@ -468,6 +468,19 @@
       ]
     },
     {
+      "path": "abcd launch scaffold",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "confirm",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd launch ship",
       "hidden": false,
       "flags": [
