@@ -110,6 +110,10 @@ func NewRootCommand() *cobra.Command {
 			rep, err := launch.DryRun(launch.DryRunRequest{
 				RepoRoot: cwd,
 				Version:  publishedVersion(cwd),
+				// Grading the citation baseline needs the lint engine, which
+				// imports launch for its semver — so the measurement is taken
+				// HERE, where both are already in scope, and handed in as data.
+				Citations: citationPreflight(cwd),
 			})
 			if err != nil {
 				return err
@@ -118,6 +122,11 @@ func NewRootCommand() *cobra.Command {
 				fmt.Fprintf(w, "abcd launch (dry-run) — version %s\n", rep.Version)
 				fmt.Fprintf(w, "  files bundled:  %d\n", len(rep.Bundle.Included))
 				fmt.Fprintf(w, "  scan hardfails: %d\n", rep.Scan.HardFails)
+				for _, g := range rep.Gates {
+					if g.Name == "citation-baseline" && g.Status == "ran" {
+						fmt.Fprintf(w, "  citations:      %s\n", termsafe.Sanitize(g.Detail))
+					}
+				}
 				fmt.Fprintf(w, "  would publish:  %v\n", rep.WouldPublish)
 				if len(rep.WouldRefuseOn) > 0 {
 					fmt.Fprintf(w, "  would refuse on: %v\n", rep.WouldRefuseOn)
@@ -204,6 +213,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 
 	var configPath string
 	var rootDir string
+	var releaseGate bool
 	lintCmd := &cobra.Command{
 		Use:   "lint",
 		Short: "Lint docs for change-narration, broken links, and stray root markdown",
@@ -249,6 +259,15 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 				}
 				return &exitError{Code: 2, Msg: fmt.Sprintf("docs lint: cannot read config %s: %s", ref, detail)}
 			}
+			// --release-gate promotes the citation staleness finding from the
+			// commit gate's warn to a blocker (spc-17: commits are never
+			// calendar-blocked; a release is). The FLAG is the trust root, the
+			// way `record-lint --release-gate` arms the receipt gate: a repo
+			// must not be able to defang its own release by editing the
+			// committed config.
+			if releaseGate {
+				cfg = lint.ArmCitationOverdue(cfg)
+			}
 			findings, err := lint.Lint(cfg, root)
 			if err != nil {
 				return err
@@ -279,7 +298,12 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	}
 	lintCmd.Flags().StringVar(&configPath, "config", "", "path to docs-lint.json (default: <root>/.abcd/docs-lint.json)")
 	lintCmd.Flags().StringVar(&rootDir, "root", "", "repo root to lint (default: current working directory)")
+	lintCmd.Flags().BoolVar(&releaseGate, "release-gate", false,
+		"run as the release gate: a citation past its staleness threshold blocks instead of warning (release-time only)")
 	docsCmd.AddCommand(lintCmd)
+	// `cite` maintains the baseline `lint` enforces: the refresh does the live
+	// fetching the gate refuses to do, and confirm closes the manual queue.
+	docsCmd.AddCommand(newCiteCommand(asJSON))
 
 	return docsCmd
 }
@@ -1433,6 +1457,12 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  root sha:    %s\n", res.RootSHA)
 				if mode, _ := res.Signals["install_mode"].(string); mode != "" {
 					fmt.Fprintf(w, "  install:     %s\n", mode)
+				}
+				// The citation baseline's coverage and age, present only in a repo
+				// that has armed the citation gate. The line embeds counts and a
+				// date derived from repo content, so it is sanitised.
+				if citations, _ := res.Signals["citations"].(string); citations != "" {
+					fmt.Fprintf(w, "  citations:   %s\n", termsafe.Sanitize(citations))
 				}
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				// Classification is read-only; the human report names the
