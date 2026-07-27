@@ -38,7 +38,15 @@ func newLaunchScaffoldCommand(asJSON *bool) *cobra.Command {
 			rep, err := scaffold.Scaffold(scaffold.Request{RepoRoot: cwd, Confirm: confirm})
 			if err != nil && !errors.Is(err, scaffold.ErrScaffoldBlocked) {
 				// A structural fault (unreadable repo/template, failed write): exit 2,
-				// scrubbed to one line so no absolute path leaks (iss-81).
+				// scrubbed to one line so no absolute path leaks (iss-81). A mid-write
+				// fault still carries a partial per-file report (which files landed
+				// before the fault, which were skipped) — render it first so the
+				// operator sees the disk state; a pure preflight fault has none.
+				if len(rep.Files) > 0 {
+					_ = render(cmd.OutOrStdout(), *asJSON, rep, func(w io.Writer) {
+						renderScaffold(w, rep, false)
+					})
+				}
 				return &exitError{Code: 2, Msg: "abcd launch scaffold: " + scrubPaths(err)}
 			}
 			blocked := errors.Is(err, scaffold.ErrScaffoldBlocked)

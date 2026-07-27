@@ -20,17 +20,33 @@ const maxWorkflowBytes = 1 << 20
 // file differs from the machinery and --confirm was not given.
 var ErrScaffoldBlocked = errors.New("scaffold refused: an existing file was hand-edited (pass --confirm to overwrite)")
 
-// FileStatus is one scaffolded file's disposition.
+// FileStatus is one scaffolded file's disposition in the report. Every value
+// means what it says on disk: "written" is written, never merely planned.
 type FileStatus string
 
 const (
-	// StatusWritten — the file was written (created, or overwritten under confirm).
+	// StatusWritten — the file was actually written (created, or overwritten under
+	// confirm). Only set AFTER the write succeeds.
 	StatusWritten FileStatus = "written"
 	// StatusCurrent — the file already matches the machinery; nothing was written.
 	StatusCurrent FileStatus = "current"
 	// StatusRefused — the file exists and differs, and --confirm was not given, so
 	// it was left untouched.
 	StatusRefused FileStatus = "refused"
+	// StatusSkipped — the file WOULD have been written, but the run refused (a
+	// sibling was hand-edited) or a write faulted first, so it was NOT written. The
+	// scaffold is all-or-nothing, so this reports honestly that nothing landed.
+	StatusSkipped FileStatus = "skipped"
+)
+
+// disposition is the pre-write classification of a target: what it is on disk,
+// independent of --confirm. It never claims a write happened.
+type disposition int
+
+const (
+	dispAbsent  disposition = iota // no file → will be created
+	dispCurrent                    // byte-identical to the machinery → no-op
+	dispDiffers                    // present and different → refuse or (with --confirm) overwrite
 )
 
 // FileOutcome is the per-file result of a scaffold run.
@@ -94,42 +110,51 @@ func Scaffold(req Request) (Report, error) {
 
 	// First pass: classify every file WITHOUT writing. A refusal on any file with
 	// Confirm unset aborts the whole run before a single write, so the scaffold is
-	// all-or-nothing rather than half-applied.
+	// all-or-nothing rather than half-applied. Nothing is marked "written" here —
+	// a planned write is only tentative until the second pass commits it, so the
+	// report never claims a file landed that did not (the StatusWritten contract).
 	outcomes := make([]FileOutcome, len(planned))
 	writeNeeded := make([]bool, len(planned))
+	overwrite := make([]bool, len(planned))
+	refused := 0
 	for i, p := range planned {
 		abs := filepath.Join(req.RepoRoot, filepath.FromSlash(p.rel))
-		state, detail := classify(abs, p.data)
-		switch state {
-		case StatusCurrent:
+		disp, detail := classify(abs, p.data)
+		switch disp {
+		case dispCurrent:
 			outcomes[i] = FileOutcome{Path: p.rel, Status: StatusCurrent}
-		case StatusWritten: // absent → to be written
+		case dispAbsent:
 			writeNeeded[i] = true
-			outcomes[i] = FileOutcome{Path: p.rel, Status: StatusWritten}
-		case StatusRefused:
+			outcomes[i] = FileOutcome{Path: p.rel, Status: StatusSkipped} // provisional until written
+		case dispDiffers:
 			if req.Confirm {
 				writeNeeded[i] = true
-				outcomes[i] = FileOutcome{Path: p.rel, Status: StatusWritten, Detail: "overwritten under --confirm"}
+				overwrite[i] = true
+				outcomes[i] = FileOutcome{Path: p.rel, Status: StatusSkipped} // provisional until written
 			} else {
+				refused++
 				outcomes[i] = FileOutcome{Path: p.rel, Status: StatusRefused, Detail: detail}
 			}
 		}
 	}
 
-	refused := 0
-	for _, o := range outcomes {
-		if o.Status == StatusRefused {
-			refused++
-		}
-	}
 	if refused > 0 {
+		// Abort all-or-nothing: nothing is written. Every file that WOULD have been
+		// written stays StatusSkipped with a reason, so the per-file report and the
+		// wrote/refused counters match what is actually on disk.
+		for i := range outcomes {
+			if writeNeeded[i] {
+				outcomes[i].Detail = "not written: the run refused because another file was hand-edited (all-or-nothing)"
+			}
+		}
 		report.Files = outcomes
 		report.Refused = refused
 		return report, ErrScaffoldBlocked
 	}
 
 	// Second pass: commit the writes. Every file that reaches here is either a
-	// create or a confirmed overwrite.
+	// create or a confirmed overwrite; a file becomes StatusWritten only once its
+	// write actually succeeds.
 	wrote := 0
 	for i, p := range planned {
 		if !writeNeeded[i] {
@@ -137,44 +162,51 @@ func Scaffold(req Request) (Report, error) {
 		}
 		abs := filepath.Join(req.RepoRoot, filepath.FromSlash(p.rel))
 		if err := fsutil.WriteFileAtomicPreserveMode(abs, p.data); err != nil {
-			// Report what was written before the fault; the caller renders it. The
-			// atomic writer never leaves a half-written file.
+			// The atomic writer never leaves a half-written file; the files written
+			// before this fault are marked written, this one and any later planned
+			// file stay StatusSkipped (not written), so the report matches disk.
+			outcomes[i].Detail = "not written: a write faulted on this file"
 			report.Files = outcomes
 			report.Wrote = wrote
 			return report, fmt.Errorf("scaffold: write %s: %w", p.rel, err)
+		}
+		outcomes[i].Status = StatusWritten
+		if overwrite[i] {
+			outcomes[i].Detail = "overwritten under --confirm"
 		}
 		wrote++
 	}
 
 	report.Files = outcomes
 	report.Wrote = wrote
-	report.NoOp = wrote == 0 && refused == 0
+	report.NoOp = wrote == 0
 	return report, nil
 }
 
-// classify reports whether abs is absent (→ StatusWritten, write it), byte-equal
-// to want (→ StatusCurrent, no-op), or present-and-different (→ StatusRefused).
-// A non-regular leaf (symlink/FIFO/device) or an unreadable existing file is
-// treated as different — the scaffold never writes through a symlink silently and
-// never assumes an unreadable file is safe to clobber.
-func classify(abs string, want []byte) (FileStatus, string) {
+// classify reports whether abs is absent (→ dispAbsent, write it), byte-equal to
+// want (→ dispCurrent, no-op), or present-and-different (→ dispDiffers, refuse or
+// overwrite under --confirm). A non-regular leaf (symlink/FIFO/device) or an
+// unreadable existing file is treated as dispDiffers — the scaffold never writes
+// through a symlink silently and never assumes an unreadable file is safe to
+// clobber. The string is a refusal reason, set only for dispDiffers.
+func classify(abs string, want []byte) (disposition, string) {
 	got, err := fsutil.ReadGuarded(abs, maxWorkflowBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return StatusWritten, ""
+			return dispAbsent, ""
 		}
 		if errors.Is(err, fsutil.ErrNotRegular) {
-			return StatusRefused, "existing path is not a regular file (a symlink or non-regular leaf is never written through)"
+			return dispDiffers, "existing path is not a regular file (a symlink or non-regular leaf is never written through)"
 		}
 		if errors.Is(err, fsutil.ErrTooBig) {
-			return StatusRefused, "existing file exceeds the size cap; this is not machinery abcd wrote"
+			return dispDiffers, "existing file exceeds the size cap; this is not machinery abcd wrote"
 		}
-		return StatusRefused, "existing file is unreadable: " + err.Error()
+		return dispDiffers, "existing file is unreadable: " + err.Error()
 	}
 	if string(got) == string(want) {
-		return StatusCurrent, ""
+		return dispCurrent, ""
 	}
-	return StatusRefused, "existing file differs from the current machinery (hand-edited or stale)"
+	return dispDiffers, "existing file differs from the current machinery (hand-edited or stale)"
 }
 
 // goVersionRe matches a strict major.minor Go version — the only shape allowed
