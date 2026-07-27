@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "disabled": false,
+  "entries": {
+    "rm-rf-after-cd-chain": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "rm",
+        "flags": ["-r|-R|--recursive", "-f|--force"],
+        "after_cd": true
+      },
+      "why": "If the `cd` fails, the delete still runs — in whatever directory the shell was already in — so a command meant for a scratch folder can wipe the working tree instead.",
+      "successor": "Run the delete as its own command with an absolute path (`rm -rf -- /absolute/path/to/target`), so a failed `cd` cannot redirect it.",
+      "fixtures": {
+        "known_bad": [
+          "cd scratch && rm -rf *",
+          "cd /tmp/build; rm -rf .",
+          "cd scratch && sudo rm -fr ./*",
+          "cd worktree && rm -r -f build"
+        ],
+        "known_good": [
+          "./bin/abcd-darwin-arm64 capture \"agent ran cd scratch && rm -rf * — one failed cd from disaster\"",
+          "rm -rf ./build",
+          "cd scratch && ls -la",
+          "cd scratch && rm ./notes.txt"
+        ]
+      }
+    },
+    "git-push-force": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "git",
+        "subcommand": "push",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "flags": ["--force|-f|--force-with-lease|--force-if-includes"]
+      },
+      "why": "A force push rewrites the shared branch history, so commits other people already have can disappear with no copy left anywhere.",
+      "successor": "Push without a force flag; if the remote rejects it, integrate first (`git pull --rebase`), or push a new branch and open a pull request.",
+      "fixtures": {
+        "known_bad": [
+          "git push --force origin main",
+          "git push -f",
+          "git push --force-with-lease origin main",
+          "git -C /repo push --force origin main",
+          "git push '--force' origin main"
+        ],
+        "known_good": [
+          "git push origin main",
+          "git push --set-upstream origin feat/shell-hazard-registry",
+          "abcd capture \"an agent tried git push --force on main\"",
+          "git log --oneline -5"
+        ]
+      }
+    },
+    "git-commit-no-verify": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "git",
+        "subcommand": "commit",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "flags": ["--no-verify|-n"]
+      },
+      "why": "`--no-verify` skips the checks the repository installed as commit hooks, so a broken or unsafe change is recorded without ever being looked at.",
+      "successor": "Commit without the flag and fix whatever the hooks report; if a hook is wrong, fix the hook.",
+      "fixtures": {
+        "known_bad": [
+          "git commit --no-verify -m \"wip\"",
+          "git commit -n -m \"wip\"",
+          "git -c core.hooksPath=/dev/null commit --no-verify"
+        ],
+        "known_good": [
+          "git commit -m \"wip\"",
+          "git commit --amend --no-edit",
+          "abcd capture \"agent used git commit --no-verify to skip the hooks\""
+        ]
+      }
+    },
+    "git-push-no-verify": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "git",
+        "subcommand": "push",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "flags": ["--no-verify"]
+      },
+      "why": "`--no-verify` skips the pre-push checks, so the branch is published without the tests and scans the repository requires before anything leaves the machine.",
+      "successor": "Push without the flag and fix what the pre-push hook reports; if a hook is wrong, fix the hook.",
+      "fixtures": {
+        "known_bad": [
+          "git push --no-verify",
+          "git push --no-verify origin main"
+        ],
+        "known_good": [
+          "git push -n origin main",
+          "git push origin main",
+          "abcd capture \"the agent ran git push --no-verify\""
+        ]
+      }
+    },
+    "git-reset-hard": {
+      "tier": "warn",
+      "pattern": {
+        "command": "git",
+        "subcommand": "reset",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "flags": ["--hard"]
+      },
+      "why": "`--hard` throws away every uncommitted change in the working tree, and nothing in git can bring back work that was never committed.",
+      "successor": "Save the changes first (`git stash`), or undo one file with `git restore <path>`; use `--hard` only on work you created yourself.",
+      "fixtures": {
+        "known_bad": [
+          "git reset --hard origin/main",
+          "git reset --hard",
+          "cd repo && git reset --hard HEAD~1"
+        ],
+        "known_good": [
+          "git reset --soft HEAD~1",
+          "git reset HEAD -- notes.md",
+          "abcd capture \"agent ran git reset --hard and lost my uncommitted edits\""
+        ]
+      }
+    },
+    "git-clean": {
+      "tier": "warn",
+      "pattern": {
+        "command": "git",
+        "subcommand": "clean",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"]
+      },
+      "why": "`git clean` deletes untracked files outright — anything never added to git, including local notes and scratch output, is gone with no copy in the repository.",
+      "successor": "List what would go first (`git clean --dry-run`) and move anything worth keeping aside; delete only files you created yourself.",
+      "fixtures": {
+        "known_bad": [
+          "git clean -fd",
+          "git clean -xfd",
+          "cd worktree && git clean -f"
+        ],
+        "known_good": [
+          "git status --porcelain",
+          "git stash --include-untracked",
+          "abcd capture \"git clean -fd wiped my scratch notes\""
+        ]
+      }
+    }
+  }
+}

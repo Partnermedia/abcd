@@ -1,0 +1,190 @@
+package guard
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+// checkOK runs Check against the bundled defaults, failing the test on a
+// tokenizer error (the cases that expect one assert it directly).
+func checkOK(t *testing.T, command string) Decision {
+	t.Helper()
+	d, err := Defaults().Check(command)
+	if err != nil {
+		t.Fatalf("Check(%q): unexpected error: %v", command, err)
+	}
+	return d
+}
+
+func TestCheckDecisions(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		verdict Verdict
+		entryID string // expected winning entry ("" when allowed)
+	}{
+		{
+			name:    "cd chain then rm -rf is blocked",
+			command: "cd scratch && rm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "hazard quoted inside an incident capture never fires",
+			command: `./bin/abcd-darwin-arm64 capture "agent ran cd scratch && rm -rf * — one failed cd from disaster"`,
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "rm -rf without a cd chain is allowed",
+			command: "rm -rf ./build",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a quoted flag still fires (quoting is not a bypass)",
+			command: `git push '--force' origin main`,
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "git global value flags do not hide the subcommand",
+			command: "git -C /repo push --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "bundled short flags match (-fr satisfies -r and -f)",
+			command: "cd scratch && rm -fr ./*",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "a sudo wrapper does not hide the command",
+			command: "cd scratch && sudo rm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "an environment assignment prefix does not hide the command",
+			command: "cd scratch && FOO=bar rm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "push -n is dry-run, not --no-verify",
+			command: "git push -n origin main",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "commit -n is --no-verify and is blocked",
+			command: `git commit -n -m "wip"`,
+			verdict: VerdictBlock,
+			entryID: "git-commit-no-verify",
+		},
+		{
+			name:    "reset --hard warns rather than blocks",
+			command: "git reset --hard origin/main",
+			verdict: VerdictWarn,
+			entryID: "git-reset-hard",
+		},
+		{
+			name:    "an unrelated command is allowed",
+			command: "git status --porcelain",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a cd on the previous line does not chain into the next line",
+			command: "cd scratch\nrm -rf ./build",
+			verdict: VerdictAllow,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := checkOK(t, tc.command)
+			if d.Verdict != tc.verdict {
+				t.Fatalf("Check(%q).Verdict = %q, want %q (matches: %v)", tc.command, d.Verdict, tc.verdict, d.Matches)
+			}
+			if d.EntryID != tc.entryID {
+				t.Fatalf("Check(%q).EntryID = %q, want %q", tc.command, d.EntryID, tc.entryID)
+			}
+			if tc.verdict == VerdictAllow {
+				return
+			}
+			if d.Successor == "" || d.Why == "" {
+				t.Fatalf("Check(%q): a firing decision must carry a successor and a why, got %+v", tc.command, d)
+			}
+			if !strings.Contains(d.Message, d.Successor) {
+				t.Fatalf("Check(%q).Message = %q, must cite the successor %q", tc.command, d.Message, d.Successor)
+			}
+		})
+	}
+}
+
+// TestBlockerWinsOverWarn pins the severity ordering: a line that trips both
+// tiers is refused, and both matches are reported.
+func TestBlockerWinsOverWarn(t *testing.T) {
+	d := checkOK(t, "cd repo && git reset --hard && rm -rf *")
+	if d.Verdict != VerdictBlock || d.EntryID != "rm-rf-after-cd-chain" {
+		t.Fatalf("blocker must win over warn, got %+v", d)
+	}
+	if len(d.Matches) != 2 {
+		t.Fatalf("Matches = %v, want both the blocker and the warn entry", d.Matches)
+	}
+}
+
+// TestEvalPayloadIsDocumentedV1Gap records the v1 gap explicitly: a hazard
+// carried as a string payload to sh -c is NOT matched. It is a stated gap, not a
+// silent one — this test is what makes it visible if the behaviour ever changes.
+func TestEvalPayloadIsDocumentedV1Gap(t *testing.T) {
+	d := checkOK(t, `sh -c 'cd scratch && rm -rf *'`)
+	if d.Verdict != VerdictAllow {
+		t.Fatalf("v1 parses no payload strings; got %+v — update the documented gap before changing this", d)
+	}
+}
+
+func TestCheckRejectsUnparsableCommand(t *testing.T) {
+	if _, err := Defaults().Check(`rm -rf "unterminated`); !errors.Is(err, ErrUnparsableCommand) {
+		t.Fatalf("error = %v, want ErrUnparsableCommand", err)
+	}
+}
+
+func TestDisabledRegistryAllowsEverything(t *testing.T) {
+	r := Defaults()
+	r.Disabled = true
+	d, err := r.Check("cd scratch && rm -rf *")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Verdict != VerdictAllow {
+		t.Fatalf("a disabled registry must allow everything, got %+v", d)
+	}
+}
+
+// TestDefaultsAreACopy proves the bundled registry cannot be mutated through a
+// caller's handle — the next Check must not inherit another caller's edit.
+func TestDefaultsAreACopy(t *testing.T) {
+	r := Defaults()
+	e := r.Entries["git-reset-hard"]
+	e.Tier = TierBlocker
+	r.Entries["git-reset-hard"] = e
+	delete(r.Entries, "git-push-force")
+
+	fresh := Defaults()
+	if fresh.Entries["git-reset-hard"].Tier != TierWarn {
+		t.Fatal("mutating a Defaults() handle changed the bundled registry")
+	}
+	if _, ok := fresh.Entries["git-push-force"]; !ok {
+		t.Fatal("deleting from a Defaults() handle removed a bundled entry")
+	}
+}
+
+// TestDefaultsValidate proves the embedded registry passes the same validation a
+// per-repo override must pass.
+func TestDefaultsValidate(t *testing.T) {
+	if err := Validate(Defaults()); err != nil {
+		t.Fatalf("bundled defaults fail validation: %v", err)
+	}
+	if Defaults().SchemaVersion != SchemaVersion {
+		t.Fatalf("bundled schema_version = %d, want %d", Defaults().SchemaVersion, SchemaVersion)
+	}
+}
