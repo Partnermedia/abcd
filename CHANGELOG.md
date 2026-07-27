@@ -12,6 +12,16 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A public terminology crosswalk at `docs/reference/terminology.md`** (itd-100).
+  One reference page maps 26 established agentic-AI terms — protocols, the core
+  loop, context, safety, governance, operations — to abcd's position on each:
+  USES (naming the native verb or principle), ADAPTS (the sharper native name and
+  why), REJECTS (with the recorded reason), or WATCHING (with the record id).
+  Every established definition carries a footnote citation to a primary source
+  (specification, standards body, DOI-bearing paper, or origin engineering doc);
+  every abcd claim is grounded in the committed record. Vendor names appear only
+  inside citation footnotes, keeping the page body host-agnostic.
+
 - **`abcd ahoy install --dev` — a track-latest dogfood install mode** (iss-75).
   Normal `ahoy install` symlinks the pinned built binary, so tracking live
   development meant hand-rolling a `~/.local/bin/abcd` wrapper that ran

@@ -19,6 +19,12 @@ and fit for the project. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas and methodologies that shaped the design — not code abcd depends on.
 
+- **"20 Must-Know Agentic AI Terms" (Andreas Horn, LinkedIn, 2026)** — the
+  practitioner term list whose assessment seeded the terminology crosswalk
+  (itd-100, `docs/reference/terminology.md`). Credited as the prompt, not a
+  source: every crosswalk citation is to a primary anchor, and the crosswalk's
+  admission rule (no single-author coinages, no aggregators) was formulated in
+  reaction to it.
 - **Agentic Context Engineering (ACE)** — the append-only-delta model of a
   self-improving instruction record, and the two failure modes it names —
   *brevity bias* and *context collapse* — which itd-81 cites to strike itd-5's
