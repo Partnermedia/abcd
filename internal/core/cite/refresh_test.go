@@ -469,6 +469,41 @@ func TestRefreshCommitsATotalFailureOnAFirstRun(t *testing.T) {
 	}
 }
 
+// TestRefreshTreatsASuccessAsAnAnswer removes a footgun from the exported seam.
+// A third-party adapter that reports StatusOK but leaves Answered at its zero
+// value would otherwise make the whole run refuse with "no host answered" —
+// while every single check succeeded. It is definitional, not inference: a 2xx
+// or a 403 cannot exist without a host having answered, so only StatusBroken
+// carries real ambiguity, and that is the one case the checker must speak to.
+func TestRefreshTreatsASuccessAsAnAnswer(t *testing.T) {
+	root := citeRepo(t, "https://example.org/a")
+	writeBaseline(t, root, map[string]lint.BaselineEntry{
+		"https://example.org/a": {FinalURL: "https://example.org/a", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+	})
+	// An adapter that forgot the field entirely.
+	naive := &stubChecker{answers: map[string]CheckOutcome{
+		"https://example.org/a": {Status: StatusOK, FinalURL: "https://example.org/a"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root, Config: testConfig(), Checker: naive, Now: now}); err != nil {
+		t.Fatalf("a successful run was refused because an adapter omitted Answered: %v", err)
+	}
+
+	// The same for a blocked outcome, which is defined by status codes and so
+	// likewise cannot happen without an answer.
+	root2 := citeRepo(t, "https://paywalled.example.org/x")
+	writeBaseline(t, root2, map[string]lint.BaselineEntry{
+		"https://paywalled.example.org/x": {FinalURL: "https://paywalled.example.org/x", LastChecked: "2026-07-01",
+			Outcome: lint.OutcomeAlive, Verification: lint.VerificationAutomatic, VerifiedOn: "2026-07-01"},
+	})
+	naive2 := &stubChecker{answers: map[string]CheckOutcome{
+		"https://paywalled.example.org/x": {Status: StatusBlocked, Detail: "HTTP 403 Forbidden"},
+	}}
+	if _, err := Refresh(RefreshRequest{RepoRoot: root2, Config: testConfig(), Checker: naive2, Now: now}); err != nil {
+		t.Fatalf("a blocked outcome was misread as an unanswered one: %v", err)
+	}
+}
+
 // TestRefreshRefusesAnUnknownCheckerStatus closes the seam's silent-drop hole.
 // Status and Checker are exported for the adapter spc-17 AC 5 calls for; one
 // returning anything else would otherwise omit the URL from BOTH the baseline and
