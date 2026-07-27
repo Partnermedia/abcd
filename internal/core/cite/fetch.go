@@ -133,12 +133,20 @@ func newHTTPChecker(blocked func(net.IP) bool, timeout time.Duration) *HTTPCheck
 				ResponseHeaderTimeout: headerTimeout,
 			},
 			CheckRedirect: func(r *http.Request, via []*http.Request) error {
+				// Both refusals below are wrapped in redirectRefusal. Reaching
+				// this function at all means a host answered with a 3xx, but
+				// client.Do reports the refusal as an ERROR — so without the
+				// marker the outcome would claim nothing replied, and the
+				// refresh's wholesale-failure guard reads exactly that bit.
 				if len(via) >= maxRedirects {
-					return errors.New("more than " + strconv.Itoa(maxRedirects) + " redirects")
+					return &redirectRefusal{errors.New("more than " + strconv.Itoa(maxRedirects) + " redirects")}
 				}
 				// Every hop is re-guarded: a public address that redirects to
 				// 169.254.169.254 must not be followed.
-				return urlguard.CheckHostWith(r.URL.Hostname(), blocked)
+				if err := urlguard.CheckHostWith(r.URL.Hostname(), blocked); err != nil {
+					return &redirectRefusal{err}
+				}
+				return nil
 			},
 		},
 	}
@@ -171,6 +179,10 @@ func (c *HTTPChecker) Check(rawURL string) CheckOutcome {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		out.Status, out.Detail = StatusBroken, transportDetail(err)
+		// A refused redirect chain is still a chain: a host answered 3xx to get
+		// here, so this is a broken citation rather than a broken network.
+		var rr *redirectRefusal
+		out.Answered = errors.As(err, &rr)
 		return out
 	}
 	// The body is never read: liveness is the status line. Closing without
@@ -208,6 +220,14 @@ func classify(code int) (Status, string) {
 		return StatusBroken, "HTTP " + strconv.Itoa(code) + " " + http.StatusText(code)
 	}
 }
+
+// redirectRefusal marks an error raised from CheckRedirect — one where a host
+// DID answer, with a 3xx, before abcd declined to follow it. It exists so Check
+// can set Answered on a path where client.Do reports only an error.
+type redirectRefusal struct{ err error }
+
+func (e *redirectRefusal) Error() string { return e.err.Error() }
+func (e *redirectRefusal) Unwrap() error { return e.err }
 
 // transportDetail renders a transport failure without the *url.Error wrapper,
 // which repeats the URL the outcome already names.
