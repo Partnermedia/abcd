@@ -1,5 +1,5 @@
 name: release
-
+<% if .Abcd %>
 # Pushing a version tag (vX.Y.Z) first re-runs the full verification gate (gofmt,
 # build, vet, the race leg, and the deterministic record/docs/reviews gates)
 # against the PUSHED COMMIT; only if that gate is green does it cross-compile the
@@ -13,6 +13,15 @@ name: release
 # re-pointed between jobs to swap unverified code into the build) and never the
 # default-branch tip. Net effect: a tag push yields a verified release whose binaries,
 # checksums, and reported version all come from the pushed commit.
+<%- else %>
+# Pushing a version tag (vX.Y.Z) re-runs the full verification gate against the
+# PUSHED COMMIT; only if that gate is green does it build and publish a GitHub
+# Release from that same commit. Nothing is pushed to any branch, and the whole
+# path runs on the built-in GITHUB_TOKEN. Both jobs check out `github.sha` — the
+# commit the pushed tag pointed at — never the re-resolvable tag NAME and never the
+# default-branch tip. A manual workflow_dispatch runs the rehearsal (below), which
+# arms the gate against a simulated release and publishes nothing.
+<%- end %>
 on:
   push:
     tags:
@@ -62,12 +71,20 @@ permissions:
   contents: read
 
 jobs:
+<%- if .Abcd %>
   # Gate the release on the pushed commit, mirroring ci.yml's check + record-lint
   # jobs (gofmt, build, vet, test, the race leg, the record/docs drift gates, and
   # the reviews-charter discipline). A red step here aborts before anything is built
   # or published. Checked out at github.sha — the commit the pushed tag pointed at,
   # never the default-branch tip or the re-resolvable tag name — so the gate
   # exercises exactly the commit whose binaries will ship.
+<%- else %>
+  # Gate the release on the pushed commit: the deterministic verification gate
+  # (gofmt, build, vet, test, the race leg). A red step here aborts before anything
+  # is built or published. Checked out at github.sha — the commit the pushed tag
+  # pointed at, never the default-branch tip or the re-resolvable tag name — so the
+  # gate exercises exactly the commit that will ship.
+<%- end %>
   verify:
     timeout-minutes: 15
     runs-on: ubuntu-latest
@@ -84,15 +101,19 @@ jobs:
           # the re-release-from-tag case; empty inputs.ref falls through to
           # github.sha = the caller's HEAD = the commit auto-release just tagged.
           ref: ${{ inputs.ref || github.sha }}
+<%- if .Abcd %>
           # Full history: the reviews-charter check (RD002, append-only) inspects
           # committed history for post-creation edits, which a shallow checkout misses.
+<%- else %>
+          # Full history so any gate that inspects committed history stays accurate.
+<%- end %>
           fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.25'
+          go-version: '<% .GoVersion %>'
           # cache: false — this workflow is tag-triggered; module caching in a
           # release-triggering workflow is a cache-poisoning vector (zizmor).
           cache: false
@@ -118,18 +139,11 @@ jobs:
 
       - name: Test (race, internal)
         run: go test -race ./internal/...
+<%- range .ExtraGates %>
 
-      - name: Record-lint (design-record drift gate)
-        run: go run ./cmd/record-lint
-
-      - name: Docs-lint (docs-currency gate)
-        run: go run ./cmd/abcd docs lint
-
-      - name: Reviews-charter discipline (RD001-RD003)
-        run: bash scripts/check-reviews.sh
-
-      - name: Smoke every command (self-discovering harness)
-        run: make smoke
+      - name: <% .Name %>
+        run: <% .Run %>
+<%- end %>
 
   # Build and publish ONLY after verify is green. Binaries are cross-compiled from
   # the same pushed commit (github.sha) that verify just gated, so the shipped
@@ -143,9 +157,13 @@ jobs:
     timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
+<%- if .Abcd %>
       contents: write       # create the Release and upload its assets (no branch push)
       id-token: write       # mint the OIDC token attest-build-provenance signs with
       attestations: write   # publish the build-provenance attestations (public repo)
+<%- else %>
+      contents: write       # create the Release (no branch push, no attestation)
+<%- end %>
     steps:
       - name: Check out the pushed commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -155,9 +173,13 @@ jobs:
           # commit verify gated. inputs.ref (resolved SHA) overrides on the
           # workflow_call re-release path, exactly as in verify.
           ref: ${{ inputs.ref || github.sha }}
+<%- if .Abcd %>
           # Full history: the semantic-gate resolve step below walks HEAD^2^/HEAD^
           # to find the reviewed content commit, which a shallow (depth-1) clone
           # cannot reach — it would abort and fail-close every release.
+<%- else %>
+          # Full history, so any history-walking gate has the commits it needs.
+<%- end %>
           fetch-depth: 0
           persist-credentials: false
 
@@ -180,8 +202,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.25'
+          go-version: '<% .GoVersion %>'
           cache: false
+<%- if .SemanticGates %>
 
       # --- Semantic release gate (iss-35; dormant until the public flip) --------
       # The LLM semantic passes (docs-currency-reviewer, the brief↔surface
@@ -239,9 +262,8 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${CONTENT_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
-          go run ./cmd/record-lint --release-gate "$CONTENT_SHA" \
-            --require-gate docs-currency-reviewer \
-            --require-gate iss35-brief-surface-crosscheck
+          go run ./cmd/record-lint --release-gate "$CONTENT_SHA"<% range .SemanticGates %> \
+            --require-gate <% . %><% end %>
 
       - name: Attest the semantic-gate receipts (signed release provenance)
         if: ${{ !github.event.repository.private }}
@@ -267,7 +289,8 @@ jobs:
               --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
               --predicate-type https://abcd.dev/attestations/semantic-release-gate/v1
           done
-
+<%- end %>
+<% if .Abcd %>
       - name: Cross-compile the four binaries (version-stamped from the tag)
         # VERSION=<tag> stamps `abcd version` via -ldflags -X …internal/core.Version.
         # The binaries built here are the ones checksummed, attested, and uploaded
@@ -326,6 +349,19 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+<%- else %>
+      - name: Build
+        run: go build ./...
+
+      - name: Create the GitHub Release and generate notes
+        # --verify-tag: the tag must already exist (auto-release created it) and
+        # point at the checked-out commit. --generate-notes lists the merged PRs
+        # since the previous tag; CHANGELOG.md remains the durable, hand-curated
+        # record. GITHUB_TOKEN-only: no personal access token, no elevated secret.
+        run: gh release create "${TAG}" --verify-tag --title "${TAG}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+<%- end %>
 
       - name: Assert the release job pushed nothing to the default branch
         # Close the no-branch-commit tripwire opened at job start. Runs last so it
@@ -381,7 +417,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.25'
+          go-version: '<% .GoVersion %>'
           cache: false
 
       - name: Simulate a changelog roll and the two-commit release branch
@@ -434,12 +470,14 @@ jobs:
           git merge-base --is-ancestor "$content" "$released"
           test "$content" = "${REHEARSAL_CONTENT_SHA}"
           echo "rehearsal: the gate would arm against content commit $content (present in the released tree)"
+<%- if .Abcd %>
 
       - name: Arm the deterministic record gate against the simulated tree
         # The deterministic half of the gate must pass on the simulated roll. The
         # semantic half (record-lint --release-gate) activates with the real gate on
         # the public flip; here the resolution above proves it would arm correctly.
         run: go run ./cmd/record-lint
+<%- end %>
 
       - name: Prove the gate admits and nothing was published
         run: |
