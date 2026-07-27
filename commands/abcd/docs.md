@@ -1,13 +1,15 @@
 ---
 name: docs
-description: Lint this repo's documentation for currency — change-narration ("previously", "formerly", …), broken relative links, and stray root markdown — by invoking the abcd binary. Read-only; performs zero writes.
-argument-hint: "[lint]"
+description: Lint this repo's documentation for currency — change-narration ("previously", "formerly", …), broken relative links, stray root markdown, and citation health — by invoking the abcd binary. `lint` is read-only; `cite refresh` and `cite confirm` maintain the citation baseline.
+argument-hint: "[lint | cite refresh | cite confirm <url>...]"
 ---
 
-# `/abcd:docs` documentation-currency lint
+# `/abcd:docs` documentation currency and citations
 
-Run the abcd binary's docs-currency lint for the current repo and present the
-result. This command performs **zero writes**.
+Two jobs live here. `lint` grades the documentation and writes nothing. `cite`
+maintains the committed citation baseline that the lint then enforces offline.
+
+## `lint` — the currency gate (zero writes, zero network)
 
 Run:
 
@@ -29,10 +31,80 @@ It also checks that relative links resolve and that no stray markdown sits at th
 repo root (it belongs under `docs/`). Point the user at the offending file and
 line for each finding, and note whether it is a blocker or a warning.
 
+Where a repo arms them, the citation rules add: footnote markers and definitions
+in bijection, every crosswalk table row carrying a footnote, well-formed URLs and
+DOIs, refused source domains, and the committed baseline — no cited URL without a
+receipt, none recorded broken, none whose recorded final address has drifted from
+what the page cites, and a staleness warning past 180 days. Every one of these
+reads committed files only; nothing dials out.
+
+`--release-gate` runs the same lint with one difference: a citation past the
+365-day threshold blocks instead of warning. It is for release machinery only —
+an ordinary commit is never blocked by the calendar.
+
 If `blockers` is zero the docs are currency-clean.
 
+## `cite refresh` — the one verb that reaches the network
+
+Run:
+
+```bash
+abcd docs cite refresh --json
+```
+
+This fetches every cited URL once, bounded and without retries, and rewrites the
+baseline. Report from the JSON:
+
+- `cited`, `fetched`, `preserved` — how much was checked, and how many current
+  human-verified receipts were left alone.
+- `outcomes` — each URL's `status` (`ok`, `broken`, `blocked`, `preserved`),
+  its `final_url`, and the `detail`. List every `broken` one: those are dead
+  citations the gate will block on.
+- `queue` — sources that refuse automated fetchers. Present these as a checklist
+  with the `sites` that cite each one, and tell the user to open each link and
+  confirm it.
+- `dropped` — receipts removed because the docs no longer cite those addresses.
+
+A `blocked` source is **not** recorded as broken and gets no invented entry: a
+403 says the fetcher may not look, which is a different fact from the citation
+being dead. Never suggest editing the baseline by hand to clear one.
+
+## `cite confirm` — closing the manual queue
+
+Once the user has opened a queued link and seen the document, record it:
+
+```bash
+abcd docs cite confirm <url> [<url>...]
+```
+
+For a batch, or to record a redirect the user followed, pass a receipt file
+instead:
+
+```bash
+abcd docs cite confirm --receipt receipts.json
+```
+
+```json
+{
+  "schema_version": 1,
+  "confirmed": [
+    {"url": "https://example.org/a", "final_url": "https://example.org/a-v2", "verified_on": "2026-07-20"}
+  ]
+}
+```
+
+Only URLs the documentation actually cites can be confirmed. The receipt records
+**that** a human verified the citation and **when** — never how. Do not ask the
+user for their method, and never record one: the schema has no field for it and
+loading rejects unknown keys.
+
+Confirm on the user's word that they checked. An agent must never run `confirm`
+on its own initiative to clear a red gate.
+
+## Fallback
+
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd docs lint --json` from the repo root, or tell the user to
-build it with `make build`.
+`go run ./cmd/abcd docs …` from the repo root, or tell the user to build it with
+`make build`.
 
 **User input:** $ARGUMENTS

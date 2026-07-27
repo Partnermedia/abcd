@@ -27,7 +27,7 @@
     "citation_crosswalk_rows": {"enabled": true, "severity": "blocker"},
     "citation_url_syntax": {"enabled": true, "severity": "blocker"},
     "citation_source_policy": {"enabled": true, "severity": "blocker", "refused_domains": []},
-    "citation_baseline": {"enabled": false, "severity": "blocker", "baseline": ".abcd/citations-baseline.json", "warn_after_days": 180, "block_after_days": 365}
+    "citation_baseline": {"enabled": true, "severity": "blocker", "baseline": ".abcd/citations-baseline.json", "warn_after_days": 180, "block_after_days": 365}
   },
   "exempt_paths": [],
   "exempt_if_status": []
