@@ -351,6 +351,18 @@ Preview the public launch bundle and release gates (read-only)
       --dry-run   preview the launch bundle and gates without publishing
 ```
 
+#### `abcd launch scaffold`
+
+Scaffold the changelog-driven release gate (release.yml, auto-release.yml, runbook) into this repo
+
+**Usage:** `abcd launch scaffold [--confirm] [flags]`
+
+**Flags:**
+
+```
+      --confirm   overwrite a hand-edited scaffolded file with the current machinery
+```
+
 #### `abcd launch ship`
 
 Cut a release: derive the version and the record set from what shipped (exit 1 when the cut refuses)
