@@ -1,0 +1,255 @@
+package scaffold
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/REPPL/abcd-cli/internal/fsutil"
+)
+
+// maxWorkflowBytes caps a guarded read of an existing scaffolded file. A
+// workflow or runbook is a short text file; a larger one is not one we wrote, and
+// the drift check refuses it rather than streaming it unbounded.
+const maxWorkflowBytes = 1 << 20
+
+// ErrScaffoldBlocked is returned when a scaffold run refuses because an existing
+// file differs from the machinery and --confirm was not given.
+var ErrScaffoldBlocked = errors.New("scaffold refused: an existing file was hand-edited (pass --confirm to overwrite)")
+
+// FileStatus is one scaffolded file's disposition.
+type FileStatus string
+
+const (
+	// StatusWritten — the file was written (created, or overwritten under confirm).
+	StatusWritten FileStatus = "written"
+	// StatusCurrent — the file already matches the machinery; nothing was written.
+	StatusCurrent FileStatus = "current"
+	// StatusRefused — the file exists and differs, and --confirm was not given, so
+	// it was left untouched.
+	StatusRefused FileStatus = "refused"
+)
+
+// FileOutcome is the per-file result of a scaffold run.
+type FileOutcome struct {
+	Path   string     `json:"path"`
+	Status FileStatus `json:"status"`
+	// Detail explains a refusal (why the file was left alone).
+	Detail string `json:"detail,omitempty"`
+}
+
+// Report is the outcome of a scaffold run.
+type Report struct {
+	Substitutions Substitutions `json:"-"`
+	DefaultBranch string        `json:"default_branch"`
+	GoVersion     string        `json:"go_version"`
+	Files         []FileOutcome `json:"files"`
+	Wrote         int           `json:"wrote"`
+	Refused       int           `json:"refused"`
+	// NoOp is true when every file was already current (the idempotent re-run).
+	NoOp bool `json:"no_op"`
+}
+
+// Request is the input to a scaffold run.
+type Request struct {
+	RepoRoot string
+	// Confirm overwrites a file that exists and differs from the machinery (the
+	// transparent-confirm on a hand-edited workflow). Absent, such a file is
+	// refused and left untouched, and the run reports ErrScaffoldBlocked.
+	Confirm bool
+}
+
+// Scaffold writes the changelog-driven release machinery into RepoRoot: a
+// generic (bare-repo) release.yml, auto-release.yml, and the adr-37 runbook, each
+// wired to the repo's own default branch and Go version. It is idempotent and
+// fail-safe:
+//
+//   - a file absent on disk is written;
+//   - a file byte-identical to the machinery is a no-op (StatusCurrent);
+//   - a file that exists and DIFFERS (hand-edited, or a stale scaffold) is REFUSED
+//     and left untouched unless Confirm is set, in which case it is overwritten.
+//
+// A run that refuses any file returns ErrScaffoldBlocked with the report, so the
+// caller can render exactly what was and was not touched — no partial half-write.
+func Scaffold(req Request) (Report, error) {
+	branch, goVersion := DeriveRepoFacts(req.RepoRoot)
+	subs := BareSubstitutions(branch, goVersion)
+	rendered, err := Render(subs)
+	if err != nil {
+		return Report{}, err
+	}
+
+	report := Report{Substitutions: subs, DefaultBranch: branch, GoVersion: goVersion}
+	planned := []struct {
+		rel  string
+		data []byte
+	}{
+		{ReleaseYMLPath, rendered.ReleaseYML},
+		{AutoReleaseYMLPath, rendered.AutoReleaseYML},
+		{RunbookPath, rendered.Runbook},
+	}
+
+	// First pass: classify every file WITHOUT writing. A refusal on any file with
+	// Confirm unset aborts the whole run before a single write, so the scaffold is
+	// all-or-nothing rather than half-applied.
+	outcomes := make([]FileOutcome, len(planned))
+	writeNeeded := make([]bool, len(planned))
+	for i, p := range planned {
+		abs := filepath.Join(req.RepoRoot, filepath.FromSlash(p.rel))
+		state, detail := classify(abs, p.data)
+		switch state {
+		case StatusCurrent:
+			outcomes[i] = FileOutcome{Path: p.rel, Status: StatusCurrent}
+		case StatusWritten: // absent → to be written
+			writeNeeded[i] = true
+			outcomes[i] = FileOutcome{Path: p.rel, Status: StatusWritten}
+		case StatusRefused:
+			if req.Confirm {
+				writeNeeded[i] = true
+				outcomes[i] = FileOutcome{Path: p.rel, Status: StatusWritten, Detail: "overwritten under --confirm"}
+			} else {
+				outcomes[i] = FileOutcome{Path: p.rel, Status: StatusRefused, Detail: detail}
+			}
+		}
+	}
+
+	refused := 0
+	for _, o := range outcomes {
+		if o.Status == StatusRefused {
+			refused++
+		}
+	}
+	if refused > 0 {
+		report.Files = outcomes
+		report.Refused = refused
+		return report, ErrScaffoldBlocked
+	}
+
+	// Second pass: commit the writes. Every file that reaches here is either a
+	// create or a confirmed overwrite.
+	wrote := 0
+	for i, p := range planned {
+		if !writeNeeded[i] {
+			continue
+		}
+		abs := filepath.Join(req.RepoRoot, filepath.FromSlash(p.rel))
+		if err := fsutil.WriteFileAtomicPreserveMode(abs, p.data); err != nil {
+			// Report what was written before the fault; the caller renders it. The
+			// atomic writer never leaves a half-written file.
+			report.Files = outcomes
+			report.Wrote = wrote
+			return report, fmt.Errorf("scaffold: write %s: %w", p.rel, err)
+		}
+		wrote++
+	}
+
+	report.Files = outcomes
+	report.Wrote = wrote
+	report.NoOp = wrote == 0 && refused == 0
+	return report, nil
+}
+
+// classify reports whether abs is absent (→ StatusWritten, write it), byte-equal
+// to want (→ StatusCurrent, no-op), or present-and-different (→ StatusRefused).
+// A non-regular leaf (symlink/FIFO/device) or an unreadable existing file is
+// treated as different — the scaffold never writes through a symlink silently and
+// never assumes an unreadable file is safe to clobber.
+func classify(abs string, want []byte) (FileStatus, string) {
+	got, err := fsutil.ReadGuarded(abs, maxWorkflowBytes)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return StatusWritten, ""
+		}
+		if errors.Is(err, fsutil.ErrNotRegular) {
+			return StatusRefused, "existing path is not a regular file (a symlink or non-regular leaf is never written through)"
+		}
+		if errors.Is(err, fsutil.ErrTooBig) {
+			return StatusRefused, "existing file exceeds the size cap; this is not machinery abcd wrote"
+		}
+		return StatusRefused, "existing file is unreadable: " + err.Error()
+	}
+	if string(got) == string(want) {
+		return StatusCurrent, ""
+	}
+	return StatusRefused, "existing file differs from the current machinery (hand-edited or stale)"
+}
+
+// goVersionRe matches a strict major.minor Go version — the only shape allowed
+// into the rendered `go-version:` value, so a crafted go.mod cannot inject YAML.
+var goVersionRe = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+
+// goModVersionRe extracts the `go X.Y[.Z]` directive from go.mod.
+var goModVersionRe = regexp.MustCompile(`(?m)^go[ \t]+([0-9]+\.[0-9]+)(?:\.[0-9]+)?`)
+
+// branchNameRe is the injection-safe allowlist for a default-branch name written
+// into the workflow YAML: git ref characters only, no whitespace or YAML
+// metacharacters. A name outside it falls back to the safe default.
+var branchNameRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+
+// defaultGoVersion is the fallback when go.mod cannot be read or its version is
+// not a clean major.minor.
+const defaultGoVersion = "1.25"
+
+// defaultBranch is the fallback default branch when the repo does not name one.
+const defaultBranch = "main"
+
+// DeriveRepoFacts reads the target repo's own default branch and Go version, both
+// validated against an injection-safe allowlist before they can reach the
+// rendered YAML. Anything malformed or absent falls back to a safe default, so a
+// hostile go.mod or ref name can never inject workflow content.
+func DeriveRepoFacts(repoRoot string) (branch, goVersion string) {
+	return deriveBranch(repoRoot), deriveGoVersion(repoRoot)
+}
+
+func deriveGoVersion(repoRoot string) string {
+	data, err := fsutil.ReadGuarded(filepath.Join(repoRoot, "go.mod"), maxWorkflowBytes)
+	if err != nil {
+		return defaultGoVersion
+	}
+	m := goModVersionRe.FindSubmatch(data)
+	if m == nil || !goVersionRe.Match(m[1]) {
+		return defaultGoVersion
+	}
+	return string(m[1])
+}
+
+// deriveBranch resolves the repo's default branch from its committed git config
+// (the symref origin/HEAD points at, or the checked-out HEAD), validated to the
+// injection-safe allowlist. It reads git's plaintext refs directly rather than
+// shelling out, so it stays dependency-free and works on a bare checkout.
+func deriveBranch(repoRoot string) string {
+	gitDir := filepath.Join(repoRoot, ".git")
+	// origin/HEAD, when set, names the remote default branch: a line
+	// "ref: refs/remotes/origin/<branch>" in .git/refs/remotes/origin/HEAD.
+	if data, err := os.ReadFile(filepath.Join(gitDir, "refs", "remotes", "origin", "HEAD")); err == nil {
+		if b := branchFromSymref(string(data), "refs/remotes/origin/"); b != "" {
+			return b
+		}
+	}
+	// Fall back to the checked-out branch (.git/HEAD → "ref: refs/heads/<branch>").
+	if data, err := os.ReadFile(filepath.Join(gitDir, "HEAD")); err == nil {
+		if b := branchFromSymref(string(data), "refs/heads/"); b != "" {
+			return b
+		}
+	}
+	return defaultBranch
+}
+
+// branchFromSymref extracts and validates a branch name from a "ref: <prefix><branch>"
+// symbolic-ref line. An unvalidated name yields "" so the caller falls back.
+func branchFromSymref(content, prefix string) string {
+	line := strings.TrimSpace(content)
+	line = strings.TrimPrefix(line, "ref:")
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, prefix) {
+		return ""
+	}
+	name := strings.TrimPrefix(line, prefix)
+	if name == "" || !branchNameRe.MatchString(name) {
+		return ""
+	}
+	return name
+}
