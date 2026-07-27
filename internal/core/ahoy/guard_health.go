@@ -39,8 +39,10 @@ type GuardHealth struct {
 	// declines to answer and every command runs unchecked.
 	RegistryLoadable bool `json:"registry_loadable"`
 	// Disabled reports a deliberately switched-off registry. It is not a fault —
-	// the committed kill switch is the only sanctioned escape — but a disabled
-	// guard that looks armed is exactly the state this report exists to prevent.
+	// .abcd/guard.json is the only route, so the change lands in a diff — but the
+	// file is read from the WORKING TREE, so this can be true before anyone has
+	// reviewed the edit that made it true (iss-147). A disabled guard that looks
+	// armed is exactly the state this report exists to prevent.
 	Disabled bool `json:"disabled"`
 	// Entries is how many hazards the loaded registry holds, so "loadable" is
 	// backed by a number rather than a boolean nobody can check.

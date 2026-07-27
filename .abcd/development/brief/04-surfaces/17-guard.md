@@ -33,21 +33,26 @@ only format it:
 | `warn` | exit 0, warning rendered | exit 0, warning on stderr |
 | `block` | exit 1, why + successor rendered | the host's blocking status, why + successor as the message |
 
-A guard that cannot be **evaluated** is a fourth case, and the two front doors
-part company on it deliberately:
+A guard that cannot be **evaluated** — an unparsable command line, a registry
+that will not load, a candidate too long to read, a registry switched off — is a
+fourth case, and the two front doors part company on it deliberately:
 
 - `guard check` exits **2**. A script that asked the guard a question must never
   read silence as clearance.
-- `guard hook` exits **0** and warns loudly. A guard that cannot answer must
-  never be the reason a session stops.
+- `guard hook` exits **1** and warns loudly. Exit 1 rather than 0 is the whole
+  point: a pre-tool-use hook that exits 0 has its stderr discarded, so the
+  warning would exist and nobody would ever see it. Exit 1 is non-blocking, so
+  the command still runs — a guard that cannot answer never stops a session.
 
 ## Fail-open-loud
 
-The installed hook entry wraps the binary call in a shim: if the abcd binary is
-missing, not executable, crashes, or is killed, the shim allows the command and
-emits an unmissable `UNGUARDED` warning. Only the binary's own exit statuses —
-allow and block — propagate. A session is therefore never bricked by a broken
-guard, and never silently unprotected either.
+The installed hook entry wraps the binary call in a shim. The binary's own three
+statuses pass through untouched — 0 (allow), 1 (ran, could not decide, allowed
+loudly), 2 (block). Anything else means the binary did not run at all: missing,
+not executable, crashed, killed. The shim then allows the command and emits an
+unmissable `UNGUARDED` warning of its own. A session is therefore never bricked
+by a broken guard, and never silently unprotected either — and a binary that ran
+and reported is never described as having failed to run.
 
 The outside-the-session half is `abcd ahoy`'s `guard:` line, which reports the
 three things that can independently be false: whether the hook is installed,
@@ -81,6 +86,9 @@ other way is not seen:
 - a command string handed to an interpreter (`eval`, `sh -c`);
 - one launched through a wrapper outside the small known set (`sudo`, `doas`,
   `command`, `env`, `nohup`, `time`) — `xargs`, `timeout`, `exec` are not in it;
+- one launched through a wrapper that *is* in that set but carries its own flags:
+  only the wrapper NAME is stepped over, so `sudo <hazard>` is seen and
+  `sudo -u bob <hazard>` is not (`-u` is read as the command);
 - one inside a backtick substitution (`$(…)` is followed, backticks are not);
 - a dangerous form no entry describes.
 
