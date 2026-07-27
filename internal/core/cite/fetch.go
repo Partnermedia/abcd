@@ -80,6 +80,13 @@ type CheckOutcome struct {
 	// the baseline records what is true about a link, not the transcript of
 	// finding out.
 	Detail string `json:"detail,omitempty"`
+	// Answered records that a host replied — any status line at all, including a
+	// 404 or a 403. It is the bit that separates "this citation is dead" from
+	// "this machine reached nothing", which StatusBroken alone cannot express:
+	// a DNS failure, a refused connection and a genuine 404 all land there. The
+	// refresh reads it to tell a broken corpus from a broken network, and
+	// nothing persists it.
+	Answered bool `json:"answered,omitempty"`
 }
 
 // Checker is the refresh seam. spc-17 fixes the baseline schema and the lint
@@ -171,6 +178,8 @@ func (c *HTTPChecker) Check(rawURL string) CheckOutcome {
 	// next request in a run is to a different host anyway.
 	defer resp.Body.Close()
 
+	// A status line came back, whatever it says.
+	out.Answered = true
 	out.FinalURL = rawURL
 	if resp.Request != nil && resp.Request.URL != nil {
 		out.FinalURL = resp.Request.URL.String()

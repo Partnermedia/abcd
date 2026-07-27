@@ -184,7 +184,7 @@ func TestCitationPolicyRefusesAnEscapingBaselinePath(t *testing.T) {
 	}
 	for _, p := range bad {
 		cfg := Config{Rules: map[string]RuleConfig{ruleCitationBaseline: {Enabled: true, Baseline: p}}}
-		if _, _, _, err := CitationPolicy(cfg); err == nil {
+		if _, err := CitationPolicy(cfg, t.TempDir()); err == nil {
 			t.Errorf("CitationPolicy accepted an escaping baseline path %q", p)
 		}
 	}
@@ -192,14 +192,50 @@ func TestCitationPolicyRefusesAnEscapingBaselinePath(t *testing.T) {
 	good := []string{"", ".abcd/citations-baseline.json", "docs/x/y.json", "./.abcd/b.json"}
 	for _, p := range good {
 		cfg := Config{Rules: map[string]RuleConfig{ruleCitationBaseline: {Enabled: true, Baseline: p}}}
-		got, _, _, err := CitationPolicy(cfg)
+		got, err := CitationPolicy(cfg, t.TempDir())
 		if err != nil {
 			t.Errorf("CitationPolicy refused a contained baseline path %q: %v", p, err)
 			continue
 		}
-		if got == "" {
-			t.Errorf("CitationPolicy(%q) returned an empty path", p)
+		if got.BaselineRel == "" || got.BaselinePath == "" {
+			t.Errorf("CitationPolicy(%q) returned an empty path: %+v", p, got)
 		}
+	}
+}
+
+// TestCitationPolicyRefusesASymlinkedBaselinePath closes the escape a purely
+// lexical containment check cannot see. ".abcd/evil/pwned.json" is contained by
+// every string test there is; if `.abcd/evil` is a committed symlink pointing
+// out of the tree, the write still lands outside it — the same arbitrary-write
+// primitive by a quieter route.
+func TestCitationPolicyRefusesASymlinkedBaselinePath(t *testing.T) {
+	outside := t.TempDir()
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(repo, ".abcd", "evil")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	cfg := Config{Rules: map[string]RuleConfig{
+		ruleCitationBaseline: {Enabled: true, Baseline: ".abcd/evil/sub/pwned.json"},
+	}}
+	if _, err := CitationPolicy(cfg, repo); err == nil {
+		t.Fatal("CitationPolicy accepted a baseline path that leaves the repo through a symlink")
+	}
+
+	// A symlink that stays INSIDE the repo is fine: containment is about where
+	// the write lands, not about symlinks being suspicious.
+	if err := os.MkdirAll(filepath.Join(repo, "inner"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(repo, "inner"), filepath.Join(repo, ".abcd", "ok")); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rules[ruleCitationBaseline] = RuleConfig{Enabled: true, Baseline: ".abcd/ok/b.json"}
+	if _, err := CitationPolicy(cfg, repo); err != nil {
+		t.Fatalf("CitationPolicy refused a symlink that stays inside the repo: %v", err)
 	}
 }
 

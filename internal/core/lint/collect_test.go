@@ -1,8 +1,49 @@
 package lint
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+// TestCollectCitedURLsRefusesAnEscapingRoot closes an exfiltration path this
+// branch opened. Reading outside the repo via `roots` was inert while the lint
+// only reported findings; now the collector feeds a LIVE FETCHER and its results
+// are persisted into `.abcd/citations-baseline.json`, a file the workflow expects
+// the maintainer to commit and push. A `roots` of "../private" would fetch every
+// URL found in a sibling directory and write them verbatim into that artifact.
+func TestCollectCitedURLsRefusesAnEscapingRoot(t *testing.T) {
+	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
+	for _, bad := range []string{"../private", "/etc", "docs/../../elsewhere"} {
+		if _, err := CollectCitedURLs(Config{Roots: []string{bad}}, root); err == nil {
+			t.Errorf("CollectCitedURLs accepted a root outside the repository: %q", bad)
+		}
+	}
+	for _, ok := range []string{"docs", "./docs"} {
+		if _, err := CollectCitedURLs(Config{Roots: []string{ok}}, root); err != nil {
+			t.Errorf("CollectCitedURLs refused a contained root %q: %v", ok, err)
+		}
+	}
+}
+
+// TestCollectCitedURLsRefusesASymlinkedRoot is the same containment against the
+// filesystem rather than the string.
+func TestCollectCitedURLsRefusesASymlinkedRoot(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.md"),
+		[]byte("# S\n\nA claim.[^a]\n\n[^a]: S, https://secret.example/token\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	refs, err := CollectCitedURLs(Config{Roots: []string{"escape"}}, root)
+	if err == nil {
+		t.Fatalf("CollectCitedURLs walked out of the repo through a symlink and found %+v", refs)
+	}
+}
 
 // TestCollectCitedURLs pins the refresh verb's contract with the gate: the set
 // of URLs the refresh fetches is EXACTLY the set the baseline rule enforces,

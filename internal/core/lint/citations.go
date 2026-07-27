@@ -59,23 +59,50 @@ const (
 // "../../../etc/x.json" turns a routine refresh into an arbitrary-file-write
 // primitive that escapes the repository. Every reader and both writers resolve
 // the path through here, so one check covers all four.
-func CitationPolicy(cfg Config) (baselinePath string, warnDays, blockDays int, err error) {
+func CitationPolicy(cfg Config, repoRoot string) (CitationPolicySet, error) {
 	rc := cfg.Rules[ruleCitationBaseline]
-	baselinePath = strings.TrimSpace(rc.Baseline)
-	if baselinePath == "" {
-		baselinePath = DefaultBaselinePath
+	rel := strings.TrimSpace(rc.Baseline)
+	if rel == "" {
+		rel = DefaultBaselinePath
 	}
-	if cerr := containedRepoPath(baselinePath); cerr != nil {
-		return "", 0, 0, &configError{ruleCitationBaseline + ": baseline " + quote(baselinePath) + " " + cerr.Error()}
+	// Two checks, because either alone is bypassable. The lexical one refuses a
+	// path that is absolute or spells its way out with ".."; the resolved one
+	// refuses a path that stays lexically inside and then leaves through a
+	// committed SYMLINK, which is the same write primitive by a quieter route.
+	if cerr := containedRepoPath(rel); cerr != nil {
+		return CitationPolicySet{}, &configError{ruleCitationBaseline + ": baseline " + quote(rel) + " " + cerr.Error()}
 	}
-	warnDays, blockDays = rc.WarnAfterDays, rc.BlockAfterDays
-	if warnDays <= 0 {
-		warnDays = defaultCitationWarnDays
+	abs := filepath.Join(repoRoot, filepath.FromSlash(rel))
+	if cerr := resolvedInsideRoot(repoRoot, abs); cerr != nil {
+		return CitationPolicySet{}, &configError{ruleCitationBaseline + ": baseline " + quote(rel) + " " + cerr.Error()}
 	}
-	if blockDays <= 0 {
-		blockDays = defaultCitationBlockDays
+
+	set := CitationPolicySet{
+		BaselineRel:  rel,
+		BaselinePath: abs,
+		WarnDays:     rc.WarnAfterDays,
+		BlockDays:    rc.BlockAfterDays,
 	}
-	return baselinePath, warnDays, blockDays, nil
+	if set.WarnDays <= 0 {
+		set.WarnDays = defaultCitationWarnDays
+	}
+	if set.BlockDays <= 0 {
+		set.BlockDays = defaultCitationBlockDays
+	}
+	return set, nil
+}
+
+// CitationPolicySet is the resolved citation-baseline policy: where the record
+// lives, in both the form messages use and the form I/O uses, and the two
+// staleness thresholds.
+type CitationPolicySet struct {
+	// BaselineRel is repo-relative — the only form that may reach a message or
+	// machine output, so no developer-identity path is ever rendered.
+	BaselineRel string
+	// BaselinePath is absolute, for reading and writing.
+	BaselinePath string
+	WarnDays     int
+	BlockDays    int
 }
 
 // containedRepoPath refuses a config-supplied path that is not a plain,
@@ -95,6 +122,56 @@ func containedRepoPath(rel string) error {
 		return errors.New("escapes the repository root")
 	}
 	return nil
+}
+
+// resolvedInsideRoot refuses a target that leaves the repository once symlinks
+// are followed — the escape a purely lexical check cannot see, where a committed
+// `.abcd/evil -> /somewhere` makes ".abcd/evil/x.json" a write outside the tree.
+//
+// The target usually does not exist yet (a first refresh writes it), so the walk
+// resolves the deepest ancestor that DOES exist and re-attaches the remainder.
+// It is the same shape internal/core/launch/bundle.go uses for symlinked bundle
+// entries: EvalSymlinks both sides, then filepath.Rel and refuse on "..".
+func resolvedInsideRoot(root, target string) error {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		realRoot = filepath.Clean(root)
+	}
+
+	probe := filepath.Clean(target)
+	var tail []string
+	for {
+		if _, serr := os.Lstat(probe); serr == nil {
+			break
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			break // reached the filesystem root without finding anything
+		}
+		tail = append([]string{filepath.Base(probe)}, tail...)
+		probe = parent
+	}
+	realProbe, err := filepath.EvalSymlinks(probe)
+	if err != nil {
+		return errors.New("cannot be resolved: " + filepath.Base(probe) + ": " + bareCause(err))
+	}
+	real := filepath.Join(append([]string{realProbe}, tail...)...)
+
+	relToRoot, err := filepath.Rel(realRoot, real)
+	if err != nil || relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
+		return errors.New("resolves outside the repository root through a symlink")
+	}
+	return nil
+}
+
+// bareCause strips a *PathError's absolute path, leaving the reason. A message
+// about a rejected path must not itself embed one (iss-81).
+func bareCause(err error) string {
+	var pe *os.PathError
+	if errors.As(err, &pe) && pe.Err != nil {
+		return pe.Err.Error()
+	}
+	return err.Error()
 }
 
 // defaultCrosswalkHeading is the narrowest identification heuristic that matches
@@ -469,12 +546,13 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 	// Resolve through the shared policy so the containment check binds here too:
 	// a config that points the baseline outside the repo is refused by the gate,
 	// not only by the verb that writes it.
-	rel, _, _, err := CitationPolicy(Config{Rules: map[string]RuleConfig{ruleCitationBaseline: cfg}})
+	policy, err := CitationPolicy(Config{Rules: map[string]RuleConfig{ruleCitationBaseline: cfg}}, repoRoot)
 	if err != nil {
 		return nil, err
 	}
+	rel := policy.BaselineRel
 
-	base, err := LoadBaseline(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+	base, err := LoadBaseline(policy.BaselinePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Fail closed, but as ONE finding: a per-URL storm here would bury
@@ -488,14 +566,7 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 		return nil, err
 	}
 
-	warnDays := cfg.WarnAfterDays
-	if warnDays <= 0 {
-		warnDays = defaultCitationWarnDays
-	}
-	blockDays := cfg.BlockAfterDays
-	if blockDays <= 0 {
-		blockDays = defaultCitationBlockDays
-	}
+	warnDays, blockDays := policy.WarnDays, policy.BlockDays
 	overdueSeverity := cfg.OverdueSeverity
 	if strings.TrimSpace(overdueSeverity) == "" {
 		// The commit gate never calendar-blocks (spc-17). The release gate is

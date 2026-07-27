@@ -12,7 +12,6 @@ package lint
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 )
@@ -69,10 +68,11 @@ func CitationAgeSummary(cfg Config, repoRoot string) (CitationSummary, error) {
 // yet is a state a status line must be able to describe. A MALFORMED one is
 // still an error — a record the gate cannot read is not a health report.
 func CitationAgeSummaryAt(cfg Config, repoRoot string, now time.Time) (CitationSummary, error) {
-	relPath, warnDays, blockDays, err := CitationPolicy(cfg)
+	policy, err := CitationPolicy(cfg, repoRoot)
 	if err != nil {
 		return CitationSummary{}, err
 	}
+	warnDays, blockDays := policy.WarnDays, policy.BlockDays
 
 	cited, err := CollectCitedURLs(cfg, repoRoot)
 	if err != nil {
@@ -80,7 +80,7 @@ func CitationAgeSummaryAt(cfg Config, repoRoot string, now time.Time) (CitationS
 	}
 	sum := CitationSummary{Cited: len(cited)}
 
-	base, err := LoadBaseline(filepath.Join(repoRoot, filepath.FromSlash(relPath)))
+	base, err := LoadBaseline(policy.BaselinePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			sum.Missing = len(cited)

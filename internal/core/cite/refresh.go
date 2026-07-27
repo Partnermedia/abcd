@@ -19,7 +19,6 @@ package cite
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -151,11 +150,11 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 		parallel = defaultParallel
 	}
 
-	relPath, warnDays, _, err := lint.CitationPolicy(req.Config)
+	policy, err := lint.CitationPolicy(req.Config, req.RepoRoot)
 	if err != nil {
 		return RefreshResult{}, err
 	}
-	absPath := filepath.Join(req.RepoRoot, filepath.FromSlash(relPath))
+	relPath, absPath, warnDays := policy.BaselineRel, policy.BaselinePath, policy.WarnDays
 
 	cited, err := lint.CollectCitedURLs(req.Config, req.RepoRoot)
 	if err != nil {
@@ -203,19 +202,23 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 	res.Fetched = len(jobs)
 
 	checked := runChecks(checker, toCheck, parallel)
-	// succeeded counts the checks that actually reached a document. It is the
-	// signal the wholesale-failure guard below reads: a blocked source is not a
-	// success, but it is not evidence of a broken network either.
-	succeeded := 0
+	// answered counts the checks a host replied to at all — any status line,
+	// including a 404 or a 403. It is the signal the wholesale-failure guard
+	// below reads, and it is a fact the CHECKER establishes rather than one this
+	// function infers: StatusBroken alone cannot tell a dead link from a dead
+	// network, and every attempt to recover that bit from a proxy was wrong.
+	answered := 0
 
 	for _, j := range jobs {
 		out := checked[j.ref.URL]
 		res.Outcomes = append(res.Outcomes, Outcome{
 			URL: j.ref.URL, Status: out.Status, FinalURL: out.FinalURL, Detail: out.Detail,
 		})
+		if out.Answered {
+			answered++
+		}
 		switch out.Status {
 		case StatusOK:
-			succeeded++
 			final := out.FinalURL
 			if final == "" {
 				final = j.ref.URL
@@ -236,8 +239,6 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 				Outcome: lint.OutcomeBroken, Verification: lint.VerificationAutomatic, VerifiedOn: stamp,
 			}
 		case StatusBlocked:
-			// A refusal is not a failed network: the host answered.
-			succeeded++
 			if j.had {
 				next[j.ref.URL] = j.prev
 			}
@@ -252,19 +253,25 @@ func Refresh(req RefreshRequest) (RefreshResult, error) {
 		}
 	}
 
-	// A run in which NOTHING succeeded is a broken network, not fifty dead
-	// citations. Check collapses a DNS failure, a refused connection and a
-	// timeout into the same StatusBroken as a genuine 404, so committing such a
-	// run would rewrite every entry as broken — stale human receipts included,
-	// since those are re-checked and so are not covered by the blocked branch —
-	// and the gate would then block every commit until someone reverted the file
-	// by hand. Refuse before writing; the operator keeps the record they had.
+	// A run in which NO HOST ANSWERED is a broken network, not a corpus that died
+	// overnight. Committing it would rewrite every entry as broken — stale human
+	// receipts included, since those are re-checked and so never reach the
+	// blocked branch that protects the current ones — and the gate would then
+	// block every commit until someone reverted the file by hand.
 	//
-	// It binds only when there WAS a record to protect: a first run over
-	// genuinely dead citations has nothing to lose and is allowed to write one.
-	if len(previous) > 0 && res.Fetched > 0 && succeeded == 0 && res.Preserved == 0 {
-		return RefreshResult{}, &RefreshError{"every one of the " + strconv.Itoa(res.Fetched) +
-			" citation(s) checked failed, which is a broken network far more often than a broken corpus; " +
+	// The condition tests ANSWERED, not "succeeded", and deliberately does not
+	// consult Preserved. A preserved receipt was never fetched, so it is no
+	// evidence the network worked; letting it veto the guard meant any repo that
+	// had ever used `confirm` — the designed steady state for robot-refusing
+	// sources — silently lost the protection. And because a genuine 404 IS an
+	// answer, a repo whose only citation is really dead still records it rather
+	// than being told forever to check its connectivity.
+	//
+	// It binds only when there was a record to protect: a first run has nothing
+	// to lose and is allowed to write one.
+	if len(previous) > 0 && res.Fetched > 0 && answered == 0 {
+		return RefreshResult{}, &RefreshError{"no host answered any of the " + strconv.Itoa(res.Fetched) +
+			" citation(s) checked, which is a broken network far more often than a broken corpus; " +
 			"the existing baseline is left untouched. Check connectivity and re-run"}
 	}
 
