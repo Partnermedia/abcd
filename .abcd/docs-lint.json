@@ -22,7 +22,12 @@
   "rules": {
     "links_resolve": {"enabled": true, "severity": "blocker"},
     "stray_root_docs": {"enabled": true, "severity": "blocker",
-      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE","ACKNOWLEDGEMENTS"]}
+      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE","ACKNOWLEDGEMENTS"]},
+    "citation_footnotes": {"enabled": true, "severity": "blocker"},
+    "citation_crosswalk_rows": {"enabled": true, "severity": "blocker"},
+    "citation_url_syntax": {"enabled": true, "severity": "blocker"},
+    "citation_source_policy": {"enabled": true, "severity": "blocker", "refused_domains": []},
+    "citation_baseline": {"enabled": false, "severity": "blocker", "baseline": ".abcd/citations-baseline.json", "warn_after_days": 180, "block_after_days": 365}
   },
   "exempt_paths": [],
   "exempt_if_status": []
