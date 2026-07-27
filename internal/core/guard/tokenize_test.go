@@ -123,6 +123,13 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cat", "0:ls"},
 		},
 		{
+			// The body starts only once the command line is complete, so the
+			// continuation of a pipeline is still command text, not body text.
+			name: "a heredoc queued on a continued line waits for the command to finish",
+			line: "cat <<EOF |\ngrep x\nrm -rf *\nEOF",
+			want: []string{"0:cat", "0:grep|x"},
+		},
+		{
 			name: "an unterminated heredoc swallows the rest of the input",
 			line: "cat <<EOF\nrm -rf *",
 			want: []string{"0:cat"},
