@@ -99,6 +99,18 @@ func TestCheckDecisions(t *testing.T) {
 			entryID: "rm-rf-after-cd-chain",
 		},
 		{
+			name:    "a blank line does not break the cd chain",
+			command: "cd scratch &&\n\nrm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "an arithmetic shift does not swallow the lines after it",
+			command: "echo $((1<<20)) > size.txt\ncd scratch && rm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
 			name:    "a hazard inside a shell conditional is still in command position",
 			command: "if cd scratch; then rm -rf *; fi",
 			verdict: VerdictBlock,
