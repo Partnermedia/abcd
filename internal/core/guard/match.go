@@ -19,6 +19,22 @@ var wrappers = map[string]bool{
 	"time":    true,
 }
 
+// reserved are shell keywords and grouping tokens that PRECEDE a command rather
+// than being one: without stepping over them, `if cd scratch; then rm -rf *; fi`
+// reads `then` as argv[0] and every hazard inside a conditional or a loop body
+// escapes command position.
+var reserved = map[string]bool{
+	"if":    true,
+	"then":  true,
+	"elif":  true,
+	"else":  true,
+	"do":    true,
+	"while": true,
+	"until": true,
+	"{":     true,
+	"!":     true,
+}
+
 // matchesAny reports whether the pattern fires on any segment of the candidate.
 func matchesAny(p Pattern, segs []segment) bool {
 	for i, s := range segs {
@@ -51,7 +67,7 @@ func commandOf(s segment) (string, []string) {
 	i := 0
 	for i < len(s.tokens) {
 		tok := s.tokens[i]
-		if isAssignment(tok) || wrappers[path.Base(tok)] {
+		if isAssignment(tok) || reserved[tok] || wrappers[path.Base(tok)] {
 			i++
 			continue
 		}

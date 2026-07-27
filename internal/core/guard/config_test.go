@@ -161,6 +161,26 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 			want: ErrInvalidEntry,
 		},
 		{
+			// The command is compared against a token's basename, so a path or a
+			// phrase could never be satisfied — the same silent defang as an
+			// empty flag group.
+			name: "pattern command that could never match",
+			body: `{"schema_version":1,"entries":{"drop-database":{"tier":"blocker","pattern":{"command":"/usr/bin/dropdb"},"why":"It deletes everything.","successor":"Take a dump first."}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			name: "subcommand that could never match",
+			body: `{"schema_version":1,"entries":{"drop-database":{"tier":"blocker","pattern":{"command":"dropdb","subcommand":"--all"},"why":"It deletes everything.","successor":"Take a dump first."}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			// A misspelt top-level key would otherwise be dropped in silence, and
+			// the repo's intended blocker would simply not exist.
+			name: "unrecognised key",
+			body: `{"schema_version":1,"entrys":{"git-clean":{"tier":"blocker"}}}`,
+			want: ErrMalformedConfig,
+		},
+		{
 			name: "entry id that could build a path",
 			body: `{"schema_version":1,"entries":{"../escape":{"tier":"warn","pattern":{"command":"x"},"why":"w","successor":"s"}}}`,
 			want: ErrInvalidEntry,

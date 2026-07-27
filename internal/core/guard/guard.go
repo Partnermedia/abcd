@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -131,10 +132,19 @@ func mustParseDefaults() Registry {
 func Defaults() Registry { return cloneRegistry(defaultRegistry) }
 
 // parse decodes registry JSON and stamps each entry's ID from its map key.
+// Unknown fields and trailing content are rejected: a misspelt key would
+// otherwise be dropped in silence, and the blocker a repo believed it had
+// declared would simply not exist (a safety config fails closed on
+// unrecognised input).
 func parse(data []byte) (Registry, error) {
 	var r Registry
-	if err := json.Unmarshal(data, &r); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&r); err != nil {
 		return Registry{}, fmt.Errorf("%w: %v", ErrMalformedConfig, err)
+	}
+	if dec.More() {
+		return Registry{}, fmt.Errorf("%w: trailing content after the JSON object", ErrMalformedConfig)
 	}
 	for id, e := range r.Entries {
 		e.ID = id
@@ -168,6 +178,16 @@ func Validate(r Registry) error {
 		}
 		if strings.TrimSpace(e.Pattern.Command) == "" {
 			return fmt.Errorf("%w: entry %s has no pattern command", ErrInvalidEntry, id)
+		}
+		// The command is compared against a token's BASENAME, and a subcommand is
+		// only ever a non-flag argument, so a path, a phrase, or a leading dash
+		// describes a pattern nothing can satisfy. Reject it here rather than
+		// ship an entry that looks armed and never fires.
+		if strings.ContainsAny(e.Pattern.Command, "/ \t") {
+			return fmt.Errorf("%w: entry %s pattern command %q is a path or phrase and could never match a command name", ErrInvalidEntry, id, e.Pattern.Command)
+		}
+		if strings.HasPrefix(e.Pattern.Subcommand, "-") {
+			return fmt.Errorf("%w: entry %s subcommand %q starts with a dash and could never match a non-flag argument", ErrInvalidEntry, id, e.Pattern.Subcommand)
 		}
 		// A refusal with no successor leaves its replacement in prose only, and
 		// one with no why cannot teach — both are load-time rejections, as in
