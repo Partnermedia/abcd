@@ -309,6 +309,58 @@
       "flags": []
     },
     {
+      "path": "abcd docs cite",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd docs cite confirm",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "config",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "receipt",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "root",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd docs cite refresh",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "config",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "root",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd docs lint",
       "hidden": false,
       "flags": [
@@ -316,6 +368,13 @@
           "name": "config",
           "shorthand": "",
           "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "release-gate",
+          "shorthand": "",
+          "type": "bool",
           "required": false,
           "hidden": false
         },
