@@ -1,6 +1,9 @@
 package guard
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // segment is one command in command position: the tokens of a single simple
 // command, plus the index of the logical line (chain) it belongs to. Segments in
@@ -28,11 +31,16 @@ type segment struct {
 // the verb's reference doc and the registry README rather than silently assumed.
 func tokenize(line string) ([]segment, error) {
 	var (
-		segs   []segment
-		toks   []string
-		cur    []byte
-		hasCur bool
-		chain  int
+		segs    []segment
+		toks    []string
+		cur     []byte
+		hasCur  bool
+		chain   int
+		pending []heredoc
+		// lastList records that the previous operator was a list operator
+		// (`&&`, `||`, `|`), whose newline is a line continuation rather than a
+		// new command — `cd scratch &&\nrm -rf *` is one chain, not two.
+		lastList bool
 	)
 	flushToken := func() {
 		if hasCur {
@@ -63,6 +71,7 @@ func tokenize(line string) ([]segment, error) {
 			}
 			cur = append(cur, line[i+1])
 			hasCur = true
+			lastList = false
 			i += 2
 		case c == '\'':
 			j := i + 1
@@ -74,6 +83,7 @@ func tokenize(line string) ([]segment, error) {
 			}
 			cur = append(cur, line[i+1:j]...)
 			hasCur = true
+			lastList = false
 			i = j + 1
 		case c == '"':
 			j := i + 1
@@ -103,33 +113,145 @@ func tokenize(line string) ([]segment, error) {
 				return nil, fmt.Errorf("%w: unterminated double quote", ErrUnparsableCommand)
 			}
 			hasCur = true
+			lastList = false
 			i = j + 1
 		case c == ' ' || c == '\t' || c == '\r':
 			flushToken()
 			i++
 		case c == '\n':
 			flushSegment()
-			chain++
 			i++
+			// A pending heredoc body starts on the next line and is DATA, not
+			// commands: writing a document that names a hazard must never read
+			// as running one.
+			if len(pending) > 0 {
+				i = skipHeredocBodies(line, i, pending)
+				pending = nil
+			}
+			if !lastList {
+				chain++
+			}
+			lastList = false
 		case c == '#' && !hasCur:
 			// A comment starts only at a word boundary (POSIX): `url/#frag` is
 			// part of the token, a bare `#` runs to the end of the line.
 			for i < len(line) && line[i] != '\n' {
 				i++
 			}
+		case c == '<' && strings.HasPrefix(line[i:], "<<<"):
+			// A herestring, not a heredoc: its payload is an ordinary argument
+			// token, so the operator is kept as plain token text.
+			cur = append(cur, '<', '<', '<')
+			hasCur = true
+			lastList = false
+			i += 3
+		case c == '<' && strings.HasPrefix(line[i:], "<<"):
+			// A heredoc redirection (`<<`, `<<-`).
+			flushToken()
+			hd, next, err := readHeredocDelim(line, i+2)
+			if err != nil {
+				return nil, err
+			}
+			pending = append(pending, hd)
+			i = next
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
+				lastList = true
 				i += 2
 				continue
 			}
+			// A single pipe continues the list across a newline; `;`, `&`, and
+			// the grouping parens do not.
+			lastList = c == '|'
 			i++
 		default:
 			cur = append(cur, c)
 			hasCur = true
+			lastList = false
 			i++
 		}
 	}
 	flushSegment()
 	return segs, nil
+}
+
+// heredoc is one pending here-document: the delimiter word that ends its body,
+// and whether the `<<-` form allows the delimiter line to be tab-indented.
+type heredoc struct {
+	delim     string
+	stripTabs bool
+}
+
+// readHeredocDelim reads the delimiter word after a `<<` at pos, honouring the
+// `<<-` variant and any quoting of the word itself (`<<'EOF'`, `<<"EOF"`), and
+// returns the position just past it.
+func readHeredocDelim(line string, pos int) (heredoc, int, error) {
+	hd := heredoc{}
+	if pos < len(line) && line[pos] == '-' {
+		hd.stripTabs = true
+		pos++
+	}
+	for pos < len(line) && (line[pos] == ' ' || line[pos] == '\t') {
+		pos++
+	}
+	var w []byte
+	for pos < len(line) {
+		c := line[pos]
+		switch c {
+		case '\'', '"':
+			j := pos + 1
+			for j < len(line) && line[j] != c {
+				j++
+			}
+			if j >= len(line) {
+				return heredoc{}, 0, fmt.Errorf("%w: unterminated quote in heredoc delimiter", ErrUnparsableCommand)
+			}
+			w = append(w, line[pos+1:j]...)
+			pos = j + 1
+			continue
+		case '\\':
+			if pos+1 >= len(line) {
+				return heredoc{}, 0, fmt.Errorf("%w: trailing backslash", ErrUnparsableCommand)
+			}
+			w = append(w, line[pos+1])
+			pos += 2
+			continue
+		case ' ', '\t', '\n', ';', '&', '|', '(', ')', '<', '>':
+			hd.delim = string(w)
+			return hd, pos, nil
+		}
+		w = append(w, c)
+		pos++
+	}
+	hd.delim = string(w)
+	return hd, pos, nil
+}
+
+// skipHeredocBodies consumes the body of every pending here-document, starting
+// at pos (the first byte after the newline that ended the command line), and
+// returns the position just past the last body. An unterminated body swallows
+// the rest of the input — exactly as a shell would treat it.
+func skipHeredocBodies(line string, pos int, pending []heredoc) int {
+	for _, hd := range pending {
+		for pos < len(line) {
+			end := pos
+			for end < len(line) && line[end] != '\n' {
+				end++
+			}
+			text := line[pos:end]
+			if hd.stripTabs {
+				text = strings.TrimLeft(text, "\t")
+			}
+			if end < len(line) {
+				pos = end + 1
+			} else {
+				pos = end
+			}
+			if text == hd.delim {
+				break
+			}
+		}
+	}
+	return pos
 }

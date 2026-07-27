@@ -16,13 +16,18 @@
           "cd scratch && rm -rf *",
           "cd /tmp/build; rm -rf .",
           "cd scratch && sudo rm -fr ./*",
-          "cd worktree && rm -r -f build"
+          "cd worktree && rm -r -f build",
+          "cd scratch &&\nrm -rf *",
+          "if cd scratch; then rm -rf *; fi",
+          "for d in a b; do cd $d && rm -rf *; done"
         ],
         "known_good": [
           "./bin/abcd-darwin-arm64 capture \"agent ran cd scratch && rm -rf * — one failed cd from disaster\"",
           "rm -rf ./build",
           "cd scratch && ls -la",
-          "cd scratch && rm ./notes.txt"
+          "cd scratch && rm ./notes.txt",
+          "cat > NOTES.md <<'EOF'\ncd scratch && rm -rf *\nEOF",
+          "cd scratch\nrm -rf ./build"
         ]
       }
     },
@@ -48,7 +53,8 @@
           "git push origin main",
           "git push --set-upstream origin feat/shell-hazard-registry",
           "abcd capture \"an agent tried git push --force on main\"",
-          "git log --oneline -5"
+          "git log --oneline -5",
+          "cat > CONTRIBUTING.md <<'EOF'\nNever run git push --force on main.\nEOF"
         ]
       }
     },

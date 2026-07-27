@@ -93,6 +93,29 @@ func TestCheckDecisions(t *testing.T) {
 			verdict: VerdictAllow,
 		},
 		{
+			name:    "a cd chain wrapped over a newline still fires",
+			command: "cd scratch &&\nrm -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "a hazard inside a shell conditional is still in command position",
+			command: "if cd scratch; then rm -rf *; fi",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "a hazard inside a loop body is still in command position",
+			command: "for d in a b; do cd $d && rm -rf *; done",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "writing a document that names a hazard is not running one",
+			command: "cat > CONTRIBUTING.md <<'EOF'\nNever run git push --force on main.\nEOF",
+			verdict: VerdictAllow,
+		},
+		{
 			name:    "a cd on the previous line does not chain into the next line",
 			command: "cd scratch\nrm -rf ./build",
 			verdict: VerdictAllow,

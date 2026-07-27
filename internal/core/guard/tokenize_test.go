@@ -93,6 +93,46 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:git|commit|-m|fix #123"},
 		},
 		{
+			name: "a newline after a list operator continues the same chain",
+			line: "cd scratch &&\nrm -rf *",
+			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
+		},
+		{
+			name: "a newline after a pipe continues the same chain",
+			line: "cd scratch |\nrm -rf *",
+			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
+		},
+		{
+			name: "heredoc body is data, not commands",
+			line: "cat > doc.md <<'EOF'\ngit push --force\nEOF",
+			want: []string{"0:cat|>|doc.md"},
+		},
+		{
+			name: "heredoc body ends at its delimiter line",
+			line: "cat <<EOF\nrm -rf *\nEOF\nls -la",
+			want: []string{"0:cat", "1:ls|-la"},
+		},
+		{
+			name: "dash heredoc delimiter may be indented",
+			line: "cat <<-EOF\n\trm -rf *\n\tEOF\nls",
+			want: []string{"0:cat", "1:ls"},
+		},
+		{
+			name: "the rest of the heredoc's own line is still command text",
+			line: "cat <<EOF && ls\nrm -rf *\nEOF",
+			want: []string{"0:cat", "0:ls"},
+		},
+		{
+			name: "an unterminated heredoc swallows the rest of the input",
+			line: "cat <<EOF\nrm -rf *",
+			want: []string{"0:cat"},
+		},
+		{
+			name: "a herestring is an argument, not a heredoc",
+			line: `grep foo <<< "rm -rf *"`,
+			want: []string{"0:grep|foo|<<<|rm -rf *"},
+		},
+		{
 			name: "empty line yields no segments",
 			line: "   \t  ",
 			want: nil,
