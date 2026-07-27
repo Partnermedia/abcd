@@ -190,11 +190,15 @@ type guardHookInput struct {
 // implicit allow — "nothing to check" and "checked and clear" must not look the
 // same to a caller.
 func guardCandidate(cmd *cobra.Command, flag string) (string, error) {
-	if strings.TrimSpace(flag) != "" {
+	// Whether the flag was GIVEN decides the channel, not whether its value is
+	// non-empty: `--command ""` is an empty question, and falling through to stdin
+	// there would leave the verb waiting on a terminal that is never going to
+	// answer.
+	if cmd.Flags().Changed("command") {
+		if strings.TrimSpace(flag) == "" {
+			return "", fmt.Errorf("--command is empty; pass a command line to check")
+		}
 		return flag, nil
-	}
-	if flag != "" {
-		return "", fmt.Errorf("--command is empty; pass a command line to check")
 	}
 	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxGuardStdinBytes))
 	if err != nil {

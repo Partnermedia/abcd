@@ -155,6 +155,21 @@ func TestGuardCheckUnparsableCommandIsAFault(t *testing.T) {
 	}
 }
 
+// TestGuardCheckEmptyFlagDoesNotFallThroughToStdin pins the channel choice: an
+// explicitly empty --command is an empty question, answered immediately. Falling
+// through to stdin would leave the verb waiting on a terminal that never answers.
+func TestGuardCheckEmptyFlagDoesNotFallThroughToStdin(t *testing.T) {
+	guardRepo(t)
+	_, stderr, code := runGuard("cd scratch && rm -rf *\n", "guard", "check", "--command", "")
+
+	if code != 2 {
+		t.Errorf("an empty --command is a usage fault (exit 2), got %d", code)
+	}
+	if !strings.Contains(stderr, "--command is empty") {
+		t.Errorf("the fault must say the flag was empty, not read stdin; stderr = %q", stderr)
+	}
+}
+
 // TestGuardCheckMalformedRepoConfigIsAFault holds the same line for the config:
 // a broken .abcd/guard.json must be loud, never a fallback to "no guard".
 func TestGuardCheckMalformedRepoConfigIsAFault(t *testing.T) {
