@@ -1,8 +1,8 @@
 ---
 id: itd-101
 slug: every-citation-abcd-publishes-is-provably-alive-and-honestly
-spec_id: null
-kind: null
+spec_id: spc-17
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
