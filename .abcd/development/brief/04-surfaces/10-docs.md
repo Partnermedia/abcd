@@ -1,25 +1,39 @@
-# `/abcd:docs` — Documentation-Currency Lint
+# `/abcd:docs` — Documentation Currency and Citations
 
 `/abcd:docs` runs abcd's documentation-currency checks over the current repo and
-presents the result. It is **strictly read-only** — it performs zero writes, it
-only reports. It is the deterministic half of the docs release gate (the semantic
-half is the `docs-currency-reviewer` agent).
+maintains the citation record those checks enforce. `lint` is **strictly
+read-only** — it performs zero writes and touches no network — and it is the
+deterministic half of the docs release gate (the semantic half is the
+`docs-currency-reviewer` agent). The `cite` sub-tree is the writing half: it is
+the only place abcd reaches the network on behalf of documentation, and it runs
+when a maintainer asks.
 
 ## Sub-verbs
-
-The shipped verb surface is one sub-verb, `lint`:
 
 - **`/abcd:docs lint`** — lint this repo's documentation for currency and print
   the findings. The plugin command (`commands/abcd/docs.md`) invokes
   `abcd docs lint --json` and summarises the result.
+- **`abcd docs cite refresh`** — fetch every cited URL once and rewrite the
+  committed citation baseline. Each URL gets exactly one bounded attempt with no
+  retries, and no response body is read: liveness is judged from the status line.
+  Sources that refuse automated fetchers are printed as a manual checklist rather
+  than recorded as broken.
+- **`abcd docs cite confirm <url>… | --receipt <file>`** — record that a human
+  verified a citation the fetcher could not read. Both forms assemble one receipt
+  schema, so the generated checklist page that lands later is a different
+  producer of the same input rather than a second pathway. Only URLs the
+  documentation cites can be confirmed.
 
-Bare `abcd docs` prints command usage (its one sub-verb, `lint`) — it does **not**
-render a status board; the bare-status convention is scoped to `ahoy`/`capture`/
-`memory`/`intent`/`spec` and bare `abcd`, not to `docs`. The global `--json` flag
-emits the machine-readable finding list, and `docs lint` additionally accepts two
-local flags: `--config` (path to the `docs-lint.json` it loads, default
-`<root>/.abcd/docs-lint.json`) and `--root` (repo root to lint, default the
-current working directory).
+Bare `abcd docs` prints command usage — it does **not** render a status board;
+the bare-status convention is scoped to `ahoy`/`capture`/`memory`/`intent`/`spec`
+and bare `abcd`, not to `docs`. The global `--json` flag emits the
+machine-readable payload. Every verb here accepts `--config` (path to the
+`docs-lint.json` it loads, default `<root>/.abcd/docs-lint.json`) and `--root`
+(repo root, default the current working directory), so the refresh fetches
+exactly the set the gate demands receipts for. `docs lint` additionally accepts
+`--release-gate`, which promotes an overdue citation from a warning to a blocker;
+the flag is release machinery's, so an ordinary commit is never blocked by the
+calendar.
 
 ## What it checks
 
@@ -34,6 +48,13 @@ current working directory).
 - **Stray root markdown** — no stray markdown at the repo root (it belongs under
   `docs/`; the allowed root files are the fixed set — README, CHANGELOG,
   CONTRIBUTING, etc.).
+- **Citations** — where a repo arms the rules: footnote markers and definitions
+  in bijection, every crosswalk table row carrying a footnote, well-formed cited
+  URLs and DOIs, refused source domains, and the committed baseline at
+  `.abcd/citations-baseline.json` — no cited URL without a receipt, none recorded
+  broken, none whose recorded final address has drifted from what the page cites,
+  and a staleness warning past 180 days. All of it reads committed files; the
+  fetching lives in `cite refresh`.
 - **Host-agnostic prose** — user-facing docs must not name a specific agent
   harness or bundled tool. This repo's `.abcd/docs-lint.json` defines a family of
   `harness/*` banned tokens (each a **blocker**) that catch such names, so the
@@ -50,11 +71,17 @@ release gate.
 
 ## Composition
 
-`/abcd:docs` is the deterministic, fast, always-runnable currency check.
+`/abcd:docs lint` is the deterministic, fast, always-runnable currency check.
 The `docs-currency-reviewer` agent is its semantic complement — it verifies that
 every user-facing claim still matches the code, which a structural lint cannot.
 The release gate runs both: `docs lint` (deterministic) and the reviewer
 (semantic) must each pass before a tag.
+
+`cite refresh` composes with the gate by separation: the gate is deterministic
+because the fetching happens elsewhere and arrives as a committed record a
+reviewer reads in a diff. The baseline's age surfaces at `abcd ahoy` and in the
+`abcd launch --dry-run` preflight, which names entries approaching the staleness
+blocker while a release still cuts, and refuses on ones past it.
 
 ## References
 
