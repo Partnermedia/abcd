@@ -1,7 +1,7 @@
 ---
 name: launch
-description: Preview the public launch — the file bundle, the secret/PII scan, and the release gates — in dry-run mode, and cut a release by deriving its version and composing its changelog. The preview performs zero writes; `ship` writes the dated CHANGELOG heading and never publishes.
-argument-hint: "[dry-run | ship]"
+description: Preview the public launch — the file bundle, the secret/PII scan, and the release gates — in dry-run mode, cut a release by deriving its version and composing its changelog, and scaffold the changelog-driven release gate into a managed repo. The preview performs zero writes; `ship` writes the dated CHANGELOG heading and never publishes; `scaffold` writes the release workflows and never publishes.
+argument-hint: "[dry-run | ship | scaffold]"
 ---
 
 # `/abcd:launch` release preview and release cut
@@ -136,6 +136,45 @@ Exit codes, same shape as step 1:
 
 Then show the user the written heading and the diff, so a human reviews the release
 record before it is committed. This command never commits, tags, or publishes.
+
+## Scaffold — the release-gate scaffolder
+
+`scaffold` writes the changelog-driven release machinery into a **managed repo that
+lacks it** — a different job from `ship` (which cuts a release in a repo that
+already has the machinery). It **never publishes**.
+
+```bash
+abcd launch scaffold --json
+```
+
+It writes three files, wired to the repo's own default branch and Go version:
+
+- `.github/workflows/release.yml` — verify → build → publish, the verify gate
+  armed against the reviewed **content** commit (`HEAD^2^` on the auto-release
+  merge path, `HEAD^` on a direct tag), so the first public release cannot hit the
+  receipt-vs-tag self-reference.
+- `.github/workflows/auto-release.yml` — newest dated CHANGELOG heading → tag that
+  commit → call `release.yml`. `GITHUB_TOKEN`-only, no personal access token.
+- `.abcd/development/release-gate/README.md` — the adr-37 runbook.
+
+The workflows come from one embedded template that abcd-cli's own release
+workflows are regenerated from (self-scaffold parity), so every abcd release
+exercises the exact machinery a managed repo receives. The scaffolded `release.yml`
+carries a `workflow_dispatch` **rehearsal**: run it green once before the first
+real release — it arms the full gate against a simulated changelog roll and
+reviewed-content commit, proves the gate admits, and publishes nothing (no tag,
+Release, or attestation).
+
+It is idempotent and fail-safe. Exit codes gate the flow:
+
+- **0** — every file written, or already current (a no-op re-run). Report the
+  per-file disposition.
+- **1** — a file exists and **differs** (hand-edited or stale); the report names
+  it and **nothing was written**. Relay it; re-run with `--confirm` to overwrite.
+- **2** — a structural fault (the repository or a template could not be read).
+
+A refusal is a result to relay, not a crash. Never hand-edit the workflows to work
+around it: re-run with `--confirm` when the operator intends to replace the drift.
 
 If the `abcd` binary is not on `PATH`, fall back to
 `go run ./cmd/abcd launch ...` from the repo root, or tell the user to build it
