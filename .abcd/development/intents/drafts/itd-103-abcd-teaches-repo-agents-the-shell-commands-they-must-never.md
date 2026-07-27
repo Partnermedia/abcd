@@ -22,11 +22,20 @@ impact: additive
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- Given the guard hook cannot execute the abcd binary, when any command runs, then the guard fails OPEN with an unmissable in-session warning, and guard health is reported by ahoy status — never a silent no-op, never a bricked session.
+- Given a command matches a blocker-tier registry entry, then it is refused with the safe successor as the block message; warn-tier matches pass with the warning injected; no in-session override exists — the only escape is a committed per-repo config override.
+- Given a hazard pattern appears inside a quoted string argument (for example a ledger capture whose text mentions a dangerous command), when the guard evaluates, then it does not fire: matching is shell-token-aware and applies in command position only, including cd-chain structure across compound separators.
+- Given a registry entry is proposed for the bundled defaults, then it ships with known-bad and known-good fixtures (known-good at least 40% of its corpus) and clears a declared true-negative-rate floor before admission; string payloads inside eval or shell -c are a documented v1 gap, not a silent one.
 
 ## Open Questions
 
-_None recorded yet._
+- The registry config's file home (extend rules.json with a guard domain vs a dedicated committed file) — a spec-time decision.
+- Which non-shell tool calls (if any) the guard family later covers.
+
+## Grill Settlements (2026-07-27)
+
+- Fail-open-loud on guard breakage; blocker/warn tiers mirror the docs-lint family; overrides are committed and reviewable only.
+- Shell-token-aware matching in command position was chosen precisely because a raw-regex guard would have blocked this repo's own incident-capture command — the known-good corpus is not optional.
 
 ## Audit Notes
 
