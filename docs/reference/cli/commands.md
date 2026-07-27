@@ -254,6 +254,56 @@ Report what a lifeboat would write into a target, read-only (coverage blanks fir
 
 **Usage:** `abcd embark probe <lifeboat-dir> [target-dir]`
 
+### `abcd guard`
+
+Check a shell command against the hazard registry before it runs
+
+**Usage:** `abcd guard`
+
+#### `abcd guard check`
+
+Decide whether a candidate shell command is safe to run
+
+**Usage:** `abcd guard check [flags]`
+
+Evaluates one candidate command line against the hazard registry — the
+bundled defaults merged with this repo's `.abcd/guard.json` — and reports
+allow, warn, or block. A blocker exits 1 and names the safe successor; a
+warn exits 0 with the warning rendered; an allow exits 0. A guard that
+cannot be evaluated at all (an unparsable command line, a malformed
+registry) exits 2, so a caller never reads silence as clearance.
+
+Matching is shell-token-aware and applies in command position only, so a
+hazard named inside a quoted argument never fires. Command strings passed
+to `eval` or `sh -c` are not parsed: a hazard hidden inside one is not
+seen. That is a known limit of this version, not a claim of coverage.
+
+The candidate comes from --command, or from stdin when the flag is absent.
+
+**Flags:**
+
+```
+      --command string   the candidate command line (default: read from stdin)
+```
+
+#### `abcd guard hook`
+
+Host pre-tool-use adapter: decide a shell command from a hook payload
+
+**Usage:** `abcd guard hook`
+
+Reads a host pre-tool-use hook payload on stdin and evaluates its shell
+command against the hazard registry. A blocker exits with the host's
+blocking status and puts the safe successor and the plain-language why on
+stderr, which is the channel the host replays to the agent. A warn and an
+allow both let the command run.
+
+Anything the adapter cannot turn into a decision — an unreadable payload, a
+tool call that is not a shell command, an unparsable command line, a
+registry that will not load — allows the command and warns loudly on
+stderr. A guard that cannot answer never stops a session, and is never
+silently absent.
+
 ### `abcd history`
 
 Manage the native session-transcript store
