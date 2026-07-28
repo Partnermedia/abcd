@@ -37,6 +37,7 @@ error — so `abcd audit` gates a repo's CI as well as backing onboarding.
 | `decision-durability` | warn | a committed `.abcd/work/DECISIONS.md`; decisions not living only in the gitignored layer |
 | `docs-currency` | warn | reuses the docs-lint engine where `docs/` exists |
 | `privacy-hygiene` | error | no absolute local paths in committed files, honouring an `abcd-audit:allow` line waiver |
+| `identity-positioning` | warn | every registered surface still carries the canonical identity block's tagline (and pitch, where required); Where-gated on a committed `.abcd/positioning.json`, and per-repo upgradeable to `error` — see [`17-identity.md`](17-identity.md) |
 
 ## How it is built
 
