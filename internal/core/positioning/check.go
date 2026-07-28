@@ -149,7 +149,8 @@ func readFirstPresent(root string, files []string) (rel string, data []byte, ok 
 			}
 			// A present-but-unreadable surface (symlinked, oversize, a device)
 			// is not an absence: report it rather than skipping it silently.
-			return f, nil, false, fmt.Errorf("reading surface %s: %w", f, rerr)
+			// Path-free — this reaches an audit finding (iss-81).
+			return f, nil, false, fmt.Errorf("reading surface %s: %s", f, pathFreeReason(rerr))
 		}
 		return f, b, true, nil
 	}
