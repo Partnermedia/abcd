@@ -537,13 +537,9 @@ func verifyHookManifest(pluginRoot string) string {
 			return "read failed"
 		}
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return "JSON parse failed"
-	}
-	hooks, ok := parsed["hooks"].(map[string]any)
-	if !ok {
-		return "missing or non-object `hooks` key"
+	hooks, reason := decodeHookEvents(data)
+	if reason != "" {
+		return reason
 	}
 	for _, event := range []string{"UserPromptSubmit", "SessionStart", "PreCompact"} {
 		entries, ok := hooks[event].([]any)
@@ -555,6 +551,36 @@ func verifyHookManifest(pluginRoot string) string {
 		}
 	}
 	return ""
+}
+
+// decodeHookEvents decodes a hook manifest's `hooks` object, returning the
+// per-event entries or a one-line reason. It is the single decoder for the
+// manifest: verifyHookManifest checks the prompt-router events with it, and the
+// guard-health check reads the PreToolUse event with it, so the two can never
+// disagree about what a well-formed manifest is.
+func decodeHookEvents(data []byte) (map[string]any, string) {
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil, "JSON parse failed"
+	}
+	hooks, ok := parsed["hooks"].(map[string]any)
+	if !ok {
+		return nil, "missing or non-object `hooks` key"
+	}
+	return hooks, ""
+}
+
+// readHookEvents reads and decodes the plugin's hook manifest, returning the
+// per-event entries. A manifest that cannot be read or decoded yields ok=false —
+// the caller reports "not installed", which is the honest answer when nothing can
+// be proven about the wiring.
+func readHookEvents(pluginRoot string) (map[string]any, bool) {
+	data, err := fsutil.ReadGuarded(filepath.Join(pluginRoot, "hooks", "hooks.json"), 256*1024)
+	if err != nil {
+		return nil, false
+	}
+	hooks, reason := decodeHookEvents(data)
+	return hooks, reason == ""
 }
 
 // eventHasCommand reports whether any nested command string contains substring.
