@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-28
+
 ### Added
 
 - **`abcd identity` — one canonical identity block, and every surface held to
