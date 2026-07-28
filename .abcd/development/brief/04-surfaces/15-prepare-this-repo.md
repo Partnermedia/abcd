@@ -39,7 +39,7 @@ Four phases, each gated on the one before:
    principles, ADRs, intents, `docs/` Diátaxis rules, and the lint configs as
    patterns.
 2. **Audit** — run `abcd audit --json` for the engine-backed conformance core
-   (the five convention rules), supplement it with the structure/principles
+   (the six convention rules), supplement it with the structure/principles
    judgement the binary does not make, write the gap report to the target's
    `.abcd/.work.local/scratch/`, and present it before any change.
 3. **Adopt** — create the three tiers with a repo-specific `CONTEXT.md`, migrate

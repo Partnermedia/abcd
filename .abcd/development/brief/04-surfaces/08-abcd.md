@@ -74,8 +74,9 @@ surfaces. The `disembark`,
 `embark`, `launch`, and `intent` CLI verbs all ship today, and each has its
 plugin command file present (`commands/abcd/disembark.md`, `embark.md`,
 `launch.md`, `intent.md`). `commands/abcd/` ships `ahoy`, `audit`, `capture`,
-`consult`, `disembark`, `docs`, `embark`, `history`, `ingest`, `intent`,
-`launch`, `memory`, `prepare-this-repo`, and `version` (14 files). The investigation found no predecessor spc-17 probe STUB behind the
+`consult`, `disembark`, `docs`, `embark`, `guard`, `history`, `ideate`,
+`identity`, `ingest`, `intent`, `launch`, `memory`, `prepare-this-repo`, and
+`version` (17 files). The investigation found no predecessor spc-17 probe STUB behind the
 top-level command to replace — the "stub replacement" premise is therefore
 recorded here as not-applicable. The top-level command file itself is present
 today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
