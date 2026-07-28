@@ -357,7 +357,7 @@ abcd/
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
 └── hooks/                              # Claude Code event hooks — each command shells directly to the binary
     └── hooks.json                      # UserPromptSubmit → hook prompt-router; SessionStart → prompt-router-reset + session-start;
-                                        # PreCompact → prompt-router-reset; SessionEnd → session-end
+                                        # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end
 ```
 
 The core is organised one package per capability under `internal/core/`, and the

@@ -174,8 +174,8 @@ Later phase — intent-fidelity-reviewer (shape-classification role) scans the c
 
 | Subcommand | Purpose | File movement |
 |---|---|---|
-| `/abcd:intent` (no args) | Read-only status: bucket counts (drafts / planned / shipped / disciplines / superseded), open/closed spec counts, the itd↔spc links, and a ledger-routing hint (`abcd capture "…"` for an observation, `abcd intent "…"` for a user-facing change) | — |
-| `/abcd:intent "<free-text>"` | **Canonical create** (spc-30 (predecessor store)/itd-46): a leading quoted seed is the canonical create entry. Seeds a draft skeleton from the text — placeholder Press Release and Acceptance Criteria sections for the human to expand — and assigns `itd-N`; writes `suggested_kind: null`. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
+| `/abcd:intent` (no args) | Read-only status: bucket counts (drafts / planned / shipped / disciplines / superseded), open/closed spec counts, the itd↔spc links, a ledger-routing hint (`abcd capture "…"` for an observation, `abcd intent "…"` for a user-facing change), and an ideate-routing line (a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way) | — |
+| `/abcd:intent "<free-text>"` | **Canonical create** (spc-30 (predecessor store)/itd-46): a leading quoted seed is the canonical create entry. Seeds a draft skeleton from the text — placeholder Press Release and Acceptance Criteria sections for the human to expand — and assigns `itd-N`; writes `suggested_kind: null`. An optional `--impact <additive\|breaking\|fix>` flag stamps the draft's product impact at create time. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent new <text>` | Deprecated alias for the quoted-text create (`abcd intent "<text>"`); files a draft from the text | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent grill <itd-N>` | Socratic adversarial interview that stress-tests an intent for vagueness, missing acceptance, hidden assumptions before planning. Glossary-aware once `terminology/` exists. `--brief-section <id>` flag for stress-testing a brief section instead. (per itd-27, `intents/planned/` — a later phase; no `grill` sub-verb ships yet) | (stays in current state) |
 | `/abcd:intent plan <itd-N>` | Plans a draft: mints its native spec, injects the bidirectional link (intent `spec_id` ↔ spec `intent`), and moves the file `drafts/` → `planned/`. Single intent ID. | `drafts/` → `planned/` |
@@ -211,7 +211,7 @@ builds_on: []            # itd-N ids this intent builds on
 severity: minor          # seeded capture-grain severity of the draft
 # Added later, not part of the seed skeleton:
 #   bundle: <id>                  — for kind: bundle-member, the bundle ID
-#   impact: additive|breaking|fix — the compatibility judgement the derived version is computed from. Never "internal" (a press-release-first intent is user-facing by definition), and required before the intent may move to shipped/
+#   impact: additive|breaking|fix — the compatibility judgement the derived version is computed from. Never "internal" (a press-release-first intent is user-facing by definition), and required before the intent may move to shipped/. Optionally stamped at create time via the `--impact` flag, otherwise added later
 #   surface_history: []           — appended when an intent's user-facing surface shape changes (e.g., skill → sub-verb, top-level command → sub-verb, command → flag) WITHOUT changing kind. Distinct from reclassification_history. Schema: { date, from, to, reason }
 ---
 

@@ -8,14 +8,14 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 
 | Subcommand | Purpose | File movement |
 |---|---|---|
-| `/abcd:capture` (no args) | Help + status: shows the most recent open issues and closes with a capture-vs-intent routing hint. Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
-| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags, each with a default — `--severity`, `--category`, `--source`, `--found-during`, `--found-at`, `--slug`, `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
+| `/abcd:capture` (no args) | Help + status: shows the most recent open issues and closes with a three-way routing hint — capture vs intent, plus an ideate route (a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way). Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
+| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags — `--severity`, `--category`, `--source`, and `--found-during` each carry a default; `--found-at`, `--slug`, and `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) have none | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
 | `/abcd:capture list --open` | Query the ledger for currently-open issues (flag immediately adjacent — earned SD001 exception) | — |
 | `/abcd:capture list --resolved` | Query the ledger for resolved issues | — |
 | `/abcd:capture list --wontfix` | Query the ledger for wontfix issues | — |
 | `/abcd:capture list --all` | Query the ledger across all three states | — |
 | `/abcd:capture promote <iss-N>` | Promote an issue to an intent draft: command-orchestrated (never a `capture promote` CLI sub-verb), it hands the issue body to `abcd intent "<text>"`, which files a new draft under `intents/drafts/` seeded from that text. The reciprocal back-link (`promoted_to` scalar + `related_issues` ↔ `related_intents` lists) onto the `iss-N` record is written by hand — no engine verb writes that edge. | (issue stays; intent created in `drafts/`) |
-| `/abcd:capture resolve <iss-N> "<resolution-note>"` | Mark issue resolved | `open/` → `resolved/` |
+| `/abcd:capture resolve <iss-N> "<resolution-note>" --impact <additive\|breaking\|fix\|internal>` | Mark issue resolved (`--impact` is required — resolving without it exits 1) | `open/` → `resolved/` |
 | `/abcd:capture wontfix <iss-N> "<reason>"` | Explicit non-action decision | `open/` → `wontfix/` |
 
 The unfiltered CLI shape `abcd capture list` (no flag) is rejected with
@@ -24,8 +24,8 @@ message. The four flagged forms above are the only earned SD001
 exception under the capture surface; each flag must appear immediately
 adjacent to `list`, never pipe-joined into a single token. There is no
 implicit-default filtered list — bare `/abcd:capture` is what renders
-status and recent captures, closing with a capture-vs-intent routing
-hint.
+status and recent captures, closing with a three-way routing hint
+(capture vs intent, plus an ideate route for a big, unproven idea).
 
 ## 2. Ledger structure
 
@@ -71,12 +71,12 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 ## 4. Acceptance
 
 - **Given** an abcd-installed repo, **when** the user runs `/abcd:capture "review nitpick: T7 cache_ttl_days dead-config alternative"`, **then** a new file `.abcd/work/issues/open/iss-N-<slug>.md` exists with frontmatter populated and the captured text in the body.
-- **Given** an existing issue at `.abcd/work/issues/open/iss-3-foo.md`, **when** the user runs `/abcd:capture resolve iss-3 "fixed in spc-7 task 4"`, **then** the file moves to `.abcd/work/issues/resolved/iss-3-foo.md` with the resolution recorded.
+- **Given** an existing issue at `.abcd/work/issues/open/iss-3-foo.md`, **when** the user runs `/abcd:capture resolve iss-3 "fixed in spc-7 task 4" --impact fix` (`--impact` is required and has no default), **then** the file moves to `.abcd/work/issues/resolved/iss-3-foo.md` with the resolution recorded.
 - **Given** an existing issue, **when** the user runs `/abcd:capture promote iss-N`, **then** the issue body is handed to `abcd intent "<text>"`, which files a new draft intent under `intents/drafts/` seeded from that text; the reciprocal back-link (`promoted_to` scalar + `related_issues` ↔ `related_intents` lists) is recorded by hand, since no engine verb writes that edge.
 - **Given** a fresh `/abcd:ahoy` upgrade with an existing scratch buffer under `.abcd/.work.local/`, **when** `dev-sync` runs (a later phase, not yet built — § 3), **then** every entry in that scratch buffer is promoted to the structured ledger with provenance noting "migrated from `.abcd/.work.local/` scratch".
 - **Given** a ledger containing 5 open issues, **when** the user runs `/abcd:capture list --open` (the flag is explicit — there is no implicit default), **then** the output lists all 5 with id, state, severity, and slug, in derived-priority order — unblocked issues first, then severity (`critical` → `nitpick`); rows blocked by an open dependency are demoted and annotated with their open blockers.
 - **Given** a ledger with a mix of open, resolved, and wontfix issues, **when** the user runs `/abcd:capture list --all`, **then** every issue across all three states is listed; the equivalent unfiltered CLI form `abcd capture list` (no flag) instead exits 2 with a "choose a filter" message.
-- **Given** an abcd-installed repo, **when** the user runs bare `/abcd:capture` (no args), **then** the output is a read-only status render — counts (`open N · resolved N · wontfix N`), up to 10 most recent open issues, and a capture-vs-intent routing hint — and no `iss-*.md` file is created, moved, or field-mutated by the invocation itself.
+- **Given** an abcd-installed repo, **when** the user runs bare `/abcd:capture` (no args), **then** the output is a read-only status render — counts (`open N · resolved N · wontfix N`), up to 10 most recent open issues, and a three-way routing hint (capture vs intent, plus an ideate route) — and no `iss-*.md` file is created, moved, or field-mutated by the invocation itself.
 
 ## 5. Implementation status
 
