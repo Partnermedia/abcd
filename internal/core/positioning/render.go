@@ -1,6 +1,7 @@
 package positioning
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -94,24 +95,53 @@ func Propose(root string, cfg Config) (Proposal, error) {
 			replacement = string(enc[1 : len(enc)-1])
 		}
 		proposed := text[:sp.start] + replacement + text[sp.end:]
+		// The locators work over newline-normalised text, but the proposal has
+		// to match the bytes on disk or no patch tool will apply it: a file
+		// written with CRLF gets its line endings back.
+		crlf := bytes.Contains(data, []byte("\r\n"))
+		onDisk := proposed
+		if crlf {
+			onDisk = strings.ReplaceAll(proposed, "\n", "\r\n")
+		}
 		p.Diffs = append(p.Diffs, SurfaceDiff{
 			SurfaceID: res.ID,
 			File:      res.File,
-			Proposed:  proposed,
-			Unified:   unifiedDiff(res.File, text, proposed, sp.start, sp.end, replacement),
+			Proposed:  onDisk,
+			Unified:   unifiedDiff(res.File, text, sp.start, sp.end, replacement, crlf),
 		})
 	}
 	return p, nil
 }
 
+// noNewlineMarker is the unified-diff notation for a final line that the file
+// does not terminate with a newline. Omitting it makes every patch tool refuse.
+const noNewlineMarker = "\\ No newline at end of file\n"
+
 // unifiedDiff renders the single-region replacement as a unified diff. The
 // change is always one contiguous span, so the patch is exactly one hunk: the
 // lines the span touches, replaced, flanked by up to diffContext unchanged
 // lines. That is enough to be a real patch without pulling in a diff algorithm.
-func unifiedDiff(file, old, proposed string, start, end int, replacement string) string {
-	oldLines := strings.Split(old, "\n")
-	firstLine := strings.Count(old[:start], "\n")
-	lastLine := strings.Count(old[:end], "\n")
+//
+// old is the newline-normalised file text and start/end are byte offsets into
+// it; crlf says the file on disk uses CRLF, in which case the emitted lines
+// carry the carriage return back so the patch matches the real bytes.
+func unifiedDiff(file, old string, start, end int, replacement string, crlf bool) string {
+	eol := "\n"
+	if crlf {
+		eol = "\r\n"
+	}
+	// A file ending in a newline has N lines, not N+1: splitting the raw text
+	// yields a phantom trailing empty line that is not in the file, and a hunk
+	// carrying it as context can never apply. Where the file really does not
+	// end in a newline, the hunk says so with the marker instead.
+	finalNewline := strings.HasSuffix(old, "\n")
+	oldLines := strings.Split(strings.TrimSuffix(old, "\n"), "\n")
+
+	// Clamped: a span that reached past the last content line (a locator that
+	// swallowed the file's trailing newline) must not index past oldLines.
+	firstLine := min(strings.Count(old[:start], "\n"), len(oldLines)-1)
+	lastLine := min(strings.Count(old[:end], "\n"), len(oldLines)-1)
+	end = min(end, lineEndOffset(old, lastLine))
 
 	// The replaced lines, rebuilt: everything on the first line before the
 	// span, the replacement, everything on the last line after it.
@@ -127,23 +157,30 @@ func unifiedDiff(file, old, proposed string, start, end int, replacement string)
 	before := oldLines[ctxStart:firstLine]
 	after := oldLines[lastLine+1 : ctxEnd+1]
 
+	// The hunk reaches the file's last line, so an absent final newline has to
+	// be declared — against the shared context line if there is one after the
+	// change, otherwise against both sides of the change itself.
+	truncated := !finalNewline && ctxEnd == len(oldLines)-1
+
 	var b strings.Builder
 	fmt.Fprintf(&b, "--- a/%s\n+++ b/%s\n", file, file)
 	fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n",
 		ctxStart+1, len(before)+len(removed)+len(after),
 		ctxStart+1, len(before)+len(added)+len(after))
 	for _, l := range before {
-		b.WriteString(" " + l + "\n")
+		b.WriteString(" " + l + eol)
 	}
-	for _, l := range removed {
-		b.WriteString("-" + l + "\n")
+	writeSide := func(prefix string, lines []string, mark bool) {
+		for i, l := range lines {
+			b.WriteString(prefix + l + eol)
+			if mark && i == len(lines)-1 {
+				b.WriteString(noNewlineMarker)
+			}
+		}
 	}
-	for _, l := range added {
-		b.WriteString("+" + l + "\n")
-	}
-	for _, l := range after {
-		b.WriteString(" " + l + "\n")
-	}
+	writeSide("-", removed, truncated && len(after) == 0)
+	writeSide("+", added, truncated && len(after) == 0)
+	writeSide(" ", after, truncated && len(after) > 0)
 	return b.String()
 }
 

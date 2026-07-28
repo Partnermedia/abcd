@@ -2,9 +2,12 @@ package positioning
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // snapshot records every file's content and modification time under root.
@@ -143,6 +146,70 @@ func TestProposeSkipsUnlocatableSurfaces(t *testing.T) {
 	}
 	if p.Report.Drifted() != 1 {
 		t.Fatalf("Drifted() = %d, want 1 (the unlocatable surface still reports)", p.Report.Drifted())
+	}
+}
+
+// The proposal is only useful if it is a real patch. `git apply` is the
+// arbiter: a phantom trailing line, a wrong hunk count, or a missing
+// no-newline marker all make it refuse.
+func TestProposedDiffAppliesWithGitApply(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	cases := map[string]map[string]string{
+		// The drifted line sits near end-of-file, so the trailing context
+		// reaches the last line.
+		"drift at end of file": {
+			"brief.md":  canonBrief,
+			"README.md": "# Widget\n\n<p>An opinionated widget framework for busy people.</p>\n",
+		},
+		"no trailing newline": {
+			"brief.md":  canonBrief,
+			"README.md": "# Widget\n\n<p>An opinionated widget framework for busy people.</p>",
+		},
+		"single-line manifest": {
+			"brief.md":    canonBrief,
+			"plugin.json": `{"name":"w","description":"The widget, but faster."}` + "\n",
+		},
+		"crlf line endings": {
+			"brief.md":  canonBrief,
+			"README.md": "# Widget\r\n\r\n<p>An opinionated widget framework.</p>\r\n\r\n## More\r\n",
+		},
+		"drift mid-file": {
+			"brief.md":  canonBrief,
+			"README.md": "# Widget\n\nintro\n\n<p>An opinionated widget framework.</p>\n\nmore\n\ntail\n",
+		},
+	}
+	for name, files := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := writeRepo(t, files)
+			gitInit(t, root)
+			p, err := Propose(root, abcdLikeConfig())
+			if err != nil {
+				t.Fatalf("Propose: %v", err)
+			}
+			if len(p.Diffs) == 0 {
+				t.Fatal("no diff produced")
+			}
+			patch := filepath.Join(t.TempDir(), "p.patch")
+			if err := os.WriteFile(patch, []byte(p.Unified()), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("git", "-C", root, "apply", "--check", patch)
+			cmd.Env = gittest.Env(t)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git apply --check refused the proposal: %v: %s\n--- patch ---\n%s", err, out, p.Unified())
+			}
+		})
+	}
+}
+
+func gitInit(t *testing.T, root string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", root, "init", "-q")
+	cmd.Env = gittest.Env(t)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
 	}
 }
 
