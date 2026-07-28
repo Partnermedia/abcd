@@ -344,6 +344,29 @@
       "flags": []
     },
     {
+      "path": "abcd guard",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd guard check",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "command",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd guard hook",
+      "hidden": false,
+      "flags": []
+    },
+    {
       "path": "abcd history",
       "hidden": false,
       "flags": []
@@ -402,6 +425,24 @@
       "path": "abcd hook session-start",
       "hidden": false,
       "flags": []
+    },
+    {
+      "path": "abcd ideate",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ideate record",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "verdict-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd identity",

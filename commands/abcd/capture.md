@@ -25,7 +25,9 @@ Summarise the JSON for the user: `open_count` / `resolved_count` /
 
 **Which ledger?** A half-formed observation, question, or nitpick goes to
 `/abcd:capture "…"`; a user-facing change you want to ship goes to
-`/abcd:intent "…"`.
+`/abcd:intent "…"`. For a big, unproven idea there is an optional third route:
+`/abcd:ideate` runs the admission gauntlet and records the verdict either way.
+It is a pointer, never a precondition — capture friction stays at one line.
 
 ## Capture an issue
 
