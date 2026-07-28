@@ -39,4 +39,5 @@ impact: additive
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+<!-- abcd-review: OWED receipt=rcp-52648dea351e -->
+Fidelity review OWED (receipt rcp-52648dea351e).
