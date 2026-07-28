@@ -34,6 +34,45 @@ func TestCleanProseNeutralisesStructure(t *testing.T) {
 	}
 }
 
+// TestCleanProseNeutralisesRawHTML proves no prose field can open raw HTML in the
+// record it lands in. In CommonMark a `<` followed by a letter, `/`, `!`, or `?`
+// begins an HTML block, and several of those block types run to the end of the
+// document — so one unclosed tag can make every later section of a durable record
+// render as inert text while a forged section above it renders normally.
+func TestCleanProseNeutralisesRawHTML(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"script-tag", "<script>alert(1)</script>", "< script>alert(1)< /script>"},
+		{"table-tag", "<table><tr><td>forged", "< table>< tr>< td>forged"},
+		{"declaration", "<!DOCTYPE html>", "< !DOCTYPE html>"},
+		{"comment-open", "text <!-- hidden", "text < !-- hidden"},
+		{"processing-instruction", "<?php echo", "< ?php echo"},
+		{"closing-tag", "</div>", "< /div>"},
+		// A masked control byte becomes '?', so a `<` before one would otherwise
+		// FORM a processing instruction after sanitisation. Neutralising after
+		// Sanitize is what closes this.
+		{"escape-forms-instruction", "<" + string(rune(0x1b)) + "php", "< ?php"},
+		// Ordinary prose keeps its angle brackets: these open nothing.
+		{"comparison-kept", "a < b and c > d", "a < b and c > d"},
+		{"arrow-kept", "x <- y", "x <- y"},
+		{"trailing-kept", "ends with <", "ends with <"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := CleanProse(c.in, 200); got != c.want {
+				t.Errorf("CleanProse(%q) = %q, want %q", c.in, got, c.want)
+			}
+			if got := CleanProseLine(c.in, 200); strings.Contains(got, "<script") ||
+				strings.Contains(got, "<table") || strings.Contains(got, "<!") || strings.Contains(got, "<?") {
+				t.Errorf("CleanProseLine(%q) = %q still opens raw HTML", c.in, got)
+			}
+		})
+	}
+}
+
 // TestCleanProseKeepsInteriorRuns proves CleanProse leaves interior whitespace
 // alone — it trims, it does not collapse. That is the difference from
 // CleanProseLine, and a caller picking the wrong one would silently reflow prose.
