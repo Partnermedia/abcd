@@ -199,7 +199,15 @@ func (s Surface) locateSpan(text string) (span, bool, error) {
 			if loc == nil || loc[2] < 0 {
 				continue
 			}
-			return span{start: loc[2], end: loc[3], text: text[loc[2]:loc[3]]}, true, nil
+			// A pattern whose paragraph terminator is end-of-file captures the
+			// file's final newline(s). They are not part of what the surface
+			// SAYS, and a replacement span that swallowed them would delete the
+			// file's line ending, so the span stops at the last real character.
+			start, end := loc[2], loc[3]
+			for end > start && (text[end-1] == '\n' || text[end-1] == '\r') {
+				end--
+			}
+			return span{start: start, end: end, text: text[start:end]}, true, nil
 		}
 		return span{}, false, nil
 	}
