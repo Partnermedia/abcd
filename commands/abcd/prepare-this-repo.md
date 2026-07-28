@@ -115,11 +115,53 @@ target's `.abcd/.work.local/scratch/` (create the directory via
      test the repo from `AGENTS.md` alone.
    - The working-conventions section below, between markers. An existing
      attribution policy in the file stays authoritative over the template.
-4. **Commit gates.** If the repo has no `.pre-commit-config.yaml`, offer the
+4. **Identity — detect first, interview only if there is nothing to detect.**
+   A project's positioning fragments silently: the README strapline, the
+   package or plugin manifest description, and the conventions file's opening
+   are edited at different moments until three surfaces tell three stories.
+   One canonical block stops that.
+
+   **Detect before asking.** Look for an identity block the repo already
+   carries — three bullets (`- **Title:**`, `- **Tagline:**`, `- **Pitch:**`)
+   under a heading such as "Identity (canonical)", typically in a brief or
+   product chapter under `.abcd/development/`. If one exists, register it and
+   ask nothing:
+
+   ```bash
+   abcd identity init --file <path-to-that-file> --heading "<that heading>"
+   ```
+
+   `init` adopts the existing block byte-for-byte and writes only the pointer.
+   Re-interviewing over an answer the repo already gives is how a project ends
+   up with two canons.
+
+   **Only if there is no block**, ask once, in the maintainer's own words:
+
+   - **Title** (required) — what the project is called, as it should read in a
+     heading.
+   - **Tagline** (required) — one line saying what it is. This is the line
+     every surface is held to.
+   - **Pitch** (optional — offer to skip) — two or three sentences a newcomer
+     could read and know whether this is for them.
+
+   Then record the answers:
+
+   ```bash
+   abcd identity init --title "…" --tagline "…" [--pitch "…"]
+   ```
+
+   This writes the markdown block (markdown stays the source of truth) and
+   `.abcd/positioning.json`, which records where the block lives and which
+   surfaces render from it. From then on `abcd audit` reports any surface that
+   drifts from it, and `abcd identity render` proposes the correction as a
+   diff. abcd never rewrites a surface itself — adopting a proposal is always
+   the maintainer's move.
+
+5. **Commit gates.** If the repo has no `.pre-commit-config.yaml`, offer the
    secrets + absolute-path gate config (template at
    `~/ABCDevelopment/.agents/templates/pre-commit-config.yaml`, if present);
    activate with `pre-commit install`.
-5. **Attribution (opt-in only).** If the user says this repo requires AI
+6. **Attribution (opt-in only).** If the user says this repo requires AI
    disclosure, install the `prepare-commit-msg` hook from
    `~/ABCDevelopment/.agents/templates/` (if present) into `.githooks/`, set
    `core.hooksPath`, and add the AI-attribution section to `AGENTS.md`.
@@ -167,5 +209,9 @@ record. Commit only content that is about this repository.
   `.work/` layout was fully migrated (with sign-off) or fully left alone.
 - `AGENTS.md` carries verified repo facts and the marked, nameless
   working-conventions section; the done-test passes.
+- One identity block is recorded and registered — adopted where the repo
+  already had one, interviewed only where it did not — and `abcd identity`
+  reports every registered surface as `ok`, or the drift it reports was shown
+  to the maintainer with the proposed diff.
 - Nothing from `private-names.txt` and no abcd-internal content appears in any
   committed or published artefact.

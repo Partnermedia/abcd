@@ -93,6 +93,8 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(newAhoyCommand(&asJSON))
 	root.AddCommand(newAuditCommand(&asJSON))
+	root.AddCommand(newGuardCommand(&asJSON))
+	root.AddCommand(newIdentityCommand(&asJSON))
 
 	var launchDryRun bool
 	launchCmd := &cobra.Command{
@@ -154,6 +156,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newHistoryCommand(&asJSON))
 	root.AddCommand(newDocsCommand(&asJSON))
 	root.AddCommand(newIntentCommand(&asJSON))
+	root.AddCommand(newIdeateCommand(&asJSON))
 	root.AddCommand(newSpecCommand(&asJSON))
 	root.AddCommand(newDisembarkCommand(&asJSON))
 	root.AddCommand(newEmbarkCommand(&asJSON))
@@ -1137,6 +1140,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					fmt.Fprintf(w, "  link: %s -> %s\n", termsafe.Sanitize(p.Intent), termsafe.Sanitize(p.Spec))
 				}
 				fmt.Fprint(w, ledgerDecisionRule)
+				fmt.Fprint(w, ideateRoutingRule)
 			})
 		},
 	}
@@ -1263,6 +1267,16 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 // both ledgers' bare-form help (itd-46 AC5), so a user knows which ledger to reach
 // for. It stays host-agnostic (binary command forms, no plugin/tool names).
 const ledgerDecisionRule = "  which ledger? half-formed observation, question, or nitpick -> `abcd capture \"…\"`; a user-facing change you want to ship -> `abcd intent \"…\"`\n"
+
+// ideateRoutingRule sits beside the ledger rule and names the optional third
+// route: a big, unproven idea can go through the admission gauntlet first
+// (itd-104 AC1).
+//
+// It is a POINTER, and the wording is load-bearing. Ideate is never a
+// precondition for capture or intent, so this line offers a route and never
+// implies one is missed — no "should", no "first", no warning when it is skipped.
+// The one line of capture friction the ledgers promise stays one line.
+const ideateRoutingRule = "  a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way\n"
 
 // createIntentFromText is the shared quoted-text create path behind both
 // `abcd intent "<text>"` and the deprecated `abcd intent new "<text>"` alias: it
@@ -1465,6 +1479,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 					fmt.Fprintf(w, "  citations:   %s\n", termsafe.Sanitize(citations))
 				}
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
+				if res.FolderKind != ahoy.UnmanagedFolder {
+					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(res.Guard))
+				}
 				// Classification is read-only; the human report names the
 				// next step per folder kind (itd-40 AC2/AC3).
 				switch res.FolderKind {
@@ -1756,6 +1773,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						}
 					}
 					fmt.Fprint(w, ledgerDecisionRule)
+					fmt.Fprint(w, ideateRoutingRule)
 				})
 			}
 			// Guard: a mistyped subcommand (e.g. `capture resovle iss-1 …`)

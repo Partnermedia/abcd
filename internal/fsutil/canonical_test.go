@@ -12,7 +12,7 @@ import (
 // real-dir primitive — the exact names iss-32 consolidates. The canonical home
 // is internal/fsutil (exported WriteFileAtomic / IsRealDir); any lowercase
 // redefinition elsewhere is a divergent copy.
-var nonCanonicalPrimitiveRe = regexp.MustCompile(`func\s+(writeFileAtomic|durableWrite|isRealDir)\b`)
+var nonCanonicalPrimitiveRe = regexp.MustCompile(`func\s+(writeFileAtomic|durableWrite|isRealDir|createExclusiveIn)\b`)
 
 // TestNoNonCanonicalAtomicWritePrimitives is the one-canonical-primitive
 // detector: no package under internal/ (other than fsutil) may declare its own

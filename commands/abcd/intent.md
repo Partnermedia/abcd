@@ -22,7 +22,10 @@ and the intent↔spec links. Nothing is created or moved by this invocation.
 
 **Which ledger?** A half-formed observation, question, or nitpick goes to
 `/abcd:capture "…"`; a user-facing change you want to ship goes to
-`/abcd:intent "…"`.
+`/abcd:intent "…"`. For a big, unproven idea there is an optional third route:
+`/abcd:ideate` runs the admission gauntlet and records the verdict either way.
+It is a pointer, never a precondition — filing a draft without it is a normal
+thing to do.
 
 ## Create a draft
 

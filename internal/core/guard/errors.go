@@ -1,0 +1,28 @@
+package guard
+
+import "errors"
+
+// The guard sentinels. Every error the package returns wraps one of these, so a
+// front door can render the failure loudly (and, for the hook shim, fail OPEN)
+// without string-matching. Core never decides what a failure means for a
+// session — it only names it.
+var (
+	// ErrUnparsableCommand is a candidate command line the shell tokenizer
+	// cannot split (an unterminated quote, a trailing backslash).
+	ErrUnparsableCommand = errors.New("guard: unparsable command line")
+
+	// ErrMalformedConfig is a per-repo .abcd/guard.json that is unreadable or
+	// is not valid JSON.
+	ErrMalformedConfig = errors.New("guard: malformed config")
+
+	// ErrSchemaVersion is a config declaring a schema_version this build does
+	// not implement.
+	ErrSchemaVersion = errors.New("guard: unsupported schema_version")
+
+	// ErrUnknownTier is an entry whose tier is neither blocker nor warn.
+	ErrUnknownTier = errors.New("guard: unknown tier")
+
+	// ErrInvalidEntry is an entry that fails the registry schema (bad id, no
+	// pattern command, missing successor or why).
+	ErrInvalidEntry = errors.New("guard: invalid entry")
+)

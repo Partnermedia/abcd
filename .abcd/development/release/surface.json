@@ -403,6 +403,29 @@
       "flags": []
     },
     {
+      "path": "abcd guard",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd guard check",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "command",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd guard hook",
+      "hidden": false,
+      "flags": []
+    },
+    {
       "path": "abcd history",
       "hidden": false,
       "flags": []
@@ -459,6 +482,75 @@
     },
     {
       "path": "abcd hook session-start",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ideate",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ideate record",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "verdict-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd identity",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd identity init",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "file",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "heading",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "pitch",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "tagline",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "title",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd identity render",
       "hidden": false,
       "flags": []
     },

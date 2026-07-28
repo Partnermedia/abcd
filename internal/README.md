@@ -36,6 +36,23 @@ plugin surface, and a future MCP server share one engine.
   the two agree. The table is a *hypothesis*: `abcd disembark probe` measures the
   same sections against real repositories in the same `grounded`/`partial`/`blank`
   vocabulary, and the evidence is expected to revise it (adr-35, itd-88).
+- **`core/guard/`** — the shell-hazard registry. Bundled hazard entries (id,
+  command-position pattern over shell tokens, blocker/warn tier, safe successor,
+  plain-language why) plus the deterministic allow/warn/block decision a harness
+  hook calls before a command runs. Matching is token-aware and command-position
+  only, so a hazard named inside a quoted argument never fires; every bundled
+  entry ships known-bad and known-good fixtures, and the admission gate test
+  holds each one to its own corpus (100% true-negative floor, at least 40%
+  known-good). An allow means no entry matched, never that a command is safe: a
+  hazard reached another way — a string handed to an interpreter (`eval`,
+  `sh -c`), a launcher outside the small `wrappers` set, a launcher inside it
+  carrying its own flags (only the wrapper NAME is stepped over), a backtick
+  substitution, or a form no entry describes — is not seen. That limit is stated here and in
+  the `abcd guard check` reference doc, never left implicit. `Load` reads the
+  working tree, so a `disabled: true` takes effect before it is reviewed; the
+  front door compensates by making a disabled registry loud rather than silent.
+  Fail-open-loud on a broken guard belongs to the hook shim (`hooks/hooks.json`)
+  and the `abcd guard hook` adapter, not here.
 - **`surface/cli/`** — the default front door: a Cobra command tree that calls
   `core` and formats results as text or `--json`. Holds no business logic.
 - **`surface/mcp/`** *(later)* — an additive front door exposing the same core

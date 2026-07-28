@@ -34,6 +34,7 @@ import (
 
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // SynthesizePrinciples builds or ingests principles.json (+ principles.md) for a
@@ -399,19 +400,11 @@ func oracleOwnOutput(rel string) bool {
 func cleanSynthProse(s string) string { return cleanSynthProseN(s, maxSynthProseBytes) }
 
 // cleanSynthProseN is cleanSynthProse with an explicit byte cap, so a longer-form
-// field (the press-release body) can share one sanitiser at its own ceiling.
+// field (the press-release body) can share one sanitiser at its own ceiling. The
+// cleaning itself is termsafe's — the canonical home this seam and the release
+// ingest seam both route through, rather than keeping divergent copies.
 func cleanSynthProseN(s string, capBytes int) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	s = sanitize(s)
-	s = strings.TrimSpace(s)
-	if len(s) > capBytes {
-		s = strings.ToValidUTF8(s[:capBytes], "")
-		s = strings.TrimSpace(s)
-	}
-	return s
+	return termsafe.CleanProse(s, capBytes)
 }
 
 // filterSynthEvidence keeps only the refs that are members of valid, deduped and
