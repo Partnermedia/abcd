@@ -179,6 +179,10 @@ func TestProposedDiffAppliesWithGitApply(t *testing.T) {
 			"brief.md":  canonBrief,
 			"README.md": "# Widget\n\nintro\n\n<p>An opinionated widget framework.</p>\n\nmore\n\ntail\n",
 		},
+		"trailing blank line": {
+			"brief.md":  canonBrief,
+			"README.md": "# Widget\n\n<p>An opinionated widget framework.</p>\n\n",
+		},
 	}
 	for name, files := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -195,10 +199,21 @@ func TestProposedDiffAppliesWithGitApply(t *testing.T) {
 			if err := os.WriteFile(patch, []byte(p.Unified()), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("git", "-C", root, "apply", "--check", patch)
+			cmd := exec.Command("git", "-C", root, "apply", patch)
 			cmd.Env = gittest.Env(t)
 			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("git apply --check refused the proposal: %v: %s\n--- patch ---\n%s", err, out, p.Unified())
+				t.Fatalf("git apply refused the proposal: %v: %s\n--- patch ---\n%s", err, out, p.Unified())
+			}
+			// The patch and the Proposed content are two renderings of the same
+			// change; if they disagree, one of them is lying to the maintainer.
+			for _, d := range p.Diffs {
+				got, rerr := os.ReadFile(filepath.Join(root, d.File))
+				if rerr != nil {
+					t.Fatal(rerr)
+				}
+				if string(got) != d.Proposed {
+					t.Errorf("%s after applying the patch = %q, but Proposed = %q", d.File, got, d.Proposed)
+				}
 			}
 		})
 	}
