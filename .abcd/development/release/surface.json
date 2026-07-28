@@ -427,6 +427,24 @@
       "flags": []
     },
     {
+      "path": "abcd ideate",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ideate record",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "verdict-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd intent",
       "hidden": false,
       "flags": [

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"syscall"
 )
@@ -145,7 +146,62 @@ func syncParent(dir string) {
 // IsRealDir reports whether path is a directory and NOT a symlink. It lstats
 // (never following) so a symlink pointing at a directory reads as false — the
 // owned-directory guard the store re-runs on every mutating call.
+//
+// It checks the LEAF only: every ancestor component is resolved by the kernel,
+// so a symlinked parent passes. Where a write must be contained against a
+// symlinked ancestor too, route it through CreateExclusiveIn under an os.Root
+// opened at the trust boundary, which refuses symlink traversal at every level.
 func IsRealDir(path string) bool {
 	fi, err := os.Lstat(path)
 	return err == nil && fi.IsDir() && fi.Mode()&os.ModeSymlink == 0
+}
+
+// CreateExclusiveIn writes data to rel INSIDE root, failing if rel already
+// exists. It is the canonical primitive for a durable write that must (a) stay
+// contained under a directory even against a symlinked ancestor, and (b) never
+// replace an existing file.
+//
+// It is deliberately not WriteFileAtomic. That primitive's contract is atomic
+// REPLACEMENT — a temp file renamed over the target — which is the right shape
+// when a file is rewritten in place, and the wrong one here: the rename would
+// happily clobber, and the containment would depend on the caller having resolved
+// the directory safely rather than on the Root. Here the exclusive create IS both
+// guarantees at once. There is no partial-overwrite hazard to protect against,
+// because the file cannot already exist; a crash mid-write leaves a short file,
+// which the caller's own no-overwrite refusal surfaces on the next run rather than
+// silently completing.
+//
+// rel is slash-separated and relative to root. os.ErrExist is returned unwrapped
+// enough for errors.Is, so a caller can map it to its own typed refusal. A write
+// that fails after the create removes the partial file.
+func CreateExclusiveIn(root *os.Root, rel string, data []byte, perm os.FileMode) error {
+	f, err := root.OpenFile(rel, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		_ = root.Remove(rel)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		_ = root.Remove(rel)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = root.Remove(rel)
+		return err
+	}
+	// Fsync the PARENT too, for the same reason WriteFileAtomic does: syncing the
+	// file makes its CONTENT durable, not its NAME. A caller that writes this file
+	// and then durably records a pointer to it would otherwise survive a crash
+	// holding the pointer and no directory entry — a pointer to nothing, which is
+	// the exact state such a caller's rollback exists to prevent. Best-effort:
+	// some filesystems refuse a directory fsync.
+	if d, err := root.Open(path.Dir(rel)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }
