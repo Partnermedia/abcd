@@ -8,6 +8,22 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
+func TestValidRelPath(t *testing.T) {
+	for _, p := range []string{"README.md", "a/b/c.json", ".abcd/development/brief/01-product/README.md"} {
+		if !fsutil.ValidRelPath(p) {
+			t.Errorf("ValidRelPath(%q) = false, want true", p)
+		}
+	}
+	for _, p := range []string{
+		"", "/etc/passwd", "../outside", "a/../../b", "./a", "a//b", "a/", "a/./b",
+		"a\x00b", "a\nb",
+	} {
+		if fsutil.ValidRelPath(p) {
+			t.Errorf("ValidRelPath(%q) = true, want false", p)
+		}
+	}
+}
+
 func TestExists(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "present.txt")

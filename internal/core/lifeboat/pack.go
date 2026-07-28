@@ -268,29 +268,10 @@ func isAbcdLifeboat(dir string) bool {
 	return prov.SchemaVersion >= 1 && prov.ManifestSHA256 != ""
 }
 
-// validRelPath reports whether p is a safe destination path to write: non-empty,
-// relative, already cleaned, every segment a real name (not "", ".", ".."), and
-// free of control characters. os.Root enforces containment too; this refuses
-// early with a legible message.
-func validRelPath(p string) bool {
-	if p == "" || path.IsAbs(p) || strings.HasPrefix(p, "/") {
-		return false
-	}
-	if p != path.Clean(p) {
-		return false
-	}
-	for _, seg := range strings.Split(p, "/") {
-		if seg == "" || seg == "." || seg == ".." {
-			return false
-		}
-		for _, r := range seg {
-			if r < 0x20 || r == 0x7f {
-				return false
-			}
-		}
-	}
-	return true
-}
+// validRelPath reports whether p is a safe destination path to write. It is the
+// canonical fsutil guard: os.Root enforces containment too; this refuses early
+// with a legible message.
+func validRelPath(p string) bool { return fsutil.ValidRelPath(p) }
 
 // writeLifeboat writes every planned file into a fresh staging directory beside
 // dest (so the final rename stays on one filesystem), then swaps staging into
