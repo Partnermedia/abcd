@@ -93,6 +93,7 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(newAhoyCommand(&asJSON))
 	root.AddCommand(newAuditCommand(&asJSON))
+	root.AddCommand(newIdentityCommand(&asJSON))
 
 	var launchDryRun bool
 	launchCmd := &cobra.Command{
