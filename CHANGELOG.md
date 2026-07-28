@@ -41,6 +41,52 @@ called out in a **Breaking** section.
   symlinked directory cannot make the check read a file the repository does not
   own and quote it into the report.
 
+- **`/abcd:ideate` — the idea-admission gauntlet** (itd-104, spc-18). A big,
+  unproven idea can be put through three legs before it becomes a record entry:
+  primary-source research (each load-bearing claim checked against its **primary**
+  source, never a secondary citation), a grill against the existing record, and an
+  adversarial review that is fresh-context, off-policy, and receives the idea as an
+  artefact of unknown authorship. The legs are host work; `abcd ideate record
+  <idea-slug> --verdict-json <file|->` is the deterministic frame that validates
+  them and writes the durable verdict — the dated record under
+  `.abcd/development/research/` plus one pointer line in `.abcd/work/DECISIONS.md`.
+  The verdict is recorded **whether the idea survives or dies**, and its rejected
+  alternatives may be empty only behind an explicit marker, because silence and
+  "nothing was weighed" read the same to a session tempted to re-propose the idea.
+  Every record-grill hit is **cited by id and proved to resolve** in the
+  repository: an id naming no record refuses the whole verdict and names the id.
+  The legs travel as an ordered array so "three legs, in order" is checked rather
+  than assumed, and refusals are whole-document — nothing is written unless
+  everything validates. Ideate is **optional and never a gate**: the `intent` and
+  `capture` routing help names it for big unproven ideas, and nothing requires it
+  or warns when it is skipped.
+
+- **`abcd guard` — the shell-hazard guard, wired into a live session** (itd-103,
+  spc-16). `abcd guard check --command "<line>"` evaluates one candidate command
+  against the hazard registry and reports allow, warn, or block: a blocker exits
+  1 and answers with the plain-language why and the safe successor, a warn exits
+  0 with the warning rendered, and a guard that cannot be evaluated at all exits
+  2 rather than letting silence read as clearance. `abcd guard hook` is the host
+  adapter: it reads a pre-tool-use hook payload, refuses a matching command with
+  the successor as the block message, and lets everything else through. The
+  installed hook entry wraps the binary call so a missing or broken abcd **fails
+  open, loudly** — the command runs and the session carries an unmissable
+  UNGUARDED warning, never a silent no-op and never a stuck session. `abcd ahoy`
+  gains a `guard:` line reporting the three things that can independently be
+  false — hook installed, binary reachable, registry loadable — plus a
+  deliberately disabled registry, so a broken guard is visible from outside the
+  session too. Every unguarded state is loud, including the deliberate one: a
+  registry switched off in `.abcd/guard.json` makes each command it lets through
+  carry the warning, so "off" can never pass for "clear". Per-repo overrides live
+  in that one file and nowhere else — no flag, environment variable, or prompt
+  disarms the guard for a session, so the change lands in a diff. An allow means
+  no entry matched, never that a command is safe: a hazard reached another way —
+  a string handed to an interpreter (`eval`, `sh -c`), a launcher the guard does
+  not step over, a backtick substitution, or a form no entry describes — is not
+  seen. Coverage is what the registry names, and the command reference says so.
+  A registry that is switched off answers `abcd guard check` with a fault rather
+  than a clearance, so a script using the verb as a gate cannot be waved through
+  by an edit to `.abcd/guard.json`.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
@@ -111,6 +157,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Untrusted prose can no longer open raw HTML in a record abcd writes.** The
+  shared cleaner every host-delegated ingest routes through — the release
+  changelog ingest, the lifeboat synthesis writers, and the ideate verdict —
+  neutralised newlines and HTML comment markers but left a bare tag intact. In
+  CommonMark a `<` followed by a letter, `/`, `!`, or `?` opens an HTML block, and
+  several of those block types run to the end of the document: a single
+  `<script>` in one model-supplied field made every later section of the record
+  render as inert text inside an unclosed element, while a forged section above it
+  rendered normally — so an artefact whose whole value is that a later session
+  trusts it could hide its own evidence. Every tag opener is now broken apart in
+  the one canonical primitive, so the fix lands at all three boundaries at once.
+  The neutralisation runs **after** terminal sanitisation, which closes a second
+  hole: sanitising substitutes `?` for a masked rune, so `<` before an escape byte
+  previously became `<?` — a processing instruction — after the old ordering.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded

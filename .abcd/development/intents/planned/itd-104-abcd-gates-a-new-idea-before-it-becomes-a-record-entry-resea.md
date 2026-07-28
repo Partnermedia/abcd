@@ -1,8 +1,8 @@
 ---
 id: itd-104
 slug: abcd-gates-a-new-idea-before-it-becomes-a-record-entry-resea
-spec_id: null
-kind: null
+spec_id: spc-18
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
