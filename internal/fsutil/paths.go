@@ -5,9 +5,38 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
+
+// ValidRelPath reports whether p is a safe repo-relative slash path: non-empty,
+// not absolute, already clean, and free of empty, ".", ".." or control-character
+// segments. It is the canonical lexical guard for a path that arrives as data —
+// a committed configuration value, a packed lifeboat's manifest entry — before
+// it is joined onto a trusted root. Lexical only: it says nothing about
+// symlinks, so a caller that then follows the path still needs the guarded
+// read/write primitives.
+func ValidRelPath(p string) bool {
+	if p == "" || path.IsAbs(p) || strings.HasPrefix(p, "/") {
+		return false
+	}
+	if p != path.Clean(p) {
+		return false
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+		for _, r := range seg {
+			if r < 0x20 || r == 0x7f {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // RepoRel renders target as a path relative to base — the repo root, or the
 // working directory — so machine output never carries an absolute

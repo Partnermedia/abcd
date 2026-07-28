@@ -92,7 +92,7 @@ jobs:
       contents: read
     steps:
       - name: Check out the pushed commit
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # github.sha, not the tag ref: checkout re-resolves a NAMED ref at each
           # job's start, so a tag moved after the push could differ here. The sha is
@@ -111,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '<% .GoVersion %>'
           # cache: false — this workflow is tag-triggered; module caching in a
@@ -166,7 +166,7 @@ jobs:
 <%- end %>
     steps:
       - name: Check out the pushed commit
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # github.sha (the commit the pushed tag pointed at), not the tag NAME and
           # not the default-branch tip, so the binaries below are built from the exact
@@ -200,7 +200,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '<% .GoVersion %>'
           cache: false
@@ -267,7 +267,7 @@ jobs:
 
       - name: Attest the semantic-gate receipts (signed release provenance)
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
           subject-path: .abcd/work/reviews/${{ env.CONTENT_SHA }}/*.json
           predicate-type: https://abcd.dev/attestations/semantic-release-gate/v1
@@ -407,7 +407,7 @@ jobs:
       contents: read
     steps:
       - name: Check out (full history)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history so the content-commit resolution below can walk parents,
           # exactly as release.yml's semantic gate does.
@@ -415,7 +415,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '<% .GoVersion %>'
           cache: false

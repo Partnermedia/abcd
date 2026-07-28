@@ -48,7 +48,7 @@ jobs:
       release_ref: ${{ steps.detect.outputs.release_ref }}
     steps:
       - name: Check out the pushed commit (full history + tags)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # fetch-depth: 0 pulls every tag so the existence check below is
           # authoritative; a shallow clone would omit tags and mis-report.
@@ -122,7 +122,7 @@ jobs:
       contents: write        # push the new tag ref
     steps:
       - name: Check out the pushed commit
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # github.sha = this main push's HEAD, the immutable commit to tag.
           ref: ${{ github.sha }}

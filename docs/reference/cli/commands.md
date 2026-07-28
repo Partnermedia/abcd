@@ -296,6 +296,67 @@ Report what a lifeboat would write into a target, read-only (coverage blanks fir
 
 **Usage:** `abcd embark probe <lifeboat-dir> [target-dir]`
 
+### `abcd guard`
+
+Check a shell command against the hazard registry before it runs
+
+**Usage:** `abcd guard`
+
+#### `abcd guard check`
+
+Decide whether a candidate shell command is safe to run
+
+**Usage:** `abcd guard check [flags]`
+
+Evaluates one candidate command line against the hazard registry — the
+bundled defaults merged with this repo's `.abcd/guard.json` — and reports
+allow, warn, or block. A blocker exits 1 and names the safe successor; a
+warn exits 0 with the warning rendered; an allow exits 0. A guard that
+cannot be evaluated at all (an unparsable command line, a malformed
+registry) exits 2, so a caller never reads silence as clearance.
+
+Matching is shell-token-aware and applies in command position only, so a
+hazard named inside a quoted argument never fires.
+
+An allow means no registry entry matched — it is never a statement that a
+command is safe. The guard reads command names it can see in command
+position, so a hazard reached any other way is not seen: a command string
+handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper
+the guard does not step over (or a known wrapper carrying its own flags —
+`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), one inside a
+backtick substitution, or a dangerous form no entry describes. Coverage is
+what the registry names.
+
+The candidate comes from --command, or from stdin when the flag is absent.
+Prefer stdin for a command line you did not type yourself: the shell expands
+a double-quoted --command argument before this verb starts, so a candidate
+containing a command substitution would run at check time. A quoted-delimiter
+heredoc (`abcd guard check <<'EOF'` ... `EOF`) passes it through untouched.
+
+**Flags:**
+
+```
+      --command string   the candidate command line (default: read from stdin)
+```
+
+#### `abcd guard hook`
+
+Host pre-tool-use adapter: decide a shell command from a hook payload
+
+**Usage:** `abcd guard hook`
+
+Reads a host pre-tool-use hook payload on stdin and evaluates its shell
+command against the hazard registry. A blocker exits with the host's
+blocking status and puts the safe successor and the plain-language why on
+stderr, which is the channel the host replays to the agent. A warn and an
+allow both let the command run.
+
+Anything the adapter cannot turn into a decision — an unreadable payload, a
+tool call that is not a shell command, an unparsable command line, a
+registry that will not load — allows the command and warns loudly on
+stderr. A guard that cannot answer never stops a session, and is never
+silently absent.
+
 ### `abcd history`
 
 Manage the native session-transcript store
@@ -326,6 +387,59 @@ List stored transcripts for this repo, newest first
 Show one stored transcript's metadata and redacted body
 
 **Usage:** `abcd history show <session-id-or-filename>`
+
+### `abcd ideate`
+
+Idea-admission protocol: record the verdict of the three-leg gauntlet
+
+**Usage:** `abcd ideate`
+
+Record the verdict of abcd's idea-admission protocol — primary-source research, a grill
+against the existing record, and an independent adversarial review.
+
+The legs are host work; `/abcd:ideate` orchestrates them. This verb validates what they
+produced and writes the durable verdict. Ideate is OPTIONAL and never a gate: no other
+verb requires it, and skipping it is never warned about.
+
+#### `abcd ideate record`
+
+Validate a host-composed verdict and write the dated research record
+
+**Usage:** `abcd ideate record <idea-slug> --verdict-json <file|-> [flags]`
+
+**Flags:**
+
+```
+      --verdict-json string   path to the host-composed verdict JSON (or - for stdin)
+```
+
+### `abcd identity`
+
+Show this repo's canonical identity block and every surface held to it (read-only)
+
+**Usage:** `abcd identity`
+
+#### `abcd identity init`
+
+Record this repo's identity block and the pointer to it (adopts an existing block)
+
+**Usage:** `abcd identity init [flags]`
+
+**Flags:**
+
+```
+      --file string      repo-relative file the identity block lives in (default .abcd/development/IDENTITY.md)
+      --heading string   heading the identity block sits under (default "Identity (canonical)")
+      --pitch string     the project's short elevator pitch (optional)
+      --tagline string   the project's one-line tagline (required unless a block already exists)
+      --title string     the project's title (required unless a block already exists)
+```
+
+#### `abcd identity render`
+
+Print the proposed correction for every drifted surface as a unified diff (writes nothing)
+
+**Usage:** `abcd identity render`
 
 ### `abcd intent`
 
