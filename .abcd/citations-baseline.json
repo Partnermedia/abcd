@@ -257,6 +257,14 @@
       "verification": "automatic",
       "verified_on": "2026-07-27"
     },
+    "https://openai.com/index/harness-engineering/": {
+      "url": "https://openai.com/index/harness-engineering/",
+      "final_url": "https://openai.com/index/harness-engineering/",
+      "last_checked": "2026-07-28",
+      "outcome": "alive",
+      "verification": "manual",
+      "verified_on": "2026-07-28"
+    },
     "https://openai.com/index/unlocking-the-codex-harness/": {
       "url": "https://openai.com/index/unlocking-the-codex-harness/",
       "final_url": "https://openai.com/index/unlocking-the-codex-harness/",
