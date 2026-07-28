@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/positioning"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 const idBrief = `## Identity (canonical)
@@ -195,6 +197,44 @@ func TestIdentityRenderPrintsTheProposedDiff(t *testing.T) {
 	}
 }
 
+// The patch the HUMAN sees must be as applicable as the one in --json. The
+// core's CRLF round-trip is worthless if the render path flattens it, and a
+// core-level test cannot catch that — this asserts it at the front door.
+func TestIdentityRenderKeepsCRLFOnTheHumanPath(t *testing.T) {
+	crlf := strings.ReplaceAll(idDriftedREADME, "\n", "\r\n")
+	repo := idRepo(t, map[string]string{
+		".abcd/development/brief.md": idBrief,
+		".abcd/positioning.json":     idConfig,
+		"README.md":                  crlf,
+	})
+	t.Chdir(repo)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"identity", "render"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "-  <p>An opinionated, intent-driven development framework for product thinkers.</p>\r\n") {
+		t.Errorf("human patch dropped the carriage return a CRLF surface needs:\n%q", out)
+	}
+	// And it is a patch git will take.
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	runGitT(t, repo, "init", "-q")
+	patch := filepath.Join(t.TempDir(), "p.patch")
+	// Drop the two header lines the human render prefixes the diffs with.
+	body := out[strings.Index(out, "--- a/"):]
+	if err := os.WriteFile(patch, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", repo, "apply", "--check", patch)
+	cmd.Env = gittest.Env(t)
+	if o, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git apply --check refused the rendered patch: %v: %s\n%q", err, o, body)
+	}
+}
+
 func TestIdentityRenderOnACleanRepoProposesNothing(t *testing.T) {
 	t.Chdir(adoptedRepo(t, idCleanREADME))
 
@@ -353,6 +393,40 @@ func TestIdentityInitIsIdempotent(t *testing.T) {
 		if before[rel] != was {
 			t.Errorf("re-running init modified %s", rel)
 		}
+	}
+}
+
+// A heading that already exists but carries incomplete bullets cannot be
+// repaired by appending a second copy of itself: init must refuse before it
+// writes anything, name the file, and stay refusing on a re-run.
+func TestIdentityInitRefusesAnIncompleteExistingBlock(t *testing.T) {
+	const partial = "## Identity (canonical)\n\n- **Title:** Widget\n"
+	repo := idRepo(t, map[string]string{
+		".abcd/development/IDENTITY.md": partial,
+		"README.md":                     idCleanREADME,
+	})
+	t.Chdir(repo)
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		var stdout, stderr bytes.Buffer
+		code := Run([]string{"identity", "init", "--title", "Widget", "--tagline", "A sharper widget."}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("attempt %d: init accepted an incomplete existing block", attempt)
+		}
+		if !strings.Contains(stderr.String()+stdout.String(), ".abcd/development/IDENTITY.md") {
+			t.Errorf("attempt %d: refusal does not name the file to repair: %s", attempt, stderr.String())
+		}
+	}
+	// Nothing was appended, and no registry was left half-adopted.
+	data, err := os.ReadFile(filepath.Join(repo, ".abcd/development/IDENTITY.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != partial {
+		t.Fatalf("init rewrote or appended to the existing block:\n%s", data)
+	}
+	if _, ok, err := positioning.LoadConfig(repo); err != nil || ok {
+		t.Fatalf("a refused init left a registry behind: ok=%v err=%v", ok, err)
 	}
 }
 

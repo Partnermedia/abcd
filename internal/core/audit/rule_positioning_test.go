@@ -3,6 +3,7 @@ package audit_test
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/REPPL/abcd-cli/internal/core/audit"
 )
@@ -157,6 +158,31 @@ func TestPositioningMissingBlockIsAFinding(t *testing.T) {
 	}
 	if !strings.Contains(f.Message, "heading") && !strings.Contains(f.Message, "block") {
 		t.Errorf("message does not explain the block could not be read: %s", f.Message)
+	}
+}
+
+// A long drifted paragraph is truncated for the one-line message, but the cut
+// must land on a rune boundary: surface text is arbitrary UTF-8 from the
+// audited repo, and a mid-rune slice puts a replacement glyph in the report.
+func TestPositioningTruncationLandsOnARuneBoundary(t *testing.T) {
+	// Em dashes are 3 bytes each and 200 is not a multiple of 3, so a fixed
+	// 200-byte cut lands on the last byte of a rune rather than on a boundary.
+	long := strings.Repeat("—", 120)
+	res := newFixtureRepo(t).conforming().withPositioning().
+		file("README.md", "<div>\n\n  <p>"+long+"</p>\n\n</div>\n").commit().run()
+
+	f := findingFor(res, "identity-positioning")
+	if f == nil {
+		t.Fatal("long drifted strapline produced no finding")
+	}
+	// The quoted text is rendered with %q, which escapes an invalid byte as
+	// \xNN rather than replacing it — so a mid-rune cut shows up as byte-escape
+	// litter in the report, not as a replacement glyph.
+	if strings.Contains(f.Message, `\x`) {
+		t.Errorf("finding message carries a byte escape from a mid-rune cut: %s", f.Message)
+	}
+	if !utf8.ValidString(f.Message) {
+		t.Errorf("finding message is not valid UTF-8: %q", f.Message)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/REPPL/abcd-cli/internal/core/positioning"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
@@ -111,11 +112,17 @@ func severityFor(cfg positioning.Config) Severity {
 }
 
 // truncate shortens quoted surface text for a one-line finding, collapsing the
-// wrapping so a paragraph reads as the line it drifted on.
+// wrapping so a paragraph reads as the line it drifted on. The cut backs off to
+// a rune boundary: slicing bytes mid-rune would put a replacement glyph in the
+// message, and the surface text is arbitrary UTF-8 from the audited repo.
 func truncate(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if len(s) <= findingMaxLen {
 		return s
 	}
-	return s[:findingMaxLen] + "…"
+	cut := findingMaxLen
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
 }
