@@ -1,8 +1,8 @@
 ---
 id: itd-102
 slug: your-repo-says-the-same-thing-about-itself-everywhere-becaus
-spec_id: null
-kind: null
+spec_id: spc-19
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
