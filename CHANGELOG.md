@@ -12,6 +12,32 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd identity` — one canonical identity block, and every surface held to
+  it** (itd-102, spc-19). A project's positioning fragments silently: the README
+  strapline, the package or plugin manifest description, and the conventions
+  file's opening are edited at different moments until three surfaces tell three
+  stories (the recorded iss-143 drift, which is this check's acceptance corpus).
+  A repo now records one canonical markdown block — `- **Title:**`,
+  `- **Tagline:**`, and an optional, wrappable `- **Pitch:**` under a recorded
+  heading — and `.abcd/positioning.json` records only where that block lives, how
+  loudly the family reports, and which surfaces render from it. Markdown stays
+  the single source of truth. The registry is data, not branches: a surface names
+  candidate files (the first present wins, so one entry covers several manifest
+  formats), a locator (a capture-group regexp or a top-level JSON field), the
+  block fields it must carry, and the template a proposal renders from; the three
+  defaults are the README strapline, the manifest description, and the
+  conventions opening, and a declared list replaces them so nothing is registered
+  silently. A new `identity-positioning` rule runs the check on **every**
+  `abcd audit`, naming the file, the exact drifted line, and the canonical line it
+  should carry — warn-tier by default (it highlights, it never gates) and
+  upgradeable per-repo to blocker. `abcd identity` renders the block and each
+  surface's verdict; `abcd identity render` prints the proposed correction as a
+  unified diff and **writes nothing** (autonomous rewriting is permanently out of
+  scope — adopting a proposal is always the maintainer's move); `abcd identity
+  init` records the block and the pointer at onboarding, adopting an existing
+  block rather than re-interviewing over it. `/abcd:prepare-this-repo` gains the
+  interview, detect-first.
+
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
