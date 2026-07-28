@@ -131,11 +131,19 @@ func renderOutcome(b *strings.Builder, v verdictDoc) {
 	}
 }
 
-// cell escapes a value for a markdown table cell. Every field reaching here is
-// already line-cleaned, so the pipe is the only remaining character that could
-// change the document's structure — and an unescaped one would silently split a
-// claim into two columns and shift every later cell.
-func cell(s string) string { return strings.ReplaceAll(s, "|", `\|`) }
+// cell escapes a value for a markdown table cell.
+//
+// The BACKSLASH is escaped alongside the pipe, and it is not optional. GFM reads
+// `\|` inside a cell as an escaped delimiter, so escaping the pipe alone turns a
+// prose `\|` into `\\|` — an escaped backslash followed by a LIVE delimiter. That
+// splits the claim into extra columns and pushes the core-owned Finding column off
+// the end of the row, where GFM silently drops it: the record would then show
+// whatever word the prose put in the third position instead of the status the
+// payload declared. One replacer does both in a single pass, so the pipe's own
+// escape can never be re-escaped.
+var cellEscaper = strings.NewReplacer(`\`, `\\`, "|", `\|`)
+
+func cell(s string) string { return cellEscaper.Replace(s) }
 
 // blockText escapes a value that starts a line of its own. Every other untrusted
 // field in this document sits behind a fixed prefix ("| ", "- ", "**"), so its
@@ -147,7 +155,11 @@ func blockText(s string) string {
 		return s
 	}
 	switch s[0] {
-	case '#', '-', '*', '+', '>', '|', '`', '~', '=', '_':
+	// '[' is here for a subtler reason than the rest: a paragraph shaped like a
+	// link reference definition (`[x]: https://…`) is CONSUMED by CommonMark and
+	// renders as nothing at all — so an idea in that shape would erase the record's
+	// own subject while the verdict and the three legs still read normally.
+	case '#', '-', '*', '+', '>', '|', '`', '~', '=', '_', '[':
 		return `\` + s
 	}
 	// An ordered-list opener ("1. ", "12) ") is the one multi-character marker.

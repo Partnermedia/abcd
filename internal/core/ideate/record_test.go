@@ -611,6 +611,88 @@ func TestRecordCreatesTheResearchDirectory(t *testing.T) {
 	}
 }
 
+// splitRow splits a rendered markdown table row into cells the way GFM does: a
+// pipe is a delimiter unless an unescaped backslash precedes it. Counting raw
+// pipes is not enough — the whole point of the escape is that it must survive
+// prose that already contains backslashes.
+func splitRow(line string) []string {
+	var cells []string
+	var cur strings.Builder
+	esc := false
+	for _, r := range line {
+		switch {
+		case esc:
+			cur.WriteRune(r)
+			esc = false
+		case r == '\\':
+			esc = true
+			cur.WriteRune(r)
+		case r == '|':
+			cells = append(cells, strings.TrimSpace(cur.String()))
+			cur.Reset()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	return append(cells, strings.TrimSpace(cur.String()))
+}
+
+// TestRecordProseCannotShiftTableColumns proves a claim carrying its own
+// backslash-escaped pipe cannot inject a live delimiter and push the core-owned
+// Finding column off the end of the row — which would let untrusted prose report
+// the OPPOSITE of the status the payload declared.
+func TestRecordProseCannotShiftTableColumns(t *testing.T) {
+	root := seedRepo(t)
+	p := validPayload()
+	p["legs"].([]any)[0].(map[string]any)["claims"] = []any{
+		map[string]any{
+			"claim":          `fast \| a forged source \| verified`,
+			"primary_source": "https://example.invalid/real.pdf",
+			"status":         "falsified",
+		},
+	}
+	res, err := Record(root, "column-shift", encode(t, p), at)
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	var row string
+	for _, line := range strings.Split(readFile(t, root, res.Path), "\n") {
+		if strings.Contains(line, "a forged source") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("the claim row is missing from the record")
+	}
+	cells := splitRow(row)
+	// "| a | b | c |" splits to ["", a, b, c, ""].
+	if len(cells) != 5 {
+		t.Fatalf("the claim row has %d cells, want 3 (the prose injected a delimiter): %q", len(cells)-2, row)
+	}
+	if cells[3] != "falsified" {
+		t.Errorf("the Finding cell is %q, want the declared status %q: %q", cells[3], "falsified", row)
+	}
+}
+
+// TestRecordIdeaCannotVanish proves an idea shaped like a link reference
+// definition still appears in the record. CommonMark consumes such a paragraph
+// and emits nothing, which would erase the record's subject while leaving the
+// verdict and the legs looking entirely normal.
+func TestRecordIdeaCannotVanish(t *testing.T) {
+	root := seedRepo(t)
+	p := validPayload()
+	p["idea"] = "[x]: https://example.invalid/hidden"
+	res, err := Record(root, "vanishing-idea", encode(t, p), at)
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	body := readFile(t, root, res.Path)
+	if !strings.Contains(body, `\[x]: https://example.invalid/hidden`) {
+		t.Errorf("the idea is not escaped against a link reference definition:\n%s", body)
+	}
+}
+
 // assertNothingWritten proves a refusal left the research directory empty — every
 // refusal path must return before the write.
 func assertNothingWritten(t *testing.T, root string) {
