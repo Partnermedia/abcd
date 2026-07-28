@@ -16,12 +16,25 @@ func TestSanitizeBlockKeepsLinesAndStillMasksAttackRunes(t *testing.T) {
 	if want := "--- a/README.md\n+  strapline?[31m\n cONTEXT\n"; got != want {
 		t.Errorf("SanitizeBlock = %q, want %q", got, want)
 	}
-	// A carriage return would still let a line be overwritten in place.
-	if got := SanitizeBlock("a\r\nb"); got != "a\nb" {
-		t.Errorf("SanitizeBlock(CRLF) = %q, want %q", got, "a\nb")
+	// CRLF survives: the carriage return of a CRLF pair is committed by the
+	// newline that follows it, so it cannot overwrite a line — and a rendered
+	// patch against a CRLF file must keep it or no patch tool will apply.
+	if got := SanitizeBlock("a\r\nb"); got != "a\r\nb" {
+		t.Errorf("SanitizeBlock(CRLF) = %q, want %q", got, "a\r\nb")
 	}
+	// A bare carriage return mid-line still lets a line be overwritten in
+	// place, so it is still masked.
 	if got := SanitizeBlock(withRune("a", 0x0d, "b")); got != "a?b" {
 		t.Errorf("SanitizeBlock(bare CR) = %q, want %q", got, "a?b")
+	}
+	// ...including a run of them before the newline: only the one immediately
+	// preceding it is part of the pair.
+	if got := SanitizeBlock("a\r\r\nb"); got != "a?\r\nb" {
+		t.Errorf("SanitizeBlock(double CR) = %q, want %q", got, "a?\r\nb")
+	}
+	// A trailing bare CR with no newline after it is not a CRLF pair.
+	if got := SanitizeBlock(withRune("a", 0x0d, "")); got != "a?" {
+		t.Errorf("SanitizeBlock(trailing bare CR) = %q, want %q", got, "a?")
 	}
 }
 

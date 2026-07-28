@@ -95,11 +95,24 @@ func Init(root string, req InitRequest) (InitResult, error) {
 
 	// An existing block at the target location is the canon: register it,
 	// never rewrite it.
-	if block, err := ParseBlock(root, loc); err == nil {
+	block, perr := ParseBlock(root, loc)
+	switch {
+	case perr == nil:
 		res.Block, res.AdoptedExisting = block, true
-	} else if !errors.Is(err, ErrBlockFileMissing) && !errors.Is(err, ErrHeadingMissing) && !errors.Is(err, ErrBulletMissing) {
-		return InitResult{}, err
-	} else {
+
+	case errors.Is(perr, ErrBulletMissing):
+		// The heading is already there but its bullets are incomplete. Only an
+		// ABSENT file or heading is fixable by appending a section; appending to
+		// this one would leave two copies of the same heading, of which the
+		// parser still reads the broken first — so every retry would append
+		// again and none would ever succeed. Refuse before writing anything and
+		// name what a human has to repair.
+		return InitResult{}, fmt.Errorf("%w — complete it by hand, then re-run to register it", perr)
+
+	case !errors.Is(perr, ErrBlockFileMissing) && !errors.Is(perr, ErrHeadingMissing):
+		return InitResult{}, perr
+
+	default:
 		title, tagline := strings.TrimSpace(req.Title), strings.TrimSpace(req.Tagline)
 		if title == "" || tagline == "" {
 			return InitResult{}, fmt.Errorf("%w (the pitch is optional)", ErrAnswersRequired)
@@ -108,13 +121,13 @@ func Init(root string, req InitRequest) (InitResult, error) {
 			return InitResult{}, err
 		}
 		res.Wrote = append(res.Wrote, loc.File)
-		block, err := ParseBlock(root, loc)
-		if err != nil {
+		written, werr := ParseBlock(root, loc)
+		if werr != nil {
 			// The block we just wrote must parse; if it does not, the scaffold
 			// is broken and must not be registered as a canon.
-			return InitResult{}, fmt.Errorf("the scaffolded identity block does not parse: %w", err)
+			return InitResult{}, fmt.Errorf("the scaffolded identity block does not parse: %w", werr)
 		}
-		res.Block = block
+		res.Block = written
 	}
 
 	if err := writeConfig(root, DefaultConfig(loc)); err != nil {

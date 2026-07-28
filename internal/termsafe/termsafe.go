@@ -38,16 +38,32 @@ func Sanitize(s string) string {
 }
 
 // SanitizeBlock sanitises multi-line text while keeping its line structure: each
-// line is sanitised on its own and the newlines are preserved. Sanitize masks a
-// newline (an injected line break must not forge extra report lines), which is
-// right for a value interpolated into one line and wrong for output that IS
-// lines — a rendered diff or a quoted file excerpt, where flattening the
-// newlines destroys the artefact the reader needs. Use this only where the line
-// breaks are the render's own, never for a single untrusted value.
+// line is sanitised on its own and the line terminators are preserved. Sanitize
+// masks a newline (an injected line break must not forge extra report lines),
+// which is right for a value interpolated into one line and wrong for output
+// that IS lines — a rendered diff or a quoted file excerpt, where flattening the
+// terminators destroys the artefact the reader needs. Use this only where the
+// line breaks are the render's own, never for a single untrusted value.
+//
+// The carriage return of a CRLF pair survives; every other carriage return is
+// masked. That distinction is load-bearing in both directions: a BARE CR moves
+// the cursor to the column zero of the line being written, so it can overprint
+// what the reader already saw — the attack Sanitize masks — whereas the CR of a
+// CRLF is immediately committed by its newline and can overprint nothing. And a
+// rendered patch against a CRLF file must carry those pairs or no patch tool
+// will apply it, so dropping them would silently void the artefact.
 func SanitizeBlock(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, l := range lines {
-		lines[i] = Sanitize(strings.TrimSuffix(l, "\r"))
+		// A trailing carriage return is half of a CRLF pair only when a newline
+		// actually follows it — that is, on every element except the last, which
+		// by construction has no newline after it. A trailing CR there is bare
+		// and is masked like any other.
+		if i < len(lines)-1 && strings.HasSuffix(l, "\r") {
+			lines[i] = Sanitize(l[:len(l)-1]) + "\r"
+			continue
+		}
+		lines[i] = Sanitize(l)
 	}
 	return strings.Join(lines, "\n")
 }
