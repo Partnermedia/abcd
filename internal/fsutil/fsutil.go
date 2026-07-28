@@ -14,6 +14,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"syscall"
 )
@@ -191,6 +192,16 @@ func CreateExclusiveIn(root *os.Root, rel string, data []byte, perm os.FileMode)
 	if err := f.Close(); err != nil {
 		_ = root.Remove(rel)
 		return err
+	}
+	// Fsync the PARENT too, for the same reason WriteFileAtomic does: syncing the
+	// file makes its CONTENT durable, not its NAME. A caller that writes this file
+	// and then durably records a pointer to it would otherwise survive a crash
+	// holding the pointer and no directory entry — a pointer to nothing, which is
+	// the exact state such a caller's rollback exists to prevent. Best-effort:
+	// some filesystems refuse a directory fsync.
+	if d, err := root.Open(path.Dir(rel)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	return nil
 }

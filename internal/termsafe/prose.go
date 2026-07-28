@@ -22,6 +22,14 @@ package termsafe
 // normally. An artefact whose whole value is that a later session trusts it must
 // not be able to hide its own evidence.
 //
+// The rule fires ANYWHERE in the string, not only at a line start, and that is
+// deliberate rather than an over-reach: the same swallow was demonstrated from
+// INSIDE a markdown table cell, where the opener is mid-line, and the cleaner
+// cannot know what surrounds the field it is handed. The cost is a fidelity
+// regression on legitimate angle-bracket prose — a changelog line's
+// `<repo>` placeholder reads `< repo>` — which is accepted: a slightly uglier
+// placeholder is cheaper than a record that can conceal its own contents.
+//
 // Two forms exist because two callers legitimately want different whitespace
 // handling, and the difference is visible in the record: CleanProse trims,
 // CleanProseLine collapses every run to one space. A field landing in a
