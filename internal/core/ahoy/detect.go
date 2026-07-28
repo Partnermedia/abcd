@@ -50,6 +50,13 @@ func Detect(cwd string) (DetectionResult, error) {
 	// kind, surfaced so status reports "dev (tip build)" honestly (never invisible).
 	signals["install_mode"] = detectInstallMode(pluginRoot, pluginOK)
 
+	// The citation baseline's coverage and age, when this repo has armed the
+	// citation gate (spc-17). Omitted entirely otherwise, so a repo that has not
+	// adopted the gate carries no line about it.
+	if citations := detectCitations(abs); citations != "" {
+		signals["citations"] = citations
+	}
+
 	res := DetectionResult{
 		FolderKind:       kind,
 		RootSHA:          identity.RootSHA,

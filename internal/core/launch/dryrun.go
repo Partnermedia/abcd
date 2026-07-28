@@ -19,6 +19,12 @@ type DryRunRequest struct {
 	// it means the caller could not name one, and retention says so.
 	Version      string
 	ExistingTags []Semver // injected; nil → default `git tag -l v*` provider
+	// Citations is the citation baseline's state, MEASURED by the caller.
+	// Grading it needs internal/core/lint, which imports this package for its
+	// semver — so the front door that holds both hands the result in as data
+	// rather than this package reaching back. Nil means the repo has not armed
+	// the citation gate.
+	Citations *CitationPreflight
 }
 
 // GateSummary records one gate's dry-run disposition.
@@ -81,9 +87,12 @@ func DryRun(req DryRunRequest) (DryRunReport, error) {
 		{Name: "marker-block", Status: "not_implemented", Detail: "Phase-5 deferred"},
 		{Name: "installability-smoke", Status: "ran", Detail: smokeDetail(smoke)},
 		{Name: "documentation-auditor", Status: "not_implemented", Detail: "Phase-5 deferred"},
+		citationGate(req.Citations),
 	}
 
-	report.WouldRefuseOn = wouldRefuseOn(bundle, scan, lockstep, report.Retention, smoke)
+	report.WouldRefuseOn = append(
+		wouldRefuseOn(bundle, scan, lockstep, report.Retention, smoke),
+		citationRefusals(req.Citations)...)
 	report.WouldPublish = false
 	return report, nil
 }

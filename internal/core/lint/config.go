@@ -148,6 +148,30 @@ type RuleConfig struct {
 	// finding on that line — the legitimate-mention escape (naming the old token in an
 	// external reference like `epic-review`, or the rename itself `epic->spec`).
 	AllowContext []string `json:"allow_context"`
+	// CrosswalkHeading is the citation_crosswalk_rows heading matcher: a table is
+	// judged a crosswalk only when its nearest preceding heading matches this
+	// regexp. Default defaultCrosswalkHeading. Keying on the heading rather than on
+	// table shape is what keeps the rule off every ordinary table in the corpus.
+	CrosswalkHeading string `json:"crosswalk_heading"`
+	// RefusedDomains is the citation_source_policy list of aggregator domains a
+	// citation may not point at. Matching is host-normalised (case-folded, www.
+	// dropped) and covers subdomains. It ships EMPTY: naming a domain is a
+	// project's editorial policy, never something the gate invents for it.
+	RefusedDomains []string `json:"refused_domains"`
+	// Baseline is the citation_baseline record's repo-relative path. Default
+	// DefaultBaselinePath.
+	Baseline string `json:"baseline"`
+	// WarnAfterDays is the citation_baseline staleness warn threshold in days
+	// (spc-17: 180). Zero means the default.
+	WarnAfterDays int `json:"warn_after_days"`
+	// BlockAfterDays is the age at which an entry becomes OVERDUE and is reported
+	// under the citation_baseline_overdue rule id (spc-17: 365). Zero means the
+	// default.
+	BlockAfterDays int `json:"block_after_days"`
+	// OverdueSeverity is the severity of a citation_baseline_overdue finding. It
+	// defaults to warn because the COMMIT gate never calendar-blocks (spc-17);
+	// the release gate is what promotes it to a blocker.
+	OverdueSeverity string `json:"overdue_severity"`
 }
 
 // ArmReceiptGate returns cfg with the receipt_gate rule armed for a release: it
