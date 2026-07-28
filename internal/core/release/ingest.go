@@ -551,24 +551,13 @@ func insertSection(root string, section []string) (string, error) {
 	return content, nil
 }
 
-// cleanChangelogProse sanitises one untrusted composed line. It mirrors
-// lifeboat's cleanSynthProseN (the two are the same primitive at two trust
-// boundaries; a THIRD copy should promote it to a shared home rather than be
-// written again) and the collapse is load-bearing here in a way it is not there:
-// this prose lands in a file whose line structure is machine-read, so an embedded
-// newline could otherwise forge a heading, a section, or a whole release.
+// cleanChangelogProse sanitises one untrusted composed line through termsafe's
+// canonical prose cleaner. The LINE form is load-bearing here in a way the plain
+// form is not: this prose lands in a file whose line structure is machine-read, so
+// an embedded newline could otherwise forge a heading, a section, or a whole
+// release.
 func cleanChangelogProse(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	s = termsafe.Sanitize(s)
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > maxEntryProseBytes {
-		s = strings.ToValidUTF8(s[:maxEntryProseBytes], "")
-		s = strings.TrimSpace(s)
-	}
-	return s
+	return termsafe.CleanProseLine(s, maxEntryProseBytes)
 }
 
 // sectionList renders the registered sections for an error message, written from
