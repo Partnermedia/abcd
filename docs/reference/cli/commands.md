@@ -371,6 +371,34 @@ Validate a host-composed verdict and write the dated research record
       --verdict-json string   path to the host-composed verdict JSON (or - for stdin)
 ```
 
+### `abcd identity`
+
+Show this repo's canonical identity block and every surface held to it (read-only)
+
+**Usage:** `abcd identity`
+
+#### `abcd identity init`
+
+Record this repo's identity block and the pointer to it (adopts an existing block)
+
+**Usage:** `abcd identity init [flags]`
+
+**Flags:**
+
+```
+      --file string      repo-relative file the identity block lives in (default .abcd/development/IDENTITY.md)
+      --heading string   heading the identity block sits under (default "Identity (canonical)")
+      --pitch string     the project's short elevator pitch (optional)
+      --tagline string   the project's one-line tagline (required unless a block already exists)
+      --title string     the project's title (required unless a block already exists)
+```
+
+#### `abcd identity render`
+
+Print the proposed correction for every drifted surface as a unified diff (writes nothing)
+
+**Usage:** `abcd identity render`
+
 ### `abcd intent`
 
 Intent lifecycle; bare invocation is read-only status, quoted text files a draft

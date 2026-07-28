@@ -10,5 +10,6 @@ func DefaultRules() []Rule {
 		decisionDurability{},
 		docsCurrency{},
 		privacyHygiene{},
+		identityPositioning{},
 	}
 }

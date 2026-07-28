@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "block": {
+    "file": ".abcd/development/brief/01-product/README.md",
+    "heading": "Identity (canonical)"
+  },
+  "severity": "warn",
+  "surfaces": [
+    {
+      "id": "readme-strapline",
+      "files": ["README.md"],
+      "kind": "regexp",
+      "patterns": ["(?s)<p>(.*?)</p>"],
+      "requires": ["tagline"],
+      "template": "{tagline}"
+    },
+    {
+      "id": "manifest-description",
+      "files": [".claude-plugin/plugin.json"],
+      "kind": "json_field",
+      "field": "description",
+      "requires": ["tagline", "pitch"],
+      "template": "{tagline} {pitch}"
+    },
+    {
+      "id": "conventions-opening",
+      "files": ["AGENTS.md"],
+      "kind": "regexp",
+      "patterns": ["(?s)<!-- END ABCD -->\\n+(.*?)(?:\\n\\n|\\z)"],
+      "requires": ["tagline"],
+      "template": "{tagline}"
+    }
+  ]
+}
