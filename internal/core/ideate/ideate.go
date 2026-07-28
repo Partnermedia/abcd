@@ -50,6 +50,17 @@ const (
 	DecisionsRelDir = ".abcd/work/DECISIONS.md"
 )
 
+// decisionsLockRel is the advisory lock serialising the decision log's
+// read-modify-write across concurrent abcd processes in one worktree. It is a
+// runtime artefact beside the log it guards, named like capture's allocator lock
+// and gitignored on the same footing.
+const decisionsLockRel = ".abcd/work/.decisions.lock"
+
+// decisionsLockTimeout bounds the wait for that lock. A verdict record is a
+// once-per-idea act, so contention is brief when it happens at all; waiting
+// longer than this means something is wedged, and saying so beats hanging.
+const decisionsLockTimeout = 5 * time.Second
+
 const (
 	// maxClaims caps the research leg's claims table.
 	maxClaims = 200

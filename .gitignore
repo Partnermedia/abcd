@@ -46,3 +46,6 @@ go.work.sum
 
 # capture ledger allocator lock (runtime artefact)
 .abcd/work/issues/.iss-alloc.lock
+
+# decision-log append lock (runtime artefact)
+.abcd/work/.decisions.lock
