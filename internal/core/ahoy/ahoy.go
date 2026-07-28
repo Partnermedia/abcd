@@ -70,7 +70,11 @@ type DetectionResult struct {
 	PluginRootStatus string         `json:"plugin_root_status"` // "resolved" | "missing"
 	RepoIdentity     RepoIdentity   `json:"repo_identity"`
 	Signals          map[string]any `json:"signals"`
-	Gaps             []Gap          `json:"gaps"`
+	// Guard is the execution-time shell guard's health. It is reported on every
+	// pass, healthy or not: a guard that fails open looks exactly like a working
+	// one from inside a session, so the state has to be legible from outside.
+	Guard GuardHealth `json:"guard"`
+	Gaps  []Gap       `json:"gaps"`
 
 	// pluginRoot is the resolved plugin root; not serialized.
 	pluginRoot string
