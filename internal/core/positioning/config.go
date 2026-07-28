@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -152,8 +151,18 @@ func DefaultConfig(loc BlockLocation) Config {
 // error when the file is present but unusable — a malformed registry must never
 // read as "no drift".
 func LoadConfig(root string) (Config, bool, error) {
-	path := filepath.Join(root, filepath.FromSlash(ConfigRelPath))
-	data, err := fsutil.ReadGuarded(path, maxConfigBytes)
+	r, err := openRepoRoot(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Config{}, false, nil
+		}
+		return Config{}, false, fmt.Errorf("%w: %s: %s", ErrConfigInvalid, ConfigRelPath, pathFreeReason(err))
+	}
+	defer r.Close()
+	// Contained, not merely lexically checked: ConfigRelPath is a fixed path,
+	// but a hostile repo can commit `.abcd` itself as a symlink and have the
+	// loader read — and then act on — a registry the repository does not own.
+	data, err := fsutil.ReadGuardedInRoot(r, ConfigRelPath, maxConfigBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Config{}, false, nil

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
@@ -75,6 +74,15 @@ func Init(root string, req InitRequest) (InitResult, error) {
 		return InitResult{}, fmt.Errorf("%w: %q", ErrBadLocation, loc.File)
 	}
 
+	// One containment root for the whole operation: every read and every write
+	// below resolves through it, so neither the block location nor the registry
+	// path can land outside the repository via a symlinked ancestor.
+	r, err := openRepoRoot(root)
+	if err != nil {
+		return InitResult{}, err
+	}
+	defer r.Close()
+
 	answered := strings.TrimSpace(req.Title) != "" || strings.TrimSpace(req.Tagline) != "" || strings.TrimSpace(req.Pitch) != ""
 
 	if existing, adopted, err := LoadConfig(root); err != nil {
@@ -84,7 +92,7 @@ func Init(root string, req InitRequest) (InitResult, error) {
 			return InitResult{}, fmt.Errorf("%w: it points at %s (%q); change the block there, or edit %s deliberately",
 				ErrAlreadyAdopted, existing.Block.File, existing.Block.Heading, ConfigRelPath)
 		}
-		block, err := ParseBlock(root, existing.Block)
+		block, err := parseBlockIn(r, existing.Block)
 		if err != nil {
 			return InitResult{}, err
 		}
@@ -95,7 +103,7 @@ func Init(root string, req InitRequest) (InitResult, error) {
 
 	// An existing block at the target location is the canon: register it,
 	// never rewrite it.
-	block, perr := ParseBlock(root, loc)
+	block, perr := parseBlockIn(r, loc)
 	switch {
 	case perr == nil:
 		res.Block, res.AdoptedExisting = block, true
@@ -117,11 +125,11 @@ func Init(root string, req InitRequest) (InitResult, error) {
 		if title == "" || tagline == "" {
 			return InitResult{}, fmt.Errorf("%w (the pitch is optional)", ErrAnswersRequired)
 		}
-		if err := writeBlock(root, loc, title, tagline, strings.TrimSpace(req.Pitch)); err != nil {
+		if err := writeBlock(r, loc, title, tagline, strings.TrimSpace(req.Pitch)); err != nil {
 			return InitResult{}, err
 		}
 		res.Wrote = append(res.Wrote, loc.File)
-		written, werr := ParseBlock(root, loc)
+		written, werr := parseBlockIn(r, loc)
 		if werr != nil {
 			// The block we just wrote must parse; if it does not, the scaffold
 			// is broken and must not be registered as a canon.
@@ -130,7 +138,7 @@ func Init(root string, req InitRequest) (InitResult, error) {
 		res.Block = written
 	}
 
-	if err := writeConfig(root, DefaultConfig(loc)); err != nil {
+	if err := writeConfig(r, DefaultConfig(loc)); err != nil {
 		return InitResult{}, err
 	}
 	res.Wrote = append(res.Wrote, ConfigRelPath)
@@ -159,11 +167,12 @@ func blockSection(heading, title, tagline, pitch string) string {
 // writeBlock lands the identity section at loc: appended to the file when it
 // already exists (never replacing what is there), or as a new file with a title
 // heading when it does not.
-func writeBlock(root string, loc BlockLocation, title, tagline, pitch string) error {
-	path := filepath.Join(root, filepath.FromSlash(loc.File))
+// The read and both writes resolve through r, so a location behind a symlinked
+// ancestor refuses instead of scaffolding the block outside the repository.
+func writeBlock(r *os.Root, loc BlockLocation, title, tagline, pitch string) error {
 	section := blockSection(loc.Heading, title, tagline, pitch)
 
-	existing, err := fsutil.ReadGuarded(path, maxBlockFileBytes)
+	existing, err := fsutil.ReadGuardedInRoot(r, loc.File, maxBlockFileBytes)
 	switch {
 	case err == nil:
 		body := normalizeNewlines(existing)
@@ -173,12 +182,9 @@ func writeBlock(root string, loc BlockLocation, title, tagline, pitch string) er
 		if !strings.HasSuffix(body, "\n\n") {
 			body += "\n"
 		}
-		return fsutil.WriteFileAtomicPreserveMode(path, []byte(body+section))
+		return fsutil.WriteFileAtomicPreserveModeInRoot(r, loc.File, []byte(body+section))
 	case os.IsNotExist(err):
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return err
-		}
-		return fsutil.WriteFileAtomic(path, []byte("# Identity\n\n"+section), 0o644)
+		return fsutil.WriteFileAtomicInRoot(r, loc.File, []byte("# Identity\n\n"+section), 0o644)
 	default:
 		return fmt.Errorf("%s: %s", loc.File, pathFreeReason(err))
 	}
@@ -186,11 +192,7 @@ func writeBlock(root string, loc BlockLocation, title, tagline, pitch string) er
 
 // writeConfig lands the registry, pretty-printed with a trailing newline,
 // through the canonical atomic primitive.
-func writeConfig(root string, cfg Config) error {
-	path := filepath.Join(root, filepath.FromSlash(ConfigRelPath))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
+func writeConfig(r *os.Root, cfg Config) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	// The registry carries regexps full of characters HTML escaping would
@@ -200,5 +202,5 @@ func writeConfig(root string, cfg Config) error {
 	if err := enc.Encode(cfg); err != nil {
 		return err
 	}
-	return fsutil.WriteFileAtomic(path, buf.Bytes(), 0o644)
+	return fsutil.WriteFileAtomicInRoot(r, ConfigRelPath, buf.Bytes(), 0o644)
 }

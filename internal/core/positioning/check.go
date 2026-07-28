@@ -2,9 +2,9 @@ package positioning
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -14,6 +14,12 @@ import (
 // maxSurfaceBytes caps a guarded surface read. A README or manifest is small;
 // the cap stops a device or runaway file being read unbounded.
 const maxSurfaceBytes = 1 << 20
+
+// ErrSurfaceUnreadable: a registered surface file is present but could not be
+// read safely — it escapes the repository root through a symlinked component,
+// its leaf is a symlink or a device, or it is oversize. It is never an absence:
+// a surface that cannot be read must not read as "no drift".
+var ErrSurfaceUnreadable = errors.New("surface file could not be read")
 
 // Status is one surface's outcome.
 type Status string
@@ -76,13 +82,18 @@ func Check(root string, cfg Config) (Report, error) {
 	if err := cfg.Validate(); err != nil {
 		return Report{}, err
 	}
-	block, err := ParseBlock(root, cfg.Block)
+	r, err := openRepoRoot(root)
+	if err != nil {
+		return Report{}, fmt.Errorf("%w: %s: %s", ErrBlockFileMissing, cfg.Block.File, pathFreeReason(err))
+	}
+	defer r.Close()
+	block, err := parseBlockIn(r, cfg.Block)
 	if err != nil {
 		return Report{}, err
 	}
 	rep := Report{Block: block, Severity: cfg.severity()}
 	for _, s := range cfg.surfaces() {
-		res, err := checkSurface(root, s, block)
+		res, err := checkSurface(r, s, block)
 		if err != nil {
 			return Report{}, err
 		}
@@ -93,10 +104,10 @@ func Check(root string, cfg Config) (Report, error) {
 
 // checkSurface resolves the surface's file, locates its self-description, and
 // compares it to the block.
-func checkSurface(root string, s Surface, b Block) (SurfaceResult, error) {
+func checkSurface(r *os.Root, s Surface, b Block) (SurfaceResult, error) {
 	res := SurfaceResult{ID: s.ID, Status: StatusAbsent, Canonical: s.render(b)}
 
-	rel, data, ok, err := readFirstPresent(root, s.Files)
+	rel, data, ok, err := readFirstPresent(r, s.Files)
 	if err != nil {
 		return SurfaceResult{}, err
 	}
@@ -135,22 +146,28 @@ func checkSurface(root string, s Surface, b Block) (SurfaceResult, error) {
 }
 
 // readFirstPresent returns the first candidate that exists, its repo-relative
-// path, and its contents. Every read is guarded: a surface file in an arbitrary
-// audited repo may be a symlink, a device, or enormous.
-func readFirstPresent(root string, files []string) (rel string, data []byte, ok bool, err error) {
+// path, and its contents. Every read is guarded AND contained: the file names
+// come from committed configuration in an arbitrary audited repo, so a candidate
+// may be a symlink, a device, enormous, or sitting behind a symlinked ancestor
+// directory that reaches outside the repository entirely. ValidRelPath is the
+// cheap lexical reject; the containment root is what actually holds the read
+// inside the repo, and a surface's content is quoted verbatim into the report,
+// so nothing from outside may ever be read here.
+func readFirstPresent(r *os.Root, files []string) (rel string, data []byte, ok bool, err error) {
 	for _, f := range files {
 		if !fsutil.ValidRelPath(f) {
 			return "", nil, false, fmt.Errorf("%w: surface file %q is not a repo-relative path", ErrConfigInvalid, f)
 		}
-		b, rerr := fsutil.ReadGuarded(filepath.Join(root, filepath.FromSlash(f)), maxSurfaceBytes)
+		b, rerr := fsutil.ReadGuardedInRoot(r, f, maxSurfaceBytes)
 		if rerr != nil {
 			if os.IsNotExist(rerr) {
 				continue
 			}
-			// A present-but-unreadable surface (symlinked, oversize, a device)
-			// is not an absence: report it rather than skipping it silently.
-			// Path-free — this reaches an audit finding (iss-81).
-			return f, nil, false, fmt.Errorf("reading surface %s: %s", f, pathFreeReason(rerr))
+			// A present-but-unreadable surface (symlinked, oversize, a device, a
+			// path escaping the root) is not an absence: report it rather than
+			// skipping it silently. Path-free — this reaches an audit finding
+			// (iss-81).
+			return f, nil, false, fmt.Errorf("%w: %s: %s", ErrSurfaceUnreadable, f, pathFreeReason(rerr))
 		}
 		return f, b, true, nil
 	}
