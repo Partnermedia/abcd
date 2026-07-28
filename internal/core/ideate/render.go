@@ -103,8 +103,10 @@ func renderRejected(b *strings.Builder, v verdictDoc) {
 		b.WriteString("session knows nothing was weighed and discarded here.\n\n")
 		return
 	}
+	// A list item is not a table cell: escaping its pipes would print a visible
+	// backslash for no gain, since nothing here can start a table.
 	for _, r := range v.rejected {
-		fmt.Fprintf(b, "- **%s** — %s\n", cell(r.Alternative), r.WhyRejected)
+		fmt.Fprintf(b, "- **%s** — %s\n", r.Alternative, r.WhyRejected)
 	}
 	b.WriteString("\n")
 }

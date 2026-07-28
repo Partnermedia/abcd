@@ -77,6 +77,14 @@ recordable or it is not.
 | A slug that is not lower-case kebab-case | The slug becomes a filename; the grammar is the lexical half of the write containment, `os.Root` the other |
 | A verdict record that already exists for this slug and date | Overwriting would erase a recorded reason, which is the one thing the verb exists to preserve |
 | A repository with no `.abcd/work/DECISIONS.md` | A record nothing points at is a record nobody finds — refused before anything is written |
+| A symlinked component anywhere in `.abcd/development/research/` | The write goes through one `os.Root` opened at the repository root, which refuses symlink traversal at every level, not just the leaf |
+
+The research directory itself is **created when absent**: nothing else in abcd
+establishes it and no convention check requires it, so refusing would fail the
+first run in every repository — after the three host legs have already been paid
+for, and with the verdict unrecoverable when it arrived on stdin. The exclusive
+create is the no-overwrite guarantee, and the decision log's read-modify-write
+runs under the same advisory lock the ledger allocators use.
 
 Refusals are **whole-document**, never cite-or-be-dropped. A verdict record with
 a quietly-dropped falsified claim or grill hit is worse than no record, because a

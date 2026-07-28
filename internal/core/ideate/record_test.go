@@ -507,12 +507,20 @@ func TestRecordRefusesWhenTheDecisionLogIsAbsent(t *testing.T) {
 func TestRecordNeutralisesInjectedProse(t *testing.T) {
 	root := seedRepo(t)
 	p := validPayload()
-	p["idea"] = "an idea\n## Forged heading\n<!-- swallow"
+	p["idea"] = "an idea\n## Forged heading\n<!-- swallow\n<script>hide the rest</script>"
 	p["legs"].([]any)[0].(map[string]any)["claims"] = []any{
 		map[string]any{
 			"claim":          "a claim | forged | cell\nand a forged row",
 			"primary_source": "https://example.invalid/[31m",
 			"status":         "verified",
+		},
+		map[string]any{
+			// A tag inside a table CELL swallows the document just as a leading one
+			// does, so the neutralisation belongs in the cleaner, not only in the
+			// block-level escape.
+			"claim":          "the model is fast <table><tr><td>every claim verified</td></tr></table>",
+			"primary_source": "<!DOCTYPE html>",
+			"status":         "falsified",
 		},
 	}
 	res, err := Record(root, "injected", encode(t, p), at)
@@ -525,6 +533,11 @@ func TestRecordNeutralisesInjectedProse(t *testing.T) {
 	}
 	if strings.Contains(body, "<!--") {
 		t.Error("injected prose opened an HTML comment")
+	}
+	for _, opener := range []string{"<script", "<table", "<tr", "<td", "</", "<!", "<?"} {
+		if strings.Contains(body, opener) {
+			t.Errorf("injected prose opened raw HTML with %q", opener)
+		}
 	}
 	if strings.Contains(body, "") {
 		t.Error("an escape sequence survived into the record")
@@ -544,6 +557,57 @@ func TestRecordNeutralisesInjectedProse(t *testing.T) {
 	}
 	if n := strings.Count(readFile(t, root, DecisionsRelDir), "\n- "); n != 2 {
 		t.Error("the decision log gained more than one bullet")
+	}
+}
+
+// TestRecordRefusesASymlinkedAncestor is the containment regression: a repository
+// whose `.abcd/development` is a symlink must not be able to redirect the verdict
+// record outside the tree. A leaf-only real-directory check passes such a tree,
+// because the kernel resolves the ancestors before the check ever sees them.
+func TestRecordRefusesASymlinkedAncestor(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outside, "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".abcd", "work"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(DecisionsRelDir)), []byte("# Decisions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, ".abcd", "development")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	p := validPayload()
+	p["legs"].([]any)[1].(map[string]any)["hits"] = []any{}
+	if _, err := Record(root, "escape-test", encode(t, p), at); err == nil {
+		t.Fatal("a symlinked .abcd/development did not refuse the write")
+	}
+	entries, err := os.ReadDir(filepath.Join(outside, "research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		t.Errorf("the write escaped the repository: %s", e.Name())
+	}
+}
+
+// TestRecordCreatesTheResearchDirectory proves an absent research directory is
+// created rather than refused. Nothing in abcd establishes it and no convention
+// check requires it, so refusing would fail the first run in every repository —
+// after the three host legs have already been paid for.
+func TestRecordCreatesTheResearchDirectory(t *testing.T) {
+	root := seedRepo(t)
+	if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(ResearchRelDir))); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Record(root, "first-run", encode(t, validPayload()), at)
+	if err != nil {
+		t.Fatalf("an absent research directory was refused: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(res.Path))); err != nil {
+		t.Errorf("the record is not on disk: %v", err)
 	}
 }
 

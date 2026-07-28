@@ -111,50 +111,78 @@ func Record(repoRoot, slug string, raw []byte, at time.Time) (Result, error) {
 	}
 	v.slug = slug
 
-	// The decision log is read BEFORE the record is written, so the commonest
-	// reason the pointer cannot land is a refusal rather than a rollback.
-	decisionsAbs := filepath.Join(repoRoot, filepath.FromSlash(DecisionsRelDir))
-	log, err := fsutil.ReadGuarded(decisionsAbs, maxDecisionsBytes)
+	// ONE os.Root at the repository root, used for every path this verb touches.
+	// It is the containment boundary: os.Root refuses symlink traversal at EVERY
+	// component, not just the leaf, so a repository whose `.abcd/development` is a
+	// symlink cannot redirect the write outside the tree. A leaf-only check would
+	// pass such a tree, because the kernel resolves the ancestors before the check
+	// ever sees them.
+	root, err := os.OpenRoot(repoRoot)
 	if err != nil {
+		return Result{}, err
+	}
+	defer root.Close()
+
+	// The decision log is read BEFORE the record is written, so the commonest
+	// reason the pointer cannot land is a refusal rather than a rollback. The
+	// through-the-Root Lstat is what refuses a symlinked ANCESTOR; ReadGuarded's
+	// O_NOFOLLOW refuses a symlinked leaf. The gap between them is the benign
+	// TOCTOU of the trusted-worktree model.
+	if _, err := root.Lstat(DecisionsRelDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Result{}, &MissingDecisionsError{Path: DecisionsRelDir}
 		}
 		return Result{}, fmt.Errorf("reading %s: %w", DecisionsRelDir, err)
 	}
-
+	decisionsAbs := filepath.Join(repoRoot, filepath.FromSlash(DecisionsRelDir))
 	name := recordDate(at) + "-ideate-" + slug + ".md"
 	rel := path.Join(ResearchRelDir, name)
-	dirAbs := filepath.Join(repoRoot, filepath.FromSlash(ResearchRelDir))
-	if !fsutil.IsRealDir(dirAbs) {
-		return Result{}, fmt.Errorf("%s is not a directory in this repository", ResearchRelDir)
-	}
-
-	// Second containment layer. The slug grammar already makes name a single
-	// path element, so os.Root cannot be escaped lexically; the Root is here for
-	// the leaf lookup, where an lstat that does not follow is what distinguishes
-	// "absent" from "a symlink planted at the target".
-	root, err := os.OpenRoot(dirAbs)
-	if err != nil {
-		return Result{}, err
-	}
-	defer root.Close()
-	if _, err := root.Lstat(name); err == nil {
-		return Result{}, &ExistsError{Path: rel}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return Result{}, err
-	}
-
 	res := v.result(slug, rel)
-	if err := fsutil.WriteFileAtomic(filepath.Join(dirAbs, name), []byte(render(v, at)), 0o644); err != nil {
-		return Result{}, err
-	}
-	if err := appendPointer(decisionsAbs, log, res, at); err != nil {
-		// The record landed but its pointer did not. Roll the record back rather
-		// than leave a verdict no session will find, and say the rollback failed
-		// if it does, because that is the one case a human must fix by hand.
-		if rmErr := root.Remove(name); rmErr != nil {
-			return Result{}, fmt.Errorf("%w; THE ROLLBACK FAILED — remove %s by hand", err, rel)
+
+	// Read the log, write the record, and append the pointer under ONE exclusive
+	// lock. The decision log is a read-modify-write over a shared file, which is
+	// the house rule's case: without the lock two concurrent runs both read the
+	// same log, both append, and the second write erases the first's pointer —
+	// leaving a verdict record that nothing points at, the exact state the
+	// rollback below exists to prevent.
+	err = fsutil.WithFileLock(filepath.Join(repoRoot, filepath.FromSlash(decisionsLockRel)), decisionsLockTimeout, func() error {
+		log, err := fsutil.ReadGuarded(decisionsAbs, maxDecisionsBytes)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return &MissingDecisionsError{Path: DecisionsRelDir}
+			}
+			return fmt.Errorf("reading %s: %w", DecisionsRelDir, err)
 		}
+		// The research directory is CREATED when absent rather than demanded.
+		// Nothing in abcd establishes it and no convention check requires it, so
+		// refusing here would fail the first run in any repository — after the three
+		// host legs have already been paid for, and with the verdict unrecoverable
+		// when it arrived on stdin. Through the Root, a symlinked component still
+		// refuses.
+		if err := root.MkdirAll(ResearchRelDir, 0o755); err != nil {
+			return fmt.Errorf("preparing %s: %w", ResearchRelDir, err)
+		}
+		// The EXCLUSIVE create is the no-overwrite guarantee, and it is one syscall
+		// rather than a check followed by a write, so it holds even against a writer
+		// that is not taking this lock.
+		if err := fsutil.CreateExclusiveIn(root, rel, []byte(render(v, at)), 0o644); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return &ExistsError{Path: rel}
+			}
+			return err
+		}
+		if err := appendPointer(decisionsAbs, log, res, at); err != nil {
+			// The record landed but its pointer did not. Roll the record back rather
+			// than leave a verdict no session will find, and say the rollback failed
+			// if it does, because that is the one case a human must fix by hand.
+			if rmErr := root.Remove(rel); rmErr != nil {
+				return fmt.Errorf("%w; THE ROLLBACK FAILED — remove %s by hand", err, rel)
+			}
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return Result{}, err
 	}
 	return res, nil
