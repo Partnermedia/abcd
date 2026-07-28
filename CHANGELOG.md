@@ -12,6 +12,32 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd guard` — the shell-hazard guard, wired into a live session** (itd-103,
+  spc-16). `abcd guard check --command "<line>"` evaluates one candidate command
+  against the hazard registry and reports allow, warn, or block: a blocker exits
+  1 and answers with the plain-language why and the safe successor, a warn exits
+  0 with the warning rendered, and a guard that cannot be evaluated at all exits
+  2 rather than letting silence read as clearance. `abcd guard hook` is the host
+  adapter: it reads a pre-tool-use hook payload, refuses a matching command with
+  the successor as the block message, and lets everything else through. The
+  installed hook entry wraps the binary call so a missing or broken abcd **fails
+  open, loudly** — the command runs and the session carries an unmissable
+  UNGUARDED warning, never a silent no-op and never a stuck session. `abcd ahoy`
+  gains a `guard:` line reporting the three things that can independently be
+  false — hook installed, binary reachable, registry loadable — plus a
+  deliberately disabled registry, so a broken guard is visible from outside the
+  session too. Every unguarded state is loud, including the deliberate one: a
+  registry switched off in `.abcd/guard.json` makes each command it lets through
+  carry the warning, so "off" can never pass for "clear". Per-repo overrides live
+  in that one file and nowhere else — no flag, environment variable, or prompt
+  disarms the guard for a session, so the change lands in a diff. An allow means
+  no entry matched, never that a command is safe: a hazard reached another way —
+  a string handed to an interpreter (`eval`, `sh -c`), a launcher the guard does
+  not step over, a backtick substitution, or a form no entry describes — is not
+  seen. Coverage is what the registry names, and the command reference says so.
+  A registry that is switched off answers `abcd guard check` with a fault rather
+  than a clearance, so a script using the verb as a gate cannot be waved through
+  by an edit to `.abcd/guard.json`.
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify

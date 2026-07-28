@@ -1,0 +1,67 @@
+package cli
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/core/ahoy"
+)
+
+// TestGuardHealthLineNeverAssertsWhatItCannotKnow pins the human half of the
+// status board to the same honesty rule as the JSON half. When the plugin root
+// is unresolvable, ahoy has not opened the manifest and has not looked for the
+// binary, so the line must say what is unknown — not synthesise "hook not
+// installed, binary unreachable" out of two booleans nobody ever set.
+func TestGuardHealthLineNeverAssertsWhatItCannotKnow(t *testing.T) {
+	h := ahoy.GuardHealth{
+		PluginRootResolved: false,
+		RegistryLoadable:   true,
+		Entries:            6,
+		Detail:             "plugin root not resolvable, so the hook manifest cannot be read",
+	}
+	line := guardHealthLine(h)
+
+	if strings.Contains(line, "hook not installed") || strings.Contains(line, "binary unreachable") {
+		t.Errorf("the line asserts facts that were never checked: %q", line)
+	}
+	if !strings.Contains(line, "plugin root") {
+		t.Errorf("the line must carry the reason the state is unknown; got %q", line)
+	}
+}
+
+// TestGuardHealthLineReportsEachRealFailure keeps the useful half: when the
+// plugin root IS resolved, every check that actually ran and failed is named, so
+// a reader knows which of the three parts to fix.
+func TestGuardHealthLineReportsEachRealFailure(t *testing.T) {
+	line := guardHealthLine(ahoy.GuardHealth{
+		PluginRootResolved: true,
+		HookInstalled:      true,
+		BinaryReachable:    false,
+		RegistryLoadable:   true,
+	})
+	if !strings.Contains(line, "binary unreachable") || strings.Contains(line, "hook not installed") {
+		t.Errorf("only the failing check must be named; got %q", line)
+	}
+	if !strings.Contains(line, "NOT ARMED") {
+		t.Errorf("an unarmed guard must say so; got %q", line)
+	}
+}
+
+// TestGuardHealthLineArmedAndDisabled covers the two healthy states, which must
+// read differently: a guard that is protecting the session, and one a committed
+// override switched off.
+func TestGuardHealthLineArmedAndDisabled(t *testing.T) {
+	armed := ahoy.GuardHealth{
+		PluginRootResolved: true, HookInstalled: true, BinaryReachable: true,
+		RegistryLoadable: true, Entries: 6,
+	}
+	if line := guardHealthLine(armed); !strings.Contains(line, "armed") || !strings.Contains(line, "6") {
+		t.Errorf("an armed guard must say so and count its hazards; got %q", line)
+	}
+
+	off := armed
+	off.Disabled = true
+	if line := guardHealthLine(off); !strings.Contains(line, "OFF") {
+		t.Errorf("a disabled guard must never read as protection; got %q", line)
+	}
+}
