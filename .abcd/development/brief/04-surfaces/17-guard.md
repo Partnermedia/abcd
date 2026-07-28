@@ -99,6 +99,6 @@ promoted into the bundled defaults through the admission gate.
 ## References
 
 - Plugin command: [`commands/abcd/guard.md`](../../../../commands/abcd/guard.md)
-- Spec: [`spc-16`](../../specs/open/spc-16-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
-- Intent: [`itd-103`](../../intents/planned/itd-103-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
+- Spec: [`spc-16`](../../specs/closed/spc-16-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
+- Intent: [`itd-103`](../../intents/shipped/itd-103-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
 - Install/health surface: [`01-ahoy.md`](01-ahoy.md)
