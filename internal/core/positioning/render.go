@@ -134,6 +134,13 @@ const noNewlineMarker = "\\ No newline at end of file\n"
 // old is the newline-normalised file text and start/end are byte offsets into
 // it; crlf says the file on disk uses CRLF, in which case the emitted lines
 // carry the carriage return back so the patch matches the real bytes.
+//
+// The CRLF handling assumes a file's line endings are uniform: one CRLF
+// anywhere makes every emitted line carry a carriage return, so a mixed-ending
+// file yields a hunk whose LF-only lines gain a CR they do not have on disk.
+// That is left as it is because the failure is loud rather than silent — the
+// context lines no longer match, `git apply` refuses the patch, and nothing is
+// written on the strength of a wrong diff.
 func unifiedDiff(file, old string, start, end int, replacement string, crlf bool) string {
 	eol := "\n"
 	if crlf {
