@@ -285,6 +285,31 @@ Show one stored transcript's metadata and redacted body
 
 **Usage:** `abcd history show <session-id-or-filename>`
 
+### `abcd ideate`
+
+Idea-admission protocol: record the verdict of the three-leg gauntlet
+
+**Usage:** `abcd ideate`
+
+Record the verdict of abcd's idea-admission protocol — primary-source research, a grill
+against the existing record, and an independent adversarial review.
+
+The legs are host work; `/abcd:ideate` orchestrates them. This verb validates what they
+produced and writes the durable verdict. Ideate is OPTIONAL and never a gate: no other
+verb requires it, and skipping it is never warned about.
+
+#### `abcd ideate record`
+
+Validate a host-composed verdict and write the dated research record
+
+**Usage:** `abcd ideate record <idea-slug> --verdict-json <file|-> [flags]`
+
+**Flags:**
+
+```
+      --verdict-json string   path to the host-composed verdict JSON (or - for stdin)
+```
+
 ### `abcd intent`
 
 Intent lifecycle; bare invocation is read-only status, quoted text files a draft

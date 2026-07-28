@@ -12,6 +12,26 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`/abcd:ideate` — the idea-admission gauntlet** (itd-104, spc-18). A big,
+  unproven idea can be put through three legs before it becomes a record entry:
+  primary-source research (each load-bearing claim checked against its **primary**
+  source, never a secondary citation), a grill against the existing record, and an
+  adversarial review that is fresh-context, off-policy, and receives the idea as an
+  artefact of unknown authorship. The legs are host work; `abcd ideate record
+  <idea-slug> --verdict-json <file|->` is the deterministic frame that validates
+  them and writes the durable verdict — the dated record under
+  `.abcd/development/research/` plus one pointer line in `.abcd/work/DECISIONS.md`.
+  The verdict is recorded **whether the idea survives or dies**, and its rejected
+  alternatives may be empty only behind an explicit marker, because silence and
+  "nothing was weighed" read the same to a session tempted to re-propose the idea.
+  Every record-grill hit is **cited by id and proved to resolve** in the
+  repository: an id naming no record refuses the whole verdict and names the id.
+  The legs travel as an ordered array so "three legs, in order" is checked rather
+  than assumed, and refusals are whole-document — nothing is written unless
+  everything validates. Ideate is **optional and never a gate**: the `intent` and
+  `capture` routing help names it for big unproven ideas, and nothing requires it
+  or warns when it is skipped.
+
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
   lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
