@@ -1,8 +1,8 @@
 ---
 id: itd-103
 slug: abcd-teaches-repo-agents-the-shell-commands-they-must-never
-spec_id: null
-kind: null
+spec_id: spc-16
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
