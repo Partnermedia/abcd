@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -97,16 +96,44 @@ func ParseBlock(root string, loc BlockLocation) (Block, error) {
 	if !fsutil.ValidRelPath(loc.File) {
 		return Block{}, fmt.Errorf("%w: %q", ErrBadLocation, loc.File)
 	}
+	r, err := openRepoRoot(root)
+	if err != nil {
+		return Block{}, fmt.Errorf("%w: %s: %s", ErrBlockFileMissing, loc.File, pathFreeReason(err))
+	}
+	defer r.Close()
+	return parseBlockIn(r, loc)
+}
+
+// openRepoRoot opens root as an os.Root containment scope. Every positioning
+// read and write resolves through one of these, so a repository that COMMITS a
+// symlinked directory (git mode 120000) as an ancestor of a configured path
+// cannot walk the operation outside itself: fsutil.ValidRelPath is lexical and
+// cannot see a symlink, and a leaf-only O_NOFOLLOW guard never looks at the
+// ancestors. The OS enforces containment instead.
+//
+// A root is opened per operation and closed by the caller, never cached: a
+// cached handle would answer for a tree that has since moved.
+func openRepoRoot(root string) (*os.Root, error) {
+	return os.OpenRoot(root)
+}
+
+// parseBlockIn is ParseBlock with the containment root already open, so a caller
+// that is already reading the repo (Check, Init) opens one root for the whole
+// operation.
+func parseBlockIn(r *os.Root, loc BlockLocation) (Block, error) {
+	if !fsutil.ValidRelPath(loc.File) {
+		return Block{}, fmt.Errorf("%w: %q", ErrBadLocation, loc.File)
+	}
 	heading := strings.TrimSpace(loc.Heading)
 	if heading == "" {
 		return Block{}, fmt.Errorf("%w: heading is empty", ErrBadLocation)
 	}
 
-	data, err := fsutil.ReadGuarded(filepath.Join(root, filepath.FromSlash(loc.File)), maxBlockFileBytes)
+	data, err := fsutil.ReadGuardedInRoot(r, loc.File, maxBlockFileBytes)
 	if err != nil {
-		// A missing, symlinked, or oversize block file is all one thing to a
-		// caller — the canon could not be read where the configuration said it
-		// was. The reason rides along, but stripped of its absolute path: this
+		// A missing, symlinked, oversize, or root-escaping block file is all one
+		// thing to a caller — the canon could not be read where the configuration
+		// said it was. The reason rides along, but stripped of its absolute path: this
 		// error reaches an audit finding, which must never carry one (iss-81).
 		return Block{}, fmt.Errorf("%w: %s: %s", ErrBlockFileMissing, loc.File, pathFreeReason(err))
 	}

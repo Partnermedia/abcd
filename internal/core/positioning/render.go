@@ -59,6 +59,15 @@ func Propose(root string, cfg Config) (Proposal, error) {
 		byID[s.ID] = s
 	}
 
+	// The re-read is contained exactly as the check's read was: a proposal
+	// carries the surface's current bytes into its diff, so an uncontained read
+	// here would leak outside content through the patch instead of the report.
+	r, err := openRepoRoot(root)
+	if err != nil {
+		return Proposal{}, err
+	}
+	defer r.Close()
+
 	p := Proposal{Report: rep}
 	for _, res := range rep.Surfaces {
 		if res.Status != StatusDrifted {
@@ -68,7 +77,7 @@ func Propose(root string, cfg Config) (Proposal, error) {
 		if !ok {
 			continue
 		}
-		_, data, present, rerr := readFirstPresent(root, []string{res.File})
+		_, data, present, rerr := readFirstPresent(r, []string{res.File})
 		if rerr != nil {
 			return Proposal{}, rerr
 		}

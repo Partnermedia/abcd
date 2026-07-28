@@ -36,7 +36,10 @@ called out in a **Breaking** section.
   scope — adopting a proposal is always the maintainer's move); `abcd identity
   init` records the block and the pointer at onboarding, adopting an existing
   block rather than re-interviewing over it. `/abcd:prepare-this-repo` gains the
-  interview, detect-first.
+  interview, detect-first. Every path the registry names is read and written
+  inside an OS-enforced containment root, so an audited repo that commits a
+  symlinked directory cannot make the check read a file the repository does not
+  own and quote it into the report.
 
 - **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
   (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
