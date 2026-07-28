@@ -74,7 +74,7 @@ glossed inline rather than deep-linked.
 
 [^react]: Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., and Cao, Y., "ReAct: Synergizing Reasoning and Acting in Language Models", ICLR 2023, DOI 10.48550/arXiv.2210.03629. The loop shape is defined independently in OpenAI's Agents SDK ("Running agents", https://openai.github.io/openai-agents-python/running_agents/) and Anthropic's tool-use documentation (https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works).
 
-[^ap2]: "Agent Payments Protocol Specification", v0.2, https://ap2-protocol.org/ap2/specification/; launch announcement, Google Cloud, 16 September 2025, https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol; contributed to the FIDO Alliance, 28 April 2026, https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/. Adjacent: x402 (under Linux Foundation governance, https://www.x402.org/) and the Agentic Commerce Protocol (OpenAI and Stripe, https://www.agenticcommerce.dev/) — the latter's "ACP" abbreviation collides with IBM's Agent Communication Protocol, which merged into A2A in August 2025 (https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/).
+[^ap2]: "Agent Payments Protocol Specification", v0.2, https://ap2-protocol.org/ap2/specification/; launch announcement, Google Cloud, 16 September 2025, https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol; contributed to the FIDO Alliance, 28 April 2026, https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/. Adjacent: x402 (under Linux Foundation governance, https://x402.org/) and the Agentic Commerce Protocol (OpenAI and Stripe, https://www.agenticcommerce.dev/) — the latter's "ACP" abbreviation collides with IBM's Agent Communication Protocol, which merged into A2A in August 2025 (https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/).
 
 [^skills]: "Agent Skills — Specification", https://agentskills.io/specification; specification repository, https://github.com/agentskills/agentskills (Apache-2.0 code, CC-BY-4.0 documentation). Unversioned, with no formal draft/final designation; at least one field is marked Experimental; no standards-body stewardship is stated on the primary sources.
 
@@ -86,9 +86,9 @@ glossed inline rather than deep-linked.
 
 [^auto]: Franklin, S. and Graesser, A., "Is It an Agent, or Just a Program?: A Taxonomy for Autonomous Agents", ATAL 1996 (Springer LNCS 1193, 1997), DOI 10.1007/BFb0013570. See also Wooldridge and Jennings under multi-agent systems.
 
-[^ce]: LangChain, "The rise of 'context engineering'", 23 June 2025, https://blog.langchain.com/the-rise-of-context-engineering/; Anthropic, "Effective context engineering for AI agents", 29 September 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents.
+[^ce]: LangChain, "The rise of 'context engineering'", 23 June 2025, https://www.langchain.com/blog/the-rise-of-context-engineering; Anthropic, "Effective context engineering for AI agents", 29 September 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents.
 
-[^durable]: Microsoft, "What is Durable Task?", https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task; Temporal, "Understanding Temporal", https://docs.temporal.io/evaluate/understanding-temporal; Restate, "Key Concepts: Durable Execution", https://docs.restate.dev/concepts/durable_execution/.
+[^durable]: Microsoft, "What is Durable Task?", https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task; Temporal, "Understanding Temporal", https://docs.temporal.io/evaluate/understanding-temporal; Restate, "Key Concepts: Durable Execution", https://docs.restate.dev/foundations/key-concepts#durable-execution.
 
 [^evals]: OpenAI, "Working with evals", https://developers.openai.com/api/docs/guides/evals; Anthropic, "Define success criteria and build evaluations", https://platform.claude.com/docs/en/test-and-evaluate/develop-tests; Liang, P., et al., "Holistic Evaluation of Language Models", Transactions on Machine Learning Research, 2023, DOI 10.48550/arXiv.2211.09110.
 
@@ -116,6 +116,6 @@ glossed inline rather than deep-linked.
 
 [^sand]: OpenAI, Codex documentation, "Sandboxing", https://learn.chatgpt.com/docs/sandboxing; Anthropic, "Configure the sandboxed Bash tool", https://code.claude.com/docs/en/sandboxing. Both sources note that sandboxing needs filesystem *and* network isolation, and reduces rather than eliminates risk. <!-- docs-lint: allow -->
 
-[^tamper]: IETF, RFC 9162, "Certificate Transparency Version 2.0", December 2021, DOI 10.17487/RFC9162, https://www.rfc-editor.org/rfc/rfc9162 — cited as the transferable verifiable-log primitive, not as an agentic-AI standard.
+[^tamper]: IETF, RFC 9162, "Certificate Transparency Version 2.0", December 2021, DOI 10.17487/RFC9162, https://www.rfc-editor.org/info/rfc9162/ — cited as the transferable verifiable-log primitive, not as an agentic-AI standard.
 
 [^tooluse]: OpenAI, "Function calling", https://developers.openai.com/api/docs/guides/function-calling; Anthropic, "Tool use with Claude", https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview; Google, "Function calling", Gemini API documentation, https://ai.google.dev/gemini-api/docs/function-calling. <!-- docs-lint: allow -->

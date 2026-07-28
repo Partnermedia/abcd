@@ -1,0 +1,413 @@
+{
+  "schema_version": 1,
+  "entries": {
+    "https://a2a-protocol.org/latest/specification/": {
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "final_url": "https://a2a-protocol.org/latest/specification/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://adk.dev/sessions/memory/": {
+      "url": "https://adk.dev/sessions/memory/",
+      "final_url": "https://adk.dev/sessions/memory/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://agents.md/": {
+      "url": "https://agents.md/",
+      "final_url": "https://agents.md/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://agentskills.io/specification": {
+      "url": "https://agentskills.io/specification",
+      "final_url": "https://agentskills.io/specification",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://ai.google.dev/gemini-api/docs/function-calling": {
+      "url": "https://ai.google.dev/gemini-api/docs/function-calling",
+      "final_url": "https://ai.google.dev/gemini-api/docs/function-calling",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://ai.google.dev/gemini-api/docs/google-search": {
+      "url": "https://ai.google.dev/gemini-api/docs/google-search",
+      "final_url": "https://ai.google.dev/gemini-api/docs/google-search",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://ap2-protocol.org/ap2/specification/": {
+      "url": "https://ap2-protocol.org/ap2/specification/",
+      "final_url": "https://ap2-protocol.org/ap2/specification/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://claude.com/blog/building-agents-with-the-claude-agent-sdk": {
+      "url": "https://claude.com/blog/building-agents-with-the-claude-agent-sdk",
+      "final_url": "https://claude.com/blog/building-agents-with-the-claude-agent-sdk",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol": {
+      "url": "https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol",
+      "final_url": "https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://code.claude.com/docs/en/sandboxing": {
+      "url": "https://code.claude.com/docs/en/sandboxing",
+      "final_url": "https://code.claude.com/docs/en/sandboxing",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://csrc.nist.gov/glossary/term/authorization": {
+      "url": "https://csrc.nist.gov/glossary/term/authorization",
+      "final_url": "https://csrc.nist.gov/glossary/term/authorization",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://developers.openai.com/api/docs/guides/evals": {
+      "url": "https://developers.openai.com/api/docs/guides/evals",
+      "final_url": "https://developers.openai.com/api/docs/guides/evals",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://developers.openai.com/api/docs/guides/function-calling": {
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "final_url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai": {
+      "url": "https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai",
+      "final_url": "https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html": {
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html",
+      "final_url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html": {
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+      "final_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://docs.restate.dev/foundations/key-concepts#durable-execution": {
+      "url": "https://docs.restate.dev/foundations/key-concepts#durable-execution",
+      "final_url": "https://docs.restate.dev/foundations/key-concepts#durable-execution",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://docs.temporal.io/evaluate/understanding-temporal": {
+      "url": "https://docs.temporal.io/evaluate/understanding-temporal",
+      "final_url": "https://docs.temporal.io/evaluate/understanding-temporal",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng": {
+      "url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
+      "final_url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/": {
+      "url": "https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/",
+      "final_url": "https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://genai.owasp.org/llmrisk/llm01-prompt-injection/": {
+      "url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+      "final_url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://github.com/agentskills/agentskills": {
+      "url": "https://github.com/agentskills/agentskills",
+      "final_url": "https://github.com/agentskills/agentskills",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://github.com/agentsmd/agents.md": {
+      "url": "https://github.com/agentsmd/agents.md",
+      "final_url": "https://github.com/agentsmd/agents.md",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://github.com/open-telemetry/semantic-conventions-genai": {
+      "url": "https://github.com/open-telemetry/semantic-conventions-genai",
+      "final_url": "https://github.com/open-telemetry/semantic-conventions-genai",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://github.com/open-telemetry/semantic-conventions/releases": {
+      "url": "https://github.com/open-telemetry/semantic-conventions/releases",
+      "final_url": "https://github.com/open-telemetry/semantic-conventions/releases",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md": {
+      "url": "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md",
+      "final_url": "https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE.md",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://learn.chatgpt.com/docs/sandboxing": {
+      "url": "https://learn.chatgpt.com/docs/sandboxing",
+      "final_url": "https://learn.chatgpt.com/docs/sandboxing",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task": {
+      "url": "https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task",
+      "final_url": "https://learn.microsoft.com/en-us/azure/durable-task/common/what-is-durable-task",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://learn.microsoft.com/en-us/azure/well-architected/ai/grounding-data-design": {
+      "url": "https://learn.microsoft.com/en-us/azure/well-architected/ai/grounding-data-design",
+      "final_url": "https://learn.microsoft.com/en-us/azure/well-architected/ai/grounding-data-design",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/agent-orchestration/": {
+      "url": "https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/agent-orchestration/",
+      "final_url": "https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/agent-orchestration/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/": {
+      "url": "https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/",
+      "final_url": "https://lfaidata.foundation/communityblog/2025/08/29/acp-joins-forces-with-a2a-under-the-linux-foundations-lf-ai-data/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://modelcontextprotocol.io/specification/2025-11-25": {
+      "url": "https://modelcontextprotocol.io/specification/2025-11-25",
+      "final_url": "https://modelcontextprotocol.io/specification/2025-11-25",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://openai.com/index/harness-engineering/": {
+      "url": "https://openai.com/index/harness-engineering/",
+      "final_url": "https://openai.com/index/harness-engineering/",
+      "last_checked": "2026-07-28",
+      "outcome": "alive",
+      "verification": "manual",
+      "verified_on": "2026-07-28"
+    },
+    "https://openai.com/index/unlocking-the-codex-harness/": {
+      "url": "https://openai.com/index/unlocking-the-codex-harness/",
+      "final_url": "https://openai.com/index/unlocking-the-codex-harness/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://openai.github.io/openai-agents-python/guardrails/": {
+      "url": "https://openai.github.io/openai-agents-python/guardrails/",
+      "final_url": "https://openai.github.io/openai-agents-python/guardrails/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://openai.github.io/openai-agents-python/multi_agent/": {
+      "url": "https://openai.github.io/openai-agents-python/multi_agent/",
+      "final_url": "https://openai.github.io/openai-agents-python/multi_agent/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://openai.github.io/openai-agents-python/running_agents/": {
+      "url": "https://openai.github.io/openai-agents-python/running_agents/",
+      "final_url": "https://openai.github.io/openai-agents-python/running_agents/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works": {
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "final_url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview": {
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview",
+      "final_url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://platform.claude.com/docs/en/test-and-evaluate/develop-tests": {
+      "url": "https://platform.claude.com/docs/en/test-and-evaluate/develop-tests",
+      "final_url": "https://platform.claude.com/docs/en/test-and-evaluate/develop-tests",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.agenticcommerce.dev/": {
+      "url": "https://www.agenticcommerce.dev/",
+      "final_url": "https://www.agenticcommerce.dev/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.anthropic.com/engineering/building-effective-agents": {
+      "url": "https://www.anthropic.com/engineering/building-effective-agents",
+      "final_url": "https://www.anthropic.com/engineering/building-effective-agents",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents": {
+      "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "final_url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents": {
+      "url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+      "final_url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation": {
+      "url": "https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation",
+      "final_url": "https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.langchain.com/blog/the-rise-of-context-engineering": {
+      "url": "https://www.langchain.com/blog/the-rise-of-context-engineering",
+      "final_url": "https://www.langchain.com/blog/the-rise-of-context-engineering",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation": {
+      "url": "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation",
+      "final_url": "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents": {
+      "url": "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "final_url": "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.openpolicyagent.org/docs": {
+      "url": "https://www.openpolicyagent.org/docs",
+      "final_url": "https://www.openpolicyagent.org/docs",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://www.rfc-editor.org/info/rfc9162/": {
+      "url": "https://www.rfc-editor.org/info/rfc9162/",
+      "final_url": "https://www.rfc-editor.org/info/rfc9162/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    },
+    "https://x402.org/": {
+      "url": "https://x402.org/",
+      "final_url": "https://x402.org/",
+      "last_checked": "2026-07-27",
+      "outcome": "alive",
+      "verification": "automatic",
+      "verified_on": "2026-07-27"
+    }
+  }
+}

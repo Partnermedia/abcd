@@ -223,6 +223,47 @@ Documentation-currency checks for this repo
 
 **Usage:** `abcd docs`
 
+#### `abcd docs cite`
+
+Maintain the citation baseline the docs lint enforces offline
+
+**Usage:** `abcd docs cite`
+
+##### `abcd docs cite confirm`
+
+Record that a human verified a cited URL the fetcher could not read
+
+**Usage:** `abcd docs cite confirm [url...] [flags]`
+
+Record that a human verified a cited URL the fetcher could not read.
+
+Name the URLs directly, or pass --receipt with a receipt file. Both write the same dated manual entry: the baseline records THAT a human confirmed the citation and WHEN, never how. Only URLs the documentation actually cites can be confirmed.
+
+**Flags:**
+
+```
+      --config string    path to docs-lint.json (default: <root>/.abcd/docs-lint.json)
+      --receipt string   path to a receipt file listing the confirmed citations (the format the generated checklist page emits)
+      --root string      repo root (default: current working directory)
+```
+
+##### `abcd docs cite refresh`
+
+Fetch every cited URL once and rewrite the committed citation baseline
+
+**Usage:** `abcd docs cite refresh [flags]`
+
+Fetch every cited URL once and rewrite the committed citation baseline.
+
+This is the only abcd verb that reaches the network on behalf of documentation. Each URL gets exactly one bounded attempt; a failure is recorded as an outcome, never retried. Sources that refuse automated fetchers are printed as a manual checklist for `abcd docs cite confirm` rather than recorded as broken.
+
+**Flags:**
+
+```
+      --config string   path to docs-lint.json (default: <root>/.abcd/docs-lint.json)
+      --root string     repo root (default: current working directory)
+```
+
 #### `abcd docs lint`
 
 Lint docs for change-narration, broken links, and stray root markdown
@@ -233,6 +274,7 @@ Lint docs for change-narration, broken links, and stray root markdown
 
 ```
       --config string   path to docs-lint.json (default: <root>/.abcd/docs-lint.json)
+      --release-gate    run as the release gate: a citation past its staleness threshold blocks instead of warning (release-time only)
       --root string     repo root to lint (default: current working directory)
 ```
 
