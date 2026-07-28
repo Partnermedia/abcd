@@ -156,55 +156,101 @@ func readFirstPresent(root string, files []string) (rel string, data []byte, ok 
 	return "", nil, false, nil
 }
 
+// span is the byte range of a surface's located self-description within its
+// file, plus the decoded text. Keeping the range (not just the text) is what
+// lets the re-render propose a replacement in place rather than guessing where
+// the text sat.
+type span struct {
+	start, end int    // byte offsets into the normalised file text
+	text       string // the decoded value (JSON-unescaped for a manifest field)
+	// escaped reports that the byte range holds an escaped form, so a
+	// replacement must be re-escaped before it is spliced back in.
+	escaped bool
+}
+
 // locate extracts the surface's self-description and the 1-based line it starts
 // on, reporting whether the locator matched at all.
 func (s Surface) locate(data []byte) (found string, line int, ok bool, err error) {
-	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	text := normalizeNewlines(data)
+	sp, ok, err := s.locateSpan(text)
+	if err != nil || !ok {
+		return "", 0, false, err
+	}
+	if sp.start < 0 {
+		// Located by value but not pinned to a byte range: no citable line.
+		return sp.text, 0, true, nil
+	}
+	return sp.text, 1 + strings.Count(text[:sp.start], "\n"), true, nil
+}
+
+// locateSpan finds the byte range the surface's self-description occupies.
+func (s Surface) locateSpan(text string) (span, bool, error) {
 	switch s.Kind {
 	case KindJSONField:
-		var obj map[string]json.RawMessage
-		if uerr := json.Unmarshal([]byte(text), &obj); uerr != nil {
-			// A manifest that is not a JSON object cannot be located; that is a
-			// locator failure, not a parse crash for the whole audit.
-			return "", 0, false, nil
-		}
-		raw, present := obj[s.Field]
-		if !present {
-			return "", 0, false, nil
-		}
-		var v string
-		if uerr := json.Unmarshal(raw, &v); uerr != nil {
-			return "", 0, false, nil // present but not a string
-		}
-		return v, jsonFieldLine(text, s.Field), true, nil
+		return locateJSONField(text, s.Field)
 	case KindRegexp:
 		for _, p := range s.Patterns {
 			re, cerr := regexp.Compile(p)
 			if cerr != nil {
-				return "", 0, false, fmt.Errorf("pattern %q does not compile: %w", p, cerr)
+				return span{}, false, fmt.Errorf("pattern %q does not compile: %w", p, cerr)
 			}
 			loc := re.FindStringSubmatchIndex(text)
 			if loc == nil || loc[2] < 0 {
 				continue
 			}
-			return text[loc[2]:loc[3]], 1 + strings.Count(text[:loc[2]], "\n"), true, nil
+			return span{start: loc[2], end: loc[3], text: text[loc[2]:loc[3]]}, true, nil
 		}
-		return "", 0, false, nil
+		return span{}, false, nil
 	}
-	return "", 0, false, fmt.Errorf("%w: unknown surface kind %q", ErrConfigInvalid, s.Kind)
+	return span{}, false, fmt.Errorf("%w: unknown surface kind %q", ErrConfigInvalid, s.Kind)
 }
 
-// jsonFieldLine finds the 1-based line a top-level JSON key sits on, so a
-// finding can cite file:line. It is a display aid over the already-parsed
-// document: a miss yields 0 rather than a wrong line.
-func jsonFieldLine(text, field string) int {
-	key := `"` + field + `"`
-	for i, l := range strings.Split(text, "\n") {
-		if strings.Contains(l, key) {
-			return i + 1
-		}
+// jsonStringMemberFmt builds a regexp for a JSON object member whose value is a
+// string, capturing the escaped value between the quotes. It recovers the byte
+// range the JSON decoder never reports; the authoritative parse decides whether
+// that range really is the top-level field asked for.
+const jsonStringMemberFmt = `"%s"\s*:\s*"((?:[^"\\]|\\.)*)"`
+
+// locateJSONField reads a top-level string field of a JSON manifest and finds
+// the byte range its value occupies. The value is taken from a real JSON parse
+// (so a nested key of the same name can never be mistaken for the top-level
+// one); the byte range comes from a scan, and is accepted only when it decodes
+// to exactly the parsed value.
+func locateJSONField(text, field string) (span, bool, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &obj); err != nil {
+		// A manifest that is not a JSON object cannot be located; that is a
+		// locator miss, not a fault that should abort the whole audit.
+		return span{}, false, nil
 	}
-	return 0
+	raw, present := obj[field]
+	if !present {
+		return span{}, false, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return span{}, false, nil // present but not a string
+	}
+	re, err := regexp.Compile(fmt.Sprintf(jsonStringMemberFmt, regexp.QuoteMeta(field)))
+	if err != nil {
+		return span{}, false, nil
+	}
+	for _, loc := range re.FindAllStringSubmatchIndex(text, -1) {
+		var decoded string
+		if json.Unmarshal([]byte(`"`+text[loc[2]:loc[3]]+`"`), &decoded) != nil || decoded != value {
+			continue
+		}
+		return span{start: loc[2], end: loc[3], text: value, escaped: true}, true, nil
+	}
+	// The value parsed but its bytes could not be pinned (an unusual encoding).
+	// Report the value with no usable range: the check still runs, the
+	// re-render declines to propose rather than splicing at a guessed offset.
+	return span{start: -1, end: -1, text: value}, true, nil
+}
+
+// normalizeNewlines renders file bytes as the text every locator works over.
+func normalizeNewlines(data []byte) string {
+	return strings.ReplaceAll(string(data), "\r\n", "\n")
 }
 
 var (

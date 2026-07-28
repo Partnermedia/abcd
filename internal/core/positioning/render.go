@@ -1,0 +1,171 @@
+package positioning
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+// diffContext is how many unchanged lines flank each hunk.
+const diffContext = 3
+
+// SurfaceDiff is one surface's proposed correction: the whole proposed file
+// content and the unified diff that turns the current file into it.
+type SurfaceDiff struct {
+	SurfaceID string `json:"surfaceId"`
+	File      string `json:"file"`
+	// Proposed is the surface file as it would read once the proposal is
+	// adopted. It is returned, never written.
+	Proposed string `json:"-"`
+	// Unified is the human-readable patch: the exact drifted line removed, the
+	// canonical line added, with surrounding context.
+	Unified string `json:"unified"`
+}
+
+// Proposal is a re-render of every drifted surface from the identity block. It
+// is a PROPOSAL: nothing here touches the working tree, and there is no flag
+// that makes it. A deliberate identity change is an edit to the block, after
+// which the same proposal flow chases the surfaces.
+type Proposal struct {
+	Report Report        `json:"report"`
+	Diffs  []SurfaceDiff `json:"diffs"`
+}
+
+// Unified concatenates every surface's patch into one diff a human can read or
+// pipe to `git apply`.
+func (p Proposal) Unified() string {
+	var b strings.Builder
+	for _, d := range p.Diffs {
+		b.WriteString(d.Unified)
+	}
+	return b.String()
+}
+
+// Propose runs the positioning check and, for every surface that drifted,
+// renders what the surface would say if it were re-rendered from the block.
+// It performs no writes whatsoever.
+//
+// A surface the locator could not find yields no diff — there is no region to
+// replace, and inventing one would propose a patch against a line that was
+// never located. It still reports as drifted in the embedded Report.
+func Propose(root string, cfg Config) (Proposal, error) {
+	rep, err := Check(root, cfg)
+	if err != nil {
+		return Proposal{}, err
+	}
+	byID := map[string]Surface{}
+	for _, s := range cfg.surfaces() {
+		byID[s.ID] = s
+	}
+
+	p := Proposal{Report: rep}
+	for _, res := range rep.Surfaces {
+		if res.Status != StatusDrifted {
+			continue
+		}
+		s, ok := byID[res.ID]
+		if !ok {
+			continue
+		}
+		_, data, present, rerr := readFirstPresent(root, []string{res.File})
+		if rerr != nil {
+			return Proposal{}, rerr
+		}
+		if !present {
+			continue
+		}
+		text := normalizeNewlines(data)
+		sp, located, lerr := s.locateSpan(text)
+		if lerr != nil {
+			return Proposal{}, lerr
+		}
+		if !located || sp.start < 0 {
+			continue
+		}
+
+		replacement := s.render(rep.Block)
+		if sp.escaped {
+			// Splicing back into a JSON string literal: the canonical line must
+			// be re-escaped or the proposed manifest would not parse.
+			enc, merr := json.Marshal(replacement)
+			if merr != nil {
+				return Proposal{}, merr
+			}
+			replacement = string(enc[1 : len(enc)-1])
+		}
+		proposed := text[:sp.start] + replacement + text[sp.end:]
+		p.Diffs = append(p.Diffs, SurfaceDiff{
+			SurfaceID: res.ID,
+			File:      res.File,
+			Proposed:  proposed,
+			Unified:   unifiedDiff(res.File, text, proposed, sp.start, sp.end, replacement),
+		})
+	}
+	return p, nil
+}
+
+// unifiedDiff renders the single-region replacement as a unified diff. The
+// change is always one contiguous span, so the patch is exactly one hunk: the
+// lines the span touches, replaced, flanked by up to diffContext unchanged
+// lines. That is enough to be a real patch without pulling in a diff algorithm.
+func unifiedDiff(file, old, proposed string, start, end int, replacement string) string {
+	oldLines := strings.Split(old, "\n")
+	firstLine := strings.Count(old[:start], "\n")
+	lastLine := strings.Count(old[:end], "\n")
+
+	// The replaced lines, rebuilt: everything on the first line before the
+	// span, the replacement, everything on the last line after it.
+	lineStart := lineStartOffset(old, firstLine)
+	lineEnd := lineEndOffset(old, lastLine)
+	newBlock := old[lineStart:start] + replacement + old[end:lineEnd]
+
+	removed := oldLines[firstLine : lastLine+1]
+	added := strings.Split(newBlock, "\n")
+
+	ctxStart := max(0, firstLine-diffContext)
+	ctxEnd := min(len(oldLines)-1, lastLine+diffContext)
+	before := oldLines[ctxStart:firstLine]
+	after := oldLines[lastLine+1 : ctxEnd+1]
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "--- a/%s\n+++ b/%s\n", file, file)
+	fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n",
+		ctxStart+1, len(before)+len(removed)+len(after),
+		ctxStart+1, len(before)+len(added)+len(after))
+	for _, l := range before {
+		b.WriteString(" " + l + "\n")
+	}
+	for _, l := range removed {
+		b.WriteString("-" + l + "\n")
+	}
+	for _, l := range added {
+		b.WriteString("+" + l + "\n")
+	}
+	for _, l := range after {
+		b.WriteString(" " + l + "\n")
+	}
+	return b.String()
+}
+
+// lineStartOffset returns the byte offset of the start of 0-based line n.
+func lineStartOffset(s string, n int) int {
+	off := 0
+	for i := 0; i < n; i++ {
+		idx := strings.IndexByte(s[off:], '\n')
+		if idx < 0 {
+			return off
+		}
+		off += idx + 1
+	}
+	return off
+}
+
+// lineEndOffset returns the byte offset just past the end of 0-based line n
+// (excluding its newline).
+func lineEndOffset(s string, n int) int {
+	off := lineStartOffset(s, n)
+	if idx := strings.IndexByte(s[off:], '\n'); idx >= 0 {
+		return off + idx
+	}
+	return len(s)
+}
