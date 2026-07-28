@@ -12,6 +12,26 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`/abcd:ideate` — the idea-admission gauntlet** (itd-104, spc-18). A big,
+  unproven idea can be put through three legs before it becomes a record entry:
+  primary-source research (each load-bearing claim checked against its **primary**
+  source, never a secondary citation), a grill against the existing record, and an
+  adversarial review that is fresh-context, off-policy, and receives the idea as an
+  artefact of unknown authorship. The legs are host work; `abcd ideate record
+  <idea-slug> --verdict-json <file|->` is the deterministic frame that validates
+  them and writes the durable verdict — the dated record under
+  `.abcd/development/research/` plus one pointer line in `.abcd/work/DECISIONS.md`.
+  The verdict is recorded **whether the idea survives or dies**, and its rejected
+  alternatives may be empty only behind an explicit marker, because silence and
+  "nothing was weighed" read the same to a session tempted to re-propose the idea.
+  Every record-grill hit is **cited by id and proved to resolve** in the
+  repository: an id naming no record refuses the whole verdict and names the id.
+  The legs travel as an ordered array so "three legs, in order" is checked rather
+  than assumed, and refusals are whole-document — nothing is written unless
+  everything validates. Ideate is **optional and never a gate**: the `intent` and
+  `capture` routing help names it for big unproven ideas, and nothing requires it
+  or warns when it is skipped.
+
 - **`abcd guard` — the shell-hazard guard, wired into a live session** (itd-103,
   spc-16). `abcd guard check --command "<line>"` evaluates one candidate command
   against the hazard registry and reports allow, warn, or block: a blocker exits
@@ -108,6 +128,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Untrusted prose can no longer open raw HTML in a record abcd writes.** The
+  shared cleaner every host-delegated ingest routes through — the release
+  changelog ingest, the lifeboat synthesis writers, and the ideate verdict —
+  neutralised newlines and HTML comment markers but left a bare tag intact. In
+  CommonMark a `<` followed by a letter, `/`, `!`, or `?` opens an HTML block, and
+  several of those block types run to the end of the document: a single
+  `<script>` in one model-supplied field made every later section of the record
+  render as inert text inside an unclosed element, while a forged section above it
+  rendered normally — so an artefact whose whole value is that a later session
+  trusts it could hide its own evidence. Every tag opener is now broken apart in
+  the one canonical primitive, so the fix lands at all three boundaries at once.
+  The neutralisation runs **after** terminal sanitisation, which closes a second
+  hole: sanitising substitutes `?` for a masked rune, so `<` before an escape byte
+  previously became `<?` — a processing instruction — after the old ordering.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded
