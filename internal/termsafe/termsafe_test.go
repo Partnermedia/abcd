@@ -10,6 +10,21 @@ func withRune(prefix string, r rune, suffix string) string {
 	return prefix + string(r) + suffix
 }
 
+func TestSanitizeBlockKeepsLinesAndStillMasksAttackRunes(t *testing.T) {
+	in := "--- a/README.md\n" + withRune("+  strapline", 0x1b, "[31m") + "\n cONTEXT\n"
+	got := SanitizeBlock(in)
+	if want := "--- a/README.md\n+  strapline?[31m\n cONTEXT\n"; got != want {
+		t.Errorf("SanitizeBlock = %q, want %q", got, want)
+	}
+	// A carriage return would still let a line be overwritten in place.
+	if got := SanitizeBlock("a\r\nb"); got != "a\nb" {
+		t.Errorf("SanitizeBlock(CRLF) = %q, want %q", got, "a\nb")
+	}
+	if got := SanitizeBlock(withRune("a", 0x0d, "b")); got != "a?b" {
+		t.Errorf("SanitizeBlock(bare CR) = %q, want %q", got, "a?b")
+	}
+}
+
 // TestSanitizeNeutralisesDisplayAttacks proves each terminal-display attack class
 // is masked while ordinary text and tab survive.
 func TestSanitizeNeutralisesDisplayAttacks(t *testing.T) {

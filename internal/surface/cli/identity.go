@@ -164,8 +164,9 @@ func renderProposal(w io.Writer, p positioning.Proposal) {
 	fmt.Fprintf(w, "abcd identity render — %d proposed change(s), nothing written. Adopt what you agree with.\n\n", len(p.Diffs))
 	for _, d := range p.Diffs {
 		// The diff body is the repo's own file content, so it is sanitised
-		// before it reaches a terminal.
-		fmt.Fprint(w, termsafe.Sanitize(d.Unified))
+		// before it reaches a terminal — per line, because a diff IS lines and
+		// masking its newlines would smear it into one unreadable string.
+		fmt.Fprint(w, termsafe.SanitizeBlock(d.Unified))
 		fmt.Fprintln(w)
 	}
 }

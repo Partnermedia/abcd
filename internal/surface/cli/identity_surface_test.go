@@ -177,6 +177,22 @@ func TestIdentityRenderPrintsTheProposedDiff(t *testing.T) {
 			t.Errorf("render output missing %q:\n%s", want, out)
 		}
 	}
+	// A diff is line-oriented: each marker must open its own line, or the
+	// output is one unreadable smear and cannot be piped to `git apply`.
+	for _, want := range []string{
+		"\n--- a/README.md\n",
+		"\n+++ b/README.md\n",
+		"\n-  <p>An opinionated",
+		"\n+  <p>A host-agnostic",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("render output is not line-oriented, missing %q:\n%q", want, out)
+		}
+	}
+	// Sanitising must not turn the diff's newlines into replacement glyphs.
+	if strings.Contains(out, "README.md?") {
+		t.Errorf("render output flattened its newlines:\n%q", out)
+	}
 }
 
 func TestIdentityRenderOnACleanRepoProposesNothing(t *testing.T) {

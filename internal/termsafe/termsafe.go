@@ -37,6 +37,21 @@ func Sanitize(s string) string {
 	}, s)
 }
 
+// SanitizeBlock sanitises multi-line text while keeping its line structure: each
+// line is sanitised on its own and the newlines are preserved. Sanitize masks a
+// newline (an injected line break must not forge extra report lines), which is
+// right for a value interpolated into one line and wrong for output that IS
+// lines — a rendered diff or a quoted file excerpt, where flattening the
+// newlines destroys the artefact the reader needs. Use this only where the line
+// breaks are the render's own, never for a single untrusted value.
+func SanitizeBlock(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = Sanitize(strings.TrimSuffix(l, "\r"))
+	}
+	return strings.Join(lines, "\n")
+}
+
 // SanitizeAll sanitises every member of a slice, returning a new slice.
 func SanitizeAll(in []string) []string {
 	if in == nil {
