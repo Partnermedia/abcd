@@ -16,6 +16,7 @@ package positioning
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -105,8 +106,9 @@ func ParseBlock(root string, loc BlockLocation) (Block, error) {
 	if err != nil {
 		// A missing, symlinked, or oversize block file is all one thing to a
 		// caller — the canon could not be read where the configuration said it
-		// was. The underlying reason rides along for the human.
-		return Block{}, fmt.Errorf("%w: %s: %s", ErrBlockFileMissing, loc.File, err)
+		// was. The reason rides along, but stripped of its absolute path: this
+		// error reaches an audit finding, which must never carry one (iss-81).
+		return Block{}, fmt.Errorf("%w: %s: %s", ErrBlockFileMissing, loc.File, pathFreeReason(err))
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
@@ -132,6 +134,17 @@ func ParseBlock(root string, loc BlockLocation) (Block, error) {
 		}
 	}
 	return b, nil
+}
+
+// pathFreeReason renders a filesystem error without the absolute path it was
+// raised against. Positioning errors surface in audit findings and machine
+// output, which must never carry a developer-identity path (iss-81).
+func pathFreeReason(err error) string {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Op + ": " + pe.Err.Error()
+	}
+	return err.Error()
 }
 
 // findHeading returns the index of the first heading whose text equals want

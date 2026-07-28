@@ -158,7 +158,7 @@ func LoadConfig(root string) (Config, bool, error) {
 		if os.IsNotExist(err) {
 			return Config{}, false, nil
 		}
-		return Config{}, false, fmt.Errorf("%w: %s: %s", ErrConfigInvalid, ConfigRelPath, err)
+		return Config{}, false, fmt.Errorf("%w: %s: %s", ErrConfigInvalid, ConfigRelPath, pathFreeReason(err))
 	}
 	var cfg Config
 	dec := json.NewDecoder(strings.NewReader(string(data)))
