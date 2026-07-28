@@ -1,0 +1,90 @@
+# `/abcd:ideate` — Gate an Idea Before It Becomes a Record Entry
+
+`/abcd:ideate` puts a big, unproven idea through a three-leg admission gauntlet
+and records the verdict — whether the idea survives or dies. Only a survivor
+graduates to a draft intent, and ideate mints no intent itself.
+
+It is **optional and never a gate**. No other verb requires it, nothing warns
+when it is skipped, and capture friction stays at one line. The routing help in
+the `intent` and `capture` surfaces names it for big, unproven ideas; that is a
+pointer, not a precondition.
+
+## Division of labour
+
+Ideate follows the host-delegated pattern the `disembark` synthesis family
+proved. The **host** runs the three judgement legs as agents; the **binary** is
+the deterministic frame that validates their output, proves every citation, and
+writes the record. The binary never fetches a source, never calls a model, and
+never decides whether an idea is any good.
+
+## The three legs, in order
+
+| # | Leg | What it produces |
+|---|---|---|
+| 1 | Primary-source research | A claims table: each load-bearing claim, the **primary** source it was checked against, and the finding (`verified` / `falsified` / `unverifiable`) |
+| 2 | Record grill | Hits on the existing record (brief, intents in every bucket, ADRs, principles), each cited by record id with a relation (`covered` / `contradicted` / `superseded`) |
+| 3 | Adversarial review | Kill attempts, each with an outcome (`survived` / `partial` / `fatal`) |
+
+The order is validated, not assumed: the legs travel as an ordered array and a
+payload whose legs are missing, reordered, or duplicated is refused. Each leg
+changes what the next one is looking at, so running them out of order produces a
+different — and weaker — result.
+
+Leg 3 is defined by its **conduct**: fresh-context, off-policy, unknown
+authorship. The evaluator did not conduct the research and receives the idea as
+an artefact whose provenance it does not know. That is the
+evaluator-outside-the-loop principle applied to ideas, and it is the one measured
+debiasing effect the protocol rests on. The binary cannot observe how an agent
+was run, so this obligation lives in the command page's orchestration script,
+which instructs the host to strip authorship and prior-leg framing before the
+hand-off.
+
+## Behaviour
+
+```bash
+abcd ideate record <idea-slug> --verdict-json <file|-> --json
+```
+
+`--verdict-json` is **required**. Unlike the `disembark` synthesis verbs there is
+no deterministic fallback mode: those can fall back because a packed lifeboat's
+own files carry evidence, and there is no evidence-only verdict an idea could
+have. A binary that invented one would be doing the judging.
+
+The verb writes two things:
+
+- `.abcd/development/research/YYYY-MM-DD-ideate-<idea-slug>.md` — the verdict
+  record: the idea as captured, the three legs, the verdict, and the rejected
+  alternatives, rendered for a human.
+- one dated pointer line in `.abcd/work/DECISIONS.md`.
+
+No new record family: a killed idea is a research outcome, and the research
+directory is where a session looks before re-proposing one.
+
+Exit codes are the release-cut shape without the middle state: `0` recorded, `2`
+refused with nothing written. There is no exit 1, because a verdict is either
+recordable or it is not.
+
+## What the binary refuses
+
+| Refusal | Why |
+|---|---|
+| A cited record id that does not resolve in the repository | A grill hit on a record that does not exist is a hit on nothing. The refusal names every offending id |
+| A cited value that is not a record id at all | Bounded before it is matched or echoed |
+| Legs missing, reordered, or duplicated; a leg carrying another leg's evidence | The gauntlet is exactly three legs, in order |
+| An out-of-enum verdict, claim status, grill relation, or kill outcome | Each set is closed; an unregistered value is a whole-document refusal, never a coercion |
+| A claim naming no primary source | A claim checked against nothing is an assertion |
+| An empty `rejected_alternatives` list with no explicit `no_rejected_alternatives` marker | Silence and "nothing was weighed" are indistinguishable to a later reader, and the record exists to stop the idea being re-litigated |
+| A slug that is not lower-case kebab-case | The slug becomes a filename; the grammar is the lexical half of the write containment, `os.Root` the other |
+| A verdict record that already exists for this slug and date | Overwriting would erase a recorded reason, which is the one thing the verb exists to preserve |
+| A repository with no `.abcd/work/DECISIONS.md` | A record nothing points at is a record nobody finds — refused before anything is written |
+
+Refusals are **whole-document**, never cite-or-be-dropped. A verdict record with
+a quietly-dropped falsified claim or grill hit is worse than no record, because a
+later session trusts it.
+
+## References
+
+- Plugin command: [`commands/abcd/ideate.md`](../../../../commands/abcd/ideate.md)
+- Intent: [`itd-104`](../../intents/planned/itd-104-abcd-gates-a-new-idea-before-it-becomes-a-record-entry-resea.md)
+- Spec: [`spc-18`](../../specs/open/spc-18-abcd-gates-a-new-idea-before-it-becomes-a-record-entry-resea.md)
+- Routing-help neighbours: [`05-intent.md`](05-intent.md), [`06-capture.md`](06-capture.md)

@@ -1,0 +1,150 @@
+---
+name: ideate
+description: Put a big, unproven idea through the three-leg admission gauntlet — primary-source research, a grill against the existing record, and an independent adversarial review — then record the verdict, whether the idea survives or dies.
+argument-hint: "<the idea, in one or two sentences>"
+---
+
+# `/abcd:ideate` — the idea-admission gauntlet
+
+An exciting idea is cheapest to kill in its first hour and most expensive to kill
+after it has minted intents, specs, and branches. This runs the admission
+interview and records the outcome.
+
+**Ideate is optional and never a gate.** Nothing requires it: `/abcd:capture` and
+`/abcd:intent` work exactly as they always do, and skipping ideate is not a
+mistake to warn about. Reach for it when an idea is big and unproven enough that
+being wrong about it would be expensive.
+
+**The binary does no judging.** The three legs below are yours to run. `abcd
+ideate record` validates what they produced, proves every citation names a real
+record, and writes the durable verdict. It never fetches a source and never
+forms an opinion.
+
+## The three legs, in order
+
+The order is not cosmetic — each leg changes what the next one is looking at —
+and `abcd ideate record` refuses a payload whose legs are missing or out of
+order.
+
+### Leg 1 — Primary-source research
+
+Research the idea's **load-bearing claims**: the ones that, if false, take the
+idea with them. For each, open the **primary** source — the paper, the
+specification, the API reference, the original data — and check the claim
+against it.
+
+A secondary citation is not a check. In the run this protocol comes from, three
+secondary-source claims were falsified once the primary was opened, one of them
+an extraction artefact that no source ever said.
+
+Produce, for each claim: the claim, the primary source (a URL or a document
+reference), and the finding — `verified`, `falsified`, or `unverifiable`. An
+honest `unverifiable` is a result; a missing source is not, and the binary
+refuses a claim that names none.
+
+### Leg 2 — Record grill
+
+Read the existing record before anything else is decided — the brief, the
+intents in **every** bucket (`drafts/`, `planned/`, `shipped/`, `disciplines/`,
+`superseded/`), the ADRs, and the principles. Answer one question: does an entry
+already **cover**, **contradict**, or **supersede** this idea?
+
+Every hit is **cited by record id** (`itd-N`, `spc-N`, `iss-N`, `adr-N`), and
+`abcd ideate record` refuses the whole verdict if an id does not resolve in this
+repository. Check the id before you write it down. The brief and the principles
+carry no per-entry id, so a hit that rests on one goes in the `note` field of
+the nearest citable record.
+
+Finding **nothing** is a legitimate and common outcome — say so; do not
+manufacture a hit.
+
+### Leg 3 — Adversarial review
+
+Hand the idea to a **fresh evaluator whose only job is to kill it**. Three
+properties make this leg worth running, and they are the whole point of it:
+
+- **Fresh context.** The evaluator must not be the session that ran legs 1 and 2.
+  Dispatch it as a separate agent with its own context.
+- **Off-policy.** Do not hand it the framing, the enthusiasm, or the conclusions
+  of the earlier legs. It receives the idea and the two legs' *findings*, not
+  their narrative.
+- **Unknown authorship.** **Strip every authorship signal before handing the
+  artefact over**: no "the user's idea", no "our proposal", no session history,
+  no mention of who wants this or how excited they are. The evaluator sees an
+  artefact of unknown provenance. This is the only measured debiasing effect in
+  the whole protocol; leaking authorship converts an adversary into a colleague.
+
+Ask it for concrete **kill attempts**, each with an outcome: `survived`,
+`partial` (it landed but is not on its own fatal), or `fatal`.
+
+## Record the verdict
+
+Compose the verdict document and hand it to the binary:
+
+```bash
+abcd ideate record <idea-slug> --verdict-json <path>   # or - for stdin
+```
+
+`<idea-slug>` is lower-case kebab-case (it becomes a filename). The document:
+
+```json
+{
+  "schema_version": 1,
+  "prompt_version": "1.0.0",
+  "idea": "the idea in the words it entered with",
+  "legs": [
+    {"kind": "research", "claims": [
+      {"claim": "…", "primary_source": "https://…", "status": "verified|falsified|unverifiable"}
+    ]},
+    {"kind": "record-grill", "hits": [
+      {"record": "itd-104", "relation": "covered|contradicted|superseded", "note": "optional"}
+    ]},
+    {"kind": "adversarial-review", "kill_attempts": [
+      {"attempt": "…", "outcome": "survived|partial|fatal"}
+    ]}
+  ],
+  "verdict": "survives|killed|reframed",
+  "rejected_alternatives": [
+    {"alternative": "…", "why_rejected": "…"}
+  ]
+}
+```
+
+**The verdict is recorded either way.** A killed idea earns exactly as full a
+record as a surviving one — that record is what stops the idea being talked back
+into six months from now.
+
+**Rejected alternatives are not optional.** If genuinely none were considered,
+say so explicitly with `"no_rejected_alternatives": true` and an empty list; the
+binary refuses an empty list that arrives by omission, because silence and "we
+weighed nothing" are indistinguishable to a later reader.
+
+## What the binary does with it
+
+It writes `.abcd/development/research/<date>-ideate-<slug>.md` — the idea, the
+three legs, the verdict, and the rejected alternatives, rendered for a human —
+and appends one dated pointer line to `.abcd/work/DECISIONS.md`.
+
+Exit codes:
+
+- **0** — recorded. Report the `verdict`, the `path`, and the `cited_records`
+  (the ids the grill cited, every one proved to resolve). Show the user the
+  written record.
+- **2** — refused, and **nothing was written**. Relay the diagnostic: an
+  unresolvable citation names the id, a payload fault names the field, and a
+  verdict record that already exists under today's date is refused rather than
+  overwritten (give the re-run its own slug, or keep the first record).
+
+## After a verdict
+
+- **survives** — the idea may graduate to a draft intent through the ordinary
+  path, `abcd intent "<text>"`. Ideate mints no intent itself; graduation stays a
+  deliberate act you take with the user.
+- **killed** — stop. Do not file an intent, and do not soften the record.
+- **reframed** — any graduation carries the reframing recorded in leg 3, not the
+  original wording.
+
+If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd ideate …`
+from the repo root, or tell the user to build it with `make build`.
+
+**User input:** $ARGUMENTS
