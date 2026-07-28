@@ -102,6 +102,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Untrusted prose can no longer open raw HTML in a record abcd writes.** The
+  shared cleaner every host-delegated ingest routes through — the release
+  changelog ingest, the lifeboat synthesis writers, and the ideate verdict —
+  neutralised newlines and HTML comment markers but left a bare tag intact. In
+  CommonMark a `<` followed by a letter, `/`, `!`, or `?` opens an HTML block, and
+  several of those block types run to the end of the document: a single
+  `<script>` in one model-supplied field made every later section of the record
+  render as inert text inside an unclosed element, while a forged section above it
+  rendered normally — so an artefact whose whole value is that a later session
+  trusts it could hide its own evidence. Every tag opener is now broken apart in
+  the one canonical primitive, so the fix lands at all three boundaries at once.
+  The neutralisation runs **after** terminal sanitisation, which closes a second
+  hole: sanitising substitutes `?` for a masked rune, so `<` before an escape byte
+  previously became `<?` — a processing instruction — after the old ordering.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded

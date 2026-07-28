@@ -9,8 +9,18 @@ package termsafe
 //
 //   - line breaks become spaces, so one prose field can never forge a second line
 //     (a changelog bullet, a markdown table row, a list item) in the record;
-//   - `<!--` and `-->` are broken apart, so prose can neither open nor close an
-//     HTML comment and swallow — or expose — the record around it.
+//   - anything that could OPEN raw HTML is broken apart — a tag, a closing tag, a
+//     declaration, a processing instruction, or a comment — so prose can neither
+//     open nor close an HTML construct and swallow the record around it.
+//
+// The HTML rule is not cosmetic. In CommonMark a `<` followed by a letter, `/`,
+// `!`, or `?` at the start of a line begins an HTML BLOCK, and several of those
+// block types run to the end of the document if their closing condition never
+// arrives: one `<script>` in a claim makes every later section of a verdict record
+// — the falsified claims, the grill hits, the adversary's findings — render as
+// inert text inside an unclosed element, while a forged table above it renders
+// normally. An artefact whose whole value is that a later session trusts it must
+// not be able to hide its own evidence.
 //
 // Two forms exist because two callers legitimately want different whitespace
 // handling, and the difference is visible in the record: CleanProse trims,
@@ -21,7 +31,16 @@ package termsafe
 // route through it rather than keep divergent copies, and a new trust boundary
 // (internal/core/ideate) reuses it instead of writing a third.
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// htmlOpenerRe matches every way CommonMark lets a `<` begin raw HTML: a tag, a
+// closing tag, a declaration or comment (`<!`), or a processing instruction
+// (`<?`). A bare `<` with anything else after it — `a < b`, `<-`, a trailing one —
+// opens nothing and is left alone, so ordinary prose reads normally.
+var htmlOpenerRe = regexp.MustCompile(`<[A-Za-z!/?]`)
 
 // CleanProse neutralises one untrusted prose field and caps it at capBytes,
 // preserving interior whitespace runs. The cap is applied last and the result is
@@ -41,12 +60,20 @@ func CleanProseLine(s string, capBytes int) string {
 // cleanProse is the shared body: neutralise, sanitise, normalise whitespace the
 // caller's way, then cap. Written once so the two forms can only differ in the
 // one dimension they are meant to differ in.
+// The HTML neutralisation runs AFTER Sanitize, and the order is load-bearing:
+// Sanitize SUBSTITUTES a '?' for each masked rune rather than deleting it, so a
+// `<` followed by an escape byte becomes `<?` — a processing instruction, which
+// is an HTML block that runs until `?>`. Neutralising before Sanitize would
+// therefore let a masked control character forge the very construct this closes.
 func cleanProse(s string, capBytes int, normalise func(string) string) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
 	s = Sanitize(s)
+	// A space after the `<` is enough: CommonMark needs the name, `/`, `!`, or `?`
+	// to follow immediately. This subsumes the comment-open case — `<!--` becomes
+	// `< !--` — so the two rules are one.
+	s = htmlOpenerRe.ReplaceAllStringFunc(s, func(m string) string { return "< " + m[1:] })
+	s = strings.ReplaceAll(s, "-->", "-- >")
 	s = normalise(s)
 	if len(s) > capBytes {
 		s = strings.ToValidUTF8(s[:capBytes], "")
