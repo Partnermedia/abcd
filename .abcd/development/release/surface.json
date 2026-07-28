@@ -404,6 +404,57 @@
       "flags": []
     },
     {
+      "path": "abcd identity",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd identity init",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "file",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "heading",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "pitch",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "tagline",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "title",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd identity render",
+      "hidden": false,
+      "flags": []
+    },
+    {
       "path": "abcd intent",
       "hidden": false,
       "flags": [
