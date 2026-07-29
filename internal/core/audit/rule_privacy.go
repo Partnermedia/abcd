@@ -96,13 +96,13 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 			if strings.Contains(line, auditWaiver) {
 				continue
 			}
-			msg, leaked := privacyLeak(line)
+			msg, sev, leaked := privacyLeak(line)
 			if !leaked {
 				continue
 			}
 			out = append(out, Finding{
 				RuleID:   "privacy-hygiene",
-				Severity: SeverityError,
+				Severity: sev,
 				File:     rel,
 				Line:     i + 1,
 				Message:  msg,
@@ -113,12 +113,19 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 }
 
 // privacyLeak reports whether one line carries content that must never be
-// committed, and the message naming the class. At most one finding per line is
-// reported (the absolute-path class first), matching the rule's v1 behaviour:
-// the citation points a reader at the line, and the line is what gets fixed.
-func privacyLeak(line string) (string, bool) {
+// committed, the message naming the class, and the severity that class carries.
+// At most one finding per line is reported (the absolute-path class first),
+// matching the rule's v1 behaviour: the citation points a reader at the line,
+// and the line is what gets fixed.
+//
+// The severity comes from the PATTERN, not from the rule: the canonical set
+// draws a deliberate line between addresses, which are range-checked and block,
+// and the two hostname shapes, which are heuristics and warn. Flattening
+// everything to error here would have made that documented split a fiction at
+// the one surface a reader meets it.
+func privacyLeak(line string) (string, Severity, bool) {
 	if hasAbsHomePath(line) {
-		return "committed file contains an absolute local path", true
+		return "committed file contains an absolute local path", SeverityError, true
 	}
 	for _, p := range networkPatterns {
 		for _, loc := range p.Re.FindAllStringIndex(line, -1) {
@@ -129,10 +136,21 @@ func privacyLeak(line string) (string, bool) {
 			if p.SkipAt != nil && p.SkipAt(line, loc[0], loc[1]) {
 				continue
 			}
-			return "committed file contains a " + p.Label, true
+			return "committed file contains a " + p.Label, auditSeverity(p.Severity), true
 		}
 	}
-	return "", false
+	return "", SeverityError, false
+}
+
+// auditSeverity maps a scanner severity onto the audit surface's two levels. A
+// scanner hard_fail blocks; anything softer is advisory. An unknown value maps
+// to the blocking level, so a new pattern can never be quieter than intended by
+// accident.
+func auditSeverity(s scanner.Severity) Severity {
+	if s == scanner.SeverityWarn || s == scanner.SeverityInfo {
+		return SeverityWarn
+	}
+	return SeverityError
 }
 
 // hasAbsHomePath reports whether a line carries an absolute home path whose
@@ -142,17 +160,50 @@ func privacyLeak(line string) (string, bool) {
 // exemption is scoped to the /Users root: a /home/<name> segment is always a
 // user, and the allowlist is a macOS convention.
 func hasAbsHomePath(line string) bool {
-	for _, m := range absPathRe.FindAllString(line, -1) {
+	for _, loc := range absPathRe.FindAllStringIndex(line, -1) {
+		m := line[loc[0]:loc[1]]
 		seg := m
 		if i := strings.LastIndexAny(m, `/\`); i >= 0 {
 			seg = m[i+1:]
 		}
 		if isUsersRoot(m) && scanner.IsNonUserHomeSegment(seg) {
+			// The exemption covers the system directory ITSELF, not everything
+			// beneath it: /Users/Shared/<name>/... still names a user, and
+			// stopping the match on the exempt segment turned the system
+			// directory into a shield for the very thing the rule looks for.
+			if hasFurtherSegment(line, loc[1]) {
+				return true
+			}
 			continue
 		}
 		return true
 	}
 	return false
+}
+
+// hasFurtherSegment reports whether a NAME-BEARING path segment follows the
+// match at pos. "/Users/Shared" and "/Users/Shared/" have none, and neither has
+// a segment of pure dots: "/Users/Shared/..." is prose with an ellipsis and
+// "/Users/Shared/./x" is a relative marker, so treating either as a username
+// would flag the very sentence that documents the exemption.
+func hasFurtherSegment(line string, pos int) bool {
+	if pos >= len(line) || line[pos] != '/' {
+		return false
+	}
+	i, named := pos+1, false
+	for i < len(line) && isPathSegmentChar(line[i]) {
+		if line[i] != '.' {
+			named = true
+		}
+		i++
+	}
+	return named
+}
+
+// isPathSegmentChar matches the character class absPathRe uses for a segment.
+func isPathSegmentChar(b byte) bool {
+	return b == '.' || b == '_' || b == '-' ||
+		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // isUsersRoot reports whether an absolute-path match hangs off a /Users (or
