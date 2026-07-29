@@ -165,7 +165,9 @@ Steps, run in parallel where independent:
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
    each referencing the expected prompt-router hook commands. The shipped
    manifest also wires `abcd hook session-start` (a second `SessionStart`
-   command) and `abcd hook session-end` (a fourth `SessionEnd` event);
+   command), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
+   hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
+   against the hazard registry before it runs) — five event types in all;
    verification covers only the three prompt-router commands above. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
@@ -205,8 +207,10 @@ resolvable category without prompting, `--adopt` / `--refuse-adopt` decide the
 unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 `both` | `skip`) sets the marker target, `--oracle-backend`
 (`host-delegated` | `native` | `cli` | `api` | `mcp`) sets the oracle,
-`--scan-deep` (`true` | `false`) toggles the deep scan, and `--visibility`
-(`private` | `public`) sets repo visibility. `--yes` does not adopt an
+`--scan-deep` (`true` | `false`) toggles the deep scan, `--visibility`
+(`private` | `public`) sets repo visibility, and `--dev` selects track-latest
+dogfood mode (the PATH entry rebuilds from the source tip on every call instead
+of pinning the built binary). `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
 interactive confirmation.
 
@@ -314,7 +318,9 @@ acceptance criterion, not just prose — see § Acceptance.
 canonical `DetectionResult` envelope as JSON (per spc-16 T1 — JSON ONLY; no
 unified-diff renderer in this command surface). Exits without writing. The
 JSON envelope shape is `{folder_kind, adopted, root_sha,
-plugin_root_status, repo_identity, signals, gaps}` so the plugin command
+plugin_root_status, repo_identity, signals, guard, gaps}` (the `guard` key
+reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
+`binary_reachable`, `registry_loadable`, `disabled`, and `entries`) so the plugin command
 (`commands/abcd/ahoy.md`) summarises state off `folder_kind` + `gaps` and
 names `abcd ahoy install` for anything actionable.
 
@@ -379,7 +385,7 @@ user-scope app-state.
 - **Given** the user runs `/abcd:ahoy dry-run`, **when** the command completes,
   **then** the detection pass runs, the canonical `DetectionResult` JSON
   envelope (`{folder_kind, adopted, root_sha,
-  plugin_root_status, repo_identity, signals, gaps}` per spc-16 T1) is printed
+  plugin_root_status, repo_identity, signals, guard, gaps}` per spc-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
   registered history-store `path` no longer matches `index.json`, **then** an
