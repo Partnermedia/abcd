@@ -181,14 +181,24 @@ called out in a **Breaking** section.
   head, which is enough to re-identify the machine the masking was meant to hide.
   The two hostname shapes tell a host from source code, because Stage-1
   redaction rewrites every finding and a false positive there corrupts a stored
-  transcript: a mixed-case suffix (the `time.Local` shape), a selector position
-  (an assignment target, a block head, a call) and a determiner before a device
-  noun ("a synology-nas") are all read as code or prose rather than machines. A
+  transcript: a mixed-case suffix where code puts a value (`zone := time.Local`),
+  a selector position (an assignment target, a block head, a call) and a
+  determiner before a device noun ("a synology-nas") are all read as code or
+  prose rather than machines. Mixed case on its own exempts nothing — a shifted
+  key in a command or a URL would otherwise be a bypass anyone could type — and a
+  fixture host must be spelled the way the persona registry spells it, in lower
+  case, because a capitalised given name in front of a device noun is how macOS
+  names a real person's machine. A digest is told from an address by the length
+  of the colon-separated run around it, counting only the groups that carry hex:
+  an address is eight of them and may sit beside one more (the port a tool
+  prints), while the shortest fingerprint is sixteen. A
   repo that wants the hostname shapes to block raises their severity in
   `.abcd/config/pii.json`, and `abcd audit` reads that merged set, so the
   override reaches the surface that reports it. The transcript store's
   verification rescan refuses the write on ANY surviving identifier, not only a
-  blocking one, so a warn-severity hostname cannot reach disk in silence.
+  hard_fail one, so a warn-severity hostname cannot reach disk in silence, and
+  the refusal it prints names the surviving kinds rather than a severity it does
+  not gate on.
 - **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
   privacy-hygiene flagged every segment under a `/Users` root, so the macOS
   system directories that live there were reported as though they named a
@@ -198,7 +208,9 @@ called out in a **Breaking** section.
   — is still a user, and still flags), a segment that merely begins with a
   system-directory name is still a leak, and an empty or dots-only segment in
   between (`Shared/../<user>`) restores no shield. The audit rule holds those
-  terms for both spellings it matches, the POSIX one and the Windows one; the
+  terms for both spellings it matches, the POSIX one and the Windows one — and
+  because Windows accepts either separator within one path, a name written after
+  a forward slash inside a Windows path is read as the nested name it is; the
   scanner's own identity matcher shares the allowlist for the POSIX paths it
   recognises, which are the only ones it has ever matched.
 - **The disembark probe's recursive file walk is bounded per directory, opens
