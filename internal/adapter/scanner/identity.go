@@ -228,6 +228,14 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 		if m.homeSelf != nil && m.homeSelf.MatchString(matched) {
 			continue
 		}
+		// /Users/Shared and friends are macOS system directories, not users
+		// (iss-153). The audit rule applies the same allowlist, so the two
+		// detectors cannot disagree about what a username is.
+		if i := strings.LastIndexByte(matched, '/'); i >= 0 &&
+			strings.HasPrefix(strings.ToLower(matched), "/users/") &&
+			IsNonUserHomeSegment(matched[i+1:]) {
+			continue
+		}
 		add(kindHomeOther, loc[0]+1, matched, "(remove or relativise — third-party path)")
 	}
 	// real_email — skip the noreply form.
