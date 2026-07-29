@@ -85,6 +85,23 @@ func Exists(path string) (bool, error) {
 	return false, err
 }
 
+// ExistsNoFollow reports whether a filesystem entry occupies path, NEVER
+// following a symlink at the leaf — so a dangling symlink still exists: the
+// name is taken, and whatever occupies it (including a link whose target
+// string is itself sensitive) is what a placement check must see. Ancestor
+// components are resolved by the kernel as usual. Error handling mirrors
+// Exists: not-present is false with no error, anything else fails closed.
+func ExistsNoFollow(path string) (bool, error) {
+	_, err := os.Lstat(path)
+	if err == nil {
+		return true, nil
+	}
+	if notPresent(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // IsDir reports whether path exists and is a directory. An absent path is false
 // with no error; any other stat error is returned (fail closed).
 //

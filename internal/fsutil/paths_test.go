@@ -77,8 +77,34 @@ func TestExistsSymlink(t *testing.T) {
 	}
 }
 
+// ExistsNoFollow lstats: a regular file exists, an absent path does not, and —
+// unlike Exists — a DANGLING symlink exists, because the name occupies the path
+// and that is what a placement check must see.
+func TestExistsNoFollow(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "present.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := fsutil.ExistsNoFollow(file); err != nil || !got {
+		t.Errorf("ExistsNoFollow(regular file) = %v, %v; want true, nil", got, err)
+	}
+	if got, err := fsutil.ExistsNoFollow(filepath.Join(dir, "nope.txt")); err != nil || got {
+		t.Errorf("ExistsNoFollow(absent) = %v, %v; want false, nil", got, err)
+	}
+
+	dangling := filepath.Join(dir, "dangling.link")
+	if err := os.Symlink(filepath.Join(dir, "absent"), dangling); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if got, err := fsutil.ExistsNoFollow(dangling); err != nil || !got {
+		t.Errorf("ExistsNoFollow(dangling link) = %v, %v; want true, nil", got, err)
+	}
+}
+
 // A path whose parent component is a regular file cannot exist; stat returns
-// ENOTDIR, and Exists/IsDir/DirHasEntries must read that as "not present"
+// ENOTDIR, and Exists/ExistsNoFollow/IsDir/DirHasEntries must read that as "not present"
 // (false, nil), not propagate it as a hard error — otherwise a caller that
 // fails closed on errors aborts on an obviously-absent path.
 func TestPathUnderAFileIsNotPresent(t *testing.T) {
@@ -91,6 +117,9 @@ func TestPathUnderAFileIsNotPresent(t *testing.T) {
 
 	if got, err := fsutil.Exists(under); err != nil || got {
 		t.Errorf("Exists(under-a-file) = %v, %v; want false, nil", got, err)
+	}
+	if got, err := fsutil.ExistsNoFollow(under); err != nil || got {
+		t.Errorf("ExistsNoFollow(under-a-file) = %v, %v; want false, nil", got, err)
 	}
 	if got, err := fsutil.IsDir(under); err != nil || got {
 		t.Errorf("IsDir(under-a-file) = %v, %v; want false, nil", got, err)

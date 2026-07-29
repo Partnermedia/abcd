@@ -32,7 +32,7 @@ error — so `abcd audit` gates a repo's CI as well as backing onboarding.
 
 | id | severity | checks |
 |---|---|---|
-| `three-tier-layout` | error | `.abcd/development/` and committed `.abcd/work/` present; `.abcd/.work.local/`, when present, gitignored |
+| `three-tier-layout` | error | `.abcd/development/` and committed `.abcd/work/` present; `.abcd/.work.local/`, when present, gitignored; no local-tier artefacts (`NEXT.md`, `scratch/`, `logs/`) directly in a committed tier |
 | `conventions-router` | error | `AGENTS.md` present at the repo root |
 | `decision-durability` | warn | a committed `.abcd/work/DECISIONS.md`; decisions not living only in the gitignored layer |
 | `docs-currency` | warn | reuses the docs-lint engine where `docs/` exists |
