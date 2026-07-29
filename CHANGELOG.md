@@ -151,6 +151,37 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Network identifiers are detected, redacted and audited — one pattern set,
+  three surfaces** (iss-154, iss-157, iss-125, iss-153). The scanner carried
+  token-shaped secrets and identity matchers but nothing for addresses or
+  hostnames, so a lifeboat pack or launch bundle carrying a tailnet address and
+  device names shipped clean, a stored transcript kept a LAN hostname verbatim,
+  and `abcd audit` passed the whole class in silence. The detector is an
+  allowlist inversion rather than a leak-recognition heuristic: because every
+  illustrative identifier in a committed file comes from a reserved range, the
+  small closed set of values that are ALLOWED is what a pattern can recognise,
+  and everything outside it is a finding. Allowed are the documentation ranges
+  (RFC 5737, RFC 3849, RFC 2606/6761, RFC 7042), device names derived from the
+  persona registry, and the values that name no individual host at all —
+  loopback, unspecified, netmasks, masked CIDR prefixes, and the IANA
+  special-use ranges for link-local, multicast, benchmarking, protocol
+  assignments and the NAT64 well-known prefix. Flagged is what identifies
+  private topology: private ranges, CGNAT/tailnet, IPv6 unique-local, 6to4,
+  public unicast, LAN suffixes (`.local`, `.lan`, `.fritz.box`) and
+  device-hostname shapes. The set is built once and folded into the scanner's
+  defaults, so Stage-1 redaction and the launch/lifeboat scan inherit it and the
+  audit rule consults exactly the same patterns — the surfaces cannot disagree
+  about what a leak is. Addresses are hard_fail; the two hostname shapes are
+  warn, and a repo may raise them. A line carrying `abcd-audit:allow` stays
+  exempt, so a deliberately illustrative value needs no weakening of the
+  patterns.
+- **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
+  privacy-hygiene flagged every segment under a `/Users` root, so the macOS
+  system directories that live there were reported as though they named a
+  person, taxing product code that legitimately writes to one. The exemption is
+  narrow: it is scoped to the `/Users` root, a segment that merely begins with a
+  system-directory name is still a leak, and the scanner's own identity matcher
+  applies the same allowlist so the two detectors agree on what a username is.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded
