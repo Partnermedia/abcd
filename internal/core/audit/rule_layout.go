@@ -11,7 +11,7 @@ import (
 // record (.abcd/development/) and the shared working tier (.abcd/work/) must be
 // present, the local-ephemeral tier (.abcd/.work.local/), when present, must
 // be gitignored so per-worktree state never leaks into history, and the
-// local tier's conventional artifacts (NEXT.md, scratch/, logs/) must not sit
+// local tier's conventional artefacts (NEXT.md, scratch/, logs/) must not sit
 // directly in a committed tier — a handover file carrying machine-local detail
 // in .abcd/work/ is committed, pushed, and public before anything flags it.
 //
@@ -26,7 +26,7 @@ func (threeTierLayout) Meta() RuleMeta {
 	return RuleMeta{
 		ID:         "three-tier-layout",
 		Severity:   SeverityError,
-		Fix:        "create the missing .abcd/ tier; ensure .abcd/.work.local/ is listed in .gitignore",
+		Fix:        "create the missing .abcd/ tier; ensure .abcd/.work.local/ is listed in .gitignore; move local-tier artefacts (NEXT.md, scratch/, logs/) out of the committed tiers into .abcd/.work.local/",
 		PolicyInfo: "the three-tier layout separates the durable record, shared working state, and per-worktree ephemera; the local tier must be gitignored so it never merge-conflicts or leaks",
 	}
 }
@@ -58,19 +58,18 @@ func (threeTierLayout) Eval(ctx Context) ([]Finding, error) {
 			continue
 		}
 
-		// Local-tier artifacts in a committed tier: NEXT.md, scratch/ and logs/
+		// Local-tier artefacts in a committed tier: NEXT.md, scratch/ and logs/
 		// are the local-ephemeral tier's conventional contents, so their presence
 		// directly under a committed tier is a placement error of the leak class —
 		// per-worktree ephemera about to enter (or already in) history. Presence
 		// is checked on the filesystem, like the tiers themselves: an untracked
-		// NEXT.md in .abcd/work/ is one `git add -A` from being committed.
-		for _, artifact := range []struct{ name, kind string }{
-			{"NEXT.md", "handover file"},
-			{"scratch", "scratch directory"},
-			{"logs", "logs directory"},
-		} {
-			rel := tier.rel + "/" + artifact.name
-			present, err := fsutil.Exists(filepath.Join(ctx.RepoRoot, filepath.FromSlash(rel)))
+		// NEXT.md in .abcd/work/ is one `git add -A` from being committed. The
+		// check is no-follow: the NAME occupying the path is the violation
+		// regardless of what it is — a dangling symlink named NEXT.md still gets
+		// committed, and its target string can itself be a private path.
+		for _, artefact := range []string{"NEXT.md", "scratch", "logs"} {
+			rel := tier.rel + "/" + artefact
+			present, err := fsutil.ExistsNoFollow(filepath.Join(ctx.RepoRoot, filepath.FromSlash(rel)))
 			if err != nil {
 				return nil, err
 			}
@@ -79,7 +78,7 @@ func (threeTierLayout) Eval(ctx Context) ([]Finding, error) {
 					RuleID:   "three-tier-layout",
 					Severity: SeverityError,
 					File:     rel,
-					Message:  "local-tier " + artifact.kind + " " + artifact.name + " found in the " + tier.label + " — per-worktree ephemera must never enter a committed tier",
+					Message:  "local-tier artefact " + artefact + " found in the " + tier.label + " — per-worktree ephemera must never enter a committed tier",
 					Fix:      "move " + rel + " to the local-ephemeral tier .abcd/.work.local/",
 				})
 			}

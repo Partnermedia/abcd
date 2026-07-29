@@ -261,23 +261,71 @@ func TestRule_LocalArtifactsInCommittedTiers(t *testing.T) {
 		commit()
 	res := b.run()
 
-	got := map[string]bool{}
+	got := map[string]audit.Finding{}
 	for _, f := range res.Findings {
 		if f.RuleID != "three-tier-layout" {
 			continue
 		}
-		got[f.File] = true
+		got[f.File] = f
 		if f.Severity != audit.SeverityError {
 			t.Errorf("severity for %s = %q, want error", f.File, f.Severity)
 		}
 	}
-	for _, want := range []string{".abcd/work/NEXT.md", ".abcd/development/scratch", ".abcd/work/logs"} {
-		if !got[want] {
+	// Exactly the three misplacements, no more: a regression that also fired on
+	// the tiers themselves (or dropped a misplacement) must not slip through.
+	if len(got) != 3 {
+		t.Errorf("three-tier-layout findings = %d, want 3 (%v)", len(got), got)
+	}
+	for want, mustName := range map[string][]string{
+		".abcd/work/NEXT.md":        {"NEXT.md", "shared-working tier .abcd/work/"},
+		".abcd/development/scratch": {"scratch", "durable-record tier .abcd/development/"},
+		".abcd/work/logs":           {"logs", "shared-working tier .abcd/work/"},
+	} {
+		f, ok := got[want]
+		if !ok {
 			t.Errorf("no three-tier-layout finding for misplaced %s (got %v)", want, got)
+			continue
+		}
+		for _, name := range mustName {
+			if !strings.Contains(f.Message, name) {
+				t.Errorf("message for %s does not name %q: %q", want, name, f.Message)
+			}
+		}
+	}
+	// The per-finding fix must name the destination tier, not fall back to the
+	// rule-level tier-presence remediation.
+	if f, ok := got[".abcd/work/NEXT.md"]; ok {
+		if !strings.Contains(f.Fix, ".abcd/work/NEXT.md") || !strings.Contains(f.Fix, ".abcd/.work.local/") {
+			t.Errorf("per-finding fix does not say what to move where: %q", f.Fix)
 		}
 	}
 	if res.ExitCode != 2 {
 		t.Errorf("exit = %d, want 2", res.ExitCode)
+	}
+}
+
+// A DANGLING symlink named NEXT.md in a committed tier is still a violation:
+// the name occupies the path, `git add -A` commits the link, and its target
+// string can itself be a private absolute path — the exact leak class. A
+// follow-symlinks presence check stats it as absent; the rule must not.
+func TestRule_LocalArtifactDanglingSymlinkStillFlagged(t *testing.T) {
+	b := newFixtureRepo(t).conforming()
+	link := filepath.Join(b.root, ".abcd", "work", "NEXT.md")
+	if err := os.Symlink("gone-target.md", link); err != nil { // relative target that does not exist
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	b.commit()
+	res := b.run()
+
+	f := findingFor(res, "three-tier-layout")
+	if f == nil {
+		t.Fatal("no three-tier-layout finding for a dangling symlink named NEXT.md in .abcd/work/")
+	}
+	if f.File != ".abcd/work/NEXT.md" {
+		t.Errorf("finding file = %q, want .abcd/work/NEXT.md", f.File)
+	}
+	if f.Severity != audit.SeverityError {
+		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
 
