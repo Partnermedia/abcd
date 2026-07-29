@@ -75,17 +75,31 @@ adjustments:
    summary state plainly that optional categories are excluded and name
    the command that applies them. Silent divergence is the bug; either
    honest behaviour is acceptable.
+6. **iss-171** — the PATH-install detector and installer stop assuming one
+   blessed layout. The issue body records the full no-sudo redesign
+   (PATH-scan + `EvalSymlinks` + classify dev-shim/owned/foreign;
+   `~/.local/bin` default; system dirs only behind an explicit `--bin-dir`
+   failing loudly when unwritable; refuse dangling symlinks; "not on PATH"
+   as its own loud gap with the printed one-line fix). It sits in this
+   cycle because its user-visible deliverable is honest, actionable
+   install reporting — the current behaviour reports a false
+   `symlink.missing` while running as `abcd` from PATH, and offers a fix
+   that would dangle. This is the one item in the cycle with sanctioned
+   behaviour change beyond wording; its filesystem-write diff gets the
+   security-style review in addition to the persona lens. Builds on
+   v0.5.0's iss-170 (`EvalSymlinks` in the resolver — same seam, land
+   after it).
 
 ## Workstream C — presence and orientation
 
-6. **iss-168** — the harness status line shows the repo is abcd-managed
+7. **iss-168** — the harness status line shows the repo is abcd-managed
    (and, if cheap, guard health). A host-adapter feature under the
    basics-built-in / SOTA-delegated stance recorded in iss-165: the
    adapter is host-specific by nature, while committed user-facing prose
    stays host-agnostic per the docs-lint rules — the adapter is named only
    where the attribution conventions allow.
-7. **itd-20 `top-level-abcd-dispatcher`** — "`/abcd` tells you where you
-   are": the command-surface complement to C6. **Not
+8. **itd-20 `top-level-abcd-dispatcher`** — "`/abcd` tells you where you
+   are": the command-surface complement to C7. **Not
    implementation-ready**: planned but `spec_id` null (verified
    2026-07-29). Same lifecycle-first milestone as A3. Minor severity;
    last in the queue, dropped first if the cycle needs trimming.
@@ -95,11 +109,11 @@ adjustments:
 - A1 (iss-163) lands before A2 (iss-164) and B4 (iss-167): all three
   touch the prompt/explanation seam, and A1 defines the structure the
   other two consume.
-- A3 (itd-63) and C7 (itd-20) each begin with the intent lifecycle
+- A3 (itd-63) and C8 (itd-20) each begin with the intent lifecycle
   (spec written, `intent ready` green) — implementing an unready intent
   is a STOP, not a shortcut.
 - B5 (iss-166) is independent; safe in parallel with anything.
-- C6's rendering consumes whatever A2 standardises for guard-health
+- C7's rendering consumes whatever A2 standardises for guard-health
   wording — prefer landing after A2, not required.
 - The v0.5.0 cycle's D19 (`plugin-surface-parity`, iss-161's namespace
   flattening) renames every registered command; if this cycle starts
@@ -114,8 +128,8 @@ adjustments:
    that is the root cause this cycle exists to remove
    (transport-agnostic-core boundary).
 2. **Wording changes that alter behaviour.** Any diff that changes what a
-   flag or prompt *does* beyond iss-166's two sanctioned resolutions is a
-   STOP.
+   flag or prompt *does* beyond iss-166's two sanctioned resolutions and
+   iss-171's recorded redesign is a STOP.
 3. **Persona-lens BLOCK** stops the change (standing rule, mirrors the
    security-review BLOCK).
 4. **Scope creep into the grill family.** iss-165 (grill delegates to an
@@ -126,11 +140,14 @@ adjustments:
 
 ## Explicitly in (maintainer, 2026-07-29)
 
-iss-163, iss-164, iss-166, iss-167, iss-168, plus the two planned intents
-itd-63 and itd-20 as their frames. The maintainer named iss-163/164/166/168
-explicitly; iss-167 rides the same prompt seam as iss-163/166 (one
-plumbing change, three issues) and itd-63/itd-20 are the standing planned
-intents this cycle realises.
+iss-163, iss-164, iss-166, iss-167, iss-168, iss-171, plus the two
+planned intents itd-63 and itd-20 as their frames. The maintainer named
+iss-163/164/166/168 explicitly; iss-167 rides the same prompt seam as
+iss-163/166 (one plumbing change, three issues); iss-171 (the bin-target
+redesign, added 2026-07-29 while this plan was in review) delivers the
+honest install reporting the cycle is about and is the one sanctioned
+behaviour change; itd-63/itd-20 are the standing planned intents this
+cycle realises.
 
 ## Explicitly out
 
