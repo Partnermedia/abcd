@@ -151,6 +151,19 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`abcd audit` flags local-tier artefacts sitting in a committed tier**
+  (iss-155). The `three-tier-layout` rule verified that the committed tiers
+  exist and that `.abcd/.work.local/` is gitignored, but never the reverse
+  containment: a `NEXT.md`, `scratch/` or `logs/` placed directly in
+  `.abcd/work/` or `.abcd/development/` passed clean — which is exactly how a
+  handover file carrying machine-local detail rides a committed tier into
+  public history. Those three names are the local-ephemeral tier's
+  conventional contents, so their presence in a committed tier is now an
+  error, one finding per misplacement, each naming the offending path and
+  fixing it with a move to `.abcd/.work.local/`. Presence is checked on the
+  filesystem, like the tiers themselves: an untracked `NEXT.md` in
+  `.abcd/work/` is one `git add -A` from being committed, and the audit
+  should say so before that happens, not after.
 - **Network identifiers are detected, redacted and audited — one pattern set,
   three surfaces** (iss-154, iss-157, iss-125, iss-153). The scanner carried
   token-shaped secrets and identity matchers but nothing for addresses or
