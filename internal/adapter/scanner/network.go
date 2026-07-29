@@ -210,9 +210,11 @@ func NetworkPatterns() []Pattern {
 		{
 			Name: "net_lan_hostname", Kind: kindNetLANHost, Label: "LAN hostname",
 			Re: lanHostRe, Severity: SeverityWarn,
-			Skip: func(m string) bool { return personaDerivedHost(m) || mixedCaseHostSuffix(m) },
+			Skip: func(m string) bool { return personaDerivedHost(m) },
 			SkipAt: func(line string, start, end int) bool {
-				return dottedFileOrDirectory(line, start, end) || selectorExpression(line, start, end)
+				return dottedFileOrDirectory(line, start, end) ||
+					selectorExpression(line, start, end) ||
+					mixedCaseSelector(line, start, end)
 			},
 			Suggestion: "replace with a reserved name (example.com, host.test) or a persona-derived fixture host",
 		},
@@ -405,6 +407,13 @@ func cidrPrefixDeclaration(line string, start, end int) bool {
 // personaDerivedHost reports whether a host or device name is built from the
 // persona registry — alice-laptop, bob-desktop, maya-workstation.lan. The first
 // hyphen-separated token of the first label is the persona.
+//
+// The token must be spelled as the registry spells it, in lower case. A
+// CAPITALISED given name in front of a device noun is how macOS names a real
+// person's machine — it builds the default host name from the account holder's
+// name — and a fixture host written in the registry's own convention is never
+// spelled that way, so folding the case handed the exemption to exactly the
+// class it exists to keep out.
 func personaDerivedHost(m string) bool {
 	if nonHostLabels[strings.ToLower(m)] {
 		return true
@@ -416,7 +425,7 @@ func personaDerivedHost(m string) bool {
 	if i := strings.IndexByte(label, '-'); i >= 0 {
 		label = label[:i]
 	}
-	return personaNames[strings.ToLower(label)]
+	return personaNames[label]
 }
 
 // insideLongerDottedRun suppresses a quad that is part of a longer dotted number
@@ -553,12 +562,45 @@ func dottedFileOrDirectory(line string, start, end int) bool {
 	return end+1 < len(line) && line[end] == '.' && isHostLabelByte(line[end+1])
 }
 
+// mixedCaseSelector reports whether a LAN-suffix match is a package-qualified
+// exported identifier — the shape of `zone := time.Local` — rather than a host.
+//
+// Mixed case ALONE cannot decide that, and treating it as decisive was a bypass
+// anyone could type: one shifted key in the suffix of a machine's name and the
+// pattern went silent on it. The mixed case must ALSO sit where
+// code puts a value, which is what a selector expression is; prose, a command
+// line and a URL never do. The cost of getting the exemption too wide is not a
+// noisy report but a silent leak, and the cost of getting it too narrow is a
+// corrupted transcript — so the position is required as well as the case.
+func mixedCaseSelector(line string, start, end int) bool {
+	return mixedCaseHostSuffix(line[start:end]) && valuePosition(line, start)
+}
+
+// valuePosition reports whether the byte before a match (skipping horizontal
+// space) is one that introduces a VALUE in code: an assignment or comparison,
+// an opening parenthesis, an argument separator, or a `return`.
+func valuePosition(line string, start int) bool {
+	i := start
+	for i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') {
+		i--
+	}
+	if i == 0 {
+		return false
+	}
+	switch line[i-1] {
+	case '=', '(', ',':
+		return true
+	}
+	j := i
+	for j > 0 && isWordByte(line[j-1]) {
+		j--
+	}
+	return line[j:i] == "return"
+}
+
 // mixedCaseHostSuffix reports whether the match's LAST label is written in mixed
-// case — the "time.Local" shape. A host name is written in ONE case, lower or
-// upper; mixed case is the Go exported-identifier convention, so such a match is
-// a selector expression and not a host at all. The
-// cost of getting this wrong is not a noisy report: Stage-1 redaction rewrites
-// every finding, so a false positive here corrupts a stored transcript.
+// case. A host name is written in ONE case, lower or upper; mixed case is the Go
+// exported-identifier convention.
 func mixedCaseHostSuffix(m string) bool {
 	suffix := m
 	if i := strings.LastIndexByte(m, '.'); i >= 0 {

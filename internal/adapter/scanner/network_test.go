@@ -146,6 +146,13 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"expanded nameserver and port", "net:ipv6", "nameserver=" + ula8 + ":53"},
 		{"expanded public unicast", "net:ipv6", "peer " + v6("2606", "2800", "220", "1", "248", "1893", "25c8", "1946") + ": refused"},
 		{"expanded 6to4", "net:ipv6", "6to4 " + v6("2002", "0a00", "0001", "0000", "0000", "0000", "0000", "0001") + ": down"},
+		// G2: a mixed-case suffix is a one-character bypass anyone can type, so it
+		// exempts a match only where CODE puts a value, never in prose, a command
+		// or a URL.
+		{"mixed case host in prose", "net:lan_hostname", "ping " + host("printer", "Local")},
+		{"mixed case plain lan suffix", "net:lan_hostname", "ssh " + host("nas", "Lan")},
+		{"mixed case device host", "net:lan_hostname", host(dash("Alice", "MBP"), "Local")},
+		{"mixed case host in a url", "net:lan_hostname", "curl http://" + host("Printer", "Local") + "/status"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -225,6 +232,7 @@ func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
 		"if cfg.local {",
 		"m.lan = 1",
 		"zone := time.Local",
+		"x = time.Local",
 		// F5b: a hyphenated device noun behind a determiner is a common noun, not a
 		// machine — prose about kit, not a hostname.
 		"our build-nas pipeline runs nightly",
