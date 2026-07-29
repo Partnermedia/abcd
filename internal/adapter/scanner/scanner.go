@@ -327,6 +327,13 @@ func sealSnippets(findings []Finding) {
 	}
 }
 
+// sealSpan is a byte span to mask, plus whether it must be masked WHOLE (an
+// identity or network kind, where a head/tail fingerprint is itself the leak).
+type sealSpan struct {
+	start, end int
+	whole      bool
+}
+
 // sealLine masks the byte spans of every finding in idxs out of src. A byte
 // covered by exactly one span shows that token's head/tail fingerprint; a byte in
 // an OVERLAP of two or more spans is forced to '*' (so no token's raw bytes leak
@@ -339,7 +346,7 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 		return src
 	}
 	cov := make([]int, n+1) // difference array → per-byte coverage count in O(n+k)
-	spans := make([]span, 0, len(idxs))
+	spans := make([]sealSpan, 0, len(idxs))
 	for _, i := range idxs {
 		start := findings[i].Column - 1
 		end := start + len(findings[i].Matched)
@@ -352,7 +359,7 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 		if start >= end {
 			continue
 		}
-		spans = append(spans, span{start, end})
+		spans = append(spans, sealSpan{start, end, IsIdentityKind(findings[i].Kind)})
 		cov[start]++
 		cov[end]--
 	}
@@ -360,7 +367,7 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 	copy(out, b)
 	// Star the middle of each span, keeping its head/tail fingerprint bytes.
 	for _, s := range spans {
-		fingerprintSpan(out, b, s.start, s.end)
+		fingerprintSpan(out, b, s.start, s.end, s.whole)
 	}
 	// Any byte covered by two or more spans is an overlap: force '*' regardless of
 	// a fingerprint head/tail char, so no token's raw bytes survive in an overlap.
@@ -380,12 +387,17 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 // maskSecret and measures the threshold in runes, not bytes, so a short multi-byte
 // identity value (email, username) that is under 16 runes but at or over 16 bytes
 // is fully starred here just as maskSecret fully stars it — and head/tail are kept
-// on rune boundaries so a multi-byte rune is never split into invalid UTF-8.
-func fingerprintSpan(out, src []byte, start, end int) {
+// on rune boundaries so a multi-byte rune is never split into invalid UTF-8. A
+// whole span keeps nothing: maskMatched's trade for an identifier, applied to the
+// shared source line so a sibling finding's snippet cannot leak it either.
+func fingerprintSpan(out, src []byte, start, end int, whole bool) {
 	const keepHead, keepTail, fingerprintBelow = 3, 2, 16
 	// Star the whole span first; head/tail fingerprint runes are restored below.
 	for j := start; j < end; j++ {
 		out[j] = '*'
+	}
+	if whole {
+		return // an identifier: its head and tail are what re-identify it
 	}
 	if utf8.RuneCount(src[start:end]) < fingerprintBelow {
 		return // short value: fully starred, mirroring maskSecret

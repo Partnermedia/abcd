@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -310,6 +311,37 @@ func TestIdentityNestedUsernameUnderSystemDirectory(t *testing.T) {
 	}
 	if got := scan("the tier lives at /Users/Shared/.."); hasKind(got, kindHomeOther) {
 		t.Errorf("a system directory with only a parent marker after it flagged: %+v", got)
+	}
+}
+
+// F4: the SERIALIZED finding surface owes the same trade as redaction. `abcd
+// launch --json` writes it to stdout and CI may archive it, so a head-and-tail
+// fingerprint there leaks a MAC's vendor bytes, an address's prefix and final
+// hextet, and a hostname's head and suffix — the re-identifying parts.
+func TestSerializedNetworkIdentifiersMaskedWhole(t *testing.T) {
+	for _, r := range []string{
+		mac(0xa4, 0x83, 0xe7, 0x11, 0x22, 0x33),
+		v6("fd7a", "115c", "a1e0", "", "1"),
+		host(dash("zeta", "crowd"), "fritz", "box"),
+	} {
+		findings := ScanText("peer "+r+" seen", Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+		if len(findings) == 0 {
+			t.Fatalf("no finding for %q", r)
+		}
+		blob, err := json.Marshal(findings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		js := string(blob)
+		if strings.Contains(js, r) {
+			t.Errorf("serialized finding still contains %q: %s", r, js)
+		}
+		if head := r[:3]; strings.Contains(js, head) {
+			t.Errorf("serialized finding leaks the head %q of %q: %s", head, r, js)
+		}
+		if tail := r[len(r)-3:]; strings.Contains(js, tail) {
+			t.Errorf("serialized finding leaks the tail %q of %q: %s", tail, r, js)
+		}
 	}
 }
 
