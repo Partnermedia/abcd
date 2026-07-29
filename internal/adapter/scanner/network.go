@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/hex"
 	"net/netip"
 	"regexp"
 	"strings"
@@ -58,23 +59,33 @@ var (
 		netip.MustParsePrefix("198.18.0.0/15"),  // benchmarking (RFC 2544)
 		netip.MustParsePrefix("192.0.0.0/24"),   // IETF protocol assignments
 	}
+	// nat64WKP is named separately because its low 32 bits are a real IPv4
+	// destination, which embeddedIPv4 has to recover.
+	nat64WKP = netip.MustParsePrefix("64:ff9b::/96")
+
 	namesNoHostIPv6 = []netip.Prefix{
-		netip.MustParsePrefix("fe80::/10"),    // link-local unicast
-		netip.MustParsePrefix("ff00::/8"),     // multicast
-		netip.MustParsePrefix("64:ff9b::/96"), // NAT64 well-known prefix
-		netip.MustParsePrefix("2001:2::/48"),  // benchmarking
+		netip.MustParsePrefix("fe80::/10"),   // link-local unicast
+		netip.MustParsePrefix("ff00::/8"),    // multicast
+		nat64WKP,                             // NAT64 well-known prefix
+		netip.MustParsePrefix("2001:2::/48"), // benchmarking
 	}
 
 	// A dotted quad. Octet-range validation is done by netip in the skip, not by
 	// the regex: a regex that spells out 0-255 is unreadable and no more correct.
 	ipv4Re = regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`)
 
-	// An IPv6 candidate: a hextet followed by at least two more colon-separated
-	// groups, so a "::" scope resolution (std::string) and a clock time (12:34:56)
-	// cannot reach the skip as addresses. The leading \b is load-bearing — without
-	// it, the tail of a scope-resolution token parses as a valid address by itself.
+	// An IPv6 candidate, in two spellings. The second is a hextet followed by at
+	// least two more colon-separated groups, whose leading \b is load-bearing:
+	// without it the tail of a scope-resolution token (std::string) parses as a
+	// valid address by itself. That anchor cannot fire on a "::"-LEADING
+	// compressed form, though, which is how a v4-mapped or otherwise compressed
+	// address is usually written — so the first alternative carries those, and
+	// requires two hextets after the "::" so a bare "::1" is not a candidate.
+	// Both spellings carry an optional dotted-quad tail so a v4-mapped address
+	// written the usual way ("::ffff:127.0.0.1") is matched WHOLE — a candidate
+	// truncated at the first dot parses as a different, and non-exempt, address.
 	// Correctness is netip's job; the regex only bounds the candidate.
-	ipv6Re = regexp.MustCompile(`\b[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7}`)
+	ipv6Re = regexp.MustCompile(`::[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){1,6}(?:(?:\.\d{1,3}){3})?|\b[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:(?:\.\d{1,3}){3})?`)
 
 	// A MAC address in either separator style.
 	macRe = regexp.MustCompile(`\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b|\b[0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5}\b`)
@@ -82,16 +93,21 @@ var (
 	// A hostname under a LAN/private suffix: mDNS (.local), the plain .lan
 	// convention, and the home-router default (.fritz.box, whose leading label is
 	// optional because the bare name is itself the host). At least one label must
-	// precede .local/.lan, so a bare "~/.local" directory cannot match.
-	lanHostRe = regexp.MustCompile(`(?i)\b(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:local|lan)|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*fritz\.box)\b`)
+	// precede .local/.lan, so a bare "~/.local" directory cannot match. A label
+	// may carry a leading underscore so an mDNS SERVICE INSTANCE — the form
+	// avahi/dns-sd actually print, "alice-laptop._ipp._tcp.local" — is not broken into
+	// pieces by the service labels and missed.
+	lanHostRe = regexp.MustCompile(`(?i)\b(?:(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:local|lan)|(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*fritz\.box)\b`)
 
 	// A device hostname: <name>-<device noun>. The noun set is deliberately narrow
 	// — it excludes "server", "host", "machine", "router" and "box", which are
 	// overwhelmingly software-role words in a source tree ("mcp-server",
-	// "prompt-router", "state-machine") and would drown the signal. A
+	// "prompt-router", "state-machine") and would drown the signal. "desktop" and
+	// "workstation" are excluded on the same rule, which they failed as plainly:
+	// "docker-desktop" and "ubuntu-desktop" are platform names, not machines. A
 	// persona-derived name (alice-laptop, carol-server) is allowed by the skip
 	// below whether or not its noun is in this set.
-	deviceHostRe = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*-(?:laptop|macbook|mbp|imac|thinkpad|desktop|workstation|netbook|chromebook|nas)\b`)
+	deviceHostRe = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*-(?:laptop|macbook|mbp|imac|thinkpad|netbook|chromebook|nas)\b`)
 )
 
 // personaNames is the persona registry's given-name sequence
@@ -152,14 +168,17 @@ func NetworkPatterns() []Pattern {
 		{
 			Name: "net_ipv6", Kind: kindNetIPv6, Label: "non-reserved IPv6 address",
 			Re: ipv6Re, Severity: SeverityHardFail,
-			Skip:       func(m string) bool { return allowedIPv6(m) },
-			SkipAt:     cidrPrefixDeclaration,
+			Skip: func(m string) bool { return allowedIPv6(m) },
+			SkipAt: func(line string, start, end int) bool {
+				return insideLongerColonRun(line, start, end) || cidrPrefixDeclaration(line, start, end)
+			},
 			Suggestion: "replace with an RFC 3849 documentation address (2001:db8::/32)",
 		},
 		{
 			Name: "net_mac", Kind: kindNetMAC, Label: "non-reserved MAC address",
 			Re: macRe, Severity: SeverityHardFail,
 			Skip:       func(m string) bool { return allowedMAC(m) },
+			SkipAt:     insideLongerColonRun,
 			Suggestion: "replace with an RFC 7042 documentation MAC (00:00:5E:00:53:00-FF)",
 		},
 		{
@@ -173,7 +192,7 @@ func NetworkPatterns() []Pattern {
 			Name: "net_device_hostname", Kind: kindNetDeviceHost, Label: "device hostname",
 			Re: deviceHostRe, Severity: SeverityWarn,
 			Skip:       func(m string) bool { return personaDerivedHost(m) },
-			Suggestion: "replace with a persona-derived fixture host (alice-laptop, bob-desktop)",
+			Suggestion: "replace with a persona-derived fixture host (alice-laptop, bob-macbook)",
 		},
 	}
 }
@@ -235,11 +254,56 @@ func allowedIPv6(m string) bool {
 		return true
 	}
 	for _, p := range namesNoHostIPv6 {
-		if p.Contains(addr) {
-			return true
+		if !p.Contains(addr) {
+			continue
 		}
+		// A special-use PREFIX says nothing about what the rest of the address
+		// carries, and two of these ranges carry a host identifier verbatim.
+		// Exempting on the prefix alone let the leak through the front door.
+		if mac, ok := eui64MAC(addr); ok {
+			return allowedMAC(mac) // the interface id IS the interface's MAC
+		}
+		if v4, ok := embeddedIPv4(addr); ok {
+			return allowedIPv4(v4) // NAT64 carries the real destination
+		}
+		return true
 	}
 	return false
+}
+
+// eui64MAC returns the MAC address an interface id encodes in modified EUI-64
+// form, and whether it is in that form at all. Stateless autoconfiguration
+// builds the low 64 bits from the interface's MAC by inserting ff:fe in the
+// middle and flipping the universal/local bit, so a link-local address is not
+// an anonymous link identifier — it is the hardware address, reversibly. The
+// caller judges the recovered MAC by the MAC rules.
+func eui64MAC(addr netip.Addr) (string, bool) {
+	b := addr.As16()
+	iid := b[8:]
+	if iid[3] != 0xFF || iid[4] != 0xFE {
+		return "", false
+	}
+	if iid[0] == 0 && iid[1] == 0 && iid[2] == 0 && iid[5] == 0 && iid[6] == 0 && iid[7] == 0 {
+		return "", false // an all-zero id that happens to sit on the marker
+	}
+	mac := []byte{iid[0] ^ 0x02, iid[1], iid[2], iid[5], iid[6], iid[7]}
+	parts := make([]string, 0, len(mac))
+	for _, o := range mac {
+		parts = append(parts, hex.EncodeToString([]byte{o}))
+	}
+	return strings.Join(parts, ":"), true
+}
+
+// embeddedIPv4 returns the IPv4 address a NAT64 well-known-prefix address
+// carries in its low 32 bits. The prefix is a translation mechanism, so the
+// address it wraps is a real destination — spelled in hex rather than dotted
+// quads, which is the only reason it read as exempt.
+func embeddedIPv4(addr netip.Addr) (string, bool) {
+	if !nat64WKP.Contains(addr) {
+		return "", false
+	}
+	b := addr.As16()
+	return netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}).String(), true
 }
 
 // allowedMAC reports whether a MAC sits in the RFC 7042 documentation range
@@ -273,8 +337,10 @@ func cidrPrefixDeclaration(line string, start, end int) bool {
 	if err != nil {
 		return false
 	}
-	if p.Bits() == p.Addr().BitLen() {
-		return false // /32 or /128 names one host, not a range
+	if p.Bits() >= p.Addr().BitLen()-1 {
+		// /32 and /128 name one host; RFC 3021 /31 (and its /127 counterpart)
+		// name exactly two, which is a point-to-point LINK, not a range.
+		return false
 	}
 	return p.Masked() == p
 }
@@ -297,13 +363,51 @@ func personaDerivedHost(m string) bool {
 }
 
 // insideLongerDottedRun suppresses a quad that is part of a longer dotted number
-// run (a four-part version, "1.2.3.4.5"): the leading \b already excludes a
-// digit neighbour, so only a '.' on either side can extend the run.
+// run: the leading \b already excludes a digit neighbour, so only a '.' on either
+// side can extend the run.
+//
+// The trailing side needs TWO or more further groups before it counts as a
+// version string. One further group is the BSD/macOS address.port rendering that
+// netstat, tcpdump and lsof print — "<addr>.41641" — which is the incident class
+// in the incident's own output format, and suppressing it hid exactly what the
+// detector exists to catch. The cost is that a five-part version number now
+// flags; six-part and longer runs stay exempt, and a five-part version is
+// vanishingly rare next to address.port output.
 func insideLongerDottedRun(line string, start, end int) bool {
 	if start > 0 && line[start-1] == '.' {
 		return true
 	}
-	return end+1 < len(line) && line[end] == '.' && isASCIIDigit(line[end+1])
+	return trailingDottedGroups(line, end) >= 2
+}
+
+// trailingDottedGroups counts the ".<digits>" groups immediately following pos.
+func trailingDottedGroups(line string, pos int) int {
+	n := 0
+	for pos < len(line) && line[pos] == '.' {
+		i := pos + 1
+		for i < len(line) && isASCIIDigit(line[i]) {
+			i++
+		}
+		if i == pos+1 {
+			break // a '.' with no digits after it ends the run
+		}
+		n++
+		pos = i
+	}
+	return n
+}
+
+// insideLongerColonRun suppresses an address candidate that is part of a longer
+// colon-separated hex run. A certificate or SSH fingerprint is dozens of hex
+// pairs, and any eight consecutive groups of one parse as a perfectly valid
+// IPv6 address — so without looking at the neighbours the detector reports a
+// digest as a leaked address. It mirrors insideLongerDottedRun on the other
+// separator.
+func insideLongerColonRun(line string, start, end int) bool {
+	if start > 0 && (line[start-1] == ':' || isHexDigit(line[start-1])) {
+		return true
+	}
+	return end < len(line) && (line[end] == ':' || isHexDigit(line[end]))
 }
 
 // dottedFileOrDirectory suppresses a LAN-suffix match that is really a filename
@@ -320,6 +424,10 @@ func dottedFileOrDirectory(line string, start, end int) bool {
 }
 
 func isASCIIDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+func isHexDigit(b byte) bool {
+	return isASCIIDigit(b) || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
 
 func isHostLabelByte(b byte) bool {
 	return isASCIIDigit(b) || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')

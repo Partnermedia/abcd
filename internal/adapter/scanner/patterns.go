@@ -20,7 +20,7 @@ type Pattern struct {
 	// the match's half-open byte span, so a pattern can reject a match by what
 	// SURROUNDS it — the thing RE2 cannot express and Skip cannot see. The
 	// network patterns need it to tell a host from a filename (".work.local/")
-	// and a quad from a longer dotted run ("1.2.3.4.5"). nil == no skip.
+	// and a quad from a longer dotted run ("1.2.3.4.5.6"). nil == no skip.
 	SkipAt     func(line string, start, end int) bool
 	Suggestion string
 }
