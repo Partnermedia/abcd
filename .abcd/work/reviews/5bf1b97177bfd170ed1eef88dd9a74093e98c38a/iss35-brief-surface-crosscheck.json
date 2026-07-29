@@ -1,0 +1,45 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "5bf1b97177bfd170ed1eef88dd9a74093e98c38a"
+    }
+  },
+  "verifier": {
+    "id": "abcd:iss35-brief-surface-crosscheck"
+  },
+  "timeVerified": "2026-07-29T05:16:18Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-fable-5",
+  "tier": "full",
+  "manifestHash": "sha256:c74d40824c9d39689715b735f894b6bc4ea08c2891c510b34f4c8f1a7742d6f8",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:6b4a388e596e159a04f73417af8c2d08699968dd01031b9c08aeac65596d8064"
+  },
+  "categories": {
+    "false-claim": 1,
+    "undocumented-surface": 1,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:345",
+      "claim": "bare abcd ahoy shows four status items (folder kind, plugin-root status, root SHA, gap count)",
+      "reality": "the shipped bare render prints a fifth guard: health line",
+      "class": "undocumented-surface",
+      "disposition": "deferred to iss-152 (brief-currency sweep). Minor brief-internal staleness; user-facing docs unaffected (docs-currency PROMOTE). 27 discrepancies were corrected across four tier-full rounds (22 then 1 then 2 then this 2); the non-deterministic checker does not converge to zero, so this residual is accepted for v0.4.1 and tracked."
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:104",
+      "claim": "four launch dry-run gates run (secret/PII scan, marker-block, installability smoke, documentation-auditor)",
+      "reality": "marker-block and documentation-auditor are Status:not_implemented (Phase-5 deferred) stubs; only secret/PII scan and installability smoke run",
+      "class": "false-claim",
+      "disposition": "deferred to iss-152 (brief-currency sweep). Minor brief-internal staleness; user-facing docs unaffected."
+    }
+  ],
+  "reviewedAt": "3de51484c6a7fa30720089421cd31d7031156edd",
+  "reviewedAtNote": "The tier-full crosscheck was run at 3de51484; the release content commit 5bf1b97 differs from it only by docs/README.md and docs/reference/README.md, neither of which is in this detector scope (briefDocs + the five named surfaces), so the in-scope tree is byte-identical and the verdict transfers."
+}

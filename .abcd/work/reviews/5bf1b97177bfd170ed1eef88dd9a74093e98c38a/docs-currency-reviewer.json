@@ -1,0 +1,21 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "5bf1b97177bfd170ed1eef88dd9a74093e98c38a"
+    }
+  },
+  "verifier": {
+    "id": "abcd:docs-currency-reviewer"
+  },
+  "timeVerified": "2026-07-29T00:00:00Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-fable-5",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1"
+  },
+  "categories": {},
+  "failing": [],
+  "manifestHash": "sha256:c74d40824c9d39689715b735f894b6bc4ea08c2891c510b34f4c8f1a7742d6f8",
+  "tier": "full"
+}
