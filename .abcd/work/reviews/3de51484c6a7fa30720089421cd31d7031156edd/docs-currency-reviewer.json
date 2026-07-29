@@ -1,0 +1,31 @@
+{
+  "subject": { "digest": { "gitCommit": "3de51484c6a7fa30720089421cd31d7031156edd" } },
+  "verifier": { "id": "abcd:docs-currency-reviewer" },
+  "timeVerified": "2026-07-29T05:18:08Z",
+  "verificationResult": "HOLD",
+  "judgeModel": "claude-fable-5",
+  "policy": { "detector": "docs-currency-reviewer", "version": "1" },
+  "categories": {
+    "stale": 2,
+    "incomplete": 0,
+    "current": 0
+  },
+  "failing": [
+    {
+      "file": "docs/README.md",
+      "lines": "11,14-16",
+      "verdict": "STALE",
+      "claim": "The CLI reference under reference/cli/ is described as 'a planned generated reference' and 'a placeholder for a planned generated reference (from the Cobra command tree); that generation is not yet wired, so the live CLI reference today is `abcd <verb> --help`'.",
+      "reality": "The generated CLI reference is wired and shipped: docs/reference/cli/commands.md is produced by GenerateReference in internal/surface/cli/reference.go (//go:generate go run ../../../cmd/abcd-gen-cli-ref), and TestReferenceMatchesCommittedPage in internal/surface/cli/reference_test.go gates the build against drift. The page's own header states it is generated from the command tree.",
+      "fix": "Rewrite the reference/cli description in present tense to state that reference/cli/commands.md is generated from the command tree and drift-tested; remove 'planned', 'placeholder', and 'not yet wired'."
+    },
+    {
+      "file": "docs/reference/README.md",
+      "lines": "10-12",
+      "verdict": "STALE",
+      "claim": "'cli/ is a placeholder for a **planned** auto-generated command reference (from the Cobra command tree); that generation is not yet wired, so until it ships the live CLI reference is `abcd <verb> --help`.'",
+      "reality": "Same as above: the generation is wired (GenerateReference / cmd/abcd-gen-cli-ref), the page ships at docs/reference/cli/commands.md, and a build-gating drift test keeps it current.",
+      "fix": "State in present tense that cli/commands.md is the generated, drift-tested command reference; drop 'placeholder', 'planned', 'not yet wired'."
+    }
+  ]
+}
