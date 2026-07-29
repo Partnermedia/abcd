@@ -227,16 +227,29 @@ func TestAC_PrivacySharedAndGuestAreNotUsernames(t *testing.T) {
 	}
 }
 
-// The exemption is narrow: a real username under /Users is still a leak, and a
-// segment that merely starts with a system-directory name is not exempt.
+// The exemption is narrow in two independent ways, so each is asserted on its
+// OWN line: a segment that merely BEGINS with a system-directory name is not
+// exempt, and a name nested under the system directory is not shielded by it.
+// Carried on one line, the first path satisfied the assertion by itself and the
+// second proved nothing.
 func TestAC_PrivacyRealUsernameStillFlaggedAlongsideExemption(t *testing.T) {
-	body := "/Users/Shared/abcd is fine but /Users/sharedstuff/notes.md is a leak\n" // abcd-audit:allow — the specimen IS the exemption under test
-	b := newFixtureRepo(t).conforming().
-		file("reference/paths.md", body).
-		commit()
-	res := b.run()
+	cases := []struct{ name, body string }{
+		{"segment merely beginning with a system directory name", "notes at /Users/sharedstuff/notes.md\n"}, // abcd-audit:allow — the specimen IS the case under test
+		{"name nested under a system directory", "notes at /Users/Shared/abcd/notes.md\n"},                  // abcd-audit:allow — the specimen IS the case under test
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := newFixtureRepo(t).conforming().
+				file("reference/paths.md", c.body).
+				commit().run()
 
-	if f := findingFor(res, "privacy-hygiene"); f == nil {
-		t.Fatal("a real username under /Users was not flagged")
+			f := findingFor(res, "privacy-hygiene")
+			if f == nil {
+				t.Fatalf("%q was not flagged", c.body)
+			}
+			if f.File != "reference/paths.md" || f.Line != 1 {
+				t.Errorf("citation = %s:%d, want reference/paths.md:1", f.File, f.Line)
+			}
+		})
 	}
 }
