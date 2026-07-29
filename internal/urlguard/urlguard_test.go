@@ -13,14 +13,14 @@ func TestBlockedIP(t *testing.T) {
 	blocked := []string{
 		"127.0.0.1", "::1", // loopback
 		"169.254.169.254",                       // cloud metadata (link-local)
-		"10.0.0.1", "192.168.1.1", "172.16.5.5", // private
+		"10.0.0.1", "192.168.1.1", "172.16.5.5", // private  abcd-audit:allow
 		"0.0.0.0", "::", // unspecified
 		"224.0.0.1", "ff02::1", // multicast
 		"fe80::1",            // link-local unicast
-		"fc00::1",            // unique local (private)
+		"fc00::1",            // unique local (private)  abcd-audit:allow
 		"64:ff9b::a9fe:a9fe", // NAT64 wrapping 169.254.169.254
 		"64:ff9b::7f00:1",    // NAT64 wrapping 127.0.0.1
-		"2002:a9fe:a9fe::",   // 6to4 wrapping 169.254.169.254
+		"2002:a9fe:a9fe::",   // 6to4 wrapping the metadata endpoint  abcd-audit:allow
 		"::ffff:127.0.0.1",   // v4-mapped loopback
 	}
 	for _, s := range blocked {
@@ -33,7 +33,7 @@ func TestBlockedIP(t *testing.T) {
 		}
 	}
 
-	allowed := []string{"93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946", "8.8.8.8"}
+	allowed := []string{"93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946", "8.8.8.8"} // abcd-audit:allow — public specimens the guard must NOT refuse
 	for _, s := range allowed {
 		ip := net.ParseIP(s)
 		if ip == nil {
@@ -55,7 +55,7 @@ func TestCheckHostRefusesNamesAndLiterals(t *testing.T) {
 		{"svc.internal", "refusing to fetch internal/metadata host"},
 		{"127.0.0.1", "refusing to fetch"},
 		{"169.254.169.254", "refusing to fetch"},
-		{"10.0.0.1", "refusing to fetch"},
+		{"10.0.0.1", "refusing to fetch"}, // abcd-audit:allow
 	}
 	for _, c := range cases {
 		err := CheckHost(c.host)
@@ -96,7 +96,7 @@ func TestDialControlRefusesBlockedAddress(t *testing.T) {
 	} else if !strings.Contains(err.Error(), "refusing to connect") {
 		t.Errorf("got %q, want a refusing-to-connect error", err)
 	}
-	if err := control("tcp", "93.184.216.34:443", nil); err != nil {
+	if err := control("tcp", "93.184.216.34:443", nil); err != nil { // abcd-audit:allow
 		t.Errorf("DialControl refused a public address: %v", err)
 	}
 }

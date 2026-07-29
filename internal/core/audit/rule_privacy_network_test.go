@@ -115,7 +115,7 @@ func TestAC_PrivacySharedAndGuestAreNotUsernames(t *testing.T) {
 // The exemption is narrow: a real username under /Users is still a leak, and a
 // segment that merely starts with a system-directory name is not exempt.
 func TestAC_PrivacyRealUsernameStillFlaggedAlongsideExemption(t *testing.T) {
-	body := "/Users/Shared/abcd is fine but /Users/sharedstuff/notes.md is a leak\n"
+	body := "/Users/Shared/abcd is fine but /Users/sharedstuff/notes.md is a leak\n" // abcd-audit:allow — the specimen IS the exemption under test
 	b := newFixtureRepo(t).conforming().
 		file("reference/paths.md", body).
 		commit()
