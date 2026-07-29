@@ -95,6 +95,15 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"p2p prefix v6", "net:ipv6", "link " + v6("2606", "4700", "", "") + "/127"},
 		// S8: an mDNS service instance is a host under a LAN suffix.
 		{"mdns service instance", "net:lan_hostname", "found " + host("printer", "_ipp", "_tcp", "local")},
+		// F1: the ORDINARY rendering of an address is a tool error message, which
+		// puts a colon straight after it. The bounding regex ends such a candidate
+		// on an EMPTY hextet, netip refuses that spelling, and a
+		// candidate that will not parse used to be read as "not an address" and
+		// ALLOWED — so the incident class passed redaction raw.
+		{"ping6 error trailing colon", "net:ipv6", "ping6: " + v6("fc00", "", "1") + ": Name or service not known"},
+		{"ssh error trailing colon", "net:ipv6", "ssh " + v6("fd7a", "115c", "a1e0", "", "1") + ": Connection refused"},
+		{"ula no trailing colon", "net:ipv6", "ping6 " + v6("fc00", "", "1")},
+		{"curl error ula", "net:ipv6", "curl: (7) Failed to connect to " + v6("fd12", "3456", "789a", "", "5") + " port 443"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

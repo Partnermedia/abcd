@@ -240,8 +240,8 @@ func isNetmask4(addr netip.Addr) bool {
 // address is judged by its IPv4 half so ::ffff:192.0.2.1 stays allowed while
 // ::ffff:<private> does not.
 func allowedIPv6(m string) bool {
-	addr, err := netip.ParseAddr(m)
-	if err != nil || addr.Is4() {
+	addr, ok := parseIPv6Candidate(m)
+	if !ok || addr.Is4() {
 		return true // not an address, or a quad the IPv4 pattern already judged
 	}
 	if addr.Is4In6() {
@@ -269,6 +269,28 @@ func allowedIPv6(m string) bool {
 		return true
 	}
 	return false
+}
+
+// parseIPv6Candidate parses an IPv6 candidate, recovering the address from a
+// candidate the bounding regex ended on trailing punctuation. The inner hextet is
+// optional (that is what carries the "::" compression), so a colon immediately
+// after an address — the ORDINARY rendering in a tool's error message, where
+// ping6 or ssh prints "<address>: Name or service not known" — is swallowed into
+// the candidate and netip refuses the result. A parse failure reads as "not an address"
+// and ALLOWS it, so exactly the incident class passed through raw. A trailing
+// colon is punctuation, never part of an address, so it is trimmed and the
+// candidate re-parsed before any allow decision is taken. Anything still
+// unparseable (a duration, a scope-resolution token) is genuinely not an address.
+func parseIPv6Candidate(m string) (netip.Addr, bool) {
+	for {
+		if addr, err := netip.ParseAddr(m); err == nil {
+			return addr, true
+		}
+		if !strings.HasSuffix(m, ":") {
+			return netip.Addr{}, false
+		}
+		m = strings.TrimSuffix(m, ":")
+	}
 }
 
 // eui64MAC returns the MAC address an interface id encodes in modified EUI-64
