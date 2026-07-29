@@ -171,7 +171,7 @@ func hasAbsHomePath(line string) bool {
 			// beneath it: /Users/Shared/<name>/... still names a user, and
 			// stopping the match on the exempt segment turned the system
 			// directory into a shield for the very thing the rule looks for.
-			if hasFurtherSegment(line, loc[1]) {
+			if hasFurtherSegment(line, loc[1], pathSeparatorOf(m)) {
 				return true
 			}
 			continue
@@ -183,21 +183,44 @@ func hasAbsHomePath(line string) bool {
 
 // hasFurtherSegment reports whether a NAME-BEARING path segment follows the
 // match at pos. "/Users/Shared" and "/Users/Shared/" have none, and neither has
-// a segment of pure dots: "/Users/Shared/..." is prose with an ellipsis and
-// "/Users/Shared/./x" is a relative marker, so treating either as a username
-// would flag the very sentence that documents the exemption.
-func hasFurtherSegment(line string, pos int) bool {
-	if pos >= len(line) || line[pos] != '/' {
-		return false
-	}
-	i, named := pos+1, false
-	for i < len(line) && isPathSegmentChar(line[i]) {
-		if line[i] != '.' {
-			named = true
+// a segment of pure dots: "/Users/Shared/..." is prose with an ellipsis, so
+// treating it as a username would flag the very sentence that documents the
+// exemption.
+//
+// An unnamed segment does not END the search, though: a dots-only or an empty
+// one ("/Users/Shared/../<user>", "/Users/Shared//<user>") sits between the
+// system directory and a real name, and stopping there handed the shield back to
+// exactly the paths the exemption must not cover. The walk skips them and keeps
+// looking.
+//
+// sep is the separator of the MATCH, not both separators at once: absPathRe
+// matches the Windows spelling too and it must get the same nested-name
+// semantics, but a backslash after a POSIX path is an escape (the two bytes of
+// "/Users/Shared\n" in a source string), never a path segment.
+func hasFurtherSegment(line string, pos int, sep byte) bool {
+	for pos < len(line) && line[pos] == sep {
+		i, named := pos+1, false
+		for i < len(line) && isPathSegmentChar(line[i]) {
+			if line[i] != '.' {
+				named = true
+			}
+			i++
 		}
-		i++
+		if named {
+			return true
+		}
+		pos = i // an empty or dots-only segment: skip it and keep looking
 	}
-	return named
+	return false
+}
+
+// pathSeparatorOf returns the separator the matched path is written with: a
+// backslash for the Windows spelling (`C:\Users\<name>`), a slash otherwise.
+func pathSeparatorOf(m string) byte {
+	if strings.Contains(strings.ToLower(m), `:\users\`) {
+		return '\\'
+	}
+	return '/'
 }
 
 // isPathSegmentChar matches the character class absPathRe uses for a segment.

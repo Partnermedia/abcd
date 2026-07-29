@@ -323,24 +323,30 @@ func isNonUserHomeMatch(matched string) bool {
 
 // nextPathSegmentEnd returns the end offset of the NAME-BEARING path segment
 // that follows pos, and whether one is there at all. "/Users/Shared" and
-// "/Users/Shared/" have none; nor does a segment of pure dots, which is prose
-// ("/Users/Shared/...") or a relative marker, never a username.
+// "/Users/Shared/" have none; nor does a segment of pure dots on its own, which
+// is prose ("/Users/Shared/...") or a relative marker, never a username.
 // "/Users/Shared/<name>/x" has "<name>".
+//
+// A dots-only or an empty segment does not end the walk, though: either one
+// between the system directory and a name ("/Users/Shared/../<user>",
+// "/Users/Shared//<user>") would otherwise re-create the shield the exemption is
+// not allowed to give. genericHomeRe is POSIX-only, so '/' is the only separator
+// that can reach here.
 func nextPathSegmentEnd(line string, pos int) (int, bool) {
-	if pos >= len(line) || line[pos] != '/' {
-		return 0, false
-	}
-	i, named := pos+1, false
-	for i < len(line) && isHomeSegmentByte(line[i]) {
-		if line[i] != '.' {
-			named = true
+	for pos < len(line) && line[pos] == '/' {
+		i, named := pos+1, false
+		for i < len(line) && isHomeSegmentByte(line[i]) {
+			if line[i] != '.' {
+				named = true
+			}
+			i++
 		}
-		i++
+		if named {
+			return i, true
+		}
+		pos = i // an empty or dots-only segment: skip it and keep looking
 	}
-	if !named {
-		return 0, false
-	}
-	return i, true
+	return 0, false
 }
 
 // isHomeSegmentByte matches the character class genericHomeRe uses for a

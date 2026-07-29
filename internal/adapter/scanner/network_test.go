@@ -289,6 +289,28 @@ func TestIdentityNestedUsernameUnderSystemDirectory(t *testing.T) {
 	if got := scan("the tier lives at /Users/Shared/ and nowhere else"); hasKind(got, kindHomeOther) {
 		t.Errorf("a system directory with no further segment flagged: %+v", got)
 	}
+	// F3b: a dots-only or an empty segment names no user, but it must not end the
+	// search — either one between the system directory and a name re-creates the
+	// shield the exemption is not allowed to give.
+	user := strings.Join([]string{"j", "doe"}, "")
+	for _, line := range []string{
+		"keys at /Users/Shared/../" + user + "/keys.txt",
+		"keys at /Users/Shared/./" + user + "/keys.txt",
+		"keys at /Users/Shared//" + user + "/keys.txt",
+	} {
+		got := scan(line)
+		if !hasKind(got, kindHomeOther) {
+			t.Errorf("a username behind a dots-only or empty segment was not flagged in %q: %+v", line, got)
+		}
+		for _, f := range got {
+			if f.Kind == kindHomeOther && !strings.Contains(f.Matched, user) {
+				t.Errorf("matched span %q does not cover the nested username in %q", f.Matched, line)
+			}
+		}
+	}
+	if got := scan("the tier lives at /Users/Shared/.."); hasKind(got, kindHomeOther) {
+		t.Errorf("a system directory with only a parent marker after it flagged: %+v", got)
+	}
 }
 
 // S9: network identifiers are IDENTIFIERS, not secrets, so they must be masked

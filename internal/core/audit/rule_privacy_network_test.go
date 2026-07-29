@@ -152,7 +152,26 @@ func TestAC_PrivacyNestedUsernameUnderSystemDirectory(t *testing.T) {
 		// Prose, not a path: an ellipsis after the system directory is not a
 		// nested username, and a segment of pure dots never names a user.
 		{"prose ellipsis", "privacy-hygiene flags /Users/Shared/... in committed files\n", false},
-		{"relative marker", "the installer writes to /Users/Shared/./abcd\n", false},
+		{"relative marker alone", "the installer writes to /Users/Shared/.\n", false},
+		// F3b: a segment of pure dots names no user, but it must not END the
+		// search either — a dots-only or an empty segment between the system
+		// directory and a name re-creates the very shield the exemption forbids.
+		{"relative marker then name", "keys at /Users/Shared/./" + strings.Join([]string{"j", "doe"}, "") + "/keys.txt\n", true},
+		{"parent marker then name", "keys at /Users/Shared/../" + strings.Join([]string{"j", "doe"}, "") + "/keys.txt\n", true},
+		{"doubled separator then name", "keys at /Users/Shared//" + strings.Join([]string{"j", "doe"}, "") + "/keys.txt\n", true},
+		// F3: absPathRe matches the Windows spelling too, so the same nested-name
+		// semantics have to hold on a backslash separator — otherwise the system
+		// directory shields a username there while flagging it on POSIX.
+		{"windows nested username", `keys at C:\Users\Public\` + strings.Join([]string{"j", "doe"}, "") + `\keys.txt` + "\n", true},
+		{"windows parent marker then name", `keys at C:\Users\Public\..\` + strings.Join([]string{"j", "doe"}, "") + "\n", true},
+		{"windows bare system directory", `the installer writes to C:\Users\Public` + "\n", false},
+		{"windows system directory trailing separator", `the installer writes to C:\Users\Public\ and stops` + "\n", false},
+		// Parity, deliberately: a plain file under the system directory flags on
+		// BOTH spellings, exactly as its POSIX twin /Users/Shared/abcd-data/x  abcd-audit:allow
+		// above does. The exemption covers the system directory itself, never a
+		// name-bearing segment beneath it.
+		{"windows file under system directory", `report at C:\Users\Public\report.txt` + "\n", true}, // abcd-audit:allow
+		{"posix file under system directory", "report at /Users/Shared/report.txt\n", true},          // abcd-audit:allow
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
