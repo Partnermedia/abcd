@@ -50,6 +50,11 @@ func scanNet(line string) []Finding {
 // half: every identifier OUTSIDE the reserved documentation ranges is a finding,
 // including the CGNAT/tailnet and private/LAN classes named in the incident.
 func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
+	// G1: the EXPANDED spelling of an address carries eight non-empty hextets,
+	// which is the most an address can hold — so any colon a tool prints beside
+	// it (a label prefix, a trailing colon, a ":<port>") used to push the
+	// surrounding run past the digest threshold and suppress the whole class.
+	ula8 := v6("fd7a", "115c", "a1e0", "0", "0", "0", "0", "1")
 	cases := []struct {
 		name string
 		kind string
@@ -124,6 +129,23 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		// declaration. A prefix length ends at a non-word boundary.
 		{"prefix length runs into a word", "net:ipv4", "net " + v4(10, 0, 0, 0) + "/8x"},
 		{"prefix length runs into a letter v6", "net:ipv6", "net " + v6("fc00", "", "") + "/7f"},
+		// G1: an EXPANDED address beside a single colon. The digest guard counted
+		// the empty group that colon opens, and walked backwards into the hex tail
+		// of the label word ("IPv6:"), so an eight-hextet address measured nine
+		// groups and was suppressed as a digest — the ordinary output of ping6,
+		// getaddrinfo, ssh and ifconfig, wholesale.
+		{"expanded ping6 error", "net:ipv6", "ping6: " + ula8 + ": Network is unreachable"},
+		{"expanded getaddrinfo error", "net:ipv6", "getaddrinfo " + ula8 + ": Name or service not known"},
+		{"expanded ssh error", "net:ipv6", "ssh: connect to host " + ula8 + ": Connection refused"},
+		{"expanded label prefix", "net:ipv6", "IPv6:" + ula8},
+		{"expanded inet6 addr label", "net:ipv6", "inet6 addr:" + ula8 + "/64"},
+		{"expanded all zero ula", "net:ipv6", v6("fd00", "0", "0", "0", "0", "0", "0", "1") + ": unreachable"},
+		// The address.port rendering on the colon separator, both spellings a tool
+		// prints: one further group is a port, not a digest.
+		{"expanded address and port", "net:ipv6", "connect to " + ula8 + ":41641 failed"},
+		{"expanded nameserver and port", "net:ipv6", "nameserver=" + ula8 + ":53"},
+		{"expanded public unicast", "net:ipv6", "peer " + v6("2606", "2800", "220", "1", "248", "1893", "25c8", "1946") + ": refused"},
+		{"expanded 6to4", "net:ipv6", "6to4 " + v6("2002", "0a00", "0001", "0000", "0000", "0000", "0000", "0001") + ": down"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

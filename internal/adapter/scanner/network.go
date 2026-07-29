@@ -455,9 +455,18 @@ func trailingDottedGroups(line string, pos int) int {
 }
 
 // maxAddressGroups is the most colon-separated groups a candidate could carry
-// and still be an address: eight IPv6 hextets (a MAC's six pairs are fewer). A
-// run of more groups than this is a digest, not an identifier.
-const maxAddressGroups = 8
+// and still be an address: eight IPv6 hextets (a MAC's six pairs are fewer).
+//
+// maxRunGroups is the most an address can carry TOGETHER WITH THE GROUP A TOOL
+// PRINTS BESIDE IT — the port of "<address>:41641" or "<address>:53", which the
+// run absorbs because a port is hex-shaped too. A run longer than that is a
+// digest: the shortest one in practice (an MD5 fingerprint) is sixteen groups,
+// so the principle the threshold rests on — a digest is much longer than an
+// address — survives the extra group with room to spare.
+const (
+	maxAddressGroups = 8
+	maxRunGroups     = maxAddressGroups + 1
+)
 
 // insideLongerColonRun suppresses an address candidate that is part of a longer
 // colon-separated hex run. A certificate or SSH fingerprint is dozens of hex
@@ -481,21 +490,52 @@ func insideLongerColonRun(line string, start, end int) bool {
 	if end < len(line) && isHexDigit(line[end]) {
 		return true
 	}
-	return colonRunGroups(line, start, end) > maxAddressGroups
+	return colonRunGroups(line, start, end) > maxRunGroups
 }
 
-// colonRunGroups counts the colon-separated groups of the maximal hex/colon run
-// containing [start,end). Empty groups (the "::" compression, a trailing colon)
-// count, which only ever makes the run look longer — never shorter — than the
-// address it might hold.
+// colonRunGroups counts the NON-EMPTY colon-separated groups of the maximal
+// hex/colon run containing [start,end). An empty group carries no hex at all, so
+// counting it (the "::" compression, the colon a tool prints after an address)
+// inflated a run by a group it never held: a fully expanded eight-hextet address
+// beside one colon measured nine groups and was suppressed as a digest.
 func colonRunGroups(line string, start, end int) int {
-	for start > 0 && isColonRunByte(line[start-1]) {
-		start--
-	}
+	start = colonRunStart(line, start)
 	for end < len(line) && isColonRunByte(line[end]) {
 		end++
 	}
-	return strings.Count(line[start:end], ":") + 1
+	n := 0
+	for _, g := range strings.Split(line[start:end], ":") {
+		if g != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// colonRunStart walks back to the beginning of the hex/colon run, refusing to
+// absorb hex bytes that belong to a LARGER WORD. "IPv6:" ends in a hex digit,
+// but that '6' is the tail of the label, not a group of the run: taking it added
+// a phantom group to every labelled address. A hex byte preceded by a non-hex
+// word byte is part of a word, not of the run.
+func colonRunStart(line string, start int) int {
+	for start > 0 {
+		if line[start-1] == ':' {
+			start--
+			continue
+		}
+		if !isHexDigit(line[start-1]) {
+			return start
+		}
+		i := start
+		for i > 0 && isHexDigit(line[i-1]) {
+			i--
+		}
+		if i > 0 && isWordByte(line[i-1]) {
+			return start // the hex bytes are a word's tail, not a group
+		}
+		start = i
+	}
+	return start
 }
 
 func isColonRunByte(b byte) bool { return b == ':' || isHexDigit(b) }
