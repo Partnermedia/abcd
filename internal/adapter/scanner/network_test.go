@@ -114,6 +114,11 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"labelled v6 no space", "net:ipv6", "IPv6:" + v6("fc00", "", "1")},
 		{"host label prefix", "net:ipv6", "peer host:" + v6("fc00", "", "1")},
 		{"inet6 addr label", "net:ipv6", "inet6 addr:" + v6("fd12", "3456", "789a", "", "5") + "/64"},
+		// F5: the discrimination that keeps a Go selector out (below) must not cost
+		// a recorded specimen — an all-uppercase suffix, a service instance on a
+		// hyphenated device name, and a bare two-label host all still flag.
+		{"uppercase lan suffix", "net:lan_hostname", "ssh " + host(dash("CORP", "NAS"), "LAN")},
+		{"device service instance", "net:lan_hostname", "found " + host(dash("zeta", "printer"), "_ipp", "_tcp", "local")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -182,6 +187,18 @@ func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
 		// Shapes that must not be mistaken for addresses.
 		"version v1.2.3", "std::string is not an address", "elapsed 12:34:56",
 		"released 2026.07.29", "ratio 1.2.3.4.5.6",
+		// F5: a selector expression is not a host. Stage-1 redaction rewrites every
+		// finding, so a false positive here silently CORRUPTS a stored transcript —
+		// the commonest source line in this repo's own transcripts is Go.
+		"t := time.Local",
+		"if cfg.local {",
+		"m.lan = 1",
+		"zone := time.Local",
+		// F5b: a hyphenated device noun behind a determiner is a common noun, not a
+		// machine — prose about kit, not a hostname.
+		"our build-nas pipeline runs nightly",
+		"the pre-imac era ended",
+		"a synology-nas is a product line",
 	}
 	for _, line := range lines {
 		t.Run(line, func(t *testing.T) {

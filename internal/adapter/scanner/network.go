@@ -184,14 +184,17 @@ func NetworkPatterns() []Pattern {
 		{
 			Name: "net_lan_hostname", Kind: kindNetLANHost, Label: "LAN hostname",
 			Re: lanHostRe, Severity: SeverityWarn,
-			Skip:       func(m string) bool { return personaDerivedHost(m) },
-			SkipAt:     dottedFileOrDirectory,
+			Skip: func(m string) bool { return personaDerivedHost(m) || mixedCaseHostSuffix(m) },
+			SkipAt: func(line string, start, end int) bool {
+				return dottedFileOrDirectory(line, start, end) || selectorExpression(line, start, end)
+			},
 			Suggestion: "replace with a reserved name (example.com, host.test) or a persona-derived fixture host",
 		},
 		{
 			Name: "net_device_hostname", Kind: kindNetDeviceHost, Label: "device hostname",
 			Re: deviceHostRe, Severity: SeverityWarn,
 			Skip:       func(m string) bool { return personaDerivedHost(m) },
+			SkipAt:     commonNounPhrase,
 			Suggestion: "replace with a persona-derived fixture host (alice-laptop, bob-macbook)",
 		},
 	}
@@ -478,7 +481,74 @@ func dottedFileOrDirectory(line string, start, end int) bool {
 	return end+1 < len(line) && line[end] == '.' && isHostLabelByte(line[end+1])
 }
 
+// mixedCaseHostSuffix reports whether the match's LAST label is written in mixed
+// case — the "time.Local" shape. A host name is written in ONE case, lower or
+// upper; mixed case is the Go exported-identifier convention, so such a match is
+// a selector expression and not a host at all. The
+// cost of getting this wrong is not a noisy report: Stage-1 redaction rewrites
+// every finding, so a false positive here corrupts a stored transcript.
+func mixedCaseHostSuffix(m string) bool {
+	suffix := m
+	if i := strings.LastIndexByte(m, '.'); i >= 0 {
+		suffix = m[i+1:]
+	}
+	return suffix != strings.ToLower(suffix) && suffix != strings.ToUpper(suffix)
+}
+
+// selectorExpression reports whether a LAN-suffix match sits where code puts a
+// selector rather than where prose or a command line puts a host: it is the
+// target of an assignment or comparison ("m.lan = 1"), it heads a block
+// ("if cfg.local {"), or it is called or indexed ("cfg.local()", "x.lan[0]").
+// A hostname is the OBJECT of a command or the value on the right of a setting,
+// never any of those. The test is deliberately narrow — it costs a finding only
+// where an identifier is plainly being read as a field.
+func selectorExpression(line string, start, end int) bool {
+	if end < len(line) && (line[end] == '(' || line[end] == '[') {
+		return true
+	}
+	i := end
+	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+		i++
+	}
+	return i < len(line) && (line[i] == '=' || line[i] == '{')
+}
+
+// determiners introduce a COMMON NOUN. A device name is a name; "our build-nas",
+// "the pre-imac era" and "a synology-nas" are prose about kit.
+var determiners = map[string]bool{
+	"a": true, "an": true, "the": true, "this": true, "that": true,
+	"these": true, "those": true, "my": true, "our": true, "your": true,
+	"their": true, "its": true, "every": true, "each": true, "some": true,
+	"any": true, "no": true,
+}
+
+// commonNounPhrase reports whether a device-hostname match is preceded by a
+// determiner, which makes it a common noun rather than a machine's name. The
+// device-noun shape alone cannot tell a machine named after its owner from a
+// product line named after its maker, and the determiner is the one signal
+// English gives for free.
+func commonNounPhrase(line string, start, _ int) bool {
+	i := start
+	for i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') {
+		i--
+	}
+	if i == start {
+		return false // nothing but the match itself before it
+	}
+	j := i
+	for j > 0 && isWordByte(line[j-1]) {
+		j--
+	}
+	return determiners[strings.ToLower(line[j:i])]
+}
+
 func isASCIIDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+// isWordByte matches the bytes that continue an ASCII word.
+func isWordByte(b byte) bool {
+	return isASCIIDigit(b) || b == '_' ||
+		(b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
 
 func isHexDigit(b byte) bool {
 	return isASCIIDigit(b) || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
