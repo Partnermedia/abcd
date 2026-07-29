@@ -433,3 +433,39 @@ func TestCaptureRejectsBadInput(t *testing.T) {
 		})
 	}
 }
+
+// TestCaptureRedactsNetworkIdentifiers is the iss-125 guarantee at the store's
+// own boundary: a transcript carrying a LAN hostname, a private address and a
+// device name must not reach disk with any of them intact. Specimens are
+// assembled at runtime so no non-reserved identifier is committed to this tree.
+func TestCaptureRedactsNetworkIdentifiers(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+
+	lanHost := strings.Join([]string{"printer", "local"}, ".")
+	fritzHost := strings.Join([]string{"nas", "fritz", "box"}, ".")
+	addr := strings.Join([]string{"100", "64", "3", "9"}, ".")
+	device := strings.Join([]string{"zeta", "laptop"}, "-")
+
+	transcript := strings.Join([]string{
+		"user: ssh " + lanHost + " then " + fritzHost,
+		"assistant: peer is " + addr,
+		"assistant: synced from " + device,
+	}, "\n")
+
+	res, err := Capture(repoRoot, testRootSHA, "sess-net001", []byte(transcript), "native")
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	onDisk, err := os.ReadFile(res.Record.Path)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	for _, v := range []string{lanHost, fritzHost, addr, device} {
+		if bytes.Contains(onDisk, []byte(v)) {
+			t.Errorf("network identifier %q leaked into the stored record", v)
+		}
+	}
+	if !bytes.Contains(onDisk, []byte("synced from")) {
+		t.Errorf("non-identifier body content was lost")
+	}
+}
