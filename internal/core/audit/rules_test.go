@@ -261,20 +261,23 @@ func TestRule_LocalArtifactsInCommittedTiers(t *testing.T) {
 		commit()
 	res := b.run()
 
+	total := 0
 	got := map[string]audit.Finding{}
 	for _, f := range res.Findings {
 		if f.RuleID != "three-tier-layout" {
 			continue
 		}
+		total++
 		got[f.File] = f
 		if f.Severity != audit.SeverityError {
 			t.Errorf("severity for %s = %q, want error", f.File, f.Severity)
 		}
 	}
 	// Exactly the three misplacements, no more: a regression that also fired on
-	// the tiers themselves (or dropped a misplacement) must not slip through.
-	if len(got) != 3 {
-		t.Errorf("three-tier-layout findings = %d, want 3 (%v)", len(got), got)
+	// the tiers themselves, dropped a misplacement, or emitted duplicates must
+	// not slip through — count the raw findings, not the deduplicating map.
+	if total != 3 {
+		t.Errorf("three-tier-layout findings = %d, want 3 (%v)", total, got)
 	}
 	for want, mustName := range map[string][]string{
 		".abcd/work/NEXT.md":        {"NEXT.md", "shared-working tier .abcd/work/"},
