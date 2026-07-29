@@ -53,9 +53,10 @@ type CaptureResult struct {
 }
 
 // RedactionResidualError is returned by Capture when the stage-two re-scan finds
-// a hard_fail span that survived redaction. NO file is written. It carries the
-// surviving findings' kinds/locations only — the scanner has already masked
-// their Matched fields, so no raw secret material is exposed.
+// a BLOCKING span that survived redaction — any identity or network span
+// whatever its severity, plus every hard_fail one (blockingResidual). NO file is
+// written. It carries the surviving findings' kinds/locations only — the scanner
+// has already masked their Matched fields, so no raw secret material is exposed.
 type RedactionResidualError struct {
 	Residual []scanner.Finding
 }
@@ -65,7 +66,7 @@ func (e *RedactionResidualError) Error() string {
 	for _, f := range e.Residual {
 		kinds = append(kinds, f.Kind)
 	}
-	return fmt.Sprintf("history: redaction left %d hard_fail span(s) unresolved [%s]; refusing to write",
+	return fmt.Sprintf("history: redaction left %d blocking span(s) unresolved [%s]; refusing to write",
 		len(e.Residual), strings.Join(kinds, ", "))
 }
 
@@ -75,7 +76,7 @@ func (e *RedactionResidualError) Error() string {
 //
 // It is idempotent on the source's sha256: an identical source already stored
 // is a no-op (Wrote=false, existing record returned, mtime preserved). It is
-// fail-closed: if a hard_fail span survives redaction it returns a
+// fail-closed: if a blocking span survives redaction it returns a
 // *RedactionResidualError and writes nothing.
 //
 // Precondition: the transcripts/ dir must already exist (abcd ahoy install
@@ -153,9 +154,9 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 		}
 	}
 
-	// Stage two — verify. Re-scan the redacted text; a surviving hard_fail
-	// blocks the write (fail-closed).
-	residual := hardFails(sc.ScanText(redacted, "transcript"))
+	// Stage two — verify. Re-scan the redacted text; a surviving finding that
+	// carries a leak blocks the write (fail-closed).
+	residual := blockingResidual(sc.ScanText(redacted, "transcript"))
 	if len(residual) > 0 {
 		return CaptureResult{Residual: residual}, &RedactionResidualError{Residual: residual}
 	}
@@ -240,11 +241,18 @@ func Read(rootSHA, sessionOrFile string) (Record, []byte, error) {
 	return rec, []byte(body), nil
 }
 
-// hardFails filters findings to the hard_fail severity.
-func hardFails(findings []scanner.Finding) []scanner.Finding {
+// blockingResidual filters a stage-two rescan to the findings that must refuse
+// the write. Severity alone is the wrong gate here: the two hostname patterns
+// are shape heuristics and therefore warn by design, so a LAN host or device
+// name that survived Stage-1 redaction was written to disk in silence — the very
+// class of leak this store exists to stop. Any surviving IDENTITY or NETWORK
+// span fails the write whatever its severity; everything else still gates on
+// hard_fail. After the Stage-1 detector fixes this path is rarely reachable,
+// which is what a backstop is for.
+func blockingResidual(findings []scanner.Finding) []scanner.Finding {
 	var out []scanner.Finding
 	for _, f := range findings {
-		if f.Severity == scanner.SeverityHardFail {
+		if f.Severity == scanner.SeverityHardFail || scanner.IsIdentityKind(f.Kind) {
 			out = append(out, f)
 		}
 	}

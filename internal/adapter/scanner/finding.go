@@ -15,6 +15,7 @@ package scanner
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 )
 
 // Severity ranks a finding. A per-repo config override may RAISE a bundled
@@ -108,7 +109,7 @@ type Finding struct {
 func (f Finding) MarshalJSON() ([]byte, error) {
 	type alias Finding // shed the MarshalJSON method to avoid recursion
 	out := alias(f)
-	masked := maskSecret(f.Matched)
+	masked := maskMatched(f.Kind, f.Matched)
 	out.Matched = masked
 	if f.Matched != "" {
 		// Redact BEFORE truncating: mask EVERY occurrence of the raw token in the
@@ -129,6 +130,21 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		out.Suggested = strings.ReplaceAll(f.Suggested, f.Matched, masked)
 	}
 	return json.Marshal(out)
+}
+
+// maskMatched masks a matched value for a SERIALIZED surface. An identity or
+// network kind is masked WHOLE: the head-and-tail fingerprint is the right trade
+// for a credential (it says which one leaked) and precisely the wrong one for an
+// identifier, where the head and tail — a MAC's OUI, an address's prefix and
+// interface id, a hostname's first label and suffix — are what re-identify the
+// machine. Redact already draws that line for the on-disk path (redact.go); the
+// JSON surface is archived by CI and owes the same. Full starring preserves rune
+// length, so the snippet still truncates where the raw line did.
+func maskMatched(kind, matched string) string {
+	if IsIdentityKind(kind) {
+		return strings.Repeat("*", utf8.RuneCountInString(matched))
+	}
+	return maskSecret(matched)
 }
 
 // maskSecret returns a non-reversible fingerprint of a matched value. A long,

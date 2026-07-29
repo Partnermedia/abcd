@@ -67,7 +67,7 @@ func redactLine(line string, fs []Finding) (string, int) {
 		if f.Matched == "" {
 			continue
 		}
-		if isIdentityKind(f.Kind) {
+		if IsIdentityKind(f.Kind) {
 			identity = append(identity, f)
 		} else {
 			secretIdx = append(secretIdx, i)
@@ -91,11 +91,18 @@ func redactLine(line string, fs []Finding) (string, int) {
 	return line, changed
 }
 
-// isIdentityKind reports whether a finding kind is a PII identity span (masked to
+// IsIdentityKind reports whether a finding kind is a PII identity span (masked to
 // a readable placeholder) rather than a secret token (masked to a fingerprint).
-func isIdentityKind(kind string) bool {
+// The network kinds belong here too: an address, a MAC and a hostname are
+// IDENTIFIERS, not high-entropy secrets. The secret fingerprint deliberately
+// keeps the first three and last two runes so a leaked credential can be
+// triaged, and on an identifier that is precisely the wrong trade — it preserves
+// a MAC's vendor bytes and final octet, and a hostname's head and suffix, which
+// is enough to re-identify the machine the redaction was meant to hide.
+func IsIdentityKind(kind string) bool {
 	switch kind {
-	case kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser:
+	case kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser,
+		kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost:
 		return true
 	}
 	return false
@@ -116,6 +123,12 @@ func redactionReplacement(f Finding) string {
 		return "[redacted-name]"
 	case kindGithubUser, kindLocalUser:
 		return "[redacted-user]"
+	case kindNetIPv4, kindNetIPv6:
+		return "[redacted-address]"
+	case kindNetMAC:
+		return "[redacted-mac]"
+	case kindNetLANHost, kindNetDeviceHost:
+		return "[redacted-hostname]"
 	default:
 		return maskSecret(f.Matched)
 	}
