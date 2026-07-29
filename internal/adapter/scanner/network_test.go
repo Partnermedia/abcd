@@ -1,0 +1,189 @@
+package scanner
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// The network acceptance corpus.
+//
+// ALLOWED specimens are written as literals on purpose: a reserved documentation
+// value (RFC 5737 / 3849 / 2606 / 7042) is safe to commit by definition, and the
+// point of the corpus is that those values read plainly.
+//
+// FLAGGED specimens are ASSEMBLED at runtime instead. They are shape-only values
+// (private, CGNAT, ULA, LAN) that identify nobody, but writing them as literals
+// would leave non-reserved identifiers sitting in this repo's own tree — the very
+// thing the detector exists to stop. The corpus obeys the discipline it enforces.
+
+// v4 assembles a dotted-quad address from its octets.
+func v4(a, b, c, d int) string { return fmt.Sprintf("%d.%d.%d.%d", a, b, c, d) }
+
+// v6 assembles an IPv6 address from its hextets; an empty element yields the
+// "::" compression.
+func v6(groups ...string) string { return strings.Join(groups, ":") }
+
+// mac assembles a colon-separated MAC address from its octets.
+func mac(octets ...int) string {
+	parts := make([]string, 0, len(octets))
+	for _, o := range octets {
+		parts = append(parts, fmt.Sprintf("%02x", o))
+	}
+	return strings.Join(parts, ":")
+}
+
+// host assembles a dotted hostname from its labels.
+func host(labels ...string) string { return strings.Join(labels, ".") }
+
+// dash assembles a hyphenated device name from its parts.
+func dash(parts ...string) string { return strings.Join(parts, "-") }
+
+// scanNet scans one line with the network pattern set only, so a case cannot be
+// satisfied by an unrelated secret or identity matcher.
+func scanNet(line string) []Finding {
+	return ScanText(line, Identity{}, NetworkPatterns(), DefaultIdentitySeverities(), "f")
+}
+
+// TestNetworkFlagsNonReservedIdentifiers is the allowlist inversion's positive
+// half: every identifier OUTSIDE the reserved documentation ranges is a finding,
+// including the CGNAT/tailnet and private/LAN classes named in the incident.
+func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
+	cases := []struct {
+		name string
+		kind string
+		line string
+	}{
+		{"cgnat tailnet", "net:ipv4", "peer at " + v4(100, 64, 3, 9) + " responded"},
+		{"rfc1918 class c", "net:ipv4", "gateway " + v4(192, 168, 1, 1)},
+		{"rfc1918 class a", "net:ipv4", "host " + v4(10, 0, 0, 7)},
+		{"rfc1918 class b", "net:ipv4", "host " + v4(172, 16, 4, 4)},
+		{"public unicast", "net:ipv4", "resolver " + v4(8, 8, 8, 8)},
+		{"link local", "net:ipv4", "metadata " + v4(169, 254, 169, 254)},
+		{"ula v6", "net:ipv6", "peer " + v6("fd00", "", "1")},
+		{"tailnet v6", "net:ipv6", "peer " + v6("fd7a", "115c", "a1e0", "", "1")},
+		{"public v6", "net:ipv6", "host " + v6("2606", "4700", "", "1111")},
+		{"mac", "net:mac", "hw addr " + mac(0x02, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e)},
+		{"mdns lan suffix", "net:lan_hostname", "ping " + host("printer", "local")},
+		{"router lan suffix", "net:lan_hostname", "see " + host("nas", "fritz", "box")},
+		{"plain lan suffix", "net:lan_hostname", "ssh " + host("gateway", "lan")},
+		{"device name", "net:device_hostname", "backup from " + dash("zeta", "laptop")},
+		{"device name mixed case", "net:device_hostname", "on " + dash("Zeta", "Desktop")},
+		// A single-host prefix is a host, not a range, so the CIDR exemption
+		// below must not reach it; nor may a URL path that starts with a digit.
+		{"single host prefix", "net:ipv4", "route " + v4(100, 64, 3, 9) + "/32"},
+		{"unmasked prefix", "net:ipv4", "route " + v4(10, 0, 0, 1) + "/24"},
+		{"url with numeric path", "net:ipv4", "GET http://" + v4(192, 168, 1, 1) + "/24/x"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := scanNet(c.line)
+			if !hasKind(got, c.kind) {
+				t.Errorf("line %q did not flag %s: %+v", c.line, c.kind, got)
+			}
+		})
+	}
+}
+
+// TestNetworkAllowsReservedIdentifiers is the allowlist inversion's negative
+// half: a reserved documentation value, a standard protocol value, and a
+// persona-derived device name are all silent. A false positive here is what
+// would make the lint unusable.
+func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
+	lines := []string{
+		// RFC 5737 documentation blocks.
+		"bind 192.0.2.1", "peer 198.51.100.7", "upstream 203.0.113.42",
+		// Loopback and unspecified are protocol values, not leaks.
+		"listen 127.0.0.1:8080", "listen 0.0.0.0:8080", "loopback 127.0.0.53",
+		// A netmask is not an address.
+		"mask 255.255.255.0", "mask 255.255.0.0", "broadcast 255.255.255.255",
+		// RFC 3849 documentation prefix, loopback, unspecified.
+		"peer 2001:db8::1", "peer 2001:DB8:0:0:0:0:0:2", "listen ::1", "listen ::",
+		// RFC 7042 documentation MACs.
+		"hw 00:00:5E:00:53:00", "hw 00:00:5e:00:53:ff",
+		// RFC 2606/6761 reserved names.
+		"see example.com", "see www.example.org", "see api.example", "see host.test",
+		"see thing.invalid",
+		// Persona-derived device names (and the same name with a LAN suffix).
+		"from alice-laptop", "from bob-desktop", "from carol-server",
+		"ping alice-laptop.local", "ping maya-workstation.lan",
+		// Non-host uses of a LAN suffix: a dot-directory, a filename, a dotfile.
+		"artefacts live in .abcd/.work.local/scratch/",
+		"overrides go in settings.local.json",
+		"the wrapper at ~/.local/bin/abcd",
+		`skip: [".abcd/\\.work\\.local"]`,
+		// CIDR prefixes name ranges, not hosts — including the special-use blocks
+		// this detector's own design record has to spell out.
+		"private is 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16",
+		"CGNAT 100.64.0.0/10 and benchmark 198.18.0.0/15",
+		"link-local fe80::/10, unique local fc00::/7",
+		"NAT64 (64:ff9b::/96) and 6to4 (2002::/16)",
+		// abcd's own local tier is a directory name, not a host.
+		`tiers: {".abcd/.work.local", "work.local"}`,
+		// Shapes that must not be mistaken for addresses.
+		"version v1.2.3", "std::string is not an address", "elapsed 12:34:56",
+		"released 2026.07.29", "ratio 1.2.3.4.5.6",
+	}
+	for _, line := range lines {
+		t.Run(line, func(t *testing.T) {
+			if got := scanNet(line); len(got) != 0 {
+				t.Errorf("reserved/benign line %q flagged: %+v", line, got)
+			}
+		})
+	}
+}
+
+// TestNetworkPatternsAreInTheDefaultSet proves the detector is built ONCE and
+// reaches every scanner consumer: launch dry-run, lifeboat pack, history
+// capture. A set that only the audit rule consults would be a second copy.
+func TestNetworkPatternsAreInTheDefaultSet(t *testing.T) {
+	have := map[string]bool{}
+	for _, p := range DefaultPatterns() {
+		have[p.Name] = true
+	}
+	for _, p := range NetworkPatterns() {
+		if !have[p.Name] {
+			t.Errorf("network pattern %q is missing from DefaultPatterns", p.Name)
+		}
+	}
+}
+
+// TestRedactRemovesNetworkIdentifiers is the Stage-1 redaction guarantee
+// (iss-125): a transcript carrying a LAN hostname and a private address is
+// rewritten so a re-scan — the store's stage-two verification — finds nothing.
+func TestRedactRemovesNetworkIdentifiers(t *testing.T) {
+	text := "ssh " + host("printer", "local") + "\n" +
+		"route via " + v4(192, 168, 1, 1) + "\n" +
+		"hw " + mac(0x02, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e) + "\n"
+	findings := ScanText(text, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+	if len(findings) == 0 {
+		t.Fatal("no findings on a transcript carrying network identifiers")
+	}
+	redacted, n := Redact(text, findings)
+	if n == 0 {
+		t.Fatal("Redact rewrote nothing")
+	}
+	if residual := ScanText(redacted, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t"); len(residual) != 0 {
+		t.Errorf("network identifiers survived redaction: %+v", residual)
+	}
+	for _, raw := range []string{host("printer", "local"), v4(192, 168, 1, 1)} {
+		if strings.Contains(redacted, raw) {
+			t.Errorf("redacted text still contains %q", raw)
+		}
+	}
+}
+
+// TestNonUserHomeSegments guards the iss-153 fix at its canonical home: the
+// macOS system directories under /Users are not usernames.
+func TestNonUserHomeSegments(t *testing.T) {
+	for _, seg := range []string{"Shared", "shared", "Guest", "Public"} {
+		if !IsNonUserHomeSegment(seg) {
+			t.Errorf("IsNonUserHomeSegment(%q) = false, want true", seg)
+		}
+	}
+	for _, seg := range []string{"alice", "bob", "sharedstuff", ""} {
+		if IsNonUserHomeSegment(seg) {
+			t.Errorf("IsNonUserHomeSegment(%q) = true, want false", seg)
+		}
+	}
+}

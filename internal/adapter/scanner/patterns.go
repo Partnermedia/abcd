@@ -10,12 +10,18 @@ import (
 // when it returns true, the match is discarded (mirrors the negative lookaheads
 // the Python patterns used, which RE2 cannot express).
 type Pattern struct {
-	Name       string
-	Kind       string
-	Label      string
-	Re         *regexp.Regexp
-	Severity   Severity
-	Skip       func(match string) bool // nil == no skip
+	Name     string
+	Kind     string
+	Label    string
+	Re       *regexp.Regexp
+	Severity Severity
+	Skip     func(match string) bool // nil == no skip
+	// SkipAt is the context-aware form of Skip: it receives the whole line and
+	// the match's half-open byte span, so a pattern can reject a match by what
+	// SURROUNDS it — the thing RE2 cannot express and Skip cannot see. The
+	// network patterns need it to tell a host from a filename (".work.local/")
+	// and a quad from a longer dotted run ("1.2.3.4.5"). nil == no skip.
+	SkipAt     func(line string, start, end int) bool
 	Suggestion string
 }
 
@@ -28,9 +34,10 @@ const awsExample = "AKIAIOSFODNN7EXAMPLE"
 const rpRedactedPlaceholder = "<RP-SESSION-UUID-REDACTED>"
 
 // DefaultPatterns returns the bundled secret pattern set (spec §2.2), ported
-// verbatim from scripts/abcd/defaults/pii.json. Every secret pattern is
-// hard_fail and non-sanitisable. This set is the built-in baseline the merged
-// config layers on top of (the Go analogue of the bundled defaults/pii.json).
+// verbatim from scripts/abcd/defaults/pii.json, plus the network-identifier set
+// from network.go. Every secret pattern is hard_fail and non-sanitisable. This
+// set is the built-in baseline the merged config layers on top of (the Go
+// analogue of the bundled defaults/pii.json).
 func DefaultPatterns() []Pattern {
 	p := []Pattern{
 		{
@@ -157,7 +164,10 @@ func DefaultPatterns() []Pattern {
 			Suggestion: "Review — may be benign sample or real bearer token",
 		},
 	}
-	return p
+	// Network identifiers are part of the baseline, not a bolt-on: folding them
+	// in here is what makes every consumer (launch dry-run, lifeboat pack,
+	// history Stage-1 redaction) inherit the same detection from one definition.
+	return append(p, NetworkPatterns()...)
 }
 
 // defaultPatternFloors captures the built-in severity floor per bundled pattern

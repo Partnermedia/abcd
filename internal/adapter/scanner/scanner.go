@@ -276,6 +276,9 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 				if cp.Skip != nil && cp.Skip(matched) {
 					continue
 				}
+				if cp.SkipAt != nil && cp.SkipAt(line, loc[0], loc[1]) {
+					continue
+				}
 				findings = append(findings, Finding{
 					File: file, Line: lineno, Column: loc[0] + 1, Kind: cp.Kind,
 					Severity: cp.Severity, Snippet: snippet(line), Matched: matched,
