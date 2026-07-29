@@ -469,3 +469,33 @@ func TestCaptureRedactsNetworkIdentifiers(t *testing.T) {
 		t.Errorf("non-identifier body content was lost")
 	}
 }
+
+// F7: the stage-two write gate keyed on hard_fail alone, so a hostname — warn by
+// design, because the hostname patterns are shape heuristics — that survived
+// Stage-1 redaction was written to disk silently. Any surviving identity or
+// network span must refuse the write, whatever its severity.
+func TestStageTwoGateBlocksSurvivingWarnIdentifier(t *testing.T) {
+	lanHost := strings.Join([]string{"printer", "local"}, ".")
+	findings := scanner.ScanText("ssh "+lanHost, scanner.Identity{},
+		scanner.DefaultPatterns(), scanner.DefaultIdentitySeverities(), "transcript")
+
+	var hostname *scanner.Finding
+	for i := range findings {
+		if findings[i].Kind == "net:lan_hostname" {
+			hostname = &findings[i]
+		}
+	}
+	if hostname == nil {
+		t.Fatalf("fixture must produce a LAN hostname finding: %+v", findings)
+	}
+	if hostname.Severity != scanner.SeverityWarn {
+		t.Fatalf("fixture must be warn-severity to exercise the gate, got %q", hostname.Severity)
+	}
+	if len(blockingResidual(findings)) == 0 {
+		t.Errorf("a surviving warn-severity hostname must refuse the write: %+v", findings)
+	}
+	// A clean rescan still writes.
+	if got := blockingResidual(nil); len(got) != 0 {
+		t.Errorf("a clean rescan must not block: %+v", got)
+	}
+}
