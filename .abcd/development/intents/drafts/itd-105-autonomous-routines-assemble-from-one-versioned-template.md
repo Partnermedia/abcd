@@ -59,7 +59,11 @@ schedule it. The binary never contacts a scheduling service.
   correctness / docs / all focuses) and plan drain — carrying the safety
   invariants: maintainer-only trust for loop-state comments, pushed-branch-
   without-PR resumption, bounded CI wait, one-round-per-run default with an
-  explicit capped multi-round variant, refuter count, stop conditions.
+  explicit capped multi-round variant, refuter count, stop conditions, and
+  public-artifact hygiene (iss-160): session URLs and harness attribution
+  footers are banned from all public text, and because the harness can append
+  them outside the model's own words, every created pull request, issue, and
+  comment is re-read as stored and stripped by edit before the round continues.
 - `abcd routine render`: repo detection (toolchain and gate commands from the
   manifest; tracked-versus-ignored working tiers, so a rendered prompt can
   never instruct a commit into an ignored path; platform caveats for
@@ -98,6 +102,10 @@ schedule it. The binary never contacts a scheduling service.
   loop's final stop follows rounds that merged substantive fixes, Then the
   rendered prompt directs the closing round to initiate the repository's
   release flow, subject to every release gate the repo declares.
+- Given any archetype, When a routine is rendered, Then the prompt bans
+  session URLs and harness attribution footers from every public artifact and
+  directs a post-create re-read-and-strip of each pull request, issue, and
+  comment the loop creates.
 
 ## Open Questions
 
