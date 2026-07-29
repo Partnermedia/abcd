@@ -59,7 +59,6 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"rfc1918 class a", "net:ipv4", "host " + v4(10, 0, 0, 7)},
 		{"rfc1918 class b", "net:ipv4", "host " + v4(172, 16, 4, 4)},
 		{"public unicast", "net:ipv4", "resolver " + v4(8, 8, 8, 8)},
-		{"link local", "net:ipv4", "metadata " + v4(169, 254, 169, 254)},
 		{"ula v6", "net:ipv6", "peer " + v6("fd00", "", "1")},
 		{"tailnet v6", "net:ipv6", "peer " + v6("fd7a", "115c", "a1e0", "", "1")},
 		{"public v6", "net:ipv6", "host " + v6("2606", "4700", "", "1111")},
@@ -74,6 +73,11 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"single host prefix", "net:ipv4", "route " + v4(100, 64, 3, 9) + "/32"},
 		{"unmasked prefix", "net:ipv4", "route " + v4(10, 0, 0, 1) + "/24"},
 		{"url with numeric path", "net:ipv4", "GET http://" + v4(192, 168, 1, 1) + "/24/x"},
+		// Ranges that DO identify private topology stay flagged, even though
+		// neighbouring special-use ranges are exempt (maintainer, 2026-07-29).
+		{"unique local v6", "net:ipv6", "peer " + v6("fc00", "", "1")},
+		{"6to4 embeds a host", "net:ipv6", "peer " + v6("2002", "a9fe", "a9fe", "", "")},
+		{"public unicast v6", "net:ipv6", "host " + v6("2606", "2800", "220", "1", "248", "1893", "25c8", "1946")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -112,6 +116,14 @@ func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
 		"overrides go in settings.local.json",
 		"the wrapper at ~/.local/bin/abcd",
 		`skip: [".abcd/\\.work\\.local"]`,
+		// IANA special-use ranges that name no INDIVIDUAL host (maintainer,
+		// 2026-07-29): the same rationale as the loopback/unspecified carve-out.
+		"metadata 169.254.169.254", "autoconf 169.254.0.1",
+		"multicast 224.0.0.1", "multicast 239.255.255.250",
+		"benchmark 198.18.0.1", "protocol assignment 192.0.0.170",
+		"link-local fe80::1", "multicast ff02::1",
+		"NAT64 64:ff9b::a9fe:a9fe", "NAT64 64:ff9b::7f00:1",
+		"benchmark 2001:2::1",
 		// CIDR prefixes name ranges, not hosts — including the special-use blocks
 		// this detector's own design record has to spell out.
 		"private is 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16",

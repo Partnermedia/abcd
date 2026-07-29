@@ -42,6 +42,29 @@ var (
 	// RFC 3849 IPv6 documentation prefix.
 	docIPv6 = netip.MustParsePrefix("2001:db8::/32")
 
+	// IANA special-use ranges that name no INDIVIDUAL host (maintainer,
+	// 2026-07-29). They extend the loopback/unspecified carve-out on the same
+	// rationale: an address here identifies a link, a group, a test harness or a
+	// protocol mechanism, never a machine, so committing one leaks no topology.
+	//
+	// What is deliberately NOT here is the whole point of the detector. The
+	// private ranges (RFC 1918), CGNAT/tailnet 100.64.0.0/10 and IPv6
+	// unique-local fc00::/7 all name real hosts on a real private network — the
+	// incident class — and stay flagged. So does 6to4 (2002::/16), which embeds a
+	// routable IPv4 address and therefore identifies a host.
+	namesNoHostIPv4 = []netip.Prefix{
+		netip.MustParsePrefix("169.254.0.0/16"), // link-local autoconfiguration
+		netip.MustParsePrefix("224.0.0.0/4"),    // multicast group addresses
+		netip.MustParsePrefix("198.18.0.0/15"),  // benchmarking (RFC 2544)
+		netip.MustParsePrefix("192.0.0.0/24"),   // IETF protocol assignments
+	}
+	namesNoHostIPv6 = []netip.Prefix{
+		netip.MustParsePrefix("fe80::/10"),    // link-local unicast
+		netip.MustParsePrefix("ff00::/8"),     // multicast
+		netip.MustParsePrefix("64:ff9b::/96"), // NAT64 well-known prefix
+		netip.MustParsePrefix("2001:2::/48"),  // benchmarking
+	}
+
 	// A dotted quad. Octet-range validation is done by netip in the skip, not by
 	// the regex: a regex that spells out 0-255 is unreadable and no more correct.
 	ipv4Re = regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`)
@@ -49,7 +72,7 @@ var (
 	// An IPv6 candidate: a hextet followed by at least two more colon-separated
 	// groups, so a "::" scope resolution (std::string) and a clock time (12:34:56)
 	// cannot reach the skip as addresses. The leading \b is load-bearing — without
-	// it the tail of an identifier ("std" -> "d::") parses as a valid address.
+	// it, the tail of a scope-resolution token parses as a valid address by itself.
 	// Correctness is netip's job; the regex only bounds the candidate.
 	ipv6Re = regexp.MustCompile(`\b[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7}`)
 
@@ -91,7 +114,7 @@ var nonHostLabels = map[string]bool{"work.local": true}
 
 // nonUserHomeSegments are the well-known macOS directories that live under
 // /Users but name no user. Flagging them as usernames (iss-153) forced waivers
-// onto product code that legitimately writes to /Users/Shared.
+// onto product code that legitimately writes there.
 var nonUserHomeSegments = map[string]bool{
 	"shared": true, "guest": true, "public": true,
 }
@@ -172,6 +195,11 @@ func allowedIPv4(m string) bool {
 			return true
 		}
 	}
+	for _, p := range namesNoHostIPv4 {
+		if p.Contains(addr) {
+			return true
+		}
+	}
 	return isNetmask4(addr)
 }
 
@@ -203,7 +231,15 @@ func allowedIPv6(m string) bool {
 	if addr.IsLoopback() || addr.IsUnspecified() {
 		return true
 	}
-	return docIPv6.Contains(addr)
+	if docIPv6.Contains(addr) {
+		return true
+	}
+	for _, p := range namesNoHostIPv6 {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // allowedMAC reports whether a MAC sits in the RFC 7042 documentation range
@@ -219,7 +255,7 @@ func allowedMAC(m string) bool {
 // range notation is how the reserved and special-use blocks are documented in
 // the first place, including by this detector's own design record. The
 // suppression is deliberately narrow: the address must be the MASKED BASE of the
-// stated length, so "10.0.0.1/24" (and any URL path that merely begins with a
+// stated length, so "198.51.100.1/24" (and any URL path that merely begins with a
 // digit) is still a finding, and a single-host prefix (/32, /128) is never
 // exempt.
 func cidrPrefixDeclaration(line string, start, end int) bool {
@@ -274,7 +310,7 @@ func insideLongerDottedRun(line string, start, end int) bool {
 // or dot-directory rather than a host: ".work.local/" (the local tier),
 // "settings.local.json", "DECISIONS.local.md". A leading '.' means the label
 // chain began as a dotfile; a trailing '.' followed by a label means a further
-// extension. Sentence-final punctuation ("ping printer.local.") is not
+// extension. Sentence-final punctuation ("ping alice-laptop.local.") is not
 // suppressed, because the '.' there is not followed by a label character.
 func dottedFileOrDirectory(line string, start, end int) bool {
 	if start > 0 && line[start-1] == '.' {
