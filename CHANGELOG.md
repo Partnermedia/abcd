@@ -172,14 +172,20 @@ called out in a **Breaking** section.
   defaults, so Stage-1 redaction and the launch/lifeboat scan inherit it and the
   audit rule consults exactly the same patterns — the surfaces cannot disagree
   about what a leak is. Addresses are hard_fail; the two hostname shapes are
-  warn, and a repo may raise them. A line carrying `abcd-audit:allow` stays
-  exempt, so a deliberately illustrative value needs no weakening of the
-  patterns.
+  warn, and the audit surface carries that split through rather than flattening
+  it. A line carrying `abcd-audit:allow` stays exempt, so a deliberately
+  illustrative value needs no weakening of the patterns. In redaction an
+  identifier is masked WHOLE, to a readable placeholder, not to the head-and-tail
+  fingerprint a credential gets — on a MAC or a hostname that fingerprint
+  preserves the vendor bytes and the head, which is enough to re-identify the
+  machine the redaction was meant to hide.
 - **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
   privacy-hygiene flagged every segment under a `/Users` root, so the macOS
   system directories that live there were reported as though they named a
   person, taxing product code that legitimately writes to one. The exemption is
-  narrow: it is scoped to the `/Users` root, a segment that merely begins with a
+  narrow: it is scoped to the `/Users` root, it covers the system directory
+  itself and not what sits beneath it (a name nested under one — `Shared/<user>`
+  — is still a user, and still flags), a segment that merely begins with a
   system-directory name is still a leak, and the scanner's own identity matcher
   applies the same allowlist so the two detectors agree on what a username is.
 - **The disembark probe's recursive file walk is bounded per directory, opens
