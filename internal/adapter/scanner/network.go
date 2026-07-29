@@ -419,18 +419,51 @@ func trailingDottedGroups(line string, pos int) int {
 	return n
 }
 
+// maxAddressGroups is the most colon-separated groups a candidate could carry
+// and still be an address: eight IPv6 hextets (a MAC's six pairs are fewer). A
+// run of more groups than this is a digest, not an identifier.
+const maxAddressGroups = 8
+
 // insideLongerColonRun suppresses an address candidate that is part of a longer
 // colon-separated hex run. A certificate or SSH fingerprint is dozens of hex
 // pairs, and any eight consecutive groups of one parse as a perfectly valid
 // IPv6 address — so without looking at the neighbours the detector reports a
 // digest as a leaked address. It mirrors insideLongerDottedRun on the other
 // separator.
+//
+// The test is the LENGTH of the surrounding run, not the mere presence of a
+// colon beside the candidate. A lone adjacent colon is the commonest punctuation
+// an identifier carries — a label prefix ("IPv6:", "inet6 addr:", "host:") or
+// the colon a tool prints after an address or a MAC — and treating any of them
+// as evidence of a digest silently exempted the hard_fail classes wholesale.
+// A hex digit on either side is a different fact and still suppresses on its own:
+// it means the regex truncated a LONGER hex group, so the candidate is a fragment
+// of a bigger token rather than a whole address.
 func insideLongerColonRun(line string, start, end int) bool {
-	if start > 0 && (line[start-1] == ':' || isHexDigit(line[start-1])) {
+	if start > 0 && isHexDigit(line[start-1]) {
 		return true
 	}
-	return end < len(line) && (line[end] == ':' || isHexDigit(line[end]))
+	if end < len(line) && isHexDigit(line[end]) {
+		return true
+	}
+	return colonRunGroups(line, start, end) > maxAddressGroups
 }
+
+// colonRunGroups counts the colon-separated groups of the maximal hex/colon run
+// containing [start,end). Empty groups (the "::" compression, a trailing colon)
+// count, which only ever makes the run look longer — never shorter — than the
+// address it might hold.
+func colonRunGroups(line string, start, end int) int {
+	for start > 0 && isColonRunByte(line[start-1]) {
+		start--
+	}
+	for end < len(line) && isColonRunByte(line[end]) {
+		end++
+	}
+	return strings.Count(line[start:end], ":") + 1
+}
+
+func isColonRunByte(b byte) bool { return b == ':' || isHexDigit(b) }
 
 // dottedFileOrDirectory suppresses a LAN-suffix match that is really a filename
 // or dot-directory rather than a host: ".work.local/" (the local tier),

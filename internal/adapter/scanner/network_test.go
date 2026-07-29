@@ -104,6 +104,15 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		{"ssh error trailing colon", "net:ipv6", "ssh " + v6("fd7a", "115c", "a1e0", "", "1") + ": Connection refused"},
 		{"ula no trailing colon", "net:ipv6", "ping6 " + v6("fc00", "", "1")},
 		{"curl error ula", "net:ipv6", "curl: (7) Failed to connect to " + v6("fd12", "3456", "789a", "", "5") + " port 443"},
+		// F2: a LONE adjacent colon is the commonest punctuation around an
+		// identifier — a label prefix, or the colon a tool prints after it. Reading
+		// any colon neighbour as "part of a longer digest" exempted the hard_fail
+		// classes wholesale; only a run that is genuinely longer than an address or
+		// a MAC could be is a digest.
+		{"mac with trailing colon", "net:mac", "HWaddr " + mac(0xa4, 0x83, 0xe7, 0x11, 0x22, 0x33) + ": up"},
+		{"labelled v6 no space", "net:ipv6", "IPv6:" + v6("fc00", "", "1")},
+		{"host label prefix", "net:ipv6", "peer host:" + v6("fc00", "", "1")},
+		{"inet6 addr label", "net:ipv6", "inet6 addr:" + v6("fd12", "3456", "789a", "", "5") + "/64"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -163,6 +172,10 @@ func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
 		"MD5:16:27:ac:a5:76:28:2d:36:63:1b:56:4d:eb:df:a6:48",
 		"SHA256 fingerprint 2f:d4:e1:c6:7a:2d:28:fc:ed:84:9e:e1:bb:76:e7:39:1b:93:eb:12:2f:d4:e1:c6:7a:2d:28:fc:ed:84:9e:e1",
 		"hw a4:83:e7:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd",
+		// A real-shaped SSH host-key fingerprint (20 groups) stays suppressed: it
+		// is longer than any address or MAC could be, which is the only reason a
+		// colon neighbour is allowed to silence a candidate at all.
+		"SHA1 fingerprint 6a:71:ff:6f:2c:0a:8e:2f:3b:71:9d:6b:5d:aa:cb:1a:0d:2c:5f:9e",
 		// S2/S6: a transition address embedding an EXEMPT IPv4 stays exempt.
 		"NAT64 64:ff9b::7f00:1", "mapped ::ffff:127.0.0.1", "mapped ::ffff:7f00:1",
 		// Shapes that must not be mistaken for addresses.
