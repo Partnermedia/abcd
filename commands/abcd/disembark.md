@@ -1,7 +1,7 @@
 ---
 name: disembark
 description: Pack a lifeboat from a repository into a destination directory — read-only over the source, behind a destination safety gate, secret-scanned before any write. Point it at any repo (including a dead or archived one) and write the lifeboat elsewhere.
-argument-hint: "<source-repo> <dest> | plan <source-repo>"
+argument-hint: "<source-repo> <dest> | plan <source-repo> | probe <source-repo>"
 ---
 
 # `/abcd:disembark` — pack a lifeboat
@@ -11,7 +11,21 @@ Mine a repository's record into a portable lifeboat at `<dest>`. The source is
 to the destination. This is the out-of-tree model (adr-35): point it at any repo,
 touch nothing, write elsewhere.
 
-## Dry run first (recommended)
+## Probe first (coverage readout)
+
+See which brief sections a lifeboat could ground from the source, without writing
+anything. The repo argument is optional and defaults to the current directory:
+
+```bash
+abcd disembark probe <source-repo> --json
+```
+
+This is the coverage experiment's read-only readout: every brief section comes
+back marked `grounded`, `partial`, or `blank`, alongside what was searched. It
+writes nothing into the source and runs in a small fraction of a full pack's time
+(no delegated model work). `coverage.{json,md}` are written only by `pack`.
+
+## Dry run next (recommended)
 
 Show the exact file set a pack would write, without writing anything:
 
@@ -21,6 +35,18 @@ abcd disembark plan <source-repo> --json
 
 Report `file_count`, `total_bytes`, `manifest_sha256`, and any `omissions` (records
 too large or unreadable to carry). Then pack for real.
+
+## Coverage (aggregate probe reports)
+
+Aggregate one or more saved probe reports into the cross-repo section×repo
+coverage table — the experiment's evidence that the packer's section list holds
+across a rich-record repo and a git-only one:
+
+```bash
+abcd disembark coverage <report.json>... --json
+```
+
+Each positional argument is a probe report emitted with `probe --json`.
 
 ## Pack
 
