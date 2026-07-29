@@ -499,3 +499,20 @@ func TestStageTwoGateBlocksSurvivingWarnIdentifier(t *testing.T) {
 		t.Errorf("a clean rescan must not block: %+v", got)
 	}
 }
+
+// G4: the refusal the caller reads must describe the gate that fired. It named
+// a hard_fail severity while blocking on ANY surviving identity or network span,
+// so a reader chasing a warn-severity hostname was sent looking for a severity
+// no finding carried.
+func TestResidualErrorNamesNoSeverityItDoesNotGateOn(t *testing.T) {
+	err := &RedactionResidualError{Residual: []scanner.Finding{
+		{Kind: "net:lan_hostname", Severity: scanner.SeverityWarn},
+	}}
+	msg := err.Error()
+	if strings.Contains(msg, string(scanner.SeverityHardFail)) {
+		t.Errorf("refusal names a severity the gate does not key on: %s", msg)
+	}
+	if !strings.Contains(msg, "net:lan_hostname") || !strings.Contains(msg, "refusing to write") {
+		t.Errorf("refusal must name the surviving kind and refuse the write: %s", msg)
+	}
+}

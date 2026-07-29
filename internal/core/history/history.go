@@ -53,9 +53,10 @@ type CaptureResult struct {
 }
 
 // RedactionResidualError is returned by Capture when the stage-two re-scan finds
-// a hard_fail span that survived redaction. NO file is written. It carries the
-// surviving findings' kinds/locations only — the scanner has already masked
-// their Matched fields, so no raw secret material is exposed.
+// a BLOCKING span that survived redaction — any identity or network span
+// whatever its severity, plus every hard_fail one (blockingResidual). NO file is
+// written. It carries the surviving findings' kinds/locations only — the scanner
+// has already masked their Matched fields, so no raw secret material is exposed.
 type RedactionResidualError struct {
 	Residual []scanner.Finding
 }
@@ -65,7 +66,7 @@ func (e *RedactionResidualError) Error() string {
 	for _, f := range e.Residual {
 		kinds = append(kinds, f.Kind)
 	}
-	return fmt.Sprintf("history: redaction left %d hard_fail span(s) unresolved [%s]; refusing to write",
+	return fmt.Sprintf("history: redaction left %d blocking span(s) unresolved [%s]; refusing to write",
 		len(e.Residual), strings.Join(kinds, ", "))
 }
 
@@ -75,7 +76,7 @@ func (e *RedactionResidualError) Error() string {
 //
 // It is idempotent on the source's sha256: an identical source already stored
 // is a no-op (Wrote=false, existing record returned, mtime preserved). It is
-// fail-closed: if a hard_fail span survives redaction it returns a
+// fail-closed: if a blocking span survives redaction it returns a
 // *RedactionResidualError and writes nothing.
 //
 // Precondition: the transcripts/ dir must already exist (abcd ahoy install
