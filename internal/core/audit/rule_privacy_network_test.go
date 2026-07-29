@@ -196,6 +196,14 @@ func TestAC_PrivacyNestedUsernameUnderSystemDirectory(t *testing.T) {
 		// name-bearing segment beneath it.
 		{"windows file under system directory", `report at C:\Users\Public\report.txt` + "\n", true}, // abcd-audit:allow
 		{"posix file under system directory", "report at /Users/Shared/report.txt\n", true},          // abcd-audit:allow
+		// G3: Windows accepts BOTH separators in one path, so a nested name written
+		// after a forward slash is a name the system directory must not shield.
+		// Picking a single separator for the walk exempted the whole mixed spelling.
+		{"windows mixed separator then name", `keys at C:\Users\Shared/` + strings.Join([]string{"j", "doe"}, "") + `/keys.txt` + "\n", true},
+		{"windows mixed separator then marker and name", `keys at C:\Users\Public/../` + strings.Join([]string{"j", "doe"}, "") + "\n", true},
+		// The POSIX walk stays slash-only: a backslash after a POSIX path is a Go
+		// string escape, not a segment, and reading it as one flagged the escape.
+		{"posix path then a string escape", `the tier lives at /Users/Shared\n and stops` + "\n", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

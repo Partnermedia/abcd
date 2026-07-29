@@ -177,7 +177,7 @@ func hasAbsHomePath(line string) bool {
 			// beneath it: /Users/Shared/<name>/... still names a user, and
 			// stopping the match on the exempt segment turned the system
 			// directory into a shield for the very thing the rule looks for.
-			if hasFurtherSegment(line, loc[1], pathSeparatorOf(m)) {
+			if hasFurtherSegment(line, loc[1], isWindowsPath(m)) {
 				return true
 			}
 			continue
@@ -199,12 +199,16 @@ func hasAbsHomePath(line string) bool {
 // exactly the paths the exemption must not cover. The walk skips them and keeps
 // looking.
 //
-// sep is the separator of the MATCH, not both separators at once: absPathRe
-// matches the Windows spelling too and it must get the same nested-name
-// semantics, but a backslash after a POSIX path is an escape (the two bytes of
-// "/Users/Shared\n" in a source string), never a path segment.
-func hasFurtherSegment(line string, pos int, sep byte) bool {
-	for pos < len(line) && line[pos] == sep {
+// The separators the walk accepts come from the MATCH, not from the host it runs
+// on. A Windows path takes BOTH: Windows itself accepts either separator and
+// mixes them freely within one path, so `C:\Users\Shared/<user>/x` names a user
+// exactly as the all-backslash spelling does, and walking on one separator
+// exempted the mixed spelling wholesale. A POSIX path stays slash-only, because a
+// backslash after one is an escape (the two bytes of "/Users/Shared\n" in a
+// source string), never a path segment.
+func hasFurtherSegment(line string, pos int, windows bool) bool {
+	isSep := func(b byte) bool { return b == '/' || (windows && b == '\\') }
+	for pos < len(line) && isSep(line[pos]) {
 		i, named := pos+1, false
 		for i < len(line) && isPathSegmentChar(line[i]) {
 			if line[i] != '.' {
@@ -220,13 +224,10 @@ func hasFurtherSegment(line string, pos int, sep byte) bool {
 	return false
 }
 
-// pathSeparatorOf returns the separator the matched path is written with: a
-// backslash for the Windows spelling (`C:\Users\<name>`), a slash otherwise.
-func pathSeparatorOf(m string) byte {
-	if strings.Contains(strings.ToLower(m), `:\users\`) {
-		return '\\'
-	}
-	return '/'
+// isWindowsPath reports whether the matched path is the Windows spelling
+// (`C:\Users\<name>`) rather than a POSIX one.
+func isWindowsPath(m string) bool {
+	return strings.Contains(strings.ToLower(m), `:\users\`)
 }
 
 // isPathSegmentChar matches the character class absPathRe uses for a segment.
