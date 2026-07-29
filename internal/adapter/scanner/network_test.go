@@ -119,6 +119,11 @@ func TestNetworkFlagsNonReservedIdentifiers(t *testing.T) {
 		// hyphenated device name, and a bare two-label host all still flag.
 		{"uppercase lan suffix", "net:lan_hostname", "ssh " + host(dash("CORP", "NAS"), "LAN")},
 		{"device service instance", "net:lan_hostname", "found " + host(dash("zeta", "printer"), "_ipp", "_tcp", "local")},
+		// F8: the CIDR exemption stopped reading at the first non-digit, so a
+		// prefix length that runs into a word was still taken for a range
+		// declaration. A prefix length ends at a non-word boundary.
+		{"prefix length runs into a word", "net:ipv4", "net " + v4(10, 0, 0, 0) + "/8x"},
+		{"prefix length runs into a letter v6", "net:ipv6", "net " + v6("fc00", "", "") + "/7f"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -171,6 +176,10 @@ func TestNetworkAllowsReservedIdentifiers(t *testing.T) {
 		"CGNAT 100.64.0.0/10 and benchmark 198.18.0.0/15",
 		"link-local fe80::/10, unique local fc00::/7",
 		"NAT64 (64:ff9b::/96) and 6to4 (2002::/16)",
+		// A prefix declaration ending in ordinary sentence punctuation is still a
+		// range: the boundary the length must respect is a WORD boundary.
+		"the private block is 10.0.0.0/8.",
+		"see 100.64.0.0/10; the CGNAT range",
 		// abcd's own local tier is a directory name, not a host.
 		`tiers: {".abcd/.work.local", "work.local"}`,
 		// C1: colon-separated hex digests are not addresses. A sub-run of eight

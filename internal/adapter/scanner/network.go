@@ -384,6 +384,12 @@ func cidrPrefixDeclaration(line string, start, end int) bool {
 	if i == end+1 || i-(end+1) > 3 {
 		return false
 	}
+	// The length must END there. Without this the scan simply stopped at the
+	// first non-digit, so "/8x" — a prefix length running into a word, which no
+	// range declaration does — was read as "/8" and exempted the base address.
+	if i < len(line) && isWordByte(line[i]) {
+		return false
+	}
 	p, err := netip.ParsePrefix(line[start:i])
 	if err != nil {
 		return false
