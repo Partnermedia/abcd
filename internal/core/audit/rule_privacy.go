@@ -45,10 +45,6 @@ var (
 	// "/home/name" at end-of-line (e.g. `HOME=/home/name`) must be caught. This abcd-audit:allow
 	// mirrors the Windows branch, which never required a trailing separator.
 	absPathRe = regexp.MustCompile(`(?:/Users/|/home/)[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+`)
-
-	// The canonical network-identifier set, built once in the scanner. Compiled
-	// at package init so the per-file scan below costs no rebuild.
-	networkPatterns = scanner.NetworkPatterns()
 )
 
 func (privacyHygiene) Meta() RuleMeta {
@@ -82,6 +78,16 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	}
 	defer root.Close()
 
+	// The canonical network-identifier set AS THIS REPO CONFIGURES IT: the
+	// scanner's merged patterns, so a severity a repo raised in
+	// .abcd/config/pii.json is honoured here exactly as it is in Stage-1
+	// redaction. A scanner that cannot be built falls back to the built-in set,
+	// which detects the same things at their default severities.
+	patterns := scanner.NetworkPatterns()
+	if sc, err := scanner.New(ctx.RepoRoot); err == nil {
+		patterns = sc.NetworkPatterns()
+	}
+
 	var out []Finding
 	for _, rel := range tracked {
 		data, ok := readTrackedFile(root, filepath.FromSlash(rel))
@@ -96,7 +102,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 			if strings.Contains(line, auditWaiver) {
 				continue
 			}
-			msg, sev, leaked := privacyLeak(line)
+			msg, sev, leaked := privacyLeak(line, patterns)
 			if !leaked {
 				continue
 			}
@@ -123,7 +129,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 // and the two hostname shapes, which are heuristics and warn. Flattening
 // everything to error here would have made that documented split a fiction at
 // the one surface a reader meets it.
-func privacyLeak(line string) (string, Severity, bool) {
+func privacyLeak(line string, networkPatterns []scanner.Pattern) (string, Severity, bool) {
 	if hasAbsHomePath(line) {
 		return "committed file contains an absolute local path", SeverityError, true
 	}

@@ -138,6 +138,30 @@ func TestAC_PrivacyNetworkSeverityFollowsThePatternSet(t *testing.T) {
 	}
 }
 
+// F6: the pattern set says a repo that wants the hostname shapes to block can
+// raise their severity in .abcd/config/pii.json. The audit rule must therefore
+// read the same MERGED set the scanner builds for this repo — binding the
+// built-in set made that documented override a no-op at the one surface a
+// maintainer meets it.
+func TestAC_PrivacyNetworkHonoursRepoSeverityOverride(t *testing.T) {
+	const cfg = `{"patterns":{"net_lan_hostname":{"severity":"hard_fail"}}}` + "\n"
+	res := newFixtureRepo(t).conforming().
+		file(".abcd/config/pii.json", cfg).
+		file("reference/notes.md", "ssh into "+joinDots("printer", "local")+"\n").
+		commit().run()
+
+	f := findingFor(res, "privacy-hygiene")
+	if f == nil {
+		t.Fatal("no privacy-hygiene finding for a LAN hostname")
+	}
+	if f.Severity != audit.SeverityError {
+		t.Errorf("severity = %q, want %q — the repo raised this pattern to hard_fail", f.Severity, audit.SeverityError)
+	}
+	if res.ExitCode != 2 {
+		t.Errorf("exit = %d, want 2 for a raised, blocking finding", res.ExitCode)
+	}
+}
+
 // S3: an exempt system directory must not shield a username nested under it.
 func TestAC_PrivacyNestedUsernameUnderSystemDirectory(t *testing.T) {
 	cases := []struct {

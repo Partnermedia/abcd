@@ -143,6 +143,32 @@ func IsNonUserHomeSegment(seg string) bool {
 	return nonUserHomeSegments[strings.ToLower(seg)]
 }
 
+// isNetworkKind reports whether a finding kind is one of the network
+// identifiers, so a consumer can take that half of a merged pattern set.
+func isNetworkKind(kind string) bool {
+	switch kind {
+	case kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost:
+		return true
+	}
+	return false
+}
+
+// NetworkPatterns returns the network-identifier subset of THIS scanner's merged
+// patterns — the built-in set with the repo's .abcd/config/pii.json override
+// applied. A consumer that wants only the network half (the audit
+// privacy-hygiene rule) must come through here rather than through the
+// package-level set, or a repo that raises a pattern's severity, exactly as the
+// set documents it may, sees no effect at the surface that reports it.
+func (s *Scanner) NetworkPatterns() []Pattern {
+	var out []Pattern
+	for _, p := range s.patterns {
+		if isNetworkKind(p.Kind) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // NetworkPatterns returns the canonical network-identifier pattern set. It is
 // exported so the audit privacy-hygiene rule can run exactly these patterns over
 // committed files without duplicating them, and it is included in
