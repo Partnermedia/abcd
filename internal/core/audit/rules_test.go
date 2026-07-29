@@ -249,6 +249,55 @@ func TestRule_WorkTierIsAFileDoesNotAbort(t *testing.T) {
 	}
 }
 
+// three-tier-layout: local-tier artifacts (NEXT.md, scratch/, logs/) sitting
+// directly in a committed tier → one error per misplacement, each naming the
+// misplaced path. This is the leak class where a handover file full of
+// machine-local detail rides a committed tier into public history.
+func TestRule_LocalArtifactsInCommittedTiers(t *testing.T) {
+	b := newFixtureRepo(t).conforming().
+		file(".abcd/work/NEXT.md", "# handover in the wrong tier\n").
+		dir(".abcd/development/scratch").
+		dir(".abcd/work/logs").
+		commit()
+	res := b.run()
+
+	got := map[string]bool{}
+	for _, f := range res.Findings {
+		if f.RuleID != "three-tier-layout" {
+			continue
+		}
+		got[f.File] = true
+		if f.Severity != audit.SeverityError {
+			t.Errorf("severity for %s = %q, want error", f.File, f.Severity)
+		}
+	}
+	for _, want := range []string{".abcd/work/NEXT.md", ".abcd/development/scratch", ".abcd/work/logs"} {
+		if !got[want] {
+			t.Errorf("no three-tier-layout finding for misplaced %s (got %v)", want, got)
+		}
+	}
+	if res.ExitCode != 2 {
+		t.Errorf("exit = %d, want 2", res.ExitCode)
+	}
+}
+
+// The same artifact names in their own tier are exactly where they belong:
+// NEXT.md, scratch/ and logs/ under .abcd/.work.local/ produce no findings.
+func TestRule_LocalArtifactsInLocalTierClean(t *testing.T) {
+	b := newFixtureRepo(t).conforming(). // conforming() already has .abcd/.work.local/NEXT.md
+						dir(".abcd/.work.local/scratch").
+						dir(".abcd/.work.local/logs").
+						commit()
+	res := b.run()
+
+	if f := findingFor(res, "three-tier-layout"); f != nil {
+		t.Fatalf("local-tier artifacts in their own tier were flagged: %+v", f)
+	}
+	if res.ExitCode != 0 {
+		t.Errorf("exit = %d, want 0", res.ExitCode)
+	}
+}
+
 // A directory named AGENTS.md does not satisfy conventions-router — the router is
 // a file.
 func TestRule_ConventionsRouterIsADirectory(t *testing.T) {

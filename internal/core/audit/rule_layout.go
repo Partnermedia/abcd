@@ -9,8 +9,11 @@ import (
 
 // threeTierLayout checks the committed three-tier .abcd/ layout: the durable
 // record (.abcd/development/) and the shared working tier (.abcd/work/) must be
-// present, and the local-ephemeral tier (.abcd/.work.local/), when present, must
-// be gitignored so per-worktree state never leaks into history.
+// present, the local-ephemeral tier (.abcd/.work.local/), when present, must
+// be gitignored so per-worktree state never leaks into history, and the
+// local tier's conventional artifacts (NEXT.md, scratch/, logs/) must not sit
+// directly in a committed tier — a handover file carrying machine-local detail
+// in .abcd/work/ is committed, pushed, and public before anything flags it.
 //
 // Presence of .work.local is NOT required — it is created on demand and a fresh
 // clone has none. Requiring it would flag every clean checkout. The load-bearing
@@ -52,6 +55,34 @@ func (threeTierLayout) Eval(ctx Context) ([]Finding, error) {
 				File:     tier.rel,
 				Message:  "missing the " + tier.label + " (must be a directory)",
 			})
+			continue
+		}
+
+		// Local-tier artifacts in a committed tier: NEXT.md, scratch/ and logs/
+		// are the local-ephemeral tier's conventional contents, so their presence
+		// directly under a committed tier is a placement error of the leak class —
+		// per-worktree ephemera about to enter (or already in) history. Presence
+		// is checked on the filesystem, like the tiers themselves: an untracked
+		// NEXT.md in .abcd/work/ is one `git add -A` from being committed.
+		for _, artifact := range []struct{ name, kind string }{
+			{"NEXT.md", "handover file"},
+			{"scratch", "scratch directory"},
+			{"logs", "logs directory"},
+		} {
+			rel := tier.rel + "/" + artifact.name
+			present, err := fsutil.Exists(filepath.Join(ctx.RepoRoot, filepath.FromSlash(rel)))
+			if err != nil {
+				return nil, err
+			}
+			if present {
+				out = append(out, Finding{
+					RuleID:   "three-tier-layout",
+					Severity: SeverityError,
+					File:     rel,
+					Message:  "local-tier " + artifact.kind + " " + artifact.name + " found in the " + tier.label + " — per-worktree ephemera must never enter a committed tier",
+					Fix:      "move " + rel + " to the local-ephemeral tier .abcd/.work.local/",
+				})
+			}
 		}
 	}
 
