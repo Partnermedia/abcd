@@ -9,7 +9,7 @@ func TestIsStrictSemver(t *testing.T) {
 			t.Errorf("expected %q valid", v)
 		}
 	}
-	invalid := []string{"v1.2.3", "1.2", "1.2.3.4", "01.2.3", "1.02.3", "1.2.3rc1", "1.2.3\n", "", "1.2.3 "}
+	invalid := []string{"v1.2.3", "1.2", "1.2.3.4", "01.2.3", "1.02.3", "1.2.3rc1", "1.2.3\n", "", "1.2.3 "} // abcd-audit:allow — VERSION strings, not addresses
 	for _, v := range invalid {
 		if IsStrictSemver(v) {
 			t.Errorf("expected %q invalid", v)

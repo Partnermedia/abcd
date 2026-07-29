@@ -151,6 +151,68 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Network identifiers are detected, redacted and audited — one pattern set,
+  three surfaces** (iss-154, iss-157, iss-125, iss-153). The scanner carried
+  token-shaped secrets and identity matchers but nothing for addresses or
+  hostnames, so a lifeboat pack or launch bundle carrying a tailnet address and
+  device names shipped clean, a stored transcript kept a LAN hostname verbatim,
+  and `abcd audit` passed the whole class in silence. The detector is an
+  allowlist inversion rather than a leak-recognition heuristic: because every
+  illustrative identifier in a committed file comes from a reserved range, the
+  small closed set of values that are ALLOWED is what a pattern can recognise,
+  and everything outside it is a finding. Allowed are the documentation ranges
+  (RFC 5737, RFC 3849, RFC 2606/6761, RFC 7042), device names derived from the
+  persona registry, and the values that name no individual host at all —
+  loopback, unspecified, netmasks, masked CIDR prefixes, and the IANA
+  special-use ranges for link-local, multicast, benchmarking, protocol
+  assignments and the NAT64 well-known prefix. Flagged is what identifies
+  private topology: private ranges, CGNAT/tailnet, IPv6 unique-local, 6to4,
+  public unicast, LAN suffixes (`.local`, `.lan`, `.fritz.box`) and
+  device-hostname shapes. The set is built once and folded into the scanner's
+  defaults, so Stage-1 redaction and the launch/lifeboat scan inherit it and the
+  audit rule consults exactly the same patterns — the surfaces cannot disagree
+  about what a leak is. Addresses are hard_fail; the two hostname shapes are
+  warn, and the audit surface carries that split through rather than flattening
+  it. A line carrying `abcd-audit:allow` stays exempt, so a deliberately
+  illustrative value needs no weakening of the patterns. An identifier is masked
+  WHOLE — to a readable placeholder in redacted text, and fully starred in a
+  serialised finding — never to the head-and-tail fingerprint a credential gets:
+  on a MAC or a hostname that fingerprint preserves the vendor bytes and the
+  head, which is enough to re-identify the machine the masking was meant to hide.
+  The two hostname shapes tell a host from source code, because Stage-1
+  redaction rewrites every finding and a false positive there corrupts a stored
+  transcript: a mixed-case suffix where code puts a value (`zone := time.Local`),
+  a selector position (an assignment target, a block head, a call) and a
+  determiner before a device noun ("a synology-nas") are all read as code or
+  prose rather than machines. Mixed case on its own exempts nothing — a shifted
+  key in a command or a URL would otherwise be a bypass anyone could type — and a
+  fixture host must be spelled the way the persona registry spells it, in lower
+  case, because a capitalised given name in front of a device noun is how macOS
+  names a real person's machine. A digest is told from an address by the length
+  of the colon-separated run around it, counting only the groups that carry hex:
+  an address is eight of them and may sit beside one more (the port a tool
+  prints), while the shortest fingerprint is sixteen. A
+  repo that wants the hostname shapes to block raises their severity in
+  `.abcd/config/pii.json`, and `abcd audit` reads that merged set, so the
+  override reaches the surface that reports it. The transcript store's
+  verification rescan refuses the write on ANY surviving identifier, not only a
+  hard_fail one, so a warn-severity hostname cannot reach disk in silence, and
+  the refusal it prints names the surviving kinds rather than a severity it does
+  not gate on.
+- **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
+  privacy-hygiene flagged every segment under a `/Users` root, so the macOS
+  system directories that live there were reported as though they named a
+  person, taxing product code that legitimately writes to one. The exemption is
+  narrow: it is scoped to the `/Users` root, it covers the system directory
+  itself and not what sits beneath it (a name nested under one — `Shared/<user>`
+  — is still a user, and still flags), a segment that merely begins with a
+  system-directory name is still a leak, and an empty or dots-only segment in
+  between (`Shared/../<user>`) restores no shield. The audit rule holds those
+  terms for both spellings it matches, the POSIX one and the Windows one — and
+  because Windows accepts either separator within one path, a name written after
+  a forward slash inside a Windows path is read as the nested name it is; the
+  scanner's own identity matcher shares the allowlist for the POSIX paths it
+  recognises, which are the only ones it has ever matched.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded

@@ -228,6 +228,22 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 		if m.homeSelf != nil && m.homeSelf.MatchString(matched) {
 			continue
 		}
+		// /Users/Shared and friends are macOS system directories, not users
+		// (iss-153). The audit rule applies the same allowlist, so the two
+		// detectors cannot disagree about what a username is.
+		//
+		// The exemption stops at the system directory ITSELF: a name nested
+		// under it (/Users/Shared/<user>/...) is still a user, and letting the
+		// one-segment match end on the exempt segment made the system directory
+		// a shield. When a further segment follows, the match is EXTENDED over
+		// it so the redacted span covers the name, not just the prefix.
+		if isNonUserHomeMatch(matched) {
+			end, ok := nextPathSegmentEnd(line, loc[1])
+			if !ok {
+				continue // the system directory alone, or with no further segment
+			}
+			matched = line[loc[0]:end]
+		}
 		add(kindHomeOther, loc[0]+1, matched, "(remove or relativise — third-party path)")
 	}
 	// real_email — skip the noreply form.
@@ -293,6 +309,51 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 		}
 	}
 	return out
+}
+
+// isNonUserHomeMatch reports whether a generic-home match's final segment is a
+// well-known non-user directory under a /Users root.
+func isNonUserHomeMatch(matched string) bool {
+	if !strings.HasPrefix(strings.ToLower(matched), "/users/") {
+		return false
+	}
+	i := strings.LastIndexByte(matched, '/')
+	return i >= 0 && IsNonUserHomeSegment(matched[i+1:])
+}
+
+// nextPathSegmentEnd returns the end offset of the NAME-BEARING path segment
+// that follows pos, and whether one is there at all. "/Users/Shared" and
+// "/Users/Shared/" have none; nor does a segment of pure dots on its own, which
+// is prose ("/Users/Shared/...") or a relative marker, never a username.
+// "/Users/Shared/<name>/x" has "<name>".
+//
+// A dots-only or an empty segment does not end the walk, though: either one
+// between the system directory and a name ("/Users/Shared/../<user>",
+// "/Users/Shared//<user>") would otherwise re-create the shield the exemption is
+// not allowed to give. genericHomeRe is POSIX-only, so '/' is the only separator
+// that can reach here.
+func nextPathSegmentEnd(line string, pos int) (int, bool) {
+	for pos < len(line) && line[pos] == '/' {
+		i, named := pos+1, false
+		for i < len(line) && isHomeSegmentByte(line[i]) {
+			if line[i] != '.' {
+				named = true
+			}
+			i++
+		}
+		if named {
+			return i, true
+		}
+		pos = i // an empty or dots-only segment: skip it and keep looking
+	}
+	return 0, false
+}
+
+// isHomeSegmentByte matches the character class genericHomeRe uses for a
+// username segment.
+func isHomeSegmentByte(b byte) bool {
+	return b == '.' || b == '_' || b == '-' ||
+		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // localSuppressionSpans returns spans where a local-username match is not a

@@ -376,14 +376,14 @@ func TestIngestRefusesSSRFTargets(t *testing.T) {
 		"http://127.0.0.1/x",                       // loopback
 		"http://localhost/x",                       // loopback by name
 		"http://[::1]/x",                           // IPv6 loopback
-		"http://10.0.0.1/x",                        // private
-		"http://192.168.1.1/x",                     // private
-		"http://172.16.5.5/x",                      // private
+		"http://10.0.0.1/x",                        // private  abcd-audit:allow
+		"http://192.168.1.1/x",                     // private  abcd-audit:allow
+		"http://172.16.5.5/x",                      // private  abcd-audit:allow
 		"http://metadata.google.internal/x",        // metadata name
 		"http://svc.internal/x",                    // .internal name
 		"http://[64:ff9b::a9fe:a9fe]/x",            // NAT64 embedding 169.254.169.254 (metadata)
 		"http://[64:ff9b::7f00:1]/x",               // NAT64 embedding 127.0.0.1 (loopback)
-		"http://[2002:a9fe:a9fe::]/x",              // 6to4 embedding 169.254.169.254 (metadata)
+		"http://[2002:a9fe:a9fe::]/x",              // 6to4 embedding the metadata endpoint  abcd-audit:allow
 	}
 	for _, target := range cases {
 		t.Run(target, func(t *testing.T) {
