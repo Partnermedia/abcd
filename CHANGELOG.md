@@ -174,11 +174,21 @@ called out in a **Breaking** section.
   about what a leak is. Addresses are hard_fail; the two hostname shapes are
   warn, and the audit surface carries that split through rather than flattening
   it. A line carrying `abcd-audit:allow` stays exempt, so a deliberately
-  illustrative value needs no weakening of the patterns. In redaction an
-  identifier is masked WHOLE, to a readable placeholder, not to the head-and-tail
-  fingerprint a credential gets — on a MAC or a hostname that fingerprint
-  preserves the vendor bytes and the head, which is enough to re-identify the
-  machine the redaction was meant to hide.
+  illustrative value needs no weakening of the patterns. An identifier is masked
+  WHOLE — to a readable placeholder in redacted text, and fully starred in a
+  serialised finding — never to the head-and-tail fingerprint a credential gets:
+  on a MAC or a hostname that fingerprint preserves the vendor bytes and the
+  head, which is enough to re-identify the machine the masking was meant to hide.
+  The two hostname shapes tell a host from source code, because Stage-1
+  redaction rewrites every finding and a false positive there corrupts a stored
+  transcript: a mixed-case suffix (the `time.Local` shape), a selector position
+  (an assignment target, a block head, a call) and a determiner before a device
+  noun ("a synology-nas") are all read as code or prose rather than machines. A
+  repo that wants the hostname shapes to block raises their severity in
+  `.abcd/config/pii.json`, and `abcd audit` reads that merged set, so the
+  override reaches the surface that reports it. The transcript store's
+  verification rescan refuses the write on ANY surviving identifier, not only a
+  blocking one, so a warn-severity hostname cannot reach disk in silence.
 - **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
   privacy-hygiene flagged every segment under a `/Users` root, so the macOS
   system directories that live there were reported as though they named a
@@ -186,8 +196,11 @@ called out in a **Breaking** section.
   narrow: it is scoped to the `/Users` root, it covers the system directory
   itself and not what sits beneath it (a name nested under one — `Shared/<user>`
   — is still a user, and still flags), a segment that merely begins with a
-  system-directory name is still a leak, and the scanner's own identity matcher
-  applies the same allowlist so the two detectors agree on what a username is.
+  system-directory name is still a leak, and an empty or dots-only segment in
+  between (`Shared/../<user>`) restores no shield. The audit rule holds those
+  terms for both spellings it matches, the POSIX one and the Windows one; the
+  scanner's own identity matcher shares the allowlist for the POSIX paths it
+  recognises, which are the only ones it has ever matched.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded
