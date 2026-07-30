@@ -73,7 +73,8 @@ the other reports it as live.
 ## The guard's output contract
 
 The guard checks the **content of every staged file**, read out of the index
-(`git show :<path>`), not the text of a diff. That is the question it is actually
+(`git show ":0:<path>"`, stage-explicit so a path shaped like a revision cannot
+redirect the read), not the text of a diff. That is the question it is actually
 asking — is this name in what I am about to commit? — and unlike diff text it has no
 shape to route around: a content line beginning `++`, a blob containing a NUL, a
 committed `.gitattributes` carrying `-diff`, and a rename all hide a name from a
