@@ -22,10 +22,20 @@ const gitignoreMaxBytes = 256 * 1024
 
 // visibilityEntries is the canonical abcd-managed entry set per visibility,
 // per the brief's visibility table (§1). Order preserved for stable diffs.
-// .work/ is always ignored regardless of visibility.
+// A private repo commits the whole .abcd/ namespace and gitignores only the
+// local-ephemeral tier; a public repo gitignores that namespace outright — one
+// switch, no per-subdirectory exceptions, so .abcd/.work.local/ needs no
+// separate entry there — plus the legacy root-level memory/ snapshot.
+// The table means the repo-root directories, so the public entries are
+// anchored: a gitignore pattern with no non-trailing slash matches at any
+// depth, and unanchored .abcd/ or memory/ would also ignore e.g. a nested
+// src/.abcd/ or an internal/memory/ source package. The leading slash anchors
+// the pattern to the .gitignore's own directory — the repository root. The
+// private entry's internal slash already anchors it, so it takes no leading
+// slash.
 var visibilityEntries = map[string][]string{
-	"private": {".work/"},
-	"public":  {".abcd/", "memory/", ".work/"},
+	"private": {".abcd/.work.local/"},
+	"public":  {"/.abcd/", "/memory/"},
 }
 
 // canonicalGitignoreBlock returns the block lines (EOL-naive) for a visibility.
