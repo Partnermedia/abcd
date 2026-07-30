@@ -12,6 +12,36 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd banlist` — the names a repo must not publish, in two layers** (itd-74,
+  spc-20). Enforcement splits by sensitivity, because a deterministic CI gate is
+  the right tool for a public banned name and the wrong place for a private one:
+  the rule would have to contain the very string it forbids. The **public** layer
+  is the `banned_tokens` family of `.abcd/docs-lint.json` — the same primitive
+  that already gates this repo's harness names, not a second mechanism — with
+  verb-written entries under a `names/` id prefix that marks what the verb owns:
+  `list` renders the whole family, and a removal is refused for a hand-curated
+  entry. Config edits are byte surgery on the located array rather than a
+  re-marshal, so an add is one inserted line, a remove is one deleted line, and
+  add-then-remove returns the file to its exact bytes. The **private** layer is a
+  gitignored per-machine store read by the committed pre-commit guard, and its
+  visibility follows: entries render by key only, never their pattern, and the
+  redaction is structural — the entry type carries no pattern field, so no
+  rendering can leak one. `add` and `remove` name their layer explicitly (neither
+  flag and both flags exit 2); bare invocation and `list` are read-only, and both
+  state their reach plainly, including that CI cannot enforce the private layer.
+- **The private name guard refuses by key and says when it is inactive** (itd-74,
+  spc-20). The committed `.githooks/pre-commit` guard reads entries as
+  `KEY<whitespace>PATTERN`, and on a match refuses the commit naming the key
+  alone: the matched text and the pattern value never reach stdout, stderr, or a
+  log, because a refusal that echoed the string would defeat the layer at the
+  moment it worked. Hostnames, IP and CIDR values, MAC addresses, and device names
+  are ordinary entries, matched exactly as a name is. A line that does not parse as
+  key + pattern is read as a bare pattern under a synthetic key, so a store in the
+  older one-pattern-per-line format keeps blocking what it blocked before, and a
+  pattern the engine refuses is itself a refusal naming its line number — an
+  unusable entry is never skipped. An absent store prints a loud warning that the
+  layer is inactive on this machine and lets the commit through: it protects
+  machines that opted in, and silence must never impersonate protection.
 - **A citations family in `abcd docs lint`, with zero network in the gate**
   (itd-101, spc-17). Cited references rot silently — pages retitle, URLs
   redirect, whole platforms announce their own shutdown — but a gate that dials
