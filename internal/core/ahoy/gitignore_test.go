@@ -1,10 +1,14 @@
 package ahoy
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestVisibilityEntriesMatchBrief pins the abcd-managed entry set per visibility
@@ -12,12 +16,14 @@ import (
 // a private repo commits the whole `.abcd/` namespace and gitignores only the
 // local-ephemeral tier; a public repo gitignores the entire `.abcd/` namespace
 // (which subsumes the local tier) plus the legacy root-level `memory/` snapshot.
-// No entry may name a path the layout does not have — a phantom entry ignores
-// nothing while leaving the local tier tracked, which `abcd audit` then flags.
+// The public entries are ANCHORED (leading slash): the table means the repo-root
+// directories, and an unanchored pattern matches at any depth. No entry may name
+// a path the layout does not have — a phantom entry ignores nothing while
+// leaving the local tier tracked, which `abcd audit` then flags.
 func TestVisibilityEntriesMatchBrief(t *testing.T) {
 	want := map[string][]string{
 		"private": {".abcd/.work.local/"},
-		"public":  {".abcd/", "memory/"},
+		"public":  {"/.abcd/", "/memory/"},
 	}
 	if len(visibilityEntries) != len(want) {
 		t.Fatalf("visibilityEntries has %d visibilities; want %d", len(visibilityEntries), len(want))
@@ -53,7 +59,7 @@ func TestVisibilityEntriesMatchBrief(t *testing.T) {
 func TestCanonicalGitignoreBlockContent(t *testing.T) {
 	cases := map[string][]string{
 		"private": {gitignoreBegin, gitignoreHeader, ".abcd/.work.local/", gitignoreEnd},
-		"public":  {gitignoreBegin, gitignoreHeader, ".abcd/", "memory/", gitignoreEnd},
+		"public":  {gitignoreBegin, gitignoreHeader, "/.abcd/", "/memory/", gitignoreEnd},
 	}
 	for vis, want := range cases {
 		got := canonicalGitignoreBlock(vis)
@@ -64,9 +70,10 @@ func TestCanonicalGitignoreBlockContent(t *testing.T) {
 }
 
 // TestApplyVisibilityBlockHealsPhantomBlock is the iss-169 upgrade shape: a repo
-// carrying the old fence (phantom root-level `.work/`, local tier left tracked)
-// reads as drift, and one apply replaces it with the canonical block while
-// preserving the user's own ignore rules.
+// carrying an old fence — the phantom root-level `.work/` (local tier left
+// tracked) or the unanchored public entries `.abcd/`/`memory/` — reads as drift
+// (the comparison is set-wise), and one apply replaces it with the canonical
+// block while preserving the user's own ignore rules.
 func TestApplyVisibilityBlockHealsPhantomBlock(t *testing.T) {
 	cases := []struct {
 		visibility string
@@ -74,7 +81,7 @@ func TestApplyVisibilityBlockHealsPhantomBlock(t *testing.T) {
 		want       map[string]bool
 	}{
 		{"private", []string{".work/"}, map[string]bool{".abcd/.work.local/": true}},
-		{"public", []string{".abcd/", "memory/", ".work/"}, map[string]bool{".abcd/": true, "memory/": true}},
+		{"public", []string{".abcd/", "memory/", ".work/"}, map[string]bool{"/.abcd/": true, "/memory/": true}},
 	}
 	for _, tc := range cases {
 		dir := t.TempDir()
@@ -121,6 +128,68 @@ func TestApplyVisibilityBlockHealsPhantomBlock(t *testing.T) {
 			t.Errorf("%s: drift still reported after apply", tc.visibility)
 		}
 	}
+}
+
+// TestVisibilityBlockEffectiveGitSemantics proves the installed block against
+// real git matching, not string comparison. A gitignore pattern with no
+// non-trailing slash matches at ANY depth, so an unanchored `memory/` or
+// `.abcd/` would also ignore e.g. an `internal/memory/` source package or a
+// nested `src/.abcd/` — the leading slash anchors each public entry to the
+// .gitignore's own directory, the repository root, which is the level the
+// brief's visibility table (§1) means. The private entry's internal slash
+// already anchors it, and it must ignore the local tier alone, never the
+// committed `.abcd/work/` tier.
+func TestVisibilityBlockEffectiveGitSemantics(t *testing.T) {
+	cases := []struct {
+		visibility string
+		ignored    []string
+		notIgnored []string
+	}{
+		{
+			visibility: "public",
+			ignored:    []string{".abcd/", ".abcd/config.json", "memory/", "memory/snapshot.md"},
+			notIgnored: []string{"internal/memory/memory.go", "src/.abcd/rules.json"},
+		},
+		{
+			visibility: "private",
+			ignored:    []string{".abcd/.work.local/", ".abcd/.work.local/NEXT.md", ".abcd/.work.local/scratch/notes.md"},
+			notIgnored: []string{".abcd/work/DECISIONS.md"},
+		},
+	}
+	for _, tc := range cases {
+		repo := gittest.NewRepo(t)
+		if _, err := applyVisibilityBlock(repo.Root(), tc.visibility); err != nil {
+			t.Fatalf("%s: applyVisibilityBlock: %v", tc.visibility, err)
+		}
+		for _, rel := range tc.ignored {
+			if !gitCheckIgnored(t, repo, rel) {
+				t.Errorf("%s: git does not ignore %q; want ignored", tc.visibility, rel)
+			}
+		}
+		for _, rel := range tc.notIgnored {
+			if gitCheckIgnored(t, repo, rel) {
+				t.Errorf("%s: git ignores %q; want not ignored", tc.visibility, rel)
+			}
+		}
+	}
+}
+
+// gitCheckIgnored asks real git whether rel is ignored in repo: check-ignore
+// exits 0 when ignored, 1 when not, anything else is a test failure.
+func gitCheckIgnored(t *testing.T, repo *gittest.Repo, rel string) bool {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repo.Root(), "check-ignore", "-q", "--", rel)
+	cmd.Env = repo.Env()
+	err := cmd.Run()
+	if err == nil {
+		return true
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return false
+	}
+	t.Fatalf("git check-ignore %q: %v", rel, err)
+	return false
 }
 
 // TestRemoveGitignoreBlocksBalanced proves a matched BEGIN..END span is removed

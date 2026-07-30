@@ -164,7 +164,9 @@ called out in a **Breaking** section.
   per-subdirectory exceptions, plus the legacy root-level `memory/` snapshot. An
   existing repo carrying the old block needs no migration step: the block reads
   as drift, `abcd ahoy` reports it, and one apply replaces it, leaving the
-  repository's own ignore rules untouched.
+  repository's own ignore rules untouched. A repository still on the historical
+  root-level `.work/` layout stops ignoring `.work/` when the block refreshes;
+  the layout migration in `/abcd:prepare-this-repo` is the path off that state.
 - **The `PII` rules domain fires on network work, and says never to commit a
   hostname or an address** (iss-156). Its recall keywords were the vocabulary of
   credentials — secret, token, credential, pii, redact, hostname, email — so a
