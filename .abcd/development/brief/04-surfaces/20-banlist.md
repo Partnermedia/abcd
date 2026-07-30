@@ -101,13 +101,14 @@ as a distinct state rather than rendering an empty list.
 `abcd banlist list --private` distinguishes a line the guard's engine **cannot use**
 from one it **accepts and reads differently**, because the two need opposite
 responses. An unusable line stops every commit until it is fixed. An inert line — a
-Perl-style escape, an inline flag group — stops nothing: it matches nothing, so the
-name is unguarded while the store looks healthy. `add --private` refuses both up
+Perl-style escape, an inline flag group — stops nothing: grep may read it
+differently than written, so the name can go unguarded while the store looks healthy. `add --private` refuses both up
 front, screening the constructs POSIX ERE does not implement and then asking grep
 itself, with the pattern on stdin, whether the expression is usable. A private
 pattern is therefore checked against the engine that enforces it rather than
-against Go's, which accepted `\d` and `(?i)` as healthy and refused `[a-z-.]` that
-grep accepts.
+against Go's, which accepted `\d` and `(?i)` as healthy (grep reads them
+differently) and accepted `[a-z-.]`, which grep refuses (its fail-safe branch then
+blocks every commit).
 
 Because the store's safety rests entirely on its being untracked, `add --private`
 refuses outright when git does not ignore the store's path: the guard cannot catch
