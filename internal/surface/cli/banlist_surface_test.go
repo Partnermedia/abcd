@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -218,5 +219,194 @@ func TestBanlistUsageErrorsExitTwo(t *testing.T) {
 				t.Errorf("exit = %d, want 2 (stderr: %s)", code, stderr.String())
 			}
 		})
+	}
+}
+
+// runBanlist drives the verb with stdin attached, which the bare Run() helper
+// cannot do. Same exit-code mapping as Run.
+func runBanlist(stdin string, args ...string) (stdout, stderr string, code int) {
+	root := NewRootCommand()
+	root.SetArgs(args)
+	var so, se bytes.Buffer
+	root.SetOut(&so)
+	root.SetErr(&se)
+	root.SetIn(strings.NewReader(stdin))
+	err := root.Execute()
+	if err == nil {
+		return so.String(), se.String(), 0
+	}
+	code = 1
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		code = coded.ExitCode()
+	}
+	return so.String(), se.String() + err.Error(), code
+}
+
+// TestBanlistResolvesTheRepoRootNotTheCwd pins where the private store goes. With
+// the path resolved from the working directory, running the verb from ANY
+// subdirectory created a second, nested `.abcd/.work.local/private-names.txt` — one
+// the root-anchored gitignore rule does not match, so it commits with the plaintext
+// patterns in it, and one the guard never reads, so nothing stops that commit.
+func TestBanlistResolvesTheRepoRootNotTheCwd(t *testing.T) {
+	repo := blRepo(t, "")
+	sub := filepath.Join(repo, "internal", "deep")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"banlist", "add", "--private", "widget-partner", "widgetworks"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("add exit = %d, stderr = %s", code, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath))); err != nil {
+		t.Errorf("the store was not written at the repo root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sub, filepath.FromSlash(banlist.PrivateRelPath))); err == nil {
+		t.Error("a nested store was created in the subdirectory: the gitignore rule does not match it and the guard does not read it")
+	}
+}
+
+// TestBanlistDoesNotEchoALeadingDashPattern pins the flag-parse error surface. A
+// pattern beginning with a dash is read by the flag parser as flags, and cobra's
+// own message quotes the offending token verbatim — which for this verb is the one
+// value that must never reach a terminal or a log.
+func TestBanlistDoesNotEchoALeadingDashPattern(t *testing.T) {
+	t.Chdir(blRepo(t, ""))
+
+	stdout, stderr, code := runBanlist("", "banlist", "add", "--private", "widget-partner", `-\dwidgetworks`)
+	if code == 0 {
+		t.Fatalf("a pattern read as flags was accepted: %s", stdout)
+	}
+	if strings.Contains(stdout+stderr, "widgetworks") {
+		t.Errorf("the flag-parse error echoes the pattern:\n%s\n%s", stdout, stderr)
+	}
+	if !strings.Contains(stdout+stderr, "-") {
+		t.Errorf("the refusal does not explain the problem:\n%s\n%s", stdout, stderr)
+	}
+}
+
+// TestBanlistAddPrivateReadsThePatternFromStdin pins the entry path that keeps a
+// real private pattern out of argv and out of shell history: `-` means read one
+// line from stdin. An argument is world-readable in /proc/<pid>/cmdline while the
+// process lives and is captured verbatim by process auditing.
+func TestBanlistAddPrivateReadsThePatternFromStdin(t *testing.T) {
+	repo := blRepo(t, "")
+	t.Chdir(repo)
+
+	stdout, stderr, code := runBanlist("widgetworks\n", "banlist", "add", "--private", "widget-partner", "-")
+	if code != 0 {
+		t.Fatalf("add exit = %d: %s%s", code, stdout, stderr)
+	}
+	if strings.Contains(stdout+stderr, "widgetworks") {
+		t.Errorf("the confirmation echoes the pattern:\n%s%s", stdout, stderr)
+	}
+	store, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(store), "widget-partner widgetworks") {
+		t.Errorf("the pattern did not reach the store: %q", store)
+	}
+}
+
+// TestBanlistExitCodesAgreeOnTheSameError pins CORR-10: the bare command and `list`
+// are the same read, so the same broken store must produce the same exit code. A
+// caller scripting one and reading the other's contract is otherwise wrong.
+func TestBanlistExitCodesAgreeOnTheSameError(t *testing.T) {
+	repo := blRepo(t, "")
+	t.Chdir(repo)
+	// A directory at the store's path: present, and unreadable as a store.
+	if err := os.MkdirAll(filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	var bareOut, bareErr bytes.Buffer
+	bare := Run([]string{"banlist"}, &bareOut, &bareErr)
+	var listOut, listErr bytes.Buffer
+	list := Run([]string{"banlist", "list"}, &listOut, &listErr)
+	if bare != list {
+		t.Errorf("bare exit = %d, list exit = %d; the same error must exit the same way", bare, list)
+	}
+	if bare == 0 {
+		t.Errorf("an unreadable store exited 0:\n%s", bareOut.String())
+	}
+}
+
+// TestBanlistRendersControlCharactersSafely pins that every field of the public
+// render is termsafe: a severity carrying an escape sequence is committed config a
+// contributor could add, and rendering it raw hands the terminal control of the
+// screen. The pattern and id were already sanitised; severity was not.
+func TestBanlistRendersControlCharactersSafely(t *testing.T) {
+	repo := t.TempDir()
+	p := filepath.Join(repo, filepath.FromSlash(banlist.PublicConfigRelPath))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{
+  "roots": ["docs"],
+  "banned_tokens": [
+    {"id":"harness/x","pattern":"(?i)x","severity":"blocker\u001b[2J","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ]
+}
+`
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"banlist", "list", "--public"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d: %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "\x1b") {
+		t.Errorf("an escape sequence from the config reached the terminal: %q", stdout.String())
+	}
+}
+
+// TestBanlistReportsInertLinesHonestly pins the diagnostic wording the incident
+// response depends on. A line the guard REFUSES and a line the guard ACCEPTS but
+// reads differently need opposite remedies, and telling a reader "the guard refuses
+// until it is fixed" about the second sends them looking for a block that is not
+// happening while the name goes unguarded.
+func TestBanlistReportsInertLinesHonestly(t *testing.T) {
+	t.Chdir(blRepo(t, "inert   \\dwidgetworks\nbroken  [unclosed\n"))
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"banlist", "list", "--private"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "line 3") || !strings.Contains(out, "refuses") {
+		t.Errorf("the unusable line is not reported as one the guard refuses:\n%s", out)
+	}
+	if !strings.Contains(out, "line 2") || !strings.Contains(out, "matches nothing") {
+		t.Errorf("the inert line is not reported as one that matches nothing:\n%s", out)
+	}
+	for _, leak := range []string{"widgetworks", "unclosed"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("the render leaks %q:\n%s", leak, out)
+		}
+	}
+}
+
+// TestBanlistAcceptsATrailingJSONFlag pins why the leading-dash leak is closed by a
+// flag-error surface rather than by switching interspersed parsing off: the plugin
+// command documents `abcd banlist add --private <key> "<pattern>" --json`, and a
+// non-interspersed parser would read that trailing flag as a third argument.
+func TestBanlistAcceptsATrailingJSONFlag(t *testing.T) {
+	t.Chdir(blRepo(t, ""))
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"banlist", "add", "--private", "widget-partner", "widgetworks", "--json"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	var res banlist.PrivateResult
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
+		t.Fatalf("--json after the positionals did not produce a JSON result: %v\n%s", err, stdout.String())
+	}
+	if res.Key != "widget-partner" {
+		t.Errorf("result = %+v", res)
 	}
 }

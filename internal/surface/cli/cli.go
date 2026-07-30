@@ -170,6 +170,11 @@ func NewRootCommand() *cobra.Command {
 	// itself. Flag-parse errors route through FlagErrorFunc; argument errors come
 	// from each command's Args validator — wrap both across the whole tree (B13).
 	markUsageErrorsExitTwo(root)
+	// AFTER the generic tagging, which sets a FlagErrorFunc on every command: the
+	// banlist verbs need one that does NOT quote the offending token, because for
+	// them the token may be a private pattern. Applied here rather than in the verb
+	// so the ordering is explicit — the generic pass would otherwise overwrite it.
+	applyBanlistFlagErrors(root)
 
 	return root
 }

@@ -90,9 +90,9 @@ Banned-names layers (bare renders both, read-only); add/remove maintain them
 
 #### `abcd banlist add`
 
-Add one banned-name entry to the named layer
+Add one banned-name entry to the named layer (pattern `-` reads one line from stdin)
 
-**Usage:** `abcd banlist add --private|--public <key> <pattern> [flags]`
+**Usage:** `abcd banlist add --private|--public <key> <pattern|-> [flags]`
 
 **Flags:**
 
