@@ -156,7 +156,7 @@ published pattern.
 ## References
 
 - Plugin command: [`commands/abcd/banlist.md`](../../../../commands/abcd/banlist.md)
-- Spec: [`spc-20`](../../specs/open/spc-20-name-banlist.md)
-- Intent: [`itd-74`](../../intents/planned/itd-74-name-banlist.md)
+- Spec: [`spc-20`](../../specs/closed/spc-20-name-banlist.md)
+- Intent: [`itd-74`](../../intents/shipped/itd-74-name-banlist.md)
 - Public-layer gate: [`10-docs.md`](10-docs.md)
 - Install surface: [`01-ahoy.md`](01-ahoy.md)
