@@ -159,44 +159,46 @@ func AddPublic(req AddPublicRequest) (PublicResult, error) {
 		successor = defaultSuccessor
 	}
 
-	data, err := readPublic(req.RepoRoot)
-	if err != nil {
-		return PublicResult{}, err
-	}
-	span, err := locateBannedTokens(data)
-	if err != nil {
-		return PublicResult{}, err
-	}
 	id := PublicIDPrefix + req.Key
-	for _, el := range span.elems {
-		var tok lint.BannedToken
-		if err := json.Unmarshal(el.raw, &tok); err == nil && tok.ID == id {
-			return PublicResult{}, fmt.Errorf("%w: %q", ErrDuplicateKey, req.Key)
+	if err := withPublicLock(req.RepoRoot, func() error {
+		data, err := readPublic(req.RepoRoot)
+		if err != nil {
+			return err
 		}
-	}
+		span, err := locateBannedTokens(data)
+		if err != nil {
+			return err
+		}
+		for _, el := range span.elems {
+			var tok lint.BannedToken
+			if err := json.Unmarshal(el.raw, &tok); err == nil && tok.ID == id {
+				return fmt.Errorf("%w: %q", ErrDuplicateKey, req.Key)
+			}
+		}
 
-	entry, err := encodeEntry(id, stored, severity, successor)
-	if err != nil {
-		return PublicResult{}, err
-	}
+		entry, err := encodeEntry(id, stored, severity, successor)
+		if err != nil {
+			return err
+		}
 
-	var out bytes.Buffer
-	if len(span.elems) == 0 {
-		indent := lineIndent(data, span.openEnd) + "  "
-		out.Write(data[:span.openEnd])
-		out.WriteString("\n" + indent)
-		out.Write(entry)
-		out.WriteString("\n" + lineIndent(data, span.openEnd))
-		out.Write(data[span.closeStart:])
-	} else {
-		last := span.elems[len(span.elems)-1]
-		out.Write(data[:last.end])
-		out.WriteString(",\n" + lineIndent(data, last.start))
-		out.Write(entry)
-		out.Write(data[last.end:])
-	}
+		var out bytes.Buffer
+		if len(span.elems) == 0 {
+			indent := lineIndent(data, span.openEnd) + "  "
+			out.Write(data[:span.openEnd])
+			out.WriteString("\n" + indent)
+			out.Write(entry)
+			out.WriteString("\n" + lineIndent(data, span.openEnd))
+			out.Write(data[span.closeStart:])
+		} else {
+			last := span.elems[len(span.elems)-1]
+			out.Write(data[:last.end])
+			out.WriteString(",\n" + elementIndent(data, span, last))
+			out.Write(entry)
+			out.Write(data[last.end:])
+		}
 
-	if err := writePublic(req.RepoRoot, out.Bytes()); err != nil {
+		return writePublic(req.RepoRoot, out.Bytes())
+	}); err != nil {
 		return PublicResult{}, err
 	}
 	return PublicResult{
@@ -223,52 +225,74 @@ func storedPublicPattern(pattern string) string {
 // managed namespace are refused: the hand-curated families are edited in the config
 // by a human, in a reviewable commit, never by a verb.
 func RemovePublic(repoRoot, key string) (PublicResult, error) {
-	data, err := readPublic(repoRoot)
-	if err != nil {
-		return PublicResult{}, err
-	}
-	span, err := locateBannedTokens(data)
-	if err != nil {
-		return PublicResult{}, err
-	}
-
 	id := PublicIDPrefix + strings.TrimPrefix(key, PublicIDPrefix)
-	target := -1
 	var removed lint.BannedToken
-	for i, el := range span.elems {
-		var tok lint.BannedToken
-		if err := json.Unmarshal(el.raw, &tok); err != nil {
-			continue
+	if err := withPublicLock(repoRoot, func() error {
+		data, err := readPublic(repoRoot)
+		if err != nil {
+			return err
 		}
+		span, err := locateBannedTokens(data)
+		if err != nil {
+			return err
+		}
+
+		target := -1
+		for i, el := range span.elems {
+			var tok lint.BannedToken
+			if err := json.Unmarshal(el.raw, &tok); err != nil {
+				continue
+			}
+			switch {
+			case tok.ID == id:
+				target, removed = i, tok
+			case tok.ID == key:
+				// Named exactly, but outside the namespace these verbs own.
+				return fmt.Errorf("%w: %q is hand-curated; edit %s to change it", ErrNotManaged, key, PublicConfigRelPath)
+			}
+		}
+		if target < 0 {
+			return fmt.Errorf("%w: %q", ErrUnknownKey, key)
+		}
+
+		var out bytes.Buffer
 		switch {
-		case tok.ID == id:
-			target, removed = i, tok
-		case tok.ID == key:
-			// Named exactly, but outside the namespace these verbs own.
-			return PublicResult{}, fmt.Errorf("%w: %q is hand-curated; edit %s to change it", ErrNotManaged, key, PublicConfigRelPath)
+		case len(span.elems) == 1:
+			out.Write(data[:span.openEnd])
+			out.Write(data[span.closeStart:])
+		case target == 0:
+			out.Write(data[:span.elems[0].start])
+			out.Write(data[span.elems[1].start:])
+		default:
+			out.Write(data[:span.elems[target-1].end])
+			out.Write(data[span.elems[target].end:])
 		}
-	}
-	if target < 0 {
-		return PublicResult{}, fmt.Errorf("%w: %q", ErrUnknownKey, key)
-	}
 
-	var out bytes.Buffer
-	switch {
-	case len(span.elems) == 1:
-		out.Write(data[:span.openEnd])
-		out.Write(data[span.closeStart:])
-	case target == 0:
-		out.Write(data[:span.elems[0].start])
-		out.Write(data[span.elems[1].start:])
-	default:
-		out.Write(data[:span.elems[target-1].end])
-		out.Write(data[span.elems[target].end:])
-	}
-
-	if err := writePublic(repoRoot, out.Bytes()); err != nil {
+		return writePublic(repoRoot, out.Bytes())
+	}); err != nil {
 		return PublicResult{}, err
 	}
 	return PublicResult{Path: PublicConfigRelPath, Entry: publicEntry(removed)}, nil
+}
+
+// withPublicLock serialises a load-modify-write of the committed config on the same
+// inter-process lock primitive the private store uses. Two adds that interleave
+// would each write a body derived from the same read, so one entry — one ban — is
+// silently lost. The lock file lives in the gitignored local tier, never beside the
+// committed config it guards.
+func withPublicLock(repoRoot string, fn func() error) error {
+	if err := mkdirLocalTier(repoRoot); err != nil {
+		return err
+	}
+	lockPath := filepath.Join(repoRoot, filepath.FromSlash(privateDirRelPath), publicLockFilename)
+	err := fsutil.WithFileLock(lockPath, storeLockTimeout, fn)
+	switch {
+	case errors.Is(err, fsutil.ErrLockContention):
+		return fmt.Errorf("%w: could not lock %s within %s", ErrStoreLocked, PublicConfigRelPath, storeLockTimeout)
+	case errors.Is(err, fsutil.ErrLockPathUnsafe):
+		return fmt.Errorf("%w: the lock path for %s is not a regular file", ErrMalformedStore, PublicConfigRelPath)
+	}
+	return err
 }
 
 // writePublic validates the edited bytes and commits them atomically. Validation
@@ -331,27 +355,34 @@ type arraySpan struct {
 // document with the standard decoder and reading its input offsets. Nothing is
 // re-marshalled: the caller edits the original bytes inside the located ranges,
 // which is what keeps an edit to one entry from churning the whole file.
+//
+// Two things it must get exactly right, because the editor's every offset depends
+// on them. It matches an object KEY, never a string VALUE that happens to spell
+// banned_tokens — json.Decoder.Token does not distinguish the two, so the walker
+// below tracks it. And a document with MORE THAN ONE top-level banned_tokens key is
+// refused rather than resolved: encoding/json keeps the last such key and a byte
+// editor finds the first, so the linter would enforce one array while the verb edited
+// another — a ban reported as written and enforced by nobody. Neither reading is
+// safe to prefer, so a human resolves it.
 func locateBannedTokens(data []byte) (arraySpan, error) {
 	malformed := func(detail string) (arraySpan, error) {
 		return arraySpan{}, fmt.Errorf("%w: %s %s", ErrMalformedStore, PublicConfigRelPath, detail)
 	}
+	switch n := countBannedTokensKeys(data); {
+	case n == 0:
+		return malformed("has no top-level banned_tokens array")
+	case n > 1:
+		return malformed("declares the top-level banned_tokens key more than once; encoding/json would keep the last " +
+			"and a byte editor the first, so no reading of it is safe — remove the duplicate")
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
-	depth := 0
+	walker := keyWalker{dec: dec}
 	for {
-		tok, err := dec.Token()
+		tok, isKey, depth, err := walker.next()
 		if err != nil {
 			return malformed("has no top-level banned_tokens array")
 		}
-		if d, ok := tok.(json.Delim); ok {
-			if d == '{' || d == '[' {
-				depth++
-			} else {
-				depth--
-			}
-			continue
-		}
-		key, ok := tok.(string)
-		if !ok || depth != 1 || key != "banned_tokens" {
+		if !isKey || depth != 1 || tok != "banned_tokens" {
 			continue
 		}
 		open, err := dec.Token()
@@ -378,6 +409,77 @@ func locateBannedTokens(data []byte) (arraySpan, error) {
 	}
 }
 
+// countBannedTokensKeys counts the top-level banned_tokens OBJECT KEYS. A document
+// the decoder cannot finish reading counts what it saw: locateBannedTokens reports
+// the parse failure itself.
+func countBannedTokensKeys(data []byte) int {
+	walker := keyWalker{dec: json.NewDecoder(bytes.NewReader(data))}
+	n := 0
+	for {
+		tok, isKey, depth, err := walker.next()
+		if err != nil {
+			return n
+		}
+		if isKey && depth == 1 && tok == "banned_tokens" {
+			n++
+		}
+	}
+}
+
+// keyWalker streams json.Decoder tokens while tracking what the decoder does not
+// report: whether a string token is an object KEY or a VALUE, and the depth of the
+// container holding it. Inside an object, tokens alternate key, value, key, value —
+// so one bit per frame is enough, and a container opening in a value position
+// consumes its parent's value slot before it becomes a frame of its own.
+type keyWalker struct {
+	dec   *json.Decoder
+	stack []jsonFrame
+}
+
+// jsonFrame is one open container: obj distinguishes {} from [], and wantKey says
+// the next token in an object is a key.
+type jsonFrame struct {
+	obj     bool
+	wantKey bool
+}
+
+// next returns the next token, whether it is an object key, and the depth of the
+// container holding it (1 is the document's top-level object).
+func (w *keyWalker) next() (tok json.Token, isKey bool, depth int, err error) {
+	tok, err = w.dec.Token()
+	if err != nil {
+		return nil, false, 0, err
+	}
+	if d, ok := tok.(json.Delim); ok {
+		if d == '{' || d == '[' {
+			w.consumedValue()
+			w.stack = append(w.stack, jsonFrame{obj: d == '{', wantKey: d == '{'})
+			return tok, false, len(w.stack) - 1, nil
+		}
+		if len(w.stack) > 0 {
+			w.stack = w.stack[:len(w.stack)-1]
+		}
+		return tok, false, len(w.stack), nil
+	}
+	depth = len(w.stack)
+	if depth > 0 {
+		if top := &w.stack[depth-1]; top.obj && top.wantKey {
+			top.wantKey = false
+			return tok, true, depth, nil
+		}
+		w.consumedValue()
+	}
+	return tok, false, depth, nil
+}
+
+// consumedValue records that the innermost object has just taken its value, so the
+// next token there is a key again.
+func (w *keyWalker) consumedValue() {
+	if n := len(w.stack); n > 0 && w.stack[n-1].obj {
+		w.stack[n-1].wantKey = true
+	}
+}
+
 // valueStart advances past the separator whitespace and comma the decoder reports
 // as part of an element's leading offset, landing on the value's first byte.
 func valueStart(data []byte, at int) int {
@@ -392,13 +494,35 @@ func valueStart(data []byte, at int) int {
 	return at
 }
 
+// elementIndent is the column an inserted entry belongs in: the same one the array's
+// last element sits in. When that element shares its line with the array's opening
+// bracket — a one-line config, or a compact `"banned_tokens": [{…}]` — the line's
+// indent is the ARRAY's, not an element's, so the insertion would land flush against
+// the margin (column zero for a one-line file). One level in from the array is the
+// right answer for exactly that case, and it is the same rule the empty-array branch
+// already uses.
+func elementIndent(data []byte, span arraySpan, last elemSpan) string {
+	if lineStart(data, last.start) == lineStart(data, span.openEnd) {
+		return lineIndent(data, span.openEnd) + "  "
+	}
+	return lineIndent(data, last.start)
+}
+
+// lineStart is the offset of the first byte of the line containing at.
+func lineStart(data []byte, at int) int {
+	if at > len(data) {
+		at = len(data)
+	}
+	return bytes.LastIndexByte(data[:at], '\n') + 1
+}
+
 // lineIndent returns the leading whitespace of the line containing at, so an
 // inserted entry lands in the same column as the entries around it.
 func lineIndent(data []byte, at int) string {
 	if at > len(data) {
 		at = len(data)
 	}
-	start := bytes.LastIndexByte(data[:at], '\n') + 1
+	start := lineStart(data, at)
 	indent := 0
 	for start+indent < len(data) && (data[start+indent] == ' ' || data[start+indent] == '\t') {
 		indent++

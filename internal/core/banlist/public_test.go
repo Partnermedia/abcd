@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/lint"
@@ -362,5 +364,168 @@ func TestAddPublicIsCaseInsensitiveLikeTheCuratedEntries(t *testing.T) {
 	}
 	if hits != 1 {
 		t.Errorf("mixed-case mention produced %d findings, want 1 — the entry is case-sensitive", hits)
+	}
+}
+
+// writeConfig puts a docs-lint config body in a fresh temp repo.
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	root := t.TempDir()
+	p := filepath.Join(root, filepath.FromSlash(PublicConfigRelPath))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestPublicRefusesDuplicateBannedTokensKeys pins the one JSON shape where the
+// editor and the linter read DIFFERENT arrays: with two top-level banned_tokens
+// keys, encoding/json keeps the LAST and the byte editor finds the FIRST, so a ban
+// the verb reports as written is enforced by nobody. Neither reading is safe to
+// pick, so the config is refused until a human resolves it.
+func TestPublicRefusesDuplicateBannedTokensKeys(t *testing.T) {
+	root := writeConfig(t, `{
+  "roots": ["docs"],
+  "banned_tokens": [
+    {"id":"names/first","pattern":"(?i)first","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ],
+  "banned_tokens": [
+    {"id":"names/second","pattern":"(?i)second","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ]
+}
+`)
+	if _, err := ListPublic(root); !errors.Is(err, ErrMalformedStore) {
+		t.Errorf("ListPublic: err = %v, want ErrMalformedStore", err)
+	}
+	if _, err := AddPublic(AddPublicRequest{RepoRoot: root, Key: "third", Pattern: "third"}); !errors.Is(err, ErrMalformedStore) {
+		t.Errorf("AddPublic: err = %v, want ErrMalformedStore", err)
+	}
+	if _, err := RemovePublic(root, "first"); !errors.Is(err, ErrMalformedStore) {
+		t.Errorf("RemovePublic: err = %v, want ErrMalformedStore", err)
+	}
+}
+
+// TestPublicLocatesTheKeyNotAStringValue pins that the locator reads object KEYS.
+// A depth-1 string VALUE that happens to spell banned_tokens is ordinary config
+// data, and mistaking it for the key aims the whole editor at the wrong offset.
+func TestPublicLocatesTheKeyNotAStringValue(t *testing.T) {
+	root := writeConfig(t, `{
+  "note": "banned_tokens",
+  "banned_tokens": [
+    {"id":"names/first","pattern":"(?i)first","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ]
+}
+`)
+	rep, err := ListPublic(root)
+	if err != nil {
+		t.Fatalf("ListPublic: %v", err)
+	}
+	if len(rep.Entries) != 1 || rep.Entries[0].ID != "names/first" {
+		t.Fatalf("entries = %+v, want the one real entry", rep.Entries)
+	}
+	if _, err := AddPublic(AddPublicRequest{RepoRoot: root, Key: "second", Pattern: "second"}); err != nil {
+		t.Fatalf("AddPublic: %v", err)
+	}
+	if _, err := lint.LoadConfig(filepath.Join(root, filepath.FromSlash(PublicConfigRelPath))); err != nil {
+		t.Fatalf("edited config does not load: %v", err)
+	}
+}
+
+// TestAddPublicIndentsIntoACompactArray pins the insertion's shape when the last
+// entry shares its line with the array's opening bracket: the "indent of that line"
+// is the array's, not an element's, so an inserted entry landed flush against the
+// margin (or at column zero for a one-line config) instead of one level in.
+func TestAddPublicIndentsIntoACompactArray(t *testing.T) {
+	root := writeConfig(t, `{"roots":["docs"],"banned_tokens":[{"id":"names/first","pattern":"(?i)first","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}]}
+`)
+	if _, err := AddPublic(AddPublicRequest{RepoRoot: root, Key: "second", Pattern: "second"}); err != nil {
+		t.Fatalf("AddPublic: %v", err)
+	}
+	got := readConfig(t, root)
+	if _, err := lint.LoadConfig(filepath.Join(root, filepath.FromSlash(PublicConfigRelPath))); err != nil {
+		t.Fatalf("edited config does not load: %v", err)
+	}
+	var inserted string
+	for _, line := range strings.Split(string(got), "\n") {
+		if strings.Contains(line, "names/second") {
+			inserted = line
+		}
+	}
+	if inserted == "" {
+		t.Fatalf("the entry was not inserted:\n%s", got)
+	}
+	if !strings.HasPrefix(inserted, "  ") {
+		t.Errorf("inserted line is not indented into the array:\n%q", inserted)
+	}
+}
+
+// TestConcurrentPrivateAddsAllLand pins the lock. Two verbs (or a verb and an
+// out-of-band refresh) that each read the store, append one line, and write it back
+// silently drop entries when they interleave: the last writer's body was derived
+// from a read that predates the other's write. Every add here must survive.
+func TestConcurrentPrivateAddsAllLand(t *testing.T) {
+	root := t.TempDir()
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = AddPrivate(AddPrivateRequest{
+				RepoRoot: root,
+				Key:      "widget-partner-" + strconv.Itoa(i),
+				Pattern:  "widgetworks" + strconv.Itoa(i),
+			})
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+	}
+	rep, err := ListPrivate(root)
+	if err != nil {
+		t.Fatalf("ListPrivate: %v", err)
+	}
+	if len(rep.Entries) != n {
+		t.Errorf("entries = %d, want %d — a concurrent add was lost", len(rep.Entries), n)
+	}
+}
+
+// TestConcurrentPublicAddsAllLand is the same statement for the committed config,
+// where a lost entry is a ban that silently is not enforced.
+func TestConcurrentPublicAddsAllLand(t *testing.T) {
+	root, _ := realConfig(t)
+	before, err := ListPublic(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, errs[i] = AddPublic(AddPublicRequest{RepoRoot: root, Key: "widgetworks" + strconv.Itoa(i), Pattern: "widgetworks" + strconv.Itoa(i)})
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+	}
+	after, err := ListPublic(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Entries) != len(before.Entries)+n {
+		t.Errorf("entries = %d, want %d — a concurrent add was lost", len(after.Entries), len(before.Entries)+n)
 	}
 }
