@@ -34,6 +34,15 @@ cannot enforce the private layer: it protects only machines that have opted in.
 When `private.present` is false, say that the layer is inactive on this machine —
 an absent store checks nothing, and silence must never look like protection.
 
+Two private fields need reporting apart, because they need opposite responses.
+`malformed_lines` are lines the guard's engine cannot use: the guard refuses **every**
+commit until they are fixed. `inert_lines` are lines it accepts but reads differently
+(a Perl-style escape, an inline flag group): the guard refuses nothing, and those
+names are unguarded while the store looks healthy. Report each by line number only.
+`keyed` reports the store's format; when it is false and there are entries, say that
+the store is in the legacy whole-line format and that `add`/`remove` refuse until its
+first line declares the keyed format.
+
 `list` is the same render with an optional scope:
 
 ```bash
@@ -43,24 +52,44 @@ abcd banlist list --private --json      # or --public
 ## Add an entry
 
 ```bash
-abcd banlist add --private <key> "<pattern>" --json
-abcd banlist add --public  <key> "<pattern>" --json
+printf %s '<pattern>' | abcd banlist add --private <key> - --json
+abcd banlist add --public <key> "<pattern>" --json
 ```
 
 The layer is **never** guessed: an add with no layer flag, or with both, exits 2.
-`<key>` is a stable, non-sensitive handle (`[A-Za-z0-9][A-Za-z0-9._/-]*`) and
-`<pattern>` a POSIX extended regular expression matched case-insensitively.
-Machine identifiers — hostnames, IPv4/IPv6 addresses, CIDR prefixes, MAC
-addresses, device names — are ordinary private entries.
+`<key>` is a stable, non-sensitive handle (`[A-Za-z0-9][A-Za-z0-9._/-]*`).
+
+**For a private add, pass the pattern as `-` and pipe it on stdin**, as above — that
+is the recommended form and the only one that keeps the value out of argv. A command
+argument is world-readable in `/proc/<pid>/cmdline` for the life of the process, is
+captured verbatim by process auditing, and lands in the shell's history file, so a
+pattern typed as an argument has already leaked to three places the layer exists to
+keep it out of. A pattern beginning with `-` can *only* be entered this way; the
+verb withholds the token from any flag-parse error rather than echoing it.
+
+A private `<pattern>` is a **POSIX extended regular expression, matched
+case-insensitively** by the guard's `grep -iE`. `(?i)` is therefore never needed, and
+Perl escapes such as `\d`, `\w` and `\b` are not available — the verb refuses them
+rather than storing an entry that would match nothing. Machine identifiers —
+hostnames, IPv4/IPv6 addresses, CIDR prefixes, MAC addresses, device names — are
+ordinary private entries. A private add reports the key alone; **do not echo the
+pattern back to the user**, which the binary does not emit either.
+
+Two refusals are worth relaying verbatim rather than working around. If the store's
+path is not gitignored the add is refused: the whole layer rests on that file being
+untracked, so add the tier line the message names and re-run. If the store predates
+the keyed format — no `# abcd-banlist: keyed` first line, and at least one entry —
+`add` and `remove` refuse, because a keyed line written into it would change what
+every other line means; the message names the one line the user adds by hand, after
+which each existing whole-line pattern needs a key.
 
 A public add takes `--severity` (`blocker`, the default, or `warn`) and
 `--successor` (the replacement the finding cites; default "a generic term"), and
-writes one entry into the committed config under the `names/` id namespace. Report
-the entry `id` and remind the user to commit it: the public layer gates everyone.
-
-A private add writes to the gitignored per-machine store and reports the key
-alone. **Do not echo the pattern back to the user** — it is the value the whole
-layer exists to keep out of transcripts, logs, and history.
+writes one entry into the committed config under the `names/` id namespace. Its
+pattern is a **Go (RE2) regular expression**, because `abcd docs lint` is what
+enforces the public layer; the entry is stored with the `(?i)` prefix so it matches
+case-insensitively like every hand-curated entry. Report the entry `id` and remind
+the user to commit it: the public layer gates everyone.
 
 ## Remove an entry
 

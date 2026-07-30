@@ -56,12 +56,17 @@ plugin surface, and a future MCP server share one engine.
 - **`core/banlist/`** — the two banned-names stores (itd-74, spc-20). The public
   layer is managed IN the docs-lint `banned_tokens` family under a `names/` id
   prefix: one banned-token primitive, and the prefix is the ownership boundary a
-  removal respects. The private layer is the gitignored per-machine store, in the
-  `KEY<whitespace>PATTERN` format the committed `.githooks/pre-commit` guard also
-  parses — the shared fixture corpus under `testdata/` is read by both parsers, so
-  their agreement is checked rather than assumed. Enforcement is NOT here: the hook
-  is the private layer's enforcement point and `core/lint` the public one, so this
-  package owns the stores, their formats, and their editing discipline. Redaction is
+  removal respects. The private layer is the gitignored per-machine store, whose
+  FIRST line declares its format — keyed (`KEY<space-or-tab>PATTERN`) or legacy (one
+  whole-line pattern per line) — which the committed `.githooks/pre-commit` guard
+  parses identically. Three shared fixture corpora under `testdata/` are read by both
+  parsers, so their agreement on the keyed format, the legacy format, and every
+  unusable line class is checked rather than assumed. Enforcement is NOT here: the
+  hook is the private layer's enforcement point and `core/lint` the public one, so
+  this package owns the stores, their formats, and their editing discipline. It does
+  VALIDATE against each layer's own engine, though — a private pattern goes to `grep`
+  on stdin, a public one through the linter's compile path — because a pattern checked
+  against a third engine is stored as healthy while it matches nothing. Redaction is
   structural — the exported private entry type carries no pattern field, so no
   rendering can leak a value — and edits are surgical (a line for the private store,
   byte surgery on the located array for the config), never a whole-file re-marshal.

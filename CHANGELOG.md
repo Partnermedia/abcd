@@ -26,22 +26,38 @@ called out in a **Breaking** section.
   gitignored per-machine store read by the committed pre-commit guard, and its
   visibility follows: entries render by key only, never their pattern, and the
   redaction is structural — the entry type carries no pattern field, so no
-  rendering can leak one. `add` and `remove` name their layer explicitly (neither
-  flag and both flags exit 2); bare invocation and `list` are read-only, and both
-  state their reach plainly, including that CI cannot enforce the private layer.
+  rendering can leak one. A private pattern is entered by piping it on stdin
+  (`printf %s 'PATTERN' | abcd banlist add --private KEY -`), which is the
+  recommended form because an argument is world-readable in `/proc/<pid>/cmdline`,
+  is captured by process auditing, and lands in shell history. Each layer is
+  validated against the engine that enforces IT — a private pattern by the guard's
+  own grep, a public one through the linter's compile path — so an entry cannot be
+  stored as healthy while it matches nothing; and `add --private` refuses outright
+  if git does not ignore the store's path, since the layer rests on that file being
+  untracked. `add` and `remove` name their layer explicitly (neither flag and both
+  flags exit 2); bare invocation and `list` are read-only, both state their reach
+  plainly, including that CI cannot enforce the private layer, and `list --private`
+  separates a line the guard cannot use from one it accepts but reads differently,
+  because the first stops every commit and the second stops nothing.
 - **The private name guard refuses by key and says when it is inactive** (itd-74,
-  spc-20). The committed `.githooks/pre-commit` guard reads entries as
-  `KEY<whitespace>PATTERN`, and on a match refuses the commit naming the key
-  alone: the matched text and the pattern value never reach stdout, stderr, or a
-  log, because a refusal that echoed the string would defeat the layer at the
-  moment it worked. Hostnames, IP and CIDR values, MAC addresses, and device names
-  are ordinary entries, matched exactly as a name is. A line that does not parse as
-  key + pattern is read as a bare pattern under a synthetic key, so a store in the
-  older one-pattern-per-line format keeps blocking what it blocked before, and a
-  pattern the engine refuses is itself a refusal naming its line number — an
-  unusable entry is never skipped. An absent store prints a loud warning that the
-  layer is inactive on this machine and lets the commit through: it protects
-  machines that opted in, and silence must never impersonate protection.
+  spc-20). The committed `.githooks/pre-commit` guard checks the CONTENT of every
+  staged file, read out of the index, and on a match refuses the commit naming the
+  entry key alone: the matched text and the pattern value never reach stdout,
+  stderr, or a log, because a refusal that echoed the string would defeat the layer
+  at the moment it worked. The pattern reaches grep on stdin rather than in argv,
+  for the same reason. Hostnames, IP and CIDR values, MAC addresses, and device
+  names are ordinary entries, matched exactly as a name is, and so are binary
+  blobs — a name in one is in history just the same. The store declares its own
+  format on its first line: `# abcd-banlist: keyed` means every line is
+  `KEY<space-or-tab>PATTERN`, and no declaration means every line is one whole-line
+  pattern under a synthetic key, so an older store keeps matching exactly what it
+  always matched and no part of any line is ever read — or printed — as a key. A
+  line that does not parse, a pattern the engine refuses, and any git step that
+  fails are each a refusal naming a step or a line number: an unusable entry is
+  never skipped, and a check that could not run must never look like a check that
+  passed. A store that is absent, or present with no entries, prints a loud warning
+  that the layer is inactive on this machine and lets the commit through: it
+  protects machines that opted in, and silence must never impersonate protection.
 - **A citations family in `abcd docs lint`, with zero network in the gate**
   (itd-101, spc-17). Cited references rot silently — pages retitle, URLs
   redirect, whole platforms announce their own shutdown — but a gate that dials
