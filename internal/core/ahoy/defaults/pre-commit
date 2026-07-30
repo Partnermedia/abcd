@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # abcd-name-guard: v1
-# Local name guard — run on every clone via the global ~/.githooks dispatcher
-# (which chains the repo's committed .githooks/<name>).
+# abcd private name guard — scaffolded by `abcd ahoy` into this repo's committed
+# hooks. It is the generalised form of abcd's own prototype guard, and it is
+# committed on purpose: every clone inherits the check, while the names it checks
+# stay on the machine that declared them.
+#
+# Point this repo's hooks at the directory holding this file, once per clone:
+#
+#     git config core.hooksPath .githooks
 #
 # Refuses to commit any name listed in an UNTRACKED banlist. The banlist lives
 # only on this machine (.abcd/.work.local/ is gitignored), so a name that must
@@ -10,6 +16,11 @@
 # appearing in a committed file or in public CI config (which a repo may be, or
 # become). An absent banlist WARNS LOUDLY and lets the commit through: the layer
 # protects machines that opted in, and silence must never impersonate protection.
+#
+# CI cannot enforce this layer. That is the design, not a gap: a pattern written
+# into public CI config is a published pattern. Use the public banned-names family
+# in .abcd/docs-lint.json for names a repo may state out loud, and `abcd banlist`
+# to maintain both.
 #
 # STORE FORMAT (itd-74 / spc-20). The banlist declares its own format on its FIRST
 # line, and that one line decides the whole file:
@@ -38,16 +49,12 @@
 #     of any line can be printed.
 #
 # Blank lines and lines whose first non-blank character is '#' are ignored. Leading
-# and trailing ASCII spaces and tabs are stripped — ASCII only, matching the Go
+# and trailing ASCII spaces and tabs are stripped — ASCII only, matching abcd's Go
 # parser byte for byte, because a whitespace class that differs between the two
 # readers is a line one of them silently ignores. A pattern the regex engine refuses
 # is a REFUSAL naming its line number — never a silent skip, and never an echo of
 # the line's content. A store that exists but yields NO entries warns as loudly as
 # an absent one: it checks exactly as much.
-#
-# Companion to the public docs-lint banned-token family: that one bans *public*
-# tokens in CI; this one bans *private* ones locally, keeping their literal string
-# out of every published artifact. `abcd banlist` maintains both.
 set -euo pipefail
 # --- environment pin: the FIRST statements, before anything is read or run -------
 # Turn OFF xtrace however it was inherited (a caller's `set -x`, SHELLOPTS, BASH_ENV):
@@ -101,7 +108,7 @@ fi
 export PATH
 # Every external tool this hook runs after the pin. A missing one must BLOCK loudly:
 # left to `set -e` it would surface as a mute exit 127 that reads like a broken repo.
-for tool in git grep mktemp tr cat mkdir rm chmod printf sed head; do
+for tool in git grep mktemp tr cat mkdir rm chmod printf; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "pre-commit: BLOCKED — $tool is not on the guard's pinned PATH ($PATH)." >&2
     echo "            the guard pins PATH so a repo-scoped override cannot substitute a fake tool," >&2
@@ -111,50 +118,18 @@ for tool in git grep mktemp tr cat mkdir rm chmod printf sed head; do
   fi
 done
 # --- end environment pin --------------------------------------------------------
-# Both gates below are written against repo-relative paths, so the working tree root
-# must be resolved BEFORE either runs — and resolved successfully. `cd ""` succeeds
-# and leaves the shell where it was, which would silently run both gates against
-# whatever directory git was invoked from: a pin that is not there, a banlist that is
-# not there, and a commit that looks checked.
+# The gate below is written against repo-relative paths, so the working tree root
+# must be resolved BEFORE it runs — and resolved successfully. `cd ""` succeeds and
+# leaves the shell where it was, which would silently run the gate against whatever
+# directory git was invoked from: a banlist that is not there, and a commit that
+# looks checked.
 toplevel=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [ -z "$toplevel" ]; then
   echo "pre-commit: BLOCKED — could not resolve the repository root (git rev-parse --show-toplevel)." >&2
-  echo "            the identity and name gates below read repo-relative paths, so they cannot run at all." >&2
+  echo "            the name gate below reads repo-relative paths, so it cannot run at all." >&2
   exit 1
 fi
 cd "$toplevel"
-
-# --- iss-62 identity gate ---------------------------------------------------
-# Refuse a commit whose author identity diverges from the committed pin
-# (.abcd/config/identity.json). Self-contained (no binary dependency) so the
-# guard holds even before abcd is built or on PATH, and can't be broken by a
-# stale abcd. Runs FIRST — the name-guard below early-exits when no banlist is
-# present, which must not skip this check. No-op ONLY when the repo has no pin.
-#
-# FAIL CLOSED: a pin that is present but that this shell cannot read (empty
-# value, or non-lowercase / non-canonical JSON keys the sed does not match)
-# BLOCKS the commit rather than falling through. The Go check
-# (`abcd ahoy identity-check`) enforces such pins directly; this shell guard is
-# deliberately stricter — it never permits an unverified identity. Keep the two
-# in the same fail-closed direction (see identity_test.go / the shell hook test).
-identity_pin=".abcd/config/identity.json"
-if [ -f "$identity_pin" ]; then
-  want_name=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$identity_pin" | head -n1)
-  want_email=$(sed -n 's/.*"email"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$identity_pin" | head -n1)
-  if [ -z "$want_name" ] || [ -z "$want_email" ]; then
-    echo "pre-commit: BLOCKED — $identity_pin is present but its name/email could not be read (fail closed)." >&2
-    echo "            check the pin's JSON (lowercase \"name\"/\"email\", both non-empty), or run: abcd ahoy identity-check" >&2
-    exit 1
-  fi
-  have_name=$(git config user.name || true)
-  have_email=$(git config user.email || true)
-  if [ "$have_name" != "$want_name" ] || [ "$have_email" != "$want_email" ]; then
-    echo "pre-commit: BLOCKED — git identity \"$have_name <$have_email>\" does not match the pinned \"$want_name <$want_email>\" ($identity_pin)." >&2
-    echo "            fix: git config user.name \"$want_name\" && git config user.email \"$want_email\"" >&2
-    exit 1
-  fi
-fi
-# --- end iss-62 identity gate -----------------------------------------------
 
 # --- itd-74 private name guard ----------------------------------------------
 
@@ -270,16 +245,6 @@ refuse_store_copy() {
     exit 1
   fi
 }
-
-# Refresh the generated block from the user-level sources corpus when present
-# (itd-76 dogfood): keeps the banlist as fresh as the current commit. No-op on
-# machines without the corpus; a failed refresh falls back to the existing
-# (possibly stale) banlist with a warning rather than blocking the commit.
-sync_banlist="$HOME/.abcd/sources/bin/sync-banlist"
-if [ -x "$sync_banlist" ]; then
-  "$sync_banlist" "$(pwd)" >/dev/null 2>&1 \
-    || echo "pre-commit: warning — banlist refresh failed; checking existing banlist." >&2
-fi
 
 # A path that exists but is not a REGULAR FILE is tampering, not non-adoption: a
 # symlink (which `git add -f` can commit, so a checkout materialises it) swaps or
@@ -485,9 +450,8 @@ if [ "$store_present" -eq 1 ]; then
 fi
 
 # A store that parsed to NOTHING checks exactly as much as an absent one, so it is
-# exactly as loud. This runs AFTER the refresh above on purpose: a refresh that
-# truncates or garbles the store away to nothing must produce this warning, not
-# silence. (An unparseable line is a refusal, handled above, not an empty store.)
+# exactly as loud. (An unparseable line is a refusal, handled above, not an empty
+# store.)
 if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ] && [ "$store_present" -eq 1 ]; then
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
@@ -511,7 +475,7 @@ fi
 #
 # Every git step is checked. A failure REFUSES the commit naming the step: a guard
 # that could not compute must never be indistinguishable from a guard that found
-# nothing, which is precisely what the previous `|| true` made it.
+# nothing.
 #
 # The scratch copy lives in the gitignored local tier rather than $TMPDIR — it is a
 # copy of the whole staged tree, and it belongs where this repo's other ephemera do
@@ -633,8 +597,8 @@ while IFS= read -r -d '' meta; do
   # A separator, so a pattern cannot match across the join between two files.
   printf '\n' >>"$candidate"
   # The staged PATH itself is scanned like content: a banned name in a FILENAME
-  # (widgetworks-notes.md) enters history just as surely as one in a file's bytes, so
-  # a path matching a private pattern refuses by key exactly as content does.
+  # enters history just as surely as one in a file's bytes, so a path matching a
+  # private pattern refuses by key exactly as content does.
   printf '%s\n' "$staged_path" >>"$candidate"
 done <"$staged_paths"
 

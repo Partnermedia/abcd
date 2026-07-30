@@ -84,6 +84,12 @@ func Detect(cwd string) (DetectionResult, error) {
 		// session that has already stopped being protected (itd-103 AC 1).
 		res.Guard = detectGuardHealth(abs, pluginRoot, pluginOK)
 		gaps = append(gaps, detectGuardGaps(res.Guard)...)
+		// The name guard's scaffolding is reported the same way and for the same
+		// reason: a private layer nobody opted into on this machine is invisible from
+		// inside a commit that passed, so the state has to be legible from outside.
+		banlistHealth := detectBanlistHealth(abs)
+		res.Banlist = &banlistHealth
+		gaps = append(gaps, detectBanlistScaffold(banlistHealth)...)
 	}
 
 	sortGaps(gaps)

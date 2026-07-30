@@ -302,7 +302,6 @@ drafts/
 ├── itd-64-benchmark-driven-config-optimization.md
 ├── itd-70-launch-release-retention-newest-per-line.md
 ├── itd-73-derived-versioning.md
-├── itd-74-name-banlist.md
 └── itd-75-cli-eval-harness.md
 ```
 

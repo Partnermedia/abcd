@@ -89,6 +89,9 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	ac.stepSkeleton()
 	cfg := ac.stepConfigValues()
 	ac.stepVisibility(cfg)
+	// After stepVisibility, never before: the private stub is only written once the
+	// .gitignore fence that keeps it untracked is on disk.
+	ac.stepBanlist()
 	ac.stepHistory()
 	ac.stepMarker(cfg)
 	ac.stepSymlink()

@@ -18,7 +18,7 @@ would have to contain the very string it forbids.
 | layer | store | enforced by | visibility |
 |---|---|---|---|
 | public | `.abcd/docs-lint.json` (the `banned_tokens` family) | `abcd docs lint` in CI, with a per-line escape | entries render in full |
-| private | `.abcd/.work.local/private-names.txt` (gitignored) | the committed `.githooks/pre-commit` guard, on this machine only | entries render **by key only** |
+| private | `.abcd/.work.local/private-names.txt` (gitignored) | the committed `.githooks/pre-commit` and `.githooks/pre-merge-commit` guards, on this machine only | entries render **by key only** |
 
 ## Render both layers (bare)
 
@@ -29,10 +29,17 @@ abcd banlist --json
 Summarise the JSON: for `private`, its `present` flag and each entry's `key` —
 **never** ask for or repeat a private pattern value, which the binary does not
 emit; for `public`, each entry's `id`, `severity`, `pattern`, and whether it is
-`managed` (verb-owned, id under `names/`) or hand-curated. State plainly that CI
-cannot enforce the private layer: it protects only machines that have opted in.
-When `private.present` is false, say that the layer is inactive on this machine —
-an absent store checks nothing, and silence must never look like protection.
+`managed` (verb-owned, id under `names/`) or hand-curated.
+
+State the private layer's reach **as the binary states it**: relay the `reach`
+sentence the render carries rather than paraphrasing it. Paraphrase drops the
+second half, and the way it drops is by omission — "protects only machines that
+have opted in" alone leaves a reader believing an opted-in machine is fully
+covered. It is not: a hook sees the commits git asks it about, so a fast-forward
+`git pull`, a rebase, a `git am`, a `git revert` or a cherry-pick bypasses it, as
+does `--no-verify`, and that list is not exhaustive. When `private.present` is
+false, say that the layer is inactive on this machine — an absent store checks
+nothing, and silence must never look like protection.
 
 Two private fields need reporting apart, because they need opposite responses.
 `malformed_lines` are lines the guard's engine cannot use: the guard refuses **every**

@@ -68,6 +68,29 @@ const PublicConfigRelPath = ".abcd/docs-lint.json"
 // but never edited or removed by a verb: the prefix is the ownership boundary.
 const PublicIDPrefix = "names/"
 
+// PrivateReachNote is the one sentence every surface that describes the private
+// layer must state (AC7). It lives here, once, because the statement is a property
+// of the layer rather than of any one renderer: a status board, a verb, and a JSON
+// envelope that worded it differently would let a reader believe one of them meant
+// something weaker. It is not a limitation awaiting a fix — a pattern written into
+// CI config is a published pattern, which is the whole reason this layer is local.
+//
+// It names the SECOND limit too, because "machines that have opted in" is necessary
+// and not sufficient. A pre-commit hook sees the commits git asks it about, and a
+// fast-forward `git pull` creates no commit at all — the commonest uncovered path of
+// the lot, and the one a reader is least likely to think of. git runs no hook for a
+// rebase, `git am`, `git revert` or a cherry-pick either, `--no-verify` switches it
+// off, and a merge commit needs the separate pre-merge-commit half.
+//
+// The list is explicitly non-exhaustive ("e.g.") and carries nothing that is
+// actually covered: `git stash pop` followed by a commit runs pre-commit like any
+// other commit, and a bypass list naming a covered path teaches a reader to distrust
+// the rest of it. A sentence that stopped at opt-in would leave them believing an
+// opted-in machine is fully covered, which is the belief that gets a name committed.
+const PrivateReachNote = "CI cannot enforce this layer — it protects only machines that have opted in, " +
+	"and only the commits git runs a hook for (e.g. a fast-forward `git pull`, a rebase, `git am`, " +
+	"`git revert` or a cherry-pick bypasses it, as does --no-verify)"
+
 // maxStoreBytes caps every banlist read (trust boundary), following the guard
 // registry's precedent.
 const maxStoreBytes = 256 * 1024
