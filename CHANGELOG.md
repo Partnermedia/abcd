@@ -151,6 +151,29 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The `PII` rules domain fires on network work, and says never to commit a
+  hostname or an address** (iss-156). Its recall keywords were the vocabulary of
+  credentials — secret, token, credential, pii, redact, hostname, email — so a
+  session investigating a mesh VPN's reachability, a firewall rule, or an
+  address in a network config matched nothing and the hook injected nothing.
+  The keywords now cover that context — `ip`, `ips`, `ipv4`, `ipv6`, `vpn`,
+  `tailscale`, `tailnet`, `wireguard`, `firewall`, `network`, `reachability`,
+  `reachable`, `unreachable`, `dns`, `ssh`, `subnet`, plus the `mac address`
+  phrase alias — and
+  one new rule line forbids committing hostnames, IP or MAC addresses, and other
+  live network identifiers: redact or omit them, and reach for a reserved
+  documentation value (RFC 5737, RFC 3849, RFC 2606, RFC 7042 — the same set the
+  audit privacy-hygiene rule cites) only where an illustrative
+  example is actually needed. That rule previously existed only in a repo's own
+  instructions file, which meant the one discipline this domain most needed to
+  state was the one it never said — an agent could recall `PII` and still read
+  nothing about the machine identifiers in front of it. Recall matching is
+  word-bounded already, so the bare `ip` keyword matches a standalone token and
+  never the middle of a word such as "script" or "zip"; the plural, the
+  version-qualified forms and the `-able` adjective need their own entries
+  because the stemmer has a three-character floor and does not bridge
+  `-ability` to `-able`. `mac` is an alias phrase rather than a bare keyword so
+  that an Apple Mac does not recall the domain.
 - **`abcd audit` flags local-tier artefacts sitting in a committed tier**
   (iss-155). The `three-tier-layout` rule verified that the committed tiers
   exist and that `.abcd/.work.local/` is gitignored, but never the reverse

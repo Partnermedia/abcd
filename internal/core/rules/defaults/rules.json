@@ -63,12 +63,13 @@
     },
     "PII": {
       "state": "active",
-      "recall": ["secret", "token", "credential", "pii", "redact", "hostname", "email"],
-      "aliases": ["api key", "access token", "personal data", "absolute path"],
+      "recall": ["secret", "token", "credential", "pii", "redact", "hostname", "email", "ip", "ips", "ipv4", "ipv6", "vpn", "tailscale", "tailnet", "wireguard", "firewall", "network", "reachability", "reachable", "unreachable", "dns", "ssh", "subnet"],
+      "aliases": ["api key", "access token", "personal data", "absolute path", "mac address"],
       "rules": [
         "Never commit, print, or paste secrets, tokens, or .env contents; reference them by name.",
         "Never put absolute local paths in anything that leaves the machine — use repo-relative paths.",
-        "Never name a private repo in commits, PRs, issues, or docs; describe it generically."
+        "Never name a private repo in commits, PRs, issues, or docs; describe it generically.",
+        "Never commit hostnames, IP addresses, MAC addresses, or other live network identifiers; redact or omit them, and use reserved documentation values (RFC 5737, RFC 3849, RFC 2606, RFC 7042) only where an illustrative example is needed."
       ]
     },
     "OPINIONS": {
