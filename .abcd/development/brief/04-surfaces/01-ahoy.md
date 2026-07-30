@@ -174,18 +174,25 @@ Steps, run in parallel where independent:
    is plugin-static per spc-14 T7.
 10. **Version** — read `config.json["meta"].setup_version`; classify `first-time` /
     `upgrade` / `current`. One input among many — never the sole gate.
-11. **Name-banlist scaffolding** (itd-74 / spc-20) — is the committed guard hook
-    (`.githooks/pre-commit`) present, does `.abcd/docs-lint.json` carry a
-    readable banned-names family, and does the private stub exist in the
-    gitignored local tier? Each absence is a `safe-autocreate` gap. The
-    private-stub gap is resolvable only once the `.gitignore` fence covering
-    the local tier is in place: a stub git would track is the hazard the layer
-    exists to prevent, so a gap apply would refuse to close is never advertised
-    as resolvable. A docs-lint config that exists but carries no usable
-    `banned_tokens` array is a non-resolvable `config-change` diagnostic —
-    the config gates CI and a contributor owns it. The same pass reports the
+11. **Name-banlist scaffolding** (itd-74 / spc-20) — are the committed guard
+    hooks (`.githooks/pre-commit` and `.githooks/pre-merge-commit`) present and
+    abcd's own, does `.abcd/docs-lint.json` carry a banned-names family CI can
+    actually enforce, and does the private stub exist in the gitignored local
+    tier? Each absence is a `safe-autocreate` gap; every other state is a
+    non-resolvable diagnostic, because abcd writes what is missing and never
+    replaces what a maintainer put there. A hook present WITHOUT the
+    `# abcd-name-guard: v1` line is foreign, and is reported rather than
+    claimed as installed. A docs-lint config with no usable `banned_tokens`
+    array, one that cannot be read, and one git IGNORES (so CI never sees it —
+    the state `visibility: public` puts every repo in) are three distinct
+    diagnostics with three distinct remedies. The private-stub gap is
+    resolvable only when **git itself** reports the store's path as ignored
+    (`git check-ignore`, not a comparison of `.gitignore` text): a stub git
+    would track is the hazard the layer exists to prevent, so a gap apply would
+    refuse to close is never advertised as resolvable. The same pass reports the
     layers' state (`banlist` in the detection envelope), and that report always
-    carries the private layer's reach: CI cannot enforce it. See
+    carries the private layer's reach — CI cannot enforce it, and neither hook
+    sees a rebase, a `git am`, a cherry-pick, or a `--no-verify` commit. See
     [`20-banlist.md`](20-banlist.md).
 
 Each detected discrepancy becomes a **gap** with a stable `id`, a `category`,
@@ -206,8 +213,9 @@ The marker block `install` writes comes from a canonical file under
 prose in this surface. If the template is stale, edit the template file. Drift
 detection (step 7) is only meaningful because the marker block has one
 canonical source. The name guard `install` writes comes from the same directory
-(`pre-commit`) — the generalised form of the prototype this repo runs on itself,
-with the repo-specific gates dropped, embedded so the binary is self-contained.
+(`pre-commit`, `pre-merge-commit`) — the generalised form of the prototype this
+repo runs on itself, with the repo-specific gates dropped, embedded so the binary
+is self-contained.
 The `.abcd/rules.json` skeleton is written inline by the apply pass
 (`stepRules`); a later phase moves it — and `.abcd/usage.md`, once that artefact
 ships — to canonical files under `defaults/` too.
@@ -255,15 +263,19 @@ interactive confirmation.
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
    Show the resulting tracked-vs-ignored list before confirming.
 6. **Name-banlist scaffolding** (`safe-autocreate`, itd-74 / spc-20) — write the
-   committed guard hook (`.githooks/pre-commit`), a `.abcd/docs-lint.json`
-   carrying an EMPTY public banned-names family, and the documented private stub
-   in the gitignored local tier. Every write is create-if-absent: a hook, a
-   CI-gating config, and above all a populated private store are the
-   maintainer's. The stub runs AFTER step 5 and only when the fence is in place,
-   so a stub git would track is never created. Its examples are commented out
-   and every illustrative value is a reserved documentation value or a
-   persona-derived fixture host (`examples-use-reserved-identifiers`). A clone
-   arms the hook once with `git config core.hooksPath .githooks`.
+   committed guard hooks (`.githooks/pre-commit` and `.githooks/pre-merge-commit`,
+   because git runs no pre-commit for a merge), a `.abcd/docs-lint.json` carrying
+   an EMPTY public banned-names family, and the documented private stub in the
+   gitignored local tier. Every write is create-if-absent AND contained: paths
+   resolve through an `os.Root` opened at the repo, so a symlink committed at
+   `.githooks` or at the local tier cannot land an artefact outside it. A hook, a
+   CI-gating config, and above all a populated private store are the maintainer's.
+   The stub runs AFTER step 5 and only where `git check-ignore` reports the path
+   as ignored, so a stub git would track is never created. Its examples are
+   commented out and every illustrative value is a reserved documentation value or
+   a persona-derived fixture host (`examples-use-reserved-identifiers`). A clone
+   arms the hooks once with `git config core.hooksPath .githooks`; abcd never sets
+   it, and no surface reports a committed hook as a running one.
 7. **History-store registry** (`user-state`) — if the `~/.abcd/history/` store
    does not exist, bootstrap it: create the directory and write an initial
    `index.json` with its `schema` + `description` header (see
@@ -289,10 +301,10 @@ interactive confirmation.
    plugin → write it. If a different `abcd` binary exists → refuse, show what
    it points to, suggest manual resolution.
 10. **Hook registration** (`plugin-owned`, VERIFY-ONLY per spc-16 T1) — install
-   verifies that `hooks/hooks.json` is present (the manifest is plugin-static
-   per spc-14 T7). Install NEVER writes `hooks.json`; uninstall NEVER mutates
-   `hooks.json`. A missing manifest surfaces as a `plugin-owned` non-resolvable
-   diagnostic gap.
+    verifies that `hooks/hooks.json` is present (the manifest is plugin-static
+    per spc-14 T7). Install NEVER writes `hooks.json`; uninstall NEVER mutates
+    `hooks.json`. A missing manifest surfaces as a `plugin-owned` non-resolvable
+    diagnostic gap.
 11. Stamp `setup_version` + `setup_date` in `config.json["meta"]`.
 12. Print summary: installed files, config table, symlink status, hook status,
     notes (re-run hint, uninstall hint).

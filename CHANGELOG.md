@@ -60,15 +60,22 @@ called out in a **Breaking** section.
   RFC 3849, RFC 2606, RFC 7042) or a persona-derived fixture host, judged by the
   repo's own network-identifier detector.
 - **Every surface that describes the private layer states its reach** (itd-74,
-  spc-20). `abcd ahoy` now reports the name guard's state — which artefacts are
-  scaffolded, and whether this machine has opted into the private layer at all —
-  and the status line, the JSON envelope, and the `abcd banlist` verb all carry the
-  same sentence: CI cannot enforce the private layer, it protects only machines
-  that have opted in. The reach travels inside the reported state rather than being
-  added by a renderer, because a machine consumer reading "hook installed" beside a
-  present store would otherwise draw exactly the wrong conclusion. The status pass
-  reads no entry and spawns no subprocess: the store's content is the secret, and a
-  status board is the surface that must not hold it.
+  spc-20). `abcd ahoy` now reports the name guard's state — what occupies each hook
+  path, whether the public family can actually be enforced, and what shape the
+  private layer is in on this machine — and the status line, the JSON envelope, and
+  the `abcd banlist` verb all carry the same sentence: CI cannot enforce the private
+  layer; it protects only machines that have opted in, and only the commits git runs
+  a hook for, since a rebase, a `git am`, or a cherry-pick bypasses it, as does
+  `--no-verify`. The reach travels inside the reported state rather than being added
+  by a renderer, because a machine consumer reading "hook committed" beside a present
+  store would otherwise draw exactly the wrong conclusion. Where a claim cannot be
+  supported it is withdrawn rather than softened: a docs-lint config git ignores —
+  the state `visibility: public` puts every repo in, since the installed fence
+  ignores the whole `.abcd/` namespace — is reported as NOT ENFORCEABLE instead of as
+  the committed, CI-enforced layer, with the placement question left for a maintainer
+  to settle (iss-176). The status pass reads the private store's shape (its format
+  and two counts) and never its content: the patterns are the secret, and a status
+  board is the surface that must not hold them.
 - **The private name guard refuses by key and says when it is inactive** (itd-74,
   spc-20). The committed `.githooks/pre-commit` guard checks the CONTENT of every
   staged file, read out of the index, and on a match refuses the commit naming the

@@ -537,6 +537,12 @@ func (a *applyCtx) stepBanlist() {
 // reports it on the next pass rather than this run claiming a file it did not create.
 func (a *applyCtx) createContained(root *os.Root, rel string, data []byte, perm, dirPerm os.FileMode) {
 	if dir := path.Dir(rel); dir != "." {
+		// MkdirAll on the PARENT, and it may create more than one level: every artefact
+		// here sits at most two deep under the repo root (.githooks/, .abcd/.work.local/),
+		// both of which are abcd's own namespaces, so there is no third party's directory
+		// for it to bring into being. dirPerm applies only to levels it CREATES — an
+		// existing directory keeps its mode, which is why the private tier's mode is
+		// asserted separately by the banlist package rather than assumed from here.
 		if err := root.MkdirAll(dir, dirPerm); err != nil {
 			return
 		}

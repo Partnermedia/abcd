@@ -47,7 +47,13 @@ func TestCorruptedDeclarationIsRefused(t *testing.T) {
 // must not cost: a first line that is nothing like the declaration is an ordinary
 // legacy store, and every line in it stays a whole-line pattern.
 func TestGenuineLegacyStoreStillReadsAsLegacy(t *testing.T) {
-	entries, keyed, err := parse([]byte("carol-server\\.example\\.net\nalice-laptop\n"))
+	// One identifier per SOURCE line. Two reserved fixture hosts joined by a literal
+	// newline escape on a single line read as ONE token whose first label is neither
+	// persona's, so the repo's own privacy-hygiene rule flags a pair of values that
+	// are individually fine.
+	legacy := "carol-server\\.example\\.net\n" +
+		"alice-laptop\n"
+	entries, keyed, err := parse([]byte(legacy))
 	if err != nil {
 		t.Fatalf("a legacy store must still parse: %v", err)
 	}
