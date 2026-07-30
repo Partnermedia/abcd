@@ -87,8 +87,9 @@ func Detect(cwd string) (DetectionResult, error) {
 		// The name guard's scaffolding is reported the same way and for the same
 		// reason: a private layer nobody opted into on this machine is invisible from
 		// inside a commit that passed, so the state has to be legible from outside.
-		res.Banlist = detectBanlistHealth(abs)
-		gaps = append(gaps, detectBanlistScaffold(res.Banlist)...)
+		banlistHealth := detectBanlistHealth(abs)
+		res.Banlist = &banlistHealth
+		gaps = append(gaps, detectBanlistScaffold(banlistHealth)...)
 	}
 
 	sortGaps(gaps)

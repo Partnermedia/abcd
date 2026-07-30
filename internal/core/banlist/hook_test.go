@@ -681,3 +681,64 @@ func TestPreCommitHook_DamagedDeclarationRefuses(t *testing.T) {
 		t.Errorf("the refusal does not name the damaged line\n%s", out)
 	}
 }
+
+// TestPreCommitHook_RefusesAStagedCopyOfTheStore is the leak the store-path
+// refusal did not close. It matched only the local tier's path, so a COPY of the
+// store anywhere else — notes.txt, a .bak beside it — committed every private
+// pattern in clear. The entries cannot catch their own text (they are escaped
+// regular expressions, and `carol-server\.example\.net` does not match itself), so
+// the guard announced a clean check while the file it exists to protect went into
+// history.
+func TestPreCommitHook_RefusesAStagedCopyOfTheStore(t *testing.T) {
+	body := "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n"
+	for _, dest := range []string{"notes.txt", ".abcd/private-names.bak", "docs/copy.md"} {
+		t.Run(dest, func(t *testing.T) {
+			r := newHookRepo(t, body)
+			r.write(dest, body)
+			r.git("add", "--", dest)
+			blocked, out := r.commit()
+			if !blocked {
+				t.Fatalf("a verbatim copy of the private store committed clean\n%s", out)
+			}
+			if strings.Contains(out, "carol-server") {
+				t.Errorf("the refusal echoes the store's content\n%s", out)
+			}
+		})
+	}
+}
+
+// TestPreCommitHook_RefusesAStoreCopyByFilename covers the store shape the
+// first-line test cannot see: a LEGACY store declares no format, so a copy of one
+// is indistinguishable from any other text file by content alone. Its filename is
+// the remaining signal, and it is a path, not a secret.
+func TestPreCommitHook_RefusesAStoreCopyByFilename(t *testing.T) {
+	r := newHookRepo(t, "carol-server\\.example\\.net\n")
+	r.write("backup/private-names.txt", "carol-server\\.example\\.net\n")
+	r.git("add", "--", "backup/private-names.txt")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("a legacy store copied under its own filename committed clean\n%s", out)
+	}
+	if !strings.Contains(out, "backup/private-names.txt") {
+		t.Errorf("the refusal does not name the staged path\n%s", out)
+	}
+}
+
+// TestPreCommitHook_RefusesARenameOfTheStore: for a rename record the loop read the
+// source path and then OVERWROTE it with the destination, so `git mv` of the store
+// itself presented only a destination outside the tier and walked past the refusal.
+func TestPreCommitHook_RefusesARenameOfTheStore(t *testing.T) {
+	r := newHookRepo(t, "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n")
+	// Track the store first (the shape a `git add -f` accident leaves behind), then
+	// rename it out of the tier: the source path is the only evidence left.
+	r.git("add", "-f", "--", ".abcd/.work.local/private-names.txt")
+	r.git("-c", "core.hooksPath=/dev/null", "commit", "-m", "seed")
+	r.git("mv", ".abcd/.work.local/private-names.txt", "keep.md")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("renaming the private store out of the tier committed clean\n%s", out)
+	}
+	if strings.Contains(out, "carol-server") {
+		t.Errorf("the refusal echoes the store's content\n%s", out)
+	}
+}

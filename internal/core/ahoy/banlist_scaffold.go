@@ -35,7 +35,14 @@ const (
 // pre-commit hook, and reporting a foreign one as "the abcd guard is installed" is
 // the worst of both states: nothing checks the banlist and the status board says
 // something does. Presence is not identity, so identity is stamped.
-const guardHookMarker = "# abcd-name-guard: v1"
+//
+// Recognition matches guardHookMarkerPrefix, NOT the whole line: a v2 template must
+// not reclassify every hook a v1 abcd scaffolded as foreign, which would tell a
+// whole population of repos that a guard they own is someone else's.
+const (
+	guardHookMarker       = guardHookMarkerPrefix + " v1"
+	guardHookMarkerPrefix = "# abcd-name-guard:"
+)
 
 // guardHookTemplate and guardMergeHookTemplate are the canonical scaffolded guard:
 // the generalised form of the prototype this repo runs on itself, with the
@@ -161,7 +168,7 @@ func classifyGuardHook(cwd, rel string) HookState {
 	if err != nil {
 		return HookUnreadable
 	}
-	if bytes.Contains(data, []byte(guardHookMarker)) {
+	if bytes.Contains(data, []byte(guardHookMarkerPrefix)) {
 		return HookInstalled
 	}
 	return HookForeign
@@ -342,10 +349,42 @@ func hooksPathArmed(cwd string) bool {
 func detectBanlistScaffold(h BanlistHealth) []Gap {
 	var gaps []Gap
 	gaps = append(gaps, hookGaps("banlist.hook", GuardHookRelPath, "pre-commit", h.Hook)...)
-	gaps = append(gaps, hookGaps("banlist.merge_hook", GuardMergeHookRelPath, "pre-merge-commit", h.MergeHook)...)
+	gaps = append(gaps, mergeHookGaps(h)...)
 	gaps = append(gaps, publicFamilyGaps(h.PublicFamily)...)
 	gaps = append(gaps, privateStoreGaps(h)...)
 	return gaps
+}
+
+// mergeHookGaps reports the merge half, whose state is only meaningful RELATIVE to
+// the half it delegates to. The shim runs whatever occupies GuardHookRelPath, so
+// "the shim is present" says nothing on its own: beside a foreign hook it means
+// merges run the maintainer's hook instead of the guard, and beside no hook at all
+// it means merges run nothing.
+func mergeHookGaps(h BanlistHealth) []Gap {
+	if h.Hook == HookInstalled {
+		// The ordinary case: the guard is abcd's, so the merge half is abcd's to write
+		// and its own state decides.
+		return hookGaps("banlist.merge_hook", GuardMergeHookRelPath, "pre-merge-commit", h.MergeHook)
+	}
+	if h.Hook == HookAbsent && h.MergeHook != HookInstalled {
+		// Nothing to mislead anyone with, and the very next apply writes both halves.
+		// Reported once, by the pre-commit half's own gap, rather than twice for one
+		// cause.
+		return nil
+	}
+	detail := GuardMergeHookRelPath + " delegates to " + GuardHookRelPath + ", which is " + string(h.Hook) +
+		" — so merge commits are NOT checked against the private banlist."
+	if h.MergeHook == HookInstalled {
+		detail += " The shim carries abcd's marker, which would otherwise read as coverage."
+	}
+	return []Gap{{
+		ID: "banlist.merge_hook_inert", Category: PluginOwned, Scope: "repo",
+		Title:      "merge commits are not checked against the private banlist",
+		Detail:     detail,
+		FixHint:    "restore the abcd guard at " + GuardHookRelPath + " (move a foreign hook aside and re-run `abcd ahoy install`); the merge half is written beside it, never beside a hook abcd does not own.",
+		Required:   false,
+		Resolvable: false,
+	}}
 }
 
 // publicFamilyGaps turns the public layer's state into gaps. Only a genuinely absent
@@ -503,10 +542,25 @@ func (a *applyCtx) stepBanlist() {
 	}
 	defer root.Close()
 
+	// Is the guard the merge shim would delegate to abcd's own? Either it already
+	// was, or this step just wrote it.
+	guardOwned := a.det.Banlist != nil && a.det.Banlist.Hook == HookInstalled
 	if a.has("banlist.hook_missing") {
-		a.createContained(root, GuardHookRelPath, guardHookTemplate, 0o755, 0o755)
+		if a.createContained(root, GuardHookRelPath, guardHookTemplate, 0o755, 0o755) {
+			guardOwned = true
+		}
 	}
-	if a.has("banlist.merge_hook_missing") {
+	// The merge half is written ONLY beside abcd's own pre-commit guard. The shim
+	// delegates to whatever occupies that path, so writing it beside a foreign hook
+	// would do two wrong things at once: abcd's marker would land in the shim and the
+	// board would read "merge hook committed" while merges stayed unchecked, and the
+	// maintainer's hook would silently start running on merge commits — git never ran
+	// it there, and apply would be taking over wiring the foreign-hook gap explicitly
+	// disclaims owning. The state is reported instead (banlist.merge_hook_inert).
+	// Keyed on the merge half's own STATE, not on its gap: on a fresh repo the gap is
+	// deliberately not raised (the pre-commit half's gap covers both), and apply must
+	// still write the shim it just earned the right to write.
+	if guardOwned && (a.det.Banlist == nil || a.det.Banlist.MergeHook == HookAbsent) {
 		a.createContained(root, GuardMergeHookRelPath, guardMergeHookTemplate, 0o755, 0o755)
 	}
 	if a.has("banlist.public_family_missing") {
@@ -535,7 +589,7 @@ func (a *applyCtx) stepBanlist() {
 // Any failure — the file already exists (the ordinary idempotent no-op), an escaping
 // symlink, a permission fault — leaves the artefact unwritten and unnoted. Detection
 // reports it on the next pass rather than this run claiming a file it did not create.
-func (a *applyCtx) createContained(root *os.Root, rel string, data []byte, perm, dirPerm os.FileMode) {
+func (a *applyCtx) createContained(root *os.Root, rel string, data []byte, perm, dirPerm os.FileMode) bool {
 	if dir := path.Dir(rel); dir != "." {
 		// MkdirAll on the PARENT, and it may create more than one level: every artefact
 		// here sits at most two deep under the repo root (.githooks/, .abcd/.work.local/),
@@ -544,11 +598,25 @@ func (a *applyCtx) createContained(root *os.Root, rel string, data []byte, perm,
 		// existing directory keeps its mode, which is why the private tier's mode is
 		// asserted separately by the banlist package rather than assumed from here.
 		if err := root.MkdirAll(dir, dirPerm); err != nil {
-			return
+			return false
+		}
+		// MkdirAll and O_CREATE both apply the process UMASK to the mode they are
+		// given, so a umask of 077 leaves the hooks directory unsearchable and a umask
+		// of 022 would leave the private stub group-readable. The mode a guard depends
+		// on is set explicitly, on the path just created, exactly as WriteFileAtomic
+		// fchmods rather than trusting the open mode.
+		if err := root.Chmod(dir, dirPerm); err != nil {
+			return false
 		}
 	}
 	if err := fsutil.CreateExclusiveIn(root, rel, data, perm); err != nil {
-		return
+		return false
+	}
+	// A umask-stripped exec bit is not cosmetic here: it turns the merge shim's
+	// fail-closed branch into a permanent block on every merge commit.
+	if err := root.Chmod(rel, perm); err != nil {
+		return false
 	}
 	a.note(filepath.Join(a.cwd, filepath.FromSlash(rel)))
+	return true
 }

@@ -79,3 +79,40 @@ func TestListPrivateRefusesACorruptedDeclaration(t *testing.T) {
 		t.Errorf("the refusal echoes store content: %v", err)
 	}
 }
+
+// TestDeclarationMustBeLineOne closes the two remaining silent downgrades. One
+// inserted blank line above the declaration, or a comment moved above it, left the
+// store reading as LEGACY — every keyed entry becoming a whole-line pattern that
+// matches nothing — with no warning, because the entry count stayed >=1. The
+// declaration is only ever read from line 1, so finding it further down the leading
+// header is an edit that broke the file, not a legacy store.
+func TestDeclarationMustBeLineOne(t *testing.T) {
+	for name, body := range map[string]string{
+		"blank line above":   "\n" + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n",
+		"comment above":      "# my notes\n" + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n",
+		"blank and comment":  "\n# my notes\n" + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n",
+		"non-utf8 bom above": "\xff\xfe" + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n",
+		"space then bom":     " " + bom + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, err := parse([]byte(body)); !errors.Is(err, ErrMalformedStore) {
+				t.Errorf("err = %v; want ErrMalformedStore", err)
+			}
+		})
+	}
+}
+
+// TestDeclarationTextBelowTheHeaderIsJustAComment keeps the refusal from
+// over-reaching: once a real entry line has been seen the header is over, and a
+// later line that happens to spell the declaration is an ordinary comment. A store
+// that refused on that would be unusable for anyone who documented their own file.
+func TestDeclarationTextBelowTheHeaderIsJustAComment(t *testing.T) {
+	body := privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n" + privateFormatDecl + "\n"
+	entries, keyed, err := parse([]byte(body))
+	if err != nil {
+		t.Fatalf("a declaration-shaped comment below the entries must not refuse: %v", err)
+	}
+	if !keyed || len(entries) != 1 {
+		t.Fatalf("keyed=%v entries=%+v; want the one keyed entry", keyed, entries)
+	}
+}

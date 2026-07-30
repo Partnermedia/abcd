@@ -143,6 +143,22 @@ func trimLead(s string) string {
 // encoding artefact, and anywhere else it is content.
 const utf8BOM = "\xef\xbb\xbf"
 
+// declaresFormat reports whether a line IS the format declaration once a UTF-8 BOM
+// and surrounding ASCII blanks are stripped — the same normalisation the committed
+// shell hook applies, so neither reader can accept a line the other rejects.
+func declaresFormat(line string) bool {
+	return trimLead(trimTrail(strings.TrimPrefix(line, utf8BOM))) == privateFormatDecl
+}
+
+// damagedDeclaration words the one refusal a store's own header can earn. detail is
+// a format string taking the store's path; no line content is ever interpolated.
+func damagedDeclaration(detail string) error {
+	return fmt.Errorf("%w: "+detail+" — it must be exactly %q on line 1, and is read as neither format there, "+
+		"so every keyed entry below would silently become a whole-line pattern that matches nothing; "+
+		"the guard refuses every commit until it is fixed",
+		append([]any{ErrMalformedStore, PrivateRelPath}, privateFormatDecl)...)
+}
+
 // parse reads the private banlist format. It is the Go half of a format with two
 // readers — the other is the committed shell hook — and the shared fixture corpora
 // under testdata/ are what hold the two in agreement.
@@ -167,15 +183,31 @@ const utf8BOM = "\xef\xbb\xbf"
 func parse(data []byte) (entries []rawEntry, keyed bool, err error) {
 	lines := strings.Split(string(data), "\n")
 	if len(lines) > 0 {
-		decl := trimTrail(strings.TrimPrefix(lines[0], utf8BOM))
+		first := trimTrail(strings.TrimPrefix(lines[0], utf8BOM))
 		switch {
-		case decl == privateFormatDecl:
+		case first == privateFormatDecl:
 			keyed = true
-		case trimLead(decl) == privateFormatDecl:
-			return nil, false, fmt.Errorf("%w: the first line of %s is a damaged format declaration "+
-				"(leading whitespace before %q); fix that line — it is read as neither format, and the guard "+
-				"refuses every commit until it is",
-				ErrMalformedStore, PrivateRelPath, privateFormatDecl)
+		case declaresFormat(lines[0]), strings.HasSuffix(first, privateFormatDecl):
+			// The line CARRIES the declaration behind a prefix: leading ASCII blanks,
+			// or any other prefix bytes — a UTF-16/UTF-32 byte-order mark, an editor
+			// artefact — which the suffix test catches without a byte-class check.
+			return nil, false, damagedDeclaration("the first line of %s carries the format declaration behind a prefix")
+		}
+	}
+	// The declaration is only ever read from LINE 1. Finding it further down the
+	// leading blank/comment header means an edit moved it — one inserted blank line
+	// above it silently downgraded a keyed store to legacy, and the entry count
+	// stayed >=1 so nothing warned. Once a real entry line is seen the header is over
+	// and a declaration-shaped line below it is an ordinary comment.
+	if !keyed {
+		for i, raw := range lines {
+			line := trimLead(trimTrail(raw))
+			if i > 0 && declaresFormat(raw) {
+				return nil, false, damagedDeclaration("%s declares the keyed format below line 1")
+			}
+			if line != "" && !strings.HasPrefix(line, "#") {
+				break
+			}
 		}
 	}
 	for i, raw := range lines {

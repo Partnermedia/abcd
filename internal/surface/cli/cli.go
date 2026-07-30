@@ -1487,7 +1487,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				if res.FolderKind != ahoy.UnmanagedFolder {
 					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(res.Guard))
-					for i, line := range banlistHealthLines(res.Banlist) {
+					for i, line := range banlistHealthLines(*res.Banlist) {
 						label := "  banlist:     "
 						if i > 0 {
 							label = "               "

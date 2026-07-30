@@ -79,11 +79,98 @@ case $- in *x*) set +x ;; esac
 LC_ALL=C
 export LC_ALL
 
+# PATH is pinned to root-owned system directories. A repo-scoped PATH prepend — a
+# direnv file, an editor task, a shell rc a repo asked to be sourced — shipping a
+# fake `grep` that always exits 1 would leave this guard announcing its entry count
+# and reporting a clean check for ever, which is the one failure it cannot detect
+# from the inside. If a tool is missing from the pinned set the guard BLOCKS and
+# says so, because a check that could not run must never look like one that passed.
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+for tool in git grep mktemp; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-commit: BLOCKED — $tool is not on the guard's pinned PATH ($PATH)." >&2
+    echo "            the guard pins PATH so a repo-scoped override cannot substitute a fake tool," >&2
+    echo "            and it refuses rather than run unchecked. Install $tool there, or edit the" >&2
+    echo "            PATH line in this hook to include its directory." >&2
+    exit 1
+  fi
+done
+
 banlist=".abcd/.work.local/private-names.txt"
 banlist_dir=".abcd/.work.local"
+store_basename="private-names.txt"
 format_decl="# abcd-banlist: keyed"
 tab=$'\t'
 bom=$'\xef\xbb\xbf'
+
+# normalise_decl echoes a line with a UTF-8 BOM and surrounding ASCII blanks
+# stripped — the one reading both this hook and abcd's Go parser apply to the
+# format declaration, so neither can accept a line the other rejects.
+normalise_decl() {
+  _l="$1"
+  case $_l in "$bom"*) _l="${_l#"$bom"}" ;; esac
+  while [ -n "$_l" ]; do
+    case $_l in
+      *' ') _l="${_l% }" ;;
+      *"$tab") _l="${_l%"$tab"}" ;;
+      *$'\r') _l="${_l%$'\r'}" ;;
+      *) break ;;
+    esac
+  done
+  while [ -n "$_l" ]; do
+    case $_l in
+      ' '*) _l="${_l# }" ;;
+      "$tab"*) _l="${_l#"$tab"}" ;;
+      *) break ;;
+    esac
+  done
+  printf '%s' "$_l"
+}
+
+# declares_format reports whether a line IS the format declaration once normalised.
+# It is what identifies a staged blob as a copy of the private store.
+declares_format() {
+  [ "$(normalise_decl "$1")" = "$format_decl" ]
+}
+
+# refuse_store_path BLOCKS the commit when a staged path is the private store, or is
+# named like it. The private store must NEVER be tracked: the whole layer rests on
+# the file being untracked, and the guard cannot catch its own source (its patterns
+# are exactly what the file holds). The path is the store LOCATION, not a secret, so
+# naming it is correct and is the remedy.
+#
+# Two tests, because one is not enough. The tier test catches the file where it
+# lives. The BASENAME test catches a copy anywhere else — and it is the only test
+# that can catch a copy of a LEGACY store, which declares no format and so is
+# indistinguishable from any other text file by content alone.
+#
+# Both are case-INSENSITIVE: on a case-insensitive filesystem (macOS's default, and
+# Windows) `.ABCD/.WORK.LOCAL/Private-Names.txt` is the same file, and a case-exact
+# test would let the store be staged under a differently-cased path.
+refuse_store_path() {
+  _p="$1"
+  [ -n "$_p" ] || return 0
+  _lc=$(printf '%s' "$_p" | tr '[:upper:]' '[:lower:]')
+  _dir_lc=$(printf '%s' "$banlist_dir" | tr '[:upper:]' '[:lower:]')
+  _base_lc=$(printf '%s' "$store_basename" | tr '[:upper:]' '[:lower:]')
+  case "$_lc" in
+    "$_dir_lc" | "$_dir_lc"/*)
+      echo "pre-commit: BLOCKED — refusing to commit $_p." >&2
+      echo "            the private banlist must never be committed: it lives in the gitignored" >&2
+      echo "            local tier ($banlist_dir/) and holds patterns whose literal text must not" >&2
+      echo "            enter history. Unstage it (git restore --staged $_p)." >&2
+      exit 1
+      ;;
+  esac
+  if [ "${_lc##*/}" = "$_base_lc" ]; then
+    echo "pre-commit: BLOCKED — refusing to commit $_p." >&2
+    echo "            it is named like the private banlist ($store_basename), and a copy of that file" >&2
+    echo "            carries every pattern in clear — the entries cannot catch their own text, because" >&2
+    echo "            they are escaped regular expressions. Rename it, or unstage it." >&2
+    exit 1
+  fi
+}
 
 # A path that exists but is not a REGULAR FILE is tampering, not non-adoption: a
 # symlink (which `git add -f` can commit, so a checkout materialises it) swaps or
@@ -103,7 +190,9 @@ if [ -e "$banlist" ] && [ ! -f "$banlist" ]; then
   exit 1
 fi
 
+store_present=1
 if [ ! -f "$banlist" ]; then
+  store_present=0
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard is INACTIVE on this machine." >&2
   echo "pre-commit:   $banlist is absent, so NOTHING is checked" >&2
@@ -113,14 +202,18 @@ if [ ! -f "$banlist" ]; then
   echo "pre-commit:   as its first line and one 'KEY<space-or-tab>PATTERN' line per" >&2
   echo "pre-commit:   entry (it is untracked and stays on this machine)." >&2
   echo "pre-commit: ****************************************************************" >&2
-  exit 0
 fi
+# NOT an early exit. The store-path, filename and format-declaration refusals below
+# protect the store from being COMMITTED, and that question is independent of
+# whether this machine has one: `git mv`-ing the store out of the tier leaves no
+# file at its path, and an early exit here let exactly that rename through. Only the
+# pattern MATCHING needs entries, and it is skipped naturally when there are none.
 
 # Which format? The FIRST line decides the whole file, once, before any entry is
 # read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
 keyed=0
 decl=""
-if IFS= read -r decl < "$banlist" || [ -n "$decl" ]; then
+if [ "$store_present" -eq 1 ] && { IFS= read -r decl < "$banlist" || [ -n "$decl" ]; }; then
   # A leading UTF-8 BOM is an encoding artefact an editor can add without telling
   # anyone, and it must not decide the file's format. Before this strip a BOM'd
   # declaration matched nothing, so a KEYED store was read as LEGACY: every keyed
@@ -140,22 +233,20 @@ if IFS= read -r decl < "$banlist" || [ -n "$decl" ]; then
   if [ "$decl" = "$format_decl" ]; then
     keyed=1
   else
-    # A first line that is not the declaration but WOULD be after stripping leading
-    # blanks is a DAMAGED declaration, never a legacy store. Reading it as legacy is
-    # the same silent downgrade the BOM caused, so it fails closed.
-    probe="$decl"
-    while [ -n "$probe" ]; do
-      case $probe in
-        ' '*) probe="${probe# }" ;;
-        "$tab"*) probe="${probe#"$tab"}" ;;
-        *) break ;;
-      esac
-    done
-    if [ "$probe" = "$format_decl" ]; then
+    # A first line that is not the declaration but CARRIES it is a DAMAGED
+    # declaration, never a legacy store. Reading it as legacy is the same silent
+    # downgrade the BOM caused, so it fails closed. Two shapes, one test each:
+    # leading ASCII blanks, and ANY other prefix bytes — a UTF-16/UTF-32 byte-order
+    # mark, a stray editor artefact — which the suffix match catches without this
+    # shell needing a portable byte-class test.
+    damaged=0
+    if declares_format "$decl"; then damaged=1; fi
+    case "$decl" in *"$format_decl") damaged=1 ;; esac
+    if [ "$damaged" -eq 1 ]; then
       echo "pre-commit: BLOCKED — $banlist line 1 is a DAMAGED format declaration (fail safe)." >&2
-      echo "            it is not '$format_decl' but would be after stripping" >&2
-      echo "            leading blanks, so it declares neither format: every keyed entry below would" >&2
-      echo "            silently become a whole-line pattern that matches nothing. Fix line 1." >&2
+      echo "            it is not exactly '$format_decl' but carries it after a" >&2
+      echo "            prefix, so it declares neither format: every keyed entry below would silently" >&2
+      echo "            become a whole-line pattern that matches nothing. Fix line 1." >&2
       exit 1
     fi
   fi
@@ -164,18 +255,22 @@ fi
 # Announce the FORMAT before any line is read, so a refusal below carries the one
 # piece of context that decides what every other line means. The count follows the
 # loop, because it is not known until then.
-if [ "$keyed" -eq 1 ]; then
-  echo "pre-commit: abcd name-guard: keyed store" >&2
-else
-  echo "pre-commit: abcd name-guard: legacy store" >&2
+if [ "$store_present" -eq 1 ]; then
+  if [ "$keyed" -eq 1 ]; then
+    echo "pre-commit: abcd name-guard: reading a keyed store" >&2
+  else
+    echo "pre-commit: abcd name-guard: reading a legacy store" >&2
+  fi
 fi
 
 rc=0
 lineno=0
 entries=0
+in_header=1
 keys=()
 pats=()
 lines=()
+if [ "$store_present" -eq 1 ]; then
 while IFS= read -r raw || [ -n "$raw" ]; do
   lineno=$((lineno + 1))
   line="$raw"
@@ -183,6 +278,17 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   # declaration line would fail the comment test below and be read as an entry.
   if [ "$lineno" -eq 1 ]; then
     case $line in "$bom"*) line="${line#"$bom"}" ;; esac
+  fi
+  # The declaration must be line 1 or nowhere. Finding it further down the LEADING
+  # blank/comment header means an edit moved it — one inserted blank line above it
+  # silently downgraded a keyed store to legacy, which is the same fail-open by
+  # another route. Once a real entry line is seen the header is over and a line that
+  # merely looks like the declaration is just a comment.
+  if [ "$in_header" -eq 1 ] && [ "$lineno" -gt 1 ] && declares_format "$line"; then
+    echo "pre-commit: BLOCKED — $banlist declares the keyed format on line $lineno, not line 1 (fail safe)." >&2
+    echo "            the declaration decides the whole file and is only read from line 1, so every entry" >&2
+    echo "            below would silently become a whole-line pattern that matches nothing. Move it up." >&2
+    exit 1
   fi
   # Trailing, then leading, ASCII space/tab (plus a trailing CR). ASCII ONLY: the Go
   # parser strips exactly this set, and [[:space:]] does not — it also eats U+000B,
@@ -204,6 +310,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
     esac
   done
   case "$line" in '' | \#*) continue ;; esac
+  in_header=0
 
   if [ "$keyed" -eq 0 ]; then
     # LEGACY store: one whole-line pattern, no split, ever. The key is synthetic, so
@@ -248,6 +355,7 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   pats+=("$pat")
   lines+=("$lineno")
 done < "$banlist"
+fi
 
 # Announce the entry count actually read, BEFORE the scan; the format was announced
 # before the loop, so a refusal raised inside it already carried the one fact that
@@ -257,18 +365,20 @@ done < "$banlist"
 # fires. The announced pair makes what the guard actually read visible at commit
 # time, so a downgrade cannot be silent. No line content is printed here — only the
 # count and the format.
-if [ "$keyed" -eq 1 ]; then
-  if [ "$entries" -eq 1 ]; then noun="entry"; else noun="entries"; fi
-  echo "pre-commit: abcd name-guard: keyed store, $entries $noun" >&2
-else
-  if [ "$entries" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
-  echo "pre-commit: abcd name-guard: legacy store, $entries $noun" >&2
+if [ "$store_present" -eq 1 ]; then
+  if [ "$keyed" -eq 1 ]; then
+    if [ "$entries" -eq 1 ]; then noun="entry"; else noun="entries"; fi
+    echo "pre-commit: abcd name-guard: keyed store, $entries $noun" >&2
+  else
+    if [ "$entries" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
+    echo "pre-commit: abcd name-guard: legacy store, $entries $noun" >&2
+  fi
 fi
 
 # A store that parsed to NOTHING checks exactly as much as an absent one, so it is
 # exactly as loud. (An unparseable line is a refusal, handled above, not an empty
 # store.)
-if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ]; then
+if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ] && [ "$store_present" -eq 1 ]; then
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
   echo "pre-commit:   $banlist exists but yields no usable entry," >&2
@@ -276,7 +386,6 @@ if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ]; then
   echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
   echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
   echo "pre-commit: ****************************************************************" >&2
-  exit 0
 fi
 # --- the candidate content: staged BLOBS, not diff text ----------------------
 # What is checked is the CONTENT of every staged file, read straight out of the
@@ -304,7 +413,7 @@ fi
 # Sweep scratch files a previous run left behind. The trap below removes them on
 # every exit path, but a SIGKILL — or a machine that lost power mid-commit — leaves
 # a copy of a staged tree sitting in the working tree indefinitely.
-for stale in "$banlist_dir"/banlist-candidate.* "$banlist_dir"/banlist-paths.*; do
+for stale in "$banlist_dir"/banlist-candidate.* "$banlist_dir"/banlist-paths.* "$banlist_dir"/banlist-blob.*; do
   if [ -f "$stale" ]; then rm -f "$stale"; fi
 done
 
@@ -317,8 +426,15 @@ staged_paths=$(mktemp "$banlist_dir/banlist-paths.XXXXXX") || {
   rm -f "$candidate"
   exit 1
 }
-trap 'rm -f "$candidate" "$staged_paths"' EXIT INT TERM HUP
-chmod 600 "$candidate" "$staged_paths"
+# One reusable scratch file per staged blob: each blob is read into it so its FIRST
+# LINE can be tested before its bytes join the candidate, then appended.
+blob=$(mktemp "$banlist_dir/banlist-blob.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+  rm -f "$candidate" "$staged_paths"
+  exit 1
+}
+trap 'rm -f "$candidate" "$staged_paths" "$blob"' EXIT INT TERM HUP
+chmod 600 "$candidate" "$staged_paths" "$blob"
 
 # NUL-delimited RAW records, so a path with a space, a newline, or a quote is one
 # field AND the staged (destination) MODE of every entry is available — a gitlink
@@ -340,29 +456,20 @@ while IFS= read -r -d '' meta; do
   dstmode="$2"
   status="$5"
   IFS= read -r -d '' staged_path || break
+  # A rename/copy record carries the OLD path then the NEW one. BOTH are checked:
+  # reading only the destination let `git mv` of the store itself out of the tier
+  # present a path the refusal below does not match, while the source path — the one
+  # piece of evidence that this IS the store — was overwritten and thrown away.
+  src_path=""
   case "$status" in
-    R* | C*) IFS= read -r -d '' staged_path || break ;;
-  esac
-
-  # The private store must NEVER be tracked: the whole layer rests on the file being
-  # untracked, and the guard cannot catch its own source (its patterns are exactly
-  # what the file holds). A staged path in the local-ephemeral tier is a refusal
-  # naming the path — the path is the store LOCATION, not a secret, so naming it is
-  # correct and is the remedy.
-  # Compared case-INSENSITIVELY: on a case-insensitive filesystem (macOS's default,
-  # and Windows) `.ABCD/.WORK.LOCAL/private-names.txt` is the same file, and a
-  # case-exact test would let the store be staged under a differently-cased path.
-  staged_lc=$(printf '%s' "$staged_path" | tr '[:upper:]' '[:lower:]')
-  banlist_dir_lc=$(printf '%s' "$banlist_dir" | tr '[:upper:]' '[:lower:]')
-  case "$staged_lc" in
-    "$banlist_dir_lc" | "$banlist_dir_lc"/*)
-      echo "pre-commit: BLOCKED — refusing to commit $staged_path." >&2
-      echo "            the private banlist must never be committed: it lives in the gitignored" >&2
-      echo "            local tier ($banlist_dir/) and holds patterns whose literal text must not" >&2
-      echo "            enter history. Unstage it (git restore --staged $staged_path)." >&2
-      exit 1
+    R* | C*)
+      src_path="$staged_path"
+      IFS= read -r -d '' staged_path || break
       ;;
   esac
+
+  refuse_store_path "$staged_path"
+  refuse_store_path "$src_path"
 
   # A gitlink has no blob here; skip it rather than fail-close on a `git show` that
   # cannot succeed. Every OTHER git-show failure still refuses (fail closed).
@@ -373,11 +480,26 @@ while IFS= read -r -d '' meta; do
   # The staged blob is read stage-explicitly (`:0:PATH`): the ambiguous `:PATH` form
   # parses a path literally named `0:README.md` as "stage 0 of README.md" and scans
   # the WRONG blob, a proven bypass. `:0:PATH` names stage 0 and the path unambiguously.
-  if ! git show ":0:$staged_path" >>"$candidate"; then
+  if ! git show ":0:$staged_path" >"$blob"; then
     echo "pre-commit: BLOCKED — could not read the staged content of one file (git show failed)." >&2
     echo "            the guard cannot check what it cannot read, so it refuses rather than pass." >&2
     exit 1
   fi
+  # A blob whose FIRST LINE is the format declaration is a copy of the private store,
+  # wherever it sits and whatever it is called. The store-path tests above catch the
+  # file and its name; this catches its CONTENT, which is what actually leaks. The
+  # declaration is a published constant, so testing for it reveals nothing, and the
+  # refusal names the staged path alone — never a line of what it found.
+  blob_first=""
+  IFS= read -r blob_first < "$blob" || true
+  if declares_format "$blob_first"; then
+    echo "pre-commit: BLOCKED — refusing to commit $staged_path." >&2
+    echo "            its first line declares the private banlist format, so it is a copy of the" >&2
+    echo "            private store and carries every pattern in clear. Unstage it." >&2
+    echo "            (its content is withheld by design — only the path is named)" >&2
+    exit 1
+  fi
+  cat "$blob" >>"$candidate"
   # A separator, so a pattern cannot match across the join between two files.
   printf '\n' >>"$candidate"
   # The staged PATH itself is scanned like content: a banned name in a FILENAME

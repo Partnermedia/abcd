@@ -439,9 +439,21 @@ func TestForeignHookIsNeverReportedAsInstalled(t *testing.T) {
 	if got, err := os.ReadFile(hook); err != nil || string(got) != handWritten {
 		t.Errorf("install overwrote a hand-written pre-commit hook")
 	}
-	// The merge half is still abcd's to write: nothing occupies it.
-	if det.Banlist.MergeHook != HookInstalled {
-		t.Errorf("merge hook state = %q; want %q", det.Banlist.MergeHook, HookInstalled)
+	// The merge half is NOT abcd's to write here. The shim delegates to the
+	// pre-commit hook, so writing it beside a foreign one does two wrong things at
+	// once: abcd's marker lands in the shim and the board reports the merge half as
+	// installed while merges stay unchecked, and the maintainer's hook silently
+	// starts running on merge commits, which git never did before — apply taking
+	// over wiring the foreign-hook gap explicitly disclaims owning.
+	if det.Banlist.MergeHook == HookInstalled {
+		t.Errorf("the merge shim was reported installed while a foreign hook occupies the guard it delegates to")
+	}
+	shim := filepath.Join(repo, filepath.FromSlash(GuardMergeHookRelPath))
+	if _, err := os.Stat(shim); err == nil {
+		t.Errorf("install wrote a merge shim that delegates to a hook abcd does not own")
+	}
+	if findGap(det.Gaps, "banlist.merge_hook_inert") == nil {
+		t.Error("nothing reports that merge commits are unchecked")
 	}
 }
 
