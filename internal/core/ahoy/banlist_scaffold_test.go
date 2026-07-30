@@ -82,7 +82,8 @@ func TestBanlistStubSeedsOnlyReservedIdentifiers(t *testing.T) {
 	// The detector must be armed, or "no findings" is a test that cannot fail: a
 	// control value from RFC 1918 has to be flagged before the stub's silence means
 	// anything (fix-the-detector).
-	if len(scan(plain+"\n#   lab-ipv4      10.11.12.13\n")) == 0 {
+	control := "\n#   lab-ipv4      10.11.12.13\n" // abcd-audit:allow — the control the detector must flag
+	if len(scan(plain+control)) == 0 {
 		t.Fatal("the network-identifier detector reported nothing for a control RFC 1918 address; the assertion below is vacuous")
 	}
 	for _, f := range scan(plain) {

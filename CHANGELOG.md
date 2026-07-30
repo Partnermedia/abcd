@@ -39,6 +39,36 @@ called out in a **Breaking** section.
   plainly, including that CI cannot enforce the private layer, and `list --private`
   separates a line the guard cannot use from one it accepts but reads differently,
   because the first stops every commit and the second stops nothing.
+- **`abcd ahoy` scaffolds the whole two-layer name banlist** (itd-74, spc-20). A
+  repo becomes name-safe by being abcd-managed rather than by a maintainer
+  hand-wiring three files: install writes the committed guard hook
+  (`.githooks/pre-commit`, the generalised form of abcd's own prototype), a
+  `.abcd/docs-lint.json` carrying an empty public banned-names family, and the
+  documented private stub inside the gitignored local tier. A clone arms the hook
+  once with `git config core.hooksPath .githooks`. The public family is seeded
+  EMPTY on purpose — abcd cannot know which names a repo may not publish, and a ban
+  nobody declared would fail a build over a word the maintainer never chose. Every
+  write is create-if-absent: a hook, a CI-gating config, and above all a populated
+  private store are the maintainer's, and re-seeding one would delete work abcd
+  cannot see. The stub is written only once the `.gitignore` fence covering the
+  local tier is on disk, because a stub git would track is the hazard rather than
+  the remedy; the gap that asks for it is advertised as resolvable only then, so a
+  repo is never left permanently "partial" by a fix that cannot land. The stub's
+  worked examples are all commented out — a fresh scaffold parses to zero entries,
+  and the guard says so loudly at commit time instead of looking like protection —
+  and every illustrative value in it is a reserved documentation value (RFC 5737,
+  RFC 3849, RFC 2606, RFC 7042) or a persona-derived fixture host, judged by the
+  repo's own network-identifier detector.
+- **Every surface that describes the private layer states its reach** (itd-74,
+  spc-20). `abcd ahoy` now reports the name guard's state — which artefacts are
+  scaffolded, and whether this machine has opted into the private layer at all —
+  and the status line, the JSON envelope, and the `abcd banlist` verb all carry the
+  same sentence: CI cannot enforce the private layer, it protects only machines
+  that have opted in. The reach travels inside the reported state rather than being
+  added by a renderer, because a machine consumer reading "hook installed" beside a
+  present store would otherwise draw exactly the wrong conclusion. The status pass
+  reads no entry and spawns no subprocess: the store's content is the secret, and a
+  status board is the surface that must not hold it.
 - **The private name guard refuses by key and says when it is inactive** (itd-74,
   spc-20). The committed `.githooks/pre-commit` guard checks the CONTENT of every
   staged file, read out of the index, and on a match refuses the commit naming the

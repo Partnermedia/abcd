@@ -174,13 +174,26 @@ Steps, run in parallel where independent:
    is plugin-static per spc-14 T7.
 10. **Version** — read `config.json["meta"].setup_version`; classify `first-time` /
     `upgrade` / `current`. One input among many — never the sole gate.
+11. **Name-banlist scaffolding** (itd-74 / spc-20) — is the committed guard hook
+    (`.githooks/pre-commit`) present, does `.abcd/docs-lint.json` carry a
+    readable banned-names family, and does the private stub exist in the
+    gitignored local tier? Each absence is a `safe-autocreate` gap. The
+    private-stub gap is resolvable only once the `.gitignore` fence covering
+    the local tier is in place: a stub git would track is the hazard the layer
+    exists to prevent, so a gap apply would refuse to close is never advertised
+    as resolvable. A docs-lint config that exists but carries no usable
+    `banned_tokens` array is a non-resolvable `config-change` diagnostic —
+    the config gates CI and a contributor owns it. The same pass reports the
+    layers' state (`banlist` in the detection envelope), and that report always
+    carries the private layer's reach: CI cannot enforce it. See
+    [`20-banlist.md`](20-banlist.md).
 
 Each detected discrepancy becomes a **gap** with a stable `id`, a `category`,
 a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 
 | `category` | Examples | Apply behaviour |
 |---|---|---|
-| `safe-autocreate` | `.abcd/` skeleton, history-store dirs (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt |
+| `safe-autocreate` | `.abcd/` skeleton, history-store dirs, name-banlist artefacts (guard hook, public family, private stub) (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt; the banlist artefacts are create-if-absent and never overwrite |
 | `config-change` | visibility, oracle adapter, PATH symlink, git-identity pin | transparent confirm; skip-if-set with "current value" notice |
 | `plugin-owned` | CLAUDE.md/AGENTS.md marker block (per itd-3); `hooks/hooks.json` manifest verification (verify-only per spc-16 T1) | silent overwrite on marker drift; non-resolvable diagnostic for malformed/missing manifest |
 | `dependency` | opt-in scanners: `gitleaks`, `trufflehog` install | offer brew with ONE category-level approval covering the opt-in scanners (per spc-16 T1 — per-CATEGORY, not per-tool) |
@@ -192,9 +205,12 @@ The marker block `install` writes comes from a canonical file under
 `internal/core/ahoy/defaults/` (`claude-md-marker-block.md`), never from inline
 prose in this surface. If the template is stale, edit the template file. Drift
 detection (step 7) is only meaningful because the marker block has one
-canonical source. The `.abcd/rules.json` skeleton is written inline by the
-apply pass (`stepRules`); a later phase moves it — and `.abcd/usage.md`, once
-that artefact ships — to canonical files under `defaults/` too.
+canonical source. The name guard `install` writes comes from the same directory
+(`pre-commit`) — the generalised form of the prototype this repo runs on itself,
+with the repo-specific gates dropped, embedded so the binary is self-contained.
+The `.abcd/rules.json` skeleton is written inline by the apply pass
+(`stepRules`); a later phase moves it — and `.abcd/usage.md`, once that artefact
+ships — to canonical files under `defaults/` too.
 
 ## Install flow (`/abcd:ahoy install`)
 
@@ -238,7 +254,17 @@ interactive confirmation.
    the visibility table in
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
    Show the resulting tracked-vs-ignored list before confirming.
-6. **History-store registry** (`user-state`) — if the `~/.abcd/history/` store
+6. **Name-banlist scaffolding** (`safe-autocreate`, itd-74 / spc-20) — write the
+   committed guard hook (`.githooks/pre-commit`), a `.abcd/docs-lint.json`
+   carrying an EMPTY public banned-names family, and the documented private stub
+   in the gitignored local tier. Every write is create-if-absent: a hook, a
+   CI-gating config, and above all a populated private store are the
+   maintainer's. The stub runs AFTER step 5 and only when the fence is in place,
+   so a stub git would track is never created. Its examples are commented out
+   and every illustrative value is a reserved documentation value or a
+   persona-derived fixture host (`examples-use-reserved-identifiers`). A clone
+   arms the hook once with `git config core.hooksPath .githooks`.
+7. **History-store registry** (`user-state`) — if the `~/.abcd/history/` store
    does not exist, bootstrap it: create the directory and write an initial
    `index.json` with its `schema` + `description` header (see
    [`05-internals/03-configuration.md`](../05-internals/03-configuration.md)
@@ -251,24 +277,24 @@ interactive confirmation.
    `path` if the repo moved. The history `index.json` is the
    **sole user-scope registry** — there is no `workspaces.json`. Transcript
    capture is native — no external tool and no per-repo redirect shim.
-7. **Marker block** (`plugin-owned`) — inject/refresh the block between
+8. **Marker block** (`plugin-owned`) — inject/refresh the block between
    `<!-- BEGIN ABCD -->` / `<!-- END ABCD -->` in the target docs. **Silent
    overwrite on drift, per itd-3 — no prompt for hand-edits inside the block;
    users edit outside the markers.** Content comes from
    `internal/core/ahoy/defaults/claude-md-marker-block.md`. Write the minimal
    `.abcd/rules.json` skeleton if missing.
-8. **PATH symlink** (`config-change`) — transparent prompt: "Install `abcd`
+9. **PATH symlink** (`config-change`) — transparent prompt: "Install `abcd`
    symlink to `/usr/local/bin/abcd`? Default: yes for private repos, no for
    public." If accepted AND the target is absent or already points at this
    plugin → write it. If a different `abcd` binary exists → refuse, show what
    it points to, suggest manual resolution.
-9. **Hook registration** (`plugin-owned`, VERIFY-ONLY per spc-16 T1) — install
+10. **Hook registration** (`plugin-owned`, VERIFY-ONLY per spc-16 T1) — install
    verifies that `hooks/hooks.json` is present (the manifest is plugin-static
    per spc-14 T7). Install NEVER writes `hooks.json`; uninstall NEVER mutates
    `hooks.json`. A missing manifest surfaces as a `plugin-owned` non-resolvable
    diagnostic gap.
-10. Stamp `setup_version` + `setup_date` in `config.json["meta"]`.
-11. Print summary: installed files, config table, symlink status, hook status,
+11. Stamp `setup_version` + `setup_date` in `config.json["meta"]`.
+12. Print summary: installed files, config table, symlink status, hook status,
     notes (re-run hint, uninstall hint).
 
 **Same-version re-install:** if the detection pass reports zero actionable

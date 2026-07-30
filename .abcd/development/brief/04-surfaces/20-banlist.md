@@ -115,13 +115,43 @@ Because the store's safety rests entirely on its being untracked, `add --private
 refuses outright when git does not ignore the store's path: the guard cannot catch
 its own source.
 
+## Scaffolded, not hand-wired
+
+`abcd ahoy` writes all three artefacts into any repo it configures, so a repo
+becomes name-safe by being abcd-managed:
+
+| artefact | where | note |
+|---|---|---|
+| guard hook | `.githooks/pre-commit` | committed, so every clone inherits it; a clone arms it once with `git config core.hooksPath .githooks` |
+| public family | `.abcd/docs-lint.json` | an **empty** `banned_tokens` array — abcd cannot know which names a repo may not publish, and a ban nobody declared would fail a build over a word the maintainer never chose |
+| private stub | `.abcd/.work.local/private-names.txt` | inside the gitignored local tier, which the installed `.gitignore` fence covers under either visibility |
+
+Every write is create-if-absent. A hook, a CI-gating config, and above all a
+populated private store are the maintainer's, and re-seeding one would delete work
+abcd cannot see. The stub is written only after the fence is on disk: a stub git
+would track is the hazard, not the remedy — so the gap that asks for it is
+advertised as resolvable only once the fence covers it.
+
+The stub's worked examples are **all commented out**, so a fresh scaffold parses to
+zero entries and the guard says so loudly at commit time rather than looking like
+protection. Every illustrative value in it is a reserved documentation value (RFC
+5737, RFC 3849, RFC 2606, RFC 7042) or a persona-derived fixture host, per
+[`examples-use-reserved-identifiers`](../../principles/examples-use-reserved-identifiers.md);
+the scaffold test judges that with the repo's own network-identifier detector, and
+proves the detector is armed with a control value first.
+
 ## Honest reach
 
-`abcd banlist` states plainly that CI cannot enforce the private layer. That is not
-a limitation to be fixed but the design: a pattern in CI config is a published
-pattern. Wiring the same statement into the status and report surfaces, and
-`ahoy` scaffolding of the guard hook, gitignore entry, and a documented stub with
-reserved-value examples, are the remaining slices of this surface.
+`abcd banlist` states plainly that CI cannot enforce the private layer, and so does
+every other surface that describes it: `abcd ahoy`'s status board and the detection
+envelope both carry the sentence beside the state it qualifies. It lives once, as
+`banlist.PrivateReachNote`, because a human line, a verb, and a machine consumer
+reading the envelope's booleans must not be able to disagree about what "hook
+installed" beside a present store means — and the reading a machine consumer takes
+on its own is the wrong one.
+
+That is not a limitation to be fixed but the design: a pattern in CI config is a
+published pattern.
 
 ## References
 
