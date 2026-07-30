@@ -640,3 +640,44 @@ func TestPreCommitHook_DoesNotTraceThePatternsUnderXtrace(t *testing.T) {
 		t.Errorf("an inherited xtrace printed the banlist patterns:\n%s", out)
 	}
 }
+
+// TestPreCommitHook_BOMDoesNotDowngradeAKeyedStore is the shell half of the
+// fail-open a leading byte-order mark opened in BOTH readers. With the BOM the
+// first line no longer equalled the declaration, so the guard read the store as
+// LEGACY and every keyed entry became one whole-line pattern
+// (`lab-host carol-server\.example\.net`) that matches nothing a commit contains —
+// while the entry count stayed >=1, so the loud zero-entry warning never fired.
+// The store looked healthy and checked nothing.
+func TestPreCommitHook_BOMDoesNotDowngradeAKeyedStore(t *testing.T) {
+	blocked, out := hookRun(t,
+		"\xef\xbb\xbf# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n",
+		"ssh carol-server.example.net\n")
+	if !blocked {
+		t.Fatalf("a BOM before the declaration downgraded the store and let a banned name through\n%s", out)
+	}
+	if !strings.Contains(out, "lab-host") {
+		t.Errorf("the refusal does not name the key\n%s", out)
+	}
+	if strings.Contains(out, "carol-server") {
+		t.Errorf("the refusal echoes the pattern or the matched text\n%s", out)
+	}
+	if !strings.Contains(out, "keyed store") {
+		t.Errorf("the guard did not announce the keyed format it actually read\n%s", out)
+	}
+}
+
+// TestPreCommitHook_DamagedDeclarationRefuses: a first line that is not the
+// declaration but would be after stripping leading blanks is a DAMAGED
+// declaration, not a legacy store. Reading it as legacy is the same silent
+// downgrade, so the guard fails closed and says which line to fix.
+func TestPreCommitHook_DamagedDeclarationRefuses(t *testing.T) {
+	blocked, out := hookRun(t,
+		"  # abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n",
+		"nothing banned here\n")
+	if !blocked {
+		t.Fatalf("a damaged format declaration was read as a legacy store\n%s", out)
+	}
+	if !strings.Contains(out, "line 1") {
+		t.Errorf("the refusal does not name the damaged line\n%s", out)
+	}
+}

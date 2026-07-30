@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# abcd-name-guard: v1
 # Local name guard — run on every clone via the global ~/.githooks dispatcher
 # (which chains the repo's committed .githooks/<name>).
 #
@@ -107,6 +108,7 @@ banlist=".abcd/.work.local/private-names.txt"
 banlist_dir=".abcd/.work.local"
 format_decl="# abcd-banlist: keyed"
 tab=$'\t'
+bom=$'\xef\xbb\xbf'
 
 # Refresh the generated block from the user-level sources corpus when present
 # (itd-76 dogfood): keeps the banlist as fresh as the current commit. No-op on
@@ -154,6 +156,14 @@ fi
 keyed=0
 decl=""
 if IFS= read -r decl < "$banlist" || [ -n "$decl" ]; then
+  # A leading UTF-8 BOM is an encoding artefact an editor can add without telling
+  # anyone, and it must not decide the file's format. Before this strip a BOM'd
+  # declaration matched nothing, so a KEYED store was read as LEGACY: every keyed
+  # entry silently became a whole-line pattern that matches nothing a commit
+  # contains, while the entry count stayed >=1 so the zero-entry warning below
+  # never fired. Stripped here and on line 1 of the parse loop, exactly as the Go
+  # parser does.
+  case $decl in "$bom"*) decl="${decl#"$bom"}" ;; esac
   while [ -n "$decl" ]; do
     case $decl in
       *' ') decl="${decl% }" ;;
@@ -162,7 +172,37 @@ if IFS= read -r decl < "$banlist" || [ -n "$decl" ]; then
       *) break ;;
     esac
   done
-  if [ "$decl" = "$format_decl" ]; then keyed=1; fi
+  if [ "$decl" = "$format_decl" ]; then
+    keyed=1
+  else
+    # A first line that is not the declaration but WOULD be after stripping leading
+    # blanks is a DAMAGED declaration, never a legacy store. Reading it as legacy is
+    # the same silent downgrade the BOM caused, so it fails closed.
+    probe="$decl"
+    while [ -n "$probe" ]; do
+      case $probe in
+        ' '*) probe="${probe# }" ;;
+        "$tab"*) probe="${probe#"$tab"}" ;;
+        *) break ;;
+      esac
+    done
+    if [ "$probe" = "$format_decl" ]; then
+      echo "pre-commit: BLOCKED — $banlist line 1 is a DAMAGED format declaration (fail safe)." >&2
+      echo "            it is not '$format_decl' but would be after stripping" >&2
+      echo "            leading blanks, so it declares neither format: every keyed entry below would" >&2
+      echo "            silently become a whole-line pattern that matches nothing. Fix line 1." >&2
+      exit 1
+    fi
+  fi
+fi
+
+# Announce the FORMAT before any line is read, so a refusal below carries the one
+# piece of context that decides what every other line means. The count follows the
+# loop, because it is not known until then.
+if [ "$keyed" -eq 1 ]; then
+  echo "pre-commit: abcd name-guard: keyed store" >&2
+else
+  echo "pre-commit: abcd name-guard: legacy store" >&2
 fi
 
 rc=0
@@ -174,6 +214,11 @@ lines=()
 while IFS= read -r raw || [ -n "$raw" ]; do
   lineno=$((lineno + 1))
   line="$raw"
+  # The BOM belongs to the FILE, not to line 1's content: strip it here too, or the
+  # declaration line would fail the comment test below and be read as an entry.
+  if [ "$lineno" -eq 1 ]; then
+    case $line in "$bom"*) line="${line#"$bom"}" ;; esac
+  fi
   # Trailing, then leading, ASCII space/tab (plus a trailing CR). ASCII ONLY: the Go
   # parser strips exactly this set, and [[:space:]] does not — it also eats U+000B,
   # and in a UTF-8 locale a byte class can disagree about U+00A0. A store line either
@@ -239,13 +284,14 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   lines+=("$lineno")
 done < "$banlist"
 
-# Announce the format and the entry count actually read, BEFORE the scan. A silent
-# downgrade — a stripped `# abcd-banlist: keyed` first line, or a UTF-8 BOM ahead of
-# it — turns every keyed entry into a non-matching whole-line pattern while `entries`
-# stays >=1, so the zero-entry warning below never fires. One announced line makes the
-# format the guard actually read visible at commit time, so a downgrade cannot be
-# silent. The key alone is never enough to leak a pattern, and no line content is
-# printed here — only the count and the format.
+# Announce the entry count actually read, BEFORE the scan; the format was announced
+# before the loop, so a refusal raised inside it already carried the one fact that
+# decides what every other line means. A silent downgrade — a stripped
+# `# abcd-banlist: keyed` first line — turns every keyed entry into a non-matching
+# whole-line pattern while `entries` stays >=1, so the zero-entry warning below never
+# fires. The announced pair makes what the guard actually read visible at commit
+# time, so a downgrade cannot be silent. No line content is printed here — only the
+# count and the format.
 if [ "$keyed" -eq 1 ]; then
   if [ "$entries" -eq 1 ]; then noun="entry"; else noun="entries"; fi
   echo "pre-commit: abcd name-guard: keyed store, $entries $noun" >&2
@@ -291,6 +337,13 @@ if ! mkdir -p "$banlist_dir"; then
   echo "pre-commit: BLOCKED — could not create $banlist_dir for the guard's scratch file." >&2
   exit 1
 fi
+# Sweep scratch files a previous run left behind. The trap below removes them on
+# every exit path, but a SIGKILL — or a machine that lost power mid-commit — leaves
+# a copy of a staged tree sitting in the working tree indefinitely.
+for stale in "$banlist_dir"/banlist-candidate.* "$banlist_dir"/banlist-paths.*; do
+  if [ -f "$stale" ]; then rm -f "$stale"; fi
+done
+
 candidate=$(mktemp "$banlist_dir/banlist-candidate.XXXXXX") || {
   echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
   exit 1
@@ -332,8 +385,13 @@ while IFS= read -r -d '' meta; do
   # what the file holds). A staged path in the local-ephemeral tier is a refusal
   # naming the path — the path is the store LOCATION, not a secret, so naming it is
   # correct and is the remedy.
-  case "$staged_path" in
-    "$banlist_dir" | "$banlist_dir"/*)
+  # Compared case-INSENSITIVELY: on a case-insensitive filesystem (macOS's default,
+  # and Windows) `.ABCD/.WORK.LOCAL/private-names.txt` is the same file, and a
+  # case-exact test would let the store be staged under a differently-cased path.
+  staged_lc=$(printf '%s' "$staged_path" | tr '[:upper:]' '[:lower:]')
+  banlist_dir_lc=$(printf '%s' "$banlist_dir" | tr '[:upper:]' '[:lower:]')
+  case "$staged_lc" in
+    "$banlist_dir_lc" | "$banlist_dir_lc"/*)
       echo "pre-commit: BLOCKED — refusing to commit $staged_path." >&2
       echo "            the private banlist must never be committed: it lives in the gitignored" >&2
       echo "            local tier ($banlist_dir/) and holds patterns whose literal text must not" >&2

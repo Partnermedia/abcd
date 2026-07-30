@@ -138,24 +138,50 @@ func trimLead(s string) string {
 	return s
 }
 
+// utf8BOM is the byte-order mark an editor can prepend to a file without telling
+// anyone. It is stripped from the FIRST line only: at the head of a file it is an
+// encoding artefact, and anywhere else it is content.
+const utf8BOM = "\xef\xbb\xbf"
+
 // parse reads the private banlist format. It is the Go half of a format with two
 // readers — the other is the committed shell hook — and the shared fixture corpora
 // under testdata/ are what hold the two in agreement.
 //
-// The FIRST line decides the whole file. Exactly privateFormatDecl (bar trailing
-// blanks) means KEYED: every non-comment, non-blank line must parse as
-// KEY<space-or-tab>PATTERN, and one that does not is returned unparsed — by number,
-// with no key and no pattern. Anything else means LEGACY: every non-comment,
+// The FIRST line decides the whole file. Exactly privateFormatDecl (bar a leading
+// BOM and trailing blanks) means KEYED: every non-comment, non-blank line must parse
+// as KEY<space-or-tab>PATTERN, and one that does not is returned unparsed — by
+// number, with no key and no pattern. Anything else means LEGACY: every non-comment,
 // non-blank line is one whole-line pattern under the synthetic key
 // entry-<line-number>, and no line is ever split.
+//
+// A first line that is NOT the declaration but would be after stripping leading
+// blanks is a DAMAGED declaration, and it is refused rather than read as legacy.
+// Both readings of a damaged line fail open in the same way: every keyed entry
+// silently becomes a whole-line pattern that matches nothing a commit contains,
+// while the entry count stays >=1 so the zero-entry warning never fires. A store
+// that cannot be read for what it is must not look like a store that found nothing.
 //
 // Pattern usability is NOT decided here (see checkPattern): parsing is a cheap,
 // deterministic, engine-free step that every caller needs, and only the diagnostic
 // read pays for asking the engine.
-func parse(data []byte) (entries []rawEntry, keyed bool) {
+func parse(data []byte) (entries []rawEntry, keyed bool, err error) {
 	lines := strings.Split(string(data), "\n")
-	keyed = len(lines) > 0 && trimTrail(lines[0]) == privateFormatDecl
+	if len(lines) > 0 {
+		decl := trimTrail(strings.TrimPrefix(lines[0], utf8BOM))
+		switch {
+		case decl == privateFormatDecl:
+			keyed = true
+		case trimLead(decl) == privateFormatDecl:
+			return nil, false, fmt.Errorf("%w: the first line of %s is a damaged format declaration "+
+				"(leading whitespace before %q); fix that line — it is read as neither format, and the guard "+
+				"refuses every commit until it is",
+				ErrMalformedStore, PrivateRelPath, privateFormatDecl)
+		}
+	}
 	for i, raw := range lines {
+		if i == 0 {
+			raw = strings.TrimPrefix(raw, utf8BOM)
+		}
 		line := trimLead(trimTrail(raw))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -181,7 +207,7 @@ func parse(data []byte) (entries []rawEntry, keyed bool) {
 		e.key, e.pattern = first, rest
 		entries = append(entries, e)
 	}
-	return entries, keyed
+	return entries, keyed, nil
 }
 
 // readPrivate returns the store's bytes, or ErrNoStore when it does not exist. The
@@ -232,7 +258,18 @@ func mkdirLocalTier(repoRoot string) error {
 		return err
 	}
 	defer root.Close()
-	return root.MkdirAll(PrivateDirRelPath, 0o700)
+	if err := root.MkdirAll(PrivateDirRelPath, 0o700); err != nil {
+		return err
+	}
+	// MkdirAll applies the mode only to directories it CREATES. A tier an earlier
+	// abcd (or a user) left at 0755 would keep the private patterns world-readable
+	// for ever, so the mode is asserted on every call rather than assumed from the
+	// creating one. Tighten only what is really a directory: a leaf swapped for a
+	// symlink is refused by the Root, and a non-directory is not this tier.
+	if fi, err := root.Lstat(PrivateDirRelPath); err == nil && fi.IsDir() && fi.Mode().Perm() != 0o700 {
+		return root.Chmod(PrivateDirRelPath, 0o700)
+	}
+	return nil
 }
 
 // ListPrivate reports the private layer: its format, its keys, the lines the
@@ -256,7 +293,10 @@ func ListPrivate(repoRoot string) (PrivateReport, error) {
 	if gitutil.InRepo(repoRoot) && !gitutil.IsIgnored(repoRoot, PrivateRelPath) {
 		rep.NotIgnored = true
 	}
-	entries, keyed := parse(data)
+	entries, keyed, perr := parse(data)
+	if perr != nil {
+		return PrivateReport{}, perr
+	}
 	rep.Keyed = keyed
 	for _, e := range entries {
 		if e.unparsed {
@@ -276,6 +316,68 @@ func ListPrivate(repoRoot string) (PrivateReport, error) {
 		}
 	}
 	return rep, nil
+}
+
+// PrivateSummary is the private layer's SHAPE without its content: what a status
+// board may say about it. Every field is non-secret by construction — a count, a
+// format flag, and git's ignore verdict — and there is no way to reach a pattern
+// from here.
+//
+// It exists because ListPrivate is a diagnostic, not a status: ListPrivate asks the
+// ENFORCEMENT engine about every entry, which is one grep subprocess per line. That
+// is the right price for `abcd banlist list --private` during an incident and the
+// wrong one for a detection pass that runs on every `abcd ahoy` and on the session
+// hooks. The parser is shared, so the two cannot disagree about what an entry is;
+// only the engine question is skipped, and Unparsed therefore counts lines that do
+// not PARSE, not lines grep would refuse.
+type PrivateSummary struct {
+	// Present distinguishes "this machine has not opted in" from "opted in with no
+	// entries" — the two check exactly as much, and both must be visible as distinct.
+	Present bool `json:"present"`
+	// Ignored is git's own verdict on the store's path. The layer's whole safety
+	// rests on the file being untracked, and only git can answer that. It is
+	// meaningful only when Present and inside a git repo; outside one it is true,
+	// because a repo that is not a repo cannot commit the file (the same posture
+	// requireIgnoredStore takes).
+	Ignored bool `json:"ignored"`
+	// Keyed reports the declared format, which decides what every line means.
+	Keyed bool `json:"keyed"`
+	// Entries counts the lines a reader can use. Unparsed counts the rest — the
+	// guard refuses every commit while any exists.
+	Entries  int `json:"entries"`
+	Unparsed int `json:"unparsed"`
+}
+
+// SummarisePrivate reports the private layer's shape for a status surface. An
+// absent store is a zero-value summary and NO error: not opting in is a state, not
+// a fault. A store that cannot be read for what it is — a damaged declaration, an
+// unreadable file — is an error, because a status board must not render it as
+// healthy.
+func SummarisePrivate(repoRoot string) (PrivateSummary, error) {
+	data, err := readPrivate(repoRoot)
+	switch {
+	case err == nil:
+	case errors.Is(err, ErrNoStore):
+		return PrivateSummary{}, nil
+	default:
+		return PrivateSummary{}, err
+	}
+	entries, keyed, err := parse(data)
+	if err != nil {
+		return PrivateSummary{}, err
+	}
+	sum := PrivateSummary{Present: true, Keyed: keyed, Ignored: true}
+	for _, e := range entries {
+		if e.unparsed {
+			sum.Unparsed++
+			continue
+		}
+		sum.Entries++
+	}
+	if gitutil.InRepo(repoRoot) {
+		sum.Ignored = gitutil.IsIgnored(repoRoot, PrivateRelPath)
+	}
+	return sum, nil
 }
 
 // AddPrivate appends one entry, creating the store (and the local tier directory)
@@ -318,7 +420,10 @@ func AddPrivate(req AddPrivateRequest) (PrivateResult, error) {
 			return err
 		}
 
-		entries, keyed := parse(data)
+		entries, keyed, perr := parse(data)
+		if perr != nil {
+			return perr
+		}
 		if !keyed && len(entries) > 0 {
 			return legacyStoreRefusal("add to")
 		}
@@ -374,7 +479,10 @@ func countParsed(entries []rawEntry) int {
 // a pattern the writer would compose into an unparseable or silently-altered line is
 // caught before any byte reaches the store.
 func composedLineRoundTrips(key, pattern string) bool {
-	entries, _ := parse([]byte(privateFormatDecl + "\n" + key + " " + pattern))
+	entries, _, err := parse([]byte(privateFormatDecl + "\n" + key + " " + pattern))
+	if err != nil {
+		return false
+	}
 	for _, e := range entries {
 		if e.unparsed {
 			return false
@@ -395,7 +503,10 @@ func RemovePrivate(repoRoot, key string) (PrivateResult, error) {
 		if err != nil {
 			return err
 		}
-		entries, keyed := parse(data)
+		entries, keyed, perr := parse(data)
+		if perr != nil {
+			return perr
+		}
 		if !keyed && len(entries) > 0 {
 			return legacyStoreRefusal("remove from")
 		}
