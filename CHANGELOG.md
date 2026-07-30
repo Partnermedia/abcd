@@ -58,6 +58,12 @@ called out in a **Breaking** section.
   passed. A store that is absent, or present with no entries, prints a loud warning
   that the layer is inactive on this machine and lets the commit through: it
   protects machines that opted in, and silence must never impersonate protection.
+  It reads each staged blob stage-explicitly (so a file literally named
+  `0:README.md` cannot hide behind git rev-magic), scans the staged PATH strings as
+  well as content (a banned name in a filename enters history just the same), skips
+  a staged gitlink rather than fail-closing on a submodule it cannot read, refuses
+  to commit the private store itself, and announces the format and entry count it
+  read before the scan so a stripped format declaration cannot silently downgrade it.
 - **A citations family in `abcd docs lint`, with zero network in the gate**
   (itd-101, spc-17). Cited references rot silently — pages retitle, URLs
   redirect, whole platforms announce their own shutdown — but a gate that dials
