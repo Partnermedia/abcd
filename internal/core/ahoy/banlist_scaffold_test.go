@@ -284,3 +284,190 @@ func TestScaffoldedGuardHookHoldsItsContract(t *testing.T) {
 		t.Fatalf("the scaffolded guard allowed the private store to be committed:\n%s", out)
 	}
 }
+
+// --- fence truth (the shared blocker) ---------------------------------------
+
+// TestStubIsNotWrittenWhereGitWouldTrackIt is the blocker both reviewers found.
+// Resolvability was decided from a TEXT comparison of the abcd-managed .gitignore
+// block, which answers a different question from the one that matters: a repo can
+// carry a byte-perfect block and still track the store — a negation after it, a
+// tracked local tier, a declined config change that means the block was never
+// written at all. Only git can answer "is this path ignored", so only git does.
+//
+// The shape here is the declined-config-change one: ConfigChange is not approved,
+// so stepVisibility never runs, no fence exists, and the stub must NOT be created.
+// The artefacts that carry no such hazard still land.
+func TestStubIsNotWrittenWhereGitWouldTrackIt(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t).Root()
+
+	opts := installOpts()
+	opts.Yes = false
+	opts.ValueOverrides = nil
+	opts.ApprovedCategories = map[GapCategory]bool{SafeAutocreate: true}
+	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath))
+	if _, err := os.Stat(store); err == nil {
+		t.Errorf("the stub was written into a repo where git does not ignore it")
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(GuardHookRelPath))); err != nil {
+		t.Errorf("the hook carries no such hazard and must still be scaffolded: %v", err)
+	}
+
+	// And the gap that remains has to say what would fix it, in git's terms.
+	det, err := Detect(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gap := findGap(det.Gaps, "banlist.private_stub_missing")
+	if gap == nil {
+		t.Fatal("no private-stub gap after a run that refused to write it")
+	}
+	if gap.Resolvable {
+		t.Errorf("the gap claims apply can close it, but apply refuses while git would track the store")
+	}
+	if !strings.Contains(gap.FixHint, "ignore") {
+		t.Errorf("the fix hint does not name the ignore requirement: %q", gap.FixHint)
+	}
+}
+
+// TestInstalledStubIsIgnoredByRealGit is the other half: after a full install in a
+// real repository, git itself — not a string compare — reports the store as
+// ignored, and the health report says so.
+func TestInstalledStubIsIgnoredByRealGit(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t)
+	if _, err := Install(repo.Root(), installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(repo.Root(), filepath.FromSlash(banlist.PrivateRelPath))); err != nil {
+		t.Fatalf("the stub was not written into a repo whose fence covers it: %v", err)
+	}
+	if !gitCheckIgnored(t, repo, banlist.PrivateRelPath) {
+		t.Errorf("git does not ignore the scaffolded store")
+	}
+	det, err := Detect(repo.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !det.Banlist.PrivateStoreIgnored {
+		t.Errorf("health reports the store as not ignored when git says it is")
+	}
+}
+
+// --- containment (security M1) ----------------------------------------------
+
+// TestScaffoldRefusesToWriteThroughASymlinkedAncestor: a repo can commit a symlink
+// at .githooks or at the local tier, so a checkout materialises it before abcd ever
+// runs. Writing through one lands a 0755 hook and a 0600 stub OUTSIDE the repo
+// while every surface reports the in-repo path — the file abcd claims to have
+// written is not the file that exists.
+func TestScaffoldRefusesToWriteThroughASymlinkedAncestor(t *testing.T) {
+	for _, tc := range []struct{ name, dir string }{
+		{"hooks dir", ".githooks"},
+		{"local tier", ".abcd/.work.local"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupHermetic(t)
+			repo := gittest.NewRepo(t).Root()
+			outside := t.TempDir()
+			link := filepath.Join(repo, filepath.FromSlash(tc.dir))
+			if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, link); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+			if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+				t.Fatal(err)
+			}
+			entries, err := os.ReadDir(outside)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range entries {
+				t.Errorf("scaffolding wrote %q outside the repo through the symlinked %s", e.Name(), tc.dir)
+			}
+		})
+	}
+}
+
+// findGap returns the gap with the given id, or nil.
+func findGap(gaps []Gap, id string) *Gap {
+	for i := range gaps {
+		if gaps[i].ID == id {
+			return &gaps[i]
+		}
+	}
+	return nil
+}
+
+// TestForeignHookIsNeverReportedAsInstalled is correctness M2. A repo's own
+// pre-commit hook is legitimate and abcd must not replace it — but presence is not
+// identity, and reporting it as the abcd guard is the worst of both states: nothing
+// checks the banlist and the status board says something does.
+func TestForeignHookIsNeverReportedAsInstalled(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t).Root()
+	hook := filepath.Join(repo, filepath.FromSlash(GuardHookRelPath))
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const handWritten = "#!/usr/bin/env bash\nexit 0\n"
+	if err := os.WriteFile(hook, []byte(handWritten), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	det, err := Detect(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.Banlist.Hook != HookForeign {
+		t.Errorf("hook state = %q; want %q", det.Banlist.Hook, HookForeign)
+	}
+	gap := findGap(det.Gaps, "banlist.hook_foreign")
+	if gap == nil {
+		t.Fatal("a foreign hook raises no gap at all, so nothing tells the maintainer the banlist is unchecked")
+	}
+	if gap.Resolvable {
+		t.Error("the foreign-hook gap claims apply can close it; abcd must never replace a maintainer's hook")
+	}
+	if got, err := os.ReadFile(hook); err != nil || string(got) != handWritten {
+		t.Errorf("install overwrote a hand-written pre-commit hook")
+	}
+	// The merge half is still abcd's to write: nothing occupies it.
+	if det.Banlist.MergeHook != HookInstalled {
+		t.Errorf("merge hook state = %q; want %q", det.Banlist.MergeHook, HookInstalled)
+	}
+}
+
+// TestPublicFamilyIgnoredIsReportedUnenforceable is correctness M4. Under
+// `visibility: public` the abcd fence ignores the whole `.abcd/` namespace — which
+// is where the public family lives — so the layer that claims to be "committed and
+// CI-enforced" is seen by nobody, exactly where public exposure is the risk. abcd
+// does not move the file (that is a design question a maintainer settles); it
+// refuses to keep claiming enforcement it cannot deliver.
+func TestPublicFamilyIgnoredIsReportedUnenforceable(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t).Root()
+	opts := installOpts()
+	opts.ValueOverrides["visibility"] = "public"
+	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	det, err := Detect(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.Banlist.PublicFamily != PublicFamilyIgnored {
+		t.Fatalf("public family = %q; want %q — git ignores the config under public visibility",
+			det.Banlist.PublicFamily, PublicFamilyIgnored)
+	}
+	if findGap(det.Gaps, "banlist.public_family_ignored") == nil {
+		t.Error("no gap reports that the public family never reaches CI")
+	}
+}

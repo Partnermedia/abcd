@@ -79,7 +79,6 @@ func Detect(cwd string) (DetectionResult, error) {
 		gaps = append(gaps, detectPathSymlink(pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectHookManifest(pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectVersion(abs)...)
-		gaps = append(gaps, detectBanlistScaffold(abs)...)
 		// Guard health is computed for every managed or adoptable repo, so a
 		// broken guard is visible on the status board and not only from inside a
 		// session that has already stopped being protected (itd-103 AC 1).
@@ -89,6 +88,7 @@ func Detect(cwd string) (DetectionResult, error) {
 		// reason: a private layer nobody opted into on this machine is invisible from
 		// inside a commit that passed, so the state has to be legible from outside.
 		res.Banlist = detectBanlistHealth(abs)
+		gaps = append(gaps, detectBanlistScaffold(res.Banlist)...)
 	}
 
 	sortGaps(gaps)

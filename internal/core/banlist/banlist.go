@@ -74,7 +74,15 @@ const PublicIDPrefix = "names/"
 // envelope that worded it differently would let a reader believe one of them meant
 // something weaker. It is not a limitation awaiting a fix — a pattern written into
 // CI config is a published pattern, which is the whole reason this layer is local.
-const PrivateReachNote = "CI cannot enforce this layer — it protects only machines that have opted in"
+//
+// It names the SECOND limit too, because "machines that have opted in" is necessary
+// and not sufficient. A pre-commit hook sees the commits git asks it about: git runs
+// none for a rebase, `git am`, or a cherry-pick, `--no-verify` switches it off, and
+// a merge commit needs the separate pre-merge-commit half. A sentence that stopped
+// at opt-in would leave a reader believing an opted-in machine is fully covered,
+// which is the belief that gets a name committed.
+const PrivateReachNote = "CI cannot enforce this layer — it protects only machines that have opted in, " +
+	"and only the commits git runs a hook for (a rebase, `git am`, or a cherry-pick bypasses it, as does --no-verify)"
 
 // maxStoreBytes caps every banlist read (trust boundary), following the guard
 // registry's precedent.
