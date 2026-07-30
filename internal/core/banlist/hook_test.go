@@ -71,7 +71,10 @@ func newHookRepo(t *testing.T, body string) *hookRepo {
 	return r
 }
 
-// writeBanlist installs the private store's bytes.
+// writeBanlist installs the private store's bytes, and gitignores the local tier
+// exactly as a real abcd-managed repo does — without that, a test's `git add -A`
+// stages the banlist itself and its patterns appear in the staged diff, which would
+// let a shape test pass for the wrong reason.
 func (r *hookRepo) writeBanlist(body string) {
 	r.t.Helper()
 	local := filepath.Join(r.dir, ".abcd", ".work.local")
@@ -79,6 +82,9 @@ func (r *hookRepo) writeBanlist(body string) {
 		r.t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(local, "private-names.txt"), []byte(body), 0o600); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.dir, ".gitignore"), []byte(".abcd/.work.local/\n"), 0o644); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -316,4 +322,208 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b)
+}
+
+// keyedBanlist is the one-entry store the staged-shape tests below share.
+const keyedBanlist = "# abcd-banlist: keyed\nwidget-partner   widgetworks\n"
+
+// TestPreCommitHook_StagedShapesThatDefeatDiffText is the reason the guard reads
+// staged BLOBS rather than diff text. Each shape below stages the banned name and
+// produces a textual diff in which it does not appear as an added line — so a guard
+// that greps `git diff --cached` output passes the commit while the name goes into
+// history. A guard that reads `git show :<path>` sees the content itself and cannot
+// be shaped around.
+func TestPreCommitHook_StagedShapesThatDefeatDiffText(t *testing.T) {
+	t.Run("content line beginning ++", func(t *testing.T) {
+		// In a unified diff this line is emitted as "+++widgetworks", which every
+		// header filter drops along with the real "+++ b/path" header.
+		r := newHookRepo(t, keyedBanlist)
+		r.write("note.md", "++widgetworks\n")
+		r.git("add", "note.md")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("commit not blocked; the name is in the staged content\n%s", out)
+		}
+	})
+
+	t.Run("binary blob", func(t *testing.T) {
+		// A NUL makes git call the file binary: the textual diff carries no + lines
+		// at all, so there is nothing for a diff-text guard to match.
+		r := newHookRepo(t, keyedBanlist)
+		r.write("blob.bin", "\x00\x01\x02widgetworks\x00trailer\n")
+		r.git("add", "blob.bin")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("commit not blocked; the name is in a staged binary blob\n%s", out)
+		}
+	})
+
+	t.Run("gitattributes suppressing the diff", func(t *testing.T) {
+		// A committed `* -diff` suppresses the textual diff repo-wide, which turns a
+		// diff-text guard off for every file in the repo at once.
+		r := newHookRepo(t, keyedBanlist)
+		r.write(".gitattributes", "* -diff\n")
+		r.write("seed.md", "nothing sensitive here\n")
+		r.git("add", ".gitattributes", "seed.md")
+		if blocked, out := r.commit(); blocked {
+			t.Fatalf("seed commit refused\n%s", out)
+		}
+		r.write("note.md", "widgetworks ships today\n")
+		r.git("add", "note.md")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("commit not blocked; `* -diff` must not switch the guard off\n%s", out)
+		}
+	})
+
+	t.Run("rename plus modification", func(t *testing.T) {
+		// Status R, which --diff-filter=ACM excludes outright.
+		r := newHookRepo(t, keyedBanlist)
+		r.write("old.md", strings.Repeat("filler line for rename detection\n", 20))
+		r.git("add", "old.md")
+		if blocked, out := r.commit(); blocked {
+			t.Fatalf("seed commit refused\n%s", out)
+		}
+		r.git("mv", "old.md", "new.md")
+		r.write("new.md", strings.Repeat("filler line for rename detection\n", 20)+"widgetworks\n")
+		r.git("add", "-A")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("commit not blocked; a renamed-and-modified file is staged content\n%s", out)
+		}
+	})
+}
+
+// TestPreCommitHook_LargeStagedFileStillBlocks is the regression pin for the
+// SIGPIPE class the increment already fixed and never tested: a staged file far
+// larger than a pipe buffer, with the name on its FIRST line, so a matching grep
+// exits long before the writer finishes. Deleting the temp-file machinery would
+// reintroduce a fail-open pass with a green suite.
+func TestPreCommitHook_LargeStagedFileStillBlocks(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	var b strings.Builder
+	b.WriteString("widgetworks on the very first line\n")
+	for i := 0; i < 200000; i++ {
+		b.WriteString("filler line that matches no banlist entry at all\n")
+	}
+	r.write("big.md", b.String())
+	r.git("add", "big.md")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("commit not blocked; a large staged file must not defeat the guard\n%s", out)
+	}
+}
+
+// TestPreCommitHook_CleansUpItsCandidateFile pins the hygiene half: the guard's
+// scratch copy of the staged content lives in the gitignored local tier, not in a
+// shared $TMPDIR, and it is gone whichever way the hook exits.
+func TestPreCommitHook_CleansUpItsCandidateFile(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	r.write("note.md", "the widgetworks deal closes friday\n")
+	r.git("add", "note.md")
+	if blocked, out := r.commit(); !blocked {
+		t.Fatalf("commit not blocked\n%s", out)
+	}
+	left, err := os.ReadDir(filepath.Join(r.dir, ".abcd", ".work.local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range left {
+		if e.Name() != "private-names.txt" {
+			t.Errorf("the guard left %q behind; the candidate copy of the staged content is trapped on every exit", e.Name())
+		}
+	}
+}
+
+// TestPreCommitHook_FailsClosedWhenItCannotReadStagedContent pins the direction the
+// guard must fail in: "could not compute" is never allowed to look like "clean". A
+// staged path whose blob cannot be produced (the index points at an object that is
+// not in the object store) refuses the commit and names the step, not the content.
+func TestPreCommitHook_FailsClosedWhenItCannotReadStagedContent(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	r.write("note.md", "nothing sensitive here\n")
+	r.git("add", "note.md")
+	// Empty the object store: the index still names note.md, so listing the staged
+	// paths succeeds and `git show :note.md` then cannot produce the blob. This is the
+	// "could not compute" case, and the guard must say so rather than fall through.
+	objects := filepath.Join(r.dir, ".git", "objects")
+	if err := os.RemoveAll(objects); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(objects, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, out := r.commit()
+	if !strings.Contains(out, "could not read the staged content") {
+		t.Errorf("the guard did not report that it could not read the staged content; a check that cannot run must never look like a check that passed\n%s", out)
+	}
+}
+
+// TestPreCommitHook_RefusesANonRegularStore pins tampering as tampering. A symlink
+// at the store's path (or at its directory) silently swaps the guard's list for an
+// empty or attacker-chosen one — and `git add -f` defeats the gitignore, so a
+// checkout can materialise it. A directory or FIFO there would take the "absent"
+// branch and read as "this machine has not opted in". Both are refusals.
+func TestPreCommitHook_RefusesANonRegularStore(t *testing.T) {
+	t.Run("symlinked store", func(t *testing.T) {
+		r := newHookRepo(t, keyedBanlist)
+		store := filepath.Join(r.dir, ".abcd", ".work.local", "private-names.txt")
+		decoy := filepath.Join(r.dir, "decoy.txt")
+		if err := os.WriteFile(decoy, []byte("# abcd-banlist: keyed\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(store); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(decoy, store); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		r.write("note.md", "the widgetworks deal closes friday\n")
+		r.git("add", "note.md")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("a symlinked banlist silently replaced the guard's list\n%s", out)
+		}
+		if !strings.Contains(out, "SYMLINK") {
+			t.Errorf("refusal does not name the cause\n%s", out)
+		}
+	})
+
+	t.Run("directory at the store path", func(t *testing.T) {
+		r := newHookRepo(t, keyedBanlist)
+		store := filepath.Join(r.dir, ".abcd", ".work.local", "private-names.txt")
+		if err := os.Remove(store); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(store, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		r.write("note.md", "the widgetworks deal closes friday\n")
+		r.git("add", "note.md")
+		blocked, out := r.commit()
+		if !blocked {
+			t.Fatalf("a directory at the store path was read as a machine that never opted in\n%s", out)
+		}
+		if !strings.Contains(out, "not a regular file") {
+			t.Errorf("refusal does not name the cause\n%s", out)
+		}
+	})
+}
+
+// TestPreCommitHook_DoesNotTraceThePatternsUnderXtrace pins the one thing an
+// inherited shell option must not be able to do: turn the guard into a printer of
+// the very list it protects. An exported SHELLOPTS=xtrace switches tracing on for
+// the hook's own shell before its first line runs, so the guard turns it back off.
+func TestPreCommitHook_DoesNotTraceThePatternsUnderXtrace(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	r.write("note.md", "nothing sensitive here\n")
+	r.git("add", "note.md")
+	r.env = append(r.env, "SHELLOPTS=xtrace")
+	blocked, out := r.commit()
+	if blocked {
+		t.Fatalf("commit refused for clean content\n%s", out)
+	}
+	if strings.Contains(out, "widgetworks") {
+		t.Errorf("an inherited xtrace printed the banlist patterns:\n%s", out)
+	}
 }

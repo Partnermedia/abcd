@@ -48,7 +48,18 @@
 # tokens in CI; this one bans *private* ones locally, keeping their literal string
 # out of every published artifact. `abcd banlist` maintains both.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel)"
+# Both gates below are written against repo-relative paths, so the working tree root
+# must be resolved BEFORE either runs — and resolved successfully. `cd ""` succeeds
+# and leaves the shell where it was, which would silently run both gates against
+# whatever directory git was invoked from: a pin that is not there, a banlist that is
+# not there, and a commit that looks checked.
+toplevel=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$toplevel" ]; then
+  echo "pre-commit: BLOCKED — could not resolve the repository root (git rev-parse --show-toplevel)." >&2
+  echo "            the identity and name gates below read repo-relative paths, so they cannot run at all." >&2
+  exit 1
+fi
+cd "$toplevel"
 
 # --- iss-62 identity gate ---------------------------------------------------
 # Refuse a commit whose author identity diverges from the committed pin
@@ -138,18 +149,6 @@ if [ ! -f "$banlist" ]; then
   exit 0
 fi
 
-# Only added lines of staged content matter (skip the +++ file headers). The
-# candidate text goes to a temp file rather than down a pipe into grep: with
-# `pipefail` a matching `grep -q` exits early, and the writer left holding a
-# closed pipe reports 141, which the pipeline would surface INSTEAD of grep's
-# verdict — a large staged diff could silently defeat the guard. A file argument
-# makes grep's exit status the only status there is (0 match / 1 clean / >1
-# unusable pattern), which is what the fail-safe branch below reads.
-staged_text="$(mktemp)"
-trap 'rm -f "$staged_text"' EXIT
-git diff --cached --unified=0 --diff-filter=ACM | grep -E '^\+' | grep -vE '^\+\+\+' >"$staged_text" || true
-[ -s "$staged_text" ] || exit 0
-
 # Which format? The FIRST line decides the whole file, once, before any entry is
 # read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
 keyed=0
@@ -169,6 +168,9 @@ fi
 rc=0
 lineno=0
 entries=0
+keys=()
+pats=()
+lines=()
 while IFS= read -r raw || [ -n "$raw" ]; do
   lineno=$((lineno + 1))
   line="$raw"
@@ -232,12 +234,96 @@ while IFS= read -r raw || [ -n "$raw" ]; do
     fi
   fi
   entries=$((entries + 1))
+  keys+=("$key")
+  pats+=("$pat")
+  lines+=("$lineno")
+done < "$banlist"
+
+# A store that parsed to NOTHING checks exactly as much as an absent one, so it is
+# exactly as loud. This runs AFTER the refresh above on purpose: a refresh that
+# truncates or garbles the store away to nothing must produce this warning, not
+# silence. (An unparseable line is a refusal, handled above, not an empty store.)
+if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ]; then
+  echo "pre-commit: ****************************************************************" >&2
+  echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
+  echo "pre-commit:   $banlist exists but yields no usable entry," >&2
+  echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
+  echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
+  echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
+  echo "pre-commit: ****************************************************************" >&2
+  exit 0
+fi
+# --- the candidate content: staged BLOBS, not diff text ----------------------
+# What is checked is the CONTENT of every staged file, read straight out of the
+# index. Parsing `git diff --cached` text instead left four ways to stage a banned
+# name that the guard could not see: a content line beginning `++` becomes `+++` and
+# is dropped with the file headers; a blob with a NUL has no textual diff and so no
+# `+` lines at all; a committed `.gitattributes` carrying `-diff` suppresses the
+# textual diff for the whole repo in one line; and a rename is status R, which the
+# `ACM` filter excluded (as it excluded T). Reading blobs answers the question the
+# guard is actually asking — "is this name in what I am about to commit?" — and has
+# no shape to route around. Binary blobs are scanned like anything else: `grep -q`
+# reports a match in one, and a name in a binary file is in history just the same.
+#
+# Every git step is checked. A failure REFUSES the commit naming the step: a guard
+# that could not compute must never be indistinguishable from a guard that found
+# nothing, which is precisely what the previous `|| true` made it.
+#
+# The scratch copy lives in the gitignored local tier rather than $TMPDIR — it is a
+# copy of the whole staged tree, and it belongs where this repo's other ephemera do
+# — mode 0600, and trapped on every exit path, not just a clean one.
+if ! mkdir -p "$banlist_dir"; then
+  echo "pre-commit: BLOCKED — could not create $banlist_dir for the guard's scratch file." >&2
+  exit 1
+fi
+candidate=$(mktemp "$banlist_dir/banlist-candidate.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+  exit 1
+}
+staged_paths=$(mktemp "$banlist_dir/banlist-paths.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+  rm -f "$candidate"
+  exit 1
+}
+trap 'rm -f "$candidate" "$staged_paths"' EXIT INT TERM HUP
+chmod 600 "$candidate" "$staged_paths"
+
+# NUL-delimited so a path with a space, a newline, or a quote is one record. R and T
+# are included: a rename and a type change are both staged content.
+if ! git diff --cached --name-only -z --diff-filter=ACMRT >"$staged_paths"; then
+  echo "pre-commit: BLOCKED — could not list the staged paths (git diff --cached failed)." >&2
+  echo "            the guard cannot see what is being committed, so it refuses rather than pass." >&2
+  exit 1
+fi
+while IFS= read -r -d '' staged_path; do
+  if ! git show ":$staged_path" >>"$candidate"; then
+    echo "pre-commit: BLOCKED — could not read the staged content of one file (git show failed)." >&2
+    echo "            the guard cannot check what it cannot read, so it refuses rather than pass." >&2
+    exit 1
+  fi
+  # A separator, so a pattern cannot match across the join between two files.
+  printf '\n' >>"$candidate"
+done <"$staged_paths"
+
+# Nothing staged to check. Any refusal already recorded above still stands: a store
+# with an unparseable line is broken whether or not this commit touches anything.
+if [ ! -s "$candidate" ]; then exit "$rc"; fi
+
+i=0
+while [ "$i" -lt "$entries" ]; do
+  key="${keys[$i]}"
+  pat="${pats[$i]}"
+  lineno="${lines[$i]}"
+  i=$((i + 1))
 
   # The pattern reaches grep on STDIN via `-f -`, NEVER in argv: an argument is
   # world-readable in /proc/<pid>/cmdline for the life of the process and is captured
   # verbatim by process auditing, which would ship the private pattern off the box.
+  # A file argument (not a pipe) makes grep's exit status the only status there is —
+  # 0 match / 1 clean / >1 unusable pattern — so a matching `grep -q` exiting early
+  # cannot leave a writer holding a closed pipe and surface 141 instead of a verdict.
   gr=0
-  printf '%s\n' "$pat" | grep -iqE -f - -- "$staged_text" >/dev/null 2>&1 || gr=$?
+  printf '%s\n' "$pat" | grep -iqE -f - -- "$candidate" >/dev/null 2>&1 || gr=$?
   case "$gr" in
     0)
       echo "pre-commit: BLOCKED — staged content matches private banlist entry '$key'." >&2
@@ -253,21 +339,6 @@ while IFS= read -r raw || [ -n "$raw" ]; do
       rc=1
       ;;
   esac
-done < "$banlist"
-
-# A store that parsed to NOTHING checks exactly as much as an absent one, so it is
-# exactly as loud. This runs AFTER the refresh above on purpose: a refresh that
-# truncates or garbles the store away to nothing must produce this warning, not
-# silence. (An unusable line is a refusal, handled above, not an empty store.)
-if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ]; then
-  echo "pre-commit: ****************************************************************" >&2
-  echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
-  echo "pre-commit:   $banlist exists but yields no usable entry," >&2
-  echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
-  echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
-  echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
-  echo "pre-commit: ****************************************************************" >&2
-  exit 0
-fi
+done
 
 exit $rc
