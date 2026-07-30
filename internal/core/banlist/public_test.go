@@ -1,6 +1,7 @@
 package banlist
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -221,6 +222,41 @@ func TestRemovePublicDoesNotShadowAManagedTargetWithABareKey(t *testing.T) {
 	}
 }
 
+// TestRemovePublicDeletesEveryDuplicateOfAManagedKey pins the removal of a
+// hand-edited duplicate: AddPublic refuses to create two `names/<key>` entries, but a
+// human edit can, and removing one while reporting success would leave a ban enforcing
+// under a key the report calls gone. remove --public must delete them all.
+func TestRemovePublicDeletesEveryDuplicateOfAManagedKey(t *testing.T) {
+	root := writeConfig(t, `{
+  "roots": ["docs"],
+  "banned_tokens": [
+    {"id":"names/widgetworks","pattern":"(?i)widgetworks","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"},
+    {"id":"harness/gemini","pattern":"(?i)gemini","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"},
+    {"id":"names/widgetworks","pattern":"(?i)widgetworks","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ]
+}
+`)
+	if _, err := RemovePublic(root, "widgetworks"); err != nil {
+		t.Fatalf("RemovePublic: %v", err)
+	}
+	rep, err := ListPublic(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range rep.Entries {
+		if e.ID == "names/widgetworks" {
+			t.Error("a duplicate names/widgetworks entry survived removal")
+		}
+	}
+	if got := countID(t, root, "names/widgetworks"); got != 0 {
+		t.Errorf("names/widgetworks still present %d time(s) after removal", got)
+	}
+	// The unrelated hand-curated entry is untouched.
+	if got := countID(t, root, "harness/gemini"); got != 1 {
+		t.Errorf("harness/gemini count = %d, want 1 (removal disturbed an unrelated entry)", got)
+	}
+}
+
 // TestListPublicRendersTheWholeFamilyInFull pins AC6's public half: public entries
 // render in full (pattern included — they are committed and reviewable), with the
 // managed flag marking which the verb owns.
@@ -402,6 +438,27 @@ func TestAddPublicIsCaseInsensitiveLikeTheCuratedEntries(t *testing.T) {
 	if hits != 1 {
 		t.Errorf("mixed-case mention produced %d findings, want 1 — the entry is case-sensitive", hits)
 	}
+}
+
+// countID counts banned_tokens elements carrying id by decoding the raw config,
+// so duplicate ids a map-based reader would collapse are each counted.
+func countID(t *testing.T, root, id string) int {
+	t.Helper()
+	var doc struct {
+		BannedTokens []struct {
+			ID string `json:"id"`
+		} `json:"banned_tokens"`
+	}
+	if err := json.Unmarshal(readConfig(t, root), &doc); err != nil {
+		t.Fatalf("countID unmarshal: %v", err)
+	}
+	n := 0
+	for _, tok := range doc.BannedTokens {
+		if tok.ID == id {
+			n++
+		}
+	}
+	return n
 }
 
 // writeConfig puts a docs-lint config body in a fresh temp repo.

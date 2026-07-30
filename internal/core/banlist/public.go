@@ -237,16 +237,15 @@ func RemovePublic(repoRoot, key string) (PublicResult, error) {
 			return err
 		}
 
-		target := -1
-		sawBareKey := false
-		for i, el := range span.elems {
+		matched, sawBareKey := false, false
+		for _, el := range span.elems {
 			var tok lint.BannedToken
 			if err := json.Unmarshal(el.raw, &tok); err != nil {
 				continue
 			}
 			switch {
 			case tok.ID == id:
-				target, removed = i, tok
+				matched, removed = true, tok
 			case tok.ID == key:
 				// Named exactly, but outside the namespace these verbs own. Recorded,
 				// not returned: a managed `names/<key>` MAY also be present, and firing
@@ -255,31 +254,67 @@ func RemovePublic(repoRoot, key string) (PublicResult, error) {
 				sawBareKey = true
 			}
 		}
-		if target < 0 {
+		if !matched {
 			if sawBareKey {
 				return fmt.Errorf("%w: %q is hand-curated; edit %s to change it", ErrNotManaged, key, PublicConfigRelPath)
 			}
 			return fmt.Errorf("%w: %q", ErrUnknownKey, key)
 		}
 
-		var out bytes.Buffer
-		switch {
-		case len(span.elems) == 1:
-			out.Write(data[:span.openEnd])
-			out.Write(data[span.closeStart:])
-		case target == 0:
-			out.Write(data[:span.elems[0].start])
-			out.Write(data[span.elems[1].start:])
-		default:
-			out.Write(data[:span.elems[target-1].end])
-			out.Write(data[span.elems[target].end:])
-		}
-
-		return writePublic(repoRoot, out.Bytes())
+		// Remove every element carrying the id, not just one. A hand-edited config can
+		// hold duplicate `names/<key>` entries (AddPublic refuses to create them, a
+		// human edit is not so constrained); deleting one and reporting success would
+		// leave a ban enforcing under a key the report calls gone — the asymmetry the
+		// private store was hardened against. Each pass re-locates and drops the first
+		// match with the proven single-element surgery, so the single-match case (the
+		// common one) stays byte-identical.
+		data = removeAllManaged(data, id)
+		return writePublic(repoRoot, data)
 	}); err != nil {
 		return PublicResult{}, err
 	}
 	return PublicResult{Path: PublicConfigRelPath, Entry: publicEntry(removed)}, nil
+}
+
+// removeAllManaged returns cfg with every banned_tokens element whose id equals id
+// deleted. Each pass re-locates the array and drops the first match with the same
+// bounded byte-surgery a single removal uses, so removing one entry is byte-identical
+// to the pre-existing path and removing duplicates leaves none behind. cfg is known
+// to hold the array (the caller matched at least once).
+func removeAllManaged(cfg []byte, id string) []byte {
+	for {
+		span, err := locateBannedTokens(cfg)
+		if err != nil {
+			return cfg
+		}
+		idx := -1
+		for i, el := range span.elems {
+			var tok lint.BannedToken
+			if err := json.Unmarshal(el.raw, &tok); err != nil {
+				continue
+			}
+			if tok.ID == id {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return cfg
+		}
+		var out bytes.Buffer
+		switch {
+		case len(span.elems) == 1:
+			out.Write(cfg[:span.openEnd])
+			out.Write(cfg[span.closeStart:])
+		case idx == 0:
+			out.Write(cfg[:span.elems[0].start])
+			out.Write(cfg[span.elems[1].start:])
+		default:
+			out.Write(cfg[:span.elems[idx-1].end])
+			out.Write(cfg[span.elems[idx].end:])
+		}
+		cfg = out.Bytes()
+	}
 }
 
 // withPublicLock serialises a load-modify-write of the committed config on the same
