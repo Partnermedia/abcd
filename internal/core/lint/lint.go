@@ -1226,6 +1226,18 @@ type tokenCheck struct {
 	allow   []*regexp.Regexp
 }
 
+// ValidateBannedToken reports whether one banned-token entry is loadable by THIS
+// linter — the engine that enforces the public banlist layer. It exists so a writer
+// of that config (`abcd banlist add --public`) validates through the same compile
+// the gate itself performs, on the exact string it is about to store, rather than
+// through a second reading that could accept an entry the gate then refuses. The
+// error is returned for the caller to discard or wrap: it quotes the expression,
+// which is safe for a public pattern and never safe for a private one.
+func ValidateBannedToken(t BannedToken) error {
+	_, err := compileTokens([]BannedToken{t})
+	return err
+}
+
 func compileTokens(tokens []BannedToken) ([]tokenCheck, error) {
 	checks := make([]tokenCheck, 0, len(tokens))
 	for _, t := range tokens {
