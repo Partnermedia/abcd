@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"github.com/REPPL/abcd-cli/internal/termsafe"
@@ -283,7 +284,29 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 			fmt.Fprintf(w, "  line %d uses a Perl-style escape or a `(?…)` group; the guard's POSIX grep reads it as an extended regular expression, which may match differently than written (grep implementations diverge) — the guard does NOT refuse it, so verify it against the guard's grep\n", line)
 		}
 	}
-	fmt.Fprintln(w, "  reach: CI cannot enforce this layer — it protects only machines that have opted in")
+	fmt.Fprintln(w, "  reach: "+banlist.PrivateReachNote)
+}
+
+// banlistHealthLine renders ahoy's one-line name-guard verdict: which of the three
+// scaffolded artefacts are in place, and whether this machine has opted into the
+// private layer. It never reads an entry — the store's content is the secret, and a
+// status board is exactly the surface that must not hold it. The reach caveat is
+// printed beside it by the caller, unconditionally, because "hook installed" beside
+// a present store otherwise reads as coverage a pull request does not have.
+func banlistHealthLine(h ahoy.BanlistHealth) string {
+	parts := []string{"hook installed", "public family present", "private store present"}
+	if !h.HookInstalled {
+		parts[0] = "hook MISSING (`abcd ahoy install` writes it)"
+	}
+	if !h.PublicFamily {
+		parts[1] = "public family MISSING"
+	}
+	if !h.PrivateStore {
+		// Absent is not "clean": nothing on this machine is checked against a private
+		// name, and the guard itself says so at commit time in these words.
+		parts[2] = "private layer INACTIVE on this machine"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // renderPublicLayer prints the public family in full: committed config is

@@ -96,6 +96,43 @@ const privateStubBody = `# abcd-banlist: keyed
 // lands on disk.
 func privateStubContent() string { return privateStubBody }
 
+// BanlistHealth is the two-layer name guard's state in one repo: which of the
+// scaffolded artefacts are there, and — always — how far the private layer reaches
+// (spc-20 AC7).
+//
+// Reach is carried in the struct rather than added by a renderer because this
+// report is read on two surfaces at once. A human sees a line; a machine consumer
+// reads the booleans. HookInstalled=true beside a populated private store reads as
+// "covered" to both of them, and it is not: the guard runs on machines that opted
+// in and nowhere else. The caveat travels with the state it qualifies.
+type BanlistHealth struct {
+	// HookInstalled reports the committed guard hook's presence. It is a fact about
+	// the repo, not about this clone's hooks path: a clone that has not pointed git
+	// at the hooks directory still carries the hook for everyone else.
+	HookInstalled bool `json:"hook_installed"`
+	// PublicFamily reports a docs-lint config whose banned-names family is readable,
+	// so a public entry can be added and CI can enforce one.
+	PublicFamily bool `json:"public_family"`
+	// PrivateStore reports whether THIS MACHINE has the private store at all. False
+	// is the honest "inactive here" state, never silence: an absent store checks
+	// nothing, and the guard says so at commit time for the same reason.
+	PrivateStore bool `json:"private_store"`
+	// Reach is PrivateReachNote, unconditionally.
+	Reach string `json:"reach"`
+}
+
+// detectBanlistHealth answers the three artefact questions for one repo. It reads
+// no entry and spawns no subprocess: the store's CONTENT is the secret, and a
+// status pass that opened it would be one formatting mistake from printing it.
+func detectBanlistHealth(cwd string) BanlistHealth {
+	return BanlistHealth{
+		HookInstalled: fileExists(filepath.Join(cwd, filepath.FromSlash(GuardHookRelPath))),
+		PublicFamily:  classifyPublicFamily(cwd) == publicFamilyPresent,
+		PrivateStore:  fileExists(filepath.Join(cwd, filepath.FromSlash(banlist.PrivateRelPath))),
+		Reach:         banlist.PrivateReachNote,
+	}
+}
+
 // publicFamilyState classifies the public layer's config for detection.
 type publicFamilyState int
 

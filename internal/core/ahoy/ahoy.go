@@ -74,7 +74,11 @@ type DetectionResult struct {
 	// pass, healthy or not: a guard that fails open looks exactly like a working
 	// one from inside a session, so the state has to be legible from outside.
 	Guard GuardHealth `json:"guard"`
-	Gaps  []Gap       `json:"gaps"`
+	// Banlist is the two-layer name guard's state. Like Guard it is reported on
+	// every pass — and it carries its own reach, because a private layer that looks
+	// installed says nothing about what a pull request is checked against.
+	Banlist BanlistHealth `json:"banlist"`
+	Gaps    []Gap         `json:"gaps"`
 
 	// pluginRoot is the resolved plugin root; not serialized.
 	pluginRoot string
