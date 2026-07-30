@@ -163,6 +163,37 @@ protection. Every illustrative value in it is a reserved documentation value (RF
 the scaffold test judges that with the repo's own network-identifier detector, and
 proves the detector is armed with a control value first.
 
+## What the copy refusals reach, and what they do not
+
+The store is protected from being committed by three tests, and it is worth being
+exact about each, because a guard described more broadly than it works is a guard
+people stop checking behind.
+
+| test | catches | escapable |
+|---|---|---|
+| tier path | any staged path inside `.abcd/.work.local/`, including a rename's **source** path | no |
+| first line | a staged blob whose first line is the format declaration | yes — see below |
+| basename | a staged path whose filename is `private-names.txt` | yes — see below |
+
+These are **shape tests on a mistake, not a net against an adversary.** A copy with
+the declaration stripped (`tail -n +2`), altered by one byte, or pushed below a
+preamble passes the first-line test; a legacy store — which declares no format at
+all — is invisible to it, and passes the basename test the moment it is renamed. The
+rename-source test only fires for a store git already tracks, which is itself the
+accident it exists to help clean up. What all three catch is the accident that
+actually happens: a `cp`, a `.bak`, a stray editor duplicate. Widening them further
+means matching against the store's key list or scanning further into every staged
+blob, which puts the secret into more code paths to protect it in fewer.
+
+The escape is published because the tests are shape tests: a repo that legitimately
+commits a store-shaped file — this repo's own fixture corpora, a document quoting
+the declaration, a file that happens to be called `private-names.txt` — needs a way
+to say so, and `--no-verify` is an off switch for the whole guard rather than a
+per-file escape. A blob whose **second line** is exactly `# abcd-banlist-example` is
+exempt from the first-line and basename tests, and from nothing else: its content is
+still scanned against every entry, so an escape cannot be used to commit a banned
+name.
+
 ## What the public layer does not reach
 
 The public layer's claim is that it is committed and enforced for everyone, and

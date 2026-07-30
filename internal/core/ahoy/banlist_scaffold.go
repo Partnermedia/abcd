@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
@@ -36,13 +37,20 @@ const (
 // the worst of both states: nothing checks the banlist and the status board says
 // something does. Presence is not identity, so identity is stamped.
 //
-// Recognition matches guardHookMarkerPrefix, NOT the whole line: a v2 template must
-// not reclassify every hook a v1 abcd scaffolded as foreign, which would tell a
-// whole population of repos that a guard they own is someone else's.
+// Recognition is a WHOLE LINE matching guardHookMarkerRe, never a substring of the
+// blob: a foreign hook that merely MENTIONS the marker — in a comment, in a grep for
+// it, in a copied fragment — would otherwise classify as abcd's own, and the board
+// would claim coverage while the merge shim was written beside it. The version is
+// matched as a group rather than literally, so a v2 template cannot reclassify every
+// hook a v1 abcd scaffolded as someone else's.
 const (
 	guardHookMarker       = guardHookMarkerPrefix + " v1"
 	guardHookMarkerPrefix = "# abcd-name-guard:"
 )
+
+// guardHookMarkerRe matches the marker as a complete line, surrounding ASCII blanks
+// tolerated. `v<digits>` and nothing else: `v1-fork` is a fork's marker, not abcd's.
+var guardHookMarkerRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardHookMarkerPrefix) + `[ \t]*v[0-9]+[ \t]*$`)
 
 // guardHookTemplate and guardMergeHookTemplate are the canonical scaffolded guard:
 // the generalised form of the prototype this repo runs on itself, with the
@@ -184,7 +192,7 @@ func classifyGuardHook(root *os.Root, rel string) HookState {
 	if err != nil {
 		return HookUnreadable
 	}
-	if bytes.Contains(data, []byte(guardHookMarkerPrefix)) {
+	if guardHookMarkerRe.Match(data) {
 		return HookInstalled
 	}
 	return HookForeign
@@ -282,13 +290,26 @@ func storePathIsSafe(cwd string) bool {
 	return !repoShaped(cwd)
 }
 
-// repoShaped reports whether cwd carries a .git entry of any kind — a directory, or
-// the file a worktree or submodule leaves. It is deliberately cruder than
-// gitutil.InRepo: its job is to tell "not a repository" apart from "a repository
-// git would not answer for".
+// repoShaped reports whether cwd sits anywhere inside a tree carrying a .git entry
+// — a directory, or the file a worktree or submodule leaves. It is deliberately
+// cruder than gitutil.InRepo: its job is to tell "not a repository" apart from "a
+// repository git would not answer for".
+//
+// It walks to the filesystem root, because git does: checking cwd alone answers "not
+// a repository" for every SUBDIRECTORY of one, and with git unavailable that is the
+// answer that writes the stub into a tracked tree.
 func repoShaped(cwd string) bool {
-	_, err := os.Lstat(filepath.Join(cwd, ".git"))
-	return err == nil
+	dir := cwd
+	for {
+		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -396,16 +417,21 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 	return h
 }
 
+// guardEOLAttributeRe matches the pin as a LIVE line: git ignores a line beginning
+// `#`, so a commented-out attribute pins nothing, and reporting it as pinned would
+// leave a repo one autocrlf checkout from a guard that silently stops running.
+var guardEOLAttributeRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardEOLAttribute) + `[ \t]*$`)
+
 // gitattributesPinsHookEOL reports whether .gitattributes already carries the
 // hooks' EOL pin. It matches the attribute line rather than parsing the file: the
-// question is whether THIS line is present, and a partial parse of a format with
+// question is whether THIS line is live, and a partial parse of a format with
 // macros and negations would answer a different one.
 func gitattributesPinsHookEOL(root *os.Root) bool {
 	data, err := fsutil.ReadGuardedInRoot(root, gitattributesRelPath, maxAhoyFileBytes)
 	if err != nil {
 		return false
 	}
-	return bytes.Contains(data, []byte(guardEOLAttribute))
+	return guardEOLAttributeRe.Match(data)
 }
 
 // hooksPathArmed reports whether this clone's LOCAL git config points core.hooksPath
@@ -479,10 +505,16 @@ func mergeHookGaps(h BanlistHealth) []Gap {
 		// cause.
 		return nil
 	}
-	detail := GuardMergeHookRelPath + " delegates to " + GuardHookRelPath + ", which is " + string(h.Hook) +
-		" — so merge commits are NOT checked against the private banlist."
+	// The wording must not assert a shim that is not there: with a foreign pre-commit
+	// hook and no merge half at all, "delegates to" describes a file that does not
+	// exist, and a reader sent to inspect it finds nothing.
+	detail := "git runs no pre-commit hook for a merge commit, and " + GuardHookRelPath + " is " +
+		string(h.Hook) + ", so abcd writes no merge half beside it — merge commits are NOT checked " +
+		"against the private banlist."
 	if h.MergeHook == HookInstalled {
-		detail += " The shim carries abcd's marker, which would otherwise read as coverage."
+		detail = GuardMergeHookRelPath + " carries abcd's marker but delegates to " + GuardHookRelPath +
+			", which is " + string(h.Hook) + " — so merge commits are NOT checked against the private " +
+			"banlist, and the marker would otherwise read as coverage."
 	}
 	return []Gap{{
 		ID: "banlist.merge_hook_inert", Category: PluginOwned, Scope: "repo",
@@ -603,6 +635,11 @@ func privateStoreGaps(h BanlistHealth) []Gap {
 // foreign one is the maintainer's and is reported, never replaced — mirroring
 // GuardHealth's posture, where wiring abcd does not own is a diagnostic rather than
 // something apply silently takes over.
+//
+// The two differ in Required deliberately. Required means "install has work to do
+// here": true for the absent hook, which the next apply writes, and false for a
+// foreign one, which no apply will ever close — a required gap nothing can resolve
+// is a repo permanently reported as incomplete for a state its maintainer chose.
 func hookGaps(idPrefix, rel, name string, state HookState) []Gap {
 	switch state {
 	case HookAbsent:
@@ -658,9 +695,10 @@ func (a *applyCtx) stepBanlist() {
 	}
 	defer root.Close()
 
-	// Is the guard the merge shim would delegate to abcd's own? Either it already
-	// was, or this step just wrote it.
-	guardOwned := a.det.Banlist != nil && a.det.Banlist.Hook == HookInstalled
+	// Is the guard the merge shim would delegate to abcd's own? Asked HERE, against
+	// disk, rather than read from the detection snapshot: the steps before this one
+	// have run, and a snapshot is by then a claim about a repo as it used to be.
+	guardOwned := classifyGuardHook(root, GuardHookRelPath) == HookInstalled
 	if a.has("banlist.hook_missing") {
 		if a.createContained(root, GuardHookRelPath, guardHookTemplate, 0o755, 0o755) {
 			guardOwned = true
@@ -676,7 +714,7 @@ func (a *applyCtx) stepBanlist() {
 	// Keyed on the merge half's own STATE, not on its gap: on a fresh repo the gap is
 	// deliberately not raised (the pre-commit half's gap covers both), and apply must
 	// still write the shim it just earned the right to write.
-	if guardOwned && (a.det.Banlist == nil || a.det.Banlist.MergeHook == HookAbsent) {
+	if guardOwned && classifyGuardHook(root, GuardMergeHookRelPath) == HookAbsent {
 		a.createContained(root, GuardMergeHookRelPath, guardMergeHookTemplate, 0o755, 0o755)
 	}
 	// Never write a config abcd would immediately declare unenforceable.
@@ -712,7 +750,7 @@ func (a *applyCtx) pinHookEOL(root *os.Root) {
 	default:
 		return
 	}
-	if bytes.Contains(data, []byte(guardEOLAttribute)) {
+	if guardEOLAttributeRe.Match(data) {
 		return
 	}
 	var buf bytes.Buffer
@@ -751,19 +789,23 @@ func (a *applyCtx) createContained(root *os.Root, rel string, data []byte, perm,
 		// MkdirAll on the PARENT, and it may create more than one level: every artefact
 		// here sits at most two deep under the repo root (.githooks/, .abcd/.work.local/),
 		// both of which are abcd's own namespaces, so there is no third party's directory
-		// for it to bring into being. dirPerm applies only to levels it CREATES — an
-		// existing directory keeps its mode, which is why the private tier's mode is
-		// asserted separately by the banlist package rather than assumed from here.
+		// for it to bring into being.
+		//
+		// The mode is pinned ONLY on a directory this call created. MkdirAll applies the
+		// process umask to the mode it is given, so a umask of 077 would leave the hooks
+		// directory unsearchable — but a directory the maintainer already made is theirs,
+		// and re-applying dirPerm to it WIDENS a deliberately tighter mode (0700 -> 0755).
+		// A pin that loosens permissions nobody asked it to touch is the inverse of the
+		// bug it exists for.
+		_, statErr := root.Lstat(dir)
+		created := statErr != nil
 		if err := root.MkdirAll(dir, dirPerm); err != nil {
 			return false
 		}
-		// MkdirAll and O_CREATE both apply the process UMASK to the mode they are
-		// given, so a umask of 077 leaves the hooks directory unsearchable and a umask
-		// of 022 would leave the private stub group-readable. The mode a guard depends
-		// on is set explicitly, on the path just created, exactly as WriteFileAtomic
-		// fchmods rather than trusting the open mode.
-		if err := root.Chmod(dir, dirPerm); err != nil {
-			return false
+		if created {
+			if err := root.Chmod(dir, dirPerm); err != nil {
+				return false
+			}
 		}
 	}
 	if err := fsutil.CreateExclusiveIn(root, rel, data, perm); err != nil {

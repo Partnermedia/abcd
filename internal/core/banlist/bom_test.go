@@ -116,3 +116,17 @@ func TestDeclarationTextBelowTheHeaderIsJustAComment(t *testing.T) {
 		t.Fatalf("keyed=%v entries=%+v; want the one keyed entry", keyed, entries)
 	}
 }
+
+// TestKeyedStoreRefusesADuplicatedDeclaration is the two-reader divergence. The
+// header scan was gated on the store NOT already being keyed, so a keyed store with
+// the declaration repeated on line 2 read as healthy to the Go parser — "present,
+// keyed, 1 entry" on the status board — while the shell hook blocked every commit.
+// A store one reader calls healthy and the other refuses is worse than either
+// verdict alone: the board sends you to look at a file the guard has already
+// rejected.
+func TestKeyedStoreRefusesADuplicatedDeclaration(t *testing.T) {
+	body := privateFormatDecl + "\n" + privateFormatDecl + "\nlab-host carol-server\\.example\\.net\n"
+	if _, _, err := parse([]byte(body)); !errors.Is(err, ErrMalformedStore) {
+		t.Fatalf("err = %v; want ErrMalformedStore", err)
+	}
+}

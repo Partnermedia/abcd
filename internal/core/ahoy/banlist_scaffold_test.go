@@ -642,3 +642,113 @@ func TestHooksPathArmedResolvesBothSides(t *testing.T) {
 		t.Error("a hooks path pointing somewhere else is not armed")
 	}
 }
+
+// TestMarkerIsRecognisedOnlyAsAWholeLine is security MAJ-1. The marker was matched
+// as a substring anywhere in the blob, so a foreign hook that merely MENTIONS it —
+// a comment, a grep for it, a copied fragment — classified as abcd's own. The board
+// then claimed coverage, the merge shim was written beside it, and the foreign hook
+// started running on merge commits. Identity is a line, not a substring.
+func TestMarkerIsRecognisedOnlyAsAWholeLine(t *testing.T) {
+	for name, body := range map[string]HookState{
+		"#!/bin/sh\n# see also: # abcd-name-guard: v1 in the abcd docs\nexit 0\n": HookForeign,
+		"#!/bin/sh\ngrep -q '# abcd-name-guard:' \"$0\" || exit 1\n":              HookForeign,
+		"#!/bin/sh\n# abcd-name-guard: v1\nexit 0\n":                              HookInstalled,
+		"#!/bin/sh\n  # abcd-name-guard: v2  \nexit 0\n":                          HookInstalled,
+		"#!/bin/sh\n# abcd-name-guard: v1-fork\nexit 0\n":                         HookForeign,
+	} {
+		t.Run(name[:min(len(name), 40)], func(t *testing.T) {
+			setupHermetic(t)
+			repo := t.TempDir()
+			hook := filepath.Join(repo, filepath.FromSlash(GuardHookRelPath))
+			if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(hook, []byte(name), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			root, err := os.OpenRoot(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			if got := classifyGuardHook(root, GuardHookRelPath); got != body {
+				t.Errorf("classify = %q; want %q", got, body)
+			}
+		})
+	}
+}
+
+// TestEOLPinIsRecognisedOnlyAsALiveLine: a commented-out attribute pins nothing, and
+// reporting it as pinned would leave a repo one autocrlf checkout from a guard that
+// silently stops running.
+func TestEOLPinIsRecognisedOnlyAsALiveLine(t *testing.T) {
+	for body, want := range map[string]bool{
+		"# " + guardEOLAttribute + "\n":      false,
+		"#" + guardEOLAttribute + "\n":       false,
+		guardEOLAttribute + "\n":             true,
+		"*.png binary\n" + guardEOLAttribute: true,
+	} {
+		repo := t.TempDir()
+		if err := os.WriteFile(filepath.Join(repo, gitattributesRelPath), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		root, err := os.OpenRoot(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := gitattributesPinsHookEOL(root)
+		root.Close()
+		if got != want {
+			t.Errorf("%q → pinned=%v; want %v", body, got, want)
+		}
+	}
+}
+
+// TestStorePathFailsClosedInASubdirectory is minor 10. A repo-shaped check that only
+// looks at cwd/.git answers "not a repository" for every SUBDIRECTORY of a repo, so
+// with git unavailable the stub would be written into a tracked tree — the exact
+// hazard the check exists to prevent.
+func TestStorePathFailsClosedInASubdirectory(t *testing.T) {
+	setupHermetic(t)
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(root, "packages", "api")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if storePathIsSafe(sub) {
+		t.Error("a subdirectory of a repo-shaped tree git will not answer for must fail closed")
+	}
+}
+
+// TestScaffoldNeverWidensAnExistingDirectory is minor 8. The mode pin exists so a
+// umask cannot strip a bit the guard depends on; applying it to a directory the
+// maintainer already created inverts it into abcd loosening permissions nobody asked
+// it to touch.
+func TestScaffoldNeverWidensAnExistingDirectory(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t).Root()
+	hooks := filepath.Join(repo, ".githooks")
+	if err := os.Mkdir(hooks, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o700 {
+		t.Errorf(".githooks mode = %v; want the 0700 the maintainer chose, untouched", fi.Mode().Perm())
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

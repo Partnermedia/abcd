@@ -199,15 +199,19 @@ func parse(data []byte) (entries []rawEntry, keyed bool, err error) {
 	// above it silently downgraded a keyed store to legacy, and the entry count
 	// stayed >=1 so nothing warned. Once a real entry line is seen the header is over
 	// and a declaration-shaped line below it is an ordinary comment.
-	if !keyed {
-		for i, raw := range lines {
-			line := trimLead(trimTrail(raw))
-			if i > 0 && declaresFormat(raw) {
-				return nil, false, damagedDeclaration("%s declares the keyed format below line 1")
-			}
-			if line != "" && !strings.HasPrefix(line, "#") {
-				break
-			}
+	// NOT gated on the store being legacy. A KEYED store with the declaration
+	// repeated in its header is the same fault seen from the other side, and the
+	// shell hook refuses it either way: gating this on !keyed made the Go parser call
+	// such a store healthy — "present, keyed, 1 entry" on the status board — while
+	// every commit was blocked. A store one reader calls healthy and the other
+	// refuses is worse than either verdict alone.
+	for i, raw := range lines {
+		line := trimLead(trimTrail(raw))
+		if i > 0 && declaresFormat(raw) {
+			return nil, false, damagedDeclaration("%s declares the keyed format below line 1")
+		}
+		if line != "" && !strings.HasPrefix(line, "#") {
+			break
 		}
 	}
 	for i, raw := range lines {

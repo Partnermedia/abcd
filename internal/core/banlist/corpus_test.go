@@ -110,7 +110,7 @@ var legacyFirstFields = []string{"widget-partner", "lab-host"}
 // with U+00A0 and one separated by U+000B — neither is an ASCII space or tab), one
 // with no separator at all, and one that parses but whose pattern the enforcing
 // engine refuses.
-var malformedUnusableLines = []int{11, 12, 13, 14}
+var malformedUnusableLines = []int{12, 13, 14, 15}
 
 // malformedKeys are the keys the malformed corpus still yields: a line that does
 // not parse has no key, so only the two parseable lines are listed.

@@ -56,6 +56,49 @@
 # the line's content. A store that exists but yields NO entries warns as loudly as
 # an absent one: it checks exactly as much.
 set -euo pipefail
+# --- environment pin: the FIRST statements, before anything is read or run -------
+# Turn OFF xtrace however it was inherited (a caller's `set -x`, SHELLOPTS, BASH_ENV):
+# tracing this hook would print every banlist pattern to stderr, which is the one
+# thing the layer exists to prevent. It is first because everything below is traced
+# otherwise, including the pattern loop.
+case $- in *x*) set +x ;; esac
+# A field separator the caller cannot choose: an inherited IFS changes how every
+# unquoted expansion below splits.
+IFS=$' \t\n'
+# C locale so the byte classes below and grep's case folding do not depend on the
+# committer's environment. The Go parser pins the same ASCII-only reading.
+LC_ALL=C
+export LC_ALL
+# PATH is pinned to the standard system directories. A repo-scoped PATH prepend — a
+# direnv file, an editor task, a shell rc a repo asked to be sourced — shipping a
+# fake `grep` that always exits 1 would leave this guard announcing its entry count
+# and reporting a clean check for ever, which is the one failure it cannot detect
+# from the inside. This NARROWS that class; it does not close it. Two of the pinned
+# directories are user-writable on a typical developer machine (/usr/local/bin,
+# /opt/homebrew/bin), and `#!/usr/bin/env bash` on line 1 resolves the interpreter
+# itself through the INHERITED PATH before any of this runs.
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# A machine-local extension for a nonstandard prefix (Nix, pkgsrc, a container
+# image). Read through git's own config — repo-LOCAL, so it is a deliberate
+# per-clone setting, and never an environment variable: a repo-scoped direnv sets
+# the environment, which is the exact hole the pin exists to close. It is read
+# BEFORE the tool check so that check can pass on such a machine:
+#     git config --local abcd.guardPath /nix/var/nix/profiles/default/bin
+guard_path=$(PATH="$PATH" git config --local --get abcd.guardPath 2>/dev/null || true)
+if [ -n "$guard_path" ]; then PATH="$PATH:$guard_path"; fi
+export PATH
+# Every external tool this hook runs after the pin. A missing one must BLOCK loudly:
+# left to `set -e` it would surface as a mute exit 127 that reads like a broken repo.
+for tool in git grep mktemp tr cat mkdir rm chmod printf; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-commit: BLOCKED — $tool is not on the guard's pinned PATH ($PATH)." >&2
+    echo "            the guard pins PATH so a repo-scoped override cannot substitute a fake tool," >&2
+    echo "            and it refuses rather than run unchecked. Install $tool there, or point the" >&2
+    echo "            guard at its directory: git config --local abcd.guardPath /path/to/bin" >&2
+    exit 1
+  fi
+done
+# --- end environment pin --------------------------------------------------------
 # The gate below is written against repo-relative paths, so the working tree root
 # must be resolved BEFORE it runs — and resolved successfully. `cd ""` succeeds and
 # leaves the shell where it was, which would silently run the gate against whatever
@@ -70,37 +113,19 @@ fi
 cd "$toplevel"
 
 # --- itd-74 private name guard ----------------------------------------------
-# Turn OFF xtrace for the rest of this hook, however it was inherited (a caller's
-# `set -x`, SHELLOPTS, or BASH_ENV): tracing this section would print every banlist
-# pattern to stderr, which is the one thing the layer exists to prevent.
-case $- in *x*) set +x ;; esac
-# C locale so the byte classes below and grep's case folding do not depend on the
-# committer's environment. The Go parser pins the same ASCII-only reading.
-LC_ALL=C
-export LC_ALL
-
-# PATH is pinned to root-owned system directories. A repo-scoped PATH prepend — a
-# direnv file, an editor task, a shell rc a repo asked to be sourced — shipping a
-# fake `grep` that always exits 1 would leave this guard announcing its entry count
-# and reporting a clean check for ever, which is the one failure it cannot detect
-# from the inside. If a tool is missing from the pinned set the guard BLOCKS and
-# says so, because a check that could not run must never look like one that passed.
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-export PATH
-for tool in git grep mktemp; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "pre-commit: BLOCKED — $tool is not on the guard's pinned PATH ($PATH)." >&2
-    echo "            the guard pins PATH so a repo-scoped override cannot substitute a fake tool," >&2
-    echo "            and it refuses rather than run unchecked. Install $tool there, or edit the" >&2
-    echo "            PATH line in this hook to include its directory." >&2
-    exit 1
-  fi
-done
 
 banlist=".abcd/.work.local/private-names.txt"
 banlist_dir=".abcd/.work.local"
 store_basename="private-names.txt"
 format_decl="# abcd-banlist: keyed"
+# The published per-file escape. A blob whose SECOND line is exactly this marker is
+# exempt from the copy refusals below — and from nothing else: its content is still
+# scanned against every entry. It exists because the copy refusals are shape tests,
+# and a repo that legitimately commits a store-shaped file (a fixture corpus, a doc
+# quoting the declaration, a file that happens to be called private-names.txt) has no
+# other way to say so — `--no-verify` disables the whole guard, which is not a
+# per-file escape but an off switch.
+example_marker="# abcd-banlist-example"
 tab=$'\t'
 bom=$'\xef\xbb\xbf'
 
@@ -148,12 +173,11 @@ declares_format() {
 # Both are case-INSENSITIVE: on a case-insensitive filesystem (macOS's default, and
 # Windows) `.ABCD/.WORK.LOCAL/Private-Names.txt` is the same file, and a case-exact
 # test would let the store be staged under a differently-cased path.
-refuse_store_path() {
+refuse_tier_path() {
   _p="$1"
   [ -n "$_p" ] || return 0
   _lc=$(printf '%s' "$_p" | tr '[:upper:]' '[:lower:]')
   _dir_lc=$(printf '%s' "$banlist_dir" | tr '[:upper:]' '[:lower:]')
-  _base_lc=$(printf '%s' "$store_basename" | tr '[:upper:]' '[:lower:]')
   case "$_lc" in
     "$_dir_lc" | "$_dir_lc"/*)
       echo "pre-commit: BLOCKED — refusing to commit $_p." >&2
@@ -163,11 +187,42 @@ refuse_store_path() {
       exit 1
       ;;
   esac
+}
+
+# refuse_store_copy BLOCKS a staged blob that LOOKS like a copy of the private store:
+# its first line is the format declaration, or its filename is the store's. Both are
+# shape tests on a mistake, NOT a net against someone determined: a copy with the
+# declaration stripped, altered by a byte, or pushed below a preamble, and a legacy
+# store renamed, all pass. What they catch is the accident that actually happens —
+# `cp`, a `.bak`, a stray editor duplicate — and the reach is stated rather than
+# implied (see .abcd/development/brief/04-surfaces/20-banlist.md).
+#
+# Exempt when the blob's SECOND line is the example marker. Content scanning is not
+# affected: an exempt blob is still matched against every entry.
+refuse_store_copy() {
+  _p="$1"
+  _first="$2"
+  _second="$3"
+  if [ "$(normalise_decl "$_second")" = "$example_marker" ]; then
+    return 0
+  fi
+  if declares_format "$_first"; then
+    echo "pre-commit: BLOCKED — refusing to commit $_p." >&2
+    echo "            its first line declares the private banlist format, so it looks like a copy of" >&2
+    echo "            the private store, which would carry every pattern in clear. Unstage it — or, if" >&2
+    echo "            this file is a deliberate example, put '$example_marker' on its" >&2
+    echo "            second line (it is exempt from this check only; its content is still scanned)." >&2
+    echo "            (its content is withheld by design — only the path is named)" >&2
+    exit 1
+  fi
+  _lc=$(printf '%s' "$_p" | tr '[:upper:]' '[:lower:]')
+  _base_lc=$(printf '%s' "$store_basename" | tr '[:upper:]' '[:lower:]')
   if [ "${_lc##*/}" = "$_base_lc" ]; then
     echo "pre-commit: BLOCKED — refusing to commit $_p." >&2
     echo "            it is named like the private banlist ($store_basename), and a copy of that file" >&2
     echo "            carries every pattern in clear — the entries cannot catch their own text, because" >&2
-    echo "            they are escaped regular expressions. Rename it, or unstage it." >&2
+    echo "            they are escaped regular expressions. Rename it, unstage it, or put" >&2
+    echo "            '$example_marker' on its second line if it is a deliberate example." >&2
     exit 1
   fi
 }
@@ -406,34 +461,58 @@ fi
 # The scratch copy lives in the gitignored local tier rather than $TMPDIR — it is a
 # copy of the whole staged tree, and it belongs where this repo's other ephemera do
 # — mode 0600, and trapped on every exit path, not just a clean one.
-if ! mkdir -p "$banlist_dir"; then
-  echo "pre-commit: BLOCKED — could not create $banlist_dir for the guard's scratch file." >&2
-  exit 1
+# Where the scratch files go. Inside the gitignored local tier when this repo has
+# one — a copy of the staged tree belongs with the repo's own ephemera — and in a
+# private temp directory when it does not. A machine that has NOT opted in has no
+# tier, and creating one on every commit would leave an abcd directory, often
+# unfenced, in a repo that never asked for it; the path-shaped refusals below still
+# have to run there, so the loop cannot simply be skipped.
+scratch_dir="$banlist_dir"
+scratch_tmp=""
+if [ "$store_present" -eq 1 ] || [ -d "$banlist_dir" ]; then
+  if [ ! -d "$banlist_dir" ]; then
+    # 0700 from the moment it exists, not 0755-under-umask then narrowed: the window
+    # between the two is when a copy of the staged tree would be world-readable.
+    if ! (umask 077 && mkdir -p "$banlist_dir"); then
+      echo "pre-commit: BLOCKED — could not create $banlist_dir for the guard's scratch file." >&2
+      exit 1
+    fi
+    chmod 700 "$banlist_dir"
+  fi
+else
+  scratch_tmp=$(mktemp -d) || {
+    echo "pre-commit: BLOCKED — could not create a private scratch directory for the guard." >&2
+    exit 1
+  }
+  chmod 700 "$scratch_tmp"
+  scratch_dir="$scratch_tmp"
 fi
 # Sweep scratch files a previous run left behind. The trap below removes them on
 # every exit path, but a SIGKILL — or a machine that lost power mid-commit — leaves
 # a copy of a staged tree sitting in the working tree indefinitely.
-for stale in "$banlist_dir"/banlist-candidate.* "$banlist_dir"/banlist-paths.* "$banlist_dir"/banlist-blob.*; do
-  if [ -f "$stale" ]; then rm -f "$stale"; fi
-done
+if [ -z "$scratch_tmp" ]; then
+  for stale in "$scratch_dir"/banlist-candidate.* "$scratch_dir"/banlist-paths.* "$scratch_dir"/banlist-blob.*; do
+    if [ -f "$stale" ]; then rm -f "$stale"; fi
+  done
+fi
 
-candidate=$(mktemp "$banlist_dir/banlist-candidate.XXXXXX") || {
-  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+candidate=$(mktemp "$scratch_dir/banlist-candidate.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $scratch_dir." >&2
   exit 1
 }
-staged_paths=$(mktemp "$banlist_dir/banlist-paths.XXXXXX") || {
-  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+staged_paths=$(mktemp "$scratch_dir/banlist-paths.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $scratch_dir." >&2
   rm -f "$candidate"
   exit 1
 }
 # One reusable scratch file per staged blob: each blob is read into it so its FIRST
 # LINE can be tested before its bytes join the candidate, then appended.
-blob=$(mktemp "$banlist_dir/banlist-blob.XXXXXX") || {
-  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $banlist_dir." >&2
+blob=$(mktemp "$scratch_dir/banlist-blob.XXXXXX") || {
+  echo "pre-commit: BLOCKED — could not create the guard's scratch file in $scratch_dir." >&2
   rm -f "$candidate" "$staged_paths"
   exit 1
 }
-trap 'rm -f "$candidate" "$staged_paths" "$blob"' EXIT INT TERM HUP
+trap 'rm -f "$candidate" "$staged_paths" "$blob"; if [ -n "$scratch_tmp" ]; then rm -rf "$scratch_tmp"; fi' EXIT INT TERM HUP
 chmod 600 "$candidate" "$staged_paths" "$blob"
 
 # NUL-delimited RAW records, so a path with a space, a newline, or a quote is one
@@ -468,8 +547,11 @@ while IFS= read -r -d '' meta; do
       ;;
   esac
 
-  refuse_store_path "$staged_path"
-  refuse_store_path "$src_path"
+  # The tier test is path-only and NOT escapable: a file inside the gitignored local
+  # tier must never be committed, whatever it contains. It applies to a rename's
+  # source path too — the only evidence left when the store is moved out of the tier.
+  refuse_tier_path "$staged_path"
+  refuse_tier_path "$src_path"
 
   # A gitlink has no blob here; skip it rather than fail-close on a `git show` that
   # cannot succeed. Every OTHER git-show failure still refuses (fail closed).
@@ -485,20 +567,17 @@ while IFS= read -r -d '' meta; do
     echo "            the guard cannot check what it cannot read, so it refuses rather than pass." >&2
     exit 1
   fi
-  # A blob whose FIRST LINE is the format declaration is a copy of the private store,
-  # wherever it sits and whatever it is called. The store-path tests above catch the
-  # file and its name; this catches its CONTENT, which is what actually leaks. The
-  # declaration is a published constant, so testing for it reveals nothing, and the
-  # refusal names the staged path alone — never a line of what it found.
+  # The copy refusals need the blob's first two lines: the first identifies a
+  # store-shaped file, the second carries the example escape. The declaration is a
+  # published constant, so testing for it reveals nothing, and every refusal names the
+  # staged path alone — never a line of what it found.
   blob_first=""
-  IFS= read -r blob_first < "$blob" || true
-  if declares_format "$blob_first"; then
-    echo "pre-commit: BLOCKED — refusing to commit $staged_path." >&2
-    echo "            its first line declares the private banlist format, so it is a copy of the" >&2
-    echo "            private store and carries every pattern in clear. Unstage it." >&2
-    echo "            (its content is withheld by design — only the path is named)" >&2
-    exit 1
-  fi
+  blob_second=""
+  {
+    IFS= read -r blob_first || true
+    IFS= read -r blob_second || true
+  } < "$blob"
+  refuse_store_copy "$staged_path" "$blob_first" "$blob_second"
   cat "$blob" >>"$candidate"
   # A separator, so a pattern cannot match across the join between two files.
   printf '\n' >>"$candidate"

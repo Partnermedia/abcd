@@ -114,7 +114,23 @@ AC as numbered in itd-74 → covering evidence.
    status board and the JSON envelope, and it names both limits: opt-in machines
    only, and only the commits git runs a hook for.
 
-Residual, recorded rather than closed: the private layer cannot cover a rebase,
-`git am`, `git revert`, a cherry-pick or `--no-verify` — a property of where git
-runs hooks, which is why the reach sentence names them.
+Residuals, recorded rather than closed.
+
+- **Where git runs hooks.** The private layer cannot cover a fast-forward
+  `git pull` (no commit is created, so nothing is asked), a rebase, `git am`,
+  `git revert`, a cherry-pick, or any commit made with `--no-verify`. That is a
+  property of git, which is why the reach sentence names them and says "e.g.".
+- **The copy refusals are a mistake-net.** The first-line and basename tests catch
+  a `cp`, a `.bak`, a stray duplicate. A copy with the declaration stripped or
+  displaced, a one-byte edit to it, and a renamed legacy store all pass; the
+  rename-source test only fires for a store git already tracks. They are not
+  widened further on purpose — matching a store's key list, or scanning deeper into
+  every staged blob, would put the secret through more code paths to catch fewer
+  accidents. The published `# abcd-banlist-example` second-line escape exists
+  because they are shape tests and a repo may legitimately commit a store-shaped
+  file.
+- **The environment pin narrows, it does not close.** `PATH` is pinned to the
+  standard system directories, two of which are user-writable on a typical
+  developer machine, and `#!/usr/bin/env bash` resolves the interpreter through the
+  inherited `PATH` before any of the hook runs.
 

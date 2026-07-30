@@ -742,3 +742,95 @@ func TestPreCommitHook_RefusesARenameOfTheStore(t *testing.T) {
 		t.Errorf("the refusal echoes the store's content\n%s", out)
 	}
 }
+
+// TestPreCommitHook_ExemptsADeclaredExample is the escape the copy refusals need.
+// The refusals are shape tests, and a repo that legitimately commits a store-shaped
+// file — this repo's own fixture corpora, a doc quoting the declaration — had no way
+// to say so: `--no-verify` is an off switch for the whole guard, not a per-file
+// escape. A blob whose SECOND line is the marker is exempt from the copy refusals
+// and from nothing else.
+func TestPreCommitHook_ExemptsADeclaredExample(t *testing.T) {
+	r := newHookRepo(t, "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n")
+	r.write("docs/fixture.txt", "# abcd-banlist: keyed\n# abcd-banlist-example\nlab-host alice-laptop\\.example\\.com\n")
+	r.git("add", "--", "docs/fixture.txt")
+	if blocked, out := r.commit(); blocked {
+		t.Fatalf("a declared example was refused as a copy of the store\n%s", out)
+	}
+}
+
+// TestPreCommitHook_ExemptExampleIsStillScanned: the escape exempts a blob from the
+// COPY refusals only. A banned name inside a declared example is a banned name in
+// the commit, and an escape that also stopped pattern matching would be a way to
+// commit anything.
+func TestPreCommitHook_ExemptExampleIsStillScanned(t *testing.T) {
+	r := newHookRepo(t, "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n")
+	r.write("docs/fixture.txt", "# abcd-banlist: keyed\n# abcd-banlist-example\nssh carol-server.example.net\n")
+	r.git("add", "--", "docs/fixture.txt")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("a banned name inside a declared example committed clean\n%s", out)
+	}
+	if !strings.Contains(out, "lab-host") {
+		t.Errorf("the refusal does not name the key\n%s", out)
+	}
+}
+
+// TestPreCommitHook_CommitsTheSharedCorpora is correctness M1's reproduction: the
+// first-line refusal blocked this repo's OWN committed fixtures, so the change that
+// added the refusal could not be committed by the guard it was hardening.
+func TestPreCommitHook_CommitsTheSharedCorpora(t *testing.T) {
+	r := newHookRepo(t, "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n")
+	for _, name := range []string{"parse-corpus.txt", "parse-corpus-malformed.txt", "parse-corpus-duplicate-decl.txt"} {
+		r.write("testdata/"+name, corpus(t, name))
+	}
+	r.git("add", "--", "testdata")
+	if blocked, out := r.commit(); blocked {
+		t.Fatalf("the shared corpora cannot be committed by the guard they prove\n%s", out)
+	}
+}
+
+// TestPreCommitHook_DuplicatedDeclarationRefuses drives the duplicate-declaration
+// corpus through the shell reader. Its Go half is TestKeyedStoreRefusesADuplicated-
+// Declaration: one fixture, both readers, so a divergence is a test failure rather
+// than a status board that disagrees with the guard.
+func TestPreCommitHook_DuplicatedDeclarationRefuses(t *testing.T) {
+	blocked, out := hookRun(t, corpus(t, "parse-corpus-duplicate-decl.txt"), "nothing sensitive here\n")
+	if !blocked {
+		t.Fatalf("a keyed store with a duplicated declaration was accepted\n%s", out)
+	}
+	if !strings.Contains(out, "line 8") {
+		t.Errorf("the refusal does not name the duplicated line\n%s", out)
+	}
+}
+
+// TestPreCommitHook_LeavesAForeignRepoAlone is security MIN-4. The guard runs in
+// whatever repo a clone points at it, including one that never opted in. Creating
+// its scratch directory unconditionally left an abcd directory — in a repo with no
+// abcd fence, so an untracked one — sitting in the working tree after every commit.
+func TestPreCommitHook_LeavesAForeignRepoAlone(t *testing.T) {
+	r := newHookRepo(t, "") // no store: this machine has not opted in
+	r.write("notes.md", "nothing sensitive here\n")
+	r.git("add", "notes.md")
+	if blocked, out := r.commit(); blocked {
+		t.Fatalf("a clean commit was refused\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(r.dir, ".abcd", ".work.local")); err == nil {
+		t.Error("the guard created its local tier in a repo that never opted in")
+	}
+}
+
+// TestPreCommitHook_RefusesAStoreCopyWithNoLocalStore: the copy refusals are about
+// what a COMMIT is carrying, not about what this machine has. They kept working
+// after the scratch directory stopped being created unconditionally.
+func TestPreCommitHook_RefusesAStoreCopyWithNoLocalStore(t *testing.T) {
+	r := newHookRepo(t, "")
+	r.write("leaked.txt", "# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n")
+	r.git("add", "leaked.txt")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("a copy of someone's store committed clean on a machine with no store\n%s", out)
+	}
+	if strings.Contains(out, "carol-server") {
+		t.Errorf("the refusal echoes the store's content\n%s", out)
+	}
+}
