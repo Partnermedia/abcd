@@ -834,3 +834,17 @@ func TestPreCommitHook_RefusesAStoreCopyWithNoLocalStore(t *testing.T) {
 		t.Errorf("the refusal echoes the store's content\n%s", out)
 	}
 }
+
+// TestPreCommitHook_BOMHeaderCorpusRefuses drives the BOM-header corpus through the
+// shell reader. Its Go half is TestParseRefusesTheBOMHeaderCorpus: the shell already
+// refused this file while Go called it healthy, which is the divergence the shared
+// fixture exists to make impossible.
+func TestPreCommitHook_BOMHeaderCorpusRefuses(t *testing.T) {
+	blocked, out := hookRun(t, corpus(t, "parse-corpus-bom-header.txt"), "nothing sensitive here\n")
+	if !blocked {
+		t.Fatalf("a declaration below a BOM'd header line was accepted\n%s", out)
+	}
+	if !strings.Contains(out, "line 8") {
+		t.Errorf("the refusal does not name the misplaced declaration's line\n%s", out)
+	}
+}

@@ -1,0 +1,10 @@
+﻿# Fixture banlist — a header whose FIRST line is a comment carrying a UTF-8
+# byte-order mark, with the format declaration on the line BELOW it. The
+# declaration is only ever read from line 1, so this file is damaged and both
+# readers must refuse it by line number: a reader that stops scanning the header
+# because the BOM made line 1 look like an entry would call it a healthy legacy
+# store while the other blocks every commit. Values are reserved-documentation
+# or persona-derived only.
+# abcd-banlist: keyed
+
+lab-host         alice-laptop\.example\.com

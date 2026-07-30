@@ -298,7 +298,10 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 // committed" beside a present store otherwise reads as coverage that neither a pull
 // request nor a rebase actually has.
 func banlistHealthLines(h ahoy.BanlistHealth) []string {
-	hooks := hookPhrase("pre-commit", h.Hook) + ", " + hookPhrase("pre-merge-commit", h.MergeHook)
+	// The merge half's phrasing depends on the half it delegates to: install writes it
+	// only beside abcd's own guard, so beside a foreign one "install writes it" would
+	// send a reader to run a command that declines.
+	hooks := hookPhrase("pre-commit", h.Hook) + ", " + mergeHookPhrase(h)
 	if (h.Hook == ahoy.HookInstalled || h.MergeHook == ahoy.HookInstalled) && !h.HooksPathArmed {
 		// A committed hook is not a running hook. This clone's LOCAL config does not
 		// point at the hooks directory — which a user-level dispatcher may still do, so
@@ -322,6 +325,18 @@ func hookPhrase(name string, state ahoy.HookState) string {
 	default:
 		return name + " hook MISSING (`abcd ahoy install` writes it)"
 	}
+}
+
+// mergeHookPhrase words the merge half, whose remedy is not its own. An absent shim
+// beside abcd's guard is install's to write; an absent shim beside a hook abcd does
+// not own is not, because install refuses to delegate to a foreign hook — so the
+// line gives the remedy the merge_hook_inert gap gives, and never one install
+// declines to perform.
+func mergeHookPhrase(h ahoy.BanlistHealth) string {
+	if h.MergeHook == ahoy.HookAbsent && h.Hook != ahoy.HookInstalled {
+		return "merge commits NOT checked (move the foreign pre-commit hook aside and re-run `abcd ahoy install`)"
+	}
+	return hookPhrase("pre-merge-commit", h.MergeHook)
 }
 
 // publicFamilyPhrase words the committed layer's state. Four faults, four remedies:

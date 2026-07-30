@@ -206,6 +206,13 @@ func parse(data []byte) (entries []rawEntry, keyed bool, err error) {
 	// every commit was blocked. A store one reader calls healthy and the other
 	// refuses is worse than either verdict alone.
 	for i, raw := range lines {
+		if i == 0 {
+			// The BOM belongs to the FILE, exactly as in the entry loop below. Without
+			// this strip a BOM'd first line is neither blank nor a comment, so the scan
+			// stopped on it and never saw a declaration on line 2 — while the shell
+			// hook, which strips it, refused every commit. One file, two verdicts.
+			raw = strings.TrimPrefix(raw, utf8BOM)
+		}
 		line := trimLead(trimTrail(raw))
 		if i > 0 && declaresFormat(raw) {
 			return nil, false, damagedDeclaration("%s declares the keyed format below line 1")

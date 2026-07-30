@@ -130,3 +130,19 @@ func TestKeyedStoreRefusesADuplicatedDeclaration(t *testing.T) {
 		t.Fatalf("err = %v; want ErrMalformedStore", err)
 	}
 }
+
+// TestParseRefusesTheBOMHeaderCorpus is the last reader split. The header scan did
+// not strip a UTF-8 BOM from line 1 the way the entry loop below it does, so a BOM'd
+// FIRST line stopped the scan (it looked like neither a blank nor a comment) and a
+// declaration on line 2 went unseen: Go called the file a healthy legacy store while
+// the shell refused every commit. Its shell half is
+// TestPreCommitHook_BOMHeaderCorpusRefuses — one fixture, both readers.
+func TestParseRefusesTheBOMHeaderCorpus(t *testing.T) {
+	_, _, err := parse(readCorpus(t, "parse-corpus-bom-header.txt"))
+	if !errors.Is(err, ErrMalformedStore) {
+		t.Fatalf("err = %v; want ErrMalformedStore", err)
+	}
+	if strings.Contains(err.Error(), "alice-laptop") {
+		t.Errorf("the refusal echoes store content: %v", err)
+	}
+}

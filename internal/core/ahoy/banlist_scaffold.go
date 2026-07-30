@@ -163,7 +163,9 @@ func privateStubContent() string {
 }
 
 // commentWrap renders text as `# `-prefixed lines inside the stub's 80-column
-// header. It breaks on spaces only, so a backtick-quoted `git am` is never split.
+// header, breaking on whitespace. A backtick-quoted span CAN straddle a line break
+// — the wrap knows nothing about backticks — which costs nothing here, because the
+// stub is a plain-text file whose readers are people, not a markdown renderer.
 func commentWrap(text string) string {
 	const width = 76
 	var out strings.Builder
@@ -285,6 +287,12 @@ func classifyPublicFamily(cwd string, root *os.Root, ignored bool) PublicFamilyS
 //
 // answerable=false means git could not be asked. That is NOT the same as "safe":
 // see storePathIsSafe.
+//
+// It is a WEAKER signal than it looks. gitutil.CheckIgnored fails open — git absent,
+// a probe that errored, and "nothing here is ignored" all come back as an empty set —
+// so answerable only reports that this directory is a work tree, never that the
+// ignore probe itself succeeded. Both write gates therefore treat an empty answer as
+// unanswerable rather than as "not ignored, go ahead".
 type ignoreVerdict struct {
 	answerable bool
 	private    bool
@@ -299,6 +307,14 @@ func checkBanlistIgnores(cwd string) ignoreVerdict {
 		return ignoreVerdict{}
 	}
 	set := gitutil.CheckIgnored(cwd, []string{banlist.PrivateRelPath, banlist.PublicConfigRelPath})
+	if len(set) == 0 {
+		// Indistinguishable from a probe that errored (CheckIgnored folds both into an
+		// empty set), and inside an abcd-managed repo at least the private store's path
+		// IS ignored — so an empty answer here is far likelier to be a failed probe
+		// than a true "nothing is ignored". Report it as unanswerable and let the write
+		// gates fail closed.
+		return ignoreVerdict{}
+	}
 	_, priv := set[banlist.PrivateRelPath]
 	_, pub := set[banlist.PublicConfigRelPath]
 	return ignoreVerdict{answerable: true, private: priv, public: pub}
@@ -317,6 +333,17 @@ func checkBanlistIgnores(cwd string) ignoreVerdict {
 func storePathIsSafe(cwd string) bool {
 	if v := checkBanlistIgnores(cwd); v.answerable {
 		return v.private
+	}
+	return !repoShaped(cwd)
+}
+
+// publicPathIsWritable is storePathIsSafe's counterpart for the docs-lint config,
+// and it fails closed the same way. Writing a config into a path git ignores
+// delivers a family CI never sees; writing one on an answer git did not actually
+// give is the same wager with the evidence missing.
+func publicPathIsWritable(cwd string) bool {
+	if v := checkBanlistIgnores(cwd); v.answerable {
+		return !v.public
 	}
 	return !repoShaped(cwd)
 }
@@ -380,6 +407,10 @@ type BanlistHealth struct {
 	// config into a path git ignores delivers no enforcement, so abcd does not offer
 	// to.
 	PublicConfigIgnored bool `json:"public_config_ignored"`
+	// PublicConfigWritable reports whether scaffolding may create the config here. It
+	// is NOT the negation of PublicConfigIgnored: a probe git could not answer is
+	// neither ignored nor safe, and it fails closed inside anything repo-shaped.
+	PublicConfigWritable bool `json:"public_config_writable"`
 	// PrivateStore reports whether THIS MACHINE has opted in. False is the honest
 	// "inactive here" state, never silence: an absent store checks nothing, and the
 	// guard says so at commit time for the same reason.
@@ -410,14 +441,16 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 	// every status render and on the session hooks, so each extra fork is paid on
 	// every prompt.
 	ign := checkBanlistIgnores(cwd)
-	storeSafe := ign.private
+	storeSafe, publicWritable := ign.private, !ign.public
 	if !ign.answerable {
-		storeSafe = !repoShaped(cwd)
+		shaped := repoShaped(cwd)
+		storeSafe, publicWritable = !shaped, !shaped
 	}
 	h := BanlistHealth{
-		PublicConfigIgnored: ign.public,
-		PrivateStoreIgnored: storeSafe,
-		Reach:               banlist.PrivateReachNote,
+		PublicConfigIgnored:  ign.public,
+		PublicConfigWritable: publicWritable,
+		PrivateStoreIgnored:  storeSafe,
+		Reach:                banlist.PrivateReachNote,
 	}
 	// One containment root for every read, opened where the writes are: a report
 	// resolved outside it could describe a file apply can never act on.
@@ -580,6 +613,10 @@ func publicFamilyGaps(h BanlistHealth) []Gap {
 		// one there produces a file abcd would immediately report as unenforceable —
 		// an offer to fix that fixes nothing.
 		fix := "ahoy install writes the docs-lint config with an empty banned-names family."
+		if !h.PublicConfigWritable && !h.PublicConfigIgnored {
+			fix = "git could not be asked whether " + banlist.PublicConfigRelPath + " would be ignored here, " +
+				"so abcd will not write a config it cannot check; make git available in this repo and re-run."
+		}
 		if h.PublicConfigIgnored {
 			fix = "git ignores " + banlist.PublicConfigRelPath + " here, so a config written there would reach no CI run; " +
 				"settle the placement question (iss-176) — commit the path explicitly, or ban the name on the private layer instead."
@@ -590,7 +627,7 @@ func publicFamilyGaps(h BanlistHealth) []Gap {
 			Detail:     banlist.PublicConfigRelPath + " is absent, so no banned name is gated in CI.",
 			FixHint:    fix,
 			Required:   true,
-			Resolvable: !h.PublicConfigIgnored,
+			Resolvable: h.PublicConfigWritable,
 		}}
 	case PublicFamilyUnusable:
 		// Diagnostic only: the config gates CI and a contributor owns it, so abcd
@@ -759,8 +796,11 @@ func (a *applyCtx) stepBanlist() {
 	if guardOwned && classifyGuardHook(root, GuardMergeHookRelPath) == HookAbsent {
 		a.createContained(root, GuardMergeHookRelPath, guardMergeHookTemplate, 0o755, 0o755)
 	}
-	// Never write a config abcd would immediately declare unenforceable.
-	if a.has("banlist.public_family_missing") && !checkBanlistIgnores(a.cwd).public {
+	// Never write a config abcd would immediately declare unenforceable — and never on
+	// an answer git did not actually give. An unanswerable probe withholds the write
+	// for this run exactly as it withholds the stub's: a config written into a path
+	// nobody could check is the same wager on both halves.
+	if a.has("banlist.public_family_missing") && publicPathIsWritable(a.cwd) {
 		a.createContained(root, banlist.PublicConfigRelPath, []byte(publicFamilySeed), 0o644, 0o755)
 	}
 	// Re-asked HERE, after stepVisibility has written the fence, and answered by git

@@ -198,7 +198,8 @@ The escape is published because the tests are shape tests: a repo that legitimat
 commits a store-shaped file — this repo's own fixture corpora, a document quoting
 the declaration, a file that happens to be called `private-names.txt` — needs a way
 to say so, and `--no-verify` is an off switch for the whole guard rather than a
-per-file escape. A blob whose **second line** is exactly `# abcd-banlist-example` is
+per-file escape. A blob whose **second line** reads `# abcd-banlist-example` — matched after the same
+byte-order-mark and surrounding-blank normalisation the format declaration gets — is
 exempt from the first-line and basename tests, and from nothing else.
 
 Be exact about what that buys. The exempt blob is still scanned against every entry,

@@ -182,3 +182,29 @@ func TestBanlistLineWarnsWhenTheStoreIsNotIgnored(t *testing.T) {
 		t.Errorf("a trackable private store is not called out: %q", line)
 	}
 }
+
+// TestBanlistLineNeverOffersARemedyInstallRefuses: when the pre-commit half is
+// foreign, install deliberately does NOT write the merge shim — it would delegate to
+// a hook abcd does not own. Telling a reader "`abcd ahoy install` writes it" sends
+// them to run a command that will decline, and the second run teaches them the
+// status board is wrong rather than that the state is.
+func TestBanlistLineNeverOffersARemedyInstallRefuses(t *testing.T) {
+	line := strings.Join(banlistHealthLines(ahoy.BanlistHealth{
+		Hook:         ahoy.HookForeign,
+		MergeHook:    ahoy.HookAbsent,
+		PublicFamily: ahoy.PublicFamilyPresent,
+	}), " ")
+	if strings.Contains(line, "`abcd ahoy install` writes it") {
+		t.Errorf("the line offers a remedy install refuses to perform: %q", line)
+	}
+	if !strings.Contains(line, "aside") {
+		t.Errorf("the line does not carry the remedy the merge_hook_inert gap gives: %q", line)
+	}
+	// The ordinary absent case keeps its ordinary remedy.
+	ordinary := strings.Join(banlistHealthLines(ahoy.BanlistHealth{
+		Hook: ahoy.HookAbsent, MergeHook: ahoy.HookAbsent, PublicFamily: ahoy.PublicFamilyPresent,
+	}), " ")
+	if !strings.Contains(ordinary, "`abcd ahoy install` writes it") {
+		t.Errorf("an absent hook install WILL write must still say so: %q", ordinary)
+	}
+}

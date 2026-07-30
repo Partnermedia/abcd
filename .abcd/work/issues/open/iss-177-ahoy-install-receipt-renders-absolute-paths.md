@@ -13,7 +13,7 @@ ahoy install reports every written artefact as an absolute filesystem path, so a
 
 Pre-existing and repo-wide: every apply step notes its write with an absolute
 path (`a.note(filepath.Join(...))`), and the CLI prints them verbatim as
-`wrote: <path>`. itd-74 increment 2 adds three more such notes and deliberately
+`wrote: <path>`. itd-74 increment 2 adds five more such notes and deliberately
 does not change the convention — a one-verb fix would leave the other steps
 inconsistent, and the sibling verbs already route error text through a shared
 path scrub (`scrubPaths`) that the receipt does not use. The fix is one change
