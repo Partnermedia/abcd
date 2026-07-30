@@ -137,29 +137,16 @@ func TestPreCommitHook_RefusesByKeyOnly(t *testing.T) {
 // from the persona registry.
 func TestPreCommitHook_MachineIdentifiers(t *testing.T) {
 	body := corpus(t)
-	cases := []struct {
-		name    string
-		staged  string
-		wantKey string
-	}{
-		{"hostname", "reached alice-laptop.example.com at noon\n", "lab-host"},
-		{"ipv4", "the box answers on 192.0.2.17\n", "lab-ip"},
-		{"cidr", "route 203.0.113.0/24 over the tunnel\n", "lab-cidr"},
-		{"mac", "nic 00:00:5E:00:53:1A came up\n", "lab-mac"},
-		{"ipv6", "and 2001:db8::5 replied\n", "lab-v6"},
-		{"indented entry", "carol-server.test is the build box\n", "indented-key"},
-		{"case-insensitive", "ALICE-LAPTOP.EXAMPLE.COM\n", "lab-host"},
-	}
-	for _, tc := range cases {
+	for _, tc := range corpusMustBlock {
 		t.Run(tc.name, func(t *testing.T) {
-			blocked, out := hookRun(t, body, tc.staged)
+			blocked, out := hookRun(t, body, tc.text)
 			if !blocked {
-				t.Fatalf("commit not blocked; want a refusal naming %q\n%s", tc.wantKey, out)
+				t.Fatalf("commit not blocked; want a refusal naming %q\n%s", tc.key, out)
 			}
-			if !strings.Contains(out, tc.wantKey) {
-				t.Errorf("refusal does not name key %q\n%s", tc.wantKey, out)
+			if !strings.Contains(out, tc.key) {
+				t.Errorf("refusal does not name key %q\n%s", tc.key, out)
 			}
-			if strings.Contains(out, strings.TrimSpace(tc.staged)) {
+			if strings.Contains(out, strings.TrimSpace(tc.text)) {
 				t.Errorf("output echoes the matched line\n%s", out)
 			}
 		})
@@ -187,19 +174,9 @@ func TestPreCommitHook_LegacyBarePatternStillBlocks(t *testing.T) {
 // commits cleanly, so the guard is not simply refusing everything. It also pins
 // that comment and blank lines are skipped rather than read as patterns.
 func TestPreCommitHook_PermittedCorpusPasses(t *testing.T) {
-	cases := []struct {
-		name   string
-		staged string
-	}{
-		{"near miss on a name", "the widgetwork prototype ships\n"},
-		{"neighbouring address", "the box answers on 192.0.2.18\n"},
-		{"unbanned persona host", "bob-desktop.example.org is idle\n"},
-		{"comment text is not a pattern", "# fixture corpus mentions nothing real\n"},
-		{"reserved-range prose", "use 198.51.100.0/24 in examples\n"},
-	}
-	for _, tc := range cases {
+	for _, tc := range corpusMustPass {
 		t.Run(tc.name, func(t *testing.T) {
-			blocked, out := hookRun(t, corpus(t), tc.staged)
+			blocked, out := hookRun(t, corpus(t), tc.text)
 			if blocked {
 				t.Fatalf("commit refused for content matching no entry\n%s", out)
 			}
