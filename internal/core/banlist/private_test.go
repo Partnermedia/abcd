@@ -447,6 +447,127 @@ func TestListPrivateReportsInertPatternsSeparately(t *testing.T) {
 	}
 }
 
+// TestAddPrivateRefusesUnroundTrippablePatterns pins that a pattern which validates
+// in isolation but does NOT round-trip through the composed `KEY<space>PATTERN` line
+// is refused, writing nothing. A whitespace-only pattern composes to `key  ` and
+// re-reads as malformed (wedging every commit, and `remove` cannot undo it); a
+// pattern with leading/trailing whitespace is silently trimmed on re-read, so the
+// enforced pattern differs from the validated one; a NUL byte the two readers
+// disagree on is refused outright.
+func TestAddPrivateRefusesUnroundTrippablePatterns(t *testing.T) {
+	root := t.TempDir()
+	body := privateFormatDecl + "\nwidget-partner   widgetworks\n"
+	path := writePrivate(t, root, body)
+
+	for _, tc := range []struct{ name, pattern string }{
+		{"whitespace-only", " "},
+		{"trailing whitespace", "widgetworks "},
+		{"leading whitespace", " widgetworks"},
+		{"NUL byte in the pattern", "widget\x00works"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := AddPrivate(AddPrivateRequest{RepoRoot: root, Key: "k", Pattern: tc.pattern})
+			if !errors.Is(err, ErrInvalidPattern) {
+				t.Fatalf("err = %v, want ErrInvalidPattern", err)
+			}
+			if got, _ := os.ReadFile(path); string(got) != body {
+				t.Errorf("a refused add changed the store:\n%q", got)
+			}
+			// Nothing was written, so there is nothing to remove — the wedge the old
+			// path created (`key  ` that `remove` reported as an unknown key) is gone.
+			if _, err := RemovePrivate(root, "k"); !errors.Is(err, ErrUnknownKey) {
+				t.Errorf("a refused add left a removable entry: err = %v", err)
+			}
+		})
+	}
+}
+
+// TestRemovePrivateDeletesAllLinesForAKey pins that a duplicate key is fully
+// removed. A hand-written store can hold a key twice; deleting only the first left
+// the second still blocking under a key the report says is gone.
+func TestRemovePrivateDeletesAllLinesForAKey(t *testing.T) {
+	root := t.TempDir()
+	body := privateFormatDecl + "\ndup   widgetworks\nother alice-laptop\\.example\\.com\ndup   partnerco\\.example\n"
+	path := writePrivate(t, root, body)
+
+	res, err := RemovePrivate(root, "dup")
+	if err != nil {
+		t.Fatalf("RemovePrivate: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "dup") {
+		t.Errorf("a duplicate key survived removal:\n%q", got)
+	}
+	// One key remains (other); the count reports parsed entries, not lines.
+	if res.Entries != 1 {
+		t.Errorf("Entries = %d, want 1", res.Entries)
+	}
+	rep, err := ListPrivate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range rep.Entries {
+		if e.Key == "dup" {
+			t.Errorf("dup still listed after removal: %+v", rep.Entries)
+		}
+	}
+}
+
+// TestAddPrivateCountAgreesWithList pins the count nit: a mutation's "N entries"
+// must count only the entries `list` shows, not the raw line count. A store carrying
+// an unparseable line (reported by list under Malformed, never as an entry) made the
+// two disagree — add reported one more than list rendered.
+func TestAddPrivateCountAgreesWithList(t *testing.T) {
+	root := t.TempDir()
+	writePrivate(t, root, privateFormatDecl+"\ngood   widgetworks\n[unparseable\n")
+
+	res, err := AddPrivate(AddPrivateRequest{RepoRoot: root, Key: "added", Pattern: "partnerco"})
+	if err != nil {
+		t.Fatalf("AddPrivate: %v", err)
+	}
+	rep, err := ListPrivate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Entries != len(rep.Entries) {
+		t.Errorf("add reported %d entries, list shows %d — the count includes the unparseable line", res.Entries, len(rep.Entries))
+	}
+}
+
+// TestListPrivateReportsANotIgnoredStore pins the read-path surfacing of the one
+// precondition the whole layer rests on: a present store git would TRACK is one
+// `git add -A` from committing its own patterns, and `list` must not report it as
+// healthy. Bidirectional: NotIgnored with no gitignore entry, clear with one.
+func TestListPrivateReportsANotIgnoredStore(t *testing.T) {
+	t.Run("not ignored", func(t *testing.T) {
+		root := t.TempDir()
+		initRepo(t, root, "")
+		writePrivate(t, root, privateFormatDecl+"\nwidget-partner   widgetworks\n")
+		rep, err := ListPrivate(root)
+		if err != nil {
+			t.Fatalf("ListPrivate: %v", err)
+		}
+		if !rep.NotIgnored {
+			t.Error("NotIgnored = false for a present store git would track")
+		}
+	})
+	t.Run("ignored", func(t *testing.T) {
+		root := t.TempDir()
+		initRepo(t, root, ".abcd/.work.local/\n")
+		writePrivate(t, root, privateFormatDecl+"\nwidget-partner   widgetworks\n")
+		rep, err := ListPrivate(root)
+		if err != nil {
+			t.Fatalf("ListPrivate: %v", err)
+		}
+		if rep.NotIgnored {
+			t.Error("NotIgnored = true for a store in the gitignored local tier")
+		}
+	})
+}
+
 // initRepo makes root a real git repo (with the isolated environment the tree's
 // git-spawning tests share) so the ignored-path check has something to answer.
 func initRepo(t *testing.T, root string, gitignore string) {

@@ -238,6 +238,7 @@ func RemovePublic(repoRoot, key string) (PublicResult, error) {
 		}
 
 		target := -1
+		sawBareKey := false
 		for i, el := range span.elems {
 			var tok lint.BannedToken
 			if err := json.Unmarshal(el.raw, &tok); err != nil {
@@ -247,11 +248,17 @@ func RemovePublic(repoRoot, key string) (PublicResult, error) {
 			case tok.ID == id:
 				target, removed = i, tok
 			case tok.ID == key:
-				// Named exactly, but outside the namespace these verbs own.
-				return fmt.Errorf("%w: %q is hand-curated; edit %s to change it", ErrNotManaged, key, PublicConfigRelPath)
+				// Named exactly, but outside the namespace these verbs own. Recorded,
+				// not returned: a managed `names/<key>` MAY also be present, and firing
+				// the namespace refusal here — before the whole array is scanned — would
+				// shadow it, refusing to remove a target the verb actually owns.
+				sawBareKey = true
 			}
 		}
 		if target < 0 {
+			if sawBareKey {
+				return fmt.Errorf("%w: %q is hand-curated; edit %s to change it", ErrNotManaged, key, PublicConfigRelPath)
+			}
 			return fmt.Errorf("%w: %q", ErrUnknownKey, key)
 		}
 
@@ -284,7 +291,7 @@ func withPublicLock(repoRoot string, fn func() error) error {
 	if err := mkdirLocalTier(repoRoot); err != nil {
 		return err
 	}
-	lockPath := filepath.Join(repoRoot, filepath.FromSlash(privateDirRelPath), publicLockFilename)
+	lockPath := filepath.Join(repoRoot, filepath.FromSlash(PrivateDirRelPath), publicLockFilename)
 	err := fsutil.WithFileLock(lockPath, storeLockTimeout, fn)
 	switch {
 	case errors.Is(err, fsutil.ErrLockContention):

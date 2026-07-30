@@ -184,6 +184,43 @@ func TestRemovePublicRefusesEntriesItDoesNotOwn(t *testing.T) {
 	}
 }
 
+// TestRemovePublicDoesNotShadowAManagedTargetWithABareKey pins the fix for the
+// namespace-check shadow: with both a bare hand-curated `widgetworks` and a managed
+// `names/widgetworks` present, `remove --public widgetworks` must remove the managed
+// entry it owns — not refuse with ErrNotManaged because it met the bare key first.
+// The bare entry is placed FIRST, the order that triggered the early return.
+func TestRemovePublicDoesNotShadowAManagedTargetWithABareKey(t *testing.T) {
+	root := writeConfig(t, `{
+  "roots": ["docs"],
+  "banned_tokens": [
+    {"id":"widgetworks","pattern":"(?i)widgetworks","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"},
+    {"id":"names/widgetworks","pattern":"(?i)widgetworks","severity":"blocker","successor":"s","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"m"}
+  ]
+}
+`)
+	res, err := RemovePublic(root, "widgetworks")
+	if err != nil {
+		t.Fatalf("RemovePublic: %v (a bare key shadowed the managed target)", err)
+	}
+	if res.Entry.ID != "names/widgetworks" {
+		t.Errorf("removed %q, want names/widgetworks", res.Entry.ID)
+	}
+	rep, err := ListPublic(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]bool{}
+	for _, e := range rep.Entries {
+		byID[e.ID] = true
+	}
+	if byID["names/widgetworks"] {
+		t.Error("the managed entry was not removed")
+	}
+	if !byID["widgetworks"] {
+		t.Error("the hand-curated bare entry was removed; the verb must not touch it")
+	}
+}
+
 // TestListPublicRendersTheWholeFamilyInFull pins AC6's public half: public entries
 // render in full (pattern included — they are committed and reviewable), with the
 // managed flag marking which the verb owns.

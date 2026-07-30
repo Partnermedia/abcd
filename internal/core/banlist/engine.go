@@ -55,20 +55,34 @@ func checkPattern(pattern string) (fault patternFault, byEngine bool) {
 		return faultEmpty, false
 	case strings.ContainsAny(pattern, "\r\n"):
 		return faultLineBreak, false
-	case perlishRe.MatchString(pattern) || strings.Contains(pattern, "(?"):
-		return faultPerlish, false
 	}
+	// The perlish SCREEN no longer short-circuits: whether a Perl-style construct is
+	// inert is decided by the real engine, not asserted statically. GNU grep
+	// IMPLEMENTS `\b`, `\w`, `\s` (so `widgetworks\b` matches — exit 0), and reads
+	// `\d`/`(?…)` as something else; classifying all of them as "matches nothing"
+	// before ever asking grep was a false claim. So probe grep FIRST — a construct it
+	// refuses is faultRefused, one it accepts but that is written in a non-portable
+	// Perl style is faultPerlish (a portability caveat, not "matches nothing").
+	perlish := perlishRe.MatchString(pattern) || strings.Contains(pattern, "(?")
 	if accepted, available := grepAccepts(pattern); available {
-		if !accepted {
+		switch {
+		case !accepted:
 			return faultRefused, true
+		case perlish:
+			return faultPerlish, true
+		default:
+			return faultNone, true
 		}
-		return faultNone, true
 	}
 	// No grep on this machine: fall back to an RE2 compile, which proves less (the
 	// engines disagree) but still rejects gross nonsense. The compile error is
-	// DISCARDED — Go's regexp errors quote the expression.
+	// DISCARDED — Go's regexp errors quote the expression. The static perlish screen
+	// stands in for the probe here, since grep's own verdict cannot be had.
 	if _, err := regexp.Compile(pattern); err != nil {
 		return faultRefused, false
+	}
+	if perlish {
+		return faultPerlish, false
 	}
 	return faultNone, false
 }
@@ -124,8 +138,10 @@ func patternRefusal(fault patternFault, byEngine bool) string {
 	case faultLineBreak:
 		return "contains a carriage return or newline, which a line-oriented store cannot hold"
 	case faultPerlish:
-		return "uses a Perl-style escape or a `(?…)` group, which the guard's POSIX grep does not implement — " +
-			"there it would match nothing; write the construct in POSIX ERE (matching is already case-insensitive, so `(?i)` is never needed)"
+		return "uses a Perl-style escape (`\\d`, `\\b`, `\\w`, …) or a `(?…)` group; POSIX ERE does not define these and grep " +
+			"implementations diverge on them — some read a given escape literally, so the pattern may not be portable across grep " +
+			"implementations and may match differently than written; write it in plain POSIX ERE (matching is already " +
+			"case-insensitive, so `(?i)` is never needed)"
 	case faultRefused:
 		if byEngine {
 			return "the guard's POSIX grep refuses it as an extended regular expression"

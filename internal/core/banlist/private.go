@@ -73,9 +73,16 @@ type PrivateReport struct {
 	Malformed []int `json:"malformed_lines"`
 	// Inert lists the 1-based line numbers whose pattern the engine ACCEPTS but
 	// reads differently from the language it was written in (a Perl-style escape,
-	// an inline flag group). The guard does not refuse these — they simply match
-	// nothing, which is the more dangerous failure and a different remedy.
+	// an inline flag group). The guard does not refuse these — grep may read them
+	// differently than written, which is the more dangerous failure and a different
+	// remedy.
 	Inert []int `json:"inert_lines"`
+	// NotIgnored reports a present store at a path git does NOT ignore — the whole
+	// layer rests on the file being untracked, so a not-ignored store is one
+	// `git add -A` from committing the very patterns it exists to keep out of
+	// history. The read path surfaces it (AddPrivate refuses outright); it is only
+	// meaningful when the store is Present and inside a git repo.
+	NotIgnored bool `json:"not_ignored"`
 }
 
 // PrivateResult is the outcome of a private-layer mutation.
@@ -225,7 +232,7 @@ func mkdirLocalTier(repoRoot string) error {
 		return err
 	}
 	defer root.Close()
-	return root.MkdirAll(privateDirRelPath, 0o700)
+	return root.MkdirAll(PrivateDirRelPath, 0o700)
 }
 
 // ListPrivate reports the private layer: its format, its keys, the lines the
@@ -242,6 +249,13 @@ func ListPrivate(repoRoot string) (PrivateReport, error) {
 		return PrivateReport{}, err
 	}
 	rep.Present = true
+	// The layer's whole safety is that the store is untracked; a present store git
+	// would track is a leak waiting for `git add -A`, and the read path must not
+	// report it as healthy. requireIgnoredStore is the write-path enforcement; here
+	// the same condition is reported rather than refused.
+	if gitutil.InRepo(repoRoot) && !gitutil.IsIgnored(repoRoot, PrivateRelPath) {
+		rep.NotIgnored = true
+	}
 	entries, keyed := parse(data)
 	rep.Keyed = keyed
 	for _, e := range entries {
@@ -272,8 +286,22 @@ func AddPrivate(req AddPrivateRequest) (PrivateResult, error) {
 	if !validKey(req.Key) {
 		return PrivateResult{}, fmt.Errorf("%w: %q (want [A-Za-z0-9][A-Za-z0-9._/-]*)", ErrInvalidKey, req.Key)
 	}
+	if strings.IndexByte(req.Pattern, 0) >= 0 {
+		// A NUL byte the two readers disagree on: bash reads to the NUL, the Go parser
+		// keeps the whole string. Refuse before it can wedge one reader.
+		return PrivateResult{}, fmt.Errorf("%w for key %q: contains a NUL byte, which the store's readers disagree on (the value is withheld)", ErrInvalidPattern, req.Key)
+	}
 	if fault, byEngine := checkPattern(req.Pattern); fault != faultNone {
 		return PrivateResult{}, fmt.Errorf("%w for key %q: %s (the value is withheld)", ErrInvalidPattern, req.Key, patternRefusal(fault, byEngine))
+	}
+	// checkPattern validates the pattern in ISOLATION; it does not prove the COMPOSED
+	// line `KEY<space>PATTERN` reads back as the same (key, pattern). A whitespace-only
+	// pattern composes to `key  `, which re-reads as malformed and wedges every commit;
+	// a leading/trailing-whitespace pattern is silently trimmed on re-read, so the
+	// enforced pattern differs from the validated one. Parse the composed line back and
+	// refuse (writing nothing) unless it round-trips exactly.
+	if !composedLineRoundTrips(req.Key, req.Pattern) {
+		return PrivateResult{}, fmt.Errorf("%w for key %q: the composed entry does not round-trip (a whitespace-only pattern, or one with leading/trailing whitespace the reader would trim; the value is withheld)", ErrInvalidPattern, req.Key)
 	}
 	if err := requireIgnoredStore(req.RepoRoot); err != nil {
 		return PrivateResult{}, err
@@ -314,13 +342,48 @@ func AddPrivate(req AddPrivateRequest) (PrivateResult, error) {
 		if err := writePrivateStore(req.RepoRoot, []byte(body)); err != nil {
 			return err
 		}
-		res = PrivateResult{Path: PrivateRelPath, Key: req.Key, Entries: len(entries) + 1}
+		// countParsed, not len(entries): an unparsed line is reported by list under
+		// Malformed, never as an entry, so the mutation's count must agree with what
+		// list shows rather than counting lines the store cannot use.
+		res = PrivateResult{Path: PrivateRelPath, Key: req.Key, Entries: countParsed(entries) + 1}
 		return nil
 	})
 	if err != nil {
 		return PrivateResult{}, err
 	}
 	return res, nil
+}
+
+// countParsed counts the entries a reader can actually use — the ones that are not
+// unparsed. It is what a mutation's "N entries" count must report, so that count
+// agrees with the keys `list` renders rather than including lines list files under
+// Malformed.
+func countParsed(entries []rawEntry) int {
+	n := 0
+	for _, e := range entries {
+		if !e.unparsed {
+			n++
+		}
+	}
+	return n
+}
+
+// composedLineRoundTrips reports whether the line AddPrivate is about to write —
+// `key + " " + pattern` — parses back to exactly (key, pattern). It runs the real
+// keyed parser on the line alone (declaration prepended) so the check IS the reader:
+// a pattern the writer would compose into an unparseable or silently-altered line is
+// caught before any byte reaches the store.
+func composedLineRoundTrips(key, pattern string) bool {
+	entries, _ := parse([]byte(privateFormatDecl + "\n" + key + " " + pattern))
+	for _, e := range entries {
+		if e.unparsed {
+			return false
+		}
+		if e.key == key && e.pattern == pattern {
+			return true
+		}
+	}
+	return false
 }
 
 // RemovePrivate drops the entry with the given key. The edit is a line deletion —
@@ -336,21 +399,23 @@ func RemovePrivate(repoRoot, key string) (PrivateResult, error) {
 		if !keyed && len(entries) > 0 {
 			return legacyStoreRefusal("remove from")
 		}
-		target := -1
+		// ALL lines carrying the key, not just the first: a hand-written store can hold
+		// a key twice, and deleting only one leaves the second still blocking under a
+		// key the report says is gone.
+		targets := map[int]bool{}
 		for _, e := range entries {
 			if e.key == key {
-				target = e.line
-				break
+				targets[e.line] = true
 			}
 		}
-		if target < 0 {
+		if len(targets) == 0 {
 			return fmt.Errorf("%w: %q", ErrUnknownKey, key)
 		}
 
 		lines := strings.Split(string(data), "\n")
 		kept := make([]string, 0, len(lines))
 		for i, line := range lines {
-			if i+1 == target {
+			if targets[i+1] {
 				continue
 			}
 			kept = append(kept, line)
@@ -358,7 +423,7 @@ func RemovePrivate(repoRoot, key string) (PrivateResult, error) {
 		if err := writePrivateStore(repoRoot, []byte(strings.Join(kept, "\n"))); err != nil {
 			return err
 		}
-		res = PrivateResult{Path: PrivateRelPath, Key: key, Entries: len(entries) - 1}
+		res = PrivateResult{Path: PrivateRelPath, Key: key, Entries: countParsed(entries) - len(targets)}
 		return nil
 	})
 	if err != nil {
@@ -393,7 +458,7 @@ func requireIgnoredStore(repoRoot string) error {
 	}
 	return fmt.Errorf("%w: git does not ignore %s, so the patterns it holds would be one `git add -A` from tracked history; "+
 		"add `%s` to .gitignore (the local-ephemeral tier) and re-run",
-		ErrStoreNotIgnored, PrivateRelPath, privateDirRelPath+"/")
+		ErrStoreNotIgnored, PrivateRelPath, PrivateDirRelPath+"/")
 }
 
 // withPrivateLock serialises a load-modify-write of the private store on the shared
@@ -409,7 +474,7 @@ func withPrivateLock(repoRoot string, fn func() error) error {
 	if err := mkdirLocalTier(repoRoot); err != nil {
 		return err
 	}
-	dir := filepath.Join(repoRoot, filepath.FromSlash(privateDirRelPath))
+	dir := filepath.Join(repoRoot, filepath.FromSlash(PrivateDirRelPath))
 	err := fsutil.WithFileLock(filepath.Join(dir, privateLockFilename), storeLockTimeout, fn)
 	switch {
 	case errors.Is(err, fsutil.ErrLockContention):

@@ -41,9 +41,9 @@ import (
 // whole — the one placement where a private pattern is safe from a `git add -A`.
 const PrivateRelPath = ".abcd/.work.local/private-names.txt"
 
-// privateDirRelPath is the local-ephemeral tier that holds the private store and
+// PrivateDirRelPath is the local-ephemeral tier that holds the private store and
 // its lock, repo-relative and slash-separated (an os.Root path).
-const privateDirRelPath = ".abcd/.work.local"
+const PrivateDirRelPath = ".abcd/.work.local"
 
 // privateLockFilename and publicLockFilename name the load-modify-write locks.
 // BOTH live in the local-ephemeral tier: a lock file beside the committed
