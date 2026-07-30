@@ -56,6 +56,19 @@ var guardHookTemplate []byte
 //go:embed defaults/pre-merge-commit
 var guardMergeHookTemplate []byte
 
+// gitattributesRelPath and guardEOLAttribute pin the committed hooks to LF.
+//
+// A hook is a script git EXECUTES. A clone with core.autocrlf=true rewrites it to
+// CRLF on checkout, and the shebang line then names an interpreter called
+// "/usr/bin/env bash\r", which no kernel resolves: the guard stops running and the
+// only symptom is a "bad interpreter" line most people read as a broken tool rather
+// than as an unprotected repo. The attribute is one line, and it is the difference
+// between the scaffolded guard working on every clone and working on some.
+const (
+	gitattributesRelPath = ".gitattributes"
+	guardEOLAttribute    = guardHooksDirRelPath + "/* text eol=lf"
+)
+
 // publicFamilySeed is the docs-lint config a repo with none inherits: the roots the
 // lint walks and an EMPTY banned-names family. Empty is the point — abcd cannot know
 // which names a repo may not publish, and seeding a ban nobody declared would fail a
@@ -153,9 +166,8 @@ const (
 // never from mere presence: a repo's own pre-commit hook is legitimate, and calling
 // it "the abcd guard" would mean nothing checks the banlist while the status board
 // says something does.
-func classifyGuardHook(cwd, rel string) HookState {
-	p := filepath.Join(cwd, filepath.FromSlash(rel))
-	fi, err := os.Lstat(p)
+func classifyGuardHook(root *os.Root, rel string) HookState {
+	fi, err := root.Lstat(rel)
 	switch {
 	case err != nil && os.IsNotExist(err):
 		return HookAbsent
@@ -164,7 +176,11 @@ func classifyGuardHook(cwd, rel string) HookState {
 	case fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular():
 		return HookUnreadable
 	}
-	data, err := fsutil.ReadGuarded(p, maxAhoyFileBytes)
+	// Read THROUGH the root, like the write path: a read resolved outside the
+	// containment scope would classify a file the scaffold could never touch, which
+	// is the read/write asymmetry that lets a report describe a different file from
+	// the one apply acts on.
+	data, err := fsutil.ReadGuardedInRoot(root, rel, maxAhoyFileBytes)
 	if err != nil {
 		return HookUnreadable
 	}
@@ -202,9 +218,8 @@ const (
 // about what "the family is present" means (one canonical primitive), and it asks
 // git whether the file is enforceable at all rather than inferring it from a
 // configured visibility.
-func classifyPublicFamily(cwd string) PublicFamilyState {
-	p := filepath.Join(cwd, filepath.FromSlash(banlist.PublicConfigRelPath))
-	if _, err := fsutil.ReadGuarded(p, maxAhoyFileBytes); err != nil {
+func classifyPublicFamily(cwd string, root *os.Root, ignored bool) PublicFamilyState {
+	if _, err := fsutil.ReadGuardedInRoot(root, banlist.PublicConfigRelPath, maxAhoyFileBytes); err != nil {
 		if os.IsNotExist(err) {
 			return PublicFamilyAbsent
 		}
@@ -213,30 +228,67 @@ func classifyPublicFamily(cwd string) PublicFamilyState {
 	if _, err := banlist.ListPublic(cwd); err != nil {
 		return PublicFamilyUnusable
 	}
-	// git's own verdict, and only inside a repo: check-ignore consults the index, so
-	// a config that is already committed reads as not-ignored whatever the fence
-	// says — which is the right answer, because it IS in the repo and CI sees it.
-	if gitutil.InRepo(cwd) && gitutil.IsIgnored(cwd, banlist.PublicConfigRelPath) {
+	// git's own verdict: check-ignore consults the index, so a config that is already
+	// committed reads as not-ignored whatever the fence says — which is the right
+	// answer, because it IS in the repo and CI sees it.
+	if ignored {
 		return PublicFamilyIgnored
 	}
 	return PublicFamilyPresent
 }
 
-// privateStoreIsIgnored reports git's OWN verdict on whether the store's path would
-// enter history — the only authority on the question. A text comparison of the
-// abcd-managed .gitignore block answers a different one: a repo can carry a
-// byte-perfect block and still track the store (a negation after it, a tracked
-// tier), and a repo that never reached the visibility step has no block at all while
-// its config may be otherwise complete.
+// ignoreVerdict is git's answer about the two paths the banlist cares about,
+// obtained in ONE subprocess. `git check-ignore` is the only authority on the
+// question: a text comparison of the abcd-managed .gitignore block answers a
+// different one, because a repo can carry a byte-perfect block and still track a
+// path (a negation after it, a tracked tier) and a repo that never reached the
+// visibility step has no block at all.
 //
-// Outside a git repo the check is SKIPPED and the path is treated as safe, exactly
-// as banlist's own requireIgnoredStore does: a scaffold cannot demand proof no one
-// can supply, and a directory that is not a repository cannot commit anything.
-func privateStoreIsIgnored(cwd string) bool {
+// answerable=false means git could not be asked. That is NOT the same as "safe":
+// see storePathIsSafe.
+type ignoreVerdict struct {
+	answerable bool
+	private    bool
+	public     bool
+}
+
+// checkBanlistIgnores asks git once about both paths. check-ignore answers for a
+// path that does not exist yet, which is what makes it usable as a placement test
+// for a config abcd is about to write.
+func checkBanlistIgnores(cwd string) ignoreVerdict {
 	if !gitutil.InRepo(cwd) {
-		return true
+		return ignoreVerdict{}
 	}
-	return gitutil.IsIgnored(cwd, banlist.PrivateRelPath)
+	set := gitutil.CheckIgnored(cwd, []string{banlist.PrivateRelPath, banlist.PublicConfigRelPath})
+	_, priv := set[banlist.PrivateRelPath]
+	_, pub := set[banlist.PublicConfigRelPath]
+	return ignoreVerdict{answerable: true, private: priv, public: pub}
+}
+
+// storePathIsSafe reports whether scaffolding may create the private store here.
+//
+// Three states, not two. Inside a repo, git decides. Outside any repo the check is
+// SKIPPED and the path is safe, exactly as banlist's own requireIgnoredStore skips
+// it — a directory that is not a repository cannot commit anything, so a scaffold
+// cannot demand proof no one can supply. But a directory that LOOKS like a repo and
+// that git will not answer for — git missing from PATH, a corrupt .git, a version
+// that fails the probe — is neither: something here can still be committed, and
+// nothing can say whether this path would be. That fails closed, because the whole
+// hazard is a store entering history.
+func storePathIsSafe(cwd string) bool {
+	if v := checkBanlistIgnores(cwd); v.answerable {
+		return v.private
+	}
+	return !repoShaped(cwd)
+}
+
+// repoShaped reports whether cwd carries a .git entry of any kind — a directory, or
+// the file a worktree or submodule leaves. It is deliberately cruder than
+// gitutil.InRepo: its job is to tell "not a repository" apart from "a repository
+// git would not answer for".
+func repoShaped(cwd string) bool {
+	_, err := os.Lstat(filepath.Join(cwd, ".git"))
+	return err == nil
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +319,15 @@ type BanlistHealth struct {
 	// PublicFamily is the committed layer's state, including the case where it is
 	// present and readable but git ignores the file, so CI never sees it.
 	PublicFamily PublicFamilyState `json:"public_family"`
+	// HookEOLPinned reports whether .gitattributes keeps the committed hooks at LF.
+	// Meaningful only where abcd owns the hooks: pinning the EOL of a directory whose
+	// contents are someone else's is not abcd's call.
+	HookEOLPinned bool `json:"hook_eol_pinned"`
+	// PublicConfigIgnored is git's verdict on the config's PATH, whether or not a
+	// file is there yet. It is what makes the absent-family gap honest: writing a
+	// config into a path git ignores delivers no enforcement, so abcd does not offer
+	// to.
+	PublicConfigIgnored bool `json:"public_config_ignored"`
 	// PrivateStore reports whether THIS MACHINE has opted in. False is the honest
 	// "inactive here" state, never silence: an absent store checks nothing, and the
 	// guard says so at commit time for the same reason.
@@ -293,33 +354,58 @@ type BanlistHealth struct {
 // store's SHAPE and never its content: the patterns are the secret, and a status
 // board is exactly the surface that must not hold them.
 func detectBanlistHealth(cwd string) BanlistHealth {
+	// ONE ignore probe for both paths, and one config read: a detection pass runs on
+	// every status render and on the session hooks, so each extra fork is paid on
+	// every prompt.
+	ign := checkBanlistIgnores(cwd)
+	storeSafe := ign.private
+	if !ign.answerable {
+		storeSafe = !repoShaped(cwd)
+	}
 	h := BanlistHealth{
-		Hook:                classifyGuardHook(cwd, GuardHookRelPath),
-		MergeHook:           classifyGuardHook(cwd, GuardMergeHookRelPath),
-		HooksPathArmed:      hooksPathArmed(cwd),
-		PublicFamily:        classifyPublicFamily(cwd),
-		PrivateStoreIgnored: true,
+		PublicConfigIgnored: ign.public,
+		PrivateStoreIgnored: storeSafe,
 		Reach:               banlist.PrivateReachNote,
 	}
-	sum, err := banlist.SummarisePrivate(cwd)
+	// One containment root for every read, opened where the writes are: a report
+	// resolved outside it could describe a file apply can never act on.
+	root, err := os.OpenRoot(cwd)
 	if err != nil {
+		h.Hook, h.MergeHook = HookUnreadable, HookUnreadable
+		h.PublicFamily = PublicFamilyUnreadable
+		h.PrivateStore, h.PrivateUnreadable = true, true
+		return h
+	}
+	defer root.Close()
+	h.Hook = classifyGuardHook(root, GuardHookRelPath)
+	h.MergeHook = classifyGuardHook(root, GuardMergeHookRelPath)
+	h.HooksPathArmed = hooksPathArmed(cwd)
+	h.PublicFamily = classifyPublicFamily(cwd, root, ign.public)
+	h.HookEOLPinned = gitattributesPinsHookEOL(root)
+	sum, serr := banlist.SummarisePrivate(cwd)
+	if serr != nil {
 		// A store that exists and cannot be read for what it is: present, and health
 		// says so rather than rendering the absence of a readable store as "inactive".
 		h.PrivateStore, h.PrivateUnreadable = true, true
-		h.PrivateStoreIgnored = privateStoreIsIgnored(cwd)
 		return h
 	}
 	h.PrivateStore = sum.Present
-	h.PrivateStoreIgnored = sum.Ignored
 	h.PrivateKeyed = sum.Keyed
 	h.PrivateEntries = sum.Entries
 	h.PrivateUnparsed = sum.Unparsed
-	if !sum.Present {
-		// An absent store's safety question is about the PATH, not the file: it is what
-		// decides whether scaffolding may create one here.
-		h.PrivateStoreIgnored = privateStoreIsIgnored(cwd)
-	}
 	return h
+}
+
+// gitattributesPinsHookEOL reports whether .gitattributes already carries the
+// hooks' EOL pin. It matches the attribute line rather than parsing the file: the
+// question is whether THIS line is present, and a partial parse of a format with
+// macros and negations would answer a different one.
+func gitattributesPinsHookEOL(root *os.Root) bool {
+	data, err := fsutil.ReadGuardedInRoot(root, gitattributesRelPath, maxAhoyFileBytes)
+	if err != nil {
+		return false
+	}
+	return bytes.Contains(data, []byte(guardEOLAttribute))
 }
 
 // hooksPathArmed reports whether this clone's LOCAL git config points core.hooksPath
@@ -331,10 +417,21 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 // is not running" — only into "arm it like this".
 func hooksPathArmed(cwd string) bool {
 	out, err := gitutil.Run(cwd, "config", "--local", "--get", "core.hooksPath")
-	if err != nil || strings.TrimSpace(out) == "" {
+	if err != nil {
 		return false
 	}
-	return path.Clean(filepath.ToSlash(strings.TrimSpace(out))) == guardHooksDirRelPath
+	set := strings.TrimSpace(out)
+	if set == "" {
+		return false
+	}
+	// Both sides resolved before comparing: git accepts an ABSOLUTE core.hooksPath,
+	// and a literal comparison against ".githooks" reads a perfectly armed clone as
+	// unarmed — at which point the surface tells the user to replace a working
+	// absolute path with a relative one, which is advice to downgrade their config.
+	if !filepath.IsAbs(set) {
+		set = filepath.Join(cwd, set)
+	}
+	return filepath.Clean(set) == filepath.Clean(filepath.Join(cwd, filepath.FromSlash(guardHooksDirRelPath)))
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +447,17 @@ func detectBanlistScaffold(h BanlistHealth) []Gap {
 	var gaps []Gap
 	gaps = append(gaps, hookGaps("banlist.hook", GuardHookRelPath, "pre-commit", h.Hook)...)
 	gaps = append(gaps, mergeHookGaps(h)...)
-	gaps = append(gaps, publicFamilyGaps(h.PublicFamily)...)
+	if h.Hook == HookInstalled && !h.HookEOLPinned {
+		gaps = append(gaps, Gap{
+			ID: "banlist.hook_eol_unpinned", Category: SafeAutocreate, Scope: "repo",
+			Title:      "the committed guard is not pinned to LF",
+			Detail:     gitattributesRelPath + " does not carry `" + guardEOLAttribute + "`, so a clone with core.autocrlf=true rewrites the guard to CRLF and its shebang stops resolving — the hook silently stops running.",
+			FixHint:    "ahoy install appends the attribute line (it never rewrites the rest of the file).",
+			Required:   true,
+			Resolvable: true,
+		})
+	}
+	gaps = append(gaps, publicFamilyGaps(h)...)
 	gaps = append(gaps, privateStoreGaps(h)...)
 	return gaps
 }
@@ -391,16 +498,25 @@ func mergeHookGaps(h BanlistHealth) []Gap {
 // config is abcd's to write; every other fault names its own remedy, because "add a
 // banned_tokens array" is the wrong instruction for a file nobody can open and for
 // one git will never show CI.
-func publicFamilyGaps(state PublicFamilyState) []Gap {
-	switch state {
+func publicFamilyGaps(h BanlistHealth) []Gap {
+	switch h.PublicFamily {
 	case PublicFamilyAbsent:
+		// Resolvable only where a written config would actually be enforced. Under
+		// `visibility: public` the fence ignores the whole .abcd/ namespace, so writing
+		// one there produces a file abcd would immediately report as unenforceable —
+		// an offer to fix that fixes nothing.
+		fix := "ahoy install writes the docs-lint config with an empty banned-names family."
+		if h.PublicConfigIgnored {
+			fix = "git ignores " + banlist.PublicConfigRelPath + " here, so a config written there would reach no CI run; " +
+				"settle the placement question (iss-176) — commit the path explicitly, or ban the name on the private layer instead."
+		}
 		return []Gap{{
 			ID: "banlist.public_family_missing", Category: SafeAutocreate, Scope: "repo",
 			Title:      "public banned-names family absent",
 			Detail:     banlist.PublicConfigRelPath + " is absent, so no banned name is gated in CI.",
-			FixHint:    "ahoy install writes the docs-lint config with an empty banned-names family.",
+			FixHint:    fix,
 			Required:   true,
-			Resolvable: true,
+			Resolvable: !h.PublicConfigIgnored,
 		}}
 	case PublicFamilyUnusable:
 		// Diagnostic only: the config gates CI and a contributor owns it, so abcd
@@ -563,17 +679,58 @@ func (a *applyCtx) stepBanlist() {
 	if guardOwned && (a.det.Banlist == nil || a.det.Banlist.MergeHook == HookAbsent) {
 		a.createContained(root, GuardMergeHookRelPath, guardMergeHookTemplate, 0o755, 0o755)
 	}
-	if a.has("banlist.public_family_missing") {
+	// Never write a config abcd would immediately declare unenforceable.
+	if a.has("banlist.public_family_missing") && !checkBanlistIgnores(a.cwd).public {
 		a.createContained(root, banlist.PublicConfigRelPath, []byte(publicFamilySeed), 0o644, 0o755)
 	}
 	// Re-asked HERE, after stepVisibility has written the fence, and answered by git
 	// rather than by a comparison of .gitignore text: what matters is whether git
 	// would track this path now, on disk.
-	if a.has("banlist.private_stub_missing") && privateStoreIsIgnored(a.cwd) {
+	// The EOL pin belongs with the hooks and only with them: keyed on guardOwned, not
+	// on the gap, for the same reason the shim is (a fresh repo raises no gap for a
+	// hook that does not exist yet).
+	if guardOwned {
+		a.pinHookEOL(root)
+	}
+	if a.has("banlist.private_stub_missing") && storePathIsSafe(a.cwd) {
 		// 0700/0600: the directory holding private patterns is no more readable than
 		// the patterns are, matching the store the banlist verbs write.
 		a.createContained(root, banlist.PrivateRelPath, []byte(privateStubContent()), 0o600, 0o700)
 	}
+}
+
+// pinHookEOL appends the hooks' EOL attribute to .gitattributes, creating the file
+// when it is absent. It is an APPEND, not a rewrite: .gitattributes is the
+// maintainer's, may carry merge drivers and filters abcd knows nothing about, and a
+// file it cannot read is left alone rather than replaced with a file it can.
+func (a *applyCtx) pinHookEOL(root *os.Root) {
+	data, err := fsutil.ReadGuardedInRoot(root, gitattributesRelPath, maxAhoyFileBytes)
+	switch {
+	case err == nil:
+	case os.IsNotExist(err):
+		data = nil
+	default:
+		return
+	}
+	if bytes.Contains(data, []byte(guardEOLAttribute)) {
+		return
+	}
+	var buf bytes.Buffer
+	buf.Write(data)
+	if len(data) > 0 && !bytes.HasSuffix(data, []byte("\n")) {
+		buf.WriteString("\n")
+	}
+	if len(data) > 0 {
+		buf.WriteString("\n")
+	}
+	buf.WriteString("# The committed name guard is a script git EXECUTES. A checkout with\n")
+	buf.WriteString("# core.autocrlf=true would rewrite it to CRLF and its shebang would stop\n")
+	buf.WriteString("# resolving, so the guard would silently stop running.\n")
+	buf.WriteString(guardEOLAttribute + "\n")
+	if err := fsutil.WriteFileAtomicPreserveModeInRoot(root, gitattributesRelPath, buf.Bytes()); err != nil {
+		return
+	}
+	a.note(filepath.Join(a.cwd, gitattributesRelPath))
 }
 
 // createContained writes data at rel inside root when nothing is there, noting the

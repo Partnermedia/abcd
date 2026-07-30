@@ -123,7 +123,8 @@ becomes name-safe by being abcd-managed:
 | artefact | where | note |
 |---|---|---|
 | guard hook | `.githooks/pre-commit` | committed, so every clone inherits it; a clone arms it once with `git config core.hooksPath .githooks` |
-| merge guard | `.githooks/pre-merge-commit` | git runs no `pre-commit` for a merge commit, so the same guard runs from a second entry point |
+| merge guard | `.githooks/pre-merge-commit` | git runs no `pre-commit` for a merge commit, so the same guard runs from a second entry point. Written **only** beside abcd's own guard: the shim delegates to whatever occupies `pre-commit`, so beside a foreign hook it would both claim coverage it has not got and silently start running the maintainer's hook on merges |
+| EOL pin | `.gitattributes` | one appended line keeping the hooks at LF — a `core.autocrlf` checkout rewrites a script git EXECUTES, and its shebang stops resolving |
 | public family | `.abcd/docs-lint.json` | an **empty** `banned_tokens` array — abcd cannot know which names a repo may not publish, and a ban nobody declared would fail a build over a word the maintainer never chose |
 | private stub | `.abcd/.work.local/private-names.txt` | inside the gitignored local tier |
 
@@ -138,7 +139,11 @@ the arming instruction rather than claiming the guard is running.
 Every write is create-if-absent, and every one is **contained**: paths resolve
 through an `os.Root` opened at the repo, so a symlink committed at `.githooks` or
 at the local tier cannot land a hook or a stub outside the repo while the surfaces
-report the in-repo path. A hook, a CI-gating config, and above all a populated
+report the in-repo path. The reads detection makes are resolved through the same
+root, so a report can never describe a file apply could not act on. Containment is
+about the repo boundary and nothing finer: a symlink that redirects *within* the
+repo (`.githooks -> docs/`) is followed, and a repo that commits one has chosen
+where its own files live. A hook, a CI-gating config, and above all a populated
 private store are the maintainer's, and re-seeding one would delete work abcd
 cannot see.
 

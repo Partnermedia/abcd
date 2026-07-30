@@ -65,8 +65,8 @@ called out in a **Breaking** section.
   private layer is in on this machine — and the status line, the JSON envelope, and
   the `abcd banlist` verb all carry the same sentence: CI cannot enforce the private
   layer; it protects only machines that have opted in, and only the commits git runs
-  a hook for, since a rebase, a `git am`, or a cherry-pick bypasses it, as does
-  `--no-verify`. The reach travels inside the reported state rather than being added
+  a hook for — a rebase, a `git am`, a `git revert`, a cherry-pick or a reapplied
+  stash bypasses it, as does `--no-verify`. The reach travels inside the reported state rather than being added
   by a renderer, because a machine consumer reading "hook committed" beside a present
   store would otherwise draw exactly the wrong conclusion. Where a claim cannot be
   supported it is withdrawn rather than softened: a docs-lint config git ignores —

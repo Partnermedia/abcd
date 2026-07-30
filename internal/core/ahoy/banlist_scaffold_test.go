@@ -18,10 +18,10 @@ import (
 // gitignored private stub — rather than a maintainer hand-wiring three files.
 func TestInstallScaffoldsTheBanlistArtefacts(t *testing.T) {
 	setupHermetic(t)
-	repo := t.TempDir()
-	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	// A REAL repository, not the bare `.git` directory the sibling install tests use:
+	// the stub write is gated on git's own ignore verdict, and a directory git cannot
+	// answer for is a state this test must not be silently exercising.
+	repo := gittest.NewRepo(t).Root()
 	res, err := Install(repo, installOpts(), RefusingPrompter{})
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +102,13 @@ func TestBanlistStubSeedsOnlyReservedIdentifiers(t *testing.T) {
 // TestInstallNeverClobbersAHandWrittenGuardHook: a repo's pre-commit hook is the
 // maintainer's, and it may carry gates abcd knows nothing about. Scaffolding creates
 // the hook it is missing and leaves an existing one exactly as it found it.
+//
+// A bare `.git` DIRECTORY, not a real repository: this asserts a refusal, and a
+// refusal holds in every git state. Anything that asserts a WRITE — the stub in
+// particular — must use gittest.NewRepo, because the write is gated on git's own
+// ignore verdict and a directory git cannot answer for deliberately fails closed
+// (TestInstallScaffoldsTheBanlistArtefacts, TestInstalledStubIsIgnoredByRealGit and
+// TestStorePathFailsClosedWhenGitCannotAnswer are the pins for that).
 func TestInstallNeverClobbersAHandWrittenGuardHook(t *testing.T) {
 	setupHermetic(t)
 	repo := t.TempDir()
@@ -390,6 +397,18 @@ func TestScaffoldRefusesToWriteThroughASymlinkedAncestor(t *testing.T) {
 			for _, e := range entries {
 				t.Errorf("scaffolding wrote %q outside the repo through the symlinked %s", e.Name(), tc.dir)
 			}
+			// The two halves are protected by DIFFERENT mechanisms, and asserting only
+			// the shared outcome would let one of them rot silently. The hooks path is
+			// held by the containment root alone. The local tier never reaches a write
+			// at all: increment 1's contained read refuses the escaping store, which
+			// health reports as present-and-unreadable, so no stub gap is raised.
+			det, derr := Detect(repo)
+			if derr != nil {
+				t.Fatal(derr)
+			}
+			if tc.dir == ".abcd/.work.local" && !det.Banlist.PrivateUnreadable {
+				t.Error("a store behind an escaping symlink must read as unreadable, not as absent")
+			}
 		})
 	}
 }
@@ -457,29 +476,169 @@ func TestForeignHookIsNeverReportedAsInstalled(t *testing.T) {
 	}
 }
 
-// TestPublicFamilyIgnoredIsReportedUnenforceable is correctness M4. Under
+// TestPublicFamilyUnderPublicVisibility is correctness M4. Under
 // `visibility: public` the abcd fence ignores the whole `.abcd/` namespace — which
-// is where the public family lives — so the layer that claims to be "committed and
-// CI-enforced" is seen by nobody, exactly where public exposure is the risk. abcd
-// does not move the file (that is a design question a maintainer settles); it
-// refuses to keep claiming enforcement it cannot deliver.
-func TestPublicFamilyIgnoredIsReportedUnenforceable(t *testing.T) {
+// is where the public family lives — so a config written there reaches no CI run,
+// exactly where public exposure is the risk. abcd does not move the file (that is a
+// design question a maintainer settles, iss-176). It declines to write a config it
+// would immediately have to call unenforceable, and it reports the state either way.
+func TestPublicFamilyUnderPublicVisibility(t *testing.T) {
+	t.Run("absent config is not offered", func(t *testing.T) {
+		setupHermetic(t)
+		repo := gittest.NewRepo(t).Root()
+		opts := installOpts()
+		opts.ValueOverrides["visibility"] = "public"
+		if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(banlist.PublicConfigRelPath))); err == nil {
+			t.Error("install wrote a docs-lint config into a path git ignores, delivering no enforcement")
+		}
+		det, err := Detect(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !det.Banlist.PublicConfigIgnored {
+			t.Fatal("health does not report that git ignores the public config's path")
+		}
+		gap := findGap(det.Gaps, "banlist.public_family_missing")
+		if gap == nil {
+			t.Fatal("no gap reports the absent public family")
+		}
+		if gap.Resolvable {
+			t.Error("the gap offers a fix that would produce a config CI never sees")
+		}
+		if !strings.Contains(gap.FixHint, "iss-176") {
+			t.Errorf("the fix hint does not point at the placement question: %q", gap.FixHint)
+		}
+	})
+
+	t.Run("existing config is reported unenforceable", func(t *testing.T) {
+		setupHermetic(t)
+		repo := gittest.NewRepo(t).Root()
+		cfg := filepath.Join(repo, filepath.FromSlash(banlist.PublicConfigRelPath))
+		if err := os.MkdirAll(filepath.Dir(cfg), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cfg, []byte("{\n  \"banned_tokens\": []\n}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		opts := installOpts()
+		opts.ValueOverrides["visibility"] = "public"
+		if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+			t.Fatal(err)
+		}
+		det, err := Detect(repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if det.Banlist.PublicFamily != PublicFamilyIgnored {
+			t.Fatalf("public family = %q; want %q — git ignores the config under public visibility",
+				det.Banlist.PublicFamily, PublicFamilyIgnored)
+		}
+		if findGap(det.Gaps, "banlist.public_family_ignored") == nil {
+			t.Error("no gap reports that the public family never reaches CI")
+		}
+	})
+}
+
+// TestStorePathFailsClosedWhenGitCannotAnswer is minor 1. gitutil.InRepo is false
+// for three different worlds: a plain directory, a repo whose git is missing from
+// PATH, and a corrupt .git. Only the first is safe to treat as "nothing can be
+// committed here"; the other two can commit, and nothing can say whether this path
+// would be — so they fail closed rather than borrow the plain directory's answer.
+func TestStorePathFailsClosedWhenGitCannotAnswer(t *testing.T) {
+	setupHermetic(t)
+	plain := t.TempDir()
+	if !storePathIsSafe(plain) {
+		t.Error("a directory that is not a repository cannot commit anything; the check must be skipped there")
+	}
+	shaped := t.TempDir()
+	if err := os.Mkdir(filepath.Join(shaped, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if storePathIsSafe(shaped) {
+		t.Error("a repo-shaped directory git will not answer for must fail closed, not inherit the plain-folder answer")
+	}
+}
+
+// TestScaffoldPinsTheHooksToLF is minor 8. abcd's own repo gained the attribute on
+// this branch; a repo abcd manages needs it just as much, and for a worse reason —
+// its maintainer did not choose the hook and will read "bad interpreter" as a
+// broken tool rather than as an unprotected repo.
+func TestScaffoldPinsTheHooksToLF(t *testing.T) {
 	setupHermetic(t)
 	repo := gittest.NewRepo(t).Root()
-	opts := installOpts()
-	opts.ValueOverrides["visibility"] = "public"
-	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+	// A .gitattributes the maintainer already owns: the append must preserve it.
+	existing := "*.png binary\n"
+	if err := os.WriteFile(filepath.Join(repo, ".gitattributes"), []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(repo, ".gitattributes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), guardEOLAttribute) {
+		t.Errorf("the committed guard is not pinned to LF:\n%s", got)
+	}
+	if !strings.HasPrefix(string(got), existing) {
+		t.Errorf("the maintainer's own attributes were not preserved:\n%s", got)
 	}
 	det, err := Detect(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if det.Banlist.PublicFamily != PublicFamilyIgnored {
-		t.Fatalf("public family = %q; want %q — git ignores the config under public visibility",
-			det.Banlist.PublicFamily, PublicFamilyIgnored)
+	if !det.Banlist.HookEOLPinned {
+		t.Error("health does not report the pin it just wrote")
 	}
-	if findGap(det.Gaps, "banlist.public_family_ignored") == nil {
-		t.Error("no gap reports that the public family never reaches CI")
+	if findGap(det.Gaps, "banlist.hook_eol_unpinned") != nil {
+		t.Error("the gap survives the fix that closes it")
+	}
+	// Idempotent: a second install appends nothing.
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.ReadFile(filepath.Join(repo, ".gitattributes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(got) {
+		t.Errorf("a re-install rewrote .gitattributes:\n%s", again)
+	}
+}
+
+// TestHooksPathArmedResolvesBothSides is minor 5. git accepts an ABSOLUTE
+// core.hooksPath, and a literal comparison against ".githooks" reads a perfectly
+// armed clone as unarmed — at which point the status line tells the user to replace
+// a working absolute path with a relative one, which is advice to downgrade a
+// config that already works.
+func TestHooksPathArmedResolvesBothSides(t *testing.T) {
+	setupHermetic(t)
+	repo := gittest.NewRepo(t)
+	root := repo.Root()
+	set := func(v string) {
+		cmd := exec.Command("git", "-C", root, "config", "core.hooksPath", v)
+		cmd.Env = repo.Env()
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git config: %v\n%s", err, out)
+		}
+	}
+	if hooksPathArmed(root) {
+		t.Error("an unset hooks path is not armed")
+	}
+	set(".githooks")
+	if !hooksPathArmed(root) {
+		t.Error("a relative hooks path pointing at the committed directory is armed")
+	}
+	set(filepath.Join(root, ".githooks"))
+	if !hooksPathArmed(root) {
+		t.Error("an ABSOLUTE hooks path pointing at the same directory is armed just the same")
+	}
+	set(filepath.Join(root, "other-hooks"))
+	if hooksPathArmed(root) {
+		t.Error("a hooks path pointing somewhere else is not armed")
 	}
 }

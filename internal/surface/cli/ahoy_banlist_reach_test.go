@@ -9,6 +9,7 @@ import (
 
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // TestAhoyStatusStatesThePrivateBanlistReach is spc-20 AC7 on the status board.
@@ -47,10 +48,9 @@ func TestAhoyStatusStatesThePrivateBanlistReach(t *testing.T) {
 // this machine has opted into the private layer at all.
 func TestAhoyStatusReportsEachScaffoldedArtefact(t *testing.T) {
 	hermeticEnv(t)
-	repo := t.TempDir()
-	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	// A REAL repository: the stub write is gated on git's own ignore verdict, and a
+	// bare `.git` directory is a state the guard deliberately fails closed on.
+	repo := gittest.NewRepo(t).Root()
 	t.Chdir(repo)
 
 	bare := string(runCLI(t, "ahoy"))

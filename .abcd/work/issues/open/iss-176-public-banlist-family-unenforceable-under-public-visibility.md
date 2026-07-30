@@ -34,3 +34,11 @@ Candidate reconciliations for a maintainer to pick between:
   per-subdirectory exception in a table that has none today.
 - Keep the placement and declare the public layer private-visibility-only,
   making the private layer the answer for a public repo.
+
+Since the second review round abcd also declines to CREATE the config where git
+would ignore it: the absent-family gap is non-resolvable there and its fix hint
+points here, because offering to write a file abcd would immediately report as
+unenforceable is an offer that fixes nothing. A public-visibility repo therefore
+has no public layer at all until this question is settled — which is the honest
+state, and the reason it needs settling.
+

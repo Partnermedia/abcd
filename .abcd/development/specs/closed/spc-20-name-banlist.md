@@ -80,3 +80,41 @@ managed-repo NEXT.md privacy-leak investigation (iss-154..iss-158); scope
 extension to machine identifiers recorded in iss-158. Related principle:
 `examples-use-reserved-identifiers` (seeding). Related discipline path:
 itd-79 (registry + lint promotion pattern).
+
+## Acceptance-criteria satisfaction
+
+AC as numbered in itd-74 → covering evidence.
+
+1. **Public gate** — the generalised `banned_tokens` family in
+   `.abcd/docs-lint.json` with the per-line allow escape; verb-written entries
+   under the `names/` prefix (`internal/core/banlist/public_test.go`), enforced by
+   `abcd docs lint`. The layer's reach is bounded by what git tracks, and a config
+   git ignores is now reported as unenforceable rather than claimed
+   (`banlist.public_family_ignored`; the placement question is iss-176).
+2. **Refuse by key** — the committed guard's output contract, asserted against a
+   fixture store in `internal/core/banlist/hook_test.go`: the refusal names the key,
+   and the pattern and matched text appear nowhere in any output.
+3. **Machine identifiers** — hostname, IP, CIDR and MAC entries are ordinary
+   entries with no special case, on both readers; the shared corpora under
+   `testdata/` carry them.
+4. **Absent list** — the guard's INACTIVE branch (absent store) and NO ENTRIES
+   branch (present, nothing usable) each warn loudly and exit zero, pinned by
+   `TestPreCommitHook_AbsentBanlistWarnsLoudly` and its entryless sibling.
+5. **Scaffold** — `abcd ahoy` writes the guard hooks, the merge half beside abcd's
+   own guard only, the public family, the EOL pin, and the gitignored stub
+   (`internal/core/ahoy/banlist_scaffold_test.go`). Every write is create-if-absent
+   and contained; the stub lands only where `git check-ignore` reports the path as
+   ignored. `TestBanlistStubSeedsOnlyReservedIdentifiers` asserts the stub's
+   examples against the repo's own network-identifier detector, with a control
+   value proving the detector is armed.
+6. **Verb visibility** — private entries render by key only; the redaction is
+   structural (the exported entry type carries no pattern field), asserted in
+   `internal/surface/cli/banlist_surface_test.go`.
+7. **Honest reach** — `banlist.PrivateReachNote` is stated by the verb, the ahoy
+   status board and the JSON envelope, and it names both limits: opt-in machines
+   only, and only the commits git runs a hook for.
+
+Residual, recorded rather than closed: the private layer cannot cover a rebase,
+`git am`, `git revert`, a cherry-pick or `--no-verify` — a property of where git
+runs hooks, which is why the reach sentence names them.
+

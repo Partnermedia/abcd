@@ -82,7 +82,8 @@ const PublicIDPrefix = "names/"
 // at opt-in would leave a reader believing an opted-in machine is fully covered,
 // which is the belief that gets a name committed.
 const PrivateReachNote = "CI cannot enforce this layer — it protects only machines that have opted in, " +
-	"and only the commits git runs a hook for (a rebase, `git am`, or a cherry-pick bypasses it, as does --no-verify)"
+	"and only the commits git runs a hook for (e.g. a rebase, `git am`, `git revert`, a cherry-pick or a " +
+	"stash reapplied into a commit bypasses it, as does --no-verify)"
 
 // maxStoreBytes caps every banlist read (trust boundary), following the guard
 // registry's precedent.

@@ -366,12 +366,6 @@ type PrivateSummary struct {
 	// Present distinguishes "this machine has not opted in" from "opted in with no
 	// entries" — the two check exactly as much, and both must be visible as distinct.
 	Present bool `json:"present"`
-	// Ignored is git's own verdict on the store's path. The layer's whole safety
-	// rests on the file being untracked, and only git can answer that. It is
-	// meaningful only when Present and inside a git repo; outside one it is true,
-	// because a repo that is not a repo cannot commit the file (the same posture
-	// requireIgnoredStore takes).
-	Ignored bool `json:"ignored"`
 	// Keyed reports the declared format, which decides what every line means.
 	Keyed bool `json:"keyed"`
 	// Entries counts the lines a reader can use. Unparsed counts the rest — the
@@ -385,6 +379,11 @@ type PrivateSummary struct {
 // a fault. A store that cannot be read for what it is — a damaged declaration, an
 // unreadable file — is an error, because a status board must not render it as
 // healthy.
+//
+// It asks git NOTHING. The ignore question belongs to the caller, which is usually
+// asking it about several paths at once and can batch them into one subprocess; a
+// summariser that spawned its own would multiply forks across a detection pass that
+// runs on every status render.
 func SummarisePrivate(repoRoot string) (PrivateSummary, error) {
 	data, err := readPrivate(repoRoot)
 	switch {
@@ -398,16 +397,13 @@ func SummarisePrivate(repoRoot string) (PrivateSummary, error) {
 	if err != nil {
 		return PrivateSummary{}, err
 	}
-	sum := PrivateSummary{Present: true, Keyed: keyed, Ignored: true}
+	sum := PrivateSummary{Present: true, Keyed: keyed}
 	for _, e := range entries {
 		if e.unparsed {
 			sum.Unparsed++
 			continue
 		}
 		sum.Entries++
-	}
-	if gitutil.InRepo(repoRoot) {
-		sum.Ignored = gitutil.IsIgnored(repoRoot, PrivateRelPath)
 	}
 	return sum, nil
 }
