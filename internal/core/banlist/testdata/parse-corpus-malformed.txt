@@ -1,0 +1,14 @@
+# abcd-banlist: keyed
+# Fixture banlist — a keyed store carrying one of every UNUSABLE line class, so
+# both readers can be shown to refuse the SAME line numbers without echoing any
+# line content. Values are reserved-documentation or persona-derived only.
+#
+# Line 11 is indented with U+00A0 (a non-breaking space) and line 12 separates
+# its fields with U+000B (a vertical tab): neither is an ASCII space or tab, so
+# neither line parses as an entry, and both readers must say so identically.
+
+widget-partner   widgetworks
+ nbsp-key   partnerco\.example
+vt-keypartnerco\.example
+[unclosed
+bad-pattern      [unclosed

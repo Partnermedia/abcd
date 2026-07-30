@@ -27,12 +27,33 @@ package banlist
 import (
 	"errors"
 	"regexp"
+	"time"
+
+	"github.com/REPPL/abcd-cli/internal/core/lint"
 )
 
 // PrivateRelPath is the gitignored per-machine private banlist, repo-relative. It
 // sits in the local-ephemeral tier, which the three-tier layout gitignores as a
 // whole — the one placement where a private pattern is safe from a `git add -A`.
 const PrivateRelPath = ".abcd/.work.local/private-names.txt"
+
+// privateDirRelPath is the local-ephemeral tier that holds the private store and
+// its lock, repo-relative and slash-separated (an os.Root path).
+const privateDirRelPath = ".abcd/.work.local"
+
+// privateLockFilename and publicLockFilename name the load-modify-write locks.
+// BOTH live in the local-ephemeral tier: a lock file beside the committed
+// docs-lint config would be untracked litter in a committed directory, and the
+// local tier is gitignored as a whole.
+const (
+	privateLockFilename = "banlist-private.lock"
+	publicLockFilename  = "banlist-public.lock"
+)
+
+// storeLockTimeout bounds the wait for either store's lock, following the capture
+// allocator's precedent: long enough to outlast a concurrent verb, short enough
+// that a stale holder is reported rather than waited on for ever.
+const storeLockTimeout = 5 * time.Second
 
 // PublicConfigRelPath is the committed docs-lint config that holds the public
 // layer, repo-relative.
@@ -75,26 +96,38 @@ var (
 	// ErrMalformedStore reports a store whose bytes cannot be read as this layer's
 	// format at all (as opposed to one unusable line, which is reported by number).
 	ErrMalformedStore = errors.New("banlist store is malformed")
+	// ErrLegacyStore reports a private store with no format declaration and at
+	// least one entry. Its lines are whole-line patterns, so a verb may not write a
+	// keyed line into it: doing so would change what every other line means.
+	ErrLegacyStore = errors.New("banlist store predates the keyed format")
+	// ErrStoreNotIgnored reports a private store at a path git would track. The
+	// layer's whole safety rests on the file being untracked.
+	ErrStoreNotIgnored = errors.New("banlist private store is not gitignored")
+	// ErrStoreLocked reports that another process holds the store's lock.
+	ErrStoreLocked = errors.New("banlist store is locked by another process")
 )
 
 // keyRe is the portable key charset, shared by both layers and by the shell hook's
-// own parser. It deliberately excludes every regular-expression metacharacter:
-// that is what lets the hook split "KEY<whitespace>PATTERN" safely, because the
-// head of a broken regex can never pass for a key and so falls back to the legacy
-// whole-line reading instead of silently changing what an old banlist matches.
+// own parser. It excludes every regular-expression metacharacter so a key can
+// never be mistaken for the head of a pattern, and it excludes CR and LF so a key
+// can never write a second line into a line-oriented store. What makes the split
+// safe is NOT the charset, though — it is the store's format declaration: a keyed
+// store splits every line and refuses one that will not, a legacy store splits
+// none. Nothing is decided per line by how a field looks.
 var keyRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
 // validKey reports whether key is usable as a banlist key.
 func validKey(key string) bool { return keyRe.MatchString(key) }
 
-// validPattern checks a pattern compiles under the case-insensitive reading both
-// layers use (the hook's `grep -iE`, the linter's own compile). The compile error
-// is DISCARDED rather than wrapped: Go's regexp errors quote the expression, which
-// would leak a private pattern into an error message.
-func validPattern(pattern string) bool {
-	if pattern == "" {
+// validPublicPattern checks a PUBLIC pattern through the linter's own compile path,
+// against the exact string that will be stored — the public layer's engine is Go's
+// regexp, because `abcd docs lint` is what enforces it, and a check against
+// anything else would be a check of a different thing. (The private layer's engine
+// is grep; see checkPattern.) The compile error is DISCARDED: Go's regexp errors
+// quote the expression, and one error path for both layers must never be the leak.
+func validPublicPattern(stored string) bool {
+	if stored == "" {
 		return false
 	}
-	_, err := regexp.Compile("(?i)" + pattern)
-	return err == nil
+	return lint.ValidateBannedToken(lint.BannedToken{Pattern: stored, AllowContext: []string{docsLintAllowEscape}}) == nil
 }

@@ -321,3 +321,46 @@ func firstKey(t *testing.T, root string) string {
 	}
 	return rep.Entries[0].Key
 }
+
+// TestAddPublicIsCaseInsensitiveLikeTheCuratedEntries pins CI parity with the
+// hand-written half of the family: every curated entry opens with (?i) and the docs
+// promise the public layer matches case-insensitively, but the linter compiles the
+// STORED pattern raw — so an entry written without the flag is case-SENSITIVE and a
+// mixed-case spelling of the banned name walks straight through CI. The flag is
+// added once, at the store, and the proof is the lint verdict rather than the string.
+func TestAddPublicIsCaseInsensitiveLikeTheCuratedEntries(t *testing.T) {
+	root, _ := realConfig(t)
+	res, err := AddPublic(AddPublicRequest{RepoRoot: root, Key: "widgetworks", Pattern: `\bwidgetworks\b`})
+	if err != nil {
+		t.Fatalf("AddPublic: %v", err)
+	}
+	if !strings.HasPrefix(res.Entry.Pattern, "(?i)") {
+		t.Errorf("stored pattern = %q; it must carry (?i) like every hand-curated entry", res.Entry.Pattern)
+	}
+
+	cfg, err := lint.LoadConfig(filepath.Join(root, filepath.FromSlash(PublicConfigRelPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := t.TempDir()
+	p := filepath.Join(docs, "docs", "named.md")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("# t\n\nBuilt with WidgetWorks.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	findings, err := lint.Lint(cfg, docs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits := 0
+	for _, f := range findings {
+		if f.RuleID == "names/widgetworks" {
+			hits++
+		}
+	}
+	if hits != 1 {
+		t.Errorf("mixed-case mention produced %d findings, want 1 — the entry is case-sensitive", hits)
+	}
+}

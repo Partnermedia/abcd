@@ -31,42 +31,33 @@ func locateHook(t *testing.T) string {
 	return hook
 }
 
-// hookRun stands up a throwaway repo with the committed hook installed, stages
-// `staged` as a file's content, and attempts a real commit. It returns whether
-// the commit was refused plus every byte the hook wrote. banlist == "" leaves
-// the private banlist file absent (the fresh-clone case).
-func hookRun(t *testing.T, banlist, staged string) (blocked bool, output string) {
+// hookRepo is a throwaway repo with the committed hook installed, so a test can
+// stage whatever shape it needs (a rename, a binary blob, a huge file, a
+// .gitattributes that suppresses the textual diff) and then attempt a real commit.
+type hookRepo struct {
+	t    *testing.T
+	dir  string
+	env  []string
+	name string
+}
+
+// newHookRepo initialises the repo, installs the committed hook, and writes the
+// private banlist when body != "" (body == "" leaves it absent: the fresh-clone
+// case).
+func newHookRepo(t *testing.T, body string) *hookRepo {
 	t.Helper()
 	hook := locateHook(t)
-	env := gittest.Env(t)
-	dir := t.TempDir()
+	r := &hookRepo{t: t, dir: t.TempDir(), env: gittest.Env(t)}
 
-	git := func(mustPass bool, args ...string) (string, error) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = env
-		out, err := cmd.CombinedOutput()
-		if err != nil && mustPass {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-		return string(out), err
+	r.git("init")
+	r.git("config", "user.name", "Alice Example")
+	r.git("config", "user.email", "alice@example.com")
+
+	if body != "" {
+		r.writeBanlist(body)
 	}
 
-	git(true, "init")
-	git(true, "config", "user.name", "Alice Example")
-	git(true, "config", "user.email", "alice@example.com")
-
-	if banlist != "" {
-		local := filepath.Join(dir, ".abcd", ".work.local")
-		if err := os.MkdirAll(local, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(local, "private-names.txt"), []byte(banlist), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	hooksDir := filepath.Join(dir, ".git", "hooks")
+	hooksDir := filepath.Join(r.dir, ".git", "hooks")
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -77,21 +68,75 @@ func hookRun(t *testing.T, banlist, staged string) (blocked bool, output string)
 	if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), src, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	return r
+}
 
-	if err := os.WriteFile(filepath.Join(dir, "note.md"), []byte(staged), 0o644); err != nil {
-		t.Fatal(err)
+// writeBanlist installs the private store's bytes.
+func (r *hookRepo) writeBanlist(body string) {
+	r.t.Helper()
+	local := filepath.Join(r.dir, ".abcd", ".work.local")
+	if err := os.MkdirAll(local, 0o755); err != nil {
+		r.t.Fatal(err)
 	}
-	git(true, "add", "note.md")
-	out, err := git(false, "commit", "-m", "t")
+	if err := os.WriteFile(filepath.Join(local, "private-names.txt"), []byte(body), 0o600); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// git runs a git command that must succeed.
+func (r *hookRepo) git(args ...string) string {
+	r.t.Helper()
+	out, err := r.tryGit(args...)
+	if err != nil {
+		r.t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return out
+}
+
+// tryGit runs a git command and returns its combined output and error.
+func (r *hookRepo) tryGit(args ...string) (string, error) {
+	r.t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", r.dir}, args...)...)
+	cmd.Env = r.env
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// write puts content at a repo-relative path, creating parents.
+func (r *hookRepo) write(rel, content string) {
+	r.t.Helper()
+	p := filepath.Join(r.dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// commit attempts a commit and reports whether the hook refused it, plus every
+// byte the hook wrote.
+func (r *hookRepo) commit() (blocked bool, output string) {
+	r.t.Helper()
+	out, err := r.tryGit("commit", "-m", "t")
 	return err != nil, out
 }
 
-// corpus is the shared fixture banlist read by BOTH parsers: this hook test and
-// the Go store's parse test (parse_test.go). One file, two readers — the only
-// way the shell hook and the Go package can be shown to agree on the format.
-func corpus(t *testing.T) string {
+// hookRun is the common shape: stage `staged` as one file's content and attempt a
+// commit against the given banlist body.
+func hookRun(t *testing.T, banlist, staged string) (blocked bool, output string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "parse-corpus.txt"))
+	r := newHookRepo(t, banlist)
+	r.write("note.md", staged)
+	r.git("add", "note.md")
+	return r.commit()
+}
+
+// corpus reads one of the shared fixture banlists — the files the Go parser reads
+// too, so both readers are driven by identical bytes.
+func corpus(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,10 +158,36 @@ func TestPreCommitHook_AbsentBanlistWarnsLoudly(t *testing.T) {
 	}
 }
 
+// TestPreCommitHook_EntrylessStoreWarnsLoudly is the other half of AC4, and the
+// one an emptied store hits: a store that exists but yields no entries checks
+// exactly as much as an absent one, so it must be exactly as loud. A refresh that
+// truncates the store must not convert the warning into silence.
+func TestPreCommitHook_EntrylessStoreWarnsLoudly(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"empty file", "\n"},
+		{"comments only", "# abcd-banlist: keyed\n# nothing yet\n\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			blocked, out := hookRun(t, tc.body, "widgetworks ships today\n")
+			if blocked {
+				t.Fatalf("commit blocked by an entryless store\n%s", out)
+			}
+			for _, want := range []string{"WARNING", "NO ENTRIES"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("hook output does not mention %q; an entryless store checks nothing and must say so\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
 // TestPreCommitHook_RefusesByKeyOnly pins AC2: the refusal names the entry key
 // and nothing else — not the matched string, not the pattern value.
 func TestPreCommitHook_RefusesByKeyOnly(t *testing.T) {
-	const banlist = "widget-partner   widgetworks\n"
+	const banlist = "# abcd-banlist: keyed\nwidget-partner   widgetworks\n"
 	blocked, out := hookRun(t, banlist, "the widgetworks deal closes friday\n")
 	if !blocked {
 		t.Fatalf("commit not blocked by a matching banlist entry\n%s", out)
@@ -131,12 +202,12 @@ func TestPreCommitHook_RefusesByKeyOnly(t *testing.T) {
 	}
 }
 
-// TestPreCommitHook_MachineIdentifiers pins AC3: hostnames, IPv4/IPv6 addresses,
-// CIDR prefixes, and MAC addresses are matched exactly as name entries are. Every
-// value here is reserved for documentation (RFC 5737/3849/2606/7042) or derived
-// from the persona registry.
-func TestPreCommitHook_MachineIdentifiers(t *testing.T) {
-	body := corpus(t)
+// TestPreCommitHook_KeyedCorpus pins AC3 on the keyed corpus: hostnames, IPv4/IPv6
+// addresses, CIDR prefixes, and MAC addresses are matched exactly as name entries
+// are, and a tab separates fields exactly as spaces do. Every value is reserved
+// for documentation (RFC 5737/3849/2606/7042) or derived from the persona registry.
+func TestPreCommitHook_KeyedCorpus(t *testing.T) {
+	body := corpus(t, "parse-corpus.txt")
 	for _, tc := range corpusMustBlock {
 		t.Run(tc.name, func(t *testing.T) {
 			blocked, out := hookRun(t, body, tc.text)
@@ -153,30 +224,56 @@ func TestPreCommitHook_MachineIdentifiers(t *testing.T) {
 	}
 }
 
-// TestPreCommitHook_LegacyBarePatternStillBlocks pins the compatibility rule: a
-// banlist written in the old one-pattern-per-line format must keep blocking.
-// Protection never weakens because the format grew a key column.
-func TestPreCommitHook_LegacyBarePatternStillBlocks(t *testing.T) {
-	blocked, out := hookRun(t, corpus(t), "partnerco.example signed\n")
-	if !blocked {
-		t.Fatalf("legacy bare-pattern line did not block\n%s", out)
-	}
-	if !strings.Contains(out, "entry-") {
-		t.Errorf("refusal does not name the synthetic key for a bare pattern\n%s", out)
-	}
-	if strings.Contains(out, "partnerco") {
-		t.Errorf("output leaks the pattern/matched text\n%s", out)
+// TestPreCommitHook_LegacyStoreReadsWholeLines pins the compatibility rule at its
+// exact strength: a store with no format declaration is read one WHOLE-LINE
+// pattern per line, so it keeps matching precisely what it always matched, and no
+// part of a line is ever read — or printed — as a key.
+func TestPreCommitHook_LegacyStoreReadsWholeLines(t *testing.T) {
+	body := corpus(t, "parse-corpus-legacy.txt")
+	for _, tc := range legacyMustBlock {
+		t.Run(tc.name, func(t *testing.T) {
+			blocked, out := hookRun(t, body, tc.text)
+			if !blocked {
+				t.Fatalf("legacy line did not block; want a refusal naming %q\n%s", tc.key, out)
+			}
+			if !strings.Contains(out, tc.key) {
+				t.Errorf("refusal does not name the synthetic key %q\n%s", tc.key, out)
+			}
+			for _, leak := range append([]string{"partnerco"}, legacyFirstFields...) {
+				if strings.Contains(out, leak) {
+					t.Errorf("output leaks %q: on a legacy line the first field is PART OF THE PATTERN, never a key\n%s", leak, out)
+				}
+			}
+		})
 	}
 }
 
-// TestPreCommitHook_PermittedCorpusPasses is the must-pass half of the guard's
-// bidirectional proof (guards-prove-themselves): content that matches no entry
-// commits cleanly, so the guard is not simply refusing everything. It also pins
-// that comment and blank lines are skipped rather than read as patterns.
+// TestPreCommitHook_LegacyStoreDoesNotSplitKeys is the must-pass half of the same
+// rule and the detector for the key-splitting leak: if the hook split a legacy line
+// on whitespace, the remainder-only patterns below would start matching and the
+// first field would be printed as a key.
+func TestPreCommitHook_LegacyStoreDoesNotSplitKeys(t *testing.T) {
+	body := corpus(t, "parse-corpus-legacy.txt")
+	for _, tc := range legacyMustPass {
+		t.Run(tc.name, func(t *testing.T) {
+			blocked, out := hookRun(t, body, tc.text)
+			if blocked {
+				t.Fatalf("commit refused for content matching no whole-line pattern\n%s", out)
+			}
+		})
+	}
+}
+
+// TestPreCommitHook_PermittedCorpusPasses is the must-pass half of the keyed
+// guard's bidirectional proof (guards-prove-themselves): content that matches no
+// entry commits cleanly, so the guard is not simply refusing everything. It also
+// pins that comment and blank lines — including the format declaration itself —
+// are skipped rather than read as patterns.
 func TestPreCommitHook_PermittedCorpusPasses(t *testing.T) {
+	body := corpus(t, "parse-corpus.txt")
 	for _, tc := range corpusMustPass {
 		t.Run(tc.name, func(t *testing.T) {
-			blocked, out := hookRun(t, corpus(t), tc.text)
+			blocked, out := hookRun(t, body, tc.text)
 			if blocked {
 				t.Fatalf("commit refused for content matching no entry\n%s", out)
 			}
@@ -184,19 +281,39 @@ func TestPreCommitHook_PermittedCorpusPasses(t *testing.T) {
 	}
 }
 
-// TestPreCommitHook_MalformedLineFailsSafe pins the malformed-entry contract: an
-// unusable pattern is never silently skipped (that would weaken the guard) and
-// its content is never echoed — the refusal names the line number alone.
-func TestPreCommitHook_MalformedLineFailsSafe(t *testing.T) {
-	const banlist = "widget-partner   widgetworks\nbad-entry        [unclosed\n"
-	blocked, out := hookRun(t, banlist, "nothing sensitive here\n")
+// TestPreCommitHook_UnusableLinesFailSafe pins the malformed-entry contract on the
+// shared corpus: every unusable line class refuses the commit by LINE NUMBER, none
+// is silently skipped, and no line's content is echoed. A keyed store's unparseable
+// line is the important case — its first field may be the secret, so it has no key
+// and the hook must not invent one out of the line's bytes.
+func TestPreCommitHook_UnusableLinesFailSafe(t *testing.T) {
+	blocked, out := hookRun(t, corpus(t, "parse-corpus-malformed.txt"), "nothing sensitive here\n")
 	if !blocked {
-		t.Fatalf("malformed banlist line did not fail safe\n%s", out)
+		t.Fatalf("unusable banlist lines did not fail safe\n%s", out)
 	}
-	if !strings.Contains(out, "line 2") {
-		t.Errorf("refusal does not name the offending line number\n%s", out)
+	for _, line := range malformedUnusableLines {
+		want := "line " + itoa(line)
+		if !strings.Contains(out, want) {
+			t.Errorf("refusal does not name %q; every unusable line must be reported\n%s", want, out)
+		}
 	}
-	if strings.Contains(out, "unclosed") {
-		t.Errorf("output echoes the malformed line's content\n%s", out)
+	for _, leak := range []string{"unclosed", "partnerco", "nbsp-key", "vt-key"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("output echoes %q from an unusable line; the content is withheld by design\n%s", leak, out)
+		}
 	}
+}
+
+// itoa keeps the assertions above free of a strconv import in a file that is
+// otherwise all shell-driving.
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b []byte
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
 }

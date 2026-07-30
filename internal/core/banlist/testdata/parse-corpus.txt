@@ -1,11 +1,13 @@
-# Fixture banlist — read by BOTH the Go parser (parse_test.go) and the committed
-# .githooks/pre-commit hook (hook_test.go), so the two can be shown to agree on
-# one format. Every value below is reserved for documentation (RFC 5737/3849/
-# 2606/7042) or derived from the persona registry; nothing here names a real
-# machine, network, or organisation.
+# abcd-banlist: keyed
+# Fixture banlist — a KEYED store: line 1 above declares the format, so every
+# non-comment line below MUST parse as KEY<space-or-tab>PATTERN. Read by BOTH
+# readers of that format — the Go parser (private_test.go) and the committed
+# .githooks/pre-commit hook (hook_test.go). Every value is reserved for
+# documentation (RFC 5737/3849/2606/7042) or derived from the persona registry;
+# nothing here names a real machine, network, or organisation.
 #
-# Format: KEY<whitespace>PATTERN. Patterns are POSIX extended regular
-# expressions matched case-insensitively.
+# Patterns are POSIX extended regular expressions, matched case-insensitively by
+# the enforcing grep.
 
 widget-partner   widgetworks
 lab-host         alice-laptop\.example\.com
@@ -15,5 +17,4 @@ lab-mac          00:00:5E:00:53:1A
 lab-v6           2001:db8::5
 
   indented-key   carol-server\.test
-
-partnerco\.example
+tab-key	widgetco\.example

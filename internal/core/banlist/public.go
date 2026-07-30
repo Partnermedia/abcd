@@ -143,7 +143,8 @@ func AddPublic(req AddPublicRequest) (PublicResult, error) {
 	if !validKey(req.Key) {
 		return PublicResult{}, fmt.Errorf("%w: %q (want [A-Za-z0-9][A-Za-z0-9._/-]*)", ErrInvalidKey, req.Key)
 	}
-	if !validPattern(req.Pattern) {
+	stored := storedPublicPattern(req.Pattern)
+	if !validPublicPattern(stored) {
 		return PublicResult{}, fmt.Errorf("%w for key %q: empty, or not a usable regular expression", ErrInvalidPattern, req.Key)
 	}
 	severity := req.Severity
@@ -174,7 +175,7 @@ func AddPublic(req AddPublicRequest) (PublicResult, error) {
 		}
 	}
 
-	entry, err := encodeEntry(id, req.Pattern, severity, successor)
+	entry, err := encodeEntry(id, stored, severity, successor)
 	if err != nil {
 		return PublicResult{}, err
 	}
@@ -200,8 +201,22 @@ func AddPublic(req AddPublicRequest) (PublicResult, error) {
 	}
 	return PublicResult{
 		Path:  PublicConfigRelPath,
-		Entry: PublicEntry{ID: id, Pattern: req.Pattern, Severity: severity, Key: req.Key, Managed: true},
+		Entry: PublicEntry{ID: id, Pattern: stored, Severity: severity, Key: req.Key, Managed: true},
 	}, nil
+}
+
+// storedPublicPattern is the exact string an entry carries on disk. Every one of
+// the config's hand-curated entries opens with (?i), and the docs promise the
+// public layer matches case-insensitively — but the linter compiles the stored
+// pattern RAW, so an entry without the flag is case-SENSITIVE and a mixed-case
+// spelling of the banned name walks through CI. The prefix is added here, once, so
+// a verb-written entry is enforced exactly as a hand-written one is; a pattern that
+// already carries it is left alone rather than double-flagged.
+func storedPublicPattern(pattern string) string {
+	if pattern == "" || strings.HasPrefix(pattern, "(?i)") {
+		return pattern
+	}
+	return "(?i)" + pattern
 }
 
 // RemovePublic drops the verb-managed entry with the given key. Entries outside the

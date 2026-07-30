@@ -10,22 +10,39 @@
 # become). An absent banlist WARNS LOUDLY and lets the commit through: the layer
 # protects machines that opted in, and silence must never impersonate protection.
 #
-# ENTRY FORMAT (itd-74 / spc-20), one per line:
+# STORE FORMAT (itd-74 / spc-20). The banlist declares its own format on its FIRST
+# line, and that one line decides the whole file:
 #
-#     KEY<whitespace>PATTERN
+#   * FIRST LINE exactly `# abcd-banlist: keyed`  ->  KEYED store. Every
+#     non-comment, non-blank line MUST parse as
 #
-#   KEY      a stable, non-sensitive handle: [A-Za-z0-9][A-Za-z0-9._/-]*. It is
-#            the ONLY part of an entry this hook ever prints.
-#   PATTERN  a POSIX extended regular expression, matched case-insensitively
-#            (`grep -iE`). Machine identifiers — hostnames, IPv4/IPv6 addresses,
-#            CIDR prefixes, MAC addresses, device names — are ordinary patterns.
+#         KEY<space-or-tab>PATTERN
 #
-# Blank lines and lines whose first non-blank character is '#' are ignored. A line
-# that does not parse as KEY+PATTERN is read as a bare pattern under the synthetic
-# key `entry-<line-number>`, so a banlist in the older one-pattern-per-line format
-# keeps blocking exactly what it blocked before. A pattern the regex engine
-# refuses is a REFUSAL naming its line number — never a silent skip, and never an
-# echo of the line's content.
+#     KEY      a stable, non-sensitive handle: [A-Za-z0-9][A-Za-z0-9._/-]*. It is
+#              the ONLY part of an entry this hook ever prints.
+#     PATTERN  a POSIX extended regular expression, matched case-insensitively
+#              (`grep -iE`), so `(?i)` is never needed and Perl escapes such as
+#              `\d`, `\w` and `\b` are NOT supported. Machine identifiers —
+#              hostnames, IPv4/IPv6 addresses, CIDR prefixes, MAC addresses,
+#              device names — are ordinary patterns.
+#
+#     A line that does not parse is a REFUSAL naming its line number only. There is
+#     no fallback: guessing per line whether a first field "looks like a key" would
+#     print part of a pattern — the secret — as a key.
+#
+#   * NO SUCH FIRST LINE  ->  LEGACY store, the format this guard shipped with.
+#     Every non-comment, non-blank line is one WHOLE-LINE pattern under the
+#     synthetic key `entry-<line-number>`, and NO line is ever split. An old
+#     banlist therefore keeps matching exactly what it always matched, and no part
+#     of any line can be printed.
+#
+# Blank lines and lines whose first non-blank character is '#' are ignored. Leading
+# and trailing ASCII spaces and tabs are stripped — ASCII only, matching the Go
+# parser byte for byte, because a whitespace class that differs between the two
+# readers is a line one of them silently ignores. A pattern the regex engine refuses
+# is a REFUSAL naming its line number — never a silent skip, and never an echo of
+# the line's content. A store that exists but yields NO entries warns as loudly as
+# an absent one: it checks exactly as much.
 #
 # Companion to the public docs-lint banned-token family: that one bans *public*
 # tokens in CI; this one bans *private* ones locally, keeping their literal string
@@ -65,7 +82,20 @@ if [ -f "$identity_pin" ]; then
 fi
 # --- end iss-62 identity gate -----------------------------------------------
 
+# --- itd-74 private name guard ----------------------------------------------
+# Turn OFF xtrace for the rest of this hook, however it was inherited (a caller's
+# `set -x`, SHELLOPTS, or BASH_ENV): tracing this section would print every banlist
+# pattern to stderr, which is the one thing the layer exists to prevent.
+case $- in *x*) set +x ;; esac
+# C locale so the byte classes below and grep's case folding do not depend on the
+# committer's environment. The Go parser pins the same ASCII-only reading.
+LC_ALL=C
+export LC_ALL
+
 banlist=".abcd/.work.local/private-names.txt"
+banlist_dir=".abcd/.work.local"
+format_decl="# abcd-banlist: keyed"
+tab=$'\t'
 
 # Refresh the generated block from the user-level sources corpus when present
 # (itd-76 dogfood): keeps the banlist as fresh as the current commit. No-op on
@@ -77,14 +107,33 @@ if [ -x "$sync_banlist" ]; then
     || echo "pre-commit: warning — banlist refresh failed; checking existing banlist." >&2
 fi
 
+# A path that exists but is not a REGULAR FILE is tampering, not non-adoption: a
+# symlink (which `git add -f` can commit, so a checkout materialises it) swaps or
+# empties the guard, and a directory or FIFO there would take the "absent" branch
+# and read as "this machine has not opted in". Both are refusals, and -L is tested
+# first because -f follows a symlink.
+if [ -L "$banlist" ] || [ -L "$banlist_dir" ]; then
+  echo "pre-commit: BLOCKED — $banlist (or its directory) is a SYMLINK." >&2
+  echo "            the private banlist must be a regular file in this working tree; a link can point" >&2
+  echo "            the guard at an empty or attacker-chosen list. Replace it with the real file." >&2
+  exit 1
+fi
+if [ -e "$banlist" ] && [ ! -f "$banlist" ]; then
+  echo "pre-commit: BLOCKED — $banlist exists but is not a regular file." >&2
+  echo "            a directory, FIFO, or device there cannot be read as a banlist, and must not be" >&2
+  echo "            mistaken for a machine that has not opted in." >&2
+  exit 1
+fi
+
 if [ ! -f "$banlist" ]; then
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard is INACTIVE on this machine." >&2
   echo "pre-commit:   $banlist is absent, so NOTHING is checked" >&2
   echo "pre-commit:   against it and this commit proceeds unprotected by that layer." >&2
-  echo "pre-commit:   Opt in: add one 'KEY<whitespace>PATTERN' line per entry to that" >&2
-  echo "pre-commit:   file (it is untracked and stays on this machine), or run" >&2
-  echo "pre-commit:   'abcd banlist add --private <key> <pattern>'." >&2
+  echo "pre-commit:   Opt in: run 'abcd banlist add --private <key> <pattern>', or" >&2
+  echo "pre-commit:   write that file yourself with '$format_decl'" >&2
+  echo "pre-commit:   as its first line and one 'KEY<space-or-tab>PATTERN' line per" >&2
+  echo "pre-commit:   entry (it is untracked and stays on this machine)." >&2
   echo "pre-commit: ****************************************************************" >&2
   exit 0
 fi
@@ -101,34 +150,94 @@ trap 'rm -f "$staged_text"' EXIT
 git diff --cached --unified=0 --diff-filter=ACM | grep -E '^\+' | grep -vE '^\+\+\+' >"$staged_text" || true
 [ -s "$staged_text" ] || exit 0
 
+# Which format? The FIRST line decides the whole file, once, before any entry is
+# read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
+keyed=0
+decl=""
+if IFS= read -r decl < "$banlist" || [ -n "$decl" ]; then
+  while [ -n "$decl" ]; do
+    case $decl in
+      *' ') decl="${decl% }" ;;
+      *"$tab") decl="${decl%"$tab"}" ;;
+      *$'\r') decl="${decl%$'\r'}" ;;
+      *) break ;;
+    esac
+  done
+  if [ "$decl" = "$format_decl" ]; then keyed=1; fi
+fi
+
 rc=0
 lineno=0
+entries=0
 while IFS= read -r raw || [ -n "$raw" ]; do
   lineno=$((lineno + 1))
-  line="${raw%$'\r'}"
-  while [ "$line" != "${line#[[:space:]]}" ]; do line="${line#[[:space:]]}"; done
-  while [ "$line" != "${line%[[:space:]]}" ]; do line="${line%[[:space:]]}"; done
+  line="$raw"
+  # Trailing, then leading, ASCII space/tab (plus a trailing CR). ASCII ONLY: the Go
+  # parser strips exactly this set, and [[:space:]] does not — it also eats U+000B,
+  # and in a UTF-8 locale a byte class can disagree about U+00A0. A store line either
+  # reader silently ignores is a hole in the layer.
+  while [ -n "$line" ]; do
+    case $line in
+      *' ') line="${line% }" ;;
+      *"$tab") line="${line%"$tab"}" ;;
+      *$'\r') line="${line%$'\r'}" ;;
+      *) break ;;
+    esac
+  done
+  while [ -n "$line" ]; do
+    case $line in
+      ' '*) line="${line# }" ;;
+      "$tab"*) line="${line#"$tab"}" ;;
+      *) break ;;
+    esac
+  done
   case "$line" in '' | \#*) continue ;; esac
 
-  # KEY + PATTERN when the first field is a valid key AND something follows it;
-  # anything else is a bare pattern under a synthetic key. A key charset without
-  # regex metacharacters is what makes the split safe: a first field that is really
-  # the head of a regex (a broken bracket or group) can never pass for a key, so
-  # such a line falls back to the legacy whole-line reading.
-  first="${line%%[[:space:]]*}"
-  rest="${line#"$first"}"
-  while [ "$rest" != "${rest#[[:space:]]}" ]; do rest="${rest#[[:space:]]}"; done
-  key="entry-$lineno"
-  pat="$line"
-  if [ -n "$rest" ]; then
-    case "$first" in
-      '' | *[!A-Za-z0-9._/-]*) ;;
-      [A-Za-z0-9]*) key="$first"; pat="$rest" ;;
-    esac
+  if [ "$keyed" -eq 0 ]; then
+    # LEGACY store: one whole-line pattern, no split, ever. The key is synthetic, so
+    # nothing from the line itself can be printed.
+    key="entry-$lineno"
+    pat="$line"
+  else
+    # KEYED store: the line MUST be KEY<space-or-tab>PATTERN. The first field ends at
+    # the first ASCII space or tab, whichever comes first; an unparseable line gets no
+    # key at all, because its first field may be the secret.
+    key=""
+    pat=""
+    first="${line%%' '*}"
+    upto_tab="${line%%"$tab"*}"
+    if [ ${#upto_tab} -lt ${#first} ]; then first="$upto_tab"; fi
+    rest="${line#"$first"}"
+    while [ -n "$rest" ]; do
+      case $rest in
+        ' '*) rest="${rest# }" ;;
+        "$tab"*) rest="${rest#"$tab"}" ;;
+        *) break ;;
+      esac
+    done
+    if [ -n "$rest" ]; then
+      case "$first" in
+        '' | *[!A-Za-z0-9._/-]*) ;;
+        [A-Za-z0-9]*) key="$first"; pat="$rest" ;;
+      esac
+    fi
+    if [ -z "$key" ]; then
+      echo "pre-commit: BLOCKED — $banlist line $lineno is not a KEY<space-or-tab>PATTERN entry (fail safe)." >&2
+      echo "            fix that line; its content is withheld by design. An unparseable entry is never" >&2
+      echo "            skipped: a banlist that cannot be read must not look like a banlist that found" >&2
+      echo "            nothing. (Remove the '$format_decl' first line to read every line as a" >&2
+      echo "            whole-line pattern instead.)" >&2
+      rc=1
+      continue
+    fi
   fi
+  entries=$((entries + 1))
 
+  # The pattern reaches grep on STDIN via `-f -`, NEVER in argv: an argument is
+  # world-readable in /proc/<pid>/cmdline for the life of the process and is captured
+  # verbatim by process auditing, which would ship the private pattern off the box.
   gr=0
-  grep -iqE -- "$pat" "$staged_text" >/dev/null 2>&1 || gr=$?
+  printf '%s\n' "$pat" | grep -iqE -f - -- "$staged_text" >/dev/null 2>&1 || gr=$?
   case "$gr" in
     0)
       echo "pre-commit: BLOCKED — staged content matches private banlist entry '$key'." >&2
@@ -145,5 +254,20 @@ while IFS= read -r raw || [ -n "$raw" ]; do
       ;;
   esac
 done < "$banlist"
+
+# A store that parsed to NOTHING checks exactly as much as an absent one, so it is
+# exactly as loud. This runs AFTER the refresh above on purpose: a refresh that
+# truncates or garbles the store away to nothing must produce this warning, not
+# silence. (An unusable line is a refusal, handled above, not an empty store.)
+if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ]; then
+  echo "pre-commit: ****************************************************************" >&2
+  echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
+  echo "pre-commit:   $banlist exists but yields no usable entry," >&2
+  echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
+  echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
+  echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
+  echo "pre-commit: ****************************************************************" >&2
+  exit 0
+fi
 
 exit $rc

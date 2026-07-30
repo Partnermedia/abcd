@@ -38,10 +38,18 @@ func blRepo(t *testing.T, body string) string {
 	}
 	write(banlist.PublicConfigRelPath, blDocsLint, 0o644)
 	if body != "" {
-		write(banlist.PrivateRelPath, body, 0o600)
+		// The store's first line declares the KEYED format, exactly as abcd writes
+		// it: without that line every line below is a whole-line pattern, which is a
+		// different store and has its own tests in the core package.
+		write(banlist.PrivateRelPath, blFormatDecl+"\n"+body, 0o600)
 	}
 	return repo
 }
+
+// blFormatDecl is the private store's format declaration, spelled out here rather
+// than imported: the surface tests assert against the format as a USER writes it,
+// so a change to the constant that broke every existing store would fail here.
+const blFormatDecl = "# abcd-banlist: keyed"
 
 // TestBanlistBareRendersPrivateKeysOnly pins AC6 at the surface: the private layer
 // renders by key, and the pattern value appears nowhere in the rendered text.

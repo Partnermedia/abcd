@@ -9,21 +9,38 @@ import (
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
+
+// privateFormatDecl is the store's self-description, and it must be the file's
+// FIRST line for the keyed format to apply. Without it every line is a whole-line
+// pattern (the format the guard shipped with), and a reader may NEVER split one:
+// the alternative — deciding per line whether its first field "looks like a key" —
+// silently changes what an old store matches AND prints part of a pattern as a
+// "key", which on this layer is the secret. One declaration, read once, settles it
+// for the whole file.
+const privateFormatDecl = "# abcd-banlist: keyed"
 
 // privateHeader is written when a store is created from nothing. It documents the
 // format and seeds NOTHING: an example value in a file whose whole purpose is to
 // hold real private strings would be one careless edit from looking like an entry.
 // (Scaffolding a documented stub with reserved-value examples is `ahoy`'s job.)
-const privateHeader = `# abcd private banlist — LOCAL TO THIS MACHINE, never committed.
-# One entry per line: KEY<whitespace>PATTERN
+const privateHeader = privateFormatDecl + `
+# abcd private banlist — LOCAL TO THIS MACHINE, never committed.
+# The line above declares the KEYED format: every entry line below is
+#     KEY<space-or-tab>PATTERN
 #   KEY      a stable, non-sensitive handle ([A-Za-z0-9][A-Za-z0-9._/-]*). It is
 #            the only part of an entry any output ever names.
-#   PATTERN  a POSIX extended regular expression, matched case-insensitively.
-# Blank lines and lines starting with '#' are ignored. Machine identifiers —
-# hostnames, IP addresses, CIDR prefixes, MAC addresses, device names — are
-# ordinary entries. The committed pre-commit hook refuses any commit whose staged
-# content matches, naming the key alone.
+#   PATTERN  a POSIX extended regular expression, matched case-insensitively by
+#            grep. Inline flag groups and Perl escapes are NOT supported there:
+#            no (?i) — matching is already case-insensitive — and no \d, \w, \b.
+# Blank lines and lines starting with '#' are ignored; leading and trailing ASCII
+# spaces and tabs are stripped. A line that does not parse is refused by number,
+# never skipped. Machine identifiers — hostnames, IP addresses, CIDR prefixes, MAC
+# addresses, device names — are ordinary entries. The committed pre-commit hook
+# refuses any commit whose staged content matches, naming the key alone.
+#
+# Remove the first line and every line below becomes a whole-line pattern again.
 `
 
 // Entry is one private banlist entry as any surface may see it: the key and the
@@ -42,11 +59,23 @@ type PrivateReport struct {
 	// entries" — the layer is local by construction, so its absence is a fact a
 	// surface must be able to state plainly.
 	Present bool `json:"present"`
-	// Entries are the keys, in file order.
+	// Keyed reports the store's format: true when its first line declares the
+	// keyed format, false for a legacy whole-line-pattern store. It changes what
+	// every other line MEANS, so a diagnostic that hid it would be unreadable.
+	Keyed bool `json:"keyed"`
+	// Entries are the keys, in file order. A line that does not parse contributes
+	// none: it has no key, and its text may be the secret.
 	Entries []Entry `json:"entries"`
-	// Malformed lists the 1-based line numbers whose pattern the engine refuses.
-	// Line numbers only: the content of such a line is withheld like any other.
+	// Malformed lists the 1-based line numbers the enforcement engine cannot use —
+	// a line that does not parse in this store's format, or a pattern grep refuses.
+	// The guard refuses every commit until they are fixed. Line numbers only: the
+	// content of such a line is withheld like any other.
 	Malformed []int `json:"malformed_lines"`
+	// Inert lists the 1-based line numbers whose pattern the engine ACCEPTS but
+	// reads differently from the language it was written in (a Perl-style escape,
+	// an inline flag group). The guard does not refuse these — they simply match
+	// nothing, which is the more dangerous failure and a different remedy.
+	Inert []int `json:"inert_lines"`
 }
 
 // PrivateResult is the outcome of a private-layer mutation.
@@ -64,70 +93,153 @@ type AddPrivateRequest struct {
 }
 
 // rawEntry is one parsed line. It never leaves the package: Pattern is the secret.
+// An unparsed line carries its number and NOTHING else — deriving a key from a
+// line the format does not accept would mean printing part of a pattern.
 type rawEntry struct {
-	key       string
-	pattern   string
-	line      int
-	malformed bool
+	key      string
+	pattern  string
+	line     int
+	unparsed bool
+}
+
+// trimTrail strips a trailing run of ASCII space, tab, and carriage return, so a
+// CRLF store and an aligned store read identically.
+func trimTrail(s string) string {
+	for len(s) > 0 {
+		switch s[len(s)-1] {
+		case ' ', '\t', '\r':
+			s = s[:len(s)-1]
+		default:
+			return s
+		}
+	}
+	return s
+}
+
+// trimLead strips a leading run of ASCII space and tab.
+//
+// ASCII ONLY, deliberately, here and in trimTrail: strings.TrimSpace would also
+// strip U+00A0, U+000B and the rest of Unicode's space table, and bash's
+// [[:space:]] strips a different set again. Any such difference makes one reader
+// key a line the other cannot parse — a store that looks healthy in `abcd banlist`
+// while the guard skips it, or the reverse. The two readers of this format share
+// one rule: a separator is a space or a tab, nothing else.
+func trimLead(s string) string {
+	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t') {
+		s = s[1:]
+	}
+	return s
 }
 
 // parse reads the private banlist format. It is the Go half of a format with two
-// readers — the other is the committed shell hook — and the shared fixture corpus
-// under testdata/ is what holds the two in agreement.
+// readers — the other is the committed shell hook — and the shared fixture corpora
+// under testdata/ are what hold the two in agreement.
 //
-// Blank lines and comment lines are skipped. A line whose first whitespace-
-// delimited field is a valid key AND which has something after it is KEY+PATTERN;
-// anything else is a bare pattern under the synthetic key entry-<line-number>, so
-// a store in the older one-pattern-per-line format keeps meaning what it meant.
-// Returned malformed line numbers are entries whose pattern does not compile;
-// those entries are still listed (a bad line must not blind the store) but a
-// caller must treat them as unusable rather than clean.
-func parse(data []byte) (entries []rawEntry, malformed []int) {
-	for i, raw := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
-		line := strings.TrimSpace(raw)
+// The FIRST line decides the whole file. Exactly privateFormatDecl (bar trailing
+// blanks) means KEYED: every non-comment, non-blank line must parse as
+// KEY<space-or-tab>PATTERN, and one that does not is returned unparsed — by number,
+// with no key and no pattern. Anything else means LEGACY: every non-comment,
+// non-blank line is one whole-line pattern under the synthetic key
+// entry-<line-number>, and no line is ever split.
+//
+// Pattern usability is NOT decided here (see checkPattern): parsing is a cheap,
+// deterministic, engine-free step that every caller needs, and only the diagnostic
+// read pays for asking the engine.
+func parse(data []byte) (entries []rawEntry, keyed bool) {
+	lines := strings.Split(string(data), "\n")
+	keyed = len(lines) > 0 && trimTrail(lines[0]) == privateFormatDecl
+	for i, raw := range lines {
+		line := trimLead(trimTrail(raw))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		e := rawEntry{key: "entry-" + strconv.Itoa(i+1), pattern: line, line: i + 1}
-		if cut := strings.IndexAny(line, " \t"); cut > 0 {
-			first, rest := line[:cut], strings.TrimSpace(line[cut:])
-			if rest != "" && validKey(first) {
-				e.key, e.pattern = first, rest
-			}
+		e := rawEntry{line: i + 1}
+		if !keyed {
+			e.key, e.pattern = "entry-"+strconv.Itoa(i+1), line
+			entries = append(entries, e)
+			continue
 		}
-		if !validPattern(e.pattern) {
-			e.malformed = true
-			malformed = append(malformed, e.line)
+		cut := strings.IndexAny(line, " \t")
+		if cut <= 0 {
+			e.unparsed = true
+			entries = append(entries, e)
+			continue
 		}
+		first, rest := line[:cut], trimLead(line[cut:])
+		if rest == "" || !validKey(first) {
+			e.unparsed = true
+			entries = append(entries, e)
+			continue
+		}
+		e.key, e.pattern = first, rest
 		entries = append(entries, e)
 	}
-	return entries, malformed
+	return entries, keyed
 }
 
-// privatePath resolves the store's absolute path under repoRoot.
+// privatePath resolves the store's absolute path under repoRoot. It is used for
+// reporting and locking; every read and write resolves inside an os.Root instead,
+// so a symlinked ANCESTOR cannot redirect them.
 func privatePath(repoRoot string) string {
 	return filepath.Join(repoRoot, filepath.FromSlash(PrivateRelPath))
 }
 
-// readPrivate returns the store's bytes, or ErrNoStore when it does not exist.
+// readPrivate returns the store's bytes, or ErrNoStore when it does not exist. The
+// read is contained: every path component resolves inside repoRoot, and a symlinked
+// or non-regular leaf is refused rather than followed — a store swapped for a link
+// is tampering, not a store.
 func readPrivate(repoRoot string) ([]byte, error) {
-	data, err := fsutil.ReadGuarded(privatePath(repoRoot), maxStoreBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s is unreadable", ErrMalformedStore, PrivateRelPath)
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, PrivateRelPath, maxStoreBytes)
 	switch {
 	case err == nil:
 		return data, nil
 	case os.IsNotExist(err):
 		return nil, fmt.Errorf("%w: %s", ErrNoStore, PrivateRelPath)
 	default:
-		// The read failure's cause (symlinked, oversize, not a regular file) is
-		// named without echoing any content.
-		return nil, fmt.Errorf("%w: %s is unreadable", ErrMalformedStore, PrivateRelPath)
+		// The read failure's cause (symlinked, oversize, not a regular file, outside
+		// the root) is named without echoing any content.
+		return nil, fmt.Errorf("%w: %s is unreadable (not a regular file, oversize, or a symlink)", ErrMalformedStore, PrivateRelPath)
 	}
 }
 
-// ListPrivate reports the private layer: its keys, its malformed lines, and
+// writePrivateStore commits the store's bytes atomically, CONTAINED inside
+// repoRoot: rel-path resolution happens through os.Root, so a symlinked
+// `.abcd/.work.local` — the shape that lands the private patterns outside the repo
+// while every surface still reports the in-repo path — cannot redirect the write.
+// The mode is 0600: this file holds the patterns whose literal text must not leave
+// this machine.
+func writePrivateStore(repoRoot string, data []byte) error {
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return fsutil.WriteFileAtomicInRoot(root, PrivateRelPath, data, 0o600)
+}
+
+// mkdirLocalTier creates the local-ephemeral tier INSIDE repoRoot, mode 0700: the
+// directory holding the private patterns is no more readable than they are, and
+// every component resolves through os.Root so a symlink out of the tree is an
+// error rather than a redirect.
+func mkdirLocalTier(repoRoot string) error {
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return root.MkdirAll(privateDirRelPath, 0o700)
+}
+
+// ListPrivate reports the private layer: its format, its keys, the lines the
+// enforcement engine cannot use, the lines it accepts but reads differently, and
 // whether this machine has opted in at all.
 func ListPrivate(repoRoot string) (PrivateReport, error) {
-	rep := PrivateReport{Path: PrivateRelPath, Entries: []Entry{}, Malformed: []int{}}
+	rep := PrivateReport{Path: PrivateRelPath, Entries: []Entry{}, Malformed: []int{}, Inert: []int{}}
 	data, err := readPrivate(repoRoot)
 	switch {
 	case err == nil:
@@ -137,91 +249,180 @@ func ListPrivate(repoRoot string) (PrivateReport, error) {
 		return PrivateReport{}, err
 	}
 	rep.Present = true
-	entries, malformed := parse(data)
+	entries, keyed := parse(data)
+	rep.Keyed = keyed
 	for _, e := range entries {
+		if e.unparsed {
+			rep.Malformed = append(rep.Malformed, e.line)
+			continue
+		}
 		rep.Entries = append(rep.Entries, Entry{Key: e.key, Line: e.line})
-	}
-	if malformed != nil {
-		rep.Malformed = malformed
+		// The diagnostic verb asks the ENFORCEMENT engine, not Go's: during an
+		// incident its whole value is agreeing with the guard about which lines
+		// work, and which way they fail.
+		switch fault, _ := checkPattern(e.pattern); fault {
+		case faultNone:
+		case faultPerlish:
+			rep.Inert = append(rep.Inert, e.line)
+		default:
+			rep.Malformed = append(rep.Malformed, e.line)
+		}
 	}
 	return rep, nil
 }
 
 // AddPrivate appends one entry, creating the store (and the local tier directory)
-// when absent. The write is atomic and the store's mode is tightened to 0600: it
-// holds the patterns whose literal text must not leave this machine.
+// when absent. Every check happens before the write, and the load-modify-write runs
+// under the store's lock so a concurrent add or an out-of-band refresh cannot drop
+// an entry.
 func AddPrivate(req AddPrivateRequest) (PrivateResult, error) {
 	if !validKey(req.Key) {
 		return PrivateResult{}, fmt.Errorf("%w: %q (want [A-Za-z0-9][A-Za-z0-9._/-]*)", ErrInvalidKey, req.Key)
 	}
-	if !validPattern(req.Pattern) {
-		return PrivateResult{}, fmt.Errorf("%w for key %q: empty, or not a usable regular expression (the value is withheld)", ErrInvalidPattern, req.Key)
+	if fault, byEngine := checkPattern(req.Pattern); fault != faultNone {
+		return PrivateResult{}, fmt.Errorf("%w for key %q: %s (the value is withheld)", ErrInvalidPattern, req.Key, patternRefusal(fault, byEngine))
 	}
-
-	data, err := readPrivate(req.RepoRoot)
-	fresh := false
-	switch {
-	case err == nil:
-	case errors.Is(err, ErrNoStore):
-		fresh = true
-		data = []byte(privateHeader)
-	default:
+	if err := requireIgnoredStore(req.RepoRoot); err != nil {
 		return PrivateResult{}, err
 	}
 
-	entries, _ := parse(data)
-	for _, e := range entries {
-		if e.key == req.Key {
-			return PrivateResult{}, fmt.Errorf("%w: %q", ErrDuplicateKey, req.Key)
+	var res PrivateResult
+	err := withPrivateLock(req.RepoRoot, func() error {
+		data, err := readPrivate(req.RepoRoot)
+		switch {
+		case err == nil:
+		case errors.Is(err, ErrNoStore):
+			data = []byte(privateHeader)
+		default:
+			return err
 		}
-	}
 
-	body := string(data)
-	if body != "" && !strings.HasSuffix(body, "\n") {
-		body += "\n"
-	}
-	body += req.Key + " " + req.Pattern + "\n"
-
-	if fresh {
-		if err := os.MkdirAll(filepath.Dir(privatePath(req.RepoRoot)), 0o700); err != nil {
-			return PrivateResult{}, err
+		entries, keyed := parse(data)
+		if !keyed && len(entries) > 0 {
+			return legacyStoreRefusal("add to")
 		}
-	}
-	if err := fsutil.WriteFileAtomic(privatePath(req.RepoRoot), []byte(body), 0o600); err != nil {
+		for _, e := range entries {
+			if e.key == req.Key {
+				return fmt.Errorf("%w: %q", ErrDuplicateKey, req.Key)
+			}
+		}
+
+		body := string(data)
+		if !keyed {
+			// An entryless legacy store has no whole-line pattern to reinterpret, so
+			// declaring the format here is safe — and leaves the user's comments intact.
+			body = privateFormatDecl + "\n" + body
+		}
+		if body != "" && !strings.HasSuffix(body, "\n") {
+			body += "\n"
+		}
+		body += req.Key + " " + req.Pattern + "\n"
+
+		if err := writePrivateStore(req.RepoRoot, []byte(body)); err != nil {
+			return err
+		}
+		res = PrivateResult{Path: PrivateRelPath, Key: req.Key, Entries: len(entries) + 1}
+		return nil
+	})
+	if err != nil {
 		return PrivateResult{}, err
 	}
-	return PrivateResult{Path: PrivateRelPath, Key: req.Key, Entries: len(entries) + 1}, nil
+	return res, nil
 }
 
 // RemovePrivate drops the entry with the given key. The edit is a line deletion —
 // every other byte of the store survives, so comments and alignment are preserved.
 func RemovePrivate(repoRoot, key string) (PrivateResult, error) {
-	data, err := readPrivate(repoRoot)
+	var res PrivateResult
+	err := withPrivateLock(repoRoot, func() error {
+		data, err := readPrivate(repoRoot)
+		if err != nil {
+			return err
+		}
+		entries, keyed := parse(data)
+		if !keyed && len(entries) > 0 {
+			return legacyStoreRefusal("remove from")
+		}
+		target := -1
+		for _, e := range entries {
+			if e.key == key {
+				target = e.line
+				break
+			}
+		}
+		if target < 0 {
+			return fmt.Errorf("%w: %q", ErrUnknownKey, key)
+		}
+
+		lines := strings.Split(string(data), "\n")
+		kept := make([]string, 0, len(lines))
+		for i, line := range lines {
+			if i+1 == target {
+				continue
+			}
+			kept = append(kept, line)
+		}
+		if err := writePrivateStore(repoRoot, []byte(strings.Join(kept, "\n"))); err != nil {
+			return err
+		}
+		res = PrivateResult{Path: PrivateRelPath, Key: key, Entries: len(entries) - 1}
+		return nil
+	})
 	if err != nil {
 		return PrivateResult{}, err
 	}
-	entries, _ := parse(data)
-	target := -1
-	for _, e := range entries {
-		if e.key == key {
-			target = e.line
-			break
-		}
-	}
-	if target < 0 {
-		return PrivateResult{}, fmt.Errorf("%w: %q", ErrUnknownKey, key)
-	}
+	return res, nil
+}
 
-	lines := strings.Split(string(data), "\n")
-	kept := make([]string, 0, len(lines))
-	for i, line := range lines {
-		if i+1 == target {
-			continue
-		}
-		kept = append(kept, line)
+// legacyStoreRefusal words the one migration a verb will not perform. Writing a
+// KEY<space>PATTERN line into a legacy store would not merely add an entry: the
+// next reader that sees a declaration reinterprets every OTHER line, so a store of
+// whole-line patterns would silently start matching remainders. The user adds one
+// line and keeps control of what their patterns mean.
+func legacyStoreRefusal(verb string) error {
+	return fmt.Errorf("%w: %s predates the keyed format, so every line in it is a whole-line pattern; "+
+		"to %s it, add this as the file's FIRST line and give each existing line a key — %s",
+		ErrLegacyStore, PrivateRelPath, verb, privateFormatDecl)
+}
+
+// requireIgnoredStore refuses to create or grow the private store at a path git
+// would track. The whole layer rests on the file being untracked: a store that is
+// not ignored is one `git add -A` from committing the very strings it exists to
+// keep out of history, and the guard cannot catch it (the guard's own patterns are
+// what the file holds). When git cannot answer — not a repo, git absent — the check
+// is skipped: a verb cannot demand proof no one can supply.
+func requireIgnoredStore(repoRoot string) error {
+	if !gitutil.InRepo(repoRoot) {
+		return nil
 	}
-	if err := fsutil.WriteFileAtomic(privatePath(repoRoot), []byte(strings.Join(kept, "\n")), 0o600); err != nil {
-		return PrivateResult{}, err
+	if gitutil.IsIgnored(repoRoot, PrivateRelPath) {
+		return nil
 	}
-	return PrivateResult{Path: PrivateRelPath, Key: key, Entries: len(entries) - 1}, nil
+	return fmt.Errorf("%w: git does not ignore %s, so the patterns it holds would be one `git add -A` from tracked history; "+
+		"add `%s` to .gitignore (the local-ephemeral tier) and re-run",
+		ErrStoreNotIgnored, PrivateRelPath, privateDirRelPath+"/")
+}
+
+// withPrivateLock serialises a load-modify-write of the private store on the shared
+// inter-process lock primitive, so a concurrent `abcd banlist add` and an
+// out-of-band refresh cannot each write a body derived from the same stale read and
+// silently drop one entry. The lock file lives beside the store, inside the
+// gitignored local tier.
+func withPrivateLock(repoRoot string, fn func() error) error {
+	// The tier is created THROUGH the root, not with os.MkdirAll: a symlinked
+	// `.abcd/.work.local` would otherwise be followed and the lock file — the first
+	// thing this function creates — would land outside the repo before the contained
+	// write ever got a chance to refuse.
+	if err := mkdirLocalTier(repoRoot); err != nil {
+		return err
+	}
+	dir := filepath.Join(repoRoot, filepath.FromSlash(privateDirRelPath))
+	err := fsutil.WithFileLock(filepath.Join(dir, privateLockFilename), storeLockTimeout, fn)
+	switch {
+	case errors.Is(err, fsutil.ErrLockContention):
+		return fmt.Errorf("%w: could not lock %s within %s", ErrStoreLocked, PrivateRelPath, storeLockTimeout)
+	case errors.Is(err, fsutil.ErrLockPathUnsafe):
+		return fmt.Errorf("%w: the lock path beside %s is not a regular file", ErrMalformedStore, PrivateRelPath)
+	}
+	return err
 }
