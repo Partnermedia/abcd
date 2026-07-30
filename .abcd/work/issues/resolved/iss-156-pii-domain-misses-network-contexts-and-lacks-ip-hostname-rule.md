@@ -7,7 +7,7 @@ category: "bug"
 source: "agent-finding"
 found_during: "managed-repo NEXT.md privacy-leak investigation 2026-07-29"
 found_at: "internal/core/rules/defaults/rules.json"
-resolution: "PII domain gains network/infra recall keywords (ip, vpn, tailscale, firewall, network, reachability) and a never-commit-hostnames/IPs/live-network-identifiers rule line."
+resolution: "PII domain gains network/infra recall keywords (ip, vpn, tailscale, firewall, network, reachability) and a never-commit-hostnames/IPs/live-network-identifiers rule line"
 impact: fix
 ---
 
