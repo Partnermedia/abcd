@@ -177,13 +177,6 @@ func parse(data []byte) (entries []rawEntry, keyed bool) {
 	return entries, keyed
 }
 
-// privatePath resolves the store's absolute path under repoRoot. It is used for
-// reporting and locking; every read and write resolves inside an os.Root instead,
-// so a symlinked ANCESTOR cannot redirect them.
-func privatePath(repoRoot string) string {
-	return filepath.Join(repoRoot, filepath.FromSlash(PrivateRelPath))
-}
-
 // readPrivate returns the store's bytes, or ErrNoStore when it does not exist. The
 // read is contained: every path component resolves inside repoRoot, and a symlinked
 // or non-regular leaf is refused rather than followed — a store swapped for a link

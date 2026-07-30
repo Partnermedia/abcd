@@ -1,16 +1,20 @@
-// Package banlist is abcd's two-layer banned-names store (itd-74, spc-20). It
-// performs no I/O beyond reading and writing files under a caller-supplied repo
-// root — no printing, no os.Exit — so front doors under internal/surface/* format
-// its results.
+// Package banlist is abcd's two-layer banned-names store (itd-74, spc-20). It never
+// prints and never exits — front doors under internal/surface/* format its results.
+// Its I/O is reads and writes under a caller-supplied repo root, plus two
+// subprocesses it must run to tell the truth about a pattern: `git check-ignore`, to
+// refuse a private store git would track, and `grep`, to ask the private layer's
+// ENFORCING engine whether an expression is usable there.
 //
 // The two layers differ in visibility, and that difference is the whole design:
 //
 //   - The PRIVATE layer is a gitignored per-machine file under the local tier
-//     (PrivateRelPath). Its entries are KEY + PATTERN, and the key is the only
-//     part any surface ever renders: a name that must never appear in public
-//     content cannot be written into public config to ban it there. The committed
-//     .githooks/pre-commit guard is the enforcement point, so this package's job is
-//     the store and the format — parse, add, remove, list — not the matching.
+//     (PrivateRelPath). Its FIRST line declares its format — keyed
+//     (KEY<space-or-tab>PATTERN) or legacy (one whole-line pattern per line) — and
+//     the key is the only part any surface ever renders: a name that must never
+//     appear in public content cannot be written into public config to ban it there.
+//     The committed .githooks/pre-commit guard is the enforcement point, so this
+//     package's job is the store, the format, and validation against that guard's
+//     engine — parse, add, remove, list — not the matching.
 //   - The PUBLIC layer is the banned_tokens family of the committed docs-lint
 //     config (PublicConfigRelPath), enforced deterministically in CI with a
 //     per-line escape. There is exactly one banned-token primitive: the
