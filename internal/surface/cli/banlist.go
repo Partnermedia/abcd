@@ -1,13 +1,13 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"github.com/REPPL/abcd-cli/internal/termsafe"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +21,16 @@ func newBanlistCommand(asJSON *bool) *cobra.Command {
 	banlistCmd := &cobra.Command{
 		Use:   "banlist",
 		Short: "Banned-names layers (bare renders both, read-only); add/remove maintain them",
-		Args:  cobra.NoArgs,
+		// NOT cobra.NoArgs: on an unknown token that validator's message quotes the
+		// token verbatim (`unknown command "<token>"`), which on this verb may be a
+		// would-be private value landing in stderr, scrollback, and logs. This one
+		// withholds the token and names the real subcommands instead.
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf(`unknown subcommand (its text is withheld — it may be a private value); use "list", "add", or "remove"`)
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := banlistRoot()
 			if err != nil {
@@ -172,7 +181,7 @@ func newBanlistRemoveCommand(asJSON *bool) *cobra.Command {
 					return usageError("abcd banlist remove", err)
 				}
 				return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-					fmt.Fprintf(w, "private banlist — removed %s (%d entr%s remain, %s)\n",
+					fmt.Fprintf(w, "private banlist — removed %s (%d entr%s remaining, %s)\n",
 						termsafe.Sanitize(res.Key), res.Entries, plural(res.Entries), res.Path)
 				})
 			}
@@ -256,6 +265,10 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 			fmt.Fprintln(w, "  no entries")
 		}
 		fmt.Fprintln(w, "  keys only: the pattern values never reach any output, by design")
+		if rep.NotIgnored {
+			fmt.Fprintf(w, "  WARNING: git does NOT ignore %s — it is one `git add -A` from committing\n", rep.Path)
+			fmt.Fprintf(w, "  the patterns it holds; add `%s/` to .gitignore before you rely on this layer\n", banlist.PrivateDirRelPath)
+		}
 		if !rep.Keyed && len(rep.Entries) > 0 {
 			fmt.Fprintln(w, "  format: LEGACY (no `# abcd-banlist: keyed` first line) — every line is one whole-line")
 			fmt.Fprintln(w, "  pattern and `add`/`remove` refuse until you add that line and give each entry a key")
@@ -267,7 +280,7 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 			fmt.Fprintf(w, "  line %d is not usable by the guard's engine — the pre-commit guard refuses every commit until it is fixed\n", line)
 		}
 		for _, line := range rep.Inert {
-			fmt.Fprintf(w, "  line %d uses a construct the guard's POSIX grep does not implement — it matches nothing there, and the guard does NOT refuse it\n", line)
+			fmt.Fprintf(w, "  line %d uses a Perl-style escape or a `(?…)` group; the guard's POSIX grep reads it as an extended regular expression, which may match differently than written (grep implementations diverge) — the guard does NOT refuse it, so verify it against the guard's grep\n", line)
 		}
 	}
 	fmt.Fprintln(w, "  reach: CI cannot enforce this layer — it protects only machines that have opted in")
@@ -301,35 +314,53 @@ const stdinPattern = "-"
 // above any real expression.
 const maxPatternBytes = 8 << 10
 
-// banlistRoot resolves the repo whose banlist is being read or written. It is
-// rulesRoot's resolution — the nearest ancestor holding a .abcd directory, then the
-// git working-tree root, then cwd — and NOT os.Getwd, because both stores are
-// repo-relative under .abcd/. Handing a subdirectory to the core created a SECOND
-// private store nested inside it: a path the root-anchored gitignore rule does not
-// match, so it commits with the plaintext patterns in it, and a path the guard never
-// reads, so nothing stops that commit.
+// banlistRoot resolves the repo whose banlist is being read or written. It resolves
+// the GIT WORKING-TREE TOPLEVEL, because that is the exact root the committed
+// pre-commit guard enforces at (`git rev-parse --show-toplevel`), and the store must
+// live where the guard reads it. rulesRoot's "nearest ancestor holding a .abcd dir"
+// disagrees when a repo is nested under a parent that itself has a .abcd/: it would
+// write the store into the PARENT — outside this repo, where the guard never reads it
+// and the root-anchored gitignore does not match it — leaving the layer inactive
+// while `add` reports a repo-relative path. Falls back to rulesRoot (then cwd) only
+// when git cannot answer, so a non-git use still resolves.
 func banlistRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
+	if top, err := gitutil.Run(cwd, "rev-parse", "--show-toplevel"); err == nil && top != "" {
+		return top, nil
+	}
 	return rulesRoot(cwd), nil
 }
 
-// readPatternFromStdin reads one line as the pattern. It is the recommended way to
-// enter a REAL private pattern: an argument is world-readable in /proc/<pid>/cmdline
-// for the life of the process, is captured verbatim by process auditing, and lands
-// in the shell's history file. Exactly one line, because the store is line-oriented
-// and a pattern spanning lines is refused anyway.
+// readPatternFromStdin reads the pattern as EXACTLY one line. It is the recommended
+// way to enter a REAL private pattern: an argument is world-readable in
+// /proc/<pid>/cmdline for the life of the process, is captured verbatim by process
+// auditing, and lands in the shell's history file.
+//
+// It reads ALL of stdin (not just the first line) and refuses trailing data: reading
+// one line and discarding the rest would report success while storing only the first
+// of a multi-line pattern — the argv path refuses the same input, so the two must
+// reach the same verdict. Multi-line or trailing-data stdin is refused with the same
+// "carriage return or newline" verdict AddPrivate gives a multi-line pattern argument.
 func readPatternFromStdin(cmd *cobra.Command) (string, error) {
-	reader := bufio.NewReader(io.LimitReader(cmd.InOrStdin(), maxPatternBytes))
-	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	// One byte past the cap distinguishes "exactly at the cap" from "overflowed".
+	data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxPatternBytes+1))
+	if err != nil {
 		return "", err
 	}
-	pattern := strings.TrimRight(line, "\r\n")
+	if len(data) > maxPatternBytes {
+		return "", fmt.Errorf("the stdin pattern is too long (over %d bytes); a banlist pattern is a short expression", maxPatternBytes)
+	}
+	// A single trailing newline is the terminator of the one piped line; strip it, then
+	// refuse anything that still spans lines.
+	pattern := strings.TrimRight(string(data), "\r\n")
 	if pattern == "" {
 		return "", fmt.Errorf("no pattern on stdin (pass the pattern as `-` and pipe one line, e.g. `printf %%s 'PATTERN' | abcd banlist add --private KEY -`)")
+	}
+	if strings.ContainsAny(pattern, "\r\n") {
+		return "", fmt.Errorf("the stdin pattern spans more than one line: it contains a carriage return or newline, which a line-oriented store cannot hold; pipe exactly one line")
 	}
 	return pattern, nil
 }

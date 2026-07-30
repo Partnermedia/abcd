@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 const blDocsLint = `{
@@ -311,6 +313,94 @@ func TestBanlistAddPrivateReadsThePatternFromStdin(t *testing.T) {
 	}
 }
 
+// TestBanlistStdinRefusesMultiLinePattern pins that the stdin entry path and the
+// argv path reach the SAME verdict on a multi-line pattern. Reading one line and
+// discarding the rest reported success while storing only the first line — the argv
+// path refuses the identical input, so the two must not disagree.
+func TestBanlistStdinRefusesMultiLinePattern(t *testing.T) {
+	repo := blRepo(t, "")
+	t.Chdir(repo)
+
+	stdout, stderr, code := runBanlist("widgetworks\nsecond-line\n", "banlist", "add", "--private", "k", "-")
+	if code == 0 {
+		t.Fatalf("multi-line stdin was accepted: %s", stdout)
+	}
+	if !strings.Contains(stdout+stderr, "carriage return or newline") {
+		t.Errorf("stdin refusal does not match the argv verdict:\n%s%s", stdout, stderr)
+	}
+	// The argv path, same input: one arg carrying an embedded newline.
+	so, se, code2 := runBanlist("", "banlist", "add", "--private", "k", "widgetworks\nsecond-line")
+	if code2 == 0 {
+		t.Fatalf("multi-line argv pattern was accepted: %s", so)
+	}
+	if !strings.Contains(so+se, "carriage return or newline") {
+		t.Errorf("argv refusal wording differs:\n%s%s", so, se)
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath))); err == nil {
+		t.Error("a refused multi-line add created the store")
+	}
+}
+
+// TestBanlistRootIsTheGitToplevel pins that the verb resolves the SAME root the hook
+// enforces at — the git working-tree toplevel. A repo nested under a parent that
+// itself holds a .abcd/ makes rulesRoot resolve to the PARENT (outside this repo,
+// where the guard never reads and the root-anchored gitignore does not match); the
+// git toplevel is this repo. The store must go where the guard reads it.
+func TestBanlistRootIsTheGitToplevel(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	parent := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(parent, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(parent, "child")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitInit := func(dir string) {
+		cmd := exec.Command("git", "-C", dir, "init")
+		cmd.Env = gittest.Env(t)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git init: %v\n%s", err, out)
+		}
+	}
+	gitInit(repo)
+	top := exec.Command("git", "-C", repo, "rev-parse", "--show-toplevel")
+	top.Env = gittest.Env(t)
+	out, err := top.Output()
+	if err != nil {
+		t.Skipf("rev-parse: %v", err)
+	}
+	want := strings.TrimSpace(string(out))
+
+	t.Chdir(repo)
+	got, err := banlistRoot()
+	if err != nil {
+		t.Fatalf("banlistRoot: %v", err)
+	}
+	if got != want {
+		t.Errorf("banlistRoot = %q, want the git toplevel %q (rulesRoot would have returned the parent %q)", got, want, parent)
+	}
+}
+
+// TestBanlistDoesNotEchoAnUnknownToken pins that no cobra path echoes an arbitrary
+// token. `abcd banlist <token>` under cobra.NoArgs prints `unknown command
+// "<token>"`, putting a would-be private value in stderr, scrollback, and logs.
+func TestBanlistDoesNotEchoAnUnknownToken(t *testing.T) {
+	t.Chdir(blRepo(t, ""))
+	const token = "SECRET-widgetworks-token"
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"banlist", token}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("exit = %d, want 2", code)
+	}
+	if strings.Contains(stdout.String()+stderr.String(), token) {
+		t.Errorf("the unknown-token error echoes the token:\nstdout=%s\nstderr=%s", stdout.String(), stderr.String())
+	}
+}
+
 // TestBanlistExitCodesAgreeOnTheSameError pins CORR-10: the bare command and `list`
 // are the same read, so the same broken store must produce the same exit code. A
 // caller scripting one and reading the other's contract is otherwise wrong.
@@ -381,8 +471,14 @@ func TestBanlistReportsInertLinesHonestly(t *testing.T) {
 	if !strings.Contains(out, "line 3") || !strings.Contains(out, "refuses") {
 		t.Errorf("the unusable line is not reported as one the guard refuses:\n%s", out)
 	}
-	if !strings.Contains(out, "line 2") || !strings.Contains(out, "matches nothing") {
-		t.Errorf("the inert line is not reported as one that matches nothing:\n%s", out)
+	// The inert line must be distinguished from the refused one, and worded as a
+	// portability caveat driven by the grep probe — never the false absolute "matches
+	// nothing" (grep implements `\b`/`\w`/`\s`, and reads `\d` as a literal `d`).
+	if !strings.Contains(out, "line 2") || !strings.Contains(out, "may match differently") {
+		t.Errorf("the inert line is not reported as a grep-divergent caveat:\n%s", out)
+	}
+	if strings.Contains(out, "matches nothing") {
+		t.Errorf("the render still asserts the false absolute \"matches nothing\":\n%s", out)
 	}
 	for _, leak := range []string{"widgetworks", "unclosed"} {
 		if strings.Contains(out, leak) {
