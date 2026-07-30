@@ -151,6 +151,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`ahoy install` writes a `.gitignore` block that matches the tier layout it
+  documents** (iss-169). The managed block ignored a root-level `.work/` under
+  both visibilities — a path the three-tier layout does not have — while never
+  naming `.abcd/.work.local/`, the one tier that must be gitignored. So a fresh
+  install ignored nothing that existed and left the local-ephemeral tier tracked:
+  precisely the state `abcd audit`'s `three-tier-layout` rule then reports as an
+  error, the installer and the auditor disagreeing about the same convention. The
+  block now follows the brief's visibility table exactly — a private repo ignores
+  `.abcd/.work.local/` alone, because the rest of the `.abcd/` namespace is meant
+  to be committed; a public repo ignores `.abcd/` outright, one switch with no
+  per-subdirectory exceptions, plus the legacy root-level `memory/` snapshot. An
+  existing repo carrying the old block needs no migration step: the block reads
+  as drift, `abcd ahoy` reports it, and one apply replaces it, leaving the
+  repository's own ignore rules untouched.
 - **The `PII` rules domain fires on network work, and says never to commit a
   hostname or an address** (iss-156). Its recall keywords were the vocabulary of
   credentials — secret, token, credential, pii, redact, hostname, email — so a
