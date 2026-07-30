@@ -1,0 +1,10 @@
+# Fixture banlist — a LEGACY store: there is NO format declaration on line 1, so
+# every non-comment line below is a WHOLE-LINE pattern under the synthetic key
+# entry-<line-number>. No key column is parsed on a legacy line, ever: that is
+# what keeps a first field which happens to look like a key from being printed as
+# one, and what keeps an old store matching exactly what it always matched.
+# Values are reserved-documentation or persona-derived only.
+
+partnerco\.example
+widget-partner   widgetworks
+lab-host alice-laptop\.example\.com

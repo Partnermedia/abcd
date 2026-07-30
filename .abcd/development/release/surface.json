@@ -115,6 +115,85 @@
       ]
     },
     {
+      "path": "abcd banlist",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd banlist add",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "private",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "public",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "severity",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "successor",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd banlist list",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "private",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "public",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd banlist remove",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "private",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "public",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd capture",
       "hidden": false,
       "flags": [
