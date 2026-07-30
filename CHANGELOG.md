@@ -158,11 +158,12 @@ called out in a **Breaking** section.
   address in a network config matched nothing and the hook injected nothing.
   The keywords now cover that context — `ip`, `ips`, `ipv4`, `ipv6`, `vpn`,
   `tailscale`, `tailnet`, `wireguard`, `firewall`, `network`, `reachability`,
-  `reachable`, `dns`, `ssh`, `subnet`, plus the `mac address` phrase alias — and
+  `reachable`, `unreachable`, `dns`, `ssh`, `subnet`, plus the `mac address`
+  phrase alias — and
   one new rule line forbids committing hostnames, IP or MAC addresses, and other
   live network identifiers: redact or omit them, and reach for a reserved
   documentation value (RFC 5737, RFC 3849, RFC 2606, RFC 7042 — the same set the
-  scanner and the audit privacy-hygiene rule cite) only where an illustrative
+  audit privacy-hygiene rule cites) only where an illustrative
   example is actually needed. That rule previously existed only in a repo's own
   instructions file, which meant the one discipline this domain most needed to
   state was the one it never said — an agent could recall `PII` and still read

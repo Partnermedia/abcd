@@ -120,7 +120,9 @@ func TestOpinionsDomainPointsAtPrinciplesNotCopies(t *testing.T) {
 func TestPIIDomainRecallsNetworkContexts(t *testing.T) {
 	rs := Defaults()
 	for _, prompt := range []string{
-		"investigating tailscale reachability from the vpn",
+		"investigating the tailscale outage",
+		"basic reachability looks fine from here",
+		"the vpn drops every hour",
 		"the firewall is dropping the connection",
 		"write up what the network scan found",
 		"note the ip we connected to",
@@ -139,6 +141,8 @@ func TestPIIDomainRecallsNetworkContexts(t *testing.T) {
 //   - "ipv4"/"ipv6" — version-qualified tokens share no stem with "ip".
 //   - "reachable" — stem() does not bridge "-ability" to "-able", so the
 //     "reachability" keyword cannot reach the adjective.
+//   - "unreachable" — stem() strips no "un-" prefix either, and unreachable is
+//     the ICMP-canonical failure word a network write-up actually uses.
 //   - "mac addresses" — the rule text forbids MACs, so the domain must recall
 //     that vocabulary; bare "mac" is unsafe (an Apple Mac), hence the phrase
 //     alias, which matches via the stemmed-phrase path in termHit
@@ -155,6 +159,7 @@ func TestPIIDomainRecallsNetworkVocabularyGaps(t *testing.T) {
 		"an IPv4 address in the config",
 		"is there an IPv6 literal in this file",
 		"confirm the node is reachable over the tunnel",
+		"the host is unreachable, write up what we found",
 		"the mac addresses of both nics",
 		"dns is not resolving for the node",
 		"note the tailnet address of the laptop",
@@ -185,6 +190,10 @@ func TestPIIDomainRecallIPIsWordBounded(t *testing.T) {
 // scanner and the audit privacy-hygiene rule already cite (RFC 5737 IPv4, 3849
 // IPv6, 2606 names, 7042 MACs) — pinning all four here means dropping or drifting
 // a citation, or deleting the clause, fails the test rather than passing quietly.
+// The remedy wording is pinned too: redact-or-omit must stay the default and
+// documentation values must stay scoped to illustrative examples — the first
+// draft's unconditional "use the reserved ranges instead" read as an instruction
+// to silently substitute plausible-looking fake identifiers into factual records.
 func TestPIIDomainForbidsCommittingNetworkIdentifiers(t *testing.T) {
 	pii, ok := Defaults().Lookup("PII")
 	if !ok {
@@ -204,6 +213,11 @@ func TestPIIDomainForbidsCommittingNetworkIdentifiers(t *testing.T) {
 		}
 		if len(missing) > 0 {
 			t.Fatalf("PII network-identifier rule omits RFC citation(s) %v: %q", missing, rule)
+		}
+		for _, want := range []string{"redact", "omit", "illustrative"} {
+			if !strings.Contains(low, want) {
+				t.Fatalf("PII network-identifier rule lost the %q remedy wording: %q", want, rule)
+			}
 		}
 		return
 	}

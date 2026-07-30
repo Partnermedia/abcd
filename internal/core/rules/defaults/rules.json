@@ -63,7 +63,7 @@
     },
     "PII": {
       "state": "active",
-      "recall": ["secret", "token", "credential", "pii", "redact", "hostname", "email", "ip", "ips", "ipv4", "ipv6", "vpn", "tailscale", "tailnet", "wireguard", "firewall", "network", "reachability", "reachable", "dns", "ssh", "subnet"],
+      "recall": ["secret", "token", "credential", "pii", "redact", "hostname", "email", "ip", "ips", "ipv4", "ipv6", "vpn", "tailscale", "tailnet", "wireguard", "firewall", "network", "reachability", "reachable", "unreachable", "dns", "ssh", "subnet"],
       "aliases": ["api key", "access token", "personal data", "absolute path", "mac address"],
       "rules": [
         "Never commit, print, or paste secrets, tokens, or .env contents; reference them by name.",
