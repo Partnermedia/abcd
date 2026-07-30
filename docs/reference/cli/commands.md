@@ -82,6 +82,53 @@ Check this repo against the working conventions (read-only)
       --root string   repo root to audit (default: current working directory)
 ```
 
+### `abcd banlist`
+
+Banned-names layers (bare renders both, read-only); add/remove maintain them
+
+**Usage:** `abcd banlist`
+
+#### `abcd banlist add`
+
+Add one banned-name entry to the named layer
+
+**Usage:** `abcd banlist add --private|--public <key> <pattern> [flags]`
+
+**Flags:**
+
+```
+      --private            the gitignored per-machine layer (.abcd/.work.local/private-names.txt)
+      --public             the committed, CI-enforced layer (.abcd/docs-lint.json)
+      --severity string    public entry severity: blocker (default) | warn
+      --successor string   public entry's replacement, cited in the finding (default "a generic term")
+```
+
+#### `abcd banlist list`
+
+Render the banlist layers; private entries render by key only
+
+**Usage:** `abcd banlist list [--private | --public] [flags]`
+
+**Flags:**
+
+```
+      --private   the gitignored per-machine layer (.abcd/.work.local/private-names.txt)
+      --public    the committed, CI-enforced layer (.abcd/docs-lint.json)
+```
+
+#### `abcd banlist remove`
+
+Remove one banned-name entry from the named layer
+
+**Usage:** `abcd banlist remove --private|--public <key> [flags]`
+
+**Flags:**
+
+```
+      --private   the gitignored per-machine layer (.abcd/.work.local/private-names.txt)
+      --public    the committed, CI-enforced layer (.abcd/docs-lint.json)
+```
+
 ### `abcd capture`
 
 Capture issues to the ledger; bare invocation is read-only status

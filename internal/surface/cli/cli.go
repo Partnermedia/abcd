@@ -150,6 +150,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newChangelogCommand(&asJSON))
 
 	root.AddCommand(newCaptureCommand(&asJSON))
+	root.AddCommand(newBanlistCommand(&asJSON))
 	root.AddCommand(newMemoryCommand(&asJSON))
 	root.AddCommand(newRulesCommand(&asJSON))
 	root.AddCommand(newHookCommand())
