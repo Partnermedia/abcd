@@ -151,6 +151,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The `PII` rules domain fires on network work, and says never to commit a
+  hostname or an address** (iss-156). Its recall keywords were the vocabulary of
+  credentials — secret, token, credential, pii, redact, hostname, email — so a
+  session investigating a mesh VPN's reachability, a firewall rule, or an
+  address in a network config matched nothing and the hook injected nothing.
+  The keywords now cover that context (`ip`, `vpn`, `tailscale`, `firewall`,
+  `network`, `reachability`), and one new rule line forbids committing
+  hostnames, IP or MAC addresses, and other live network identifiers, naming the
+  reserved documentation ranges as the alternative. That rule previously existed
+  only in a repo's own instructions file, which meant the one discipline this
+  domain most needed to state was the one it never said — an agent could recall
+  `PII` and still read nothing about the machine identifiers in front of it.
+  Recall matching is word-bounded already, so the bare `ip` keyword matches a
+  standalone token and never the middle of a word such as "script" or "zip".
 - **`abcd audit` flags local-tier artefacts sitting in a committed tier**
   (iss-155). The `three-tier-layout` rule verified that the committed tiers
   exist and that `.abcd/.work.local/` is gitignored, but never the reverse

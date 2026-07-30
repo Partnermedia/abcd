@@ -111,6 +111,54 @@ func TestOpinionsDomainPointsAtPrinciplesNotCopies(t *testing.T) {
 	}
 }
 
+// TestPIIDomainRecallsNetworkContexts (iss-156) proves the PII domain fires on
+// the network/infra prompts that most need it. The original recall set (secret,
+// token, credential, pii, redact, hostname, email) missed every one of these, so
+// an agent writing up a mesh-VPN or firewall investigation got zero injection.
+// Recall matching is word-bounded (see indexPrompt/termHit), so the bare "ip"
+// keyword is safe: it matches only a standalone token, never "script" or "zip".
+func TestPIIDomainRecallsNetworkContexts(t *testing.T) {
+	rs := Defaults()
+	for _, prompt := range []string{
+		"investigating tailscale reachability from the vpn",
+		"the firewall is dropping the connection",
+		"write up what the network scan found",
+		"note the ip we connected to",
+	} {
+		if !has(rs.Match(prompt), "PII") {
+			t.Errorf("network-context prompt %q did not recall PII, got %v", prompt, names(rs.Match(prompt)))
+		}
+	}
+}
+
+// TestPIIDomainRecallIPIsWordBounded guards the "ip" keyword against the
+// over-matching it would cause under substring semantics: a prompt about a
+// script, a description, or a zip file must not inject PII.
+func TestPIIDomainRecallIPIsWordBounded(t *testing.T) {
+	rs := Defaults()
+	if got := rs.Match("unzip the script and edit its description"); has(got, "PII") {
+		t.Fatalf("bare 'ip' keyword over-matched a non-network prompt, got %v", names(got))
+	}
+}
+
+// TestPIIDomainForbidsCommittingNetworkIdentifiers (iss-156) proves the injected
+// rule text carries the never-commit-hostnames/IPs rule. It previously lived only
+// in a parent CLAUDE.md privacy section, so the rules loader never injected it.
+func TestPIIDomainForbidsCommittingNetworkIdentifiers(t *testing.T) {
+	pii, ok := Defaults().Lookup("PII")
+	if !ok {
+		t.Fatal("PII domain missing from the bundled defaults")
+	}
+	for _, rule := range pii.Rules {
+		low := strings.ToLower(rule)
+		if strings.Contains(low, "hostname") && strings.Contains(low, "ip address") &&
+			strings.Contains(low, "network identifier") {
+			return
+		}
+	}
+	t.Fatalf("no PII rule forbids committing hostnames, IP addresses, or live network identifiers: %v", pii.Rules)
+}
+
 func TestMatchRecallKeyword(t *testing.T) {
 	rs := Defaults()
 	got := rs.Match("let's commit and push this")
