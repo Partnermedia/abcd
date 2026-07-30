@@ -239,6 +239,21 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   lines+=("$lineno")
 done < "$banlist"
 
+# Announce the format and the entry count actually read, BEFORE the scan. A silent
+# downgrade — a stripped `# abcd-banlist: keyed` first line, or a UTF-8 BOM ahead of
+# it — turns every keyed entry into a non-matching whole-line pattern while `entries`
+# stays >=1, so the zero-entry warning below never fires. One announced line makes the
+# format the guard actually read visible at commit time, so a downgrade cannot be
+# silent. The key alone is never enough to leak a pattern, and no line content is
+# printed here — only the count and the format.
+if [ "$keyed" -eq 1 ]; then
+  if [ "$entries" -eq 1 ]; then noun="entry"; else noun="entries"; fi
+  echo "pre-commit: abcd name-guard: keyed store, $entries $noun" >&2
+else
+  if [ "$entries" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
+  echo "pre-commit: abcd name-guard: legacy store, $entries $noun" >&2
+fi
+
 # A store that parsed to NOTHING checks exactly as much as an absent one, so it is
 # exactly as loud. This runs AFTER the refresh above on purpose: a refresh that
 # truncates or garbles the store away to nothing must produce this warning, not
@@ -288,21 +303,65 @@ staged_paths=$(mktemp "$banlist_dir/banlist-paths.XXXXXX") || {
 trap 'rm -f "$candidate" "$staged_paths"' EXIT INT TERM HUP
 chmod 600 "$candidate" "$staged_paths"
 
-# NUL-delimited so a path with a space, a newline, or a quote is one record. R and T
-# are included: a rename and a type change are both staged content.
-if ! git diff --cached --name-only -z --diff-filter=ACMRT >"$staged_paths"; then
+# NUL-delimited RAW records, so a path with a space, a newline, or a quote is one
+# field AND the staged (destination) MODE of every entry is available — a gitlink
+# (mode 160000) has no blob in this object store, and reading it would fail-close
+# every commit forever. R and T are included: a rename and a type change are both
+# staged content; a rename's DESTINATION path is the one carrying the staged blob.
+if ! git diff --cached --raw -z --diff-filter=ACMRT >"$staged_paths"; then
   echo "pre-commit: BLOCKED — could not list the staged paths (git diff --cached failed)." >&2
   echo "            the guard cannot see what is being committed, so it refuses rather than pass." >&2
   exit 1
 fi
-while IFS= read -r -d '' staged_path; do
-  if ! git show ":$staged_path" >>"$candidate"; then
+# The raw -z stream alternates: one metadata field (`:srcmode dstmode srcsha dstsha
+# STATUS`) then one path field, except a rename/copy (status R*/C*) which carries the
+# OLD path then the NEW path. Both are read from the same redirected stream so it
+# stays aligned.
+while IFS= read -r -d '' meta; do
+  # shellcheck disable=SC2086
+  set -- $meta
+  dstmode="$2"
+  status="$5"
+  IFS= read -r -d '' staged_path || break
+  case "$status" in
+    R* | C*) IFS= read -r -d '' staged_path || break ;;
+  esac
+
+  # The private store must NEVER be tracked: the whole layer rests on the file being
+  # untracked, and the guard cannot catch its own source (its patterns are exactly
+  # what the file holds). A staged path in the local-ephemeral tier is a refusal
+  # naming the path — the path is the store LOCATION, not a secret, so naming it is
+  # correct and is the remedy.
+  case "$staged_path" in
+    "$banlist_dir" | "$banlist_dir"/*)
+      echo "pre-commit: BLOCKED — refusing to commit $staged_path." >&2
+      echo "            the private banlist must never be committed: it lives in the gitignored" >&2
+      echo "            local tier ($banlist_dir/) and holds patterns whose literal text must not" >&2
+      echo "            enter history. Unstage it (git restore --staged $staged_path)." >&2
+      exit 1
+      ;;
+  esac
+
+  # A gitlink has no blob here; skip it rather than fail-close on a `git show` that
+  # cannot succeed. Every OTHER git-show failure still refuses (fail closed).
+  case "$dstmode" in
+    160000) continue ;;
+  esac
+
+  # The staged blob is read stage-explicitly (`:0:PATH`): the ambiguous `:PATH` form
+  # parses a path literally named `0:README.md` as "stage 0 of README.md" and scans
+  # the WRONG blob, a proven bypass. `:0:PATH` names stage 0 and the path unambiguously.
+  if ! git show ":0:$staged_path" >>"$candidate"; then
     echo "pre-commit: BLOCKED — could not read the staged content of one file (git show failed)." >&2
     echo "            the guard cannot check what it cannot read, so it refuses rather than pass." >&2
     exit 1
   fi
   # A separator, so a pattern cannot match across the join between two files.
   printf '\n' >>"$candidate"
+  # The staged PATH itself is scanned like content: a banned name in a FILENAME
+  # (widgetworks-notes.md) enters history just as surely as one in a file's bytes, so
+  # a path matching a private pattern refuses by key exactly as content does.
+  printf '%s\n' "$staged_path" >>"$candidate"
 done <"$staged_paths"
 
 # Nothing staged to check. Any refusal already recorded above still stands: a store

@@ -394,6 +394,119 @@ func TestPreCommitHook_StagedShapesThatDefeatDiffText(t *testing.T) {
 	})
 }
 
+// TestPreCommitHook_StageExplicitBlobRead pins the fix for the `git show` rev-magic
+// bypass. A file literally named `0:README.md` fed to the ambiguous `git show
+// ":$path"` is parsed as "stage 0 of README.md" — so a hostile blob under that name
+// is never scanned, and `2:notes.md` mis-resolves the same way. The stage-explicit
+// `git show ":0:$path"` names stage 0 and the path unambiguously.
+func TestPreCommitHook_StageExplicitBlobRead(t *testing.T) {
+	for _, name := range []string{"0:README.md", "2:notes.md"} {
+		t.Run(name, func(t *testing.T) {
+			r := newHookRepo(t, keyedBanlist)
+			// A decoy at the path the rev-magic would resolve to, holding nothing
+			// banned: the OLD hook scanned THIS instead of the hostile file.
+			r.write("README.md", "a clean readme\n")
+			r.write("notes.md", "clean notes\n")
+			r.write(name, "the widgetworks deal closes friday\n")
+			r.git("add", "README.md", "notes.md", name)
+			blocked, out := r.commit()
+			if !blocked {
+				t.Fatalf("commit not blocked; a file named %q hid its banned content behind git rev-magic\n%s", name, out)
+			}
+		})
+	}
+}
+
+// TestPreCommitHook_RefusesStagingThePrivateStore pins that the guard refuses to
+// commit the private store (or anything in the local-ephemeral tier). The whole
+// layer rests on that file being untracked; a `git add -f` of it would otherwise
+// commit the plaintext banlist, and the guard cannot catch its own source.
+func TestPreCommitHook_RefusesStagingThePrivateStore(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	// Force past the gitignore, exactly the leak: stage the store itself.
+	r.git("add", "-f", ".abcd/.work.local/private-names.txt")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("commit not blocked; the private banlist was committed\n%s", out)
+	}
+	if !strings.Contains(out, "private-names.txt") || !strings.Contains(out, "never be committed") {
+		t.Errorf("refusal does not name the store path and the invariant\n%s", out)
+	}
+}
+
+// TestPreCommitHook_BannedNameInAFilenameBlocks pins that a banned name in a staged
+// PATH is refused by key exactly as one in staged content is: a filename enters
+// history just as surely as a file's bytes.
+func TestPreCommitHook_BannedNameInAFilenameBlocks(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	r.write("widgetworks-notes.md", "nothing sensitive in here\n")
+	r.git("add", "widgetworks-notes.md")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("commit not blocked; the banned name is in the staged FILENAME\n%s", out)
+	}
+	if !strings.Contains(out, "widget-partner") {
+		t.Errorf("refusal does not name the key\n%s", out)
+	}
+}
+
+// TestPreCommitHook_SkipsGitlinks pins that a staged submodule/gitlink (mode 160000)
+// does not fail-close the guard. A gitlink has no blob in this object store, so
+// `git show :0:<path>` cannot succeed; the guard must skip it, not refuse every
+// commit forever. The gitlink is staged directly via update-index (a real submodule
+// needs a second repo), which is the same index shape a submodule add produces.
+func TestPreCommitHook_SkipsGitlinks(t *testing.T) {
+	r := newHookRepo(t, keyedBanlist)
+	r.write("seed.md", "nothing sensitive here\n")
+	r.git("add", "seed.md")
+	if blocked, out := r.commit(); blocked {
+		t.Fatalf("seed commit refused\n%s", out)
+	}
+	// A commit sha NOT in this object store — the real submodule shape, where the
+	// superproject's index names a commit that lives only in the submodule. `git show
+	// :0:subm` then exits 128, which the fail-closed branch would turn into a refusal
+	// of every commit forever; the guard must skip the gitlink by its mode instead.
+	const fakeSHA = "0000000000000000000000000000000000000001"
+	if _, err := r.tryGit("update-index", "--add", "--cacheinfo", "160000,"+fakeSHA+",subm"); err != nil {
+		t.Skip("cannot stage a gitlink in this sandbox")
+	}
+	blocked, out := r.commit()
+	if blocked {
+		t.Fatalf("commit blocked by a staged gitlink; the guard fail-closed on a mode it cannot read\n%s", out)
+	}
+}
+
+// TestPreCommitHook_AnnouncesTheFormatItRead pins the visible-downgrade defence:
+// the guard prints one line naming the format and entry count it actually read,
+// BEFORE the scan. Stripping the `# abcd-banlist: keyed` declaration silently turns
+// every keyed entry into a non-matching whole-line pattern, and the announcement is
+// what makes that downgrade visible at commit time.
+func TestPreCommitHook_AnnouncesTheFormatItRead(t *testing.T) {
+	keyedOut := func() string {
+		r := newHookRepo(t, keyedBanlist)
+		r.write("note.md", "nothing sensitive here\n")
+		r.git("add", "note.md")
+		_, out := r.commit()
+		return out
+	}()
+	if !strings.Contains(keyedOut, "keyed store") {
+		t.Errorf("keyed store not announced\n%s", keyedOut)
+	}
+
+	// Strip line 1: the same entry line is now a whole-line pattern (legacy).
+	downgraded := strings.TrimPrefix(keyedBanlist, "# abcd-banlist: keyed\n")
+	r := newHookRepo(t, downgraded)
+	r.write("note.md", "nothing sensitive here\n")
+	r.git("add", "note.md")
+	_, out := r.commit()
+	if !strings.Contains(out, "legacy store") {
+		t.Errorf("a stripped declaration was not announced as a legacy store\n%s", out)
+	}
+	if strings.Contains(out, "keyed store") {
+		t.Errorf("the downgraded store was still announced as keyed\n%s", out)
+	}
+}
+
 // TestPreCommitHook_LargeStagedFileStillBlocks is the regression pin for the
 // SIGPIPE class the increment already fixed and never tested: a staged file far
 // larger than a pipe buffer, with the name on its FIRST line, so a matching grep
