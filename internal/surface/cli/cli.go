@@ -1487,6 +1487,14 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				if res.FolderKind != ahoy.UnmanagedFolder {
 					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(res.Guard))
+					for i, line := range banlistHealthLines(*res.Banlist) {
+						label := "  banlist:     "
+						if i > 0 {
+							label = "               "
+						}
+						fmt.Fprintf(w, "%s%s\n", label, line)
+					}
+					fmt.Fprintf(w, "               reach: %s\n", res.Banlist.Reach)
 				}
 				// Classification is read-only; the human report names the
 				// next step per folder kind (itd-40 AC2/AC3).

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/REPPL/abcd-cli/internal/core/banlist"
 	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
@@ -170,6 +171,24 @@ func TestVisibilityBlockEffectiveGitSemantics(t *testing.T) {
 			if gitCheckIgnored(t, repo, rel) {
 				t.Errorf("%s: git ignores %q; want not ignored", tc.visibility, rel)
 			}
+		}
+	}
+}
+
+// TestVisibilityBlockIgnoresThePrivateBanlistStore is spc-20 AC5's gitignore
+// clause, pinned to the store's own path constant rather than to a spelling of the
+// local tier. The private layer's entire safety rests on the store being untracked:
+// abcd scaffolds it into every managed repo, so the fence abcd installs must cover
+// it under EITHER visibility, and moving the store without moving the fence must
+// fail here rather than in someone's history.
+func TestVisibilityBlockIgnoresThePrivateBanlistStore(t *testing.T) {
+	for _, visibility := range []string{"private", "public"} {
+		repo := gittest.NewRepo(t)
+		if _, err := applyVisibilityBlock(repo.Root(), visibility); err != nil {
+			t.Fatalf("%s: applyVisibilityBlock: %v", visibility, err)
+		}
+		if !gitCheckIgnored(t, repo, banlist.PrivateRelPath) {
+			t.Errorf("%s: the installed fence does not ignore %s", visibility, banlist.PrivateRelPath)
 		}
 	}
 }

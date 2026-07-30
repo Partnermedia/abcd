@@ -21,8 +21,8 @@ compromise.
 | | public layer | private layer |
 |---|---|---|
 | store | `.abcd/docs-lint.json`, the `banned_tokens` family | `.abcd/.work.local/private-names.txt`, gitignored |
-| enforced by | `abcd docs lint` in CI, per-line escape | the committed `.githooks/pre-commit` guard |
-| reach | every clone, every pull request | only machines that have opted in |
+| enforced by | `abcd docs lint` in CI, per-line escape | the committed `.githooks/pre-commit` and `pre-merge-commit` guards |
+| reach | every clone and pull request — **when the config is tracked** (see below) | only machines that have opted in, and only the commits git runs a hook for |
 | visibility | entries render in full | entries render **by key only** |
 
 The public layer is not a new mechanism. It is the `banned_tokens` family that
@@ -115,18 +115,144 @@ Because the store's safety rests entirely on its being untracked, `add --private
 refuses outright when git does not ignore the store's path: the guard cannot catch
 its own source.
 
+## Scaffolded, not hand-wired
+
+`abcd ahoy` writes all five artefacts into any repo it configures, so a repo
+becomes name-safe by being abcd-managed:
+
+| artefact | where | note |
+|---|---|---|
+| guard hook | `.githooks/pre-commit` | committed, so every clone inherits it; a clone arms it once with `git config core.hooksPath .githooks` |
+| merge guard | `.githooks/pre-merge-commit` | git runs no `pre-commit` for a merge commit, so the same guard runs from a second entry point. Written **only** beside abcd's own guard: the shim delegates to whatever occupies `pre-commit`, so beside a foreign hook it would both claim coverage it has not got and silently start running the maintainer's hook on merges |
+| EOL pin | `.gitattributes` | one appended line keeping the hooks at LF — a `core.autocrlf` checkout rewrites a script git EXECUTES, and its shebang stops resolving |
+| public family | `.abcd/docs-lint.json` | an **empty** `banned_tokens` array — abcd cannot know which names a repo may not publish, and a ban nobody declared would fail a build over a word the maintainer never chose |
+| private stub | `.abcd/.work.local/private-names.txt` | inside the gitignored local tier |
+
+Presence is not identity. Each hook carries an `# abcd-name-guard: v1` line —
+matched as a whole line, so a hook that merely mentions it in a comment is not
+claimed — and a hook without it is a **foreign** hook: abcd reports it and never
+replaces it, because a maintainer's own `pre-commit` is legitimate and calling it
+"the abcd guard" would mean nothing checks the banlist while the status board says
+something does.
+
+Identity is not integrity, and abcd asserts only the first. ANY file carrying that
+line is treated as abcd's guard — including one that quotes the template inside a
+heredoc, and including a hook edited to check nothing — and it earns the merge shim
+that delegates to it. What the marker answers is "did abcd put this here", well
+enough to keep abcd from claiming a maintainer's hook; it is not a signature, and a
+repo whose committed hooks a contributor can change is a repo where the guard's
+behaviour is whatever that contributor last committed. "Committed" is likewise not "armed" — git runs the hook the clone's hooks
+path selects, which abcd neither sets nor fully observes, so every surface prints
+the arming instruction rather than claiming the guard is running.
+
+Every write is create-if-absent, and every one is **contained**: paths resolve
+through an `os.Root` opened at the repo, so a symlink committed at `.githooks` or
+at the local tier cannot land a hook or a stub outside the repo while the surfaces
+report the in-repo path. The reads detection makes are resolved through the same
+root, so a report can never describe a file apply could not act on. Containment is
+about the repo boundary and nothing finer: a symlink that redirects *within* the
+repo (`.githooks -> docs/`) is followed, and a repo that commits one has chosen
+where its own files live. A hook, a CI-gating config, and above all a populated
+private store are the maintainer's, and re-seeding one would delete work abcd
+cannot see.
+
+The stub is written only where **git itself** reports the store's path as ignored —
+`git check-ignore`, the primitive the `add --private` write path already uses, not a
+comparison of `.gitignore` text. The two answer different questions: a repo can
+carry a byte-perfect abcd block and still track the store (a negation after it, a
+tracked tier), and a repo whose config step never ran has no block at all. A stub
+git would track is the hazard, not the remedy, so the gap that asks for it is
+advertised as resolvable only when git says the path is safe.
+
+The stub's worked examples are **all commented out**, so a fresh scaffold parses to
+zero entries and the guard says so loudly at commit time rather than looking like
+protection. Every illustrative value in it is a reserved documentation value (RFC
+5737, RFC 3849, RFC 2606, RFC 7042) or a persona-derived fixture host, per
+[`examples-use-reserved-identifiers`](../../principles/examples-use-reserved-identifiers.md);
+the scaffold test judges that with the repo's own network-identifier detector, and
+proves the detector is armed with a control value first.
+
+## What the copy refusals reach, and what they do not
+
+The store is protected from being committed by three tests, and it is worth being
+exact about each, because a guard described more broadly than it works is a guard
+people stop checking behind.
+
+| test | catches | escapable |
+|---|---|---|
+| tier path | any staged path inside `.abcd/.work.local/`, including a rename's **source** path | no |
+| first line | a staged blob whose first line is the format declaration | yes — see below |
+| basename | a staged path whose filename is `private-names.txt` | yes — see below |
+
+These are **shape tests on a mistake, not a net against an adversary.** A copy with
+the declaration stripped (`tail -n +2`), altered by one byte, or pushed below a
+preamble passes the first-line test; a legacy store — which declares no format at
+all — is invisible to it, and passes the basename test the moment it is renamed. The
+rename-source test only fires for a store git already tracks, which is itself the
+accident it exists to help clean up. What all three catch is the accident that
+actually happens: a `cp`, a `.bak`, a stray editor duplicate. Widening them further
+means matching against the store's key list or scanning further into every staged
+blob, which puts the secret into more code paths to protect it in fewer.
+
+The escape is published because the tests are shape tests: a repo that legitimately
+commits a store-shaped file — this repo's own fixture corpora, a document quoting
+the declaration, a file that happens to be called `private-names.txt` — needs a way
+to say so, and `--no-verify` is an off switch for the whole guard rather than a
+per-file escape. A blob whose **second line** reads `# abcd-banlist-example` — matched after the same
+byte-order-mark and surrounding-blank normalisation the format declaration gets — is
+exempt from the first-line and basename tests, and from nothing else.
+
+Be exact about what that buys. The exempt blob is still scanned against every entry,
+so it cannot smuggle a **plaintext** banned name past the guard. It is not, and
+cannot be, protection for a copy of the store itself: a store's entries are escaped
+regular expressions and do not match their own text, which is the whole reason the
+copy refusals exist. The trap that follows is second-order and worth naming — a LIVE
+store carrying the marker on its own second line exempts every copy of itself, so
+the marker belongs in fixtures and documents, never in a store holding real
+patterns.
+
+## What the public layer does not reach
+
+The public layer's claim is that it is committed and enforced for everyone, and
+that claim depends on the config being tracked. Under `visibility: public` the
+installed fence ignores the anchored `/.abcd/` wholesale — one switch, no
+per-subdirectory exceptions — and `.abcd/docs-lint.json` sits inside it. A repo
+abcd configures as public therefore carries a public family CI never sees, exactly
+where public exposure is the risk.
+
+abcd does not resolve that here: moving the file amends the iss-169 fence record,
+and carving an exception into the fence gives up the one-switch property that
+record chose. It stops claiming otherwise instead — detection reports
+`banlist.public_family_ignored` and the status board reads "public family NOT
+ENFORCEABLE". The placement question is
+[`iss-176`](../../../work/issues/open/iss-176-public-banlist-family-unenforceable-under-public-visibility.md),
+for a maintainer to settle.
+
 ## Honest reach
 
-`abcd banlist` states plainly that CI cannot enforce the private layer. That is not
-a limitation to be fixed but the design: a pattern in CI config is a published
-pattern. Wiring the same statement into the status and report surfaces, and
-`ahoy` scaffolding of the guard hook, gitignore entry, and a documented stub with
-reserved-value examples, are the remaining slices of this surface.
+`abcd banlist` states plainly that CI cannot enforce the private layer, and so does
+every other surface that describes it: `abcd ahoy`'s status board and the detection
+envelope both carry the sentence beside the state it qualifies. It lives once, as
+`banlist.PrivateReachNote`, because a human line, a verb, and a machine consumer
+reading the envelope's fields must not be able to disagree about what "hook
+committed" beside a present store means — and the reading a machine consumer takes
+on its own is the wrong one.
+
+The sentence names the second limit too, because "machines that have opted in" is
+necessary and not sufficient. A hook sees the commits git asks it about, and the
+list is explicitly non-exhaustive: a fast-forward `git pull` creates no commit at
+all, git runs no hook for a rebase, a `git am`, a `git revert` or a cherry-pick,
+`--no-verify` switches it off, and a merge commit needs the `pre-merge-commit`
+half. A reader who stopped at opt-in would believe an opted-in machine is fully
+covered, which is the belief that gets a name committed.
+
+None of that is a limitation to be fixed. A pattern in CI config is a published
+pattern, and a guard is only ever asked about what git asks it about.
 
 ## References
 
 - Plugin command: [`commands/abcd/banlist.md`](../../../../commands/abcd/banlist.md)
-- Spec: [`spc-20`](../../specs/open/spc-20-name-banlist.md)
-- Intent: [`itd-74`](../../intents/planned/itd-74-name-banlist.md)
+- Spec: [`spc-20`](../../specs/closed/spc-20-name-banlist.md)
+- Intent: [`itd-74`](../../intents/shipped/itd-74-name-banlist.md)
 - Public-layer gate: [`10-docs.md`](10-docs.md)
 - Install surface: [`01-ahoy.md`](01-ahoy.md)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/banlist"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 	"github.com/REPPL/abcd-cli/internal/termsafe"
@@ -283,7 +284,115 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 			fmt.Fprintf(w, "  line %d uses a Perl-style escape or a `(?…)` group; the guard's POSIX grep reads it as an extended regular expression, which may match differently than written (grep implementations diverge) — the guard does NOT refuse it, so verify it against the guard's grep\n", line)
 		}
 	}
-	fmt.Fprintln(w, "  reach: CI cannot enforce this layer — it protects only machines that have opted in")
+	fmt.Fprintln(w, "  reach: "+banlist.PrivateReachNote)
+}
+
+// banlistHealthLines renders ahoy's name-guard verdict: what occupies each hook
+// path, whether the public family can actually be enforced, and what shape the
+// private layer is in on this machine. It never reads an entry — the store's
+// content is the secret, and a status board is exactly the surface that must not
+// hold it — but it does report counts, because a store whose lines do not parse
+// stops every commit while looking populated.
+//
+// The reach caveat is printed beside it by the caller, unconditionally: "hook
+// committed" beside a present store otherwise reads as coverage that neither a pull
+// request nor a rebase actually has.
+func banlistHealthLines(h ahoy.BanlistHealth) []string {
+	// The merge half's phrasing depends on the half it delegates to: install writes it
+	// only beside abcd's own guard, so beside a foreign one "install writes it" would
+	// send a reader to run a command that declines.
+	hooks := hookPhrase("pre-commit", h.Hook) + ", " + mergeHookPhrase(h)
+	if (h.Hook == ahoy.HookInstalled || h.MergeHook == ahoy.HookInstalled) && !h.HooksPathArmed {
+		// A committed hook is not a running hook. This clone's LOCAL config does not
+		// point at the hooks directory — which a user-level dispatcher may still do, so
+		// this is an instruction, never a verdict that the guard is off.
+		hooks += " (arm this clone: git config core.hooksPath .githooks)"
+	}
+	return []string{hooks, publicFamilyPhrase(h.PublicFamily) + "; " + privateStorePhrase(h)}
+}
+
+// hookPhrase words one hook path's state. "Committed" and "installed" are different
+// claims and only the first is abcd's to make: git runs the hook the clone's hooks
+// path selects, which abcd neither sets nor fully observes.
+func hookPhrase(name string, state ahoy.HookState) string {
+	switch state {
+	case ahoy.HookInstalled:
+		return name + " hook committed"
+	case ahoy.HookForeign:
+		return "a foreign " + name + " hook occupies .githooks/" + name + " — the banlist is NOT checked there"
+	case ahoy.HookUnreadable:
+		return ".githooks/" + name + " cannot be read as a hook"
+	default:
+		return name + " hook MISSING (`abcd ahoy install` writes it)"
+	}
+}
+
+// mergeHookPhrase words the merge half, whose remedy is not its own. An absent shim
+// beside abcd's guard is install's to write; an absent shim beside a hook abcd does
+// not own is not, because install refuses to delegate to a foreign hook — so the
+// line gives the remedy the merge_hook_inert gap gives, and never one install
+// declines to perform.
+func mergeHookPhrase(h ahoy.BanlistHealth) string {
+	if h.MergeHook == ahoy.HookAbsent && h.Hook != ahoy.HookInstalled {
+		return "merge commits NOT checked (move the foreign pre-commit hook aside and re-run `abcd ahoy install`)"
+	}
+	return hookPhrase("pre-merge-commit", h.MergeHook)
+}
+
+// publicFamilyPhrase words the committed layer's state. Four faults, four remedies:
+// a file to write, an array to add, a file to restore, and a placement to settle.
+// One shared wording would send a reader to do the wrong one.
+func publicFamilyPhrase(state ahoy.PublicFamilyState) string {
+	switch state {
+	case ahoy.PublicFamilyPresent:
+		return "public family present"
+	case ahoy.PublicFamilyUnusable:
+		return "public family unusable (no banned_tokens array)"
+	case ahoy.PublicFamilyUnreadable:
+		return "public family unreadable (" + banlist.PublicConfigRelPath + " cannot be opened)"
+	case ahoy.PublicFamilyIgnored:
+		// Present, readable, and enforced by nobody: git ignores the file, so CI never
+		// sees it. Under `visibility: public` the abcd fence ignores the whole .abcd/
+		// namespace, which is exactly where the public family lives.
+		return "public family NOT ENFORCEABLE (git ignores " + banlist.PublicConfigRelPath + ", so CI never sees it)"
+	default:
+		return "public family MISSING"
+	}
+}
+
+// privateStorePhrase words this machine's opt-in state and the store's shape.
+func privateStorePhrase(h ahoy.BanlistHealth) string {
+	if !h.PrivateStore {
+		// Absent is not "clean": nothing on this machine is checked against a private
+		// name, and the guard itself says so at commit time in these words.
+		return "private layer INACTIVE on this machine"
+	}
+	if h.PrivateUnreadable {
+		return "private store UNREADABLE — the guard refuses every commit until it is fixed"
+	}
+	format := "legacy"
+	if h.PrivateKeyed {
+		format = "keyed"
+	}
+	phrase := fmt.Sprintf("private store present (%s, %d entr%s", format, h.PrivateEntries, plural(h.PrivateEntries))
+	if h.PrivateUnparsed > 0 {
+		// An unusable line stops EVERY commit, so it belongs beside the count rather
+		// than one verb away.
+		phrase += fmt.Sprintf(", %d unusable line%s", h.PrivateUnparsed, pluralS(h.PrivateUnparsed))
+	}
+	phrase += ")"
+	if !h.PrivateStoreIgnored {
+		phrase += " — WARNING: NOT gitignored, one `git add -A` from committing its patterns"
+	}
+	return phrase
+}
+
+// pluralS is the plain -s plural, for nouns `plural` (entry/entries) does not fit.
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // renderPublicLayer prints the public family in full: committed config is

@@ -90,7 +90,10 @@ func keysOf(entries []rawEntry) []string {
 // same keys, skip the same comment and blank lines, and reach the same verdict on
 // both probe halves when the patterns are driven through the real grep.
 func TestParseAgreesWithTheHookOnTheKeyedCorpus(t *testing.T) {
-	entries, keyed := parse(readCorpus(t, "parse-corpus.txt"))
+	entries, keyed, err := parse(readCorpus(t, "parse-corpus.txt"))
+	if err != nil {
+		t.Fatalf("the keyed corpus must parse: %v", err)
+	}
 	if !keyed {
 		t.Fatal("the corpus's first line declares the keyed format; the parser did not recognise it")
 	}
@@ -128,7 +131,10 @@ func TestParseAgreesWithTheHookOnTheKeyedCorpus(t *testing.T) {
 // keys are all synthetic and no part of a line's text is ever exposed as a key.
 func TestParseReadsALegacyStoreAsWholeLines(t *testing.T) {
 	data := readCorpus(t, "parse-corpus-legacy.txt")
-	entries, keyed := parse(data)
+	entries, keyed, err := parse(data)
+	if err != nil {
+		t.Fatalf("the legacy corpus must parse: %v", err)
+	}
 	if keyed {
 		t.Fatal("a store with no format declaration was read as keyed")
 	}
@@ -639,5 +645,19 @@ func TestAddPrivateWriteIsContainedInTheRepo(t *testing.T) {
 	}
 	if len(leaked) != 0 {
 		t.Errorf("the private patterns landed outside the repo: %v", leaked)
+	}
+}
+
+// TestParseRefusesTheDuplicateDeclarationCorpus is the Go half of the
+// duplicate-declaration fixture. Its shell half is
+// TestPreCommitHook_DuplicatedDeclarationRefuses: one file, both readers, so the
+// divergence that made the status board contradict the guard is a test failure.
+func TestParseRefusesTheDuplicateDeclarationCorpus(t *testing.T) {
+	_, _, err := parse(readCorpus(t, "parse-corpus-duplicate-decl.txt"))
+	if !errors.Is(err, ErrMalformedStore) {
+		t.Fatalf("err = %v; want ErrMalformedStore", err)
+	}
+	if strings.Contains(err.Error(), "alice-laptop") {
+		t.Errorf("the refusal echoes store content: %v", err)
 	}
 }

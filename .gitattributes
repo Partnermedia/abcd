@@ -1,3 +1,11 @@
 # Keep-both union merge for the changelog: parallel PRs each append to
 # [Unreleased], so a literal merge conflicts. The union driver keeps both sides.
 CHANGELOG.md merge=union
+
+# The committed git hooks are executed by bash on every platform that runs them,
+# and a CRLF checkout makes the shebang line unparseable ("bad interpreter").
+# Pinning LF keeps the guard runnable after a checkout with autocrlf on, and keeps
+# the embedded scaffold template byte-identical to what it scaffolds.
+.githooks/* text eol=lf
+internal/core/ahoy/defaults/pre-commit text eol=lf
+internal/core/ahoy/defaults/pre-merge-commit text eol=lf

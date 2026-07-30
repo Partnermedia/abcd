@@ -1,4 +1,5 @@
 # abcd-banlist: keyed
+# abcd-banlist-example
 # Fixture banlist — a KEYED store: line 1 above declares the format, so every
 # non-comment line below MUST parse as KEY<space-or-tab>PATTERN. Read by BOTH
 # readers of that format — the Go parser (private_test.go) and the committed
@@ -8,6 +9,11 @@
 #
 # Patterns are POSIX extended regular expressions, matched case-insensitively by
 # the enforcing grep.
+#
+# Line 2 is the published per-file escape: this file is a committed FIXTURE whose
+# first line declares the store format, so without it the guard would refuse to
+# commit the corpus that proves the guard works. It exempts this blob from the
+# copy refusals only — its content is still scanned against every entry.
 
 widget-partner   widgetworks
 lab-host         alice-laptop\.example\.com

@@ -70,6 +70,10 @@ plugin surface, and a future MCP server share one engine.
   structural — the exported private entry type carries no pattern field, so no
   rendering can leak a value — and edits are surgical (a line for the private store,
   byte surgery on the located array for the config), never a whole-file re-marshal.
+  Scaffolding is NOT here either: `core/ahoy` writes the five artefacts (the two
+  committed guard hooks, the `.gitattributes` line keeping them at LF, the public
+  family, and the gitignored stub) into a repo it configures, importing this package
+  for the paths and for the one canonical statement of the private layer's reach.
 - **`surface/cli/`** — the default front door: a Cobra command tree that calls
   `core` and formats results as text or `--json`. Holds no business logic.
 - **`surface/mcp/`** *(later)* — an additive front door exposing the same core
