@@ -117,7 +117,7 @@ its own source.
 
 ## Scaffolded, not hand-wired
 
-`abcd ahoy` writes all three artefacts into any repo it configures, so a repo
+`abcd ahoy` writes all five artefacts into any repo it configures, so a repo
 becomes name-safe by being abcd-managed:
 
 | artefact | where | note |
@@ -128,11 +128,20 @@ becomes name-safe by being abcd-managed:
 | public family | `.abcd/docs-lint.json` | an **empty** `banned_tokens` array — abcd cannot know which names a repo may not publish, and a ban nobody declared would fail a build over a word the maintainer never chose |
 | private stub | `.abcd/.work.local/private-names.txt` | inside the gitignored local tier |
 
-Presence is not identity. Each hook carries an `# abcd-name-guard: v1` line, and a
-hook without it is a **foreign** hook: abcd reports it and never replaces it,
-because a maintainer's own `pre-commit` is legitimate and calling it "the abcd
-guard" would mean nothing checks the banlist while the status board says something
-does. "Committed" is likewise not "armed" — git runs the hook the clone's hooks
+Presence is not identity. Each hook carries an `# abcd-name-guard: v1` line —
+matched as a whole line, so a hook that merely mentions it in a comment is not
+claimed — and a hook without it is a **foreign** hook: abcd reports it and never
+replaces it, because a maintainer's own `pre-commit` is legitimate and calling it
+"the abcd guard" would mean nothing checks the banlist while the status board says
+something does.
+
+Identity is not integrity, and abcd asserts only the first. ANY file carrying that
+line is treated as abcd's guard — including one that quotes the template inside a
+heredoc, and including a hook edited to check nothing — and it earns the merge shim
+that delegates to it. What the marker answers is "did abcd put this here", well
+enough to keep abcd from claiming a maintainer's hook; it is not a signature, and a
+repo whose committed hooks a contributor can change is a repo where the guard's
+behaviour is whatever that contributor last committed. "Committed" is likewise not "armed" — git runs the hook the clone's hooks
 path selects, which abcd neither sets nor fully observes, so every surface prints
 the arming instruction rather than claiming the guard is running.
 
@@ -190,9 +199,16 @@ commits a store-shaped file — this repo's own fixture corpora, a document quot
 the declaration, a file that happens to be called `private-names.txt` — needs a way
 to say so, and `--no-verify` is an off switch for the whole guard rather than a
 per-file escape. A blob whose **second line** is exactly `# abcd-banlist-example` is
-exempt from the first-line and basename tests, and from nothing else: its content is
-still scanned against every entry, so an escape cannot be used to commit a banned
-name.
+exempt from the first-line and basename tests, and from nothing else.
+
+Be exact about what that buys. The exempt blob is still scanned against every entry,
+so it cannot smuggle a **plaintext** banned name past the guard. It is not, and
+cannot be, protection for a copy of the store itself: a store's entries are escaped
+regular expressions and do not match their own text, which is the whole reason the
+copy refusals exist. The trap that follows is second-order and worth naming — a LIVE
+store carrying the marker on its own second line exempts every copy of itself, so
+the marker belongs in fixtures and documents, never in a store holding real
+patterns.
 
 ## What the public layer does not reach
 

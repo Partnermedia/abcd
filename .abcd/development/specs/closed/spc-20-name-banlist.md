@@ -128,9 +128,23 @@ Residuals, recorded rather than closed.
   every staged blob, would put the secret through more code paths to catch fewer
   accidents. The published `# abcd-banlist-example` second-line escape exists
   because they are shape tests and a repo may legitimately commit a store-shaped
-  file.
-- **The environment pin narrows, it does not close.** `PATH` is pinned to the
-  standard system directories, two of which are user-writable on a typical
-  developer machine, and `#!/usr/bin/env bash` resolves the interpreter through the
-  inherited `PATH` before any of the hook runs.
+  file. The escape keeps content scanning, so it cannot smuggle a plaintext banned
+  name — but it offers no protection to a copy of a STORE, whose escaped patterns
+  never match their own text, and a live store carrying the marker on its own second
+  line therefore exempts every copy of itself. The marker belongs in fixtures and
+  documents, never in a store holding real patterns.
+- **The marker asserts identity, not integrity.** Any file carrying a line equal to
+  `# abcd-name-guard: v<n>` is treated as abcd's guard and earns the merge shim that
+  delegates to it — including a file that quotes the template inside a heredoc, and
+  including a hook edited to check nothing. It answers "did abcd put this here" well
+  enough to keep abcd from claiming a maintainer's hook; it is not a signature, and
+  in a repo whose committed hooks a contributor can change, the guard's behaviour is
+  whatever that contributor last committed.
+- **The environment pin narrows, it does not close.** It pins `PATH`, `IFS` and
+  xtrace and unsets inherited shell functions shadowing the commands it runs, which
+  covers the common accidental and repo-scoped routes — a direnv file, an editor
+  task, a sourced rc, an exported `BASH_FUNC_*`. It is not a boundary: anyone who
+  controls the committer's environment wins, `#!/usr/bin/env bash` resolves the
+  interpreter through the inherited `PATH` before any of the hook runs, and two of
+  the pinned directories are user-writable on a typical developer machine.
 

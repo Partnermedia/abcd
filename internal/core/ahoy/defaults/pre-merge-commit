@@ -21,6 +21,11 @@ set -euo pipefail
 # half pins against. `#!/usr/bin/env bash` on line 1 still resolves the interpreter
 # through the inherited PATH, so the class is narrowed rather than closed.
 case $- in *x*) set +x ;; esac
+# Drop any inherited shell FUNCTION shadowing a command this hook runs. Pinning PATH
+# does nothing against `BASH_FUNC_grep%%=() { return 1; }` in the environment: a
+# function wins over PATH lookup, so the guard would report a clean check for ever
+# while announcing its entry count. Same class as the PATH prepend, different route.
+unset -f git grep mktemp tr cat mkdir rm chmod printf sed head command 2>/dev/null || true
 IFS=$' \t\n'
 LC_ALL=C
 export LC_ALL

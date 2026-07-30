@@ -655,8 +655,12 @@ func TestMarkerIsRecognisedOnlyAsAWholeLine(t *testing.T) {
 		"#!/bin/sh\n# abcd-name-guard: v1\nexit 0\n":                              HookInstalled,
 		"#!/bin/sh\n  # abcd-name-guard: v2  \nexit 0\n":                          HookInstalled,
 		"#!/bin/sh\n# abcd-name-guard: v1-fork\nexit 0\n":                         HookForeign,
+		// A CRLF checkout is the very failure the EOL pin exists for. Such a hook is
+		// still OURS — install must be able to heal it — so a trailing CR may not turn
+		// it into someone else's file for ever.
+		"#!/bin/sh\r\n# abcd-name-guard: v1\r\nexit 0\r\n": HookInstalled,
 	} {
-		t.Run(name[:min(len(name), 40)], func(t *testing.T) {
+		t.Run(shortName(name), func(t *testing.T) {
 			setupHermetic(t)
 			repo := t.TempDir()
 			hook := filepath.Join(repo, filepath.FromSlash(GuardHookRelPath))
@@ -678,29 +682,39 @@ func TestMarkerIsRecognisedOnlyAsAWholeLine(t *testing.T) {
 	}
 }
 
-// TestEOLPinIsRecognisedOnlyAsALiveLine: a commented-out attribute pins nothing, and
-// reporting it as pinned would leave a repo one autocrlf checkout from a guard that
-// silently stops running.
-func TestEOLPinIsRecognisedOnlyAsALiveLine(t *testing.T) {
-	for body, want := range map[string]bool{
-		"# " + guardEOLAttribute + "\n":      false,
-		"#" + guardEOLAttribute + "\n":       false,
-		guardEOLAttribute + "\n":             true,
-		"*.png binary\n" + guardEOLAttribute: true,
+// TestEOLPinIsGitsAnswerNotAPatternMatch: whether the hooks are pinned to LF is a
+// question about what git will DO on checkout, and only git can answer it. A pattern
+// match on abcd's own line calls a file pinned when a later `* text eol=crlf`
+// overrides it, and misses a live line that differs in whitespace — both of which
+// leave a repo one checkout from a guard that silently stops running.
+func TestEOLPinIsGitsAnswerNotAPatternMatch(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body string
+		want bool
+	}{
+		"commented out": {"# " + guardEOLAttribute + "\n", false},
+		"no space":      {"#" + guardEOLAttribute + "\n", false},
+		"live":          {guardEOLAttribute + "\n", true},
+		"after another": {"*.png binary\n" + guardEOLAttribute + "\n", true},
+		// git reads the LAST matching line, so a later catch-all overrides ours.
+		"overridden later":  {guardEOLAttribute + "\n* text eol=crlf\n", false},
+		"whitespace and CR": {"  " + guardEOLAttribute + "  \r\n", true},
 	} {
-		repo := t.TempDir()
-		if err := os.WriteFile(filepath.Join(repo, gitattributesRelPath), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		root, err := os.OpenRoot(repo)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := gitattributesPinsHookEOL(root)
-		root.Close()
-		if got != want {
-			t.Errorf("%q → pinned=%v; want %v", body, got, want)
-		}
+		t.Run(name, func(t *testing.T) {
+			setupHermetic(t)
+			repo := gittest.NewRepo(t).Root()
+			if err := os.WriteFile(filepath.Join(repo, gitattributesRelPath), []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			root, err := os.OpenRoot(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			if got := gitattributesPinsHookEOL(repo, root); got != tc.want {
+				t.Errorf("%q → pinned=%v; want %v", tc.body, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -737,6 +751,11 @@ func TestScaffoldNeverWidensAnExistingDirectory(t *testing.T) {
 	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
 		t.Fatal(err)
 	}
+	// The hook must actually have landed, or the mode below is the mode of a
+	// directory nothing was written into and the assertion proves nothing.
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(GuardHookRelPath))); err != nil {
+		t.Fatalf("the guard hook was not scaffolded into the pre-existing directory: %v", err)
+	}
 	fi, err := os.Stat(hooks)
 	if err != nil {
 		t.Fatal(err)
@@ -746,9 +765,12 @@ func TestScaffoldNeverWidensAnExistingDirectory(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+// shortName trims a fixture body down to a readable subtest name. It is not called
+// min: that shadows the builtin, and a helper in a test file is not worth the
+// confusion of reading `min` and meaning something else.
+func shortName(s string) string {
+	if len(s) > 40 {
+		return s[:40]
 	}
-	return b
+	return s
 }

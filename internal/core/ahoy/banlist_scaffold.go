@@ -50,7 +50,11 @@ const (
 
 // guardHookMarkerRe matches the marker as a complete line, surrounding ASCII blanks
 // tolerated. `v<digits>` and nothing else: `v1-fork` is a fork's marker, not abcd's.
-var guardHookMarkerRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardHookMarkerPrefix) + `[ \t]*v[0-9]+[ \t]*$`)
+//
+// A trailing CR is tolerated because a CRLF checkout is the exact failure the EOL pin
+// exists for: a hook that arrived mangled is still OURS, and install must be able to
+// heal it rather than be told for ever that someone else's file is in the way.
+var guardHookMarkerRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardHookMarkerPrefix) + `[ \t]*v[0-9]+[ \t\r]*$`)
 
 // guardHookTemplate and guardMergeHookTemplate are the canonical scaffolded guard:
 // the generalised form of the prototype this repo runs on itself, with the
@@ -402,7 +406,7 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 	h.MergeHook = classifyGuardHook(root, GuardMergeHookRelPath)
 	h.HooksPathArmed = hooksPathArmed(cwd)
 	h.PublicFamily = classifyPublicFamily(cwd, root, ign.public)
-	h.HookEOLPinned = gitattributesPinsHookEOL(root)
+	h.HookEOLPinned = gitattributesPinsHookEOL(cwd, root)
 	sum, serr := banlist.SummarisePrivate(cwd)
 	if serr != nil {
 		// A store that exists and cannot be read for what it is: present, and health
@@ -417,16 +421,26 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 	return h
 }
 
-// guardEOLAttributeRe matches the pin as a LIVE line: git ignores a line beginning
-// `#`, so a commented-out attribute pins nothing, and reporting it as pinned would
-// leave a repo one autocrlf checkout from a guard that silently stops running.
-var guardEOLAttributeRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardEOLAttribute) + `[ \t]*$`)
+// guardEOLAttributeRe matches abcd's own pin line, live (git ignores a line
+// beginning `#`). It answers ONE question — "is the canonical line already in this
+// file" — so an append does not duplicate it. It is not the classifier: what a file
+// is pinned TO is git's answer, below.
+var guardEOLAttributeRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardEOLAttribute) + `[ \t\r]*$`)
 
-// gitattributesPinsHookEOL reports whether .gitattributes already carries the
-// hooks' EOL pin. It matches the attribute line rather than parsing the file: the
-// question is whether THIS line is live, and a partial parse of a format with
-// macros and negations would answer a different one.
-func gitattributesPinsHookEOL(root *os.Root) bool {
+// gitattributesPinsHookEOL reports whether git will keep the committed hooks at LF.
+// It ASKS GIT — `check-attr eol` on the hook itself — because the question is what
+// git does on checkout, and only git knows: a pattern match on abcd's own line calls
+// a file pinned when a later `* text eol=crlf` overrides it, and misses a live line
+// that differs in whitespace. The same authority this package already grants git for
+// the ignore question.
+//
+// When git cannot answer — not a repository, git absent — it falls back to the
+// textual check rather than asserting "unpinned": a gap that cannot be verified must
+// not be reported as a fault a re-run would fix.
+func gitattributesPinsHookEOL(cwd string, root *os.Root) bool {
+	if out, err := gitutil.Run(cwd, "check-attr", "eol", "--", GuardHookRelPath); err == nil {
+		return strings.HasSuffix(strings.TrimSpace(out), ": eol: lf")
+	}
 	data, err := fsutil.ReadGuardedInRoot(root, gitattributesRelPath, maxAhoyFileBytes)
 	if err != nil {
 		return false
@@ -742,6 +756,9 @@ func (a *applyCtx) stepBanlist() {
 // maintainer's, may carry merge drivers and filters abcd knows nothing about, and a
 // file it cannot read is left alone rather than replaced with a file it can.
 func (a *applyCtx) pinHookEOL(root *os.Root) {
+	if gitattributesPinsHookEOL(a.cwd, root) {
+		return
+	}
 	data, err := fsutil.ReadGuardedInRoot(root, gitattributesRelPath, maxAhoyFileBytes)
 	switch {
 	case err == nil:
@@ -750,8 +767,24 @@ func (a *applyCtx) pinHookEOL(root *os.Root) {
 	default:
 		return
 	}
-	if guardEOLAttributeRe.Match(data) {
+	// git says the hooks are not pinned, but the canonical line may already be there
+	// and simply overridden by a later one. Appending it again is the fix — ours then
+	// wins as the last match — and this keeps a SECOND re-run from appending a third.
+	if bytes.Equal(data, appendEOLPin(data)) {
 		return
+	}
+	if err := fsutil.WriteFileAtomicPreserveModeInRoot(root, gitattributesRelPath, appendEOLPin(data)); err != nil {
+		return
+	}
+	a.note(filepath.Join(a.cwd, gitattributesRelPath))
+}
+
+// appendEOLPin returns data with the canonical attribute appended, or data unchanged
+// when the canonical line is already its LAST live attribute (appending a duplicate
+// after itself changes nothing but the diff).
+func appendEOLPin(data []byte) []byte {
+	if lastLiveAttributeIsOurs(data) {
+		return data
 	}
 	var buf bytes.Buffer
 	buf.Write(data)
@@ -765,10 +798,22 @@ func (a *applyCtx) pinHookEOL(root *os.Root) {
 	buf.WriteString("# core.autocrlf=true would rewrite it to CRLF and its shebang would stop\n")
 	buf.WriteString("# resolving, so the guard would silently stop running.\n")
 	buf.WriteString(guardEOLAttribute + "\n")
-	if err := fsutil.WriteFileAtomicPreserveModeInRoot(root, gitattributesRelPath, buf.Bytes()); err != nil {
-		return
+	return buf.Bytes()
+}
+
+// lastLiveAttributeIsOurs reports whether the file's final non-blank, non-comment
+// line is exactly abcd's pin — the only case where appending it again would be pure
+// noise.
+func lastLiveAttributeIsOurs(data []byte) bool {
+	lines := strings.Split(string(data), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimRight(strings.TrimSpace(lines[i]), "\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		return line == guardEOLAttribute
 	}
-	a.note(filepath.Join(a.cwd, gitattributesRelPath))
+	return false
 }
 
 // createContained writes data at rel inside root when nothing is there, noting the

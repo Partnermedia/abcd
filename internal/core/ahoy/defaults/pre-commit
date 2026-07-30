@@ -62,6 +62,11 @@ set -euo pipefail
 # thing the layer exists to prevent. It is first because everything below is traced
 # otherwise, including the pattern loop.
 case $- in *x*) set +x ;; esac
+# Drop any inherited shell FUNCTION shadowing a command this hook runs. Pinning PATH
+# does nothing against `BASH_FUNC_grep%%=() { return 1; }` in the environment: a
+# function wins over PATH lookup, so the guard would report a clean check for ever
+# while announcing its entry count. Same class as the PATH prepend, different route.
+unset -f git grep mktemp tr cat mkdir rm chmod printf sed head command 2>/dev/null || true
 # A field separator the caller cannot choose: an inherited IFS changes how every
 # unquoted expansion below splits.
 IFS=$' \t\n'
@@ -84,8 +89,22 @@ PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 # the environment, which is the exact hole the pin exists to close. It is read
 # BEFORE the tool check so that check can pass on such a machine:
 #     git config --local abcd.guardPath /nix/var/nix/profiles/default/bin
-guard_path=$(PATH="$PATH" git config --local --get abcd.guardPath 2>/dev/null || true)
-if [ -n "$guard_path" ]; then PATH="$PATH:$guard_path"; fi
+guard_path=$(git config --local --get abcd.guardPath 2>/dev/null || true)
+if [ -n "$guard_path" ]; then
+  # An EMPTY element — a leading, trailing or doubled colon — means "the current
+  # directory" to every PATH consumer, so a stray colon in this value would put the
+  # repo's own working tree on the guard's PATH and hand back the substitution the
+  # pin exists to prevent.
+  case ":$guard_path:" in
+    *::*)
+      echo "pre-commit: BLOCKED — abcd.guardPath contains an empty element, which means the current" >&2
+      echo "            directory to every PATH consumer and would put this repo's working tree on the" >&2
+      echo "            guard's PATH. Set it to directories only: git config --local abcd.guardPath /path/to/bin" >&2
+      exit 1
+      ;;
+  esac
+  PATH="$PATH:$guard_path"
+fi
 export PATH
 # Every external tool this hook runs after the pin. A missing one must BLOCK loudly:
 # left to `set -e` it would surface as a mute exit 127 that reads like a broken repo.
@@ -469,21 +488,17 @@ fi
 # have to run there, so the loop cannot simply be skipped.
 scratch_dir="$banlist_dir"
 scratch_tmp=""
-if [ "$store_present" -eq 1 ] || [ -d "$banlist_dir" ]; then
-  if [ ! -d "$banlist_dir" ]; then
-    # 0700 from the moment it exists, not 0755-under-umask then narrowed: the window
-    # between the two is when a copy of the staged tree would be world-readable.
-    if ! (umask 077 && mkdir -p "$banlist_dir"); then
-      echo "pre-commit: BLOCKED — could not create $banlist_dir for the guard's scratch file." >&2
-      exit 1
-    fi
-    chmod 700 "$banlist_dir"
-  fi
-else
-  scratch_tmp=$(mktemp -d) || {
+if [ ! -d "$banlist_dir" ]; then
+  # A store PRESENT implies the tier exists, so this is exactly the not-opted-in
+  # case. The explicit template is portable: bare `mktemp -d` is a GNU extension that
+  # BSD and macOS do not accept.
+  scratch_tmp=$(mktemp -d "${TMPDIR:-/tmp}/abcd-guard.XXXXXX") || {
     echo "pre-commit: BLOCKED — could not create a private scratch directory for the guard." >&2
     exit 1
   }
+  # Trapped IMMEDIATELY, before the three scratch files below: each of their failure
+  # paths exits, and every one of those exits leaked this directory.
+  trap 'rm -rf "$scratch_tmp"' EXIT INT TERM HUP
   chmod 700 "$scratch_tmp"
   scratch_dir="$scratch_tmp"
 fi

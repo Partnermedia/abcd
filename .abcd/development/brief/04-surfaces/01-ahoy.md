@@ -191,8 +191,9 @@ Steps, run in parallel where independent:
     would track is the hazard the layer exists to prevent, so a gap apply would
     refuse to close is never advertised as resolvable. The same pass reports the
     layers' state (`banlist` in the detection envelope), and that report always
-    carries the private layer's reach — CI cannot enforce it, and neither hook
-    sees a rebase, a `git am`, a cherry-pick, or a `--no-verify` commit. See
+    carries the private layer's reach — CI cannot enforce it, and neither hook sees
+    a fast-forward `git pull`, a rebase, a `git am`, a `git revert`, a cherry-pick,
+    or a `--no-verify` commit. See
     [`20-banlist.md`](20-banlist.md).
 
 Each detected discrepancy becomes a **gap** with a stable `id`, a `category`,
@@ -200,7 +201,7 @@ a `scope`, a `title`, `detail`, and a `fix_hint`. Gaps are grouped by category:
 
 | `category` | Examples | Apply behaviour |
 |---|---|---|
-| `safe-autocreate` | `.abcd/` skeleton, history-store dirs, name-banlist artefacts (guard hook, public family, private stub) (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt; the banlist artefacts are create-if-absent and never overwrite |
+| `safe-autocreate` | `.abcd/` skeleton, history-store dirs, name-banlist artefacts (both guard hooks, the `.gitattributes` LF pin, public family, private stub) (`.abcd/bin/` scripts in a later phase) | apply once category approved, no per-item prompt; the banlist artefacts are create-if-absent and never overwrite |
 | `config-change` | visibility, oracle adapter, PATH symlink, git-identity pin | transparent confirm; skip-if-set with "current value" notice |
 | `plugin-owned` | CLAUDE.md/AGENTS.md marker block (per itd-3); `hooks/hooks.json` manifest verification (verify-only per spc-16 T1) | silent overwrite on marker drift; non-resolvable diagnostic for malformed/missing manifest |
 | `dependency` | opt-in scanners: `gitleaks`, `trufflehog` install | offer brew with ONE category-level approval covering the opt-in scanners (per spc-16 T1 — per-CATEGORY, not per-tool) |
@@ -263,10 +264,11 @@ interactive confirmation.
    [`05-internals/03-configuration.md § 1`](../05-internals/03-configuration.md#1-visibility-driven-gitignore-policy).
    Show the resulting tracked-vs-ignored list before confirming.
 6. **Name-banlist scaffolding** (`safe-autocreate`, itd-74 / spc-20) — write the
-   committed guard hooks (`.githooks/pre-commit` and `.githooks/pre-merge-commit`,
-   because git runs no pre-commit for a merge), a `.abcd/docs-lint.json` carrying
-   an EMPTY public banned-names family, and the documented private stub in the
-   gitignored local tier. Every write is create-if-absent AND contained: paths
+   five artefacts: the committed guard hooks (`.githooks/pre-commit` and
+   `.githooks/pre-merge-commit`, because git runs no pre-commit for a merge), the
+   appended `.gitattributes` line keeping them at LF, a `.abcd/docs-lint.json`
+   carrying an EMPTY public banned-names family, and the documented private stub in
+   the gitignored local tier. Every write is create-if-absent AND contained: paths
    resolve through an `os.Root` opened at the repo, so a symlink committed at
    `.githooks` or at the local tier cannot land an artefact outside it. A hook, a
    CI-gating config, and above all a populated private store are the maintainer's.
