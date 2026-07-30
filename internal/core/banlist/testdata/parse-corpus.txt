@@ -1,0 +1,19 @@
+# Fixture banlist — read by BOTH the Go parser (parse_test.go) and the committed
+# .githooks/pre-commit hook (hook_test.go), so the two can be shown to agree on
+# one format. Every value below is reserved for documentation (RFC 5737/3849/
+# 2606/7042) or derived from the persona registry; nothing here names a real
+# machine, network, or organisation.
+#
+# Format: KEY<whitespace>PATTERN. Patterns are POSIX extended regular
+# expressions matched case-insensitively.
+
+widget-partner   widgetworks
+lab-host         alice-laptop\.example\.com
+lab-ip           192\.0\.2\.17
+lab-cidr         203\.0\.113\.0/24
+lab-mac          00:00:5E:00:53:1A
+lab-v6           2001:db8::5
+
+  indented-key   carol-server\.test
+
+partnerco\.example
