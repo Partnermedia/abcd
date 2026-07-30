@@ -9,11 +9,12 @@
 # here, on the same staged content, with the same output contract: a match refuses
 # the merge naming the entry KEY alone.
 #
-# `git cherry-pick` runs neither hook when it does not stop for an edit, and
-# `git rebase`, `git am`, `git commit --no-verify`, and a server-side push bypass
-# both by construction. This layer covers the commits git asks a hook about, on
-# machines that have opted in — nothing more, and the reach every abcd surface
-# states says exactly that.
+# Neither hook covers everything, and the list is explicitly non-exhaustive: a
+# fast-forward `git pull` creates no commit at all, and `git rebase`, `git am`,
+# `git revert`, `git cherry-pick` (when it does not stop for an edit),
+# `git commit --no-verify` and a server-side push bypass both by construction. This
+# layer covers the commits git asks a hook about, on machines that have opted in —
+# nothing more, and the reach every abcd surface states says exactly that.
 set -euo pipefail
 # --- environment pin: the FIRST statements, matching the guard this delegates to ---
 # Without them this half is the soft way in: it would exec the delegate under an

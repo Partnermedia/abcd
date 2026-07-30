@@ -105,16 +105,19 @@ const publicFamilySeed = `{
 // persona-derived fixture host, per examples-use-reserved-identifiers: this file is
 // scaffolded into every managed repo, so an example that looked like a real host or
 // address would teach the shape of the leak the layer exists to prevent.
-const privateStubBody = `# abcd-banlist: keyed
+const privateStubHead = `# abcd-banlist: keyed
 # abcd private banlist — LOCAL TO THIS MACHINE, never committed.
 #
 # The committed pre-commit and pre-merge-commit guards (.githooks/) refuse any
 # commit whose staged content matches an entry below, naming the entry's KEY alone.
-# CI cannot enforce this layer, and neither guard sees a rebase, a ` + "`git am`" + `, a
-# cherry-pick, or a commit made with --no-verify. That is the design, not a gap: a
-# pattern written into public CI config is a published pattern. Names a repo may
-# state out loud belong in the public family instead (.abcd/docs-lint.json), where
-# the lint gates them for everyone.
+# Their reach:
+`
+
+// privateStubTail is everything after the reach note.
+const privateStubTail = `#
+# That is the design, not a gap: a pattern written into public CI config is a
+# published pattern. Names a repo may state out loud belong in the public family
+# instead (.abcd/docs-lint.json), where the lint gates them for everyone.
 #
 # The first line above declares the KEYED format: every entry line is
 #     KEY<space-or-tab>PATTERN
@@ -149,10 +152,34 @@ const privateStubBody = `# abcd-banlist: keyed
 # Remove the first line and every line below becomes a whole-line pattern again.
 `
 
-// privateStubContent is the stub's bytes as scaffolding writes them. It is a
-// function rather than a bare constant so a test can assert against exactly what
-// lands on disk.
-func privateStubContent() string { return privateStubBody }
+// privateStubContent is the stub's bytes as scaffolding writes them.
+//
+// The reach paragraph is DERIVED from banlist.PrivateReachNote rather than restated:
+// this header ships into every managed repo, so a maintainer reads it as the account
+// of what their own guard covers. A hand-copied list drifts — and the way it drifts
+// is by omission, which reads as coverage.
+func privateStubContent() string {
+	return privateStubHead + commentWrap(banlist.PrivateReachNote) + privateStubTail
+}
+
+// commentWrap renders text as `# `-prefixed lines inside the stub's 80-column
+// header. It breaks on spaces only, so a backtick-quoted `git am` is never split.
+func commentWrap(text string) string {
+	const width = 76
+	var out strings.Builder
+	line := "#"
+	for _, word := range strings.Fields(text) {
+		if len(line)+1+len(word) > width && line != "#" {
+			out.WriteString(line + "\n")
+			line = "#"
+		}
+		line += " " + word
+	}
+	if line != "#" {
+		out.WriteString(line + "\n")
+	}
+	return out.String()
+}
 
 // ---------------------------------------------------------------------------
 // classification
@@ -422,9 +449,10 @@ func detectBanlistHealth(cwd string) BanlistHealth {
 }
 
 // guardEOLAttributeRe matches abcd's own pin line, live (git ignores a line
-// beginning `#`). It answers ONE question — "is the canonical line already in this
-// file" — so an append does not duplicate it. It is not the classifier: what a file
-// is pinned TO is git's answer, below.
+// beginning `#`). It is the FALLBACK classifier only — what a file is pinned to is
+// `git check-attr`'s answer, and this stands in when git cannot be asked at all.
+// Keeping an append from duplicating is a different question, answered against the
+// file's last live attribute (see lastLiveAttributeIsOurs).
 var guardEOLAttributeRe = regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(guardEOLAttribute) + `[ \t\r]*$`)
 
 // gitattributesPinsHookEOL reports whether git will keep the committed hooks at LF.

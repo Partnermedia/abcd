@@ -238,11 +238,12 @@ committed" beside a present store means — and the reading a machine consumer t
 on its own is the wrong one.
 
 The sentence names the second limit too, because "machines that have opted in" is
-necessary and not sufficient. A hook sees the commits git asks it about: git runs
-none for a rebase, a `git am`, or a cherry-pick, `--no-verify` switches it off, and
-a merge commit needs the `pre-merge-commit` half. A reader who stopped at opt-in
-would believe an opted-in machine is fully covered, which is the belief that gets a
-name committed.
+necessary and not sufficient. A hook sees the commits git asks it about, and the
+list is explicitly non-exhaustive: a fast-forward `git pull` creates no commit at
+all, git runs no hook for a rebase, a `git am`, a `git revert` or a cherry-pick,
+`--no-verify` switches it off, and a merge commit needs the `pre-merge-commit`
+half. A reader who stopped at opt-in would believe an opted-in machine is fully
+covered, which is the belief that gets a name committed.
 
 None of that is a limitation to be fixed. A pattern in CI config is a published
 pattern, and a guard is only ever asked about what git asks it about.
