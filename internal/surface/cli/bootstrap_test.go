@@ -15,11 +15,15 @@ import (
 	"time"
 )
 
-// bootstrapTag / bootstrapCommit are the fixture release the test server serves.
-// The commit is a made-up 40-hex string: the script only ever tests its shape.
+// bootstrapTag / bootstrapCommit / bootstrapRelease are the fixture release the
+// test server serves. The commits are made-up 40-hex strings (the script only
+// ever tests their shape) and deliberately DIFFER from each other, so a script
+// that confused the plugin root's stamp with the release's commit — the two
+// values the skew notice compares — could not pass by coincidence.
 const (
-	bootstrapTag    = "v9.9.9"
-	bootstrapCommit = "0123456789abcdef0123456789abcdef01234567"
+	bootstrapTag     = "v9.9.9"
+	bootstrapCommit  = "0123456789abcdef0123456789abcdef01234567"
+	bootstrapRelease = "fedcba9876543210fedcba9876543210fedcba98"
 )
 
 // bootstrapScript locates the committed hooks/bootstrap.sh from this test file's
@@ -52,27 +56,35 @@ func bootstrapScript(t *testing.T) string {
 // bootstrapAsset is the release asset name the script derives from uname.
 func bootstrapAsset() string { return "abcd-" + runtime.GOOS + "-" + runtime.GOARCH }
 
-// bootstrapServer stands in for the release host: the asset path redirects to a
-// tag-stamped download URL (so the script can read the tag off curl's effective
-// URL), checksums.txt carries whatever manifest the case wants, and the commits
-// endpoint answers the release-sha lookup. hits counts every request, which is
-// how the no-network cases are proved rather than asserted.
+// bootstrapServer stands in for the release host, shaped like the real one
+// rather than like the script's convenience: /releases/latest answers a 302 to
+// /releases/tag/<tag> (the only place the tag is legible), and the tag-pinned
+// asset URL redirects to an OPAQUE CDN path carrying no tag segment — which is
+// what GitHub actually does (release-assets.githubusercontent.com/<numbers>?…),
+// and the reason reading the tag off curl's effective URL resolved to "unknown"
+// in production while passing against a friendlier fixture. checksums.txt is
+// served only from the tag-pinned path, so a script that fetched it from
+// /releases/latest/download instead gets a 404 rather than a silent pass.
+// hits counts every request, which is how the no-network cases are proved.
 func bootstrapServer(t *testing.T, body []byte, manifest string) (base string, hits *int32) {
 	t.Helper()
 	var count int32
 	asset := bootstrapAsset()
+	pinned := "/releases/download/" + bootstrapTag + "/"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&count, 1)
 		switch r.URL.Path {
-		case "/" + asset:
-			http.Redirect(w, r, "/releases/download/"+bootstrapTag+"/"+asset, http.StatusFound)
-		case "/releases/download/" + bootstrapTag + "/" + asset:
+		case "/releases/latest":
+			http.Redirect(w, r, "/releases/tag/"+bootstrapTag, http.StatusFound)
+		case pinned + asset:
+			http.Redirect(w, r, "/cdn-blob/1292161760/10d722b0?sig=x", http.StatusFound)
+		case "/cdn-blob/1292161760/10d722b0":
 			_, _ = w.Write(body)
-		case "/checksums.txt":
+		case pinned + "checksums.txt":
 			_, _ = w.Write([]byte(manifest))
 		case "/commits/" + bootstrapTag:
-			_, _ = w.Write([]byte(`{"sha":"` + bootstrapCommit + `","node_id":"x"}`))
+			_, _ = w.Write([]byte(`{"sha":"` + bootstrapRelease + `","node_id":"x"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,6 +118,13 @@ func bootstrapRoot(t *testing.T) string {
 // exit code. extraPath is prepended to PATH so a case can shim a command.
 func runBootstrap(t *testing.T, root, base, extraPath string) (string, int) {
 	t.Helper()
+	return runBootstrapEnv(t, root, base, base, extraPath)
+}
+
+// runBootstrapEnv is runBootstrap with the two URL overrides set independently,
+// which the loopback-restriction cases need (one remote, one local).
+func runBootstrapEnv(t *testing.T, root, base, api, extraPath string) (string, int) {
+	t.Helper()
 	pathValue := os.Getenv("PATH")
 	if extraPath != "" {
 		pathValue = extraPath + string(os.PathListSeparator) + pathValue
@@ -116,7 +135,7 @@ func runBootstrap(t *testing.T, root, base, extraPath string) (string, int) {
 		"HOME=" + t.TempDir(),
 		"CLAUDE_PLUGIN_ROOT=" + root,
 		"ABCD_BOOTSTRAP_BASE_URL=" + base,
-		"ABCD_BOOTSTRAP_API_URL=" + base,
+		"ABCD_BOOTSTRAP_API_URL=" + api,
 	}
 	out, err := cmd.CombinedOutput()
 	code := 0
@@ -173,15 +192,18 @@ func TestBootstrapFastPathTouchesNoNetwork(t *testing.T) {
 
 // TestBootstrapInstallsVerifiedBinary is the fresh-install AC: download, verify
 // against the release manifest, install executable, and record the provenance
-// the skew notice reads.
+// the skew notice reads. The exit code is 2, not 0: a SessionStart hook's stdout
+// is model context and only a non-zero exit shows its stderr to the human, so
+// the one-time `abcd ahoy install` suggestion would otherwise never be read by
+// anyone who could act on it. SessionStart does not block on a non-zero exit.
 func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("#!/bin/sh\nexit 0\n")
 	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
 
 	out, code := runBootstrap(t, root, base, "")
-	if code != 0 {
-		t.Fatalf("a verified download must exit 0, got %d (output %q)", code, out)
+	if code != 2 {
+		t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
 	}
 	binary := filepath.Join(root, "abcd")
 	fi, err := os.Stat(binary)
@@ -200,14 +222,25 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	}
 
 	meta := metaValues(t, root)
+	// release_tag has to be resolved from the release endpoint, not scraped off
+	// the asset download's effective URL: the real one redirects to an opaque CDN
+	// path, so a scraped tag is always "unknown" and the whole skew feature — and
+	// the tag-pinned checksums URL that keeps the binary and its manifest from
+	// coming from two different releases — dies with it.
 	if meta["release_tag"] != bootstrapTag {
-		t.Errorf("release_tag = %q, want %q", meta["release_tag"], bootstrapTag)
+		t.Errorf("release_tag = %q, want %q resolved from the release endpoint", meta["release_tag"], bootstrapTag)
 	}
-	if meta["release_sha"] != bootstrapCommit {
-		t.Errorf("release_sha = %q, want the commit the release API reports", meta["release_sha"])
+	if meta["release_sha"] != bootstrapRelease {
+		t.Errorf("release_sha = %q, want %q (the commit the release API reports)", meta["release_sha"], bootstrapRelease)
 	}
 	if meta["plugin_sha"] != bootstrapCommit {
 		t.Errorf("plugin_sha = %q, want the plugin root's commit stamp", meta["plugin_sha"])
+	}
+	// The hash the verification just accepted is recorded, so a later check can
+	// tell the binary that was verified from one that replaced it.
+	sum := sha256.Sum256(body)
+	if want := hex.EncodeToString(sum[:]); meta["binary_sha256"] != want {
+		t.Errorf("binary_sha256 = %q, want the verified hash %q", meta["binary_sha256"], want)
 	}
 	if _, err := time.Parse(time.RFC3339, meta["fetched_at"]); err != nil {
 		t.Errorf("fetched_at = %q, want an RFC3339 UTC timestamp (%v)", meta["fetched_at"], err)
@@ -294,8 +327,12 @@ func TestBootstrapUnsupportedPlatformChangesNothing(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, base, shim)
-	if code != 0 {
-		t.Errorf("an unsupported platform must exit 0, got %d (output %q)", code, out)
+	// 2, not 0: an unsupported platform is a reported condition rather than a
+	// fault, but a SessionStart hook that exits 0 has only put its message into
+	// model context — the human who would build from source never sees it. A
+	// non-zero SessionStart exit is non-blocking, so nothing is disrupted.
+	if code != 2 {
+		t.Errorf("an unsupported platform must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
 	}
 	if n := atomic.LoadInt32(hits); n != 0 {
 		t.Errorf("an unsupported platform must download nothing, got %d request(s)", n)
@@ -336,6 +373,95 @@ func TestBootstrapLockContentionExitsQuietly(t *testing.T) {
 	}
 }
 
+// TestBootstrapSweepsOrphanedTempDirs: SIGKILL runs no trap, so a killed run
+// leaves its PID-stamped temp directory behind holding a partially downloaded,
+// UNVERIFIED binary. Nothing else ever removes it, so it accumulates in the
+// plugin root forever. A run that holds the lock sweeps them.
+func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
+	root := bootstrapRoot(t)
+	body := []byte("payload")
+	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	orphan := filepath.Join(root, ".bootstrap.tmp.99999")
+	if err := os.MkdirAll(orphan, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(orphan, "abcd-unverified"), []byte("not verified"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, code := runBootstrap(t, root, base, "")
+	if code != 2 {
+		t.Fatalf("the install must still proceed, got %d (output %q)", code, out)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Errorf("a temp directory orphaned by a killed run must be swept, %s survives (%v)", orphan, err)
+	}
+}
+
+// TestBootstrapFastPathRejectsADirectory: `[ -x ]` is true of a DIRECTORY too, so
+// a plugin root holding a directory named abcd would take the fast path forever
+// and never provision anything. The check has to be a regular file, matching
+// internal/core/ahoy's isExecutableFile — the two must agree about what
+// "reachable binary" means or ahoy reports a gap the bootstrap refuses to fill.
+func TestBootstrapFastPathRejectsADirectory(t *testing.T) {
+	root := bootstrapRoot(t)
+	body := []byte("payload")
+	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	if err := os.MkdirAll(filepath.Join(root, "abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, code := runBootstrap(t, root, base, "")
+	if code == 0 {
+		t.Fatalf("a directory at the binary path must not read as a provisioned binary; output %q", out)
+	}
+	if !strings.Contains(out, "cannot be installed") && !strings.Contains(out, "ahoy install") {
+		t.Errorf("the run must proceed past the fast path and then report what it found; output %q", out)
+	}
+}
+
+// TestBootstrapRefusesNonLoopbackOverride is the trust bar's other half, and the
+// reason the two URL overrides are loopback-only rather than free-form: the
+// binary AND the checksums.txt that verifies it are fetched from the same base,
+// so an unrestricted override supplies both the payload and the manifest that
+// "verifies" it — checksum verification becomes vacuous — and the binary it
+// installs is then run unattended as the Bash shell guard on every tool call.
+// Refusing is louder than ignoring: a silently dropped override reads as a pass.
+func TestBootstrapRefusesNonLoopbackOverride(t *testing.T) {
+	// A .invalid host never resolves, so a script that IGNORED the restriction
+	// and fetched anyway fails on DNS rather than on this assertion — the
+	// refusal has to be named in the message, not inferred from the exit code.
+	const remote = "http://abcd-bootstrap.invalid"
+	cases := []struct{ name, base, api string }{
+		{"download base", remote, ""},
+		{"api base", "", remote},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := bootstrapRoot(t)
+			base, hits := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+			if tc.base == "" {
+				tc.base = base
+			}
+			if tc.api == "" {
+				tc.api = base
+			}
+
+			out, code := runBootstrapEnv(t, root, tc.base, tc.api, "")
+			if code == 0 {
+				t.Errorf("a non-loopback override must be refused, got exit 0 (output %q)", out)
+			}
+			if !strings.Contains(out, "loopback") {
+				t.Errorf("the refusal must name the loopback-only restriction; output %q", out)
+			}
+			if n := atomic.LoadInt32(hits); n != 0 {
+				t.Errorf("a refused override must fetch nothing at all, got %d request(s)", n)
+			}
+			assertNothingInstalled(t, root, out)
+		})
+	}
+}
+
 // TestBootstrapStaleLockIsBroken: a lock left by a crashed run would otherwise
 // make the plugin root unprovisionable forever, so one older than ten minutes is
 // taken over.
@@ -353,7 +479,7 @@ func TestBootstrapStaleLockIsBroken(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, base, "")
-	if code != 0 {
+	if code != 2 {
 		t.Fatalf("a stale lock must be broken and the install proceed, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "abcd")); err != nil {
