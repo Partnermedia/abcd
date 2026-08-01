@@ -151,6 +151,17 @@ func collectBlockScalar(lines []string, start int) ([]string, int) {
 		}
 		indent := indentOf(raw)
 		if blockIndent < 0 {
+			// The body of a block scalar must be indented DEEPER than the "key: |"
+			// line that opened it. collectBlockScalar is only ever reached from
+			// parseYAMLLines, which refuses any key line that is not at zero indent,
+			// so "deeper" means an indent greater than zero. A first content line at
+			// column 0 therefore belongs to the document, not to the block: the block
+			// is empty and the line is left unconsumed for the top-level parse.
+			// Taking it as content would silently swallow every remaining line —
+			// including other keys — with no error.
+			if indent == 0 {
+				break
+			}
 			blockIndent = indent
 		}
 		if indent < blockIndent {
@@ -950,7 +961,12 @@ func dumpString(s string) string {
 	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "?") {
 		return doubleQuote(s)
 	}
-	if strings.ContainsAny(s, "\n\t") {
+	// Line-structure characters. \r belongs here with \n: parseFrontmatter
+	// normalises \r and \r\n to \n before splitting, so a bare \r emitted raw
+	// becomes a real line break on read — enough to end the frontmatter early
+	// (a "---" after it) and drop every later key into the page body. doubleQuote
+	// escapes all three.
+	if strings.ContainsAny(s, "\n\r\t") {
 		return doubleQuote(s)
 	}
 	return s
