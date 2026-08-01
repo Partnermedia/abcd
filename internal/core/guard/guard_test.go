@@ -156,6 +156,21 @@ func TestCheckDecisions(t *testing.T) {
 			entryID: "gh-api-repo-delete",
 		},
 		{
+			// gh passes a fully-qualified URL through to the API unchanged, so
+			// this is the same repository deletion with the host spelled out.
+			name:    "the same deletion written as a fully-qualified URL",
+			command: "gh api -X DELETE https://api.github.com/repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			// Normalising the URL must not widen the entry: the depth limit is
+			// what keeps ordinary work inside a repository allowed.
+			name:    "a deeper URL path is still not repository deletion",
+			command: "gh api -X DELETE https://api.github.com/repos/owner/repo/git/refs/heads/feature",
+			verdict: VerdictAllow,
+		},
+		{
 			name:    "a DELETE deeper under a repository is not repository deletion",
 			command: "gh api -X DELETE repos/owner/repo/git/refs/heads/feature",
 			verdict: VerdictAllow,
@@ -260,14 +275,20 @@ func TestEvalPayloadIsDocumentedV1Gap(t *testing.T) {
 	}
 }
 
-// TestApiURLFormIsDocumentedV1Gap records the gh api entry's stated limit: the
-// path constraint reads an API PATH, so the same DELETE written against a
-// fully-qualified URL is not matched. It is a stated gap, not a silent one —
-// this test is what makes it visible if the behaviour ever changes.
-func TestApiURLFormIsDocumentedV1Gap(t *testing.T) {
-	d := checkOK(t, "gh api -X DELETE https://api.github.com/repos/owner/repo")
+// TestApiEnterpriseMountIsDocumentedV1Gap records what is left of the gh api
+// entry's URL limit now that a `scheme://host/` prefix is stripped. A path
+// constraint names a root SEGMENT, and a GitHub Enterprise Server install mounts
+// the same API under `/api/v3/`, so the repository path no longer starts the
+// path and the entry does not fire. Teaching the generic field about that mount
+// would put one host's routing into a declarative shape every entry shares —
+// and matching a `repos` root wherever it appeared would falsely refuse
+// `DELETE /teams/{id}/repos/{owner}/{repo}`, which removes a repository from a
+// team and destroys nothing. It is a stated gap, not a silent one; this test is
+// what makes it visible if the behaviour ever changes.
+func TestApiEnterpriseMountIsDocumentedV1Gap(t *testing.T) {
+	d := checkOK(t, "gh api -X DELETE https://ghe.example.test/api/v3/repos/owner/repo")
 	if d.Verdict != VerdictAllow {
-		t.Fatalf("v1 reads api paths, not URLs; got %+v — update the documented gap before changing this", d)
+		t.Fatalf("v1 reads a path from its root segment; got %+v — update the documented gap before changing this", d)
 	}
 }
 

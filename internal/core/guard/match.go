@@ -335,12 +335,13 @@ func isShortFlag(alt string) bool {
 // path under it names something inside the repository and stays allowed.
 //
 // A leading or trailing slash is ignored (`gh api /repos/owner/repo` is the same
-// call), and every remaining segment must be non-empty. A fully-qualified URL
-// form is not read as a path — a stated limit of the same family as the
-// tokenizer's payload gap, not a silent one.
+// call), and every remaining segment must be non-empty. An operand written as a
+// fully-qualified URL is normalised to its path first: `gh` passes an absolute
+// URL through to the API unchanged, so spelling the host out is the same call
+// and must not be a way around the same entry.
 func pathArgMatches(pa PathArg, ops []string) bool {
 	for _, op := range ops {
-		segs := strings.Split(strings.Trim(op, "/"), "/")
+		segs := strings.Split(strings.Trim(pathOf(op), "/"), "/")
 		if len(segs) != pa.Segments || segs[0] != pa.Root {
 			continue
 		}
@@ -356,6 +357,46 @@ func pathArgMatches(pa PathArg, ops []string) bool {
 		}
 	}
 	return false
+}
+
+// pathOf reduces an operand to the path part a resource constraint reads: a
+// leading `scheme://host` is dropped, and so is anything from the first `?` or
+// `#`. Both are normalisation, not interpretation — `https://api.github.com/
+// repos/owner/repo` and `repos/owner/repo?` are the same API call as
+// `repos/owner/repo`, and an entry a change of spelling walks past is not one.
+//
+// The host itself is deliberately NOT inspected. Reading it would mean deciding
+// which hostnames are the real API, which is a lookalike-domain problem this
+// guard has no way to settle; normalising every authority away can only ever
+// make the depth check see a path it would otherwise have missed.
+func pathOf(op string) string {
+	if q := strings.IndexAny(op, "?#"); q >= 0 {
+		op = op[:q]
+	}
+	i := strings.Index(op, "://")
+	if i <= 0 {
+		return op
+	}
+	// A scheme is letters, digits, `+`, `-`, `.`, starting with a letter —
+	// anything else before the `://` is ordinary path text, not an authority.
+	if c := op[0]; !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') {
+		return op
+	}
+	for j := 1; j < i; j++ {
+		c := op[j]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '+', c == '-', c == '.':
+		default:
+			return op
+		}
+	}
+	rest := op[i+3:]
+	slash := strings.IndexByte(rest, '/')
+	if slash < 0 {
+		return "" // a bare authority names no resource path at all
+	}
+	return rest[slash:]
 }
 
 // isShortCluster reports whether a token is a bundled short-flag cluster

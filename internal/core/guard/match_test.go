@@ -68,6 +68,34 @@ func TestCommandOfStepsOverWrapperArguments(t *testing.T) {
 	}
 }
 
+// TestPathOfNormalisesAnOperand pins the normalisation a resource constraint
+// reads through: a fully-qualified URL is the same API call as the path it
+// carries, and a query or fragment is not part of that path. Everything else
+// must survive untouched — over-eager stripping would widen every entry using
+// arg_paths, and the depth limit is what keeps ordinary work allowed.
+func TestPathOfNormalisesAnOperand(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"repos/owner/repo", "repos/owner/repo"},
+		{"/repos/owner/repo", "/repos/owner/repo"},
+		{"https://api.github.com/repos/owner/repo", "/repos/owner/repo"},
+		{"http://api.github.com/repos/owner/repo", "/repos/owner/repo"},
+		{"HTTPS://API.GITHUB.COM/repos/owner/repo", "/repos/owner/repo"},
+		{"https://api.github.com/repos/owner/repo?foo=1", "/repos/owner/repo"},
+		{"repos/owner/repo#frag", "repos/owner/repo"},
+		// A bare authority names no resource path at all.
+		{"https://api.github.com", ""},
+		// Not an authority: no scheme in front of the "://".
+		{"://repos/owner/repo", "://repos/owner/repo"},
+		{"1http://api.github.com/repos/owner/repo", "1http://api.github.com/repos/owner/repo"},
+		{"repos/own er://x/repo", "repos/own er://x/repo"},
+	}
+	for _, tc := range tests {
+		if got := pathOf(tc.in); got != tc.want {
+			t.Errorf("pathOf(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // TestWrappersDoNotDefangAnEntry is the same point end to end: a registry entry
 // that fires on a bare hazard must fire on the same hazard launched through a
 // wrapper, whether the wrapper is one the set already knew (`sudo`) or one it

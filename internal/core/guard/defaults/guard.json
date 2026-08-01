@@ -186,11 +186,15 @@
           "gh api --method DELETE repos/owner/repo",
           "gh api --method=DELETE /repos/owner/repo",
           "gh api -XDELETE repos/owner/repo",
-          "gh api -H 'Accept: application/vnd.github+json' -X DELETE repos/owner/repo"
+          "gh api -H 'Accept: application/vnd.github+json' -X DELETE repos/owner/repo",
+          "gh api -X DELETE https://api.github.com/repos/owner/repo",
+          "gh api --method DELETE http://api.github.com/repos/owner/repo"
         ],
         "known_good": [
           "gh api repos/owner/repo",
           "gh api -X GET repos/owner/repo",
+          "gh api -X GET https://api.github.com/repos/owner/repo",
+          "gh api -X DELETE https://api.github.com/repos/owner/repo/git/refs/heads/feature",
           "gh api -X DELETE repos/owner/repo/git/refs/heads/feature",
           "gh api -X DELETE user/starred/owner/repo",
           "gh api -X PATCH repos/owner/repo -f archived=true",
