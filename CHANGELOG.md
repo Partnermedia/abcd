@@ -305,6 +305,43 @@ called out in a **Breaking** section.
   operand prefix. Every new entry ships through the same admission gate as the
   rest: known-bad and known-good fixtures in the registry file itself, a 100%
   true-negative floor, and known-good at least 40% of its own corpus.
+- **The plugin provisions its own binary, so a fresh install and every update
+  yield a working hook surface** (itd-105, spc-21). The hooks call
+  `$CLAUDE_PLUGIN_ROOT/abcd`, the plugin root is a clone of a repository that
+  commits no binary, and the harness re-clones each update into a fresh
+  commit-stamped cache directory — so every install and every update produced a
+  plugin root with nothing to call, and each hook failed with a raw "No such
+  file or directory" until someone hand-copied a binary in. `hooks/bootstrap.sh`
+  closes that: committed POSIX sh, needing no abcd binary to run (the binary is
+  exactly what is missing), wired as the FIRST `SessionStart` hook so it lands
+  before the binary-backed ones in the same event. It downloads the latest
+  release binary for the host platform plus `checksums.txt`, verifies the
+  SHA-256 against the manifest, and installs it with an atomic rename from a
+  temp directory on the same filesystem — a mismatch or an absent manifest line
+  deletes the download and refuses, so a corrupted or unpublished artefact never
+  reaches the binary path. The trust bar is the README one-liner's: same-origin
+  checksums, with `go build ./cmd/abcd` documented as the full-trust route. A
+  plugin root that already holds an executable binary exits on one file test
+  with no network, so steady-state sessions pay nothing; concurrent sessions
+  serialise on an atomic `mkdir` lock whose loser exits quietly and whose stale
+  remains (older than ten minutes, from a killed run) are broken and retaken. A
+  platform outside the released matrix — darwin and linux on amd64 and arm64 —
+  is reported, not retried: it states the matrix, changes nothing, and exits 0.
+  Every failing path prints one plain-language message naming what is missing,
+  what it costs (hooks cannot run, the shell-hazard guard is inactive and
+  commands run UNGUARDED), and the three ways out; `abcd ahoy`'s guard health
+  names the same script and its recovery step, so one fault has one story
+  wherever it is read.
+- **A binary older than the surface it serves says so at session start**
+  (itd-105, spc-21). The plugin surface tracks the repository tip while the
+  newest binary is the last tagged release, so a fix can merge without a release
+  cut and leave a session running old-binary logic against new-surface
+  expectations. The bootstrap records what it installed in a `.binary-meta` file
+  beside the binary — release tag, release commit, fetch time, and the plugin
+  commit it provisioned for — and the session-start hook renders one line when
+  the plugin commit and the release commit differ. What the bootstrap could not
+  resolve it records as `unknown`, and an unknown commit produces no line at
+  all: a skew notice that guesses is worse than no notice.
 
 ### Fixed
 
