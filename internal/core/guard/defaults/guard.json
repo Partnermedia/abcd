@@ -22,7 +22,9 @@
           "if cd scratch; then rm -rf *; fi",
           "for d in a b; do cd $d && rm -rf *; done",
           "cd scratch &&\n\nrm -rf *",
-          "echo $((1<<20)) > size.txt\ncd scratch && rm -rf *"
+          "echo $((1<<20)) > size.txt\ncd scratch && rm -rf *",
+          "cd scratch && rm `true` -rf *",
+          "cd scratch && rm $(true) -rf *"
         ],
         "known_good": [
           "./bin/abcd-darwin-arm64 capture \"agent ran cd scratch && rm -rf * — one failed cd from disaster\"",
@@ -32,7 +34,9 @@
           "cat > NOTES.md <<'EOF'\ncd scratch && rm -rf *\nEOF",
           "cd scratch\nrm -rf ./build",
           "tee NOTES.md <<'---'\ncd scratch && rm -rf *\n---",
-          "cd scratch && rm -f ./notes.txt"
+          "cd scratch && rm -f ./notes.txt",
+          "cd scratch && rm -f `cat list.txt`",
+          "cd scratch && rm $(cat list.txt)"
         ]
       }
     },
@@ -52,10 +56,13 @@
           "git push -f",
           "git push --force-with-lease origin main",
           "git -C /repo push --force origin main",
-          "git push '--force' origin main"
+          "git push '--force' origin main",
+          "git push `true` --force origin main",
+          "git push $(true) --force origin main"
         ],
         "known_good": [
           "git push origin main",
+          "git push origin `git branch --show-current`",
           "git push --set-upstream origin feat/shell-hazard-registry",
           "abcd capture \"an agent tried git push --force on main\"",
           "git log --oneline -5",
