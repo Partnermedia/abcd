@@ -84,16 +84,19 @@ guard reads command names it can see in command position, so a hazard reached an
 other way is not seen:
 
 - a command string handed to an interpreter (`eval`, `sh -c`);
-- one launched through a wrapper outside the small known set (`sudo`, `doas`,
-  `command`, `env`, `nohup`, `time`) — `xargs`, `timeout`, `exec` are not in it;
-- one launched through a wrapper that *is* in that set but carries its own flags:
-  only the wrapper NAME is stepped over, so `sudo <hazard>` is seen and
-  `sudo -u bob <hazard>` is not (`-u` is read as the command);
+- one launched through a wrapper outside the known set (`sudo`, `doas`,
+  `command`, `env`, `nohup`, `time`, `xargs`, `timeout`, `exec`);
+- one launched through a known wrapper carrying a value-taking flag the matcher's
+  per-wrapper table does not name: `sudo -u bob <hazard>` is seen, the bundled
+  short form `sudo -Hu bob <hazard>` is not (`bob` is read as the command). The
+  miss is a non-match, never a false block;
 - a dangerous form no entry describes.
 
-Both command-substitution forms ARE followed: `$(…)` and a backtick span alike
-put what is inside them in command position (iss-148), in the unquoted case the
-tokenizer already handled for parentheses.
+A wrapper's own arguments are stepped over with it, including the mandatory
+operand in `timeout DURATION COMMAND` (iss-148). Both command-substitution forms
+ARE followed: `$(…)` and a backtick span alike put what is inside them in
+command position, in the unquoted case the tokenizer already handled for
+parentheses.
 
 Coverage is what the registry names. The registry grows from reality: a
 facilitator who sees something scary captures it, and recurring captures are

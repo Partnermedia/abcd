@@ -83,12 +83,12 @@ retiering a hazard is the user's decision to make and to review.
 An allow means **no registry entry matched**. It is never a statement that a
 command is safe. The guard reads command names it can see in command position, so
 a hazard reached any other way is not seen: a command string handed to an
-interpreter (`eval`, `sh -c`), one launched through a wrapper the guard does not
-step over (`xargs`, `timeout`, `exec` — or a wrapper it does know, such as
-`sudo`, carrying its own flags: `sudo <hazard>` is seen, `sudo -u bob <hazard>`
-is not), or a dangerous form no entry describes. Coverage is what the registry
-names. Say exactly this if a user asks
-about coverage — never that the guard cleared the command.
+interpreter (`eval`, `sh -c`), one launched through a wrapper outside the known
+set, one launched through a known wrapper carrying a value-taking flag the guard
+does not name (`sudo -u bob <hazard>` is seen; the bundled short form
+`sudo -Hu bob <hazard>` is not), or a dangerous form no entry describes.
+Coverage is what the registry names. Say exactly this if a user asks about
+coverage — never that the guard cleared the command.
 
 A candidate too long to read is refused (exit 2), not answered on the part that
 fitted.

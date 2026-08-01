@@ -6,10 +6,10 @@ import (
 )
 
 // wrappers are commands that RUN another command with the same intent, so the
-// hazard sits one token further along: `sudo rm -rf *` is an `rm`. Only the
-// wrapper NAME is stepped over — a wrapper's own flags are not parsed (`sudo -u
-// bob rm -rf *` reads `-u` as the command), a narrow v1 limitation of the same
-// family as the eval gap.
+// hazard sits one token further along: `sudo rm -rf *` is an `rm`. A wrapper's
+// OWN arguments are stepped over with it (wrapperValueFlags, wrapperOperands),
+// because a wrapper that defangs an entry as soon as it carries a flag is worse
+// than one the set never knew — the registry looks armed and is not.
 var wrappers = map[string]bool{
 	"sudo":    true,
 	"doas":    true,
@@ -17,6 +17,43 @@ var wrappers = map[string]bool{
 	"env":     true,
 	"nohup":   true,
 	"time":    true,
+	"xargs":   true,
+	"timeout": true,
+	"exec":    true,
+}
+
+// wrapperValueFlags names, per wrapper, that wrapper's OWN flags which consume
+// the FOLLOWING token, so the walk to command position steps over the value
+// rather than reading it as the command (`sudo -u bob rm -rf *` is an `rm`).
+//
+// The table is deliberately explicit and small: only wrappers in the set above,
+// only flags those wrappers actually document, and only the separate-token form
+// — a `--flag=value` carries its value in the same token and needs no entry.
+// Booleans (`sudo -n`, `env -i`, `time -p`) need no entry either; they are
+// stepped over as flags. A value flag the table does not name is NOT stepped
+// over, so its value is read as the command and the entry misses: a miss is a
+// non-match, never a false block, the same trade operandAt already makes.
+var wrapperValueFlags = map[string][]string{
+	"sudo": {
+		"-C", "--close-from", "-D", "--chdir", "-g", "--group", "-h", "--host",
+		"-p", "--prompt", "-R", "--chroot", "-r", "--role", "-T",
+		"--command-timeout", "-t", "--type", "-U", "--other-user", "-u", "--user",
+	},
+	"doas":    {"-a", "-C", "-u"},
+	"env":     {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+	"time":    {"-f", "--format", "-o", "--output"},
+	"xargs":   {"-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var"},
+	"timeout": {"-k", "--kill-after", "-s", "--signal"},
+	"exec":    {"-a"},
+	// `command` and `nohup` take no value flags at all.
+}
+
+// wrapperOperands names wrappers whose grammar puts a mandatory OPERAND between
+// the flags and the command: `timeout [OPTIONS] DURATION COMMAND...`. The
+// duration is not a flag, so no amount of flag stepping reaches past it — read
+// as command position, `timeout 30 rm -rf /` is a command called `30`.
+var wrapperOperands = map[string]int{
+	"timeout": 1,
 }
 
 // reserved are shell keywords and grouping tokens that PRECEDE a command rather
@@ -67,8 +104,12 @@ func commandOf(s segment) (string, []string) {
 	i := 0
 	for i < len(s.tokens) {
 		tok := s.tokens[i]
-		if isAssignment(tok) || reserved[tok] || wrappers[path.Base(tok)] {
+		if isAssignment(tok) || reserved[tok] {
 			i++
+			continue
+		}
+		if w := path.Base(tok); wrappers[w] {
+			i = skipWrapperArgs(s.tokens, i+1, w)
 			continue
 		}
 		break
@@ -77,6 +118,35 @@ func commandOf(s segment) (string, []string) {
 		return "", nil
 	}
 	return path.Base(s.tokens[i]), s.tokens[i+1:]
+}
+
+// skipWrapperArgs advances past one wrapper's own arguments, from pos (the token
+// just after the wrapper name), and returns the index where the command it
+// launches begins. Without it a known wrapper turned an entry the registry does
+// describe into an allow with one extra token — `sudo <hazard>` was seen,
+// `sudo -u bob <hazard>` was not, because `-u` was read as the command name
+// (iss-148).
+func skipWrapperArgs(tokens []string, pos int, wrapper string) int {
+	valueFlags := wrapperValueFlags[wrapper]
+	for pos < len(tokens) {
+		tok := tokens[pos]
+		if tok == "--" {
+			// End of the wrapper's options: everything after it is the command.
+			pos++
+			break
+		}
+		if tok == "-" || !strings.HasPrefix(tok, "-") {
+			break
+		}
+		pos++
+		if !strings.Contains(tok, "=") && containsString(valueFlags, tok) {
+			pos++ // its value belongs to the wrapper, not to command position
+		}
+	}
+	for n := wrapperOperands[wrapper]; n > 0 && pos < len(tokens); n-- {
+		pos++
+	}
+	return pos
 }
 
 // isAssignment reports whether a token is a NAME=VALUE environment prefix,
