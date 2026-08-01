@@ -57,8 +57,8 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"the bundled short form `sudo -Hu bob <hazard>` is not), one whose API path an\n" +
 			"entry names by its ROOT segment but the host serves under a prefix (a GitHub\n" +
 			"Enterprise Server install mounts the same endpoints under `/api/v3/`; the\n" +
-			"api.github.com URL form IS read), or a dangerous form no entry describes.\n" +
-			"Coverage is what the registry names.\n\n" +
+			"api.github.com URL form IS read), one inside a backtick substitution, or a\n" +
+			"dangerous form no entry describes. Coverage is what the registry names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
 			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
 			"a double-quoted --command argument before this verb starts, so a candidate\n" +

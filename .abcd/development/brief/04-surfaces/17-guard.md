@@ -98,17 +98,11 @@ other way is not seen:
   depth check. Matching a root segment wherever it appeared would close the
   remainder and falsely refuse `DELETE /teams/{id}/repos/{owner}/{repo}`, which
   removes a repository from a team and destroys nothing;
+- one inside a backtick substitution (`$(…)` is followed, backticks are not);
 - a dangerous form no entry describes.
 
 A wrapper's own arguments are stepped over with it, including the mandatory
-operand in `timeout DURATION COMMAND` (iss-148). Both command-substitution forms
-ARE followed, in the unquoted case the tokenizer already handled for
-parentheses: `$(…)` and a backtick span alike put what is inside them in command
-position, *and* the command CONTAINING one survives it — `rm $(true) -rf *` is
-still a recursive force delete, because the flags written after a substitution
-rejoin the command they were typed after rather than starting a new one. A bare
-`(` is a subshell group rather than a substitution and does end the command
-before it, which is what keeps a function body in command position.
+operand in `timeout DURATION COMMAND` (iss-148).
 
 Coverage is what the registry names. The registry grows from reality: a
 facilitator who sees something scary captures it, and recurring captures are

@@ -471,7 +471,7 @@ called out in a **Breaking** section.
   single shared primitive; the capture allocator and the history registry both
   route through it.
 - **A wrapper carrying its own flags no longer defangs the hazard entry behind
-  it, and a backtick substitution is read like `$( … )`** (iss-148). Of the
+  it** (iss-148). Of the
   matcher's gaps this was the one a facilitator would reasonably assume was
   covered: only the wrapper NAME was stepped over, so `sudo <hazard>` was seen
   and `sudo -u bob <hazard>` was not — `-u` was read as the command name, and one
@@ -481,24 +481,12 @@ called out in a **Breaking** section.
   value, and the mandatory operand that no flag stepping can reach —
   `timeout [OPTIONS] DURATION COMMAND...`, where `timeout 30 rm -rf /` read as a
   command called `30`. `xargs`, `timeout` and `exec` join the wrapper set they
-  were missing from. Separately, a backtick command substitution runs what is
-  inside it, so what is inside it is command position: `$( … )` already reached
-  the matcher through the tokenizer's grouping parentheses while a backtick was
-  an operator nowhere in it and became ordinary token text, so the same hazard
-  fired under one spelling and not the other. Both are followed now, in the
-  unquoted case for both — the parity that already held for parentheses, not full
-  POSIX coverage — and the command CONTAINING a substitution survives it: the
-  parenthesis route worked by ENDING the enclosing segment, so every flag and
-  operand written after the substitution closed started a new, unrelated command
-  and `rm $(true) -rf *` lost its `-rf`. A substitution now parks the enclosing
-  command's tokens, flushes its own content as its own segments, and hands the
-  enclosing tokens back, so both spellings of both hazards fire. A bare `(` keeps
-  ending the command before it, because it is a subshell group rather than a
-  substitution inside a command — which is what keeps a function body in command
-  position. What stays unseen is stated rather than implied: a wrapper
-  outside the known set, and a value-taking flag the per-wrapper table does not
+  were missing from. What stays unseen is stated rather than implied: a wrapper
+  outside the known set, a value-taking flag the per-wrapper table does not
   name (a bundled `sudo -Hu bob`), where the miss is a non-match and never a
-  false block.
+  false block, and a backtick command substitution, which stays a disclosed v1
+  gap: the fourth part of iss-148 was attempted on this branch and reverted, and
+  the issue stays open on it alone.
 
 ## [0.4.1] - 2026-07-28
 

@@ -48,8 +48,9 @@ plugin surface, and a future MCP server share one engine.
   `sh -c`), a launcher outside the `wrappers` set, a launcher inside it carrying
   a value-taking flag `wrapperValueFlags` does not name, an `ArgPaths` root
   segment the host serves under a prefix (a GitHub Enterprise Server `/api/v3/`
-  mount; `pathOf` normalises a `scheme://host` URL, not a mount point), or a form
-  no entry describes — is not seen. Each limit is stated here and in
+  mount; `pathOf` normalises a `scheme://host` URL, not a mount point), a
+  backtick substitution, or a form no entry describes — is not seen. Each limit
+  is stated here and in
   the `abcd guard check` reference doc, never left implicit. `Load` reads the
   working tree, so a `disabled: true` takes effect before it is reviewed; the
   front door compensates by making a disabled registry loud rather than silent.
