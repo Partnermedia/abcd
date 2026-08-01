@@ -390,6 +390,25 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Two frontmatter-parser defects that silently dropped a memory page's
+  provenance** (iss-30). Both were found by the detectors written for that
+  issue's last acceptance instances, and both broke the same invariant the parser
+  documents at the top of `internal/core/memory/yaml.go`: what the writer emits,
+  the reader gives back. (1) A block scalar opened with `key: |` and left without
+  an INDENTED body took the next unindented line as its content and went on
+  consuming the rest of the document — every later key, `source` and its hashes
+  among them, vanished into that value with no parse error. The block's body must
+  be indented deeper than the line that opened it; an unindented line now ends an
+  EMPTY block and is read as the top-level key it is. (2) The dumper decided a
+  string needed quoting on `\n` and `\t` but not `\r`, so a bare carriage return
+  went into the YAML region raw — and since the reader normalises `\r` to `\n`
+  before splitting lines, a value carrying `\r---` re-read as an early
+  frontmatter terminator, pushing the keys below it into the page body. A page
+  written that way reported a successful ingest while reading back with no source
+  hashes at all, which is the state the reconcile/repair path treats as an
+  orphan. `\r` now triggers the same quoting as `\n` and `\t` (the escape side
+  already emitted `\r` correctly). Both defects were reachable from distiller
+  output, so a page's provenance could be stripped without any hand-editing.
 - **`ahoy install` writes a `.gitignore` block that matches the tier layout it
   documents** (iss-169). The managed block ignored a root-level `.work/` under
   both visibilities — a path the three-tier layout does not have — while never

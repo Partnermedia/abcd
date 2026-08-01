@@ -156,7 +156,7 @@ func TestAcquireSourceFetcherErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Content-type matrix (iss-30 instance 6)
+// Content-type matrix (iss-30 instance 5)
 // ---------------------------------------------------------------------------
 
 // TestMaterialFromFetchedContentTypeMatrix walks every branch of the fetched
@@ -188,7 +188,7 @@ func TestMaterialFromFetchedContentTypeMatrix(t *testing.T) {
 		{name: "octet_stream", ctype: "application/octet-stream", body: text, wantErr: `non-text content-type "application/octet-stream" rejected`},
 		{name: "image", ctype: "image/png", body: text, wantErr: `non-text content-type "image/png" rejected`},
 		{name: "allowlist_near_miss", ctype: "application/jsonl", body: text, wantErr: `non-text content-type "application/jsonl" rejected`},
-		{name: "zip", ctype: "application/zip", body: text, wantErr: "nothing written"},
+		{name: "zip", ctype: "application/zip", body: text, wantErr: `non-text content-type "application/zip" rejected`},
 		{name: "missing", ctype: "", body: text, wantErr: `non-text content-type "(missing)" rejected`},
 
 		// A text/* header is not a promise: the bytes are still decoded, and
@@ -304,7 +304,7 @@ func TestMaterialFromFetchedSizeCap(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PDF extraction (iss-30 instance 7) — via the injectable PDFExtractor seam
+// PDF extraction (iss-30 instance 5) — via the injectable PDFExtractor seam
 // ---------------------------------------------------------------------------
 
 // TestExtractPDFText walks the extractor contract directly: no extractor, a
@@ -519,6 +519,62 @@ func TestIngestPDFFromURL(t *testing.T) {
 	}
 }
 
+// TestIngestDistilledControlCharsKeepProvenance is the ingest-level form of the
+// writer/reader round-trip invariant: whatever control characters a distiller puts
+// in a page field, the page it writes must read back with its provenance intact.
+// A raw carriage return is the dangerous one — parseFrontmatter normalises it to a
+// newline before splitting, so an unquoted \r followed by "---" ends the
+// frontmatter early and the `source` block (with it every source hash) falls into
+// the page body while Ingest still reports success.
+func TestIngestDistilledControlCharsKeepProvenance(t *testing.T) {
+	// `recall` sorts before `source` in the written frontmatter, so an injection
+	// through it is exactly what would strip the source block below it.
+	const injected = "harmless\r---\rleaked"
+	repo := t.TempDir()
+	body := "Token rotation policy: rotate tokens every 24 hours."
+
+	res, err := Ingest(IngestRequest{
+		RepoRoot: repo,
+		Source:   docURL,
+		Fetcher:  staticFetcher(nil, textFetched(docURL, "text/plain", body)),
+		Distiller: func(string, map[string]any) ([]map[string]any, error) {
+			return []map[string]any{{
+				"type": "topic", "domain": "auth", "slug": "tokens",
+				"body":   "# Token rotation\nRotate tokens every 24 hours.",
+				"recall": []any{injected},
+			}}, nil
+		},
+		Now: fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if len(res.Pages) != 1 {
+		t.Fatalf("pages = %v, want one page", res.Pages)
+	}
+	raw, err := os.ReadFile(filepath.Join(Dir(repo), res.Pages[0]))
+	if err != nil {
+		t.Fatalf("read page: %v", err)
+	}
+	text := string(raw)
+
+	src := pageSourceBlock(text)
+	if !contains(SourceHashes(src), res.ContentHash) {
+		t.Fatalf("the page lost its provenance on reread: source block = %#v, want the ingested hash %q\npage:\n%q", src, res.ContentHash, text)
+	}
+	fm, err := parseFrontmatter(text)
+	if err != nil {
+		t.Fatalf("written page does not reparse: %v\npage:\n%q", err, text)
+	}
+	recall, ok := fm["recall"].([]any)
+	if !ok || len(recall) != 1 || recall[0] != any(injected) {
+		t.Fatalf("recall = %#v, want the distilled value verbatim %q", fm["recall"], injected)
+	}
+	if _, ok := fm["topic_hash"]; !ok {
+		t.Fatalf("topic_hash was pushed out of the frontmatter: %#v", fm)
+	}
+}
+
 // TestIngestRejectedSourceWritesNothing proves the content-type and PDF
 // refusals are pre-dispatch: the distiller never runs and the store is left
 // untouched — no memory page, no sources index.
@@ -552,8 +608,14 @@ func TestIngestRejectedSourceWritesNothing(t *testing.T) {
 			if _, err := os.Stat(SourcesIndexPath(repo)); !os.IsNotExist(err) {
 				t.Fatalf("a refused source must not create the sources index (stat err = %v)", err)
 			}
+			// An ABSENT memory directory is itself a pass: a refusal happens before
+			// any write, so the store is never created. Hence the read is only
+			// asserted on when it succeeds — the two acceptable states are "no
+			// directory" and "an empty one".
 			if entries, err := os.ReadDir(Dir(repo)); err == nil && len(entries) > 0 {
 				t.Fatalf("a refused source must not write into the store, found %d entries", len(entries))
+			} else if err != nil && !os.IsNotExist(err) {
+				t.Fatalf("reading the store: %v", err)
 			}
 		})
 	}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// yaml_boundary_test.go — iss-30 remainder: the two frontmatter-parser surfaces
+// yaml_boundary_test.go — iss-30 instance 6: the two frontmatter-parser surfaces
 // the detector named and nothing exercised, block scalars and double-quoted
 // escapes. Both are driven directly with literal documents; no fixture files.
 
@@ -67,6 +67,20 @@ func TestParseBlockScalar(t *testing.T) {
 			want:  map[string]any{"body": ""},
 		},
 		{
+			// A "|" with no INDENTED body opens an EMPTY block. The unindented line
+			// that follows is a top-level key of its own, not block content: were it
+			// read as content the block would go on consuming every later line, and
+			// the rest of the document would vanish with no parse error.
+			name:  "empty_block_does_not_swallow_the_next_key",
+			lines: []string{"body: |", "after: tail"},
+			want:  map[string]any{"body": "", "after": "tail"},
+		},
+		{
+			name:  "empty_block_then_blank_line_does_not_swallow_the_next_key",
+			lines: []string{"body: |", "", "after: tail"},
+			want:  map[string]any{"body": "", "after": "tail"},
+		},
+		{
 			name:  "block_followed_only_by_blank_lines",
 			lines: []string{"body: |", "  text", "", ""},
 			want:  map[string]any{"body": "text"},
@@ -86,8 +100,10 @@ func TestParseBlockScalar(t *testing.T) {
 }
 
 // TestParseBlockScalarThroughFrontmatter proves the block-scalar path is reached
-// through the real entry point, delimiters and all, and that a "---" inside the
-// block body does not terminate the frontmatter while the unindented one does.
+// through the real entry point, delimiters and all. The terminator check is an
+// EXACT column-0 "---" match, so what this pins is that an indented occurrence
+// inside a block body is ordinary content and only the column-0 line ends the
+// region — the indented one was never a candidate terminator to begin with.
 func TestParseBlockScalarThroughFrontmatter(t *testing.T) {
 	doc := "---\n" +
 		"title: Rotation\n" +
@@ -118,6 +134,42 @@ func TestParseBlockScalarThroughFrontmatter(t *testing.T) {
 	}
 	if !strings.Contains(region, "  --- not a delimiter\n") {
 		t.Fatalf("region lost the indented block line:\n%s", region)
+	}
+}
+
+// TestParseBlockScalarEmptyBlockKeepsLaterKeys is the document-level form of the
+// same property: a "|" whose body was left empty (a hand-authored page, or a
+// distiller that emitted the indicator and nothing under it) must not swallow the
+// keys beneath it. The load-bearing key here is `source` — a page whose source
+// block silently disappeared reads back with no source hashes at all, which is
+// what the reconcile/repair path uses to decide a page is orphaned.
+func TestParseBlockScalarEmptyBlockKeepsLaterKeys(t *testing.T) {
+	doc := "---\n" +
+		"type: topic\n" +
+		"notes: |\n" +
+		"domain: auth\n" +
+		"slug: tokens\n" +
+		"source: { class: external_article, source_hash: abc123 }\n" +
+		"---\n" +
+		"\nbody\n"
+	fm, err := parseFrontmatter(doc)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if fm["notes"] != "" {
+		t.Fatalf("notes = %#v, want an EMPTY block — the unindented lines below it are not its body", fm["notes"])
+	}
+	for _, k := range []string{"domain", "slug", "source"} {
+		if _, ok := fm[k]; !ok {
+			t.Fatalf("key %q was swallowed by the empty block scalar: %#v", k, fm)
+		}
+	}
+	if fm["domain"] != "auth" || fm["slug"] != "tokens" {
+		t.Fatalf("keys after the empty block parsed wrongly: %#v", fm)
+	}
+	src, ok := fm["source"].(map[string]any)
+	if !ok || src["source_hash"] != "abc123" {
+		t.Fatalf("source block = %#v, want the flow map with its source_hash intact", fm["source"])
 	}
 }
 
@@ -362,6 +414,7 @@ func TestDoubleQuoteEscapeRoundTrip(t *testing.T) {
 		"", " leading", "trailing ", "plain text",
 		"\n", "\t", "\r", "\\", "\"",
 		"line one\nline two", "tab\there", "carriage\rreturn",
+		"crlf\r\ninside", "harmless\r---\rleaked", "trailing---\rmore",
 		`back\slash`, `a\nb`, `c:\windows\path`,
 		`quote"d`, `a":b`, `both "\" and \n`,
 		"42", "true", "null", "-dash", "?query", ",", "{", "}", "[", "]", "#hash", "@at",
@@ -397,6 +450,29 @@ func TestDoubleQuoteEscapeRoundTrip(t *testing.T) {
 		}
 		if v != any(s) {
 			t.Fatalf("flow round trip of value %q gave %#v (dumped %s)", s, v, flow)
+		}
+
+		// Call site 3: the REAL file boundary — dumpFrontmatter → joinFileFrontmatter
+		// → parseFrontmatter, the invariant stated at the top of yaml.go. This is
+		// the only call site where an unquoted control character can change the
+		// document's LINE STRUCTURE, so the two above cannot stand in for it:
+		// parseFrontmatter normalises \r to \n before splitting, so a bare \r the
+		// dumper emitted becomes a real line break on read — and a "---" after it
+		// terminates the frontmatter early, dropping every later key into the page
+		// body. The sentinel key sorts after the subject precisely to catch that.
+		region, err := dumpFrontmatter(map[string]any{"subject": s, "zz_sentinel": "kept"})
+		if err != nil {
+			t.Fatalf("dumpFrontmatter %q: %v", s, err)
+		}
+		reparsed, err := parseFrontmatter(joinFileFrontmatter(region, "page body\n"))
+		if err != nil {
+			t.Fatalf("frontmatter round trip of %q failed to parse (region %q): %v", s, region, err)
+		}
+		if reparsed["subject"] != any(s) {
+			t.Fatalf("frontmatter round trip of %q gave %#v (region %q)", s, reparsed["subject"], region)
+		}
+		if reparsed["zz_sentinel"] != "kept" {
+			t.Fatalf("frontmatter round trip of %q lost the key after it: %#v (region %q)", s, reparsed, region)
 		}
 	}
 }
