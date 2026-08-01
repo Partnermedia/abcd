@@ -183,3 +183,8 @@ commitments, not options:
 _None — resolved in the 2026-07-29 grill session; see Decisions. Follow-ups
 are recorded as scope exclusions and ledger entries (iss-168), not open
 questions._
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-bba9a75a2d1d -->
+Fidelity review OWED (receipt rcp-bba9a75a2d1d).
