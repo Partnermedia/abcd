@@ -407,8 +407,10 @@ called out in a **Breaking** section.
   written that way reported a successful ingest while reading back with no source
   hashes at all, which is the state the reconcile/repair path treats as an
   orphan. `\r` now triggers the same quoting as `\n` and `\t` (the escape side
-  already emitted `\r` correctly). Both defects were reachable from distiller
-  output, so a page's provenance could be stripped without any hand-editing.
+  already emitted `\r` correctly). Defect (2) was reachable from distiller
+  output alone, so a page's provenance could be stripped without any
+  hand-editing; defect (1) needs a hand-authored or externally-written page
+  (a bare `key: |` cannot survive the dumper's own quoting of `|`).
 - **`ahoy install` writes a `.gitignore` block that matches the tier layout it
   documents** (iss-169). The managed block ignored a root-level `.work/` under
   both visibilities — a path the three-tier layout does not have — while never
