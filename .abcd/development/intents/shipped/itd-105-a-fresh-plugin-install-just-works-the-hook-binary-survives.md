@@ -7,6 +7,7 @@ suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-67]
 severity: critical
+impact: additive
 grill_session_id: f050596a-e4fe-49e4-92b3-38f90604b3fb
 grilled_at: 2026-07-29
 warrants_assumed:
