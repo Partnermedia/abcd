@@ -320,11 +320,21 @@ called out in a **Breaking** section.
   temp directory on the same filesystem — a mismatch or an absent manifest line
   deletes the download and refuses, so a corrupted or unpublished artefact never
   reaches the binary path. The trust bar is the README one-liner's: same-origin
-  checksums, with `go build ./cmd/abcd` documented as the full-trust route. A
+  checksums, with `go build ./cmd/abcd` documented as the full-trust route. The
+  script fetches from two hardcoded origins and offers no way — no environment
+  variable, no flag, no branch — to point it anywhere else, and it pins HTTPS
+  including redirects on every request unconditionally: the binary and the
+  `checksums.txt` that verifies it come from one origin, so anything able to
+  name that origin would supply both the payload and its own manifest, and what
+  is installed then runs unattended as the Bash shell guard on every tool call. A
   plugin root that already holds an executable binary exits on one file test
   with no network, so steady-state sessions pay nothing; concurrent sessions
   serialise on an atomic `mkdir` lock whose loser exits quietly and whose stale
   remains (older than ten minutes, from a killed run) are broken and retaken. A
+  lock that cannot be taken and is not there afterwards is not a lost race —
+  the plugin root is unwritable, or something that is not a directory occupies
+  the lock path — and that says so out loud instead of sharing the loser's
+  silence, because it repeats every session and nothing else would report it. A
   platform outside the released matrix — darwin and linux on amd64 and arm64 —
   is reported, not retried: it states the matrix and changes nothing.
   Every failing path prints one plain-language message naming what is missing,
@@ -339,6 +349,10 @@ called out in a **Breaking** section.
   two binary-backed `SessionStart` commands that follow the bootstrap check for
   the binary first, so a session that begins before one exists reports the gap
   in the same plain language instead of a raw "No such file or directory".
+  Every message strips control characters from the values it echoes — a
+  plugin-root path, `uname`'s answer, the release tag read off a redirect — so
+  an escape sequence in one of them cannot recolour or visually rewrite a
+  message whose whole job is to be believed.
 - **A binary at a different commit from the surface it serves says so at session
   start** (itd-105, spc-21). The plugin surface tracks the repository tip while
   the newest binary is the last tagged release, so a fix can merge without a
@@ -353,7 +367,12 @@ called out in a **Breaking** section.
   What the bootstrap could not resolve it records as `unknown`, and a commit
   that is not forty lowercase hex characters — unresolved, or truncated by a
   crash mid-write — produces no line at all: a skew notice that guesses is worse
-  than no notice.
+  than no notice. The plugin commit comes from the cache directory's name, which
+  is an assumption about the harness this repository cannot verify, so the raw
+  basename is recorded beside the gated value: if that naming ever changes, the
+  notice goes quiet for everyone and `.binary-meta` is the one place that says
+  why. The release tag is sanitised before it is rendered, being the only value
+  in the line that arrives unchecked from off the machine.
 
 ### Fixed
 
