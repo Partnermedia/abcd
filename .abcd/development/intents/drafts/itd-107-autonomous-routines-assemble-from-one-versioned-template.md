@@ -1,5 +1,5 @@
 ---
-id: itd-105
+id: itd-107
 slug: autonomous-routines-assemble-from-one-versioned-template
 spec_id: null
 kind: null
@@ -60,7 +60,7 @@ schedule it. The binary never contacts a scheduling service.
   invariants: maintainer-only trust for loop-state comments, pushed-branch-
   without-PR resumption, bounded CI wait, one-round-per-run default with an
   explicit capped multi-round variant, refuter count, stop conditions, and
-  public-artifact hygiene (iss-160): session URLs and harness attribution
+  public-artifact hygiene (iss-178): session URLs and harness attribution
   footers are banned from all public text, and because the harness can append
   them outside the model's own words, every created pull request, issue, and
   comment is re-read as stored and stripped by edit before the round continues.

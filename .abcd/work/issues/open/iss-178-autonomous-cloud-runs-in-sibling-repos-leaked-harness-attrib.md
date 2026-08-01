@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-160"
+id: "iss-178"
 slug: "autonomous-cloud-runs-in-sibling-repos-leaked-harness-attrib"
 severity: "minor"
 category: "security"
