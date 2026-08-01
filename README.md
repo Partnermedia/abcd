@@ -235,7 +235,11 @@ That covers the hooks. For the `abcd` command in your own terminal, keep the
 [install](#install) above, or run `abcd ahoy install` once to put the
 plugin-root binary on your `PATH`. For a stronger root of trust than
 same-origin checksums, build from source — `go build ./cmd/abcd` — and place
-the binary in the plugin root and on your `PATH` yourself.
+the binary in the plugin root and on your `PATH` yourself. A binary placed
+there by hand takes the same no-network fast path, so the `.binary-meta`
+provenance record beside it still describes whichever release the bootstrap
+last fetched: delete that file so no version-skew notice is rendered from a
+release the binary in place did not come from.
 
 ## Build
 

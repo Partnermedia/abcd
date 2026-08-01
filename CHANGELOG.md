@@ -326,22 +326,34 @@ called out in a **Breaking** section.
   serialise on an atomic `mkdir` lock whose loser exits quietly and whose stale
   remains (older than ten minutes, from a killed run) are broken and retaken. A
   platform outside the released matrix — darwin and linux on amd64 and arm64 —
-  is reported, not retried: it states the matrix, changes nothing, and exits 0.
+  is reported, not retried: it states the matrix and changes nothing.
   Every failing path prints one plain-language message naming what is missing,
   what it costs (hooks cannot run, the shell-hazard guard is inactive and
   commands run UNGUARDED), and the three ways out; `abcd ahoy`'s guard health
   names the same script and its recovery step, so one fault has one story
-  wherever it is read.
-- **A binary older than the surface it serves says so at session start**
-  (itd-105, spc-21). The plugin surface tracks the repository tip while the
-  newest binary is the last tagged release, so a fix can merge without a release
-  cut and leave a session running old-binary logic against new-surface
+  wherever it is read. Every message the bootstrap has for a person — the
+  unsupported-platform statement and the one-time `abcd ahoy install`
+  suggestion included — goes to stderr with a non-zero (non-blocking) exit,
+  because a SessionStart hook's stdout becomes model context while only a
+  non-zero exit puts its stderr in front of the human who can act on it. The
+  two binary-backed `SessionStart` commands that follow the bootstrap check for
+  the binary first, so a session that begins before one exists reports the gap
+  in the same plain language instead of a raw "No such file or directory".
+- **A binary at a different commit from the surface it serves says so at session
+  start** (itd-105, spc-21). The plugin surface tracks the repository tip while
+  the newest binary is the last tagged release, so a fix can merge without a
+  release cut and leave a session running old-binary logic against new-surface
   expectations. The bootstrap records what it installed in a `.binary-meta` file
-  beside the binary — release tag, release commit, fetch time, and the plugin
-  commit it provisioned for — and the session-start hook renders one line when
-  the plugin commit and the release commit differ. What the bootstrap could not
-  resolve it records as `unknown`, and an unknown commit produces no line at
-  all: a skew notice that guesses is worse than no notice.
+  beside the binary — release tag, release commit, the SHA-256 it verified the
+  binary against, fetch time, and the plugin commit it provisioned for, written
+  by the same atomic rename the binary gets — and the session-start hook renders
+  one line when the plugin commit and the release commit differ. The line names
+  both directions the difference could run in and asserts neither, because
+  comparing two commits establishes that they differ and never which is ahead.
+  What the bootstrap could not resolve it records as `unknown`, and a commit
+  that is not forty lowercase hex characters — unresolved, or truncated by a
+  crash mid-write — produces no line at all: a skew notice that guesses is worse
+  than no notice.
 
 ### Fixed
 
