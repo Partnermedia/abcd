@@ -7,7 +7,7 @@ category: "bug"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"
 found_at: "internal/core/memory/ingest.go"
-resolution: "Remainder drained: detectors added for the URL-ingest success path, the content-type matrix, PDF extraction via the injectable PDFExtractor seam, and the YAML block-scalar / double-quoted-escape parser cases. Test-only — no new dependency, no production behaviour change."
+resolution: "Remainder drained: detectors added for the URL-ingest success path, the content-type matrix, PDF extraction via the injectable PDFExtractor seam, and the YAML block-scalar / double-quoted-escape parser cases. No new dependency. The parser detectors found and fixed TWO real defects in yaml.go — an empty block scalar swallowing the rest of the document, and dumpString not quoting a carriage return — each of which could strip a written page's provenance silently."
 impact: internal
 ---
 
@@ -51,7 +51,43 @@ local sniffs (`.pdf` extension, `%PDF-` magic) across nil/error/empty/success
 extractors; and the parser cases — literal `|` block scalars (de-indent,
 interior and trailing blank lines, opaque content, block as last key) with the
 unsupported `>`/`|-`/`|+` indicators pinned as loud refusals, plus the full
-`unescapeDoubleQuoted` escape set, both error paths, and both call sites. No
+`unescapeDoubleQuoted` escape set, both error paths, and both call sites.
+Original-storage — the fourth instance-5 sub-surface — was already covered by
+`TestIngestKeepOriginalWritesSourceCanonically` and
+`TestIngestKeepOriginalFailureStillReportsIngest` in
+`internal/core/memory/memory_test.go`, and the new URL and PDF cases add the
+extension-derivation and original-bytes assertions those did not reach, so the
+completeness claim rests on both. Every case was mutation-checked against a
+targeted reversion of the behaviour it claims to pin.
+
+**Correction (2026-08-01, same day):** the closure above originally claimed "no
 production behaviour was found to diverge from its documentation, so this
-increment is test-only; every case was mutation-checked against a targeted
-reversion of the behaviour it claims to pin.
+increment is test-only". That was WRONG, and pre-PR review caught it: the new
+parser detectors, once written against the real writer/reader boundary rather
+than the parser's internals, reproduced TWO defects in
+`internal/core/memory/yaml.go`, both fixed here.
+
+- `collectBlockScalar` took the block's indent from the first non-blank line
+  without requiring it to exceed the indent of the `key: |` line that opened the
+  block. A `|` with no INDENTED body therefore read the next unindented line as
+  content and kept consuming — the rest of the document, other keys included,
+  disappeared into the value with NO error. Fix: an unindented first line ends an
+  EMPTY block and is left for the top-level parse. Detectors:
+  `TestParseBlockScalar/empty_block_does_not_swallow_the_next_key` (+ its
+  blank-line sibling) and `TestParseBlockScalarEmptyBlockKeepsLaterKeys`.
+- `dumpString` triggered quoting on `\n`/`\t` but not `\r`, so a bare carriage
+  return was written raw into the YAML region. `parseFrontmatter` normalises
+  `\r` to `\n` BEFORE splitting, so a value carrying `\r---` re-read as an early
+  frontmatter terminator and every key below it fell into the page body — a
+  distiller-supplied `recall` string was enough to make `Ingest` report success
+  while writing a page that reads back with no `source` block and no source
+  hashes, the state the repair path treats as an orphan. Fix: `\r` joins the
+  quote trigger (`doubleQuote` already escaped it). Detectors: the file-boundary
+  call site added to `TestDoubleQuoteEscapeRoundTrip` (the pre-existing `\r`
+  subjects passed only because they never crossed `dumpFrontmatter` →
+  `joinFileFrontmatter` → `parseFrontmatter`) and
+  `TestIngestDistilledControlCharsKeepProvenance`, which drives the whole chain
+  through `Ingest`. Both were watched fail before the fix and pass after.
+
+So the increment is NOT test-only: it carries two production fixes and a
+CHANGELOG entry under Fixed.
