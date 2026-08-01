@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -898,6 +899,176 @@ func TestBootstrapScriptIsExecutable(t *testing.T) {
 	}
 }
 
+// bootstrapEnvRefPattern matches every $NAME / ${NAME} reference a shell line
+// makes, and bootstrapAssignPattern matches a `name=` assignment at the head of
+// a (trimmed) line. They are the two primitives the allowlist below is built on.
+var (
+	bootstrapEnvRefPattern = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
+	bootstrapAssignPattern = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
+)
+
+// bootstrapEnvRefNames returns, in source order, every name the fragment
+// references as $NAME or ${NAME}.
+func bootstrapEnvRefNames(s string) []string {
+	var names []string
+	for _, m := range bootstrapEnvRefPattern.FindAllStringSubmatch(s, -1) {
+		names = append(names, m[1])
+	}
+	return names
+}
+
+// bootstrapSafeNames returns the names <body> may be said to define ITSELF —
+// the set a $NAME reference is allowed to resolve to without being an
+// environment read.
+//
+// A name is safe only if every assignment of it takes its value from constants,
+// from CLAUDE_PLUGIN_ROOT, or from names that are themselves already safe AT
+// THAT POINT in the file. Anything else is an environment read wearing a local
+// name, so the name is tainted and stays tainted.
+//
+// The propagation is run to a FIXPOINT rather than in one pass, because taint
+// travels through chains. A single-pass, single-line self-reference check
+// catches `mirror="${mirror:-}"` and nothing longer: two names that reference
+// each other
+//
+//	repo_url="${GH_MIRROR:-$gh_default}"
+//	GH_MIRROR="$repo_url"
+//
+// leave neither line self-referential, yet GH_MIRROR is read straight out of the
+// environment and lands in the fetch origin. Iterating until no name is newly
+// tainted closes the two-hop case and every longer chain with it: the first pass
+// taints repo_url (its value names GH_MIRROR, which is not defined before use
+// and so is an external read), and taint then propagates to GH_MIRROR because
+// its value names a tainted name.
+func bootstrapSafeNames(body string) map[string]bool {
+	type assignment struct {
+		name string
+		rhs  string
+	}
+	var assignments []assignment
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		m := bootstrapAssignPattern.FindStringSubmatch(trimmed)
+		if m == nil {
+			continue
+		}
+		assignments = append(assignments, assignment{name: m[1], rhs: trimmed[len(m[0]):]})
+	}
+	tainted := map[string]bool{}
+	safe := map[string]bool{}
+	for {
+		changed := false
+		// defined is the "safe so far" set for THIS pass: a name only counts as
+		// script-local for references that come after its own assignment, so a
+		// value naming a name defined later is read from the environment.
+		defined := map[string]bool{}
+		for _, a := range assignments {
+			if tainted[a.name] {
+				delete(defined, a.name)
+				continue
+			}
+			external := false
+			for _, ref := range bootstrapEnvRefNames(a.rhs) {
+				switch {
+				case ref == a.name:
+					// Reads the environment under its own name before
+					// falling back to a default.
+					external = true
+				case ref == "CLAUDE_PLUGIN_ROOT":
+				case tainted[ref], !defined[ref]:
+					external = true
+				}
+				if external {
+					break
+				}
+			}
+			if external {
+				tainted[a.name] = true
+				delete(defined, a.name)
+				changed = true
+				continue
+			}
+			defined[a.name] = true
+		}
+		safe = defined
+		if !changed {
+			break
+		}
+	}
+	return safe
+}
+
+// bootstrapEnvRead is one unrecognised environment read: the name, and the first
+// non-comment line that reads it.
+type bootstrapEnvRead struct {
+	name string
+	line string
+}
+
+// bootstrapUnrecognisedEnvReads applies the allowlist: every $NAME reference in
+// a non-comment line must be CLAUDE_PLUGIN_ROOT or a name bootstrapSafeNames
+// vouches for. Anything else is reported, whatever it is called.
+func bootstrapUnrecognisedEnvReads(body string) []bootstrapEnvRead {
+	safe := bootstrapSafeNames(body)
+	seen := map[string]bool{}
+	var reads []bootstrapEnvRead
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for _, name := range bootstrapEnvRefNames(line) {
+			if name == "CLAUDE_PLUGIN_ROOT" || safe[name] || seen[name] {
+				continue
+			}
+			seen[name] = true
+			reads = append(reads, bootstrapEnvRead{name: name, line: line})
+		}
+	}
+	return reads
+}
+
+// bootstrapCurlCallPattern recognises a line that INVOKES curl, as opposed to
+// one that merely mentions it (`command -v curl`, a refusal message).
+//
+// Matching the substring "curl -" instead would silently skip any call whose
+// first argument is not a flag — `curl "$url" -o /dev/null` — so a call missing
+// -q or the transport pin could sit in the script and never be scanned, while
+// the call count still looked healthy because the scan simply undercounted.
+// curl is therefore matched as a whole word in COMMAND position: at the head of
+// the line, after a shell operator or command substitution, after a path
+// prefix, or after one of the keywords a command can follow.
+var bootstrapCurlCallPattern = regexp.MustCompile(
+	"(?:^|[|&;(){}/`]|\\b(?:if|then|else|elif|do|while|until|exec|env|time|command|nohup)[ \t]+)[ \t]*curl(?:[ \t]|$)")
+
+// bootstrapCurlCalls returns every non-comment line of body that invokes curl.
+func bootstrapCurlCalls(body string) []string {
+	var calls []string
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") || !bootstrapCurlCallPattern.MatchString(trimmed) {
+			continue
+		}
+		calls = append(calls, trimmed)
+	}
+	return calls
+}
+
+// bootstrapCurlQFirst matches -q in the ONE position curl honours it in: the
+// first argument.
+var bootstrapCurlQFirst = regexp.MustCompile(`curl[ \t]+-q(?:[ \t]|$)`)
+
+// bootstrapCurlCallProblems reports what a single curl invocation is missing.
+func bootstrapCurlCallProblems(call string) []string {
+	var problems []string
+	if !strings.Contains(call, "--proto '=https' --proto-redir '=https'") {
+		problems = append(problems, "does not pin HTTPS literally")
+	}
+	if !bootstrapCurlQFirst.MatchString(call) {
+		problems = append(problems, "does not pass -q as its FIRST argument, so it loads $CURL_HOME/.curlrc and the fetch origin is no longer this script's to choose")
+	}
+	return problems
+}
+
 // TestBootstrapFetchOriginsAreConstants is the structural half of the security
 // bar the two rounds before this one failed. The shipped script must hold its
 // fetch origins as literals with NO environment-driven way to redirect them, and
@@ -920,52 +1091,17 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	// renamed the variable (e.g. $GH_MIRROR) would sail through unnoticed. The
 	// real invariant this test exists to hold is narrower and checkable directly:
 	// every $NAME / ${NAME} reference the script contains, after subtracting the
-	// names it assigns to itself, must be exactly {CLAUDE_PLUGIN_ROOT} — a
+	// names it genuinely defines itself, must be exactly {CLAUDE_PLUGIN_ROOT} — a
 	// filesystem destination, never a fetch origin. This is an ALLOWLIST: an
 	// unrecognised environment reference under any name fails it.
-	envRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
-	assignPattern := regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
-	assigned := map[string]bool{}
-	tainted := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		m := assignPattern.FindStringSubmatch(trimmed)
-		if m == nil {
-			continue
-		}
-		name := m[1]
-		// A SELF-referential assignment (name="${name:-default}") reads the
-		// environment under its own name before falling back — exactly the
-		// mirror-variable bypass that walked through an earlier version of this
-		// allowlist, because the name was in `assigned` by the time its own
-		// defining line was checked. Such a name is never treated as safe, on
-		// ANY of its assignment lines, so both the self-reference itself and any
-		// later use of the name are flagged as an unrecognised environment read.
-		rhs := trimmed[len(m[0]):]
-		if regexp.MustCompile(`\$\{?` + regexp.QuoteMeta(name) + `\b`).MatchString(rhs) {
-			tainted[name] = true
-			continue
-		}
-		assigned[name] = true
-	}
-	for name := range tainted {
-		delete(assigned, name)
-	}
-	seen := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			continue
-		}
-		for _, m := range envRefPattern.FindAllStringSubmatch(line, -1) {
-			name := m[1]
-			if name == "CLAUDE_PLUGIN_ROOT" || assigned[name] {
-				continue
-			}
-			if !seen[name] {
-				seen[name] = true
-				t.Errorf("unrecognised environment reference $%s in a non-comment line — every environment read must be CLAUDE_PLUGIN_ROOT or a name this script assigns itself: %q", name, line)
-			}
-		}
+	//
+	// "Genuinely defines itself" is the whole difficulty, and it is
+	// bootstrapSafeNames' job: a name assigned from the environment is not
+	// script-local however local its assignment looks, and taint travels along
+	// chains of such assignments. TestBootstrapEnvAllowlistTaintsReferenceChains
+	// is that helper's own detector.
+	for _, read := range bootstrapUnrecognisedEnvReads(body) {
+		t.Errorf("unrecognised environment reference $%s in a non-comment line — every environment read must be CLAUDE_PLUGIN_ROOT or a name this script assigns itself: %q", read.name, read.line)
 	}
 	for _, origin := range []string{bootstrapReleaseOrigin, bootstrapAPIOrigin} {
 		if n := strings.Count(body, origin); n != 1 {
@@ -999,22 +1135,233 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	// file, unconditionally. A variable holding the flags is what the previous
 	// round used, and clearing it on one path is what reopened redirect downgrade.
 	// -q must be the FIRST argument: curl honours it in no other position.
-	calls := 0
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") || !strings.Contains(trimmed, "curl -") {
-			continue
-		}
-		calls++
-		if !strings.Contains(trimmed, "--proto '=https' --proto-redir '=https'") {
-			t.Errorf("every curl call must pin HTTPS literally; %q does not", trimmed)
-		}
-		if !strings.Contains(trimmed, "curl -q ") {
-			t.Errorf("every curl call must pass -q as its FIRST argument, or it loads $CURL_HOME/.curlrc and the fetch origin is no longer this script's to choose; %q does not", trimmed)
+	// TestBootstrapCurlScanSeesEveryInvocation is the scan's own detector.
+	calls := bootstrapCurlCalls(body)
+	for _, call := range calls {
+		for _, problem := range bootstrapCurlCallProblems(call) {
+			t.Errorf("every curl call must pin HTTPS and pass -q first; %q %s", call, problem)
 		}
 	}
-	if calls < 4 {
-		t.Errorf("expected the script's four curl calls to be found, saw %d — the scan above is no longer matching", calls)
+	if len(calls) < 4 {
+		t.Errorf("expected the script's four curl calls to be found, saw %d — the scan above is no longer matching", len(calls))
+	}
+}
+
+// TestBootstrapEnvAllowlistTaintsReferenceChains is the detector for the
+// allowlist ABOVE, and exists because that allowlist is the only thing standing
+// between a renamed fetch-origin variable and a green test run. A guard nothing
+// tests is a guard nobody knows is broken, and this one already shipped broken
+// twice: first subtracting any assigned name (so `mirror="${mirror:-}"` read as
+// script-local), then subtracting any name whose OWN line did not name itself —
+// which a merge-gate reviewer walked through in two hops, with a curl shim
+// recording the redirected fetch.
+//
+// The fragments below are not the shipped script and never run; they are the
+// shapes the allowlist must and must not report, fed to it directly.
+func TestBootstrapEnvAllowlistTaintsReferenceChains(t *testing.T) {
+	const origin = `"https://github.com/REPPL/abcd-cli"`
+	cases := []struct {
+		name string
+		body string
+		// want is the names the allowlist must report; empty means the
+		// fragment is legitimate and must be reported clean.
+		want []string
+	}{
+		{
+			name: "constants and their derivations are script-local",
+			body: "plugin_root=\"${CLAUDE_PLUGIN_ROOT:-}\"\nrepo_url=" + origin + "\nreleases_url=\"$repo_url/releases\"\ncurl -q \"$releases_url/latest\"\n",
+		},
+		{
+			name: "a bare environment read is reported",
+			body: "curl -q \"$GH_MIRROR/releases/latest\"\n",
+			want: []string{"GH_MIRROR"},
+		},
+		{
+			name: "one hop: a self-referential assignment is reported",
+			body: "repo_url=" + origin + "\nmirror=\"${mirror:-}\"\n[ -n \"$mirror\" ] && repo_url=\"$mirror\"\n",
+			want: []string{"mirror"},
+		},
+		{
+			// The merge-gate reviewer's reproduction, verbatim. Neither line
+			// names itself, so a per-line self-reference check passes it —
+			// while GH_MIRROR=https://attacker.invalid/x redirects the fetch.
+			name: "two hops: mutually referring names are reported",
+			body: "gh_default=" + origin + "\nrepo_url=\"${GH_MIRROR:-$gh_default}\"\nGH_MIRROR=\"$repo_url\"\ncurl -q \"$repo_url/releases/latest\"\n",
+			want: []string{"GH_MIRROR", "repo_url"},
+		},
+		{
+			// The same trick with a third name inserted, because closing a
+			// fixed hop count is not closing the class.
+			name: "three hops through a laundering name",
+			body: "gh_default=" + origin + "\nbase=\"${GH_MIRROR:-$gh_default}\"\nrepo_url=\"$base\"\nGH_MIRROR=\"$repo_url\"\ncurl -q \"$repo_url/releases/latest\"\n",
+			want: []string{"GH_MIRROR", "base", "repo_url"},
+		},
+		{
+			// Assignment order is load-bearing on the ASSIGNMENT side: a value
+			// naming a name defined LATER reads the environment, whatever that
+			// name is set to afterwards, so repo_url is tainted and every use
+			// of it is reported. $mirror itself is not reported by name,
+			// because the reference scan stays order-insensitive on purpose —
+			// a shell function body runs long after the line that defines it,
+			// so "referenced before assigned" is not a defect there.
+			name: "a forward reference is an environment read",
+			body: "repo_url=\"$mirror\"\nmirror=" + origin + "\ncurl -q \"$repo_url/releases/latest\"\n",
+			want: []string{"repo_url"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := map[string]bool{}
+			for _, read := range bootstrapUnrecognisedEnvReads(tc.body) {
+				got[read.name] = true
+			}
+			for _, name := range tc.want {
+				if !got[name] {
+					t.Errorf("the allowlist must report $%s as an unrecognised environment read; it reported %v", name, keysOf(got))
+				}
+				delete(got, name)
+			}
+			for name := range got {
+				t.Errorf("the allowlist reported $%s, which this fragment defines itself — a false positive here fails the shipped script for no reason", name)
+			}
+		})
+	}
+
+	// The same two-hop reproduction planted into the REAL script's bytes, which
+	// is how the merge-gate reviewer ran it: with GH_MIRROR set, the planted
+	// script fetches from wherever GH_MIRROR says, and the allowlist as it stood
+	// reported nothing at all.
+	t.Run("planted into the committed script", func(t *testing.T) {
+		src, err := os.ReadFile(bootstrapScript(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		const constant = "repo_url=" + `"https://github.com/REPPL/abcd-cli"`
+		planted := strings.Replace(string(src), constant,
+			"gh_default="+`"https://github.com/REPPL/abcd-cli"`+"\nrepo_url=\"${GH_MIRROR:-$gh_default}\"\nGH_MIRROR=\"$repo_url\"", 1)
+		if planted == string(src) {
+			t.Fatalf("the planted bypass could not be spliced in: %q no longer appears in the script, so this detector is testing nothing", constant)
+		}
+		found := false
+		for _, read := range bootstrapUnrecognisedEnvReads(planted) {
+			if read.name == "GH_MIRROR" {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("the allowlist must report $GH_MIRROR in the planted script; it reported nothing, so a renamed fetch origin would pass this suite green")
+		}
+	})
+}
+
+// keysOf renders a set for a failure message, sorted so the message is stable.
+func keysOf(set map[string]bool) []string {
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TestBootstrapCurlScanSeesEveryInvocation is the detector for the curl scan
+// above. Filtering lines on the substring "curl -" made the scan's coverage
+// depend on argument ORDER: a call whose first argument is its URL was skipped
+// entirely, so it could be missing -q and the transport pin without the scan
+// ever looking at it — and the call count, being the scan's own count, stayed
+// happily consistent with itself. The scan matches curl as a command word now,
+// and this holds that: every shape that IS an invocation is seen, every shape
+// that merely mentions curl is not.
+func TestBootstrapCurlScanSeesEveryInvocation(t *testing.T) {
+	const pin = "--proto '=https' --proto-redir '=https'"
+	cases := []struct {
+		name         string
+		line         string
+		wantCall     bool
+		wantProblems bool
+	}{
+		{
+			name:     "the shipped shape",
+			line:     "curl -q -fsSL " + pin + " --max-time 120 -o \"$tmp/$asset\" \"$url\"",
+			wantCall: true,
+		},
+		{
+			name:     "inside a command substitution",
+			line:     "redirect=$(curl -q -fsS " + pin + " -o /dev/null \"$url\")",
+			wantCall: true,
+		},
+		{
+			// The dodge: flags after the URL, so "curl -" never appears. The
+			// scan must see it AND report it, because -q is honoured in no
+			// position but the first.
+			name:         "flags after the url, dodging the substring",
+			line:         "curl \"$url\" -q " + pin + " -o /dev/null",
+			wantCall:     true,
+			wantProblems: true,
+		},
+		{
+			name:         "no pin and no -q at all",
+			line:         "curl \"$url\" -o /dev/null",
+			wantCall:     true,
+			wantProblems: true,
+		},
+		{
+			name:         "an absolute path to curl",
+			line:         "/usr/bin/curl \"$url\" -o /dev/null",
+			wantCall:     true,
+			wantProblems: true,
+		},
+		{
+			name:         "after a shell keyword",
+			line:         "if curl \"$url\" -o /dev/null; then",
+			wantCall:     true,
+			wantProblems: true,
+		},
+		{
+			name:         "downstream of a pipe",
+			line:         "printf '%s' \"$url\" | curl \"$url\" -o /dev/null",
+			wantCall:     true,
+			wantProblems: true,
+		},
+		{
+			// Mentions, not invocations: reporting these would make the scan
+			// unusable and tempt the next reader to loosen it again.
+			name: "a availability probe is not an invocation",
+			line: "command -v curl >/dev/null 2>&1 ||",
+		},
+		{
+			name: "prose naming curl is not an invocation",
+			line: "refuse 'curl is not available, so the release binary cannot be downloaded'",
+		},
+		{
+			name: "curlrc is not an invocation",
+			line: "printf '%s' \"$CURL_HOME/.curlrc\"",
+		},
+		{
+			name: "a commented-out call is not an invocation",
+			line: "# curl \"$url\" -o /dev/null",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := bootstrapCurlCalls(tc.line + "\n")
+			if tc.wantCall && len(calls) != 1 {
+				t.Fatalf("the scan must see %q as a curl invocation; it saw %d", tc.line, len(calls))
+			}
+			if !tc.wantCall {
+				if len(calls) != 0 {
+					t.Fatalf("the scan must not read %q as a curl invocation; it saw %d", tc.line, len(calls))
+				}
+				return
+			}
+			problems := bootstrapCurlCallProblems(calls[0])
+			if tc.wantProblems && len(problems) == 0 {
+				t.Errorf("the scan must report %q as unpinned or missing -q first, and reported nothing", tc.line)
+			}
+			if !tc.wantProblems && len(problems) != 0 {
+				t.Errorf("the scan must accept %q; it reported %v", tc.line, problems)
+			}
+		})
 	}
 }
 
