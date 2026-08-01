@@ -549,6 +549,21 @@ func storeEntropySpecimen() string {
 	return string(a[:40])
 }
 
+// storeEntropySpecimenGolden is the exact value storeEntropySpecimen returns, and
+// is asserted so the two duplicated generators cannot silently diverge: the
+// scanner package pins the identical value as entropySpecimenGolden, and either
+// copy drifting now fails on BOTH sides rather than leaving the two pins
+// describing different residues. It also pins determinism, which the entropy
+// floor cannot — a changed stream would still measure ~5.32 bits per character.
+//
+// It is the one credential-SHAPED literal admitted here, on measurement rather
+// than assumption: a bare 40-character alphanumeric run with no key name and no
+// `=`/`:` delimiter beside it does not trip gitleaks' generic-api-key rule
+// (keyword + delimiter + entropy >= 3.5), verified against the pinned 8.24.3
+// default rules over this exact declaration. It is a shuffle of the alphabet
+// above; it is not, and never was, a credential.
+const storeEntropySpecimenGolden = "fXbLtohSxAn9d1jv75E0eDkB6JHT8OzNWcVCQgsU"
+
 // shannonEntropy returns the per-character Shannon entropy of s in bits.
 func shannonEntropy(s string) float64 {
 	if s == "" {
@@ -601,10 +616,12 @@ func TestCaptureStoresUnanchoredEntropyVerbatim(t *testing.T) {
 	repoRoot, _ := setupStore(t)
 
 	anchored := "ghp_" + strings.Repeat("F", 36)
-	// scanner.maskSecret keeps the first three and last two runes and stars the
-	// middle, so the stored fingerprint begins "ghp" followed by asterisks. Only
-	// the stable head is asserted: the exact star count is the token's length,
-	// which this test does not exist to pin.
+	// On the Capture path the stored fingerprint is written by the scanner's
+	// sealLine -> fingerprintSpan (documented there as the byte-level mirror of
+	// maskSecret), not by maskSecret itself: it keeps the first three and last two
+	// runes and stars the middle, so the stored fingerprint begins "ghp" followed
+	// by asterisks. Only the stable head is asserted: the exact star count is the
+	// token's length, which this test does not exist to pin.
 	maskHead := "ghp" + strings.Repeat("*", 8)
 	secretKeyShape := strings.Repeat("FAKEfake00", 4) // 40 chars, no prefix
 	passphrase := strings.Join([]string{"correct", "horse", "battery", "staple", "9x"}, "-")
@@ -614,6 +631,13 @@ func TestCaptureStoresUnanchoredEntropyVerbatim(t *testing.T) {
 	// produced a repetitive value would restore the silent-pass gap it closes.
 	if h := shannonEntropy(highEntropy); h < 4.5 {
 		t.Fatalf("high-entropy specimen measures %.2f bits/char, below the 4.5 floor — it can no longer alarm an entropy detector", h)
+	}
+	// Entropy alone cannot see the two copies diverging: a changed stream would
+	// still measure ~5.32 bits. The golden value can, and it pins determinism at
+	// the same time. Never printed — a diagnostic here names the case, not the
+	// value.
+	if highEntropy != storeEntropySpecimenGolden {
+		t.Fatalf("high-entropy specimen no longer equals storeEntropySpecimenGolden — the generator's stream has changed; internal/adapter/scanner pins the same value as entropySpecimenGolden, so update BOTH copies or the two pins stop describing the same residue")
 	}
 	// A private quad: flagged by the network set (allowlist inversion over the
 	// reserved documentation ranges), assembled from its octets so no

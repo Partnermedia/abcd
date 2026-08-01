@@ -40,7 +40,10 @@ import (
 // TestCaptureStoresUnanchoredEntropyVerbatim carries the same specimen shapes at
 // the STORE boundary (a separate package, so the set is duplicated rather than
 // shared). The two sets are meant to move together — change one and change the
-// other, or the ledger entry citing both stops describing the same residue.
+// other, or the ledger entry citing both stops describing the same residue. That
+// intent is enforced rather than asked for: both sides assert the generated
+// specimen equals the same golden value (entropySpecimenGolden here,
+// storeEntropySpecimenGolden there), so a drifting copy fails on both.
 
 // phrase assembles a nonsense passphrase from ordinary words. It exists so the
 // joined value never appears as a literal in this repo: a credential-shaped run
@@ -91,6 +94,36 @@ func entropySpecimen() string {
 	return string(a[:40])
 }
 
+// entropySpecimenGolden is the exact value entropySpecimen returns. Two separate
+// drifts are pinned by asserting it.
+//
+//   - DETERMINISM. A generator whose stream changed — a different seed, a
+//     reordered shuffle, a Go release that altered integer behaviour — would very
+//     likely still measure high entropy, so the entropy floor alone cannot see it.
+//   - The CROSS-PACKAGE COPY. internal/core/history's storeEntropySpecimen is a
+//     duplicate of this generator in another package (Go tests do not share
+//     helpers across packages), and it asserts this same value. Either copy
+//     drifting now fails on both sides instead of leaving the two pins quietly
+//     describing different residues.
+//
+// It is the one credential-SHAPED literal this file permits, and it is admitted
+// by measurement rather than by assumption: a bare 40-character alphanumeric run
+// with no key name and no `=`/`:` delimiter beside it does not trip gitleaks'
+// generic-api-key rule, whose condition is keyword + delimiter + entropy >= 3.5
+// (verified against the pinned 8.24.3 default rules, the same version this
+// repo's history scan runs, over this exact declaration). It is a shuffle of the
+// alphabet three lines above; it is not, and never was, a credential.
+const entropySpecimenGolden = "fXbLtohSxAn9d1jv75E0eDkB6JHT8OzNWcVCQgsU"
+
+// The low-entropy specimens, declared ONCE. TestTranscriptPathMissesUnanchoredEntropy
+// scans these expressions and TestEntropySpecimenIsGenuinelyHighEntropy measures
+// them, so the guard cannot drift away from the thing it guards: re-declaring the
+// comparators inline in the self-check would let a corpus edit change what is
+// scanned while the measurement went on describing the old value.
+func lowEntropySecretKeyShape() string { return strings.Repeat("FAKEfake00", 4) }
+func lowEntropyHexToken() string       { return strings.Repeat("deadbeef", 4) }
+func lowEntropyBase64Token() string    { return strings.Repeat("Zm9vYmFy", 5) }
+
 // shannonEntropy returns the per-character Shannon entropy of s in bits, the
 // measure an entropy-based detector thresholds on.
 func shannonEntropy(s string) float64 {
@@ -122,20 +155,27 @@ func TestEntropySpecimenIsGenuinelyHighEntropy(t *testing.T) {
 	if len(spec) != 40 {
 		t.Fatalf("specimen must be 40 characters, got %d", len(spec))
 	}
+	// Never prints the specimen: a diagnostic in this file names the case, not
+	// the value. See entropySpecimenGolden for what this catches that the
+	// entropy floor below cannot.
+	if spec != entropySpecimenGolden {
+		t.Errorf("specimen no longer equals entropySpecimenGolden — the generator's stream has changed; internal/core/history pins the same value, so update BOTH copies or the two pins stop describing the same residue")
+	}
 	const floor = 4.5
 	if h := shannonEntropy(spec); h < floor {
 		t.Errorf("specimen entropy %.2f bits/char is below the %.1f floor — it can no longer alarm an entropy detector", h, floor)
 	}
 	// The low-entropy specimens are the contrast that makes the point: they are
-	// the reason this case exists, so their measurement is asserted too.
+	// the reason this case exists, so their measurement is asserted too. These are
+	// the SAME expressions the corpus scans, not inline copies of them.
 	for _, c := range []struct {
 		name string
 		text string
 		max  float64
 	}{
-		{"repeated secret-key shape", strings.Repeat("FAKEfake00", 4), 3.5},
-		{"repeated hex token", strings.Repeat("deadbeef", 4), 3.5},
-		{"repeated base64 token", strings.Repeat("Zm9vYmFy", 5), 3.5},
+		{"repeated secret-key shape", lowEntropySecretKeyShape(), 3.5},
+		{"repeated hex token", lowEntropyHexToken(), 3.5},
+		{"repeated base64 token", lowEntropyBase64Token(), 3.5},
 	} {
 		if h := shannonEntropy(c.text); h >= c.max {
 			t.Errorf("%s: entropy %.2f bits/char is no longer below %.1f — the high-entropy specimen is no longer the only case an entropy floor would catch", c.name, h, c.max)
@@ -240,12 +280,12 @@ func TestTranscriptPathMissesUnanchoredEntropy(t *testing.T) {
 		{"positive control: anchored github pat", "token=ghp_" + r("F", 36), "token:github_pat"},
 		// An AWS SECRET access key is 40 base64-ish characters with no prefix —
 		// the counterpart of the AKIA id that IS caught above.
-		{"bare 40-char secret-key shape", "AWS_SECRET_ACCESS_KEY=" + r("FAKEfake00", 4), ""},
-		{"bare 40-char secret-key shape, no key name", r("FAKEfake00", 4), ""},
+		{"bare 40-char secret-key shape", "AWS_SECRET_ACCESS_KEY=" + lowEntropySecretKeyShape(), ""},
+		{"bare 40-char secret-key shape, no key name", lowEntropySecretKeyShape(), ""},
 		{"bare passphrase", "password: " + phrase("correct", "horse", "battery", "staple", "9x"), ""},
 		{"bare passphrase in a flag", "--password=" + phrase("correct", "horse", "battery", "staple", "9x"), ""},
-		{"generic prefix-less hex token", "api_key = " + r("deadbeef", 4), ""},
-		{"generic prefix-less base64 token", "Authorization: Bearer " + r("Zm9vYmFy", 5), ""},
+		{"generic prefix-less hex token", "api_key = " + lowEntropyHexToken(), ""},
+		{"generic prefix-less base64 token", "Authorization: Bearer " + lowEntropyBase64Token(), ""},
 		// The specimens above are all REPETITIVE, and so sit below a
 		// conventional entropy floor: they would not alarm this pin if an
 		// entropy detector landed. This one would — see entropySpecimen.
@@ -275,7 +315,14 @@ func TestTranscriptPathMissesUnanchoredEntropy(t *testing.T) {
 				// ledger entry that cites it) rather than deleting the case.
 				t.Errorf("%s: expected no finding (tracked gap), got secret kinds %v — token/secret coverage has changed; re-point this pin", c.name, secretKindsOf(found))
 			} else {
-				t.Errorf("%s: unexpected non-secret kind now matches this specimen: %v — this says nothing about the entropy gap; adjust the specimen so it isolates the token/secret question again", c.name, kindsOf(found))
+				// This branch has TWO readings and must not steer to the wrong
+				// one. A widened network or identity pattern is a fact about the
+				// specimen. But a secret or entropy detector that lands under a
+				// naming family secretKindsOf does not yet know (say
+				// `secret:entropy`) arrives here too, and that is the gap CLOSING —
+				// weakening the specimen would then hide the very coverage this pin
+				// exists to notice.
+				t.Errorf("%s: unexpected non-secret kind now matches this specimen: %v — if this is a network/identity pattern widening, adjust the specimen so it isolates the token/secret question again; but if the new kind IS a secret or entropy detector under a different naming family, this is coverage GROWTH: re-point this pin and teach secretKindsOf the new family rather than weakening the specimen", c.name, kindsOf(found))
 			}
 			continue
 		}
@@ -288,6 +335,11 @@ func TestTranscriptPathMissesUnanchoredEntropy(t *testing.T) {
 // `rp_session_key`, the one non-prefixed secret kind in the bundled set — the
 // kinds whose growth is what iss-96 is about. Network and identity kinds are
 // deliberately excluded: they are covered elsewhere and have their own pins.
+//
+// The family list is the pin's blind spot, so it must be MAINTAINED: a secret or
+// entropy detector shipping under a new namespace (`secret:`, `entropy:`) would
+// close the tracked gap while reading here as "not a secret kind". The caller's
+// failure message says so; add the family here when that happens.
 func secretKindsOf(f []Finding) []string {
 	var out []string
 	for _, fn := range f {
