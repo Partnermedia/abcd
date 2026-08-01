@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -437,6 +438,9 @@ func TestBootstrapRefusesAbsentManifestEntry(t *testing.T) {
 	if code == 0 {
 		t.Errorf("an unlisted asset must fail loudly, got exit 0 (output %q)", out)
 	}
+	if !strings.Contains(out, "lists no entry") {
+		t.Errorf("the refusal must say the manifest lists no entry for this platform, not a download or mismatch failure; output %q", out)
+	}
 	if !strings.Contains(out, bootstrapAsset()) {
 		t.Errorf("the refusal must name the asset the manifest lacks; output %q", out)
 	}
@@ -593,10 +597,12 @@ func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
 // and never provision anything. The check has to be a regular file, matching
 // internal/core/ahoy's isExecutableFile — the two must agree about what
 // "reachable binary" means or ahoy reports a gap the bootstrap refuses to fill.
+// It must also REFUSE outright rather than proceed: `mv -f` onto an existing
+// directory moves the downloaded file INTO it instead of replacing it, which
+// would otherwise report success while the hooks stay broken.
 func TestBootstrapFastPathRejectsADirectory(t *testing.T) {
 	root := bootstrapRoot(t)
-	body := []byte("payload")
-	fx := bootstrapServer(t, body, bootstrapManifest(body))
+	fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
 	if err := os.MkdirAll(filepath.Join(root, "abcd"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -605,8 +611,14 @@ func TestBootstrapFastPathRejectsADirectory(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("a directory at the binary path must not read as a provisioned binary; output %q", out)
 	}
-	if !strings.Contains(out, "cannot be installed") && !strings.Contains(out, "ahoy install") {
-		t.Errorf("the run must proceed past the fast path and then report what it found; output %q", out)
+	if !strings.Contains(out, "not a regular file") {
+		t.Errorf("the refusal must name the obstruction; output %q", out)
+	}
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
+		t.Errorf("a pre-existing obstruction must be caught before any download, got %d request(s)", n)
+	}
+	if _, err := os.Stat(filepath.Join(root, "abcd", bootstrapAsset())); !os.IsNotExist(err) {
+		t.Error("the downloaded asset must never be moved INTO the obstructing directory")
 	}
 }
 
@@ -639,18 +651,23 @@ func TestBootstrapStaleLockIsBroken(t *testing.T) {
 // interpolate values the script does not author — the plugin-root path, uname's
 // output, the release tag read off a redirect. A raw ESC in one of them can
 // recolour, reposition, or visually rewrite what the reader is shown, on a
-// message whose entire job is to be believed.
+// message whose entire job is to be believed. A bare CR is the same class of
+// attack by a different mechanism (it returns the cursor to column zero and
+// overprints what the reader has already been shown — internal/termsafe's
+// SanitizeBlock names this specifically), and DEL is stripped alongside it.
 func TestBootstrapStripsControlCharactersFromMessages(t *testing.T) {
 	t.Run("refuse", func(t *testing.T) {
-		root := bootstrapRootNamed(t, "plugin\x1b[31mroot")
+		root := bootstrapRootNamed(t, "plugin\x1b[31mroot\rEVIL\x7f")
 		fx := bootstrapServer(t, []byte("tampered"), bootstrapManifest([]byte("published")))
 
 		out, code := runBootstrap(t, root, fx, "")
 		if code == 0 {
 			t.Fatalf("expected a refusal; output %q", out)
 		}
-		if strings.ContainsRune(out, 0x1b) {
-			t.Errorf("the refusal must strip control characters from the values it echoes; output %q", out)
+		for _, r := range []rune{0x1b, '\r', 0x7f} {
+			if strings.ContainsRune(out, r) {
+				t.Errorf("the refusal must strip control character %U from the values it echoes; output %q", r, out)
+			}
 		}
 	})
 	t.Run("notice", func(t *testing.T) {
@@ -670,6 +687,64 @@ func TestBootstrapStripsControlCharactersFromMessages(t *testing.T) {
 			t.Errorf("the notice must strip control characters from the values it echoes; output %q", out)
 		}
 	})
+}
+
+// TestBootstrapSanitizesPluginRootBasename: plugin_root_basename is the RAW,
+// unvalidated plugin-cache directory name, recorded so "why has the skew
+// notice never fired" has an answer in the file when the commit-stamped-cache
+// warrant does not hold. .binary-meta is a key=value text file another process
+// parses with last-line-wins semantics, so a basename is not an inert label —
+// an embedded newline could forge an additional key into that file, and an
+// unbounded one could push the file past the guarded read size and silence the
+// notice by a second route. Both must be neutralised before the value is ever
+// written.
+func TestBootstrapSanitizesPluginRootBasename(t *testing.T) {
+	t.Run("embedded newline cannot forge a key", func(t *testing.T) {
+		forged := strings.Repeat("f", 40)
+		root := bootstrapRootNamed(t, "evil\nrelease_sha="+forged)
+		body := []byte("payload")
+		fx := bootstrapServer(t, body, bootstrapManifest(body))
+
+		out, code := runBootstrap(t, root, fx, "")
+		if code != 2 {
+			t.Fatalf("the install must still succeed despite the hostile basename, got %d (output %q)", code, out)
+		}
+		meta := metaValues(t, root)
+		if got := meta["release_sha"]; got == forged {
+			t.Errorf("a newline in the plugin-root basename forged an extra release_sha line: %q", got)
+		}
+		lines := strings.Count(strings.TrimSpace(mustReadFile(t, filepath.Join(root, ".binary-meta"))), "\n") + 1
+		if lines != 6 {
+			t.Errorf(".binary-meta must hold exactly its six declared fields, got %d lines", lines)
+		}
+	})
+	t.Run("length is capped", func(t *testing.T) {
+		// 200 bytes: past the 120-byte cap this test exists to prove, but under the
+		// 255-byte filename limit most filesystems enforce.
+		root := bootstrapRootNamed(t, strings.Repeat("a", 200))
+		body := []byte("payload")
+		fx := bootstrapServer(t, body, bootstrapManifest(body))
+
+		out, code := runBootstrap(t, root, fx, "")
+		if code != 2 {
+			t.Fatalf("the install must still succeed despite the oversized basename, got %d (output %q)", code, out)
+		}
+		got := metaValues(t, root)["plugin_root_basename"]
+		if len(got) != 120 {
+			t.Errorf("plugin_root_basename must be capped at 120 bytes, got %d", len(got))
+		}
+	})
+}
+
+// mustReadFile is a small helper so the tests above can assert on
+// .binary-meta's raw shape, not just its parsed values.
+func mustReadFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 // TestBootstrapScriptIsExecutable: the harness invokes the committed script by
@@ -703,23 +778,36 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	if strings.Contains(body, "ABCD_BOOTSTRAP") {
 		t.Error("the shipped script must name no ABCD_BOOTSTRAP override: the seam was removed, not narrowed")
 	}
-	// Exactly one environment read in the whole script, and it is the plugin root
-	// the harness supplies — a filesystem destination, never a fetch origin.
+	// A DENYLIST of the names a redirection seam has used so far (ABCD_BOOTSTRAP_*)
+	// only ever catches a seam that reuses one of those names — a bypass that
+	// renamed the variable (e.g. $GH_MIRROR) would sail through unnoticed. The
+	// real invariant this test exists to hold is narrower and checkable directly:
+	// every $NAME / ${NAME} reference the script contains, after subtracting the
+	// names it assigns to itself, must be exactly {CLAUDE_PLUGIN_ROOT} — a
+	// filesystem destination, never a fetch origin. This is an ALLOWLIST: an
+	// unrecognised environment reference under any name fails it.
+	envRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
+	assignPattern := regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
+	assigned := map[string]bool{}
+	for _, line := range strings.Split(body, "\n") {
+		if m := assignPattern.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			assigned[m[1]] = true
+		}
+	}
+	seen := map[string]bool{}
 	for _, line := range strings.Split(body, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
-		for _, ref := range []string{"${", "$ABCD", "$HTTP", "$CURL"} {
-			if !strings.Contains(line, ref) {
+		for _, m := range envRefPattern.FindAllStringSubmatch(line, -1) {
+			name := m[1]
+			if name == "CLAUDE_PLUGIN_ROOT" || assigned[name] {
 				continue
 			}
-			if ref == "${" && strings.Contains(line, "${CLAUDE_PLUGIN_ROOT:-}") {
-				continue
+			if !seen[name] {
+				seen[name] = true
+				t.Errorf("unrecognised environment reference $%s in a non-comment line — every environment read must be CLAUDE_PLUGIN_ROOT or a name this script assigns itself: %q", name, line)
 			}
-			if ref == "${" && strings.Contains(line, "${#plugin_sha}") {
-				continue
-			}
-			t.Errorf("unexpected environment reference %q in a non-comment line: %q", ref, line)
 		}
 	}
 	for _, origin := range []string{bootstrapReleaseOrigin, bootstrapAPIOrigin} {

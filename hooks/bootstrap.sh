@@ -49,7 +49,7 @@ cleanup() {
 # sequence in one of them can recolour, reposition, or visually rewrite what the
 # reader is shown. Tab and newline survive; the report is made of them.
 safe() {
-	printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'
+	printf '%s' "$1" | tr -d '\000-\010\013-\037\177'
 }
 
 # refuse is the single failure message every failing path shares: what is
@@ -76,6 +76,13 @@ notice() {
 #    regular file, not merely something with an execute bit — a directory is
 #    executable too (matching internal/core/ahoy's isExecutableFile).
 [ -f "$binary" ] && [ -x "$binary" ] && exit 0
+
+# `mv -f` onto an existing DIRECTORY moves the file INTO it rather than
+# replacing it, so a stray directory at $binary would otherwise "succeed"
+# every session while the hooks stay broken and .binary-meta lies about it.
+if [ -e "$binary" ] && [ ! -f "$binary" ]; then
+	refuse "$binary exists and is not a regular file, so the release binary cannot be installed there"
+fi
 
 # 2. Platform gate. An unsupported platform is a reported condition, not a hook
 #    fault, so it changes nothing and never blocks — but it is still said out
