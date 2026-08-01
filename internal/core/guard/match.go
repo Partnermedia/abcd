@@ -32,7 +32,7 @@ var wrappers = map[string]bool{
 // Booleans (`sudo -n`, `env -i`, `time -p`) need no entry either; they are
 // stepped over as flags. A value flag the table does not name is NOT stepped
 // over, so its value is read as the command and the entry misses: a miss is a
-// non-match, never a false block, the same trade operandAt already makes.
+// non-match, never a false block, the same trade the operand walk already makes.
 var wrapperValueFlags = map[string][]string{
 	"sudo": {
 		"-C", "--close-from", "-D", "--chdir", "-g", "--group", "-h", "--host",

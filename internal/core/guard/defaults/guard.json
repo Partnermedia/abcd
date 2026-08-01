@@ -14,6 +14,7 @@
       "fixtures": {
         "known_bad": [
           "cd scratch && rm -rf *",
+          "mkdir -p scratch/work && cd scratch/work && rm -rf *",
           "cd /tmp/build; rm -rf .",
           "cd scratch && sudo rm -fr ./*",
           "cd worktree && rm -r -f build",

@@ -276,6 +276,27 @@ called out in a **Breaking** section.
   `shipped/`. `internal` is rejected on an intent (a press-release-first intent is
   user-facing by definition). `capture wontfix` is unchanged — a non-action ships
   nothing, so `wontfix/` carries no impact.
+- **The hazard registry refuses destructive GitHub remote operations and a force
+  push spelled as a refspec** (iss-159, iss-148). Three shapes that verdicted
+  `allow` now block. `gh repo delete` destroys the remote copy of a repository
+  and everything kept with it — issues, pull requests, releases, review history —
+  and nothing an agent can run brings any of it back, so the refusal names the
+  human-only successor: tell the person who owns the repository, and archive it
+  (`gh repo archive owner/repo`) where retiring it rather than destroying it was
+  what was meant. `gh api -X DELETE repos/{owner}/{repo}` is the same deletion
+  written as a raw API call, with no confirmation prompt anywhere in the way; it
+  is depth-limited on purpose, so a `DELETE` deeper inside a repository — a
+  branch ref, a release — is ordinary work and stays allowed. And
+  `git push origin +main:main` overwrites the remote branch exactly as `--force`
+  does, without the flag anyone reviews for. Entry patterns gained the fields
+  those shapes need, each optional and overridable per repo like the rest: a
+  second-level subcommand (`gh repo list` and `gh repo delete` share their first
+  level and only one of them is a hazard), a flag's SETTING rather than its
+  presence (`-X DELETE` refused, `-X GET` allowed, all three spellings read and
+  the case of the value ignored), an operand's path root and exact depth, and an
+  operand prefix. Every new entry ships through the same admission gate as the
+  rest: known-bad and known-good fixtures in the registry file itself, a 100%
+  true-negative floor, and known-good at least 40% of its own corpus.
 
 ### Fixed
 
@@ -441,6 +462,27 @@ called out in a **Breaking** section.
   file swept away after the capture reported success. The inter-process lock is a
   single shared primitive; the capture allocator and the history registry both
   route through it.
+- **A wrapper carrying its own flags no longer defangs the hazard entry behind
+  it, and a backtick substitution is read like `$( … )`** (iss-148). Of the
+  matcher's gaps this was the one a facilitator would reasonably assume was
+  covered: only the wrapper NAME was stepped over, so `sudo <hazard>` was seen
+  and `sudo -u bob <hazard>` was not — `-u` was read as the command name, and one
+  extra token turned an entry the registry does describe into an allow. The same
+  held for `env -i` and `time -p`. A wrapper's own arguments are now stepped over
+  with it, off two explicit tables: the flags each wrapper documents as taking a
+  value, and the mandatory operand that no flag stepping can reach —
+  `timeout [OPTIONS] DURATION COMMAND...`, where `timeout 30 rm -rf /` read as a
+  command called `30`. `xargs`, `timeout` and `exec` join the wrapper set they
+  were missing from. Separately, a backtick command substitution runs what is
+  inside it, so what is inside it is command position: `$( … )` already reached
+  the matcher through the tokenizer's grouping parentheses while a backtick was
+  an operator nowhere in it and became ordinary token text, so the same hazard
+  fired under one spelling and not the other. Both are followed now, in the
+  unquoted case for both — the parity that already held for parentheses, not full
+  POSIX coverage. What stays unseen is stated rather than implied: a wrapper
+  outside the known set, and a value-taking flag the per-wrapper table does not
+  name (a bundled `sudo -Hu bob`), where the miss is a non-match and never a
+  false block.
 
 ## [0.4.1] - 2026-07-28
 
