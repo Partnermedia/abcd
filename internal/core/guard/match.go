@@ -6,10 +6,10 @@ import (
 )
 
 // wrappers are commands that RUN another command with the same intent, so the
-// hazard sits one token further along: `sudo rm -rf *` is an `rm`. Only the
-// wrapper NAME is stepped over — a wrapper's own flags are not parsed (`sudo -u
-// bob rm -rf *` reads `-u` as the command), a narrow v1 limitation of the same
-// family as the eval gap.
+// hazard sits one token further along: `sudo rm -rf *` is an `rm`. A wrapper's
+// OWN arguments are stepped over with it (wrapperValueFlags, wrapperOperands),
+// because a wrapper that defangs an entry as soon as it carries a flag is worse
+// than one the set never knew — the registry looks armed and is not.
 var wrappers = map[string]bool{
 	"sudo":    true,
 	"doas":    true,
@@ -17,6 +17,43 @@ var wrappers = map[string]bool{
 	"env":     true,
 	"nohup":   true,
 	"time":    true,
+	"xargs":   true,
+	"timeout": true,
+	"exec":    true,
+}
+
+// wrapperValueFlags names, per wrapper, that wrapper's OWN flags which consume
+// the FOLLOWING token, so the walk to command position steps over the value
+// rather than reading it as the command (`sudo -u bob rm -rf *` is an `rm`).
+//
+// The table is deliberately explicit and small: only wrappers in the set above,
+// only flags those wrappers actually document, and only the separate-token form
+// — a `--flag=value` carries its value in the same token and needs no entry.
+// Booleans (`sudo -n`, `env -i`, `time -p`) need no entry either; they are
+// stepped over as flags. A value flag the table does not name is NOT stepped
+// over, so its value is read as the command and the entry misses: a miss is a
+// non-match, never a false block, the same trade the operand walk already makes.
+var wrapperValueFlags = map[string][]string{
+	"sudo": {
+		"-C", "--close-from", "-D", "--chdir", "-g", "--group", "-h", "--host",
+		"-p", "--prompt", "-R", "--chroot", "-r", "--role", "-T",
+		"--command-timeout", "-t", "--type", "-U", "--other-user", "-u", "--user",
+	},
+	"doas":    {"-a", "-C", "-u"},
+	"env":     {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+	"time":    {"-f", "--format", "-o", "--output"},
+	"xargs":   {"-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var"},
+	"timeout": {"-k", "--kill-after", "-s", "--signal"},
+	"exec":    {"-a"},
+	// `command` and `nohup` take no value flags at all.
+}
+
+// wrapperOperands names wrappers whose grammar puts a mandatory OPERAND between
+// the flags and the command: `timeout [OPTIONS] DURATION COMMAND...`. The
+// duration is not a flag, so no amount of flag stepping reaches past it — read
+// as command position, `timeout 30 rm -rf /` is a command called `30`.
+var wrapperOperands = map[string]int{
+	"timeout": 1,
 }
 
 // reserved are shell keywords and grouping tokens that PRECEDE a command rather
@@ -67,8 +104,12 @@ func commandOf(s segment) (string, []string) {
 	i := 0
 	for i < len(s.tokens) {
 		tok := s.tokens[i]
-		if isAssignment(tok) || reserved[tok] || wrappers[path.Base(tok)] {
+		if isAssignment(tok) || reserved[tok] {
 			i++
+			continue
+		}
+		if w := path.Base(tok); wrappers[w] {
+			i = skipWrapperArgs(s.tokens, i+1, w)
 			continue
 		}
 		break
@@ -77,6 +118,35 @@ func commandOf(s segment) (string, []string) {
 		return "", nil
 	}
 	return path.Base(s.tokens[i]), s.tokens[i+1:]
+}
+
+// skipWrapperArgs advances past one wrapper's own arguments, from pos (the token
+// just after the wrapper name), and returns the index where the command it
+// launches begins. Without it a known wrapper turned an entry the registry does
+// describe into an allow with one extra token — `sudo <hazard>` was seen,
+// `sudo -u bob <hazard>` was not, because `-u` was read as the command name
+// (iss-148).
+func skipWrapperArgs(tokens []string, pos int, wrapper string) int {
+	valueFlags := wrapperValueFlags[wrapper]
+	for pos < len(tokens) {
+		tok := tokens[pos]
+		if tok == "--" {
+			// End of the wrapper's options: everything after it is the command.
+			pos++
+			break
+		}
+		if tok == "-" || !strings.HasPrefix(tok, "-") {
+			break
+		}
+		pos++
+		if !strings.Contains(tok, "=") && containsString(valueFlags, tok) {
+			pos++ // its value belongs to the wrapper, not to command position
+		}
+	}
+	for n := wrapperOperands[wrapper]; n > 0 && pos < len(tokens); n-- {
+		pos++
+	}
+	return pos
 }
 
 // isAssignment reports whether a token is a NAME=VALUE environment prefix,
@@ -104,7 +174,11 @@ func matchSegment(p Pattern, s segment) bool {
 	if cmd == "" || cmd != p.Command {
 		return false
 	}
-	if p.Subcommand != "" && subcommandOf(args, p.ValueFlags) != p.Subcommand {
+	ops := operands(args, p.ValueFlags)
+	if p.Subcommand != "" && operandAt(ops, 0) != p.Subcommand {
+		return false
+	}
+	if p.Subcommand2 != "" && operandAt(ops, 1) != p.Subcommand2 {
 		return false
 	}
 	for _, group := range p.Flags {
@@ -112,27 +186,66 @@ func matchSegment(p Pattern, s segment) bool {
 			return false
 		}
 	}
+	for _, fv := range p.FlagValues {
+		if !flagValueMatches(fv, args) {
+			return false
+		}
+	}
+	for _, prefix := range p.ArgPrefixes {
+		if !argPrefixMatches(prefix, ops) {
+			return false
+		}
+	}
+	for _, pa := range p.ArgPaths {
+		if !pathArgMatches(pa, ops) {
+			return false
+		}
+	}
 	return true
 }
 
-// subcommandOf returns the first non-flag argument, stepping over the value of
-// any flag listed in valueFlags (`git -C /repo push` is a push). An unknown
-// value-taking flag is not stepped over — the miss is a non-match, never a
-// false block.
-func subcommandOf(args []string, valueFlags []string) string {
+// operands returns the segment's non-flag arguments in order, stepping over the
+// value of any flag listed in valueFlags (`git -C /repo push` is a push). An
+// unknown value-taking flag is not stepped over — the miss is a non-match, never
+// a false block. The subcommand is operand 0.
+func operands(args []string, valueFlags []string) []string {
+	var ops []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if !strings.HasPrefix(a, "-") {
-			return a
+			ops = append(ops, a)
+			continue
 		}
 		if a == "--" {
 			continue
 		}
 		if !strings.Contains(a, "=") && containsString(valueFlags, a) {
-			i++ // its value is not the subcommand
+			i++ // its value is an option argument, not an operand
 		}
 	}
-	return ""
+	return ops
+}
+
+// operandAt returns the n-th operand, or "" when the command line has no such
+// argument.
+func operandAt(ops []string, n int) string {
+	if n < 0 || n >= len(ops) {
+		return ""
+	}
+	return ops[n]
+}
+
+// argPrefixMatches reports whether some operand carries the prefix. Only
+// operands are considered, so a prefix like "+" can never be satisfied by an
+// option token: the constraint describes an argument (`git push origin
+// +main:main`), not a flag.
+func argPrefixMatches(prefix string, ops []string) bool {
+	for _, op := range ops {
+		if strings.HasPrefix(op, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // flagGroupMatches reports whether any alternative in one "a|b" group is present
@@ -165,6 +278,125 @@ func flagMatches(alt, arg string) bool {
 		return isShortCluster(arg) && strings.ContainsRune(arg[1:], rune(alt[1]))
 	}
 	return false
+}
+
+// flagValueMatches reports whether some argument SETS one of the flag
+// alternatives to one of the accepted values. All three spellings a shell user
+// reaches for are read — `-X DELETE`, `-XDELETE`, `--method=DELETE` — because a
+// constraint another spelling of the same call steps past is not one.
+func flagValueMatches(fv FlagValue, args []string) bool {
+	for _, alt := range strings.Split(fv.Flag, "|") {
+		if alt == "" {
+			continue
+		}
+		for i, arg := range args {
+			switch {
+			case arg == alt:
+				// The separate-token form: the value is the next argument.
+				if i+1 < len(args) && acceptsValue(fv.Values, args[i+1]) {
+					return true
+				}
+			case strings.HasPrefix(arg, alt+"="):
+				if acceptsValue(fv.Values, arg[len(alt)+1:]) {
+					return true
+				}
+			case isShortFlag(alt) && len(arg) > len(alt) && strings.HasPrefix(arg, alt):
+				// A short flag's value may be attached with no separator at all.
+				if acceptsValue(fv.Values, arg[len(alt):]) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// acceptsValue reports whether a setting is one the constraint accepts, ignoring
+// case: what makes `-X DELETE` destructive is the request it sends, and that
+// does not turn on how the word was typed.
+func acceptsValue(values []string, got string) bool {
+	for _, want := range values {
+		if want != "" && strings.EqualFold(want, got) {
+			return true
+		}
+	}
+	return false
+}
+
+// isShortFlag reports whether an alternative is a single-letter short flag
+// (`-X`), the only shape that can carry an attached value.
+func isShortFlag(alt string) bool {
+	return len(alt) == 2 && alt[0] == '-' && alt[1] != '-'
+}
+
+// pathArgMatches reports whether some operand is a resource path rooted at
+// pa.Root and exactly pa.Segments segments deep. The depth limit is the entry's
+// scope, not a detail: `repos/{owner}/{repo}` IS the repository, while a deeper
+// path under it names something inside the repository and stays allowed.
+//
+// A leading or trailing slash is ignored (`gh api /repos/owner/repo` is the same
+// call), and every remaining segment must be non-empty. An operand written as a
+// fully-qualified URL is normalised to its path first: `gh` passes an absolute
+// URL through to the API unchanged, so spelling the host out is the same call
+// and must not be a way around the same entry.
+func pathArgMatches(pa PathArg, ops []string) bool {
+	for _, op := range ops {
+		segs := strings.Split(strings.Trim(pathOf(op), "/"), "/")
+		if len(segs) != pa.Segments || segs[0] != pa.Root {
+			continue
+		}
+		empty := false
+		for _, seg := range segs {
+			if seg == "" {
+				empty = true
+				break
+			}
+		}
+		if !empty {
+			return true
+		}
+	}
+	return false
+}
+
+// pathOf reduces an operand to the path part a resource constraint reads: a
+// leading `scheme://host` is dropped, and so is anything from the first `?` or
+// `#`. Both are normalisation, not interpretation — `https://api.github.com/
+// repos/owner/repo` and `repos/owner/repo?` are the same API call as
+// `repos/owner/repo`, and an entry a change of spelling walks past is not one.
+//
+// The host itself is deliberately NOT inspected. Reading it would mean deciding
+// which hostnames are the real API, which is a lookalike-domain problem this
+// guard has no way to settle; normalising every authority away can only ever
+// make the depth check see a path it would otherwise have missed.
+func pathOf(op string) string {
+	if q := strings.IndexAny(op, "?#"); q >= 0 {
+		op = op[:q]
+	}
+	i := strings.Index(op, "://")
+	if i <= 0 {
+		return op
+	}
+	// A scheme is letters, digits, `+`, `-`, `.`, starting with a letter —
+	// anything else before the `://` is ordinary path text, not an authority.
+	if c := op[0]; !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') {
+		return op
+	}
+	for j := 1; j < i; j++ {
+		c := op[j]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9',
+			c == '+', c == '-', c == '.':
+		default:
+			return op
+		}
+	}
+	rest := op[i+3:]
+	slash := strings.IndexByte(rest, '/')
+	if slash < 0 {
+		return "" // a bare authority names no resource path at all
+	}
+	return rest[slash:]
 }
 
 // isShortCluster reports whether a token is a bundled short-flag cluster

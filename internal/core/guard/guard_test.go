@@ -132,6 +132,65 @@ func TestCheckDecisions(t *testing.T) {
 			command: "cd scratch\nrm -rf ./build",
 			verdict: VerdictAllow,
 		},
+		{
+			name:    "deleting a repository is a human-only operation",
+			command: "gh repo delete owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-repo-delete",
+		},
+		{
+			name:    "another two-level gh delete is not repository deletion",
+			command: "gh release delete v1.0.0",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a raw api DELETE on a repository is the same deletion",
+			command: "gh api -X DELETE repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			name:    "the same call written with an attached short value",
+			command: "gh api -XDELETE /repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			// gh passes a fully-qualified URL through to the API unchanged, so
+			// this is the same repository deletion with the host spelled out.
+			name:    "the same deletion written as a fully-qualified URL",
+			command: "gh api -X DELETE https://api.github.com/repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			// Normalising the URL must not widen the entry: the depth limit is
+			// what keeps ordinary work inside a repository allowed.
+			name:    "a deeper URL path is still not repository deletion",
+			command: "gh api -X DELETE https://api.github.com/repos/owner/repo/git/refs/heads/feature",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a DELETE deeper under a repository is not repository deletion",
+			command: "gh api -X DELETE repos/owner/repo/git/refs/heads/feature",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a GET on the repository path is not a deletion",
+			command: "gh api -X GET repos/owner/repo",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a refspec with a leading plus is a force push in disguise",
+			command: "git push origin +main:main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force-refspec",
+		},
+		{
+			name:    "an ordinary refspec is not a force push",
+			command: "git push origin main:main",
+			verdict: VerdictAllow,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,6 +233,35 @@ func TestEvalPayloadIsDocumentedV1Gap(t *testing.T) {
 	d := checkOK(t, `sh -c 'cd scratch && rm -rf *'`)
 	if d.Verdict != VerdictAllow {
 		t.Fatalf("v1 parses no payload strings; got %+v — update the documented gap before changing this", d)
+	}
+}
+
+// TestApiEnterpriseMountIsDocumentedV1Gap records what is left of the gh api
+// entry's URL limit now that a `scheme://host/` prefix is stripped. A path
+// constraint names a root SEGMENT, and a GitHub Enterprise Server install mounts
+// the same API under `/api/v3/`, so the repository path no longer starts the
+// path and the entry does not fire. Teaching the generic field about that mount
+// would put one host's routing into a declarative shape every entry shares —
+// and matching a `repos` root wherever it appeared would falsely refuse
+// `DELETE /teams/{id}/repos/{owner}/{repo}`, which removes a repository from a
+// team and destroys nothing. It is a stated gap, not a silent one; this test is
+// what makes it visible if the behaviour ever changes.
+func TestApiEnterpriseMountIsDocumentedV1Gap(t *testing.T) {
+	d := checkOK(t, "gh api -X DELETE https://ghe.example.test/api/v3/repos/owner/repo")
+	if d.Verdict != VerdictAllow {
+		t.Fatalf("v1 reads a path from its root segment; got %+v — update the documented gap before changing this", d)
+	}
+}
+
+// TestHelpIsNotAnExemption pins a deliberate absence: no entry in this registry
+// special-cases `--help`, so a help invocation of a refused command is refused
+// too. Fixing it would mean teaching every entry which of its flags mean "do
+// nothing", and a guard that reasons about intent is one that can be argued out
+// of refusing.
+func TestHelpIsNotAnExemption(t *testing.T) {
+	d := checkOK(t, "gh repo delete --help")
+	if d.Verdict != VerdictBlock {
+		t.Fatalf("Check(%q) = %+v, want the block; --help is not an exemption anywhere in this registry", "gh repo delete --help", d)
 	}
 }
 

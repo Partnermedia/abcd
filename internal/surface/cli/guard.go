@@ -52,10 +52,13 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"command is safe. The guard reads command names it can see in command\n" +
 			"position, so a hazard reached any other way is not seen: a command string\n" +
 			"handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper\n" +
-			"the guard does not step over (or a known wrapper carrying its own flags —\n" +
-			"`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), one inside a\n" +
-			"backtick substitution, or a dangerous form no entry describes. Coverage is\n" +
-			"what the registry names.\n\n" +
+			"outside the known set, one launched through a known wrapper carrying a\n" +
+			"value-taking flag the guard does not name (`sudo -u bob <hazard>` is seen,\n" +
+			"the bundled short form `sudo -Hu bob <hazard>` is not), one whose API path an\n" +
+			"entry names by its ROOT segment but the host serves under a prefix (a GitHub\n" +
+			"Enterprise Server install mounts the same endpoints under `/api/v3/`; the\n" +
+			"api.github.com URL form IS read), one inside a backtick substitution, or a\n" +
+			"dangerous form no entry describes. Coverage is what the registry names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
 			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
 			"a double-quoted --command argument before this verb starts, so a candidate\n" +

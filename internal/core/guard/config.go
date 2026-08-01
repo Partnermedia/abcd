@@ -113,11 +113,23 @@ func mergePattern(base, over Pattern) Pattern {
 	if over.Subcommand != "" {
 		r.Subcommand = over.Subcommand
 	}
+	if over.Subcommand2 != "" {
+		r.Subcommand2 = over.Subcommand2
+	}
 	if over.ValueFlags != nil {
 		r.ValueFlags = append([]string(nil), over.ValueFlags...)
 	}
 	if over.Flags != nil {
 		r.Flags = append([]string(nil), over.Flags...)
+	}
+	if over.ArgPrefixes != nil {
+		r.ArgPrefixes = append([]string(nil), over.ArgPrefixes...)
+	}
+	if over.FlagValues != nil {
+		r.FlagValues = cloneFlagValues(over.FlagValues)
+	}
+	if over.ArgPaths != nil {
+		r.ArgPaths = append([]PathArg(nil), over.ArgPaths...)
 	}
 	// AfterCD is a pointer precisely so an override can set it to false — a
 	// bool field could only ever tighten the requirement, never lift it.
