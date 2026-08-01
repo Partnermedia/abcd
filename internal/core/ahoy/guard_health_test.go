@@ -109,6 +109,23 @@ func TestGuardHealthBinaryUnreachable(t *testing.T) {
 	if !hasGap(det.Gaps, "guard.binary_unreachable") {
 		t.Errorf("an unreachable guard binary must surface as a gap; gaps = %v", gapIDs(det.Gaps))
 	}
+	// spc-21: the binary is provisioned by hooks/bootstrap.sh at session start, so
+	// "why is the guard down and what do I do" is answered in one place rather than
+	// leaving a reader to guess that a reinstall is the only route.
+	if !strings.Contains(det.Guard.Detail, "bootstrap.sh") {
+		t.Errorf("the health reason must name the script that re-provisions the binary; detail = %q", det.Guard.Detail)
+	}
+	for _, g := range det.Gaps {
+		if g.ID != "guard.binary_unreachable" {
+			continue
+		}
+		if !strings.Contains(g.FixHint, "bootstrap.sh") {
+			t.Errorf("the fix hint must name hooks/bootstrap.sh; fix hint = %q", g.FixHint)
+		}
+		if !strings.Contains(g.FixHint, "session") {
+			t.Errorf("the fix hint must say the bootstrap runs at session start; fix hint = %q", g.FixHint)
+		}
+	}
 }
 
 // TestGuardHealthRegistryUnloadable is the third failure mode: the hook runs, the

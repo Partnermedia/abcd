@@ -973,7 +973,7 @@ func newHookCommand() *cobra.Command {
 	// installed gap that was otherwise silent.
 	hookCmd.AddCommand(&cobra.Command{
 		Use:   "session-start",
-		Short: "SessionStart: warn if the transcript store is not bootstrapped",
+		Short: "SessionStart: warn about an unbootstrapped store or a stale binary",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			in, err := readHookInput(cmd)
@@ -986,23 +986,34 @@ func newHookCommand() *cobra.Command {
 					cwd = wd
 				}
 			}
-			det, err := ahoy.Detect(cwd)
-			if err != nil {
-				return nil // cannot tell: never nag on uncertainty
-			}
+			var notices []string
 			// history.transcripts_missing is emitted only when cwd is a git repo
 			// (a root SHA resolved) AND this repo's transcripts dir is absent —
 			// exactly the state in which session-end would silently capture
 			// nothing. A non-repo cwd never carries this gap, so we stay silent
-			// there: no `ahoy install` would make a non-repo capturable.
-			for _, g := range det.Gaps {
-				if g.ID == "history.transcripts_missing" {
-					fmt.Fprintln(cmd.ErrOrStderr(),
-						"abcd: session transcripts will not be captured — the history store is not set up for this repo. Run `/abcd:ahoy install` (or `abcd ahoy install`) to start recording.")
-					return &exitError{Code: 2} // non-zero so SessionStart shows it; SessionStart never blocks
+			// there: no `ahoy install` would make a non-repo capturable. A
+			// detection that errored tells us nothing: never nag on uncertainty.
+			if det, err := ahoy.Detect(cwd); err == nil {
+				for _, g := range det.Gaps {
+					if g.ID == "history.transcripts_missing" {
+						notices = append(notices,
+							"abcd: session transcripts will not be captured — the history store is not set up for this repo. Run `/abcd:ahoy install` (or `abcd ahoy install`) to start recording.")
+						break
+					}
 				}
 			}
-			return nil
+			// The skew notice is a plugin-root fact, not a repo one, so it stands
+			// whatever the repo detection above could answer (itd-105).
+			if n := binarySkewNotice(); n != "" {
+				notices = append(notices, n)
+			}
+			if len(notices) == 0 {
+				return nil
+			}
+			for _, n := range notices {
+				fmt.Fprintln(cmd.ErrOrStderr(), n)
+			}
+			return &exitError{Code: 2} // non-zero so SessionStart shows it; SessionStart never blocks
 		},
 	})
 

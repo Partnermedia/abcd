@@ -305,6 +305,88 @@ called out in a **Breaking** section.
   operand prefix. Every new entry ships through the same admission gate as the
   rest: known-bad and known-good fixtures in the registry file itself, a 100%
   true-negative floor, and known-good at least 40% of its own corpus.
+- **The plugin provisions its own binary, so a fresh install and every update
+  yield a working hook surface** (itd-105, spc-21). The hooks call
+  `$CLAUDE_PLUGIN_ROOT/abcd`, the plugin root is a clone of a repository that
+  commits no binary, and the harness re-clones each update into a fresh
+  commit-stamped cache directory — so every install and every update produced a
+  plugin root with nothing to call, and each hook failed with a raw "No such
+  file or directory" until someone hand-copied a binary in. `hooks/bootstrap.sh`
+  closes that: committed POSIX sh, needing no abcd binary to run (the binary is
+  exactly what is missing), wired as the FIRST `SessionStart` hook so it lands
+  before the binary-backed ones in the same event. It downloads the latest
+  release binary for the host platform plus `checksums.txt`, verifies the
+  SHA-256 against the manifest, and installs it with an atomic rename from a
+  temp directory on the same filesystem — a mismatch or an absent manifest line
+  deletes the download and refuses, so a corrupted or unpublished artefact never
+  reaches the binary path. The trust bar is the README one-liner's: same-origin
+  checksums, with `go build ./cmd/abcd` documented as the full-trust route. The
+  script fetches from two hardcoded origins and offers no way — no environment
+  variable, no flag, no branch — to point it anywhere else, and it pins HTTPS
+  including redirects on every request unconditionally: the binary and the
+  `checksums.txt` that verifies it come from one origin, so anything able to
+  name that origin would supply both the payload and its own manifest, and what
+  is installed then runs unattended as the Bash shell guard on every tool call.
+  Pinning the transport is not enough on its own, because `curl` reads a
+  configuration surface the command line knows nothing about: every fetch
+  therefore passes `-q` as its first argument, so `$CURL_HOME/.curlrc` and
+  `$HOME/.curlrc` are never loaded — one `connect-to` or `resolve` line there
+  re-points the connection while the URL still reads `https://github.com/…`, and
+  the checksum then verifies the substitute against its own manifest. The names
+  `curl` reads without being told to are removed from the environment before the
+  first request for the same reason: the proxy variables (`HTTPS_PROXY`,
+  `ALL_PROXY` and their lowercase forms, plus `HTTP_PROXY`/`http_proxy`) and the
+  certificate-authority overrides (`CURL_CA_BUNDLE`, `SSL_CERT_FILE`,
+  `SSL_CERT_DIR`) that would make such a route succeed on TLS. **The accepted
+  cost: a machine that can only reach the network through a proxy does not
+  bootstrap automatically** — install the release binary by hand or build from
+  source with `go build ./cmd/abcd`, both of which the refusal message names. A
+  plugin root that already holds an executable binary exits on one file test
+  with no network, so steady-state sessions pay nothing; concurrent sessions
+  serialise on an atomic `mkdir` lock whose loser exits quietly and whose stale
+  remains (older than ten minutes, from a killed run) are broken and retaken. A
+  lock that cannot be taken and is not there afterwards is not a lost race —
+  the plugin root is unwritable, or something that is not a directory occupies
+  the lock path — and that says so out loud instead of sharing the loser's
+  silence, because it repeats every session and nothing else would report it. A
+  platform outside the released matrix — darwin and linux on amd64 and arm64 —
+  is reported, not retried: it states the matrix and changes nothing.
+  Every failing path prints one plain-language message naming what is missing,
+  what it costs (hooks cannot run, the shell-hazard guard is inactive and
+  commands run UNGUARDED), and the three ways out; `abcd ahoy`'s guard health
+  names the same script and its recovery step, so one fault has one story
+  wherever it is read. Every message the bootstrap has for a person — the
+  unsupported-platform statement and the one-time `abcd ahoy install`
+  suggestion included — goes to stderr with a non-zero (non-blocking) exit,
+  because a SessionStart hook's stdout becomes model context while only a
+  non-zero exit puts its stderr in front of the human who can act on it. The
+  two binary-backed `SessionStart` commands that follow the bootstrap check for
+  the binary first, so a session that begins before one exists reports the gap
+  in the same plain language instead of a raw "No such file or directory".
+  Every message strips control characters from the values it echoes — a
+  plugin-root path, `uname`'s answer, the release tag read off a redirect — so
+  an escape sequence in one of them cannot recolour or visually rewrite a
+  message whose whole job is to be believed.
+- **A binary at a different commit from the surface it serves says so at session
+  start** (itd-105, spc-21). The plugin surface tracks the repository tip while
+  the newest binary is the last tagged release, so a fix can merge without a
+  release cut and leave a session running old-binary logic against new-surface
+  expectations. The bootstrap records what it installed in a `.binary-meta` file
+  beside the binary — release tag, release commit, the SHA-256 it verified the
+  binary against, fetch time, and the plugin commit it provisioned for, written
+  by the same atomic rename the binary gets — and the session-start hook renders
+  one line when the plugin commit and the release commit differ. The line names
+  both directions the difference could run in and asserts neither, because
+  comparing two commits establishes that they differ and never which is ahead.
+  What the bootstrap could not resolve it records as `unknown`, and a commit
+  that is not forty lowercase hex characters — unresolved, or truncated by a
+  crash mid-write — produces no line at all: a skew notice that guesses is worse
+  than no notice. The plugin commit comes from the cache directory's name, which
+  is an assumption about the harness this repository cannot verify, so the raw
+  basename is recorded beside the gated value: if that naming ever changes, the
+  notice goes quiet for everyone and `.binary-meta` is the one place that says
+  why. The release tag is sanitised before it is rendered, being the only value
+  in the line that arrives unchecked from off the machine.
 
 ### Fixed
 

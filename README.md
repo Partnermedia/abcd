@@ -219,9 +219,27 @@ sourced from the repository root. Pull the current state of the marketplace with
 
 The marketplace is served from the repository itself, so an install tracks the
 repository rather than a versioned artefact: the manifests here carry no version
-key, and a release publishes the `abcd` binaries and their checksums. The
-commands drive the `abcd` binary, so keep the [install](#install) above in place
-alongside the plugin.
+key, and a release publishes the `abcd` binaries and their checksums.
+
+The plugin provisions its own binary. This repository commits none, and every
+plugin update lands in a fresh cache directory, so a plugin root starts empty
+each time: [`hooks/bootstrap.sh`](hooks/bootstrap.sh) runs first at session
+start, downloads the release binary for this platform along with
+`checksums.txt`, verifies the binary's SHA-256 against the manifest, and
+installs it into the plugin root. A mismatch, a manifest that doesn't list the
+platform, or a platform outside the released matrix (darwin and linux on amd64
+and arm64) installs nothing and says why in plain language. A plugin root that
+already holds the binary costs one file test and no network.
+
+That covers the hooks. For the `abcd` command in your own terminal, keep the
+[install](#install) above, or run `abcd ahoy install` once to put the
+plugin-root binary on your `PATH`. For a stronger root of trust than
+same-origin checksums, build from source — `go build ./cmd/abcd` — and place
+the binary in the plugin root and on your `PATH` yourself. A binary placed
+there by hand takes the same no-network fast path, so the `.binary-meta`
+provenance record beside it still describes whichever release the bootstrap
+last fetched: delete that file so no version-skew notice is rendered from a
+release the binary in place did not come from.
 
 ## Build
 
