@@ -203,6 +203,21 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 			want: ErrInvalidEntry,
 		},
 		{
+			// `operands` only ever returns tokens that do NOT start with a dash,
+			// so a prefix that starts with one describes an argument nothing can
+			// be — the same silent defang as an empty flag group, one field along.
+			name: "argument prefix that could never match",
+			body: `{"schema_version":1,"entries":{"git-push-force":{"pattern":{"arg_prefixes":["-f"]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			// A root is compared against the FIRST segment of a path split on
+			// "/", so a root carrying a slash could never be one.
+			name: "path root that could never match",
+			body: `{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"arg_paths":[{"root":"repos/owner","segments":3}]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
 			// A flag-value constraint with no accepted value can never be
 			// satisfied: the entry would look armed and refuse nothing.
 			name: "flag-value constraint with no value",
@@ -242,6 +257,22 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 				t.Fatalf("error text leaks an absolute local path: %v", err)
 			}
 		})
+	}
+}
+
+// TestLoadAcceptsWellFormedOperandConstraints is the other half of the two
+// operand checks above: the shapes they reject are the ones that could never
+// match, and the ordinary shapes must still load. A validator that rejected
+// `arg_prefixes: ["+"]` or a plain path root would take the fields out of use
+// entirely.
+func TestLoadAcceptsWellFormedOperandConstraints(t *testing.T) {
+	for _, body := range []string{
+		`{"schema_version":1,"entries":{"git-push-force":{"pattern":{"arg_prefixes":["+"]}}}}`,
+		`{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"arg_paths":[{"root":"repos","segments":3}]}}}}`,
+	} {
+		if _, err := Load(writeOverride(t, body)); err != nil {
+			t.Fatalf("a well-formed operand constraint must load, got %v for %s", err, body)
+		}
 	}
 }
 

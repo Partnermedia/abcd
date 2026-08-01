@@ -264,6 +264,13 @@ func Validate(r Registry) error {
 			if strings.TrimSpace(prefix) == "" {
 				return fmt.Errorf("%w: entry %s argument prefix %d is empty and would match every argument", ErrInvalidEntry, id, i)
 			}
+			// A prefix constrains an OPERAND, and `operands` never returns a
+			// token that starts with a dash — it reads those as flags. A dashed
+			// prefix therefore describes an argument nothing can be: the silent
+			// defang again, one field along. A flag belongs in Flags.
+			if strings.HasPrefix(prefix, "-") {
+				return fmt.Errorf("%w: entry %s argument prefix %q starts with a dash and could never match a non-flag argument", ErrInvalidEntry, id, prefix)
+			}
 		}
 		// A flag-value constraint with no flag, or with no accepted value, can
 		// never be satisfied — the silent defang again, one field along.
@@ -284,6 +291,12 @@ func Validate(r Registry) error {
 			}
 			if pa.Segments < 1 {
 				return fmt.Errorf("%w: entry %s path constraint %d wants %d segments; a path has at least one", ErrInvalidEntry, id, i, pa.Segments)
+			}
+			// The root is compared against the FIRST segment of an operand split
+			// on "/", so a root that carries a slash is not a segment and could
+			// never be one. Depth is what the Segments field is for.
+			if strings.Contains(pa.Root, "/") {
+				return fmt.Errorf("%w: entry %s path root %q holds a slash and could never match a single path segment; use segments for depth", ErrInvalidEntry, id, pa.Root)
 			}
 		}
 	}
