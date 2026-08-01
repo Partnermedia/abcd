@@ -3,6 +3,7 @@ package history
 import (
 	"bytes"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -514,5 +515,160 @@ func TestResidualErrorNamesNoSeverityItDoesNotGateOn(t *testing.T) {
 	}
 	if !strings.Contains(msg, "net:lan_hostname") || !strings.Contains(msg, "refusing to write") {
 		t.Errorf("refusal must name the surviving kind and refuse the write: %s", msg)
+	}
+}
+
+// storeEntropySpecimen assembles a 40-character alphanumeric value of genuinely
+// high Shannon entropy — a deterministic shuffle of the alnum alphabet taken
+// without replacement, so all 40 characters differ and the per-character entropy
+// is log2(40) ≈ 5.32 bits. Deterministic across runs and machines (a hand-rolled
+// LCG over a fixed seed, no dependence on math/rand's stream), and computed at
+// run time, so no credential-shaped literal enters this repo's tree or history.
+//
+// It matters because the other unanchored specimens REPEAT: FAKEfake00×4,
+// deadbeef×4 and the base64 run measure 3.12, 2.16 and 2.75 bits per character,
+// all below the ~3.5-bit floor an entropy detector conventionally uses. Without
+// this specimen, an entropy threshold could land on the transcript path while
+// every assertion here still passed.
+//
+// CROSS-REFERENCE: internal/adapter/scanner/transcript_coverage_test.go carries
+// the same generator (as entropySpecimen) and the same specimen shapes at the
+// PATTERN-SET boundary, plus the entropy self-check that keeps the value honest.
+// Separate packages, so the set is duplicated rather than shared — change one
+// and change the other, or the ledger entry citing both stops describing the
+// same residue.
+func storeEntropySpecimen() string {
+	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	a := []byte(alphabet)
+	var s uint64 = 0x5EED17
+	for i := len(a) - 1; i > 0; i-- {
+		s = s*6364136223846793005 + 1442695040888963407
+		j := int(s % uint64(i+1))
+		a[i], a[j] = a[j], a[i]
+	}
+	return string(a[:40])
+}
+
+// shannonEntropy returns the per-character Shannon entropy of s in bits.
+func shannonEntropy(s string) float64 {
+	if s == "" {
+		return 0
+	}
+	counts := map[rune]int{}
+	n := 0
+	for _, r := range s {
+		counts[r]++
+		n++
+	}
+	h := 0.0
+	for _, c := range counts {
+		p := float64(c) / float64(n)
+		h -= p * math.Log2(p)
+	}
+	return h
+}
+
+// TestCaptureStoresUnanchoredEntropyVerbatim is the iss-96 residue pinned at the
+// boundary the ledger entry actually describes: an automatically captured
+// transcript reaching disk. A value with no recognisable prefix — a bare
+// secret-key shape, a bare passphrase, a prefix-less token, and a genuinely
+// high-entropy 40-character run — is not detected by the token patterns, so
+// Capture writes each one through unchanged on the lines BELOW the anchored
+// token, which is itself masked to a fingerprint on the transcript's first line.
+//
+// The same capture carries the CONTRA case: a flagged network identifier on the
+// last line, which A2's set does reach, and which must therefore be REDACTED in
+// the stored record. Without it the test would show only what survives, and the
+// class iss-96 no longer covers would rest on prose alone.
+//
+// The anchored control is asserted twice over: absent in raw form AND present as
+// its mask. Absence alone is satisfied by a store that dropped the line, or wrote
+// nothing at all — only the fingerprint proves the word "masked".
+//
+// It asserts CURRENT behaviour, not desired behaviour, and its reach is the
+// PATTERN SET: when an entropy or key-name detector lands in DefaultPatterns the
+// assertion inverts, and that failure is the signal to re-point the pin (and the
+// ledger entry that cites it). It cannot see an opt-in external-scanner adapter
+// run over this path — that route never consults DefaultPatterns, so this pin
+// would stay green while coverage had in fact grown, and closing iss-96 on the
+// pins alone would be wrong. The counterpart unit pin is
+// TestTranscriptPathMissesUnanchoredEntropy in internal/adapter/scanner.
+//
+// Every specimen is synthetic and self-evidently fake; the passphrase, the
+// high-entropy run and the network identifier are all assembled at run time, so
+// no credential-shaped or non-reserved literal sits in this repo's history.
+func TestCaptureStoresUnanchoredEntropyVerbatim(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+
+	anchored := "ghp_" + strings.Repeat("F", 36)
+	// scanner.maskSecret keeps the first three and last two runes and stars the
+	// middle, so the stored fingerprint begins "ghp" followed by asterisks. Only
+	// the stable head is asserted: the exact star count is the token's length,
+	// which this test does not exist to pin.
+	maskHead := "ghp" + strings.Repeat("*", 8)
+	secretKeyShape := strings.Repeat("FAKEfake00", 4) // 40 chars, no prefix
+	passphrase := strings.Join([]string{"correct", "horse", "battery", "staple", "9x"}, "-")
+	hexToken := strings.Repeat("deadbeef", 4)
+	highEntropy := storeEntropySpecimen()
+	// The duplicated generator is guarded here too: a drifting copy that quietly
+	// produced a repetitive value would restore the silent-pass gap it closes.
+	if h := shannonEntropy(highEntropy); h < 4.5 {
+		t.Fatalf("high-entropy specimen measures %.2f bits/char, below the 4.5 floor — it can no longer alarm an entropy detector", h)
+	}
+	// A private quad: flagged by the network set (allowlist inversion over the
+	// reserved documentation ranges), assembled from its octets so no
+	// non-reserved identifier is a literal here.
+	lanAddr := strings.Join([]string{"10", "0", "0", "7"}, ".")
+
+	transcript := strings.Join([]string{
+		"user: here is the token " + anchored,
+		"assistant: AWS_SECRET_ACCESS_KEY=" + secretKeyShape,
+		"assistant: password: " + passphrase,
+		"assistant: api_key = " + hexToken,
+		"assistant: session_token " + highEntropy,
+		"assistant: ssh " + lanAddr,
+	}, "\n")
+
+	res, err := Capture(repoRoot, testRootSHA, "sess-entropy1", []byte(transcript), "native")
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	if !res.Wrote {
+		t.Fatal("expected Wrote=true: an idempotent no-op would leave every assertion below reading a record this call did not write")
+	}
+	onDisk, err := os.ReadFile(res.Record.Path)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	if bytes.Contains(onDisk, []byte(anchored)) {
+		t.Errorf("anchored control: the token must not survive in the stored record")
+	}
+	if !bytes.Contains(onDisk, []byte(maskHead)) {
+		t.Errorf("anchored control: the token must be MASKED, not merely absent — no %q fingerprint in the stored record", maskHead)
+	}
+	// The class A2 DID close, asserted at the store rather than described: the
+	// identifier is gone and its placeholder is there, so the line survived and
+	// the value did not.
+	if bytes.Contains(onDisk, []byte(lanAddr)) {
+		t.Errorf("network control: the flagged address must not survive in the stored record")
+	}
+	if !bytes.Contains(onDisk, []byte("[redacted-address]")) {
+		t.Errorf("network control: the address must be REDACTED, not merely absent — no [redacted-address] placeholder in the stored record")
+	}
+	unanchored := []struct {
+		name     string
+		specimen string
+	}{
+		{"bare 40-char secret-key shape", secretKeyShape},
+		{"bare passphrase after a password: key name", passphrase},
+		{"prefix-less hex token after an api_key = key name", hexToken},
+		{"high-entropy 40-char token", highEntropy},
+	}
+	for _, c := range unanchored {
+		if !bytes.Contains(onDisk, []byte(c.specimen)) {
+			// Names the case, never the specimen: a diagnostic must not echo a
+			// credential-shaped value into CI output.
+			t.Errorf("%s: no longer stored verbatim — coverage has changed; re-point this pin and iss-96", c.name)
+		}
 	}
 }
