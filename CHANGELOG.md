@@ -12,6 +12,134 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd banlist` — the names a repo must not publish, in two layers** (itd-74,
+  spc-20). Enforcement splits by sensitivity, because a deterministic CI gate is
+  the right tool for a public banned name and the wrong place for a private one:
+  the rule would have to contain the very string it forbids. The **public** layer
+  is the `banned_tokens` family of `.abcd/docs-lint.json` — the same primitive
+  that already gates this repo's harness names, not a second mechanism — with
+  verb-written entries under a `names/` id prefix that marks what the verb owns:
+  `list` renders the whole family, and a removal is refused for a hand-curated
+  entry. Config edits are byte surgery on the located array rather than a
+  re-marshal, so an add is one inserted line, a remove is one deleted line, and
+  add-then-remove returns the file to its exact bytes. The **private** layer is a
+  gitignored per-machine store read by the committed pre-commit guard, and its
+  visibility follows: entries render by key only, never their pattern, and the
+  redaction is structural — the entry type carries no pattern field, so no
+  rendering can leak one. A private pattern is entered by piping it on stdin
+  (`printf %s 'PATTERN' | abcd banlist add --private KEY -`), which is the
+  recommended form because an argument is world-readable in `/proc/<pid>/cmdline`,
+  is captured by process auditing, and lands in shell history. Each layer is
+  validated against the engine that enforces IT — a private pattern by the guard's
+  own grep, a public one through the linter's compile path — so an entry cannot be
+  stored as healthy while it matches nothing; and `add --private` refuses outright
+  if git does not ignore the store's path, since the layer rests on that file being
+  untracked. `add` and `remove` name their layer explicitly (neither flag and both
+  flags exit 2); bare invocation and `list` are read-only, both state their reach
+  plainly, including that CI cannot enforce the private layer, and `list --private`
+  separates a line the guard cannot use from one it accepts but reads differently,
+  because the first stops every commit and the second stops nothing.
+- **`abcd ahoy` scaffolds the whole two-layer name banlist** (itd-74, spc-20). A
+  repo becomes name-safe by being abcd-managed rather than by a maintainer
+  hand-wiring the files. Install writes FIVE artefacts, each reported by name on
+  the status board: `.githooks/pre-commit` (the guard), `.githooks/pre-merge-commit`
+  (git runs no pre-commit for a merge commit, so a banned name would otherwise walk
+  into history the moment a merge commit carrying it is made), an appended
+  `.gitattributes` line keeping both hooks at LF (a `core.autocrlf` checkout
+  rewrites a script git executes, and its shebang stops resolving),
+  `.abcd/docs-lint.json` carrying an empty public banned-names family, and the
+  documented private stub in the gitignored local tier. A clone arms the hooks once
+  with `git config core.hooksPath .githooks`; abcd never sets it, and no surface
+  reports a committed hook as a running one. The merge half is written ONLY beside
+  abcd's own guard, identified by a whole `# abcd-name-guard: v1` line: beside a
+  maintainer's own hook it would both claim coverage it has not got and silently
+  start running that hook on merge commits, which git never did. The public family
+  is seeded EMPTY on purpose — abcd cannot know which names a repo may not publish,
+  and a ban nobody declared would fail a build over a word the maintainer never
+  chose. Every write is create-if-absent and contained: a hook, a CI-gating config,
+  and above all a populated private store are the maintainer's, and paths resolve
+  through a containment root so a symlink committed at `.githooks` or at the local
+  tier cannot land an artefact outside the repo while the surfaces report the
+  in-repo path. The stub is written only where `git check-ignore` itself reports the
+  store's path as ignored, not where a comparison of `.gitignore` text suggests it:
+  a repo can carry a byte-perfect block and still track the store, and a stub git
+  would track is the hazard rather than the remedy. Where git cannot be asked at all
+  — missing from PATH, a corrupt `.git` — a repo-shaped directory fails closed
+  rather than borrowing a plain folder's answer. The public config is held to the
+  same rule: abcd does not write one into a path git ignores, because it would have
+  to report it unenforceable in the same breath. The stub's worked examples are all
+  commented out — a fresh scaffold parses to zero entries, and the guard says so
+  loudly at commit time instead of looking like protection — and every illustrative
+  value in it is a reserved documentation value (RFC 5737, RFC 3849, RFC 2606, RFC
+  7042) or a persona-derived fixture host, judged by the repo's own
+  network-identifier detector.
+- **The name guard refuses copies of the private store, with a published escape**
+  (itd-74, spc-20). The store-path refusal matched only the local tier, so a COPY of
+  the private banlist anywhere else — `notes.txt`, a `.bak` beside it, or a `git mv`
+  out of the tier — committed every pattern in clear while the guard announced a
+  clean check: the entries cannot catch their own text, because they are escaped
+  regular expressions and a pattern does not match itself. Three tests now: a staged
+  path inside the local tier (including a rename's source path, and not escapable),
+  a staged blob whose first line is the format declaration, and a staged path whose
+  basename is the store's filename. They are shape tests on a mistake rather than a
+  net against someone determined — a copy with the declaration stripped or displaced
+  still commits — and they carry a per-file escape, because a repo that legitimately
+  commits a store-shaped file (a fixture corpus, a doc quoting the declaration) needs
+  one that is not `--no-verify`: a second line reading `# abcd-banlist-example`
+  exempts a blob from the copy refusals and from nothing else, its content still
+  scanned against every entry. The guard also pins `PATH`, `IFS` and xtrace and
+  unsets any inherited shell function shadowing a command it runs, as its first
+  statements, and BLOCKS loudly when a tool it needs is missing rather than failing
+  as a mute exit 127; a machine with a nonstandard prefix extends the pin with
+  `git config --local abcd.guardPath <dir>`, never an environment variable, since a
+  repo-scoped environment is the hole the pin exists to close. The format declaration
+  must be line 1 or nowhere: a blank line, a comment, a duplicate below it, or any
+  prefix bytes before it is a damaged declaration rather than a silent downgrade to
+  the legacy format, and both readers say so identically.
+- **Every surface that describes the private layer states its reach** (itd-74,
+  spc-20). `abcd ahoy` now reports the name guard's state — what occupies each hook
+  path, whether the public family can actually be enforced, and what shape the
+  private layer is in on this machine — and the status line, the JSON envelope, and
+  the `abcd banlist` verb all carry the same sentence: CI cannot enforce the private
+  layer; it protects only machines that have opted in, and only the commits git runs
+  a hook for, so a fast-forward `git pull`, a rebase, a `git am`, a `git revert` or a
+  cherry-pick bypasses it, as does `--no-verify`. The list is explicitly
+  non-exhaustive and names nothing that is in fact covered. The reach travels inside
+  the reported state rather than being added by a renderer, because a machine
+  consumer reading "hook committed" beside a present store would otherwise draw
+  exactly the wrong conclusion. Where a claim cannot be supported it is withdrawn
+  rather than softened: a docs-lint config git ignores — the state
+  `visibility: public` puts every repo in, since the installed fence ignores the
+  whole `.abcd/` namespace — is reported as NOT ENFORCEABLE instead of as the
+  committed, CI-enforced layer, with the placement question left for a maintainer to
+  settle (iss-176). The status pass reads the private store's shape (its format and
+  two counts) and never its content: the patterns are the secret, and a status board
+  is the surface that must not hold them.
+- **The private name guard refuses by key and says when it is inactive** (itd-74,
+  spc-20). The committed `.githooks/pre-commit` guard checks the CONTENT of every
+  staged file, read out of the index, and on a match refuses the commit naming the
+  entry key alone: the matched text and the pattern value never reach stdout,
+  stderr, or a log, because a refusal that echoed the string would defeat the layer
+  at the moment it worked. The pattern reaches grep on stdin rather than in argv,
+  for the same reason. Hostnames, IP and CIDR values, MAC addresses, and device
+  names are ordinary entries, matched exactly as a name is, and so are binary
+  blobs — a name in one is in history just the same. The store declares its own
+  format on its first line: `# abcd-banlist: keyed` means every line is
+  `KEY<space-or-tab>PATTERN`, and no declaration means every line is one whole-line
+  pattern under a synthetic key, so an older store keeps matching exactly what it
+  always matched and no part of any line is ever read — or printed — as a key. A
+  line that does not parse, a pattern the engine refuses, and any git step that
+  fails are each a refusal naming a step or a line number: an unusable entry is
+  never skipped, and a check that could not run must never look like a check that
+  passed. A store that is absent, or present with no entries, prints a loud warning
+  that the layer is inactive on this machine and lets the commit through: it
+  protects machines that opted in, and silence must never impersonate protection.
+  It reads each staged blob stage-explicitly (so a file literally named
+  `0:README.md` cannot hide behind git rev-magic), scans the staged PATH strings as
+  well as content (a banned name in a filename enters history just the same), skips
+  a staged gitlink rather than fail-closing on a submodule it cannot read, refuses
+  to commit the private store itself, and announces the format and entry count it
+  read before the scan so a stripped format declaration cannot silently downgrade it.
 - **A citations family in `abcd docs lint`, with zero network in the gate**
   (itd-101, spc-17). Cited references rot silently — pages retitle, URLs
   redirect, whole platforms announce their own shutdown — but a gate that dials
@@ -151,6 +279,120 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`ahoy install` writes a `.gitignore` block that matches the tier layout it
+  documents** (iss-169). The managed block ignored a root-level `.work/` under
+  both visibilities — a path the three-tier layout does not have — while never
+  naming `.abcd/.work.local/`, the one tier that must be gitignored. So a fresh
+  install ignored nothing that existed and left the local-ephemeral tier tracked:
+  precisely the state `abcd audit`'s `three-tier-layout` rule then reports as an
+  error, the installer and the auditor disagreeing about the same convention. The
+  block now follows the brief's visibility table exactly — a private repo ignores
+  `.abcd/.work.local/` alone, because the rest of the `.abcd/` namespace is meant
+  to be committed; a public repo ignores `.abcd/` outright, one switch with no
+  per-subdirectory exceptions, plus the legacy root-level `memory/` snapshot. An
+  existing repo carrying the old block needs no migration step: the block reads
+  as drift, `abcd ahoy` reports it, and one apply replaces it, leaving the
+  repository's own ignore rules untouched. A repository still on the historical
+  root-level `.work/` layout stops ignoring `.work/` when the block refreshes;
+  the layout migration in `/abcd:prepare-this-repo` is the path off that state.
+- **The `PII` rules domain fires on network work, and says never to commit a
+  hostname or an address** (iss-156). Its recall keywords were the vocabulary of
+  credentials — secret, token, credential, pii, redact, hostname, email — so a
+  session investigating a mesh VPN's reachability, a firewall rule, or an
+  address in a network config matched nothing and the hook injected nothing.
+  The keywords now cover that context — `ip`, `ips`, `ipv4`, `ipv6`, `vpn`,
+  `tailscale`, `tailnet`, `wireguard`, `firewall`, `network`, `reachability`,
+  `reachable`, `unreachable`, `dns`, `ssh`, `subnet`, plus the `mac address`
+  phrase alias — and
+  one new rule line forbids committing hostnames, IP or MAC addresses, and other
+  live network identifiers: redact or omit them, and reach for a reserved
+  documentation value (RFC 5737, RFC 3849, RFC 2606, RFC 7042 — the same set the
+  audit privacy-hygiene rule cites) only where an illustrative
+  example is actually needed. That rule previously existed only in a repo's own
+  instructions file, which meant the one discipline this domain most needed to
+  state was the one it never said — an agent could recall `PII` and still read
+  nothing about the machine identifiers in front of it. Recall matching is
+  word-bounded already, so the bare `ip` keyword matches a standalone token and
+  never the middle of a word such as "script" or "zip"; the plural, the
+  version-qualified forms and the `-able` adjective need their own entries
+  because the stemmer has a three-character floor and does not bridge
+  `-ability` to `-able`. `mac` is an alias phrase rather than a bare keyword so
+  that an Apple Mac does not recall the domain.
+- **`abcd audit` flags local-tier artefacts sitting in a committed tier**
+  (iss-155). The `three-tier-layout` rule verified that the committed tiers
+  exist and that `.abcd/.work.local/` is gitignored, but never the reverse
+  containment: a `NEXT.md`, `scratch/` or `logs/` placed directly in
+  `.abcd/work/` or `.abcd/development/` passed clean — which is exactly how a
+  handover file carrying machine-local detail rides a committed tier into
+  public history. Those three names are the local-ephemeral tier's
+  conventional contents, so their presence in a committed tier is now an
+  error, one finding per misplacement, each naming the offending path and
+  fixing it with a move to `.abcd/.work.local/`. Presence is checked on the
+  filesystem, like the tiers themselves: an untracked `NEXT.md` in
+  `.abcd/work/` is one `git add -A` from being committed, and the audit
+  should say so before that happens, not after.
+- **Network identifiers are detected, redacted and audited — one pattern set,
+  three surfaces** (iss-154, iss-157, iss-125, iss-153). The scanner carried
+  token-shaped secrets and identity matchers but nothing for addresses or
+  hostnames, so a lifeboat pack or launch bundle carrying a tailnet address and
+  device names shipped clean, a stored transcript kept a LAN hostname verbatim,
+  and `abcd audit` passed the whole class in silence. The detector is an
+  allowlist inversion rather than a leak-recognition heuristic: because every
+  illustrative identifier in a committed file comes from a reserved range, the
+  small closed set of values that are ALLOWED is what a pattern can recognise,
+  and everything outside it is a finding. Allowed are the documentation ranges
+  (RFC 5737, RFC 3849, RFC 2606/6761, RFC 7042), device names derived from the
+  persona registry, and the values that name no individual host at all —
+  loopback, unspecified, netmasks, masked CIDR prefixes, and the IANA
+  special-use ranges for link-local, multicast, benchmarking, protocol
+  assignments and the NAT64 well-known prefix. Flagged is what identifies
+  private topology: private ranges, CGNAT/tailnet, IPv6 unique-local, 6to4,
+  public unicast, LAN suffixes (`.local`, `.lan`, `.fritz.box`) and
+  device-hostname shapes. The set is built once and folded into the scanner's
+  defaults, so Stage-1 redaction and the launch/lifeboat scan inherit it and the
+  audit rule consults exactly the same patterns — the surfaces cannot disagree
+  about what a leak is. Addresses are hard_fail; the two hostname shapes are
+  warn, and the audit surface carries that split through rather than flattening
+  it. A line carrying `abcd-audit:allow` stays exempt, so a deliberately
+  illustrative value needs no weakening of the patterns. An identifier is masked
+  WHOLE — to a readable placeholder in redacted text, and fully starred in a
+  serialised finding — never to the head-and-tail fingerprint a credential gets:
+  on a MAC or a hostname that fingerprint preserves the vendor bytes and the
+  head, which is enough to re-identify the machine the masking was meant to hide.
+  The two hostname shapes tell a host from source code, because Stage-1
+  redaction rewrites every finding and a false positive there corrupts a stored
+  transcript: a mixed-case suffix where code puts a value (`zone := time.Local`),
+  a selector position (an assignment target, a block head, a call) and a
+  determiner before a device noun ("a synology-nas") are all read as code or
+  prose rather than machines. Mixed case on its own exempts nothing — a shifted
+  key in a command or a URL would otherwise be a bypass anyone could type — and a
+  fixture host must be spelled the way the persona registry spells it, in lower
+  case, because a capitalised given name in front of a device noun is how macOS
+  names a real person's machine. A digest is told from an address by the length
+  of the colon-separated run around it, counting only the groups that carry hex:
+  an address is eight of them and may sit beside one more (the port a tool
+  prints), while the shortest fingerprint is sixteen. A
+  repo that wants the hostname shapes to block raises their severity in
+  `.abcd/config/pii.json`, and `abcd audit` reads that merged set, so the
+  override reaches the surface that reports it. The transcript store's
+  verification rescan refuses the write on ANY surviving identifier, not only a
+  hard_fail one, so a warn-severity hostname cannot reach disk in silence, and
+  the refusal it prints names the surviving kinds rather than a severity it does
+  not gate on.
+- **`/Users/Shared` and `/Users/Guest` stop reading as usernames** (iss-153).
+  privacy-hygiene flagged every segment under a `/Users` root, so the macOS
+  system directories that live there were reported as though they named a
+  person, taxing product code that legitimately writes to one. The exemption is
+  narrow: it is scoped to the `/Users` root, it covers the system directory
+  itself and not what sits beneath it (a name nested under one — `Shared/<user>`
+  — is still a user, and still flags), a segment that merely begins with a
+  system-directory name is still a leak, and an empty or dots-only segment in
+  between (`Shared/../<user>`) restores no shield. The audit rule holds those
+  terms for both spellings it matches, the POSIX one and the Windows one — and
+  because Windows accepts either separator within one path, a name written after
+  a forward slash inside a Windows path is read as the nested name it is; the
+  scanner's own identity matcher shares the allowlist for the POSIX paths it
+  recognises, which are the only ones it has ever matched.
 - **The disembark probe's recursive file walk is bounded per directory, opens
   each child in O(1), and skips the common ecosystems' dependency trees**
   (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded

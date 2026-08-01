@@ -1,0 +1,26 @@
+# abcd-banlist: keyed
+# abcd-banlist-example
+# Fixture banlist — a KEYED store: line 1 above declares the format, so every
+# non-comment line below MUST parse as KEY<space-or-tab>PATTERN. Read by BOTH
+# readers of that format — the Go parser (private_test.go) and the committed
+# .githooks/pre-commit hook (hook_test.go). Every value is reserved for
+# documentation (RFC 5737/3849/2606/7042) or derived from the persona registry;
+# nothing here names a real machine, network, or organisation.
+#
+# Patterns are POSIX extended regular expressions, matched case-insensitively by
+# the enforcing grep.
+#
+# Line 2 is the published per-file escape: this file is a committed FIXTURE whose
+# first line declares the store format, so without it the guard would refuse to
+# commit the corpus that proves the guard works. It exempts this blob from the
+# copy refusals only — its content is still scanned against every entry.
+
+widget-partner   widgetworks
+lab-host         alice-laptop\.example\.com
+lab-ip           192\.0\.2\.17
+lab-cidr         203\.0\.113\.0/24
+lab-mac          00:00:5E:00:53:1A
+lab-v6           2001:db8::5
+
+  indented-key   carol-server\.test
+tab-key	widgetco\.example

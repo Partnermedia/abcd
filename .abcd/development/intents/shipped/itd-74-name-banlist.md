@@ -56,3 +56,8 @@ The concrete prototype this intent generalises is live in abcd-cli itself: a `ha
 ## Open Questions
 
 _None — all three original questions resolved in the 2026-07-29 planning interview (see Resolved Questions)._
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-3ceed52bdb99 -->
+Fidelity review OWED (receipt rcp-3ceed52bdb99).

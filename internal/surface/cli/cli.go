@@ -150,6 +150,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newChangelogCommand(&asJSON))
 
 	root.AddCommand(newCaptureCommand(&asJSON))
+	root.AddCommand(newBanlistCommand(&asJSON))
 	root.AddCommand(newMemoryCommand(&asJSON))
 	root.AddCommand(newRulesCommand(&asJSON))
 	root.AddCommand(newHookCommand())
@@ -169,6 +170,11 @@ func NewRootCommand() *cobra.Command {
 	// itself. Flag-parse errors route through FlagErrorFunc; argument errors come
 	// from each command's Args validator — wrap both across the whole tree (B13).
 	markUsageErrorsExitTwo(root)
+	// AFTER the generic tagging, which sets a FlagErrorFunc on every command: the
+	// banlist verbs need one that does NOT quote the offending token, because for
+	// them the token may be a private pattern. Applied here rather than in the verb
+	// so the ordering is explicit — the generic pass would otherwise overwrite it.
+	applyBanlistFlagErrors(root)
 
 	return root
 }
@@ -1481,6 +1487,14 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				if res.FolderKind != ahoy.UnmanagedFolder {
 					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(res.Guard))
+					for i, line := range banlistHealthLines(*res.Banlist) {
+						label := "  banlist:     "
+						if i > 0 {
+							label = "               "
+						}
+						fmt.Fprintf(w, "%s%s\n", label, line)
+					}
+					fmt.Fprintf(w, "               reach: %s\n", res.Banlist.Reach)
 				}
 				// Classification is read-only; the human report names the
 				// next step per folder kind (itd-40 AC2/AC3).

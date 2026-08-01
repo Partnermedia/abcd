@@ -433,3 +433,86 @@ func TestCaptureRejectsBadInput(t *testing.T) {
 		})
 	}
 }
+
+// TestCaptureRedactsNetworkIdentifiers is the iss-125 guarantee at the store's
+// own boundary: a transcript carrying a LAN hostname, a private address and a
+// device name must not reach disk with any of them intact. Specimens are
+// assembled at runtime so no non-reserved identifier is committed to this tree.
+func TestCaptureRedactsNetworkIdentifiers(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+
+	lanHost := strings.Join([]string{"printer", "local"}, ".")
+	fritzHost := strings.Join([]string{"nas", "fritz", "box"}, ".")
+	addr := strings.Join([]string{"100", "64", "3", "9"}, ".")
+	device := strings.Join([]string{"zeta", "laptop"}, "-")
+
+	transcript := strings.Join([]string{
+		"user: ssh " + lanHost + " then " + fritzHost,
+		"assistant: peer is " + addr,
+		"assistant: synced from " + device,
+	}, "\n")
+
+	res, err := Capture(repoRoot, testRootSHA, "sess-net001", []byte(transcript), "native")
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	onDisk, err := os.ReadFile(res.Record.Path)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	for _, v := range []string{lanHost, fritzHost, addr, device} {
+		if bytes.Contains(onDisk, []byte(v)) {
+			t.Errorf("network identifier %q leaked into the stored record", v)
+		}
+	}
+	if !bytes.Contains(onDisk, []byte("synced from")) {
+		t.Errorf("non-identifier body content was lost")
+	}
+}
+
+// F7: the stage-two write gate keyed on hard_fail alone, so a hostname — warn by
+// design, because the hostname patterns are shape heuristics — that survived
+// Stage-1 redaction was written to disk silently. Any surviving identity or
+// network span must refuse the write, whatever its severity.
+func TestStageTwoGateBlocksSurvivingWarnIdentifier(t *testing.T) {
+	lanHost := strings.Join([]string{"printer", "local"}, ".")
+	findings := scanner.ScanText("ssh "+lanHost, scanner.Identity{},
+		scanner.DefaultPatterns(), scanner.DefaultIdentitySeverities(), "transcript")
+
+	var hostname *scanner.Finding
+	for i := range findings {
+		if findings[i].Kind == "net:lan_hostname" {
+			hostname = &findings[i]
+		}
+	}
+	if hostname == nil {
+		t.Fatalf("fixture must produce a LAN hostname finding: %+v", findings)
+	}
+	if hostname.Severity != scanner.SeverityWarn {
+		t.Fatalf("fixture must be warn-severity to exercise the gate, got %q", hostname.Severity)
+	}
+	if len(blockingResidual(findings)) == 0 {
+		t.Errorf("a surviving warn-severity hostname must refuse the write: %+v", findings)
+	}
+	// A clean rescan still writes.
+	if got := blockingResidual(nil); len(got) != 0 {
+		t.Errorf("a clean rescan must not block: %+v", got)
+	}
+}
+
+// G4: the refusal the caller reads must describe the gate that fired. It named
+// a hard_fail severity while blocking on ANY surviving identity or network span,
+// so a reader chasing a warn-severity hostname was sent looking for a severity
+// no finding carried.
+func TestResidualErrorNamesNoSeverityItDoesNotGateOn(t *testing.T) {
+	err := &RedactionResidualError{Residual: []scanner.Finding{
+		{Kind: "net:lan_hostname", Severity: scanner.SeverityWarn},
+	}}
+	msg := err.Error()
+	if strings.Contains(msg, string(scanner.SeverityHardFail)) {
+		t.Errorf("refusal names a severity the gate does not key on: %s", msg)
+	}
+	if !strings.Contains(msg, "net:lan_hostname") || !strings.Contains(msg, "refusing to write") {
+		t.Errorf("refusal must name the surviving kind and refuse the write: %s", msg)
+	}
+}

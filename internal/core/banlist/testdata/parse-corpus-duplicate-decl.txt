@@ -1,0 +1,10 @@
+# abcd-banlist: keyed
+# abcd-banlist-example
+# Fixture banlist — a KEYED store whose header repeats the format declaration
+# below line 1. The declaration is only ever read from line 1, so a second one is
+# an edit that moved or duplicated it, and BOTH readers must refuse the file by
+# line number rather than one calling it healthy while the other blocks every
+# commit. Values are reserved-documentation or persona-derived only.
+# abcd-banlist: keyed
+
+lab-host         alice-laptop\.example\.com

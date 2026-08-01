@@ -111,6 +111,119 @@ func TestOpinionsDomainPointsAtPrinciplesNotCopies(t *testing.T) {
 	}
 }
 
+// TestPIIDomainRecallsNetworkContexts (iss-156) proves the PII domain fires on
+// the network/infra prompts that most need it. The original recall set (secret,
+// token, credential, pii, redact, hostname, email) missed every one of these, so
+// an agent writing up a mesh-VPN or firewall investigation got zero injection.
+// Recall matching is word-bounded (see indexPrompt/termHit), so the bare "ip"
+// keyword is safe: it matches only a standalone token, never "script" or "zip".
+func TestPIIDomainRecallsNetworkContexts(t *testing.T) {
+	rs := Defaults()
+	for _, prompt := range []string{
+		"investigating the tailscale outage",
+		"basic reachability looks fine from here",
+		"the vpn drops every hour",
+		"the firewall is dropping the connection",
+		"write up what the network scan found",
+		"note the ip we connected to",
+	} {
+		if !has(rs.Match(prompt), "PII") {
+			t.Errorf("network-context prompt %q did not recall PII, got %v", prompt, names(rs.Match(prompt)))
+		}
+	}
+}
+
+// TestPIIDomainRecallsNetworkVocabularyGaps pins the coverage the first keyword
+// pass missed, each row a distinct hole in the matcher rather than a synonym:
+//
+//   - "ips" — stem() has a 3-character floor, so stem("ips") == "ips" and the
+//     bare "ip" keyword never sees the plural.
+//   - "ipv4"/"ipv6" — version-qualified tokens share no stem with "ip".
+//   - "reachable" — stem() does not bridge "-ability" to "-able", so the
+//     "reachability" keyword cannot reach the adjective.
+//   - "unreachable" — stem() strips no "un-" prefix either, and unreachable is
+//     the ICMP-canonical failure word a network write-up actually uses.
+//   - "mac addresses" — the rule text forbids MACs, so the domain must recall
+//     that vocabulary; bare "mac" is unsafe (an Apple Mac), hence the phrase
+//     alias, which matches via the stemmed-phrase path in termHit
+//     ("addresses" stems to "address").
+//   - dns / ssh / subnet / tailnet / wireguard — the ordinary vocabulary of the
+//     incident class, none of it reachable from the credential keywords.
+//
+// Prompt values are deliberately identifier-free (no real host, address or
+// network is named) so the test corpus itself obeys the rule under test.
+func TestPIIDomainRecallsNetworkVocabularyGaps(t *testing.T) {
+	rs := Defaults()
+	for _, prompt := range []string{
+		"list the IPs of every node",
+		"an IPv4 address in the config",
+		"is there an IPv6 literal in this file",
+		"confirm the node is reachable over the tunnel",
+		"the host is unreachable, write up what we found",
+		"the mac addresses of both nics",
+		"dns is not resolving for the node",
+		"note the tailnet address of the laptop",
+		"the ssh config for the build box",
+		"which subnet does the host sit on",
+		"wireguard keeps dropping the peer",
+	} {
+		if !has(rs.Match(prompt), "PII") {
+			t.Errorf("network-context prompt %q did not recall PII, got %v", prompt, names(rs.Match(prompt)))
+		}
+	}
+}
+
+// TestPIIDomainRecallIPIsWordBounded guards the "ip" keyword against the
+// over-matching it would cause under substring semantics: a prompt about a
+// script, a description, or a zip file must not inject PII.
+func TestPIIDomainRecallIPIsWordBounded(t *testing.T) {
+	rs := Defaults()
+	if got := rs.Match("unzip the script and edit its description"); has(got, "PII") {
+		t.Fatalf("bare 'ip' keyword over-matched a non-network prompt, got %v", names(got))
+	}
+}
+
+// TestPIIDomainForbidsCommittingNetworkIdentifiers (iss-156) proves the injected
+// rule text carries the never-commit-hostnames/IPs rule. It previously lived only
+// in a parent CLAUDE.md privacy section, so the rules loader never injected it.
+// The rule must name MAC addresses too, and cite the full reserved-value set the
+// scanner and the audit privacy-hygiene rule already cite (RFC 5737 IPv4, 3849
+// IPv6, 2606 names, 7042 MACs) — pinning all four here means dropping or drifting
+// a citation, or deleting the clause, fails the test rather than passing quietly.
+// The remedy wording is pinned too: redact-or-omit must stay the default and
+// documentation values must stay scoped to illustrative examples — the first
+// draft's unconditional "use the reserved ranges instead" read as an instruction
+// to silently substitute plausible-looking fake identifiers into factual records.
+func TestPIIDomainForbidsCommittingNetworkIdentifiers(t *testing.T) {
+	pii, ok := Defaults().Lookup("PII")
+	if !ok {
+		t.Fatal("PII domain missing from the bundled defaults")
+	}
+	for _, rule := range pii.Rules {
+		low := strings.ToLower(rule)
+		if !strings.Contains(low, "hostname") || !strings.Contains(low, "ip address") ||
+			!strings.Contains(low, "mac address") || !strings.Contains(low, "network identifier") {
+			continue
+		}
+		var missing []string
+		for _, rfc := range []string{"5737", "3849", "2606", "7042"} {
+			if !strings.Contains(low, rfc) {
+				missing = append(missing, rfc)
+			}
+		}
+		if len(missing) > 0 {
+			t.Fatalf("PII network-identifier rule omits RFC citation(s) %v: %q", missing, rule)
+		}
+		for _, want := range []string{"redact", "omit", "illustrative"} {
+			if !strings.Contains(low, want) {
+				t.Fatalf("PII network-identifier rule lost the %q remedy wording: %q", want, rule)
+			}
+		}
+		return
+	}
+	t.Fatalf("no PII rule forbids committing hostnames, IP addresses, MAC addresses, or live network identifiers: %v", pii.Rules)
+}
+
 func TestMatchRecallKeyword(t *testing.T) {
 	rs := Defaults()
 	got := rs.Match("let's commit and push this")

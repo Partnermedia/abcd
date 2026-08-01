@@ -23,6 +23,14 @@ Then summarise the JSON for the user:
   the track-latest dogfood shim is installed, `pinned` for the built-binary
   symlink, empty when there is nothing on `PATH` yet. Report it so a dev install
   is never invisible.
+- `banlist` — the two-layer name guard, when the folder is a repo: `hook` and
+  `merge_hook` (`installed` / `absent` / `foreign` / `unreadable`), whether this
+  clone is armed (`hooks_path_armed`), `public_family`, and the private layer's
+  state on this machine (`private_store`, and its shape — `private_keyed`,
+  `private_entries`, `private_unparsed`). Never report a `foreign` hook as abcd's
+  guard, and never report a committed hook as a running one. Relay `reach`
+  verbatim: it is the one sentence stating what the private layer does NOT cover,
+  and a paraphrase drops the half that matters.
 - `gaps` — how many are outstanding, and for each actionable one its `title`,
   `category`, and `fix_hint`; call out which are `required`.
 

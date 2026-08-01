@@ -77,7 +77,7 @@ from the marked entries.**
 - The two-layer split this repo already runs (public banned tokens in CI lint;
   private patterns in an untracked pre-commit banlist, because a public rule
   cannot contain the secret it bans) is the right architecture —
-  [itd-74](../../intents/planned/itd-74-name-banlist.md) generalises it.
+  [itd-74](../../intents/shipped/itd-74-name-banlist.md) generalises it.
 - The new move: *derive* the private patterns from the bibliography's
   `confidential: true` entries (title, aliases, full author names) so the
   banlist cannot drift from the corpus. Custom-rule secret scanners at
