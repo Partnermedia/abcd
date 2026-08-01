@@ -3,6 +3,7 @@ package cli
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,10 +27,39 @@ const (
 	bootstrapRelease = "fedcba9876543210fedcba9876543210fedcba98"
 )
 
+// bootstrapReleaseOrigin / bootstrapAPIOrigin are the two fetch origins the
+// shipped script hardcodes. They are the ONLY seam these tests have, and they
+// are a textual one: the script itself reads no environment variable to decide
+// where to fetch from, because two successive attempts to keep such a variable
+// behind a loopback allowlist were both defeated in adversarial review. A test
+// therefore rewrites these literals in a throwaway COPY of the script (see
+// bootstrapFixtureScript) rather than driving a redirection seam that would
+// then also exist in production.
+const (
+	bootstrapReleaseOrigin = "https://github.com/REPPL/abcd-cli"
+	bootstrapAPIOrigin     = "https://api.github.com/repos/REPPL/abcd-cli"
+)
+
 // bootstrapScript locates the committed hooks/bootstrap.sh from this test file's
-// own on-disk position (internal/surface/cli/ -> three levels up), so the test
-// drives the script that actually ships rather than a copy.
+// own on-disk position (internal/surface/cli/ -> three levels up), so the tests
+// derive from the script that actually ships rather than from a hand-written
+// stand-in. Callers that need to RUN it against a fixture go through
+// bootstrapFixtureScript.
 func bootstrapScript(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed to locate the test source file")
+	}
+	script := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "hooks", "bootstrap.sh"))
+	if _, err := os.Stat(script); err != nil {
+		t.Fatalf("the committed bootstrap script must exist: %v", err)
+	}
+	return script
+}
+
+// bootstrapRequires skips a case whose host cannot run the script at all.
+func bootstrapRequires(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh unavailable")
@@ -42,19 +72,69 @@ func bootstrapScript(t *testing.T) string {
 	default:
 		t.Skipf("no released binary for %s/%s: the supported-matrix case covers this", runtime.GOOS, runtime.GOARCH)
 	}
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed to locate the test source file")
+}
+
+// bootstrapFixtureScript writes a per-test COPY of the committed script with its
+// two hardcoded fetch origins rewritten to the fixture's base URL, and returns
+// the copy's path.
+//
+// This is the whole test seam, and it exists on THIS side of the boundary on
+// purpose: the shipped script must contain no branch, variable, or flag that can
+// point a fetch somewhere else, because the binary and the checksums.txt that
+// "verifies" it come from the same origin and the result is run unattended as
+// the Bash shell guard on every tool call. Rewriting a copy keeps the production
+// bytes identical to what runs on a user's machine while still exercising the
+// full download/verify/install path.
+//
+// Every substitution is checked, both before and after. A silent no-op — the
+// literal drifting in the script, a typo in the constant — would leave every
+// case below pointed at the REAL GitHub while reporting a pass, which is exactly
+// the fixture-hides-the-bug failure an earlier round already shipped once.
+func bootstrapFixtureScript(t *testing.T, base string) string {
+	t.Helper()
+	src, err := os.ReadFile(bootstrapScript(t))
+	if err != nil {
+		t.Fatalf("reading the committed bootstrap script: %v", err)
 	}
-	script := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "hooks", "bootstrap.sh"))
-	if _, err := os.Stat(script); err != nil {
-		t.Fatalf("the committed bootstrap script must exist: %v", err)
+	body := string(src)
+	// The QUOTED, complete assignment value — never a bare hostname and never a
+	// bare prefix. A prefix match would happily rewrite a longer origin
+	// (…/abcd-cli-renamed) into a mangled URL and carry on; requiring the closing
+	// quote means the literal is matched whole or not at all. Each must appear
+	// exactly once, or the script has changed shape in a way this harness no
+	// longer models and would otherwise silently test against the real GitHub.
+	for _, origin := range []string{bootstrapAPIOrigin, bootstrapReleaseOrigin} {
+		quoted := `"` + origin + `"`
+		if n := strings.Count(body, quoted); n != 1 {
+			t.Fatalf("the fixture substitution expects exactly one %s in hooks/bootstrap.sh, found %d — the script's fetch origins have changed and this harness would otherwise silently test against the real GitHub", quoted, n)
+		}
+		body = strings.Replace(body, quoted, `"`+base+`"`, 1)
 	}
-	return script
+	for _, origin := range []string{bootstrapAPIOrigin, bootstrapReleaseOrigin} {
+		if strings.Contains(body, origin) {
+			t.Fatalf("the rewritten script still names %q, so the fixture substitution did not take effect", origin)
+		}
+	}
+	if n := strings.Count(body, base); n != 2 {
+		t.Fatalf("the rewritten script must name the fixture base exactly twice (release origin + API origin), found %d", n)
+	}
+	path := filepath.Join(t.TempDir(), "bootstrap.sh")
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("writing the rewritten bootstrap script: %v", err)
+	}
+	return path
 }
 
 // bootstrapAsset is the release asset name the script derives from uname.
 func bootstrapAsset() string { return "abcd-" + runtime.GOOS + "-" + runtime.GOARCH }
+
+// bootstrapFixture is the stand-in release host plus the trust material a real
+// curl needs to talk to it.
+type bootstrapFixture struct {
+	base string // https://127.0.0.1:<port>
+	ca   string // PEM file holding the fixture's self-signed certificate
+	hits *int32 // every request the script makes, counted
+}
 
 // bootstrapServer stands in for the release host, shaped like the real one
 // rather than like the script's convenience: /releases/latest answers a 302 to
@@ -66,12 +146,23 @@ func bootstrapAsset() string { return "abcd-" + runtime.GOOS + "-" + runtime.GOA
 // served only from the tag-pinned path, so a script that fetched it from
 // /releases/latest/download instead gets a 404 rather than a silent pass.
 // hits counts every request, which is how the no-network cases are proved.
-func bootstrapServer(t *testing.T, body []byte, manifest string) (base string, hits *int32) {
+//
+// It speaks TLS, not plain http, because the script pins `--proto '=https'
+// --proto-redir '=https'` on every call unconditionally and nothing can clear
+// that. Trust is supplied through CURL_CA_BUNDLE (see runBootstrap): a CA bundle
+// only ever ADDS an issuer curl will accept — it can never name a different
+// server — so it is not the class of seam that was removed from the script.
+func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixture {
 	t.Helper()
 	var count int32
 	asset := bootstrapAsset()
 	pinned := "/releases/download/" + bootstrapTag + "/"
 	mux := http.NewServeMux()
+	// Deliberately outside the counter: the harness's own reachability probe
+	// must not read as a fetch the script made.
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&count, 1)
 		switch r.URL.Path {
@@ -89,9 +180,34 @@ func bootstrapServer(t *testing.T, body []byte, manifest string) (base string, h
 			http.NotFound(w, r)
 		}
 	})
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
-	return srv.URL, &count
+
+	ca := filepath.Join(t.TempDir(), "fixture-ca.pem")
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	if err := os.WriteFile(ca, pemBytes, 0o600); err != nil {
+		t.Fatalf("writing the fixture CA: %v", err)
+	}
+	fx := &bootstrapFixture{base: srv.URL, ca: ca, hits: &count}
+
+	// Prove the harness itself works before any case blames the script. Without
+	// this, a curl build that ignored CURL_CA_BUNDLE would surface as "the latest
+	// release tag could not be resolved" and read like a script defect.
+	probe := exec.Command("curl", "-fsS", "--proto", "=https", fx.base+"/healthz")
+	probe.Env = append(fx.env(), "PATH="+os.Getenv("PATH"))
+	if out, err := probe.CombinedOutput(); err != nil {
+		t.Fatalf("the fixture TLS server is unreachable from curl with CURL_CA_BUNDLE set, so the harness cannot exercise the pinned-HTTPS script: %v (output %q)", err, out)
+	}
+	return fx
+}
+
+// env is the trust material the fixture needs, and nothing else. CURL_CA_BUNDLE
+// and SSL_CERT_FILE are curl/OpenSSL's own variables, honoured by any curl
+// invocation in the process environment; the script neither names nor branches
+// on them. Both are set because the two curl TLS backends in play read different
+// ones.
+func (f *bootstrapFixture) env() []string {
+	return []string{"CURL_CA_BUNDLE=" + f.ca, "SSL_CERT_FILE=" + f.ca}
 }
 
 // bootstrapManifest renders a sha256sum-style manifest over body, listing the
@@ -106,44 +222,50 @@ func bootstrapManifest(body []byte) string {
 // the shape the harness's plugin cache uses, and the input for plugin_sha.
 func bootstrapRoot(t *testing.T) string {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), bootstrapCommit)
+	return bootstrapRootNamed(t, bootstrapCommit)
+}
+
+// bootstrapRootNamed makes a plugin root with an arbitrary basename, which is
+// how the "the commit-stamped-cache warrant did not hold" case is reached.
+func bootstrapRootNamed(t *testing.T, name string) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), name)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return root
 }
 
-// runBootstrap executes the script with an explicitly constructed environment —
-// no inherited proxy or plugin variables — and returns its merged output and
-// exit code. extraPath is prepended to PATH so a case can shim a command.
-func runBootstrap(t *testing.T, root, base, extraPath string) (string, int) {
+// runBootstrap executes a fixture-pointed copy of the script with an explicitly
+// constructed environment — no inherited proxy or plugin variables — and returns
+// its merged output and exit code. extraPath is prepended to PATH so a case can
+// shim a command.
+func runBootstrap(t *testing.T, root string, fx *bootstrapFixture, extraPath string) (string, int) {
 	t.Helper()
-	return runBootstrapEnv(t, root, base, base, extraPath)
+	bootstrapRequires(t)
+	return runScript(t, bootstrapFixtureScript(t, fx.base), root, fx.env(), extraPath)
 }
 
-// runBootstrapEnv is runBootstrap with the two URL overrides set independently,
-// which the loopback-restriction cases need (one remote, one local).
-func runBootstrapEnv(t *testing.T, root, base, api, extraPath string) (string, int) {
+// runScript executes a bootstrap script directly (not via `sh <path>`, so the
+// executable bit and the shebang are exercised too) under a constructed
+// environment.
+func runScript(t *testing.T, script, root string, extraEnv []string, extraPath string) (string, int) {
 	t.Helper()
 	pathValue := os.Getenv("PATH")
 	if extraPath != "" {
 		pathValue = extraPath + string(os.PathListSeparator) + pathValue
 	}
-	cmd := exec.Command("sh", bootstrapScript(t))
-	cmd.Env = []string{
+	cmd := exec.Command(script)
+	cmd.Env = append([]string{
 		"PATH=" + pathValue,
 		"HOME=" + t.TempDir(),
 		"CLAUDE_PLUGIN_ROOT=" + root,
-		"ABCD_BOOTSTRAP_BASE_URL=" + base,
-		"ABCD_BOOTSTRAP_API_URL=" + api,
-	}
+	}, extraEnv...)
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if err != nil {
-		var coded *exec.ExitError
 		if e, ok := err.(*exec.ExitError); ok {
-			coded = e
-			code = coded.ExitCode()
+			code = e.ExitCode()
 		} else {
 			t.Fatalf("running the bootstrap: %v (output %s)", err, out)
 		}
@@ -171,17 +293,17 @@ func metaValues(t *testing.T, root string) map[string]string {
 // that already holds an executable binary costs one file test and nothing else.
 func TestBootstrapFastPathTouchesNoNetwork(t *testing.T) {
 	root := bootstrapRoot(t)
-	base, hits := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+	fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
 	binary := filepath.Join(root, "abcd")
 	if err := os.WriteFile(binary, []byte("already here"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code != 0 {
 		t.Errorf("a present binary must exit 0, got %d (output %q)", code, out)
 	}
-	if n := atomic.LoadInt32(hits); n != 0 {
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
 		t.Errorf("a present binary must cost no network, got %d request(s)", n)
 	}
 	got, err := os.ReadFile(binary)
@@ -199,11 +321,16 @@ func TestBootstrapFastPathTouchesNoNetwork(t *testing.T) {
 func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("#!/bin/sh\nexit 0\n")
-	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code != 2 {
 		t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+	}
+	// The substitution is proved BEHAVIOURALLY as well as textually: a copy that
+	// still named the real origin could not have reached this fixture at all.
+	if n := atomic.LoadInt32(fx.hits); n == 0 {
+		t.Fatal("the fixture served no request, so the script was not pointed at it — the substitution silently missed")
 	}
 	binary := filepath.Join(root, "abcd")
 	fi, err := os.Stat(binary)
@@ -236,8 +363,12 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	if meta["plugin_sha"] != bootstrapCommit {
 		t.Errorf("plugin_sha = %q, want the plugin root's commit stamp", meta["plugin_sha"])
 	}
-	// The hash the verification just accepted is recorded, so a later check can
-	// tell the binary that was verified from one that replaced it.
+	if meta["plugin_root_basename"] != bootstrapCommit {
+		t.Errorf("plugin_root_basename = %q, want the raw plugin-root basename %q", meta["plugin_root_basename"], bootstrapCommit)
+	}
+	// The hash the verification just accepted is recorded, so a human (or a later
+	// verb) can tell the binary that was verified from one that replaced it.
+	// Nothing re-checks it today; the fast path deliberately stays a file test.
 	sum := sha256.Sum256(body)
 	if want := hex.EncodeToString(sum[:]); meta["binary_sha256"] != want {
 		t.Errorf("binary_sha256 = %q, want the verified hash %q", meta["binary_sha256"], want)
@@ -250,14 +381,42 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	}
 }
 
+// TestBootstrapRecordsTheRawPluginRootBasename is the observability half of the
+// commit-stamped-cache WARRANT. plugin_sha is gated to exactly forty lowercase
+// hex characters because itd-105 assumes the harness names each plugin cache
+// directory for the commit it was cloned from. Nothing in this repository
+// verifies that against the real harness. If it ever stops holding, the gate
+// records `unknown` for every install, the version-skew notice goes silent
+// permanently, and — without this raw field — there is nothing anywhere for a
+// human to look at. The raw value is recorded, never compared and never
+// rendered, so the notice's behaviour is unchanged.
+func TestBootstrapRecordsTheRawPluginRootBasename(t *testing.T) {
+	const notACommit = "abcd-plugin-v0.5.0"
+	root := bootstrapRootNamed(t, notACommit)
+	body := []byte("payload")
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
+
+	out, code := runBootstrap(t, root, fx, "")
+	if code != 2 {
+		t.Fatalf("a plugin root that is not commit-stamped must still install, got %d (output %q)", code, out)
+	}
+	meta := metaValues(t, root)
+	if meta["plugin_sha"] != "unknown" {
+		t.Errorf("plugin_sha = %q, want unknown: %q is not a commit", meta["plugin_sha"], notACommit)
+	}
+	if meta["plugin_root_basename"] != notACommit {
+		t.Errorf("plugin_root_basename = %q, want the raw basename %q — otherwise a warrant that stopped holding is invisible", meta["plugin_root_basename"], notACommit)
+	}
+}
+
 // TestBootstrapRefusesChecksumMismatch is the trust bar: a download whose SHA-256
 // disagrees with the release manifest never reaches the binary path, and the
 // message says so.
 func TestBootstrapRefusesChecksumMismatch(t *testing.T) {
 	root := bootstrapRoot(t)
-	base, _ := bootstrapServer(t, []byte("tampered"), bootstrapManifest([]byte("the published bytes")))
+	fx := bootstrapServer(t, []byte("tampered"), bootstrapManifest([]byte("the published bytes")))
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code == 0 {
 		t.Errorf("a checksum mismatch must fail loudly, got exit 0 (output %q)", out)
 	}
@@ -272,10 +431,9 @@ func TestBootstrapRefusesChecksumMismatch(t *testing.T) {
 // is installed.
 func TestBootstrapRefusesAbsentManifestEntry(t *testing.T) {
 	root := bootstrapRoot(t)
-	body := []byte("payload")
-	base, _ := bootstrapServer(t, body, strings.Repeat("0", 64)+"  abcd-other-platform\n")
+	fx := bootstrapServer(t, []byte("payload"), strings.Repeat("0", 64)+"  abcd-other-platform\n")
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code == 0 {
 		t.Errorf("an unlisted asset must fail loudly, got exit 0 (output %q)", out)
 	}
@@ -315,26 +473,27 @@ func assertNothingInstalled(t *testing.T, root, out string) {
 
 // TestBootstrapUnsupportedPlatformChangesNothing shims uname so the script sees a
 // platform no release covers. It must say so plainly, name the matrix, change
-// nothing, and exit 0 — an unsupported platform is a reported condition, not a
-// hook error to retry every session.
+// nothing, and exit 2 — an unsupported platform is a reported condition, not a
+// hook fault, but a SessionStart hook that exits 0 has only put its message into
+// model context, where the human who would build from source never sees it.
+// A non-zero SessionStart exit is non-blocking, so nothing is disrupted; the
+// accepted cost is that this notice then repeats every session for as long as
+// the platform is unsupported (itd-105's "every hook reports, for now" posture,
+// with the one-notice-per-session aspiration tracked in iss-168).
 func TestBootstrapUnsupportedPlatformChangesNothing(t *testing.T) {
 	root := bootstrapRoot(t)
-	base, hits := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+	fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
 	shim := t.TempDir()
 	fake := "#!/bin/sh\ncase \"$1\" in\n-s) echo Haiku ;;\n-m) echo sparc64 ;;\n*) echo Haiku ;;\nesac\n"
 	if err := os.WriteFile(filepath.Join(shim, "uname"), []byte(fake), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, shim)
-	// 2, not 0: an unsupported platform is a reported condition rather than a
-	// fault, but a SessionStart hook that exits 0 has only put its message into
-	// model context — the human who would build from source never sees it. A
-	// non-zero SessionStart exit is non-blocking, so nothing is disrupted.
+	out, code := runBootstrap(t, root, fx, shim)
 	if code != 2 {
 		t.Errorf("an unsupported platform must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
 	}
-	if n := atomic.LoadInt32(hits); n != 0 {
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
 		t.Errorf("an unsupported platform must download nothing, got %d request(s)", n)
 	}
 	for _, want := range []string{"darwin", "linux", "amd64", "arm64", "go build ./cmd/abcd"} {
@@ -352,24 +511,55 @@ func TestBootstrapUnsupportedPlatformChangesNothing(t *testing.T) {
 // would render as a hook failure.
 func TestBootstrapLockContentionExitsQuietly(t *testing.T) {
 	root := bootstrapRoot(t)
-	base, hits := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+	fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
 	lock := filepath.Join(root, ".bootstrap.lock")
 	if err := os.Mkdir(lock, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code != 0 {
 		t.Errorf("losing the lock race must exit 0, got %d (output %q)", code, out)
 	}
 	if out != "" {
 		t.Errorf("losing the lock race must be silent; output %q", out)
 	}
-	if n := atomic.LoadInt32(hits); n != 0 {
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
 		t.Errorf("losing the lock race must cost no network, got %d request(s)", n)
 	}
 	if _, err := os.Stat(lock); err != nil {
 		t.Error("the loser must not remove the winner's live lock")
+	}
+}
+
+// TestBootstrapUnusableLockPathRefusesLoudly is the other side of that silence.
+// A lock that cannot be taken and is NOT there afterwards is not a race: the
+// plugin root is unwritable, or something that is not a directory occupies the
+// lock path. That condition is permanent and repeats every session, so sharing
+// the loser's silent exit 0 with it would leave a plugin root that can never be
+// provisioned and never says why.
+func TestBootstrapUnusableLockPathRefusesLoudly(t *testing.T) {
+	root := bootstrapRoot(t)
+	fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+	// A regular FILE at the lock path: mkdir fails exactly as it does on a
+	// read-only plugin root, and no lock directory exists afterwards. Unlike a
+	// permission bit this reproduces for root as well as an ordinary user.
+	if err := os.WriteFile(filepath.Join(root, ".bootstrap.lock"), []byte("not a lock"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, code := runBootstrap(t, root, fx, "")
+	if code == 0 {
+		t.Fatalf("an unusable lock path must not be mistaken for a lost race; got exit 0 (output %q)", out)
+	}
+	if !strings.Contains(out, "not writable") {
+		t.Errorf("the refusal must say the plugin root is not writable; output %q", out)
+	}
+	if !strings.Contains(out, root) {
+		t.Errorf("the refusal must name the plugin root %q; output %q", root, out)
+	}
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
+		t.Errorf("a run that never took the lock must fetch nothing, got %d request(s)", n)
 	}
 }
 
@@ -380,7 +570,7 @@ func TestBootstrapLockContentionExitsQuietly(t *testing.T) {
 func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("payload")
-	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
 	orphan := filepath.Join(root, ".bootstrap.tmp.99999")
 	if err := os.MkdirAll(orphan, 0o755); err != nil {
 		t.Fatal(err)
@@ -389,7 +579,7 @@ func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code != 2 {
 		t.Fatalf("the install must still proceed, got %d (output %q)", code, out)
 	}
@@ -406,59 +596,17 @@ func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
 func TestBootstrapFastPathRejectsADirectory(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("payload")
-	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
 	if err := os.MkdirAll(filepath.Join(root, "abcd"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code == 0 {
 		t.Fatalf("a directory at the binary path must not read as a provisioned binary; output %q", out)
 	}
 	if !strings.Contains(out, "cannot be installed") && !strings.Contains(out, "ahoy install") {
 		t.Errorf("the run must proceed past the fast path and then report what it found; output %q", out)
-	}
-}
-
-// TestBootstrapRefusesNonLoopbackOverride is the trust bar's other half, and the
-// reason the two URL overrides are loopback-only rather than free-form: the
-// binary AND the checksums.txt that verifies it are fetched from the same base,
-// so an unrestricted override supplies both the payload and the manifest that
-// "verifies" it — checksum verification becomes vacuous — and the binary it
-// installs is then run unattended as the Bash shell guard on every tool call.
-// Refusing is louder than ignoring: a silently dropped override reads as a pass.
-func TestBootstrapRefusesNonLoopbackOverride(t *testing.T) {
-	// A .invalid host never resolves, so a script that IGNORED the restriction
-	// and fetched anyway fails on DNS rather than on this assertion — the
-	// refusal has to be named in the message, not inferred from the exit code.
-	const remote = "http://abcd-bootstrap.invalid"
-	cases := []struct{ name, base, api string }{
-		{"download base", remote, ""},
-		{"api base", "", remote},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			root := bootstrapRoot(t)
-			base, hits := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
-			if tc.base == "" {
-				tc.base = base
-			}
-			if tc.api == "" {
-				tc.api = base
-			}
-
-			out, code := runBootstrapEnv(t, root, tc.base, tc.api, "")
-			if code == 0 {
-				t.Errorf("a non-loopback override must be refused, got exit 0 (output %q)", out)
-			}
-			if !strings.Contains(out, "loopback") {
-				t.Errorf("the refusal must name the loopback-only restriction; output %q", out)
-			}
-			if n := atomic.LoadInt32(hits); n != 0 {
-				t.Errorf("a refused override must fetch nothing at all, got %d request(s)", n)
-			}
-			assertNothingInstalled(t, root, out)
-		})
 	}
 }
 
@@ -468,7 +616,7 @@ func TestBootstrapRefusesNonLoopbackOverride(t *testing.T) {
 func TestBootstrapStaleLockIsBroken(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("payload")
-	base, _ := bootstrapServer(t, body, bootstrapManifest(body))
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
 	lock := filepath.Join(root, ".bootstrap.lock")
 	if err := os.Mkdir(lock, 0o755); err != nil {
 		t.Fatal(err)
@@ -478,11 +626,192 @@ func TestBootstrapStaleLockIsBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, code := runBootstrap(t, root, base, "")
+	out, code := runBootstrap(t, root, fx, "")
 	if code != 2 {
 		t.Fatalf("a stale lock must be broken and the install proceed, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "abcd")); err != nil {
 		t.Errorf("a stale lock must not block provisioning: %v", err)
+	}
+}
+
+// TestBootstrapStripsControlCharactersFromMessages: both message sinks
+// interpolate values the script does not author — the plugin-root path, uname's
+// output, the release tag read off a redirect. A raw ESC in one of them can
+// recolour, reposition, or visually rewrite what the reader is shown, on a
+// message whose entire job is to be believed.
+func TestBootstrapStripsControlCharactersFromMessages(t *testing.T) {
+	t.Run("refuse", func(t *testing.T) {
+		root := bootstrapRootNamed(t, "plugin\x1b[31mroot")
+		fx := bootstrapServer(t, []byte("tampered"), bootstrapManifest([]byte("published")))
+
+		out, code := runBootstrap(t, root, fx, "")
+		if code == 0 {
+			t.Fatalf("expected a refusal; output %q", out)
+		}
+		if strings.ContainsRune(out, 0x1b) {
+			t.Errorf("the refusal must strip control characters from the values it echoes; output %q", out)
+		}
+	})
+	t.Run("notice", func(t *testing.T) {
+		root := bootstrapRoot(t)
+		fx := bootstrapServer(t, []byte("payload"), bootstrapManifest([]byte("payload")))
+		shim := t.TempDir()
+		fake := "#!/bin/sh\ncase \"$1\" in\n-s) printf 'Hai\\033[31mku\\n' ;;\n-m) echo sparc64 ;;\n*) printf 'Hai\\033[31mku\\n' ;;\nesac\n"
+		if err := os.WriteFile(filepath.Join(shim, "uname"), []byte(fake), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		out, code := runBootstrap(t, root, fx, shim)
+		if code != 2 {
+			t.Fatalf("expected the unsupported-platform notice; got %d (output %q)", code, out)
+		}
+		if strings.ContainsRune(out, 0x1b) {
+			t.Errorf("the notice must strip control characters from the values it echoes; output %q", out)
+		}
+	})
+}
+
+// TestBootstrapScriptIsExecutable: the harness invokes the committed script by
+// path, not as `sh <path>`, so a lost executable bit is a fresh-install failure
+// no other test would catch — every case above runs a rewritten COPY this test
+// file chmods itself.
+func TestBootstrapScriptIsExecutable(t *testing.T) {
+	fi, err := os.Stat(bootstrapScript(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm()&0o111 == 0 {
+		t.Errorf("hooks/bootstrap.sh must be committed executable, got mode %v", fi.Mode().Perm())
+	}
+}
+
+// TestBootstrapFetchOriginsAreConstants is the structural half of the security
+// bar the two rounds before this one failed. The shipped script must hold its
+// fetch origins as literals with NO environment-driven way to redirect them, and
+// must pin HTTPS (redirects included) on every call with no toggle: the binary
+// and the checksums.txt that "verifies" it come from one origin, so anything
+// that can name that origin supplies both the payload and its own manifest, and
+// the result is executed unattended as the Bash shell guard on every tool call.
+func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
+	src, err := os.ReadFile(bootstrapScript(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)
+
+	if strings.Contains(body, "ABCD_BOOTSTRAP") {
+		t.Error("the shipped script must name no ABCD_BOOTSTRAP override: the seam was removed, not narrowed")
+	}
+	// Exactly one environment read in the whole script, and it is the plugin root
+	// the harness supplies — a filesystem destination, never a fetch origin.
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for _, ref := range []string{"${", "$ABCD", "$HTTP", "$CURL"} {
+			if !strings.Contains(line, ref) {
+				continue
+			}
+			if ref == "${" && strings.Contains(line, "${CLAUDE_PLUGIN_ROOT:-}") {
+				continue
+			}
+			if ref == "${" && strings.Contains(line, "${#plugin_sha}") {
+				continue
+			}
+			t.Errorf("unexpected environment reference %q in a non-comment line: %q", ref, line)
+		}
+	}
+	for _, origin := range []string{bootstrapReleaseOrigin, bootstrapAPIOrigin} {
+		if n := strings.Count(body, origin); n != 1 {
+			t.Errorf("the script must hold %q as a single literal, found %d", origin, n)
+		}
+	}
+	// Every curl invocation pins the transport, unconditionally. A variable
+	// holding the flags is what the previous round used, and clearing it on one
+	// path is what reopened redirect downgrade.
+	calls := 0
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") || !strings.Contains(trimmed, "curl -") {
+			continue
+		}
+		calls++
+		if !strings.Contains(trimmed, "--proto '=https' --proto-redir '=https'") {
+			t.Errorf("every curl call must pin HTTPS literally; %q does not", trimmed)
+		}
+	}
+	if calls < 4 {
+		t.Errorf("expected the script's four curl calls to be found, saw %d — the scan above is no longer matching", calls)
+	}
+}
+
+// TestBootstrapIgnoresEveryEnvironmentOrigin is the behavioural half, and the
+// direct regression for the defect two review rounds failed to close: the
+// COMMITTED script (no substitution) is run with the removed override variables
+// set to every shape that previously worked — a bare loopback base, the URL
+// userinfo form that walked straight through the loopback glob
+// (http://127.0.0.1:1@host), and a file:// origin. curl is shimmed so nothing
+// leaves the machine and every invocation is recorded; the assertions are that
+// the recorded URLs name GitHub and only GitHub, that the fixture server was
+// never contacted, and that the transport pin is present on each call.
+func TestBootstrapIgnoresEveryEnvironmentOrigin(t *testing.T) {
+	bootstrapRequires(t)
+	fx := bootstrapServer(t, []byte("attacker payload"), bootstrapManifest([]byte("attacker payload")))
+	hostile := []struct{ name, value string }{
+		// The plain loopback base the removed allowlist accepted by design.
+		{"loopback base", fx.base},
+		// The userinfo form an independent reviewer walked through the loopback
+		// glob twice: everything before the @ is a username, so the real host is
+		// abcd-bootstrap.invalid while the pattern reads 127.0.0.1.
+		{"userinfo past the loopback glob", "http://127.0.0.1:1@abcd-bootstrap.invalid"},
+		{"userinfo over https", "https://127.0.0.1:1@abcd-bootstrap.invalid"},
+		{"local file origin", "file:///dev/null"},
+	}
+	for _, tc := range hostile {
+		value := tc.value
+		t.Run(tc.name, func(t *testing.T) {
+			root := bootstrapRoot(t)
+			shim := t.TempDir()
+			log := filepath.Join(shim, "curl.log")
+			// The shim records the argv it was handed and fails, standing in for
+			// "no network": the script then refuses at tag resolution, and the log
+			// is the evidence of where it TRIED to go.
+			fake := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + log + "\nexit 1\n"
+			if err := os.WriteFile(filepath.Join(shim, "curl"), []byte(fake), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			out, code := runScript(t, bootstrapScript(t), root, []string{
+				"ABCD_BOOTSTRAP_BASE_URL=" + value,
+				"ABCD_BOOTSTRAP_API_URL=" + value,
+				"ABCD_BOOTSTRAP_URL=" + value,
+			}, shim)
+			if code == 0 {
+				t.Fatalf("with no reachable network the script must refuse; got exit 0 (output %q)", out)
+			}
+			recorded, err := os.ReadFile(log)
+			if err != nil {
+				t.Fatalf("the script must have attempted at least one fetch: %v", err)
+			}
+			calls := strings.Split(strings.TrimSpace(string(recorded)), "\n")
+			for _, call := range calls {
+				if !strings.Contains(call, bootstrapReleaseOrigin) && !strings.Contains(call, bootstrapAPIOrigin) {
+					t.Errorf("a fetch went somewhere other than the compiled origins: %q", call)
+				}
+				if !strings.Contains(call, "--proto =https --proto-redir =https") {
+					t.Errorf("a fetch was made without the HTTPS pin: %q", call)
+				}
+			}
+			for _, forbidden := range []string{"127.0.0.1", "abcd-bootstrap.invalid", "file://"} {
+				if strings.Contains(string(recorded), forbidden) {
+					t.Errorf("the environment redirected a fetch to %q; recorded calls: %q", forbidden, recorded)
+				}
+			}
+			if n := atomic.LoadInt32(fx.hits); n != 0 {
+				t.Errorf("the fixture server was contacted %d time(s): the override still redirects", n)
+			}
+			assertNothingInstalled(t, root, out)
+		})
 	}
 }
