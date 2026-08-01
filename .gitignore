@@ -52,7 +52,9 @@ go.work.sum
 
 # hooks/bootstrap.sh artefacts, when a checkout is itself the plugin root
 # (CLAUDE_PLUGIN_ROOT pointed here): the provisioned binary, its provenance
-# record, and the mkdir lock are runtime state, never committed.
+# record, the mkdir lock, and a temp dir orphaned by a SIGKILL (which runs no
+# trap, so the next run sweeps it) are runtime state, never committed.
 /abcd
 /.binary-meta
 /.bootstrap.lock
+/.bootstrap.tmp.*

@@ -9,3 +9,7 @@ CHANGELOG.md merge=union
 .githooks/* text eol=lf
 internal/core/ahoy/defaults/pre-commit text eol=lf
 internal/core/ahoy/defaults/pre-merge-commit text eol=lf
+# hooks/bootstrap.sh is executed by the harness on every SessionStart and is the
+# one thing that provisions the plugin binary, so a CRLF checkout does not merely
+# break a hook: it breaks the script that repairs the hooks.
+hooks/*.sh text eol=lf
