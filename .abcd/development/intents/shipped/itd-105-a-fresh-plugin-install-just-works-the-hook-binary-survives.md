@@ -7,6 +7,7 @@ suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-67]
 severity: critical
+impact: additive
 grill_session_id: f050596a-e4fe-49e4-92b3-38f90604b3fb
 grilled_at: 2026-07-29
 warrants_assumed:
@@ -183,3 +184,8 @@ commitments, not options:
 _None — resolved in the 2026-07-29 grill session; see Decisions. Follow-ups
 are recorded as scope exclusions and ledger entries (iss-168), not open
 questions._
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-bba9a75a2d1d -->
+Fidelity review OWED (receipt rcp-bba9a75a2d1d).
