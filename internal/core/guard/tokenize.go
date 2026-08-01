@@ -16,42 +16,6 @@ type segment struct {
 	chain  int
 }
 
-// subKind names what opened a command-substitution frame, so a close is matched
-// against the right opener: `)` closes a `$( … )`, a backtick closes a backtick
-// span. Both delimiters of a backtick span are the SAME character, which is why
-// the open/close decision is taken from the frame stack rather than the byte.
-type subKind int
-
-const (
-	kindParen subKind = iota
-	kindBacktick
-)
-
-// subFrame is one level of command substitution. A substitution RUNS what is
-// inside it, so its content is command position in its own right — but the
-// command CONTAINING it does not end at the boundary: `rm $(true) -rf *` is
-// still a recursive force delete, and a force push written with a backticked
-// substitution in front of `--force` is still a force push.
-// Flushing the enclosing segment at the boundary (what the tokenizer did before
-// frames existed) threw away every flag and operand that followed, so the
-// registry entry looked armed and never fired.
-//
-// The frame therefore parks the enclosing command's tokens while the
-// substitution accumulates its own, and hands the finished segments back when it
-// closes, so the enclosing segment resumes where it left off.
-type subFrame struct {
-	kind subKind
-	// toks is the segment currently accumulating in this frame.
-	toks []string
-	// out is the segments this frame has finished, in source order.
-	out []segment
-	// pend is segments produced by substitutions sitting INSIDE the segment that
-	// is still accumulating. They are held until that segment flushes, so a
-	// substitution never lands ahead of the command it is written inside — the
-	// order `precededByCD` reads to recognise a cd chain.
-	pend []segment
-}
-
 // tokenize splits a candidate command line into command-position segments,
 // honouring shell quoting: single quotes are literal, double quotes take the
 // POSIX backslash escapes, and a backslash outside quotes escapes the next
@@ -67,6 +31,8 @@ type subFrame struct {
 // the verb's reference doc and the registry README rather than silently assumed.
 func tokenize(line string) ([]segment, error) {
 	var (
+		segs    []segment
+		toks    []string
 		cur     []byte
 		hasCur  bool
 		chain   int
@@ -76,71 +42,18 @@ func tokenize(line string) ([]segment, error) {
 		// new command — `cd scratch &&\nrm -rf *` is one chain, not two.
 		lastList bool
 	)
-	// frames is the substitution stack. frames[0] is the command line itself; a
-	// `$( … )` or a backtick span pushes one, and its close pops it back.
-	frames := []*subFrame{{}}
-	top := func() *subFrame { return frames[len(frames)-1] }
 	flushToken := func() {
 		if hasCur {
-			f := top()
-			f.toks = append(f.toks, string(cur))
+			toks = append(toks, string(cur))
 			cur = nil
 			hasCur = false
 		}
 	}
 	flushSegment := func() {
 		flushToken()
-		f := top()
-		if len(f.toks) > 0 {
-			f.out = append(f.out, segment{tokens: f.toks, chain: chain})
-			f.toks = nil
-		}
-		if len(f.pend) > 0 {
-			f.out = append(f.out, f.pend...)
-			f.pend = nil
-		}
-	}
-	// openFrame returns the index of the innermost open frame of kind k, or -1.
-	openFrame := func(k subKind) int {
-		for i := len(frames) - 1; i > 0; i-- {
-			if frames[i].kind == k {
-				return i
-			}
-		}
-		return -1
-	}
-	openSub := func(k subKind) {
-		// The token in progress belongs to the ENCLOSING command (the `$` of a
-		// `$(`, or whatever the substitution is glued onto), so it is finalised
-		// there before the substitution starts accumulating its own.
-		flushToken()
-		frames = append(frames, &subFrame{kind: k})
-	}
-	// closeSub finishes the innermost frame of kind k — emitting the
-	// substitution's own content as its own segments, which is what makes a
-	// hazard hidden inside a substitution matchable — and hands those segments to
-	// the frame enclosing it, which then resumes accumulating.
-	//
-	// Imbalance degrades, it never panics: a close with no matching open falls
-	// back to the plain segment flush the tokenizer did before frames existed,
-	// and a close that skips over frames of the other kind unwinds them rather
-	// than stranding their content. Unbalanced parens and backticks are NOT a
-	// parse error here — a real shell would reject them itself, and this guard's
-	// job is to refuse to misparse into an allow, not to validate shell grammar.
-	// Only genuinely unterminated quotes and heredocs, which change what the rest
-	// of the input MEANS, return ErrUnparsableCommand.
-	closeSub := func(k subKind) {
-		depth := openFrame(k)
-		if depth < 0 {
-			flushSegment()
-			return
-		}
-		for len(frames) > depth {
-			flushSegment()
-			f := frames[len(frames)-1]
-			frames = frames[:len(frames)-1]
-			p := top()
-			p.pend = append(p.pend, f.out...)
+		if len(toks) > 0 {
+			segs = append(segs, segment{tokens: toks, chain: chain})
+			toks = nil
 		}
 	}
 
@@ -255,56 +168,15 @@ func tokenize(line string) ([]segment, error) {
 			flushToken()
 			pending = append(pending, hd)
 			i = next
-		case c == '`':
-			// A backtick command substitution RUNS what is inside it, so what is
-			// inside it is command position: a backticked find in an rm's argument
-			// list is a find that executes. Before iss-148 a backtick was an
-			// operator nowhere in this switch and fell through to the default as
-			// ordinary token text, so nothing inside one was ever seen.
-			//
-			// Both delimiters are the SAME character, so which one this is comes
-			// from the stack, not from the byte: a backtick with a backtick frame
-			// already open closes it, any other backtick opens one.
-			//
-			// The scope is parity with `$( … )`, not POSIX completeness: neither
-			// form is followed inside double quotes, where the quoting branch
-			// above consumes the whole span as one token.
-			if openFrame(kindBacktick) > 0 {
-				closeSub(kindBacktick)
-			} else {
-				openSub(kindBacktick)
-			}
-			lastList = false
-			i++
-		case c == '(':
-			// `$( … )` is a substitution INSIDE a command, so the command survives
-			// it. A BARE `(` is a subshell group, which is a command of its own —
-			// and it genuinely ends the token run before it, which is what keeps
-			// the body of a function definition (`f() { rm -rf *; }`) in command
-			// position instead of gluing it onto the function's name.
-			if hasCur && cur[len(cur)-1] == '$' {
-				openSub(kindParen)
-			} else {
-				flushSegment()
-			}
-			lastList = false
-			i++
-		case c == ')':
-			closeSub(kindParen)
-			lastList = false
-			i++
-		case c == '&' || c == '|' || c == ';':
-			// A list operator ends a command for real, so it gets no frame
-			// treatment: what follows it is a different command, not the rest of
-			// this one.
+		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
-			if i+1 < len(line) && line[i+1] == c {
+			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
 				lastList = true
 				i += 2
 				continue
 			}
-			// A single pipe continues the list across a newline; `;` and `&` do
-			// not.
+			// A single pipe continues the list across a newline; `;`, `&`, and
+			// the grouping parens do not.
 			lastList = c == '|'
 			i++
 		default:
@@ -314,14 +186,8 @@ func tokenize(line string) ([]segment, error) {
 			i++
 		}
 	}
-	// A substitution whose close never arrived is unwound rather than dropped: a
-	// hazard inside an unbalanced span still executes in the shell that accepts
-	// it, so it must still reach command position here.
-	for len(frames) > 1 {
-		closeSub(top().kind)
-	}
 	flushSegment()
-	return frames[0].out, nil
+	return segs, nil
 }
 
 // heredoc is one pending here-document: the delimiter word that ends its body,

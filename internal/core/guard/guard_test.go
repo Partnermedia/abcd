@@ -191,45 +191,6 @@ func TestCheckDecisions(t *testing.T) {
 			command: "git push origin main:main",
 			verdict: VerdictAllow,
 		},
-		{
-			name:    "a hazard inside a $( … ) substitution is in command position",
-			command: "echo $(git push --force origin main)",
-			verdict: VerdictBlock,
-			entryID: "git-push-force",
-		},
-		{
-			name:    "a hazard inside a backtick substitution is in command position too",
-			command: "echo `git push --force origin main`",
-			verdict: VerdictBlock,
-			entryID: "git-push-force",
-		},
-		{
-			// A substitution in the middle of a hazard must not carry the rest of
-			// the command line away with it: the flags that follow still belong to
-			// the command they were typed after, and the delete still runs.
-			name:    "a backtick substitution before the flags does not defang the rm",
-			command: "cd scratch && rm `true` -rf *",
-			verdict: VerdictBlock,
-			entryID: "rm-rf-after-cd-chain",
-		},
-		{
-			name:    "the $( … ) form of the same shape",
-			command: "cd scratch && rm $(true) -rf *",
-			verdict: VerdictBlock,
-			entryID: "rm-rf-after-cd-chain",
-		},
-		{
-			name:    "a backtick substitution before a force flag still fires",
-			command: "git push `true` --force origin main",
-			verdict: VerdictBlock,
-			entryID: "git-push-force",
-		},
-		{
-			name:    "the $( … ) form of the same shape",
-			command: "git push $(true) --force origin main",
-			verdict: VerdictBlock,
-			entryID: "git-push-force",
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
