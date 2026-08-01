@@ -195,6 +195,14 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 			want: ErrMalformedConfig,
 		},
 		{
+			// An empty argument prefix is carried by EVERY operand, so the entry
+			// would fire on any command that reached it — the over-blocking twin
+			// of the empty flag group, and just as invisible in the file.
+			name: "argument prefix that matches everything",
+			body: `{"schema_version":1,"entries":{"git-push-force":{"pattern":{"arg_prefixes":["+",""]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
 			name: "entry id that could build a path",
 			body: `{"schema_version":1,"entries":{"../escape":{"tier":"warn","pattern":{"command":"x"},"why":"w","successor":"s"}}}`,
 			want: ErrInvalidEntry,

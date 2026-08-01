@@ -55,6 +55,12 @@ type Pattern struct {
 	// single-letter short alternative also matches inside a bundled cluster
 	// (-rf satisfies -r and -f).
 	Flags []string `json:"flags,omitempty"`
+	// ArgPrefixes constrain an OPERAND rather than a flag: every listed prefix
+	// must be carried by some non-flag argument. It is what describes a hazard
+	// spelled without any flag at all — `git push origin +main:main`, where the
+	// leading `+` on the refspec is a force push by another name and Flags has
+	// nothing to look at.
+	ArgPrefixes []string `json:"arg_prefixes,omitempty"`
 	// AfterCD, when true, additionally requires that some EARLIER command in the
 	// same chain is a `cd` — the cd-chain structure (`cd scratch && rm -rf *`)
 	// whose hazard is that a failed cd silently redirects the command. A nil
@@ -208,6 +214,14 @@ func Validate(r Registry) error {
 				return fmt.Errorf("%w: entry %s flag group %d is empty and could never match", ErrInvalidEntry, id, i)
 			}
 		}
+		// An empty argument prefix is carried by every operand, so the entry
+		// would fire on anything that reached it: the over-blocking twin of the
+		// empty flag group, and as invisible in the file.
+		for i, prefix := range e.Pattern.ArgPrefixes {
+			if strings.TrimSpace(prefix) == "" {
+				return fmt.Errorf("%w: entry %s argument prefix %d is empty and would match every argument", ErrInvalidEntry, id, i)
+			}
+		}
 	}
 	return nil
 }
@@ -315,6 +329,7 @@ func cloneEntry(e Entry) Entry {
 	out := e
 	out.Pattern.ValueFlags = append([]string(nil), e.Pattern.ValueFlags...)
 	out.Pattern.Flags = append([]string(nil), e.Pattern.Flags...)
+	out.Pattern.ArgPrefixes = append([]string(nil), e.Pattern.ArgPrefixes...)
 	if e.Pattern.AfterCD != nil {
 		v := *e.Pattern.AfterCD
 		out.Pattern.AfterCD = &v

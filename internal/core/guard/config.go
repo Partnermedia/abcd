@@ -119,6 +119,9 @@ func mergePattern(base, over Pattern) Pattern {
 	if over.Flags != nil {
 		r.Flags = append([]string(nil), over.Flags...)
 	}
+	if over.ArgPrefixes != nil {
+		r.ArgPrefixes = append([]string(nil), over.ArgPrefixes...)
+	}
 	// AfterCD is a pointer precisely so an override can set it to false — a
 	// bool field could only ever tighten the requirement, never lift it.
 	if over.AfterCD != nil {

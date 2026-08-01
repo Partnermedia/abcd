@@ -62,6 +62,33 @@
         ]
       }
     },
+    "git-push-force-refspec": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "git",
+        "subcommand": "push",
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "arg_prefixes": ["+"]
+      },
+      "why": "A refspec written with a leading `+` is a force push spelled another way: it overwrites the remote branch without the flag anyone reviews for, so commits other people already have can disappear with no copy left anywhere.",
+      "successor": "Push the same refspec without the `+` (`git push origin main:main`); if the remote rejects it, integrate first (`git pull --rebase`), or push a new branch and open a pull request.",
+      "fixtures": {
+        "known_bad": [
+          "git push origin +main:main",
+          "git push origin +refs/heads/main:refs/heads/main",
+          "git -C /repo push origin +main:main",
+          "git push '+main:main'",
+          "cd repo && git push origin +main:main"
+        ],
+        "known_good": [
+          "git push origin main:main",
+          "git push origin HEAD:main",
+          "git push --set-upstream origin feat/guard-registry",
+          "abcd capture \"an agent ran git push origin +main:main and rewrote the branch\"",
+          "cat > CONTRIBUTING.md <<'EOF'\nA refspec such as +main:main is a force push.\nEOF"
+        ]
+      }
+    },
     "git-commit-no-verify": {
       "tier": "blocker",
       "pattern": {

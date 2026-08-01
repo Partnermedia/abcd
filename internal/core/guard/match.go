@@ -174,7 +174,8 @@ func matchSegment(p Pattern, s segment) bool {
 	if cmd == "" || cmd != p.Command {
 		return false
 	}
-	if p.Subcommand != "" && subcommandOf(args, p.ValueFlags) != p.Subcommand {
+	ops := operands(args, p.ValueFlags)
+	if p.Subcommand != "" && operandAt(ops, 0) != p.Subcommand {
 		return false
 	}
 	for _, group := range p.Flags {
@@ -182,27 +183,56 @@ func matchSegment(p Pattern, s segment) bool {
 			return false
 		}
 	}
+	for _, prefix := range p.ArgPrefixes {
+		if !argPrefixMatches(prefix, ops) {
+			return false
+		}
+	}
 	return true
 }
 
-// subcommandOf returns the first non-flag argument, stepping over the value of
-// any flag listed in valueFlags (`git -C /repo push` is a push). An unknown
-// value-taking flag is not stepped over — the miss is a non-match, never a
-// false block.
-func subcommandOf(args []string, valueFlags []string) string {
+// operands returns the segment's non-flag arguments in order, stepping over the
+// value of any flag listed in valueFlags (`git -C /repo push` is a push). An
+// unknown value-taking flag is not stepped over — the miss is a non-match, never
+// a false block. The subcommand is operand 0.
+func operands(args []string, valueFlags []string) []string {
+	var ops []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if !strings.HasPrefix(a, "-") {
-			return a
+			ops = append(ops, a)
+			continue
 		}
 		if a == "--" {
 			continue
 		}
 		if !strings.Contains(a, "=") && containsString(valueFlags, a) {
-			i++ // its value is not the subcommand
+			i++ // its value is an option argument, not an operand
 		}
 	}
-	return ""
+	return ops
+}
+
+// operandAt returns the n-th operand, or "" when the command line has no such
+// argument.
+func operandAt(ops []string, n int) string {
+	if n < 0 || n >= len(ops) {
+		return ""
+	}
+	return ops[n]
+}
+
+// argPrefixMatches reports whether some operand carries the prefix. Only
+// operands are considered, so a prefix like "+" can never be satisfied by an
+// option token: the constraint describes an argument (`git push origin
+// +main:main`), not a flag.
+func argPrefixMatches(prefix string, ops []string) bool {
+	for _, op := range ops {
+		if strings.HasPrefix(op, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // flagGroupMatches reports whether any alternative in one "a|b" group is present

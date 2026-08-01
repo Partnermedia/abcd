@@ -133,6 +133,17 @@ func TestCheckDecisions(t *testing.T) {
 			verdict: VerdictAllow,
 		},
 		{
+			name:    "a refspec with a leading plus is a force push in disguise",
+			command: "git push origin +main:main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force-refspec",
+		},
+		{
+			name:    "an ordinary refspec is not a force push",
+			command: "git push origin main:main",
+			verdict: VerdictAllow,
+		},
+		{
 			name:    "a hazard inside a $( … ) substitution is in command position",
 			command: "echo $(git push --force origin main)",
 			verdict: VerdictBlock,
