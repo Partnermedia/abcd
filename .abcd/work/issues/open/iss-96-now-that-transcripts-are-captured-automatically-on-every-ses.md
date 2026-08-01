@@ -135,15 +135,18 @@ transcript `TestCaptureStoresUnanchoredEntropyVerbatim` captures
 (`internal/core/history/history_test.go`), and delimiter probes on the same
 values, added to isolate the mechanism. Twenty-one lines, six findings, all
 `generic-api-key`. Enumerated in full below — sixteen rows for twenty-one lines,
-because a shape carried by both fixtures differs only by the store transcript's
-`user: `/`assistant: ` prefix and is merged into one row, and rows 10 and 13
-merge the two undelimited key names. (`<hi>` is the 40-character high-entropy
-specimen, `<pass>` the five-word passphrase; neither value appears here, and the
-entropy column is gitleaks' own measurement.)
+because a shape carried by both fixtures is merged into one row (differing only
+by the store transcript's conversational framing: its `user: `/`assistant: `
+prefixes, and on row 1 its prose lead-in around the same anchored token), and
+rows 10 and 13 merge the two undelimited key names. (`<hi>` is the 40-character
+high-entropy specimen, `<pass>` the five-word passphrase; neither value appears
+here. The entropy column is gitleaks' reported measurement on findings and the
+same Shannon computation on passes — identical arithmetic, since gitleaks
+reports no figure for a line it does not flag.)
 
 | # | line as scanned | from | gitleaks 8.24.3 |
 |---|---|---|---|
-| 1 | `token=ghp_` + `F`×36 | scanner corpus | passed (see caveat) |
+| 1 | `token=ghp_` + `F`×36 | both fixtures | passed (see caveat) |
 | 2 | `AWS_SECRET_ACCESS_KEY=` + `FAKEfake00`×4 | both fixtures | passed — entropy 3.12 |
 | 3 | `FAKEfake00`×4, bare | scanner corpus | passed — no key name |
 | 4 | `password: ` + `<pass>` | both fixtures | **CAUGHT** `generic-api-key`, entropy 3.66 |
@@ -161,13 +164,17 @@ entropy column is gitleaks' own measurement.)
 | 16 | `ssh ` + private IPv4 quad | store fixture | passed — not a credential rule's business |
 
 The rule doing all the work is `generic-api-key`, and its condition is a
-conjunction of three things: a key-name KEYWORD (`key`, `token`, `secret`,
+conjunction of three things — a key-name KEYWORD (`key`, `token`, `secret`,
 `password`, `auth`, `api`, …), a DELIMITER (`=`, `:`, and relatives) between
 keyword and value, and Shannon entropy of at least **3.5 bits per character** in
-the value. Rows 4, 5, 9, 11 and 12 satisfy all three. Every other row fails
-exactly one: rows 3 and 8 have no keyword; rows 10 and 13 have a keyword but no
-delimiter; rows 2, 6, 7, 14 and 15 have keyword and delimiter but sit under the
-entropy floor.
+the value — subject to the ruleset's own stopword allowlist, which suppresses a
+value containing a dictionary marker such as `fake` or `deadbeef` regardless of
+its entropy. Rows 4, 5, 9, 11 and 12 satisfy all three. Every other row fails at
+least one: rows 3 and 8 have no keyword; rows 10 and 13 have a keyword but no
+delimiter; rows 7 and 15 have keyword and delimiter but sit under the entropy
+floor; rows 2, 6 and 14 sit under the floor AND carry the `fake`/`deadbeef`
+stopwords, either of which suppresses them alone — raising their entropy without
+changing their spelling would not flip them.
 
 **(c)'s reach, stated accurately.** Keyword + delimiter + entropy ≥ 3.5 reaches
 LABELLED, DELIMITED, high-entropy values — including the branch's own

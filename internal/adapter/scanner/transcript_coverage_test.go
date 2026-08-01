@@ -102,16 +102,20 @@ func entropySpecimen() string {
 //     likely still measure high entropy, so the entropy floor alone cannot see it.
 //   - The CROSS-PACKAGE COPY. internal/core/history's storeEntropySpecimen is a
 //     duplicate of this generator in another package (Go tests do not share
-//     helpers across packages), and it asserts this same value. Either copy
-//     drifting now fails on both sides instead of leaving the two pins quietly
-//     describing different residues.
+//     helpers across packages), and it asserts this same value. Each copy is
+//     pinned to the same literal, so drift in either fails that side loudly and
+//     its message names the other. The residual hole is a coordinated edit of
+//     one side's seed and golden together: update both packages in one change.
 //
 // It is the one credential-SHAPED literal this file permits, and it is admitted
 // by measurement rather than by assumption: a bare 40-character alphanumeric run
 // with no key name and no `=`/`:` delimiter beside it does not trip gitleaks'
 // generic-api-key rule, whose condition is keyword + delimiter + entropy >= 3.5
 // (verified against the pinned 8.24.3 default rules, the same version this
-// repo's history scan runs, over this exact declaration). It is a shuffle of the
+// repo's history scan runs, over this exact declaration). That clean scan hangs
+// on the keyword-free name: renaming this constant to embed a keyword (a
+// ...Key/...Token/...Secret suffix) or moving the value beside a delimited key
+// name would trip the rule and red the CI secret scan. It is a shuffle of the
 // alphabet three lines above; it is not, and never was, a credential.
 const entropySpecimenGolden = "fXbLtohSxAn9d1jv75E0eDkB6JHT8OzNWcVCQgsU"
 

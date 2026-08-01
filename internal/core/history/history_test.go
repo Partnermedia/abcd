@@ -552,16 +552,20 @@ func storeEntropySpecimen() string {
 // storeEntropySpecimenGolden is the exact value storeEntropySpecimen returns, and
 // is asserted so the two duplicated generators cannot silently diverge: the
 // scanner package pins the identical value as entropySpecimenGolden, and either
-// copy drifting now fails on BOTH sides rather than leaving the two pins
-// describing different residues. It also pins determinism, which the entropy
-// floor cannot — a changed stream would still measure ~5.32 bits per character.
+// copy drifting now fails its OWN side loudly, with a message naming the other,
+// rather than leaving the two pins describing different residues. It also pins
+// determinism, which the entropy floor cannot — a changed stream would still
+// measure ~5.32 bits per character.
 //
 // It is the one credential-SHAPED literal admitted here, on measurement rather
 // than assumption: a bare 40-character alphanumeric run with no key name and no
 // `=`/`:` delimiter beside it does not trip gitleaks' generic-api-key rule
 // (keyword + delimiter + entropy >= 3.5), verified against the pinned 8.24.3
-// default rules over this exact declaration. It is a shuffle of the alphabet
-// above; it is not, and never was, a credential.
+// default rules over this exact declaration. That clean scan hangs on the
+// keyword-free name: renaming this constant to embed a keyword (a
+// ...Key/...Token/...Secret suffix) or moving the value beside a delimited key
+// name would trip the rule and red the CI secret scan. It is a shuffle of the
+// alphabet above; it is not, and never was, a credential.
 const storeEntropySpecimenGolden = "fXbLtohSxAn9d1jv75E0eDkB6JHT8OzNWcVCQgsU"
 
 // shannonEntropy returns the per-character Shannon entropy of s in bits.
