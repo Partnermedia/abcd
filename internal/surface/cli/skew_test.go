@@ -52,6 +52,29 @@ func TestHookSessionStartReportsBinarySkew(t *testing.T) {
 	}
 }
 
+// TestHookSessionStartSkewTagIsTermsafe: the two commits the notice renders are
+// shape-checked (forty lowercase hex) before anything is said, but the release
+// TAG is not — the bootstrap reads it out of an HTTP redirect, so it is the one
+// value in the line that arrives unvalidated from off the machine. Rendered raw
+// it can carry an ANSI escape into a message whose whole job is to be believed.
+// This repo already has one sanitiser for that (termsafe); the tag uses it.
+func TestHookSessionStartSkewTagIsTermsafe(t *testing.T) {
+	repo, _ := sessionEndRepo(t)
+	skewMeta(t, "release_tag=v0.4.9\x1b[31m\nrelease_sha=1111111111111111111111111111111111111111\nfetched_at=2026-08-01T00:00:00Z\nplugin_sha=2222222222222222222222222222222222222222\n")
+
+	_, stderr, code := runSessionStart(startPayload("s-termsafe", repo), "hook", "session-start")
+
+	if code == 0 {
+		t.Fatalf("the skew notice must still render; got exit 0 (stderr %q)", stderr)
+	}
+	if strings.ContainsRune(stderr, 0x1b) {
+		t.Errorf("the release tag must be sanitised before it reaches a terminal; stderr = %q", stderr)
+	}
+	if !strings.Contains(stderr, "v0.4.9") {
+		t.Errorf("sanitising must keep the legible part of the tag; stderr = %q", stderr)
+	}
+}
+
 // TestHookSessionStartSilentOnMalformedMeta: `.binary-meta` is written by a shell
 // script that a crash can interrupt, so a value that is merely "not the literal
 // string unknown" is not evidence of anything. A truncated commit renders a

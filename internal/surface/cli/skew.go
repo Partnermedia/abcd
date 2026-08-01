@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // binaryMetaFile is the provenance record hooks/bootstrap.sh writes into the
@@ -14,8 +15,9 @@ import (
 // plugin commit it fetched that release for.
 const binaryMetaFile = ".binary-meta"
 
-// maxBinaryMetaBytes caps the read. Four key=value lines; anything larger is not
-// the file the bootstrap wrote.
+// maxBinaryMetaBytes caps the read. A handful of short key=value lines
+// (release_tag, release_sha, binary_sha256, fetched_at, plugin_sha,
+// plugin_root_basename); anything larger is not the file the bootstrap wrote.
 const maxBinaryMetaBytes = 4 << 10
 
 // binarySkewNotice is the one-line session-start notice for a plugin surface
@@ -36,10 +38,23 @@ func binarySkewNotice() string {
 	}
 	meta := readBinaryMeta(filepath.Join(root, binaryMetaFile))
 	pluginSHA, releaseSHA := meta["plugin_sha"], meta["release_sha"]
+	// Silence here has two distinct causes and they are NOT the same news. Either
+	// the two commits genuinely agree (nothing to report), or one of them never
+	// parsed — and `plugin_sha` failing to parse is the interesting one, because
+	// it is downstream of itd-105's unverified warrant that the harness names each
+	// plugin cache directory for the commit it was cloned from. If that stops
+	// holding, this returns "" forever and no notice can ever fire. The bootstrap
+	// records the raw, ungated `plugin_root_basename` beside the gated field
+	// precisely so that case is diagnosable from the file; it is deliberately not
+	// read here, because a notice built on a value that is not a commit would be
+	// the guesswork this whole path refuses to do.
 	if !resolvedSHA(pluginSHA) || !resolvedSHA(releaseSHA) || pluginSHA == releaseSHA {
 		return ""
 	}
-	tag := meta["release_tag"]
+	// The tag is the one rendered value that is not shape-checked upstream: it is
+	// read out of an HTTP redirect. Sanitise it like every other untrusted string
+	// this repo renders to a terminal.
+	tag := termsafe.Sanitize(meta["release_tag"])
 	if tag == "" {
 		tag = "unknown"
 	}
