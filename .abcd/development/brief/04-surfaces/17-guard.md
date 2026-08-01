@@ -89,8 +89,11 @@ other way is not seen:
 - one launched through a wrapper that *is* in that set but carries its own flags:
   only the wrapper NAME is stepped over, so `sudo <hazard>` is seen and
   `sudo -u bob <hazard>` is not (`-u` is read as the command);
-- one inside a backtick substitution (`$(…)` is followed, backticks are not);
 - a dangerous form no entry describes.
+
+Both command-substitution forms ARE followed: `$(…)` and a backtick span alike
+put what is inside them in command position (iss-148), in the unquoted case the
+tokenizer already handled for parentheses.
 
 Coverage is what the registry names. The registry grows from reality: a
 facilitator who sees something scary captures it, and recurring captures are

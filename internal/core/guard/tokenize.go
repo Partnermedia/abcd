@@ -168,6 +168,23 @@ func tokenize(line string) ([]segment, error) {
 			flushToken()
 			pending = append(pending, hd)
 			i = next
+		case c == '`':
+			// A backtick command substitution RUNS what is inside it, so what is
+			// inside it is command position: a backticked find in an rm's argument
+			// list is a find that executes. The `$( … )` form already reached
+			// command position through the grouping-paren branch below (the paren
+			// flushes, the `$` is left as ordinary token text); a backtick reached
+			// nothing, because it was an operator nowhere in this switch and fell
+			// through to the default as ordinary token text (iss-148). Both
+			// delimiters are the SAME character, so the one flush serves the open
+			// and the close alike.
+			//
+			// The scope is parity with `$( … )` as it behaves TODAY, not POSIX
+			// completeness: neither form is followed inside double quotes, where
+			// the quoting branch above consumes the whole span as one token.
+			flushSegment()
+			lastList = false
+			i++
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {

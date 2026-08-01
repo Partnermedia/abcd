@@ -132,6 +132,18 @@ func TestCheckDecisions(t *testing.T) {
 			command: "cd scratch\nrm -rf ./build",
 			verdict: VerdictAllow,
 		},
+		{
+			name:    "a hazard inside a $( … ) substitution is in command position",
+			command: "echo $(git push --force origin main)",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "a hazard inside a backtick substitution is in command position too",
+			command: "echo `git push --force origin main`",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

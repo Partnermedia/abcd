@@ -370,9 +370,8 @@ command is safe. The guard reads command names it can see in command
 position, so a hazard reached any other way is not seen: a command string
 handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper
 the guard does not step over (or a known wrapper carrying its own flags —
-`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), one inside a
-backtick substitution, or a dangerous form no entry describes. Coverage is
-what the registry names.
+`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), or a dangerous
+form no entry describes. Coverage is what the registry names.
 
 The candidate comes from --command, or from stdin when the flag is absent.
 Prefer stdin for a command line you did not type yourself: the shell expands

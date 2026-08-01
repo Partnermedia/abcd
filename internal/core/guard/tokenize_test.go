@@ -174,6 +174,36 @@ func TestTokenizeSegments(t *testing.T) {
 			line: `grep "" file`,
 			want: []string{"0:grep||file"},
 		},
+		{
+			name: "a backtick substitution is followed like $( … )",
+			line: "rm -rf `find /tmp -name x`",
+			want: []string{"0:rm|-rf", "0:find|/tmp|-name|x"},
+		},
+		{
+			name: "the dollar-paren form it mirrors",
+			line: "rm -rf $(find /tmp -name x)",
+			want: []string{"0:rm|-rf|$", "0:find|/tmp|-name|x"},
+		},
+		{
+			name: "text after a backtick substitution is still command text",
+			line: "echo `whoami` && rm -rf *",
+			want: []string{"0:echo", "0:whoami", "0:rm|-rf|*"},
+		},
+		{
+			name: "an escaped backtick stays literal",
+			line: "echo a\\`b",
+			want: []string{"0:echo|a`b"},
+		},
+		{
+			name: "a single-quoted backtick stays literal",
+			line: "echo 'rm -rf `x`'",
+			want: []string{"0:echo|rm -rf `x`"},
+		},
+		{
+			name: "a double-quoted backtick is not followed (parity with $( … ))",
+			line: "echo \"`rm -rf *`\"",
+			want: []string{"0:echo|`rm -rf *`"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
