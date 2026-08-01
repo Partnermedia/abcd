@@ -75,7 +75,7 @@ func detectGuardHealth(cwd, pluginRoot string, pluginOK bool) GuardHealth {
 			reasons = append(reasons, "hooks/hooks.json declares no PreToolUse entry running `abcd guard hook`")
 		}
 		if !h.BinaryReachable {
-			reasons = append(reasons, "the plugin-root abcd binary is missing or not executable, so the hook shim fails open on every command")
+			reasons = append(reasons, "the plugin-root abcd binary is missing or not executable, so the hook shim fails open on every command; "+bootstrapRecovery)
 		}
 	}
 
@@ -97,6 +97,12 @@ func detectGuardHealth(cwd, pluginRoot string, pluginOK bool) GuardHealth {
 // not load, shared by the health detail and the gap so a reader is never told two
 // different things about one fault.
 const guardRegistryUnloadableReason = guard.RepoRelPath + " does not load, so the guard declines to answer and commands run unchecked"
+
+// bootstrapRecovery names the committed script that re-provisions the plugin-root
+// binary, shared by the health reason and the gap for the same reason
+// guardRegistryUnloadableReason is: a reader must never be told two different
+// stories about one fault (spc-21).
+const bootstrapRecovery = "hooks/bootstrap.sh re-provisions it at the start of every session"
 
 // detectGuardGaps turns an unhealthy guard into gaps, so a broken guard shows up
 // on the same status board as every other discrepancy rather than only in a line
@@ -121,9 +127,11 @@ func detectGuardGaps(h GuardHealth) []Gap {
 	if h.HookInstalled && !h.BinaryReachable {
 		gaps = append(gaps, Gap{
 			ID: "guard.binary_unreachable", Category: PluginOwned, Scope: "machine",
-			Title:   "guard hook installed but its binary is unreachable",
-			Detail:  "The guard hook is wired but the abcd binary it calls is missing or not executable, so it fails open on every command.",
-			FixHint: "Reinstall the abcd plugin, or run `abcd ahoy install`.", Required: false, Resolvable: false,
+			Title:  "guard hook installed but its binary is unreachable",
+			Detail: "The guard hook is wired but the abcd binary it calls is missing or not executable, so it fails open on every command.",
+			FixHint: "Start a session with network access — " + bootstrapRecovery +
+				". Otherwise install the release binary per the README, or run `abcd ahoy install` for the terminal PATH entry.",
+			Required: false, Resolvable: false,
 		})
 	}
 	return append(gaps, registryGap(h)...)
