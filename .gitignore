@@ -49,3 +49,10 @@ go.work.sum
 
 # decision-log append lock (runtime artefact)
 .abcd/work/.decisions.lock
+
+# hooks/bootstrap.sh artefacts, when a checkout is itself the plugin root
+# (CLAUDE_PLUGIN_ROOT pointed here): the provisioned binary, its provenance
+# record, and the mkdir lock are runtime state, never committed.
+/abcd
+/.binary-meta
+/.bootstrap.lock

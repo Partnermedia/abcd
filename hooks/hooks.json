@@ -5,6 +5,7 @@
     ],
     "SessionStart": [
       {"hooks": [
+        {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/bootstrap.sh\""},
         {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset"},
         {"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/abcd\" hook session-start"}
       ]}
