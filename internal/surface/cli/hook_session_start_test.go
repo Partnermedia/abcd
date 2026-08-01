@@ -78,10 +78,24 @@ func TestHookSessionStartWarnsWhenStoreMissing(t *testing.T) {
 	}
 }
 
+// noAmbientPluginRoot points the plugin-root resolution at an empty directory.
+// The session-start notices now include one read off `$CLAUDE_PLUGIN_ROOT/
+// .binary-meta` (itd-105), so a silence assertion that inherits the ambient
+// environment asserts something about the machine it runs on: inside a session
+// where the abcd plugin is installed and skewed, "must be silent" fails for a
+// reason that has nothing to do with the case under test.
+func noAmbientPluginRoot(t *testing.T) {
+	t.Helper()
+	empty := t.TempDir()
+	t.Setenv("ABCD_PLUGIN_ROOT", empty)
+	t.Setenv("CLAUDE_PLUGIN_ROOT", empty)
+}
+
 // TestHookSessionStartSilentWhenStoreReady is the common case: an installed repo
 // must start with no notice at all.
 func TestHookSessionStartSilentWhenStoreReady(t *testing.T) {
 	repo, _ := sessionEndRepo(t) // creates the hermetic store's transcripts dir
+	noAmbientPluginRoot(t)
 	stdout, stderr, code := runSessionStart(startPayload("s2", repo), "hook", "session-start")
 
 	if code != 0 {
@@ -116,6 +130,7 @@ func TestHookSessionStartSilentAndNonBlocking(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			noAmbientPluginRoot(t)
 			stdout, stderr, code := runSessionStart(tc.stdin(t), "hook", "session-start")
 			if code != 0 {
 				t.Errorf("must exit 0 (not a store problem), got %d", code)
