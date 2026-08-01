@@ -369,10 +369,13 @@ An allow means no registry entry matched — it is never a statement that a
 command is safe. The guard reads command names it can see in command
 position, so a hazard reached any other way is not seen: a command string
 handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper
-the guard does not step over (or a known wrapper carrying its own flags —
-`sudo <hazard>` is seen, `sudo -u bob <hazard>` is not), one inside a
-backtick substitution, or a dangerous form no entry describes. Coverage is
-what the registry names.
+outside the known set, one launched through a known wrapper carrying a
+value-taking flag the guard does not name (`sudo -u bob <hazard>` is seen,
+the bundled short form `sudo -Hu bob <hazard>` is not), one whose API path an
+entry names by its ROOT segment but the host serves under a prefix (a GitHub
+Enterprise Server install mounts the same endpoints under `/api/v3/`; the
+api.github.com URL form IS read), one inside a backtick substitution, or a
+dangerous form no entry describes. Coverage is what the registry names.
 
 The candidate comes from --command, or from stdin when the flag is absent.
 Prefer stdin for a command line you did not type yourself: the shell expands
