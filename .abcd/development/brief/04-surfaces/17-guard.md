@@ -90,13 +90,25 @@ other way is not seen:
   per-wrapper table does not name: `sudo -u bob <hazard>` is seen, the bundled
   short form `sudo -Hu bob <hazard>` is not (`bob` is read as the command). The
   miss is a non-match, never a false block;
+- an API path an entry names by its ROOT segment when the host serves that API
+  under a prefix: a GitHub Enterprise Server install mounts the same endpoints
+  under `/api/v3/`, so `gh api -X DELETE https://ghe.example/api/v3/repos/o/r`
+  is not seen. The `https://api.github.com/…` URL form *is* — an operand is
+  normalised to its path (scheme, host, query, fragment dropped) before the
+  depth check. Matching a root segment wherever it appeared would close the
+  remainder and falsely refuse `DELETE /teams/{id}/repos/{owner}/{repo}`, which
+  removes a repository from a team and destroys nothing;
 - a dangerous form no entry describes.
 
 A wrapper's own arguments are stepped over with it, including the mandatory
 operand in `timeout DURATION COMMAND` (iss-148). Both command-substitution forms
-ARE followed: `$(…)` and a backtick span alike put what is inside them in
-command position, in the unquoted case the tokenizer already handled for
-parentheses.
+ARE followed, in the unquoted case the tokenizer already handled for
+parentheses: `$(…)` and a backtick span alike put what is inside them in command
+position, *and* the command CONTAINING one survives it — `rm $(true) -rf *` is
+still a recursive force delete, because the flags written after a substitution
+rejoin the command they were typed after rather than starting a new one. A bare
+`(` is a subshell group rather than a substitution and does end the command
+before it, which is what keeps a function body in command position.
 
 Coverage is what the registry names. The registry grows from reality: a
 facilitator who sees something scary captures it, and recurring captures are

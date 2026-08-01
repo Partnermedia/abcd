@@ -286,7 +286,15 @@ called out in a **Breaking** section.
   what was meant. `gh api -X DELETE repos/{owner}/{repo}` is the same deletion
   written as a raw API call, with no confirmation prompt anywhere in the way; it
   is depth-limited on purpose, so a `DELETE` deeper inside a repository — a
-  branch ref, a release — is ordinary work and stays allowed. And
+  branch ref, a release — is ordinary work and stays allowed. The path operand is
+  normalised before that depth check — a `scheme://host` prefix, a query, and a
+  fragment are dropped — so the same call written as
+  `https://api.github.com/repos/owner/repo` is the same refusal; what remains
+  stated rather than closed is a host that serves the API under a mount prefix
+  (a GitHub Enterprise Server `/api/v3/…`), because matching a root segment
+  wherever it appeared would falsely refuse
+  `DELETE /teams/{id}/repos/{owner}/{repo}`, which removes a repository from a
+  team and destroys nothing. And
   `git push origin +main:main` overwrites the remote branch exactly as `--force`
   does, without the flag anyone reviews for. Entry patterns gained the fields
   those shapes need, each optional and overridable per repo like the rest: a
@@ -479,7 +487,15 @@ called out in a **Breaking** section.
   an operator nowhere in it and became ordinary token text, so the same hazard
   fired under one spelling and not the other. Both are followed now, in the
   unquoted case for both — the parity that already held for parentheses, not full
-  POSIX coverage. What stays unseen is stated rather than implied: a wrapper
+  POSIX coverage — and the command CONTAINING a substitution survives it: the
+  parenthesis route worked by ENDING the enclosing segment, so every flag and
+  operand written after the substitution closed started a new, unrelated command
+  and `rm $(true) -rf *` lost its `-rf`. A substitution now parks the enclosing
+  command's tokens, flushes its own content as its own segments, and hands the
+  enclosing tokens back, so both spellings of both hazards fire. A bare `(` keeps
+  ending the command before it, because it is a subshell group rather than a
+  substitution inside a command — which is what keeps a function body in command
+  position. What stays unseen is stated rather than implied: a wrapper
   outside the known set, and a value-taking flag the per-wrapper table does not
   name (a bundled `sudo -Hu bob`), where the miss is a non-match and never a
   false block.
