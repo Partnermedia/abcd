@@ -41,6 +41,22 @@ const (
 	bootstrapAPIOrigin     = "https://api.github.com/repos/REPPL/abcd-cli"
 )
 
+// bootstrapTrustScrub is the shipped script's line that removes curl's CA-override
+// variables from the environment before any fetch, and bootstrapProxyScrub is its
+// companion for the proxy variables and CURL_HOME.
+//
+// The trust line is the ONE line bootstrapFixtureScript neutralises in its
+// throwaway copy, because the fixture is a self-signed local TLS server and
+// CURL_CA_BUNDLE is the only way to make a real curl trust it. That is a widening
+// of what curl will ACCEPT, never a naming of a different server, so the copy is
+// still exercising the same fetch path; the proxy/CURL_HOME line stays intact in
+// the copy, which is what makes the poisoned-config case below meaningful.
+// TestBootstrapFetchOriginsAreConstants holds both lines in the shipped bytes.
+const (
+	bootstrapTrustScrub = "unset CURL_CA_BUNDLE SSL_CERT_FILE SSL_CERT_DIR"
+	bootstrapProxyScrub = "unset HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy CURL_HOME"
+)
+
 // bootstrapScript locates the committed hooks/bootstrap.sh from this test file's
 // own on-disk position (internal/surface/cli/ -> three levels up), so the tests
 // derive from the script that actually ships rather than from a hand-written
@@ -118,6 +134,18 @@ func bootstrapFixtureScript(t *testing.T, base string) string {
 	}
 	if n := strings.Count(body, base); n != 2 {
 		t.Fatalf("the rewritten script must name the fixture base exactly twice (release origin + API origin), found %d", n)
+	}
+	// The fixture's self-signed certificate reaches curl through CURL_CA_BUNDLE,
+	// which the shipped script scrubs. Neutralise that ONE line (`:` is the POSIX
+	// no-op) so the copy can talk to the fixture at all; everything else about the
+	// lockdown — -q on every call, and the proxy/CURL_HOME scrub — stays exactly as
+	// shipped, so the cases below still run against it.
+	if n := strings.Count(body, bootstrapTrustScrub); n != 1 {
+		t.Fatalf("the fixture substitution expects exactly one %q in hooks/bootstrap.sh, found %d — the CA-scrub line has changed shape and the fixture would otherwise be unreachable", bootstrapTrustScrub, n)
+	}
+	body = strings.Replace(body, bootstrapTrustScrub, ":", 1)
+	if !strings.Contains(body, bootstrapProxyScrub) {
+		t.Fatalf("the rewritten script must keep the proxy/CURL_HOME scrub intact, otherwise the poisoned-config case proves nothing")
 	}
 	path := filepath.Join(t.TempDir(), "bootstrap.sh")
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
@@ -747,6 +775,115 @@ func mustReadFile(t *testing.T, path string) string {
 	return string(data)
 }
 
+// TestBootstrapIgnoresCurlsOwnConfigSurface is the regression for the bypass an
+// independent security review reproduced: curl reads a config surface of its own
+// that has nothing to do with this script's argv. Unless `-q` is passed as the
+// FIRST argument, every invocation loads `$CURL_HOME/.curlrc` (curl >= 7.73,
+// falling back to `$HOME/.curlrc`), and a `connect-to` or `resolve` line there
+// re-points the connection while the URL on the command line still literally
+// reads https://github.com/… — so `--proto '=https' --proto-redir '=https'`
+// still holds, and the checksum verification is VACUOUS, because the same
+// poisoned config supplies both the binary and the checksums.txt that "verifies"
+// it. The forged binary is then run unattended as the Bash shell guard on every
+// tool call.
+//
+// The fixture is the published release; a second, byte-different server stands in
+// for whoever wrote the config. The poisoned .curlrc carries its own `cacert`, as
+// the reproduction did, so the redirection is not merely attempted but would
+// actually complete on TLS. The bar is that it changes nothing: the published
+// bytes are installed, and the forger is never contacted at all.
+func TestBootstrapIgnoresCurlsOwnConfigSurface(t *testing.T) {
+	bootstrapRequires(t)
+	published := []byte("#!/bin/sh\nexit 0\n")
+	forged := []byte("#!/bin/sh\nid > /tmp/pwned\n")
+
+	// Both names, because curl consults CURL_HOME first and falls back to HOME,
+	// and `-q` is the one answer that covers both without enumerating them.
+	for _, home := range []string{"CURL_HOME", "HOME"} {
+		name := home
+		t.Run(name, func(t *testing.T) {
+			root := bootstrapRoot(t)
+			fx := bootstrapServer(t, published, bootstrapManifest(published))
+			forger := bootstrapServer(t, forged, bootstrapManifest(forged))
+
+			dir := t.TempDir()
+			rc := "connect-to = \"" + bootstrapHostPort(fx.base) + ":" + bootstrapHostPort(forger.base) + "\"\n" +
+				"cacert = \"" + forger.ca + "\"\n"
+			if err := os.WriteFile(filepath.Join(dir, ".curlrc"), []byte(rc), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			// runScript de-duplicates its environment keeping the LAST value, so the
+			// HOME case really does replace the constructed one.
+			out, code := runScript(t, bootstrapFixtureScript(t, fx.base), root,
+				append(fx.env(), name+"="+dir), "")
+			if code != 2 {
+				t.Fatalf("the published release must still install, got %d (output %q)", code, out)
+			}
+			if n := atomic.LoadInt32(forger.hits); n != 0 {
+				t.Errorf("a %s/.curlrc redirected %d fetch(es) to a server this script never names: curl's own config surface is a fetch-origin seam", name, n)
+			}
+			if n := atomic.LoadInt32(fx.hits); n == 0 {
+				t.Error("the published release server was never contacted, so this case proves nothing")
+			}
+			got, err := os.ReadFile(filepath.Join(root, "abcd"))
+			if err != nil {
+				t.Fatalf("the bootstrap must install the published binary: %v", err)
+			}
+			if string(got) == string(forged) {
+				t.Fatalf("the binary installed at the guard path is the FORGED one: a %s/.curlrc supplied both the payload and the manifest that verified it", name)
+			}
+			if string(got) != string(published) {
+				t.Errorf("the installed binary is neither the published nor the forged payload; got %q", got)
+			}
+		})
+	}
+}
+
+// bootstrapHostPort reduces a fixture base URL to the host:port pair a curl
+// `connect-to` line is written in terms of.
+func bootstrapHostPort(base string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(base, "https://"), "http://")
+}
+
+// TestBootstrapReportsAnObstructedBinaryMeta: `mv -f` onto an existing DIRECTORY
+// moves the file INTO it rather than replacing it — the same hazard the binary
+// path already refuses. At the .binary-meta path the consequence is quieter and
+// therefore worse: the provenance record lands at .binary-meta/binary-meta where
+// nothing will ever read it, and the success notice claims provenance was
+// recorded when it was not. The install itself is genuine and must not be undone,
+// so this is reported in the notice rather than refused.
+func TestBootstrapReportsAnObstructedBinaryMeta(t *testing.T) {
+	root := bootstrapRoot(t)
+	body := []byte("payload")
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
+	meta := filepath.Join(root, ".binary-meta")
+	if err := os.MkdirAll(meta, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, code := runBootstrap(t, root, fx, "")
+	if code != 2 {
+		t.Fatalf("an obstructed .binary-meta must not fail the install itself, got %d (output %q)", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "abcd")); err != nil {
+		t.Errorf("the verified binary must still be installed: %v", err)
+	}
+	entries, err := os.ReadDir(meta)
+	if err != nil {
+		t.Fatalf("the obstruction must be left as it was found: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("the provenance record was moved INTO the obstructing directory (%v), where nothing will ever read it", entries)
+	}
+	if !strings.Contains(out, "provenance") {
+		t.Errorf("the notice must say the provenance record was not written; output %q", out)
+	}
+	if !strings.Contains(out, "not a regular file") {
+		t.Errorf("the notice must name the obstruction, not report a generic write failure; output %q", out)
+	}
+}
+
 // TestBootstrapScriptIsExecutable: the harness invokes the committed script by
 // path, not as `sh <path>`, so a lost executable bit is a fresh-install failure
 // no other test would catch — every case above runs a rewritten COPY this test
@@ -835,9 +972,33 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 			t.Errorf("the script must hold %q as a single literal, found %d", origin, n)
 		}
 	}
-	// Every curl invocation pins the transport, unconditionally. A variable
-	// holding the flags is what the previous round used, and clearing it on one
-	// path is what reopened redirect downgrade.
+	// An environment reference is not the only origin seam: curl reads names the
+	// script never mentions. $CURL_HOME/.curlrc (or $HOME/.curlrc) can re-point a
+	// connection with `connect-to`/`resolve` while the URL on the command line
+	// still reads github.com, and the proxy variables can route the same fetch
+	// through a server of the setter's choosing — with the CA overrides supplying
+	// the trust that makes it succeed. Because the binary and the checksums.txt
+	// that verifies it travel the same route, any of those makes verification
+	// vacuous. The allowlist above cannot see them, so they are asserted directly:
+	// every call disables the config file, and the names are gone from the
+	// environment before the first fetch.
+	for _, scrub := range []string{bootstrapProxyScrub, bootstrapTrustScrub} {
+		if n := strings.Count(body, scrub); n != 1 {
+			t.Errorf("the script must scrub curl's environment surface exactly once with %q, found %d", scrub, n)
+		}
+	}
+	for _, name := range []string{
+		"HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy",
+		"CURL_HOME", "CURL_CA_BUNDLE", "SSL_CERT_FILE",
+	} {
+		if !strings.Contains(bootstrapProxyScrub+" "+bootstrapTrustScrub, name) {
+			t.Errorf("%s is a name curl reads on its own and must be scrubbed before any fetch", name)
+		}
+	}
+	// Every curl invocation pins the transport and disables curl's own config
+	// file, unconditionally. A variable holding the flags is what the previous
+	// round used, and clearing it on one path is what reopened redirect downgrade.
+	// -q must be the FIRST argument: curl honours it in no other position.
 	calls := 0
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -847,6 +1008,9 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 		calls++
 		if !strings.Contains(trimmed, "--proto '=https' --proto-redir '=https'") {
 			t.Errorf("every curl call must pin HTTPS literally; %q does not", trimmed)
+		}
+		if !strings.Contains(trimmed, "curl -q ") {
+			t.Errorf("every curl call must pass -q as its FIRST argument, or it loads $CURL_HOME/.curlrc and the fetch origin is no longer this script's to choose; %q does not", trimmed)
 		}
 	}
 	if calls < 4 {

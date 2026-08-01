@@ -36,6 +36,23 @@ api_url="https://api.github.com/repos/REPPL/abcd-cli"
 # no toggle and no code path that clears it. Without the pin a redirect could
 # downgrade the transport (or point at file://) and hand both the payload and the
 # manifest that verifies it to whoever can rewrite a response.
+#
+# The pin is not enough on its own, because curl reads a configuration surface
+# this script's argv knows nothing about. Unless -q is its FIRST argument, curl
+# loads $CURL_HOME/.curlrc (falling back to $HOME/.curlrc), and one `connect-to`
+# or `resolve` line there re-points the connection while the URL above still
+# literally reads https://github.com/… — the transport pin still holds, and the
+# checksum check becomes vacuous, because the same config supplies the binary AND
+# the checksums.txt that "verifies" it. Independent review reproduced exactly
+# that. So: -q first on every call below, and the other names curl reads without
+# being told to — the proxy variables, which can route both fetches through a
+# server of the setter's choosing, and the CA overrides, which are what make such
+# a route succeed on TLS — are removed here, before any fetch happens. The cost
+# is deliberate and accepted: a machine that can only reach the network through a
+# proxy no longer bootstraps automatically, and refuse() already names the
+# manual install and build-from-source ways out.
+unset HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy CURL_HOME
+unset CURL_CA_BUNDLE SSL_CERT_FILE SSL_CERT_DIR
 
 cleanup() {
 	[ -n "$tmp" ] && rm -rf "$tmp"
@@ -143,7 +160,7 @@ command -v curl >/dev/null 2>&1 ||
 #    an UNFOLLOWED request is the only URL shape that survives: %{url_effective}
 #    after -L lands on the asset CDN (release-assets.githubusercontent.com/...),
 #    which carries no tag segment at all.
-redirect=$(curl -fsS --proto '=https' --proto-redir '=https' --max-time 15 -o /dev/null -w '%{redirect_url}' "$releases_url/latest" 2>/dev/null) || redirect=''
+redirect=$(curl -q -fsS --proto '=https' --proto-redir '=https' --max-time 15 -o /dev/null -w '%{redirect_url}' "$releases_url/latest" 2>/dev/null) || redirect=''
 release_tag=$(printf '%s\n' "$redirect" | sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
 [ -n "$release_tag" ] ||
 	refuse 'the latest release tag could not be resolved, so the download cannot be pinned to a single release — there may be no network'
@@ -161,9 +178,9 @@ rm -rf "$tmp"
 mkdir "$tmp" 2>/dev/null ||
 	refuse "a temporary directory cannot be created in the plugin root ($plugin_root)"
 
-curl -fsSL --proto '=https' --proto-redir '=https' --max-time 120 -o "$tmp/$asset" "$download_url/$asset" 2>/dev/null ||
+curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 120 -o "$tmp/$asset" "$download_url/$asset" 2>/dev/null ||
 	refuse "downloading $asset from release $release_tag failed — there may be no network, or that release may carry no asset for this platform"
-curl -fsSL --proto '=https' --proto-redir '=https' --max-time 30 -o "$tmp/checksums.txt" "$download_url/checksums.txt" 2>/dev/null ||
+curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 30 -o "$tmp/checksums.txt" "$download_url/checksums.txt" 2>/dev/null ||
 	refuse "downloading checksums.txt from release $release_tag failed, so the download cannot be verified and is not installed"
 
 # 6. Verification against the same-origin manifest.
@@ -194,7 +211,7 @@ binary_sha256=$(printf '%s\n' "$line" | sed -n 's/^\([0-9a-fA-F]\{64\}\).*/\1/p'
 # otherwise: the meta file is the skew notice's only evidence, so it never
 # records a value it did not resolve.
 release_sha=unknown
-body=$(curl -fsSL --proto '=https' --proto-redir '=https' --max-time 15 -H 'Accept: application/vnd.github+json' "$api_url/commits/$release_tag" 2>/dev/null) || body=''
+body=$(curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 15 -H 'Accept: application/vnd.github+json' "$api_url/commits/$release_tag" 2>/dev/null) || body=''
 candidate=$(printf '%s\n' "$body" | tr ',' '\n' |
 	sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' | head -n 1)
 [ -n "$candidate" ] && release_sha="$candidate"
@@ -229,17 +246,27 @@ esac
 # Written into the temp dir and renamed in, on the same filesystem, for the same
 # reason the binary is: a crash mid-write would otherwise leave a truncated value
 # that still parses, and a skew notice rendered off a truncated commit is a lie.
+meta_path="$plugin_root/.binary-meta"
 meta_note=''
-{
-	printf 'release_tag=%s\n' "$release_tag"
-	printf 'release_sha=%s\n' "$release_sha"
-	printf 'binary_sha256=%s\n' "$binary_sha256"
-	printf 'fetched_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-	printf 'plugin_sha=%s\n' "$plugin_sha"
-	printf 'plugin_root_basename=%s\n' "$plugin_root_basename"
-} > "$tmp/binary-meta" 2>/dev/null &&
-	mv -f "$tmp/binary-meta" "$plugin_root/.binary-meta" 2>/dev/null ||
-	meta_note=' (the .binary-meta provenance record could not be written, so version-skew reporting stays silent for this plugin root)'
+if [ -e "$meta_path" ] && [ ! -f "$meta_path" ]; then
+	# The same `mv -f` hazard the binary path refuses above, and quieter here: a
+	# DIRECTORY at this path swallows the record as .binary-meta/binary-meta,
+	# where nothing reads it, while the notice below would claim provenance was
+	# recorded. The install itself is genuine and is not undone for this — it is
+	# reported instead, in the words the other write failure uses.
+	meta_note=' (the .binary-meta provenance record could not be written because that path exists and is not a regular file, so version-skew reporting stays silent for this plugin root)'
+else
+	{
+		printf 'release_tag=%s\n' "$release_tag"
+		printf 'release_sha=%s\n' "$release_sha"
+		printf 'binary_sha256=%s\n' "$binary_sha256"
+		printf 'fetched_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+		printf 'plugin_sha=%s\n' "$plugin_sha"
+		printf 'plugin_root_basename=%s\n' "$plugin_root_basename"
+	} > "$tmp/binary-meta" 2>/dev/null &&
+		mv -f "$tmp/binary-meta" "$meta_path" 2>/dev/null ||
+		meta_note=' (the .binary-meta provenance record could not be written, so version-skew reporting stays silent for this plugin root)'
+fi
 
 # The one place PATH setup is suggested; the symlink itself stays owned by ahoy.
 # This prints once per plugin root, because every later session takes the fast

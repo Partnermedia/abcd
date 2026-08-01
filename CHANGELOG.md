@@ -326,7 +326,21 @@ called out in a **Breaking** section.
   including redirects on every request unconditionally: the binary and the
   `checksums.txt` that verifies it come from one origin, so anything able to
   name that origin would supply both the payload and its own manifest, and what
-  is installed then runs unattended as the Bash shell guard on every tool call. A
+  is installed then runs unattended as the Bash shell guard on every tool call.
+  Pinning the transport is not enough on its own, because `curl` reads a
+  configuration surface the command line knows nothing about: every fetch
+  therefore passes `-q` as its first argument, so `$CURL_HOME/.curlrc` and
+  `$HOME/.curlrc` are never loaded — one `connect-to` or `resolve` line there
+  re-points the connection while the URL still reads `https://github.com/…`, and
+  the checksum then verifies the substitute against its own manifest. The names
+  `curl` reads without being told to are removed from the environment before the
+  first request for the same reason: the proxy variables (`HTTPS_PROXY`,
+  `ALL_PROXY` and their lowercase forms, plus `HTTP_PROXY`/`http_proxy`) and the
+  certificate-authority overrides (`CURL_CA_BUNDLE`, `SSL_CERT_FILE`,
+  `SSL_CERT_DIR`) that would make such a route succeed on TLS. **The accepted
+  cost: a machine that can only reach the network through a proxy does not
+  bootstrap automatically** — install the release binary by hand or build from
+  source with `go build ./cmd/abcd`, both of which the refusal message names. A
   plugin root that already holds an executable binary exits on one file test
   with no network, so steady-state sessions pay nothing; concurrent sessions
   serialise on an atomic `mkdir` lock whose loser exits quietly and whose stale
