@@ -134,6 +134,62 @@
         ]
       }
     },
+    "gh-repo-delete": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "gh",
+        "subcommand": "repo",
+        "subcommand2": "delete"
+      },
+      "why": "Deleting a repository destroys the remote copy and everything kept with it — issues, pull requests, releases, and the review history — and nothing an agent can run brings any of it back.",
+      "successor": "Leave this one to a human: tell the person who owns the repository what you believe should be deleted and let them do it themselves. If the aim is to retire a repository rather than destroy it, archive it instead (`gh repo archive owner/repo`), which is reversible.",
+      "fixtures": {
+        "known_bad": [
+          "gh repo delete owner/repo",
+          "gh repo delete owner/repo --yes",
+          "gh repo delete --yes owner/repo",
+          "cd repo && gh repo delete owner/repo",
+          "gh repo delete 'owner/repo'"
+        ],
+        "known_good": [
+          "gh repo list owner",
+          "gh repo view owner/repo",
+          "gh repo clone owner/repo",
+          "gh repo archive owner/repo",
+          "gh release delete v1.0.0",
+          "abcd capture \"an agent ran gh repo delete owner/repo and the remote was gone\""
+        ]
+      }
+    },
+    "gh-api-repo-delete": {
+      "tier": "blocker",
+      "pattern": {
+        "command": "gh",
+        "subcommand": "api",
+        "value_flags": ["-X", "--method", "-f", "--field", "-F", "--raw-field", "-H", "--header", "-q", "--jq", "-t", "--template", "--cache", "--hostname", "--input"],
+        "flag_values": [{"flag": "-X|--method", "values": ["DELETE"]}],
+        "arg_paths": [{"root": "repos", "segments": 3}]
+      },
+      "why": "A `DELETE` on `repos/{owner}/{repo}` is repository deletion spelled as a raw API call: the same irreversible destruction as `gh repo delete`, with no confirmation prompt anywhere in the way.",
+      "successor": "Leave repository deletion to the human who owns the repository. A `DELETE` deeper inside a repository — a branch ref, a release, a comment — is ordinary work and is not refused; only the repository path itself is.",
+      "fixtures": {
+        "known_bad": [
+          "gh api -X DELETE repos/owner/repo",
+          "gh api --method DELETE repos/owner/repo",
+          "gh api --method=DELETE /repos/owner/repo",
+          "gh api -XDELETE repos/owner/repo",
+          "gh api -H 'Accept: application/vnd.github+json' -X DELETE repos/owner/repo"
+        ],
+        "known_good": [
+          "gh api repos/owner/repo",
+          "gh api -X GET repos/owner/repo",
+          "gh api -X DELETE repos/owner/repo/git/refs/heads/feature",
+          "gh api -X DELETE user/starred/owner/repo",
+          "gh api -X PATCH repos/owner/repo -f archived=true",
+          "abcd capture \"the agent ran gh api -X DELETE repos/owner/repo\""
+        ]
+      }
+    },
     "git-reset-hard": {
       "tier": "warn",
       "pattern": {

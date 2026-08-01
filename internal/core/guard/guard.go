@@ -45,6 +45,11 @@ type Pattern struct {
 	// git reset). ValueFlags lets a global option that consumes the next token
 	// be skipped while looking for it.
 	Subcommand string `json:"subcommand,omitempty"`
+	// Subcommand2, when set, must be the SECOND non-flag argument — the
+	// two-level grammar `gh repo delete`, which one Subcommand cannot express
+	// (`gh repo list` and `gh repo delete` share their first level, and only one
+	// of them is a hazard).
+	Subcommand2 string `json:"subcommand2,omitempty"`
 	// ValueFlags are flags of Command that consume the FOLLOWING token, so the
 	// scan for Subcommand steps over the value rather than reading it as the
 	// subcommand (`git -C /repo push`).
@@ -55,6 +60,18 @@ type Pattern struct {
 	// single-letter short alternative also matches inside a bundled cluster
 	// (-rf satisfies -r and -f).
 	Flags []string `json:"flags,omitempty"`
+	// FlagValues constrain what a flag is SET TO, not merely that it is present.
+	// `gh api -X DELETE repos/owner/repo` deletes the repository and
+	// `gh api -X GET repos/owner/repo` reads it, so an entry that could only ask
+	// whether -X appears would have to choose between missing the first and
+	// refusing the second. Every listed constraint must be satisfied.
+	FlagValues []FlagValue `json:"flag_values,omitempty"`
+	// ArgPaths constrain an operand that names a slash-separated resource path,
+	// by its first segment AND its exact depth. Depth is the point: DELETE on
+	// `repos/{owner}/{repo}` destroys the repository, while DELETE on a deeper
+	// path under it (a branch ref, a release) is ordinary work that stays
+	// allowed. Every listed constraint must be satisfied.
+	ArgPaths []PathArg `json:"arg_paths,omitempty"`
 	// ArgPrefixes constrain an OPERAND rather than a flag: every listed prefix
 	// must be carried by some non-flag argument. It is what describes a hazard
 	// spelled without any flag at all — `git push origin +main:main`, where the
@@ -67,6 +84,29 @@ type Pattern struct {
 	// pointer means false; it is a pointer so a per-repo override can turn the
 	// requirement off as well as on.
 	AfterCD *bool `json:"after_cd,omitempty"`
+}
+
+// FlagValue is one flag-with-value constraint: some argument must set one of
+// Flag's "|"-separated alternatives to one of Values.
+type FlagValue struct {
+	// Flag is an alternation group written with "|" ("-X|--method"), matching
+	// the spelling Pattern.Flags uses.
+	Flag string `json:"flag"`
+	// Values are the accepted settings. They are compared case-insensitively:
+	// an HTTP method's case is not what makes it destructive, and a constraint a
+	// change of case walks past is not a constraint.
+	Values []string `json:"values"`
+}
+
+// PathArg is one operand constraint for a slash-separated resource path.
+type PathArg struct {
+	// Root is the first path segment the operand must have ("repos").
+	Root string `json:"root"`
+	// Segments is the EXACT number of segments the operand must hold, counting
+	// Root: three for `repos/{owner}/{repo}`. Exact rather than a maximum,
+	// because it is the deeper paths — not the shallower ones — that stay
+	// allowed.
+	Segments int `json:"segments"`
 }
 
 // Fixtures is an entry's proof corpus: command lines it must fire on, and
@@ -197,6 +237,9 @@ func Validate(r Registry) error {
 		if strings.HasPrefix(e.Pattern.Subcommand, "-") {
 			return fmt.Errorf("%w: entry %s subcommand %q starts with a dash and could never match a non-flag argument", ErrInvalidEntry, id, e.Pattern.Subcommand)
 		}
+		if strings.HasPrefix(e.Pattern.Subcommand2, "-") {
+			return fmt.Errorf("%w: entry %s subcommand2 %q starts with a dash and could never match a non-flag argument", ErrInvalidEntry, id, e.Pattern.Subcommand2)
+		}
 		// A refusal with no successor leaves its replacement in prose only, and
 		// one with no why cannot teach — both are load-time rejections, as in
 		// the record-lint banned_tokens family (iss-51).
@@ -222,6 +265,27 @@ func Validate(r Registry) error {
 				return fmt.Errorf("%w: entry %s argument prefix %d is empty and would match every argument", ErrInvalidEntry, id, i)
 			}
 		}
+		// A flag-value constraint with no flag, or with no accepted value, can
+		// never be satisfied — the silent defang again, one field along.
+		for i, fv := range e.Pattern.FlagValues {
+			if !hasAlternative(fv.Flag) {
+				return fmt.Errorf("%w: entry %s flag-value constraint %d names no flag and could never match", ErrInvalidEntry, id, i)
+			}
+			if !hasAnyValue(fv.Values) {
+				return fmt.Errorf("%w: entry %s flag-value constraint %d accepts no value and could never match", ErrInvalidEntry, id, i)
+			}
+		}
+		// A path constraint with no root would depth-limit every operand that
+		// happened to look like a path, and one with no depth describes no path
+		// at all.
+		for i, pa := range e.Pattern.ArgPaths {
+			if strings.TrimSpace(pa.Root) == "" {
+				return fmt.Errorf("%w: entry %s path constraint %d names no root segment", ErrInvalidEntry, id, i)
+			}
+			if pa.Segments < 1 {
+				return fmt.Errorf("%w: entry %s path constraint %d wants %d segments; a path has at least one", ErrInvalidEntry, id, i, pa.Segments)
+			}
+		}
 	}
 	return nil
 }
@@ -231,6 +295,17 @@ func Validate(r Registry) error {
 func hasAlternative(group string) bool {
 	for _, alt := range strings.Split(group, "|") {
 		if strings.TrimSpace(alt) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAnyValue reports whether a flag-value constraint accepts at least one
+// usable setting, so neither an empty list nor a list of blanks can pass.
+func hasAnyValue(values []string) bool {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
 			return true
 		}
 	}
@@ -330,11 +405,26 @@ func cloneEntry(e Entry) Entry {
 	out.Pattern.ValueFlags = append([]string(nil), e.Pattern.ValueFlags...)
 	out.Pattern.Flags = append([]string(nil), e.Pattern.Flags...)
 	out.Pattern.ArgPrefixes = append([]string(nil), e.Pattern.ArgPrefixes...)
+	out.Pattern.ArgPaths = append([]PathArg(nil), e.Pattern.ArgPaths...)
+	out.Pattern.FlagValues = cloneFlagValues(e.Pattern.FlagValues)
 	if e.Pattern.AfterCD != nil {
 		v := *e.Pattern.AfterCD
 		out.Pattern.AfterCD = &v
 	}
 	out.Fixtures.KnownBad = append([]string(nil), e.Fixtures.KnownBad...)
 	out.Fixtures.KnownGood = append([]string(nil), e.Fixtures.KnownGood...)
+	return out
+}
+
+// cloneFlagValues deep-copies flag-value constraints: each one holds its own
+// Values slice, so the copy goes a level further than the other pattern fields.
+func cloneFlagValues(in []FlagValue) []FlagValue {
+	if in == nil {
+		return nil
+	}
+	out := make([]FlagValue, len(in))
+	for i, fv := range in {
+		out[i] = FlagValue{Flag: fv.Flag, Values: append([]string(nil), fv.Values...)}
+	}
 	return out
 }

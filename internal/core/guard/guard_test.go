@@ -133,6 +133,39 @@ func TestCheckDecisions(t *testing.T) {
 			verdict: VerdictAllow,
 		},
 		{
+			name:    "deleting a repository is a human-only operation",
+			command: "gh repo delete owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-repo-delete",
+		},
+		{
+			name:    "another two-level gh delete is not repository deletion",
+			command: "gh release delete v1.0.0",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a raw api DELETE on a repository is the same deletion",
+			command: "gh api -X DELETE repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			name:    "the same call written with an attached short value",
+			command: "gh api -XDELETE /repos/owner/repo",
+			verdict: VerdictBlock,
+			entryID: "gh-api-repo-delete",
+		},
+		{
+			name:    "a DELETE deeper under a repository is not repository deletion",
+			command: "gh api -X DELETE repos/owner/repo/git/refs/heads/feature",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a GET on the repository path is not a deletion",
+			command: "gh api -X GET repos/owner/repo",
+			verdict: VerdictAllow,
+		},
+		{
 			name:    "a refspec with a leading plus is a force push in disguise",
 			command: "git push origin +main:main",
 			verdict: VerdictBlock,
@@ -197,6 +230,29 @@ func TestEvalPayloadIsDocumentedV1Gap(t *testing.T) {
 	d := checkOK(t, `sh -c 'cd scratch && rm -rf *'`)
 	if d.Verdict != VerdictAllow {
 		t.Fatalf("v1 parses no payload strings; got %+v — update the documented gap before changing this", d)
+	}
+}
+
+// TestApiURLFormIsDocumentedV1Gap records the gh api entry's stated limit: the
+// path constraint reads an API PATH, so the same DELETE written against a
+// fully-qualified URL is not matched. It is a stated gap, not a silent one —
+// this test is what makes it visible if the behaviour ever changes.
+func TestApiURLFormIsDocumentedV1Gap(t *testing.T) {
+	d := checkOK(t, "gh api -X DELETE https://api.github.com/repos/owner/repo")
+	if d.Verdict != VerdictAllow {
+		t.Fatalf("v1 reads api paths, not URLs; got %+v — update the documented gap before changing this", d)
+	}
+}
+
+// TestHelpIsNotAnExemption pins a deliberate absence: no entry in this registry
+// special-cases `--help`, so a help invocation of a refused command is refused
+// too. Fixing it would mean teaching every entry which of its flags mean "do
+// nothing", and a guard that reasons about intent is one that can be argued out
+// of refusing.
+func TestHelpIsNotAnExemption(t *testing.T) {
+	d := checkOK(t, "gh repo delete --help")
+	if d.Verdict != VerdictBlock {
+		t.Fatalf("Check(%q) = %+v, want the block; --help is not an exemption anywhere in this registry", "gh repo delete --help", d)
 	}
 }
 

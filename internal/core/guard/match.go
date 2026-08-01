@@ -178,13 +178,26 @@ func matchSegment(p Pattern, s segment) bool {
 	if p.Subcommand != "" && operandAt(ops, 0) != p.Subcommand {
 		return false
 	}
+	if p.Subcommand2 != "" && operandAt(ops, 1) != p.Subcommand2 {
+		return false
+	}
 	for _, group := range p.Flags {
 		if !flagGroupMatches(group, args) {
 			return false
 		}
 	}
+	for _, fv := range p.FlagValues {
+		if !flagValueMatches(fv, args) {
+			return false
+		}
+	}
 	for _, prefix := range p.ArgPrefixes {
 		if !argPrefixMatches(prefix, ops) {
+			return false
+		}
+	}
+	for _, pa := range p.ArgPaths {
+		if !pathArgMatches(pa, ops) {
 			return false
 		}
 	}
@@ -263,6 +276,84 @@ func flagMatches(alt, arg string) bool {
 	}
 	if len(alt) == 2 && alt[0] == '-' {
 		return isShortCluster(arg) && strings.ContainsRune(arg[1:], rune(alt[1]))
+	}
+	return false
+}
+
+// flagValueMatches reports whether some argument SETS one of the flag
+// alternatives to one of the accepted values. All three spellings a shell user
+// reaches for are read — `-X DELETE`, `-XDELETE`, `--method=DELETE` — because a
+// constraint another spelling of the same call steps past is not one.
+func flagValueMatches(fv FlagValue, args []string) bool {
+	for _, alt := range strings.Split(fv.Flag, "|") {
+		if alt == "" {
+			continue
+		}
+		for i, arg := range args {
+			switch {
+			case arg == alt:
+				// The separate-token form: the value is the next argument.
+				if i+1 < len(args) && acceptsValue(fv.Values, args[i+1]) {
+					return true
+				}
+			case strings.HasPrefix(arg, alt+"="):
+				if acceptsValue(fv.Values, arg[len(alt)+1:]) {
+					return true
+				}
+			case isShortFlag(alt) && len(arg) > len(alt) && strings.HasPrefix(arg, alt):
+				// A short flag's value may be attached with no separator at all.
+				if acceptsValue(fv.Values, arg[len(alt):]) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// acceptsValue reports whether a setting is one the constraint accepts, ignoring
+// case: what makes `-X DELETE` destructive is the request it sends, and that
+// does not turn on how the word was typed.
+func acceptsValue(values []string, got string) bool {
+	for _, want := range values {
+		if want != "" && strings.EqualFold(want, got) {
+			return true
+		}
+	}
+	return false
+}
+
+// isShortFlag reports whether an alternative is a single-letter short flag
+// (`-X`), the only shape that can carry an attached value.
+func isShortFlag(alt string) bool {
+	return len(alt) == 2 && alt[0] == '-' && alt[1] != '-'
+}
+
+// pathArgMatches reports whether some operand is a resource path rooted at
+// pa.Root and exactly pa.Segments segments deep. The depth limit is the entry's
+// scope, not a detail: `repos/{owner}/{repo}` IS the repository, while a deeper
+// path under it names something inside the repository and stays allowed.
+//
+// A leading or trailing slash is ignored (`gh api /repos/owner/repo` is the same
+// call), and every remaining segment must be non-empty. A fully-qualified URL
+// form is not read as a path — a stated limit of the same family as the
+// tokenizer's payload gap, not a silent one.
+func pathArgMatches(pa PathArg, ops []string) bool {
+	for _, op := range ops {
+		segs := strings.Split(strings.Trim(op, "/"), "/")
+		if len(segs) != pa.Segments || segs[0] != pa.Root {
+			continue
+		}
+		empty := false
+		for _, seg := range segs {
+			if seg == "" {
+				empty = true
+				break
+			}
+		}
+		if !empty {
+			return true
+		}
 	}
 	return false
 }

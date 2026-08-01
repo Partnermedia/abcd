@@ -203,6 +203,30 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 			want: ErrInvalidEntry,
 		},
 		{
+			// A flag-value constraint with no accepted value can never be
+			// satisfied: the entry would look armed and refuse nothing.
+			name: "flag-value constraint with no value",
+			body: `{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"flag_values":[{"flag":"-X|--method","values":[]}]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			name: "flag-value constraint with no flag",
+			body: `{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"flag_values":[{"flag":"","values":["DELETE"]}]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			// Zero segments describe no path at all, and a rootless constraint
+			// would depth-limit every operand that happened to be a path.
+			name: "path constraint with no depth",
+			body: `{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"arg_paths":[{"root":"repos","segments":0}]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
+			name: "path constraint with no root",
+			body: `{"schema_version":1,"entries":{"gh-api-repo-delete":{"pattern":{"arg_paths":[{"root":"","segments":3}]}}}}`,
+			want: ErrInvalidEntry,
+		},
+		{
 			name: "entry id that could build a path",
 			body: `{"schema_version":1,"entries":{"../escape":{"tier":"warn","pattern":{"command":"x"},"why":"w","successor":"s"}}}`,
 			want: ErrInvalidEntry,
