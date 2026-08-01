@@ -789,10 +789,30 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	envRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)`)
 	assignPattern := regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
 	assigned := map[string]bool{}
+	tainted := map[string]bool{}
 	for _, line := range strings.Split(body, "\n") {
-		if m := assignPattern.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-			assigned[m[1]] = true
+		trimmed := strings.TrimSpace(line)
+		m := assignPattern.FindStringSubmatch(trimmed)
+		if m == nil {
+			continue
 		}
+		name := m[1]
+		// A SELF-referential assignment (name="${name:-default}") reads the
+		// environment under its own name before falling back — exactly the
+		// mirror-variable bypass that walked through an earlier version of this
+		// allowlist, because the name was in `assigned` by the time its own
+		// defining line was checked. Such a name is never treated as safe, on
+		// ANY of its assignment lines, so both the self-reference itself and any
+		// later use of the name are flagged as an unrecognised environment read.
+		rhs := trimmed[len(m[0]):]
+		if regexp.MustCompile(`\$\{?` + regexp.QuoteMeta(name) + `\b`).MatchString(rhs) {
+			tainted[name] = true
+			continue
+		}
+		assigned[name] = true
+	}
+	for name := range tainted {
+		delete(assigned, name)
 	}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(body, "\n") {

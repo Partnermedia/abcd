@@ -154,7 +154,11 @@ asset="abcd-$os-$arch"
 download_url="$releases_url/download/$release_tag"
 tmp="$plugin_root/.bootstrap.tmp.$$"
 rm -rf "$tmp"
-mkdir -p "$tmp" 2>/dev/null ||
+# `mkdir -p` succeeds on a directory that already exists — including one that
+# reappeared, symlinked, in the window since the rm -rf above. Plain `mkdir`
+# fails on that, turning a same-name race into a refusal instead of a curl
+# write through a planted symlink.
+mkdir "$tmp" 2>/dev/null ||
 	refuse "a temporary directory cannot be created in the plugin root ($plugin_root)"
 
 curl -fsSL --proto '=https' --proto-redir '=https' --max-time 120 -o "$tmp/$asset" "$download_url/$asset" 2>/dev/null ||
