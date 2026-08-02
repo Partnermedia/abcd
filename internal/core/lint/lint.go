@@ -94,6 +94,12 @@ var (
 	// that redecides the question an intent rested on retires that intent as surely
 	// as a successor intent does (itd-47 → adr-22, itd-49 → adr-26). Restricting
 	// this to ^itd- forced such a record to carry no supersession at all (iss-39).
+	//
+	// The widening makes intent_lifecycle's own target check LOOSER: it reads only
+	// the intent tree, so it can resolve an itd- target but not an adr- one, and a
+	// repo running intent_lifecycle ALONE therefore accepts `superseded_by:
+	// adr-9999`. record_schema is what closes that — it reads every store and
+	// resolves cross-store targets — so the two rules are armed together.
 	supersededRe = regexp.MustCompile(`^(itd|adr)-\d+`)
 	// spec_lifecycle: anchored id/link/filename matchers for the spec store.
 	specFileRe     = regexp.MustCompile(`^spc-\d+.*\.md$`)

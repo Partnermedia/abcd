@@ -50,7 +50,14 @@ var (
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
 	// ("itd-38's id was released, not reserved") is legitimate narration.
-	recordRefFields = []string{"supersedes", "related_adrs", "related_intents", "builds_on", "blocked_by"}
+	//
+	// `supersedes` is deliberately NOT here. It is the field that DECLARES a
+	// pruned id, so it can never fail its own resolution check; listing it would
+	// read as coverage it does not provide. Its targets are checked separately,
+	// against the store's allocation high-water mark.
+	recordRefFields = []string{"related_adrs", "related_intents", "builds_on", "blocked_by"}
+	// Every field the rule reads handles out of, so the scan parses each once.
+	recordHandleFields = append([]string{"supersedes", "superseded_by"}, recordRefFields...)
 )
 
 // recordStore describes one identified record store: where the buckets are, and
@@ -87,6 +94,13 @@ type schemaRecord struct {
 	num    int
 	bucket string
 	fields map[string]fmField
+	// refs holds the handles read out of each cross-reference field, parsed once
+	// at scan time so the block-sequence spelling is read in ONE place. Reading
+	// only fields[...].value would miss it: the shared frontmatter scanner is a
+	// same-line scanner, so `supersedes:` followed by indented `- adr-12` lines
+	// reads as empty — and an empty read here would make the bidirectional check
+	// assert, confidently and falsely, that another file omits a link it carries.
+	refs map[string][]recordRef
 }
 
 // handle renders the record's prose handle (adr-12, itd-47).
@@ -113,19 +127,35 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		return nil, err
 	}
 
-	// index: what the corpus HAS. retired: ids that a record declares it replaced.
-	// The ADR lifecycle prunes a superseded record once its successor lands and
-	// keeps the trace in the successor's `supersedes` (decisions/adrs/README.md),
-	// so a handle naming a pruned id resolves to that declaration rather than to a
-	// file — the record has not lost track of it.
+	// index: what the corpus HAS. highWater: the highest id each store has ever
+	// issued, as far as the corpus can show.
 	index := map[recordRef]schemaRecord{}
-	retired := map[recordRef]bool{}
+	highWater := map[string]int{}
 	for _, r := range records {
 		index[recordRef{r.store.prefix, r.num}] = r
+		if r.num > highWater[r.store.prefix] {
+			highWater[r.store.prefix] = r.num
+		}
 	}
+
+	// retired: ids a record declares it replaced. The ADR lifecycle prunes a
+	// superseded record once its successor lands and keeps the trace in the
+	// successor's `supersedes` (decisions/adrs/README.md), so a handle naming a
+	// pruned id resolves to that declaration rather than to a file — the record
+	// has not lost track of it.
+	//
+	// The declaration is BOUNDED by the store's allocation high-water mark,
+	// because it is otherwise self-attesting: `supersedes: [adr-9999]` would mint
+	// a phantom the rule then accepts in every other record's related_adrs,
+	// silently reopening the very class of reference this rule exists to close. An
+	// id above the high-water mark was never issued, so nothing can have pruned
+	// it, and the declaration itself is reported below.
+	retired := map[recordRef]bool{}
 	for _, r := range records {
-		for _, h := range recordRefsIn(r.fields["supersedes"].value) {
-			retired[h] = true
+		for _, h := range r.refs["supersedes"] {
+			if h.num >= 1 && h.num <= highWater[h.prefix] {
+				retired[h] = true
+			}
 		}
 	}
 
@@ -145,10 +175,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		// retired by the record that replaced it.
 		for _, field := range recordRefFields {
 			f := r.fields[field]
-			if isNull(f.value) {
-				continue
-			}
-			for _, h := range recordRefsIn(f.value) {
+			for _, h := range r.refs[field] {
 				if _, ok := index[h]; ok || retired[h] {
 					continue
 				}
@@ -156,15 +183,30 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 			}
 		}
 
+		// A pruned id must be one the store actually issued. Without this, the
+		// retirement declaration is a blank cheque: any id written here becomes
+		// resolvable everywhere else in the corpus.
+		sup := r.fields["supersedes"]
+		for _, h := range r.refs["supersedes"] {
+			if _, ok := index[h]; ok {
+				continue
+			}
+			if h.num >= 1 && h.num <= highWater[h.prefix] {
+				continue // a plausible pruned id: below the store's high-water mark
+			}
+			add(r.rel, sup.line, "supersedes names '"+h.String()+"', which is neither a record in the corpus nor an id the "+
+				h.prefix+" store has issued (its highest is "+h.prefix+"-"+strconv.Itoa(highWater[h.prefix])+
+				"); a pruned record's id must be one that was allocated")
+		}
+
 		// Supersession, direction A→B: the successor must exist (a live decision is
 		// never a pruned one) and must name this record back.
 		sb := r.fields["superseded_by"]
-		if isNull(sb.value) {
-			continue
-		}
-		targets := recordRefsIn(sb.value)
+		targets := r.refs["superseded_by"]
 		if len(targets) == 0 {
-			add(r.rel, sb.line, "superseded_by '"+sb.value+"' is not a record handle (want adr-N, itd-N, or iss-N)")
+			if !isNull(sb.value) {
+				add(r.rel, sb.line, "superseded_by '"+sb.value+"' is not a record handle (want adr-N, itd-N, or iss-N)")
+			}
 			continue
 		}
 		for _, h := range targets {
@@ -173,7 +215,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 				add(r.rel, sb.line, "superseded_by names '"+h.String()+"', which is not a record in the corpus; a successor decision must be present")
 				continue
 			}
-			if !recordRefsContain(target.fields["supersedes"].value, recordRef{r.store.prefix, r.num}) {
+			if !refsContain(target.refs["supersedes"], recordRef{r.store.prefix, r.num}) {
 				add(r.rel, sb.line, "one-way supersession: this record declares superseded_by '"+h.String()+
 					"' but "+target.rel+" does not list '"+r.handle()+"' in supersedes; both directions must be present")
 			}
@@ -185,15 +227,12 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	// blessing (see above) and has nothing left to answer with.
 	for _, r := range records {
 		sup := r.fields["supersedes"]
-		if isNull(sup.value) {
-			continue
-		}
-		for _, h := range recordRefsIn(sup.value) {
+		for _, h := range r.refs["supersedes"] {
 			target, ok := index[h]
 			if !ok {
 				continue
 			}
-			if !recordRefsContain(target.fields["superseded_by"].value, recordRef{r.store.prefix, r.num}) {
+			if !refsContain(target.refs["superseded_by"], recordRef{r.store.prefix, r.num}) {
 				add(r.rel, sup.line, "one-way supersession: this record declares supersedes '"+h.String()+
 					"' but "+target.rel+" does not carry 'superseded_by: "+r.handle()+"'; both directions must be present")
 			}
@@ -296,12 +335,15 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				if err != nil {
 					return err
 				}
+				lines := strings.Split(string(content), "\n")
+				fields := frontmatterFields(lines)
 				records = append(records, schemaRecord{
 					rel:    rel,
 					store:  store,
 					num:    num,
 					bucket: bucket,
-					fields: frontmatterFields(strings.Split(string(content), "\n")),
+					fields: fields,
+					refs:   recordRefsOf(lines, fields),
 				})
 			}
 			return nil
@@ -309,6 +351,17 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 
 		storeRel := repoRel(repoRoot, storeAbs)
 		if store.buckets == nil {
+			// A flat store declares NO buckets, so every subdirectory of it is
+			// undeclared by definition. Saying nothing here would let a whole
+			// directory of records — with their ids, filenames, and supersessions —
+			// sit one level down where no check in this rule ever reaches them,
+			// which is the exact escape the bucketed branch below exists to close.
+			for _, e := range entries {
+				if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+					add(filepath.Join(storeRel, e.Name()), "the "+store.noun+" store is flat, so subdirectory '"+e.Name()+
+						"' is undeclared; records inside it are read by no rule")
+				}
+			}
 			if err := readBucket(storeAbs, storeRel, ""); err != nil {
 				return nil, nil, err
 			}
@@ -318,6 +371,12 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 		for _, e := range entries {
 			rel := filepath.Join(storeRel, e.Name())
 			if e.IsDir() {
+				// A dot-directory is tooling state (an editor's, a scanner's), never
+				// a lifecycle the record authored — the record's own buckets are all
+				// named, so refusing one would be a blocker over somebody's .vscode.
+				if strings.HasPrefix(e.Name(), ".") {
+					continue
+				}
 				if !declared[e.Name()] {
 					add(rel, "lifecycle directory '"+e.Name()+"' is not a declared "+store.noun+
 						" bucket ("+strings.Join(store.buckets, ", ")+"); an undeclared bucket is a lifecycle state no rule reads")
@@ -342,6 +401,57 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 	return records, out, nil
 }
 
+// recordRefsOf reads the handles of every cross-reference field once per record.
+//
+// YAML spells a list two ways and the record uses both: the inline flow sequence
+// (`supersedes: [adr-14, adr-15]`) and the indented block sequence. The shared
+// frontmatter scanner reads same-line values only — correct for its own job, and
+// the reason a block sequence reaches this rule as an empty string. An empty read
+// is not a harmless degradation HERE: the bidirectional check would report that
+// some OTHER file omits a link that file plainly carries, which is a confident
+// false statement about a record the reader then has to go and disprove. So the
+// block form is folded in at the one place the handles are parsed.
+func recordRefsOf(lines []string, fields map[string]fmField) map[string][]recordRef {
+	refs := make(map[string][]recordRef, len(recordHandleFields))
+	for _, field := range recordHandleFields {
+		f, ok := fields[field]
+		if !ok {
+			continue
+		}
+		value := f.value
+		if strings.TrimSpace(value) == "" {
+			value = blockSequenceAt(lines, f.line)
+		}
+		if hs := recordRefsIn(value); len(hs) > 0 {
+			refs[field] = hs
+		}
+	}
+	return refs
+}
+
+// blockSequenceAt returns the indented `- item` lines that continue a frontmatter
+// key whose own line carries no value, joined so the handle scanner reads them as
+// one value. line is the key's 1-based source line, so the scan starts at the line
+// after it and stops at the first line that is not an indented list item — the
+// next key, the closing delimiter, or the end of the file.
+func blockSequenceAt(lines []string, line int) string {
+	var items []string
+	for i := line; i >= 1 && i < len(lines); i++ {
+		raw := lines[i]
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			break
+		}
+		// An item must be INDENTED under the key: a `- ` at column 0 is a document
+		// -level construct, not this key's list.
+		if raw == trimmed || !strings.HasPrefix(trimmed, "- ") {
+			break
+		}
+		items = append(items, strings.TrimPrefix(trimmed, "- "))
+	}
+	return strings.Join(items, ", ")
+}
+
 // recordRefsIn reads every record handle out of a frontmatter value, tolerating
 // the inline-list, quoted, and bare spellings the record uses interchangeably
 // (`[adr-14, adr-15]`, `["adr-8", "adr-27"]`, `adr-4`).
@@ -360,9 +470,9 @@ func recordRefsIn(value string) []recordRef {
 	return out
 }
 
-// recordRefsContain reports whether a frontmatter value names the given handle.
-func recordRefsContain(value string, want recordRef) bool {
-	for _, h := range recordRefsIn(value) {
+// refsContain reports whether a parsed handle set names the given handle.
+func refsContain(refs []recordRef, want recordRef) bool {
+	for _, h := range refs {
 		if h == want {
 			return true
 		}

@@ -195,6 +195,132 @@ func TestRecordSchemaLifecycleDirectoriesAreDeclared(t *testing.T) {
 	}
 }
 
+// A FLAT store declares no buckets, so any subdirectory of it is undeclared. Left
+// unsaid, a directory one level down hides every record inside it from every check
+// in the rule — the same escape the bucketed branch closes, in the branch that
+// looked like it had nothing to close.
+func TestRecordSchemaFlatStoreHasNoSubdirectories(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0013-memory.md", "---\nid: adr-13\n---\n# ADR-13\n")
+	// Three defects, each of a class the rule checks, all one directory down.
+	writeFile(t, root, adrs+"/archive/0012-issue-ledger.md", "---\nid: adr-21\nsuperseded_by: adr-9999\n---\n# ADR-12\n")
+	writeFile(t, root, adrs+"/archive/loose-notes.md", "# notes\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(adrs, "archive"), ruleRecordSchema, "store is flat, so subdirectory 'archive' is undeclared") {
+		t.Fatalf("expected an undeclared-subdirectory finding on the flat store: %+v", fs)
+	}
+}
+
+// The retirement escape hatch is bounded by what the store has actually issued.
+// Unbounded it is self-attesting: one record naming a phantom in `supersedes`
+// would make that phantom resolvable in every other record's cross-references.
+func TestRecordSchemaRetirementIsBoundedByAllocation(t *testing.T) {
+	adrs := "rec/decisions/adrs"
+
+	t.Run("an id the store never issued", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0025-host-delegated.md", "---\nid: adr-25\nsupersedes: [adr-9999]\nrelated_adrs: [adr-9999]\n---\n# ADR-25\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 2 {
+			t.Fatalf("expected 2 findings (the declaration and the reference it must not legitimise), got %d: %+v", n, fs)
+		}
+		if !findingWith(fs, filepath.Join(adrs, "0025-host-delegated.md"), ruleRecordSchema, "nor an id the adr store has issued") {
+			t.Errorf("expected the supersedes declaration itself to be refused: %+v", fs)
+		}
+		if !findingWith(fs, filepath.Join(adrs, "0025-host-delegated.md"), ruleRecordSchema, "related_adrs names 'adr-9999'") {
+			t.Errorf("expected the cross-reference to stay unresolved: %+v", fs)
+		}
+	})
+
+	t.Run("a genuinely pruned id", func(t *testing.T) {
+		root := t.TempDir()
+		// adr-8 has no file: it was pruned when adr-25 landed. adr-25 says so, and
+		// 8 is below the store's high-water mark, so citing it elsewhere resolves.
+		writeFile(t, root, adrs+"/0025-host-delegated.md", "---\nid: adr-25\nsupersedes: [adr-8]\n---\n# ADR-25\n")
+		writeFile(t, root, "rec/intents/drafts/itd-17-tracking.md", "---\nid: itd-17\nkind: null\nspec_id: null\nrelated_adrs: [adr-8]\n---\n# draft\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("a pruned id below the high-water mark must resolve, got %d: %+v", n, fs)
+		}
+	})
+}
+
+// YAML spells a list two ways and the record uses both. Reading only the same-line
+// form makes a block sequence look empty — and an empty read here does not merely
+// under-report, it makes the bidirectional check assert that ANOTHER file omits a
+// link that file plainly carries.
+func TestRecordSchemaReadsBlockSequences(t *testing.T) {
+	adrs := "rec/decisions/adrs"
+
+	t.Run("a linked pair written in block form is clean", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-12\nsuperseded_by: adr-32\n---\n# ADR-12\n")
+		writeFile(t, root, adrs+"/0032-working-tier.md", "---\nid: adr-32\nsupersedes:\n  - adr-12\nrelated_adrs:\n  - adr-12\n---\n# ADR-32\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("block-sequence links must read as links, got %d: %+v", n, fs)
+		}
+	})
+
+	t.Run("a one-way pair written in block form is still caught", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-12\nsuperseded_by:\n  - adr-32\n---\n# ADR-12\n")
+		writeFile(t, root, adrs+"/0032-working-tier.md", "---\nid: adr-32\nsupersedes: null\n---\n# ADR-32\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !findingWith(fs, filepath.Join(adrs, "0012-issue-ledger.md"), ruleRecordSchema, "one-way supersession") {
+			t.Fatalf("expected the one-way finding to survive the block spelling: %+v", fs)
+		}
+	})
+
+	t.Run("an unrelated block key does not leak into the next", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "rec/intents/superseded/itd-31-cross-doc.md",
+			"---\nid: itd-31\nkind: standalone\nreclassification_history:\n  - { date: 2026-05-27, reason: \"absorbed by itd-48\" }\nsupersedes: null\nsuperseded_by: itd-48\n---\n# x\n")
+		writeFile(t, root, "rec/intents/shipped/itd-48-successor.md", "---\nid: itd-48\nkind: standalone\nspec_id: spc-2-x\nsupersedes:\n  - itd-31\n---\n# ok\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("expected a clean pair, got %d: %+v", n, fs)
+		}
+	})
+}
+
+// A dot-directory is tooling state, not a lifecycle the record authored, so it is
+// not an undeclared bucket.
+func TestRecordSchemaIgnoresDotDirectories(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/intents/shipped/itd-1-good.md", "---\nid: itd-1\nkind: standalone\nspec_id: spc-1-x\n---\n# ok\n")
+	writeFile(t, root, "rec/intents/.obsidian/workspace.json", "{}\n")
+	writeFile(t, root, "rec/decisions/adrs/.vscode/settings.json", "{}\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("dot-directories are not undeclared buckets, got %d: %+v", n, fs)
+	}
+}
+
 // Corpus fixture (c)+(d): the superseded/ exemption is a CONTENT exemption. A
 // record in an exempt bucket still answers the schema rules — which is the only
 // reason the missing supersession on the two real superseded intents is visible at
