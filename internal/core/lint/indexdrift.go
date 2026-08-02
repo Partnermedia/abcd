@@ -119,21 +119,33 @@ func indexRegion(lines []string, id string, entryRe *regexp.Regexp) ([]listedEnt
 	var entries []listedEntry
 	start, open := 0, false
 	for i, line := range lines {
+		// scan is the slice of the line that is inside the region: from just
+		// after an opening marker found on this line (a marker shares its
+		// line with entries when the region opens mid-paragraph), up to just
+		// before a closing marker found on this line (the mirror case). A
+		// token outside that slice is outside the region and must not count.
+		scan := line
 		if !open {
-			if m := indexOpenRe.FindStringSubmatch(line); m != nil && m[1] == id {
-				open, start = true, i+1
+			loc := indexOpenRe.FindStringSubmatchIndex(line)
+			if loc == nil || line[loc[2]:loc[3]] != id {
+				continue
 			}
-			continue
+			open, start = true, i+1
+			scan = line[loc[1]:]
 		}
-		if indexCloseRe.MatchString(line) {
-			return entries, start, true
+		closed := false
+		if loc := indexCloseRe.FindStringIndex(scan); loc != nil {
+			scan, closed = scan[:loc[0]], true
 		}
-		for _, m := range indexTokenRe.FindAllStringSubmatch(line, -1) {
+		for _, m := range indexTokenRe.FindAllStringSubmatch(scan, -1) {
 			tok := strings.TrimSpace(m[1])
 			if !entryRe.MatchString(tok) {
 				continue
 			}
 			entries = append(entries, listedEntry{name: strings.TrimSuffix(tok, "/"), line: i + 1})
+		}
+		if closed {
+			return entries, start, true
 		}
 	}
 	// An unclosed region is treated as running to the end of the document: the

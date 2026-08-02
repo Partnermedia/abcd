@@ -125,6 +125,57 @@ func TestIndexDriftAbsentCatchesShippedSeam(t *testing.T) {
 	}
 }
 
+// TestIndexDriftEntriesOnMarkerLines pins the region-boundary scan: an entry
+// sharing a line with the opening or closing marker is still inside the
+// region and must be parsed. A prior version of the parser returned as soon as
+// it matched the closing marker (dropping any entries before it on that line)
+// and skipped straight past the opening marker to the next line (dropping any
+// entries after it on that line) — both silently produce wrong results, a
+// spurious blocker on a correct document in `exact` mode or a disarmed check
+// in `absent` mode.
+func TestIndexDriftEntriesOnMarkerLines(t *testing.T) {
+	root := t.TempDir()
+	for _, verb := range []string{"alpha", "beta"} {
+		writeFile(t, root, filepath.Join("commands", "abcd", verb+".md"), "# "+verb+"\n")
+	}
+
+	t.Run("entry on the opening marker line", func(t *testing.T) {
+		writeFile(t, root, filepath.Join("commands", "README.md"), strings.Join([]string{
+			"# commands/",
+			"",
+			"<!-- index: commands --> `alpha`,",
+			"`beta`.",
+			"<!-- /index -->",
+		}, "\n")+"\n")
+
+		fs, err := Lint(indexCfg(verbSpec()), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "index_drift"); n != 0 {
+			t.Fatalf("expected the entry sharing the opening marker's line to be read as listed, got %d finding(s): %+v", n, fs)
+		}
+	})
+
+	t.Run("entry on the closing marker line", func(t *testing.T) {
+		writeFile(t, root, filepath.Join("commands", "README.md"), strings.Join([]string{
+			"# commands/",
+			"",
+			"<!-- index: commands -->",
+			"`alpha`,",
+			"`beta`. <!-- /index -->",
+		}, "\n")+"\n")
+
+		fs, err := Lint(indexCfg(verbSpec()), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, "index_drift"); n != 0 {
+			t.Fatalf("expected the entry sharing the closing marker's line to be read as listed, got %d finding(s): %+v", n, fs)
+		}
+	})
+}
+
 // TestIndexDriftFailsClosed covers the two ways a gate could be silently
 // disarmed: the region deleted from the document while the config still claims
 // it, and a region that parses to no entries at all.
