@@ -37,8 +37,10 @@
     "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands/abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"},
     "index_drift": {"enabled": true, "severity": "blocker", "indexes": [
       {"id": "commands", "doc": "commands/README.md", "dir": "commands/abcd", "entry": "^[a-z][a-z-]*$", "suffix": ".md"},
-      {"id": "planned-seams", "doc": "internal/README.md", "dir": "internal", "entry": "^[a-z][a-z0-9-]*(/[a-z0-9-]+)*/$", "mode": "absent"}
+      {"id": "planned-seams", "doc": "internal/README.md", "dir": "internal", "entry": "^[a-z][a-z0-9-]*(/[a-z0-9-]+)*/$", "mode": "absent"},
+      {"id": "later-phase-intents", "doc": ".abcd/development/brief/06-delivery/03-out-of-scope.md", "dir": ".abcd/development/intents/drafts", "entry": "^itd-[0-9]+$", "suffix": ".md", "dir_entry": "^(itd-[0-9]+)"}
     ]},
+    "delivery_state": {"enabled": true, "severity": "blocker", "changelog": "CHANGELOG.md", "intents_root": ".abcd/development/intents"},
     "receipt_gate": {"enabled": false, "severity": "blocker", "receipts_dir": ".abcd/work/reviews", "required_gates": ["docs-currency-reviewer", "iss35-brief-surface-crosscheck"]},
     "gate_lockstep": {"enabled": true, "severity": "blocker", "runbook": ".abcd/development/release-gate/README.md", "workflow": ".github/workflows/release.yml", "job": "verify", "ignore_steps": ["Check out the pushed commit", "Set up Go"], "min_gates": 9},
     "forbidden_synonyms": {"enabled": true, "severity": "blocker", "glossary_dir": ".abcd/development/brief/glossary", "enforce": ["epic"], "exempt_prefixes": [".abcd/development/research/", ".abcd/development/decisions/", ".abcd/development/plans/", ".abcd/development/intents/shipped/", ".abcd/development/intents/superseded/"], "allow_context": ["epic-review", "epic->spec", "epic→spec", "epic-to-spec"]}

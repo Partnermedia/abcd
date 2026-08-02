@@ -60,6 +60,8 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 
 **Directory location is the single source of truth for lifecycle state across all kinds.** Standalone and bundle-member intents derive state from `drafts/` / `planned/` / `shipped/`; disciplines derive state from `disciplines/` / `superseded/`. No intent has a `status` field that could disagree with its directory; the record lint enforces the contract.
 
+**Delivered capability is represented by the intent leaving `drafts/` — nothing else says it.** An intent in `drafts/` is a captured idea nobody has committed to build, so no other document may report it as delivered: the CHANGELOG credits an intent only where the tree can back the claim. Two consequences follow, and the `delivery_state` record-lint rule holds both. An intent whose capability ships whole leaves `drafts/` on the ordinary path (`plan` mints or links its spec, `ship` moves it), and until it does, the shipment is only half-recorded. An intent whose capability ships in *part* stays in `drafts/` and is not cited at all — the entry describes what shipped without naming it, because an intent is delivered whole or not at all ([Split-the-intent doctrine](#bidirectional-link-convention)) and a partial citation reads as a promotion that never happened.
+
 ---
 
 ## Lifecycle (mostly automatic, with deliberate manual steps)

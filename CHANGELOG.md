@@ -12,6 +12,35 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`delivery_state` — the changelog cannot credit an intent the record calls
+  unbuilt** (iss-41). An intent in `drafts/` is a captured idea nobody has
+  committed to build, so the intent tree and a delivery entry citing it say
+  opposite things about the same work — and the tree is the side nobody re-reads.
+  The rule reads each version entry's delivery sections — `Added` and `Changed`,
+  plus any heading a repo names in `delivery_sections`, which is unioned with
+  those rather than substituted for them so a config can widen the gate but never
+  narrow it — and blocks any `itd-N` citation whose intent still sits in
+  `drafts/`. Non-delivery sections are out of scope on purpose: an id
+  under `Fixed` is normally provenance for a defect — which draft two branches
+  minted at once — not a claim that the intent is built. Its two remedies are the
+  two truths a finding can be reporting: the intent shipped whole and was never
+  promoted out of `drafts/`, or the entry credits an intent for less than it
+  promises, in which case it describes the capability without the citation, since
+  an intent is delivered whole or not at all. It fails closed on the three ways an
+  armed gate could check nothing — no changelog to read, no intents store to
+  resolve against, and a store holding none of the lifecycle buckets, which is
+  what a root pointed one level too deep looks like and reads exactly like a clean
+  corpus. Any abcd-managed repo enables it by declaring its own `changelog` and
+  `intents_root` in `.abcd/record-lint.json`.
+- **`index_drift` gains `dir_entry`, so a listing can enumerate records by id.**
+  The rule compared a document's entries against whole filenames, which only ever
+  agreed when the document transcribed slugs — a listing nobody writes by hand.
+  `dir_entry` is the mirror of `entry` on the directory side: a regexp that
+  reduces each file's stem to the part the document enumerates — a record's id
+  rather than its id-plus-slug filename — and drops any stem it does not
+  describe. That is what lets the brief's later-phase list be gated by the same
+  one rule instead of a second one shaped like it. It is rejected in `absent`
+  mode, which resolves listed paths rather than reading a directory.
 - **`record_schema` — the design record is checked across its stores, not just
   inside each one** (iss-39). Every existing record rule asks a question about one
   store: is this intent's bucket schema right, does this spec agree with its
@@ -454,6 +483,23 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The record can say what has been delivered, and the brief's later-phase list
+  is derived again** (iss-41). Two entries credited an intent that never left the
+  uncommitted bench: the v0.1.0 `abcd docs lint` entry cited `itd-60`, whose
+  deterministic layer shipped while its semantic layer is still five open
+  questions, and the v0.2.0 `abcd audit` entry cited `itd-85`, which shipped
+  whole and was never promoted. Both entries now describe the delivered
+  capability without the citation, and `intents/README.md` states the rule the
+  new `delivery_state` gate holds: leaving `drafts/` is what represents delivery,
+  and nothing else does. `itd-85`'s missing promotion is `iss-180` — it is
+  blocked on the `shipped/` schema, which wants a spec id the audit verb has
+  never had. The brief's canonical later-phase list, which claimed to be derived
+  from `drafts/` and not hand-counted, had drifted nineteen entries: three intents
+  it still listed had moved to `planned/`, `shipped/`, and `superseded/`, and
+  sixteen captures since the last hand edit were missing. It is regenerated and
+  now sits inside an `index_drift` marked region, so the claim is enforced rather
+  than repeated. The four later-phase items that never had an intent id move out
+  of the derived list, which could not have contained them.
 - **One canonical glossary, and its index is derived** (iss-40). The record held
   two artefacts each calling itself the glossary: `.abcd/development/brief/glossary/`,
   a directory of per-term files with the frontmatter the `GL002` forbidden-synonym
@@ -1517,7 +1563,7 @@ called out in a **Breaking** section.
   any error — so it gates CI as well as onboarding. It answers a different
   question from `abcd ahoy doctor`: `doctor` is tool-setup health, `audit` is
   repo conformance. `/abcd:prepare-this-repo` now runs `abcd audit` for its
-  Phase 2 gap report instead of hand-auditing (itd-85, iss-86).
+  Phase 2 gap report instead of hand-auditing (iss-86).
 
 ### Fixed
 
@@ -1803,9 +1849,9 @@ a markdown plugin surface that shells out to it.
   gitignored transcript store (`list`, `show`, and a fail-closed `capture` write
   path); `abcd capture` is a directory-as-status issue ledger; `abcd memory`
   provides deterministic ingest / ask / lint.
-- `abcd docs lint` (itd-60 layer 1) — a deterministic docs-currency gate over
-  `docs/` and the repo root: change-narration in a doc body, a broken relative
-  link, or a stray top-level markdown file each fails the gate.
+- `abcd docs lint` — a deterministic docs-currency gate over `docs/` and the repo
+  root: change-narration in a doc body, a broken relative link, or a stray
+  top-level markdown file each fails the gate.
 - `record-lint` — a deterministic drift gate for the `.abcd/development` design
   record (banned tokens, git-metadata, link resolution, intent lifecycle), wired
   blocking into CI and the pre-push preflight.
