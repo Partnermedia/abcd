@@ -2,6 +2,7 @@ package lint
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -236,14 +237,18 @@ func TestIndexDriftFailsClosed(t *testing.T) {
 func TestIndexDriftDirEntryComparesByRecordID(t *testing.T) {
 	root := t.TempDir()
 	drafts := filepath.Join(".abcd", "development", "intents", "drafts")
-	for _, f := range []string{"itd-8-with-code-bundling.md", "itd-60-doc-fidelity-anti-drift.md", "itd-76-source-provenance-ledger.md"} {
+	// itd-108.md carries no slug. The canonical intent-filename rule accepts it,
+	// so an id-reduction pattern that does not is a gate that goes quiet on a
+	// schema-legal record instead of firing on it.
+	for _, f := range []string{"itd-8-with-code-bundling.md", "itd-60-doc-fidelity-anti-drift.md", "itd-76-source-provenance-ledger.md", "itd-108.md"} {
 		writeFile(t, root, filepath.Join(drafts, f), "# fixture\n")
 	}
 	writeFile(t, root, filepath.Join(drafts, "README.md"), "# drafts\n")
 
 	doc := filepath.Join(".abcd", "development", "brief", "06-delivery", "03-out-of-scope.md")
-	// Lists itd-47 (since moved to superseded/), omits itd-76 (a later capture),
-	// and carries backticked prose the entry pattern must not read as an id.
+	// Lists itd-47 (since moved to superseded/), omits itd-76 and itd-108 (later
+	// captures), and carries backticked prose the entry pattern must not read as
+	// an id.
 	writeFile(t, root, doc, strings.Join([]string{
 		"# Out of Phase Scope",
 		"",
@@ -256,20 +261,58 @@ func TestIndexDriftDirEntryComparesByRecordID(t *testing.T) {
 
 	spec := IndexSpec{
 		ID: "later-phase-intents", Doc: doc, Dir: ".abcd/development/intents/drafts",
-		Entry: `^itd-[0-9]+$`, Suffix: ".md", DirEntry: `^(itd-[0-9]+)-`,
+		Entry: `^itd-[0-9]+$`, Suffix: ".md", DirEntry: `^(itd-[0-9]+)`,
 	}
 	fs, err := Lint(indexCfg(spec), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := countRule(fs, "index_drift"); n != 2 {
-		t.Fatalf("expected 2 index_drift findings (1 departed + 1 omitted), got %d: %+v", n, fs)
+	if n := countRule(fs, "index_drift"); n != 3 {
+		t.Fatalf("expected 3 index_drift findings (1 departed + 2 omitted), got %d: %+v", n, fs)
 	}
-	if !messageContains(fs, "`itd-47`") || !messageContains(fs, "`itd-76`") {
-		t.Errorf("expected findings naming the departed and the omitted id; got %+v", fs)
+	for _, want := range []string{"`itd-47`", "`itd-76`", "`itd-108`"} {
+		if !messageContains(fs, want) {
+			t.Errorf("expected a finding naming %s; got %+v", want, fs)
+		}
 	}
 	if messageContains(fs, "with-code") {
 		t.Errorf("expected the comparison to run on ids, not slugs; got %+v", fs)
+	}
+}
+
+// TestLaterPhaseIndexCoversEveryLegalIntentFilename is the wiring test between
+// the shipped config and the canonical filename rule. The later-phase index
+// enumerates the drafts bench by id, so its dir_entry pattern must reduce every
+// filename intentFileRe accepts; one it does not match is silently dropped from
+// the comparison, and the gate that claims "the filesystem is the list" goes
+// quiet on exactly the record it was meant to catch.
+func TestLaterPhaseIndexCoversEveryLegalIntentFilename(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..")
+	cfg, err := LoadConfig(filepath.Join(repoRoot, ".abcd", "record-lint.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec *IndexSpec
+	for i := range cfg.Rules["index_drift"].Indexes {
+		if s := cfg.Rules["index_drift"].Indexes[i]; s.ID == "later-phase-intents" {
+			spec = &s
+			break
+		}
+	}
+	if spec == nil {
+		t.Fatal("record-lint.json must declare the later-phase-intents index (iss-41)")
+	}
+	re, err := regexp.Compile(spec.DirEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"itd-8-with-code-bundling", "itd-108", "itd-1000-a-long-slug-here"} {
+		if !intentFileRe.MatchString(name + ".md") {
+			t.Fatalf("fixture %s.md is not a legal intent filename; fix the fixture", name)
+		}
+		if got := indexDirName(name, re); got != intentIDRe.FindString(name) {
+			t.Errorf("dir_entry reduces %q to %q; want the canonical id %q", name, got, intentIDRe.FindString(name))
+		}
 	}
 }
 

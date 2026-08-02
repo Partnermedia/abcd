@@ -80,11 +80,14 @@ func TestDeliveryStateIgnoresNonDeliverySections(t *testing.T) {
 	}
 }
 
-// TestDeliveryStateSectionsAreConfigurable proves the widening knob is wired:
-// a repo that files delivery under its own heading gates it by naming it.
-func TestDeliveryStateSectionsAreConfigurable(t *testing.T) {
+// TestDeliveryStateSectionsWiden proves the knob only ever ADDS: a repo that
+// files delivery under its own heading gates it by naming it, and the built-in
+// Added/Changed keep gating alongside. A configured list that SUBSTITUTED for the
+// defaults would let one added heading quietly retire the two that matter.
+func TestDeliveryStateSectionsWiden(t *testing.T) {
 	root := t.TempDir()
 	writeIntent(t, root, "drafts", "itd-85-audit-verb.md")
+	writeIntent(t, root, "drafts", "itd-60-doc-fidelity-anti-drift.md")
 	writeFile(t, root, "CHANGELOG.md", strings.Join([]string{
 		"# Changelog",
 		"",
@@ -93,6 +96,10 @@ func TestDeliveryStateSectionsAreConfigurable(t *testing.T) {
 		"### Shipped",
 		"",
 		"- `abcd audit` — a read-only repo-conformance check (itd-85).",
+		"",
+		"### Added",
+		"",
+		"- `abcd docs lint` — a deterministic docs-currency gate (itd-60).",
 	}, "\n")+"\n")
 
 	cfg := deliveryCfg()
@@ -104,8 +111,14 @@ func TestDeliveryStateSectionsAreConfigurable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := countRule(fs, ruleDeliveryState); n != 1 {
-		t.Fatalf("expected the configured section to gate, got %d: %+v", n, fs)
+	if n := countRule(fs, ruleDeliveryState); n != 2 {
+		t.Fatalf("expected the configured section AND the built-in defaults to gate, got %d: %+v", n, fs)
+	}
+	if !messageContains(fs, "itd-85") {
+		t.Errorf("expected the configured section to gate; got %+v", fs)
+	}
+	if !messageContains(fs, "itd-60") {
+		t.Errorf("expected the built-in Added section to keep gating; got %+v", fs)
 	}
 }
 
@@ -180,6 +193,24 @@ func TestDeliveryStateFailsClosed(t *testing.T) {
 		writeFile(t, root, "CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- itd-60.\n")
 		if _, err := Lint(deliveryCfg(), root); err == nil {
 			t.Fatal("expected an error when the configured intents store is absent")
+		}
+	})
+
+	// A root pointed one level too deep — at a bucket rather than at the store —
+	// exists, reads cleanly, and resolves every citation to nothing. That is the
+	// shape a silent pass takes, so it is the shape the guard must catch.
+	t.Run("intents store holds no lifecycle bucket", func(t *testing.T) {
+		root := t.TempDir()
+		writeIntent(t, root, "drafts", "itd-60-doc-fidelity-anti-drift.md")
+		writeFile(t, root, "CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- itd-60.\n")
+
+		cfg := deliveryCfg()
+		rc := cfg.Rules[ruleDeliveryState]
+		rc.IntentsRoot = ".abcd/development/intents/drafts"
+		cfg.Rules[ruleDeliveryState] = rc
+
+		if _, err := Lint(cfg, root); err == nil {
+			t.Fatal("expected an error when the configured intents store holds no lifecycle bucket")
 		}
 	})
 }

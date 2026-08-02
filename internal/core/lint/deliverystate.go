@@ -44,8 +44,9 @@ const deliveryStateDraftBucket = "drafts"
 // without the citation (an intent is delivered whole or not at all, per the
 // split-the-intent doctrine).
 //
-// It fails closed on the two ways the gate could be armed and check nothing: a
-// changelog it cannot read, and a configured intents store that is not there.
+// It fails closed on the three ways the gate could be armed and check nothing: a
+// changelog it cannot read, a configured intents store that is not there, and one
+// that is there but holds no lifecycle bucket to resolve a citation against.
 func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	changelog := cfg.Changelog
 	if changelog == "" {
@@ -55,12 +56,15 @@ func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	if intentsRoot == "" {
 		intentsRoot = filepath.Join(".abcd", "development", "intents")
 	}
+	// The configured list WIDENS the defaults rather than replacing them: a repo
+	// naming its own delivery heading is adding a place capability is announced,
+	// never revoking Added/Changed, and a config that could silently narrow the
+	// gate is a config that can silently disarm it.
 	sections := map[string]bool{}
-	names := cfg.DeliverySections
-	if len(names) == 0 {
-		names = deliveryStateSections
+	for _, s := range deliveryStateSections {
+		sections[strings.ToLower(strings.TrimSpace(s))] = true
 	}
-	for _, s := range names {
+	for _, s := range cfg.DeliverySections {
 		sections[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 
@@ -68,9 +72,8 @@ func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	if err != nil {
 		return nil, &configError{ruleDeliveryState + ": reading " + changelog + ": " + err.Error()}
 	}
-	intentsAbs := filepath.Join(repoRoot, filepath.FromSlash(intentsRoot))
-	if _, err := os.Stat(intentsAbs); err != nil {
-		return nil, &configError{ruleDeliveryState + ": reading the intents store " + intentsRoot + ": " + err.Error()}
+	if err := requireIntentBuckets(repoRoot, intentsRoot); err != nil {
+		return nil, err
 	}
 	tree, err := scanIntentTree(repoRoot, repoRoot, filepath.FromSlash(intentsRoot))
 	if err != nil {
@@ -113,6 +116,26 @@ func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// requireIntentBuckets is the third way an armed gate could check nothing: a root
+// that exists but holds no lifecycle bucket resolves every citation to "found
+// nowhere", which reads exactly like a clean corpus. The likeliest cause is a
+// root pointed one level too deep — at a bucket rather than at the store — so the
+// state is reported as the misconfiguration it is rather than as a pass.
+func requireIntentBuckets(repoRoot, intentsRoot string) error {
+	ents, err := os.ReadDir(filepath.Join(repoRoot, filepath.FromSlash(intentsRoot)))
+	if err != nil {
+		return &configError{ruleDeliveryState + ": reading the intents store " + intentsRoot + ": " + err.Error()}
+	}
+	for _, e := range ents {
+		if e.IsDir() && intentBuckets[e.Name()] {
+			return nil
+		}
+	}
+	return &configError{ruleDeliveryState + ": the intents store " + intentsRoot +
+		" holds none of the lifecycle buckets " + strings.Join(intentBucketNames, "/") +
+		"; every citation would resolve to nothing and the gate would pass on an empty corpus"}
 }
 
 // changelogIntentCitations returns the distinct intent ids a line cites, in the

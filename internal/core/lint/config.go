@@ -197,9 +197,10 @@ type RuleConfig struct {
 	// the lifecycle bucket holding it and the changelog it reads is repo-scoped.
 	// Default .abcd/development/intents.
 	IntentsRoot string `json:"intents_root"`
-	// DeliverySections are the changelog change-type headings delivery_state reads
-	// as delivery claims. Empty means the default (deliveryStateSections); a repo
-	// widens the gate by naming more of its own headings here.
+	// DeliverySections are additional changelog change-type headings delivery_state
+	// reads as delivery claims. They are UNIONED with deliveryStateSections, never
+	// substituted for them: a repo names its own headings here to widen the gate,
+	// and a config that could narrow it could silently disarm it.
 	DeliverySections []string `json:"delivery_sections"`
 }
 

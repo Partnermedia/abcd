@@ -16,18 +16,22 @@ called out in a **Breaking** section.
   unbuilt** (iss-41). An intent in `drafts/` is a captured idea nobody has
   committed to build, so the intent tree and a delivery entry citing it say
   opposite things about the same work — and the tree is the side nobody re-reads.
-  The rule reads each version entry's delivery sections (`Added`, `Changed` by
-  default, widened by config) and blocks any `itd-N` citation whose intent still
-  sits in `drafts/`. Non-delivery sections are out of scope on purpose: an id
+  The rule reads each version entry's delivery sections — `Added` and `Changed`,
+  plus any heading a repo names in `delivery_sections`, which is unioned with
+  those rather than substituted for them so a config can widen the gate but never
+  narrow it — and blocks any `itd-N` citation whose intent still sits in
+  `drafts/`. Non-delivery sections are out of scope on purpose: an id
   under `Fixed` is normally provenance for a defect — which draft two branches
   minted at once — not a claim that the intent is built. Its two remedies are the
   two truths a finding can be reporting: the intent shipped whole and was never
   promoted out of `drafts/`, or the entry credits an intent for less than it
   promises, in which case it describes the capability without the citation, since
-  an intent is delivered whole or not at all. It fails closed on the two ways an
-  armed gate could check nothing — no changelog to read, and no intents store to
-  resolve against. Any abcd-managed repo enables it by declaring its own
-  `changelog` and `intents_root` in `.abcd/record-lint.json`.
+  an intent is delivered whole or not at all. It fails closed on the three ways an
+  armed gate could check nothing — no changelog to read, no intents store to
+  resolve against, and a store holding none of the lifecycle buckets, which is
+  what a root pointed one level too deep looks like and reads exactly like a clean
+  corpus. Any abcd-managed repo enables it by declaring its own `changelog` and
+  `intents_root` in `.abcd/record-lint.json`.
 - **`index_drift` gains `dir_entry`, so a listing can enumerate records by id.**
   The rule compared a document's entries against whole filenames, which only ever
   agreed when the document transcribed slugs — a listing nobody writes by hand.
