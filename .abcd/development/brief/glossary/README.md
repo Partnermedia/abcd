@@ -2,24 +2,33 @@
 
 <!-- Adapted from mattpocock/skills (MIT). See README Acknowledgements. -->
 
-This directory contains the canonical terminology glossary for the abcd project. Each term is a
-Markdown file with YAML frontmatter that defines the term's meaning, bounded context, and usage
-constraints.
+This directory is the abcd project's **one canonical glossary**. Each term is a Markdown file with
+YAML frontmatter that defines the term's meaning, bounded context, and usage constraints. Cross-cutting
+vocabulary — the nouns the record uses in prose, with their aliases and forbidden synonyms — is
+registered here and nowhere else.
+
+The neighbouring registry in [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md) is a
+different artefact: it registers the maritime naming convention and the controlled enums (command
+names, closed-vocabulary field values) that individual specs pin. It is not a glossary and holds no
+term files.
 
 ---
 
 ## Format Specification
 
-Every term file MUST begin with a YAML frontmatter block (`---` delimiters) conforming to
-the terminology schema (`internal/core/schema/terminology.schema.json`). The body of the file (below the closing `---`)
+Every term file MUST begin with a YAML frontmatter block (`---` delimiters), optionally preceded by a
+whole-line HTML comment (the attribution header). The body of the file (below the closing `---`)
 provides narrative context, examples, and cross-references.
+
+The field tables below are the source of truth for the frontmatter shape; abcd ships no separate
+JSON-schema file for it.
 
 ### Required Frontmatter Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `term` | string | Canonical lowercase name (no spaces) |
-| `bounded_context` | string | Lowercase identifier matching the parent directory name. Current contexts: `core`, `interview`. New contexts are added by creating a new subdirectory — no schema edit needed. |
+| `bounded_context` | string | Lowercase identifier matching the parent directory name. The current contexts are the subdirectories the [Term Index](#term-index) lists — a new context is a new subdirectory, nothing else to edit. |
 | `definition` | string (≥10 chars) | Precise, unambiguous definition |
 | `aliases` | array | Acceptable alternative names |
 | `forbidden_synonyms` | array | Words that MUST NOT substitute for this term |
@@ -46,42 +55,58 @@ provides narrative context, examples, and cross-references.
 
 ## Directory Layout
 
+The glossary lives at `.abcd/development/brief/glossary/` (the home, per adr-30). The tree below is
+rendered from the directory itself — see [Enforcement](#enforcement).
+
+<!-- BEGIN GENERATED: glossary-layout -->
 ```
-glossary/              ← .abcd/development/brief/glossary/ (the home, per adr-30)
-├── README.md          ← this file (format spec + index)
-├── _template.md       ← copy this when adding new terms
-├── core/              ← terms that apply across all abcd bounded contexts
+glossary/
+├── README.md
+├── _template.md
+├── core/
+│   ├── README.md
 │   ├── brief.md
+│   ├── disembark.md
 │   ├── intent.md
-│   ├── spec.md
+│   ├── lifeboat.md
 │   ├── oracle.md
 │   ├── persona.md
 │   ├── phase.md
-│   ├── voyage.md
+│   ├── spec.md
 │   ├── transport.md
-│   ├── lifeboat.md
-│   └── disembark.md
-└── interview/         ← terms specific to the grill/interview sub-verb
-    ├── session.md
-    └── embark.md
+│   └── voyage.md
+├── distribution/
+│   ├── README.md
+│   ├── end-user.md
+│   ├── release.md
+│   └── version.md
+└── interview/
+    ├── README.md
+    ├── embark.md
+    └── session.md
 ```
+<!-- END GENERATED: glossary-layout -->
 
 ---
 
-## Validation
+## Enforcement
 
-The terminology lint (`internal/core/lint`) validates the term files against the
-schema. Run it via the abcd CLI over the glossary directory to check every term:
+Two mechanical checks read this directory. Neither is a full schema validator — the field tables
+above are the shape's specification, and conformance to them is a review responsibility.
 
-```bash
-abcd lint terminology .abcd/development/brief/glossary/
-```
-
-Or over a single term file:
-
-```bash
-abcd lint terminology .abcd/development/brief/glossary/core/brief.md
-```
+- **`GL002` forbidden synonyms** (`internal/core/lint`, run by the record-lint gate — `go run
+  ./cmd/record-lint`). The rule walks this directory as the single source of truth for what a
+  forbidden synonym is, then flags live prose that substitutes an *enforced* synonym for its
+  canonical term. Enforcement is a configured subset of the declared synonyms, because most of them
+  are common English words: a repo opts words in through the `forbidden_synonyms` rule in its
+  `.abcd/record-lint.json`, and a word the glossary does not forbid is refused as a configuration
+  error. This repo currently enforces one — `epic` (itd-43) — via that rule's `enforce` list.
+- **The index drift gate** (`internal/core/glossary`, run by `go test ./internal/core/glossary/`).
+  The Directory Layout and Term Index blocks above and below are rendered from the term files; the
+  test fails the build when the committed README no longer matches what the directory holds. A term
+  file that lands without an index row, or a bounded context that never reaches the index, is a build
+  failure rather than a silent omission. Regenerate by copying the rendered block the failing test
+  prints.
 
 ---
 
@@ -89,15 +114,16 @@ abcd lint terminology .abcd/development/brief/glossary/core/brief.md
 
 ### Manually
 
-1. Copy `_template.md` to the appropriate subdirectory (`core/`, `interview/`, or a new context directory you create).
+1. Copy `_template.md` to the appropriate subdirectory (see the [Term Index](#term-index) for the current contexts, or create a new context directory).
 2. Fill in all required frontmatter fields.
 3. Write a narrative body below the closing `---`.
-4. Run the linter to verify the file passes validation.
-5. Add the term to the index table below.
+4. Run `go run ./cmd/record-lint` and `go test ./internal/core/glossary/`.
+5. Copy the rendered blocks the drift gate prints into the generated regions above and below — the
+   index is derived from the term files, never hand-typed.
 
 ### Via `/abcd:intent grill` (glossary-aware mode)
 
-When a project has this `terminology/` directory, `/abcd:intent grill` enters
+When a project has this glossary directory, `/abcd:intent grill` enters
 **glossary-aware mode** and can write new term files inline during the grill session.
 
 **How grill writes back:**
@@ -105,7 +131,7 @@ When a project has this `terminology/` directory, `/abcd:intent grill` enters
 - When the interview surfaces a new noun the user wants to pin, grill offers to write it
   immediately (never batched to the end of the session — per Pocock's `/grill-with-docs`
   pattern). The user confirms the term name, bounded context, and definition before any write.
-- New terms are written to `terminology/<bounded_context>/<term>.md` using **atomic write**
+- New terms are written to `glossary/<bounded_context>/<term>.md` using **atomic write**
   (`<file>.tmp` + POSIX `rename(2)`). A `kill -9` mid-session cannot corrupt existing term files.
 - All grill-written terms receive `status: draft` and `introduced_in: <current-intent-id>`.
 - Grill also detects **forbidden synonyms** in the intent body and proposes canonical replacements
@@ -132,45 +158,53 @@ The complete write-back protocol is a **design target** of `/abcd:intent grill`'
 
 ## Term Index
 
+<!-- BEGIN GENERATED: glossary-index -->
 ### core/
 
-| Term | Status | Definition (summary) |
-|------|--------|----------------------|
-| [brief](core/brief.md) | stable | Root document defining project purpose and constraints |
-| [intent](core/intent.md) | stable | Press-release-shaped feature description before implementation |
-| [oracle](core/oracle.md) | stable | AI model invoked to review or reason over artefacts |
-| [persona](core/persona.md) | stable | Placeholder stakeholder character from the personas registry |
-| [phase](core/phase.md) | stable | Discrete layer of the build sequence, grouping related specs |
-| [spec](core/spec.md) | stable | Specced block of work implementing one or more intents |
-| [voyage](core/voyage.md) | stable | Operations namespace at `~/.abcd/voyage/<source-root-sha>/` — the append-only record of disembark and embark runs against a source repository |
-| [transport](core/transport.md) | stable | Mechanism by which context is delivered to an oracle |
-| [lifeboat](core/lifeboat.md) | stable | Portable artefact packed by `/abcd:disembark` to transfer project knowledge across context boundaries; it always lands outside the source repository, at an operator-chosen destination |
-| [disembark](core/disembark.md) | stable | The act of packing a lifeboat: distils a source project's settled artefacts, decisions, and configuration into a portable directory |
+| Term | Status | Definition |
+|---|---|---|
+| [brief](core/brief.md) | stable | The root document that defines a project's purpose, constraints, and success criteria before any implementation begins. |
+| [disembark](core/disembark.md) | stable | The act of packing a lifeboat — `abcd disembark <source-repo> to <dest>` reads a source repository without writing to it and distils its settled artefacts, decisions, and configuration into a portable lifeboat directory at a destination outside that repository, which a fresh context can later unpack via `/abcd:embark`. |
+| [intent](core/intent.md) | stable | A press-release-shaped description of a feature written before implementation begins, capturing the user problem, proposed solution, and success criteria. |
+| [lifeboat](core/lifeboat.md) | stable | A portable directory artefact packed by `/abcd:disembark` that captures the distilled knowledge and configuration of a source project so it can be unpacked into a fresh context by `/abcd:embark`. It always lands outside the source repository, at an operator-chosen destination. |
+| [oracle](core/oracle.md) | stable | An AI model invoked to review, reason over, or validate a project's artefacts — host-delegated by default, or reached through an opt-in oracle adapter. |
+| [persona](core/persona.md) | stable | A placeholder stakeholder character drawn from the abcd personas registry, used in press releases, intents, and design documents to represent a real user archetype without using real names. |
+| [phase](core/phase.md) | stable | An ordered stretch of development work that bundles a set of intents and brief plumbing-phases and ends in a milestone; abcd's sequencing layer, recorded as a document in roadmap/phases/. |
+| [spec](core/spec.md) | stable | A specced block of work in abcd's native spec store that implements one or more intents, broken into ordered tasks with acceptance criteria. |
+| [transport](core/transport.md) | stable | The mechanism by which curated context and artefacts are packaged and delivered to an oracle for review or reasoning. |
+| [voyage](core/voyage.md) | stable | The operations namespace at `~/.abcd/voyage/<source-root-sha>/` — an append-only record of what abcd *did* to produce a lifeboat (every disembark and embark run), as against the lifeboat itself, which is what gets carried. |
+
+### distribution/
+
+| Term | Status | Definition |
+|---|---|---|
+| [end-user](distribution/end-user.md) | stable | A person who installs and runs published abcd from the repo marketplace — the consumer of a release, distinct from a persona (a modelled archetype used in intents and briefs). |
+| [release](distribution/release.md) | stable | A published, version-tagged snapshot of abcd — the act and the artefact of cutting a curated release from the single repo, carrying a version and a changelog entry. |
+| [version](distribution/version.md) | stable | A strict-SemVer string stamped into the curated release artifact at cut time and carried as the git tag of the single repo, identifying a published snapshot of abcd for install and update. It is an OUTPUT of publishing, distinct from the internal sequencing unit (phase). |
 
 ### interview/
 
-| Term | Status | Definition (summary) |
-|------|--------|----------------------|
-| [session](interview/session.md) | stable | One interactive exchange in a grill sub-verb invocation |
-| [embark](interview/embark.md) | stable | Opening move that initiates a grill session |
+| Term | Status | Definition |
+|---|---|---|
+| [embark](interview/embark.md) | stable | The opening move of a grill session in which the oracle reads the target intent, identifies the primary ambiguities, and poses the first round of Socratic questions. |
+| [session](interview/session.md) | stable | One complete interactive exchange between a human and the abcd grill sub-verb, spanning all rounds of Socratic questioning through PRD synthesis for a single intent or brief section. |
+<!-- END GENERATED: glossary-index -->
 
 ---
 
-## Allowlist entries
+## Exemptions
 
-The top-level `terminology_exclude_files` array in `.abcd/config.json`
-lists files that must not be scanned for forbidden-synonym hits even when a future terminology
-linter is wired up. Each entry below names the file, the controlling intent, and the reason it
-is intentionally allowlisted.
+`GL002` reads every term file here for its forbidden-synonym set, and it never scans this directory
+back: a term file names its own forbidden synonyms legitimately, so the glossary is always exempt from
+its own rule. Beyond that, a repo scopes the rule in its `.abcd/record-lint.json` `forbidden_synonyms`
+entry — `exempt_prefixes` skips whole path prefixes (the historical, git-tracked records), and
+`allow_context` suppresses a line matching a named pattern (an external token that merely mentions the
+word).
 
-- the issue-schema validator's **negative-test corpus** fixture (spc-18) — this fixture is the
-  negative-test corpus for the
-  issue-schema validator: it intentionally embeds strings that would otherwise be flagged as
-  forbidden synonyms in order to assert that the validator rejects them. Linting the negative
-  corpus for those same strings would produce a guaranteed false positive on every CI run.
-  The entry is **inert documentation** — no `internal/core/lint` consumer reads
-  `terminology_exclude_files` yet. Recording the allowlist artifact means the contract is
-  pinned to a single named location before any consumer is wired in.
+The case those escapes exist for is a **negative-test corpus**: the issue-schema validator's fixture
+(spc-18) deliberately embeds the strings a validator must reject, so scanning it for those same
+strings is a guaranteed false positive on every run. A corpus of that shape belongs behind
+`exempt_prefixes`, named in the config with its reason, rather than left to fire and be ignored.
 
 ## Acknowledgements
 
