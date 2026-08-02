@@ -189,6 +189,18 @@ type RuleConfig struct {
 	// Roots (a package or command README lives beside its code), so the pairs are
 	// declared here rather than discovered by the walk.
 	Indexes []IndexSpec `json:"indexes"`
+	// Changelog is the delivery_state changelog, repo-relative. Default
+	// "CHANGELOG.md". It sits at the repo root, outside Roots.
+	Changelog string `json:"changelog"`
+	// IntentsRoot is the delivery_state intents store, repo-relative — the whole
+	// store, not a subdirectory of a root, because the rule resolves a cited id to
+	// the lifecycle bucket holding it and the changelog it reads is repo-scoped.
+	// Default .abcd/development/intents.
+	IntentsRoot string `json:"intents_root"`
+	// DeliverySections are the changelog change-type headings delivery_state reads
+	// as delivery claims. Empty means the default (deliveryStateSections); a repo
+	// widens the gate by naming more of its own headings here.
+	DeliverySections []string `json:"delivery_sections"`
 }
 
 // IndexSpec is one index_drift pair — a hand-written enumeration of a
@@ -206,6 +218,14 @@ type IndexSpec struct {
 	// an entry. It is what keeps the rule off the prose around the list: a token
 	// the pattern does not describe (a flag, a tool name) is not an entry.
 	Entry string `json:"entry"`
+	// DirEntry is the mirror of Entry on the directory side: the regexp a file's
+	// stem must match to be an entry, reduced to submatch 1 when the pattern has a
+	// group. It is what lets a document enumerate records by IDENTITY rather than
+	// by filename — `itd-8` for `itd-8-with-code-bundling.md` — without a second
+	// rule: without it the two sides can only agree when the document transcribes
+	// whole slugs, which is a listing nobody writes by hand. Empty compares whole
+	// stems.
+	DirEntry string `json:"dir_entry"`
 	// Suffix is the file extension an exact index enumerates (".md" lists file
 	// stems); empty enumerates the directory's immediate subdirectories.
 	Suffix string `json:"suffix"`

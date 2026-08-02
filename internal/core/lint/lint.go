@@ -380,6 +380,16 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, id...)
 	}
 
+	// delivery_state reads the repo-root changelog against the intents store, both
+	// outside cfg.Roots, so it runs once here as well.
+	if dsCfg, ok := cfg.Rules[ruleDeliveryState]; ok && dsCfg.Enabled {
+		ds, err := checkDeliveryState(repoRoot, dsCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ds...)
+	}
+
 	// receipt_gate is the release-time verification of the semantic gates. It is
 	// disabled for ordinary development (a commit under review has no receipt yet)
 	// and armed only at release time with a target commit; it reads sha-keyed
