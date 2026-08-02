@@ -113,7 +113,7 @@ above are the shape's specification, and conformance to them is a review respons
 
 ### Manually
 
-1. Copy `_template.md` to the appropriate subdirectory (`core/`, `interview/`, or a new context directory you create).
+1. Copy `_template.md` to the appropriate subdirectory (see the [Term Index](#term-index) for the current contexts, or create a new context directory).
 2. Fill in all required frontmatter fields.
 3. Write a narrative body below the closing `---`.
 4. Run `abcd docs lint` and `go test ./internal/core/glossary/`.
