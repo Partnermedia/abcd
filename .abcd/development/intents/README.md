@@ -241,7 +241,7 @@ This is a discipline ([`disciplines/itd-79-persona-registry.md`](disciplines/itd
 
 Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — valid for `drafts/` and `planned/` alike: a draft is uncommitted, an unscheduled planned intent is committed but awaiting sequencing. The invariant runs one way only: any intent a phase `## Scope` names is committed by definition and lives in `planned/` (or `disciplines/`) — see [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md).
 
-This README describes the intent corpus by *lifecycle state* (the directory listings below); it deliberately does not duplicate the phase→intent mapping.
+This README describes the intent corpus by *lifecycle state* — what each lifecycle directory means and how an intent moves between them. It transcribes neither the phase→intent mapping nor the directories' contents: both have a home that cannot go stale, and a copy kept here would (adr-5, derive don't store).
 
 ---
 
@@ -262,48 +262,9 @@ Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); mem
 
 ## Drafts
 
-Captured intents that haven't been promoted to native specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases); this directory listing is the raw filesystem view.
+Captured intents that haven't been promoted to native specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases).
 
-```
-drafts/
-├── itd-8-with-code-bundling.md
-├── itd-9-schema-migration.md
-├── itd-10-purge-uninstall.md
-├── itd-11-pass-b-pitfall-mitigation.md
-├── itd-12-work-adapter-weighting.md
-├── itd-13-scheduled-dev-sync.md
-├── itd-14-prompt-registry-versioning.md
-├── itd-15-self-dogfooded-sota-audit.md
-├── itd-16-hash-chain-merkle-audit.md
-├── itd-17-model-effectiveness-tracking.md
-├── itd-18-permission-template-per-project-type.md
-├── itd-19-stage-aware-behaviour.md
-├── itd-21-no-lifeboat-scaffolding.md
-├── itd-22-opencode-portability.md
-├── itd-23-spec-kit-interop.md
-├── itd-25-dredge-cross-corpus-synthesist.md
-├── itd-26-loot-oss-vendor.md
-├── itd-30-design-fictions-as-intent-format.md
-├── (itd-31 superseded — moved to superseded/itd-31-cross-document-fidelity-reviewer.md; absorbed by itd-48)
-├── (itd-32 superseded — moved to superseded/itd-32-audit-role-taxonomy.md)
-├── itd-33-agent-communication-infrastructure.md
-├── itd-35-lifeboat-integrity-audit.md           (sibling to itd-16)
-├── itd-39-scope-aware-memory-retrieval.md        (extends itd-3 recall hook to memory)
-├── itd-41-phase-negotiator.md                    (Socratic phase-proposer, per adr-10)
-├── itd-44-fourth-intent-kind-decision.md
-├── itd-47-oracle-gates-autonomous-mode.md
-├── itd-51-harness-adoption-readiness-rubric.md
-├── itd-55-first-principles-foundations-auditor.md
-├── itd-57-manual-hold-sentinel.md
-├── itd-59-autonomous-worker-transcript-capture.md
-├── itd-60-doc-fidelity-anti-drift.md
-├── itd-61-brief-change-derivation.md
-├── itd-62-pluggable-safety-gate.md
-├── itd-64-benchmark-driven-config-optimization.md
-├── itd-70-launch-release-retention-newest-per-line.md
-├── itd-73-derived-versioning.md
-└── itd-75-cli-eval-harness.md
-```
+The bench itself is [`drafts/`](drafts/) — the directory is the listing, and a transcription of it here is a second copy that drifts on the next capture or promotion (adr-5, derive don't store).
 
 ---
 
@@ -311,13 +272,7 @@ drafts/
 
 Active discipline-kind intents (cross-cutting rules with no user moment of their own; impose acceptance gates that every other spec inherits). They never get a native spec — they ARE the rule, not a feature being built. **No `status` frontmatter field — presence in `disciplines/` IS the active state; supersession moves to `superseded/`.**
 
-```
-disciplines/
-├── itd-1-acceptance-gates.md         (## Acceptance Criteria gate on every intent + spec)
-├── itd-5-prompt-quality-additions.md (prompt_version + self-improvement + injection canaries + capability_scope static)
-├── itd-37-modification-grammar.md    (## Modification Grammar gate on every spec — Naur's Modification axis + Ripple sub-axis)
-└── itd-79-persona-registry.md        (persona names from personas.json, selected by role — persona_registry lint gate)
-```
+The active rule set is [`disciplines/`](disciplines/); each file states its own rule, which is the description a listing here could only paraphrase.
 
 See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-intent-ids-kinds-and-lifecycle) "Discipline format" for the template (no press release; uses `## Rule` + `## Why` + `## Acceptance Criteria` instead; no `status` field).
 
@@ -329,48 +284,13 @@ See [`brief/04-surfaces/05-intent.md § 1`](../brief/04-surfaces/05-intent.md#1-
 
 `planned/` holds the committed capabilities awaiting their Go build — some scheduled into a roadmap phase, others committed but not yet sequenced (per [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). Their `spec_id` is `null` until the spec layer schedules them (Phase 4).
 
-```
-planned/
-├── itd-2-in-session-subagent-dispatch.md
-├── itd-3-modular-rules-loader.md
-├── itd-4-issue-capture.md
-├── itd-6-rp-mcp-only-integration.md
-├── itd-7-rp-workspace-portability.md
-├── itd-20-top-level-abcd-dispatcher.md
-├── itd-24-reflect-command.md
-├── itd-27-grill-skill-and-glossary.md
-├── itd-28-rp-reviews-into-flow.md
-├── itd-29-autonomous-run-resilience.md
-├── itd-34-three-intent-kinds.md
-├── itd-36-memory-unification.md
-├── itd-40-folder-classification.md
-├── itd-42-coherence-aware-grill.md
-├── itd-43-epic-to-spec-terminology.md
-├── itd-46-abcd-intent-quoted-text-create-symmetric.md
-├── itd-48-intent-fidelity-reviewer-roles-2-3.md
-├── itd-49-flow-state-drift-detector.md
-├── itd-50-loop-toward-acceptance.md
-├── itd-53-review-queue-auto-drain-fidelity-gate.md
-├── itd-58-session-reviewer-verdict-ingestion.md
-├── itd-63-setup-wizard-explains-installs.md
-├── itd-65-launch-preflight-gate-suite.md
-├── itd-66-launch-payload-render-parity.md
-├── itd-67-installable-versioned-plugin.md
-├── itd-69-plugin-metadata-lockstep-update.md
-└── itd-72-launch-ship-tier-b-publishing.md
-```
+The commitment set is [`planned/`](planned/); which of those a phase has sequenced is the phase docs' `## Scope` sections, not a list here.
 
 ---
 
 ## Superseded
 
-Two intents currently superseded.
-
-```
-superseded/
-├── itd-31-cross-document-fidelity-reviewer.md  (superseded by itd-48 on 2026-05-27; kind_at_supersession: standalone; absorbed by itd-48 which owns Roles 2 + 3)
-└── itd-32-audit-role-taxonomy.md  (superseded by itd-31 on 2026-05-07; kind_at_supersession: bundle-member; tier-0-audit-substrate bundle dissolved)
-```
+The retired set is [`superseded/`](superseded/); each file names its own successor and the shape it had when it was retired, so the directory answers "what happened to itd-N" without a roll-call here.
 
 Intents move here when they are killed by reclassification or absorption — e.g., when a smaller intent is folded into a larger one (`/abcd:intent reclassify <itd-N> --kind superseded --by <itd-M>`), or when a discipline is replaced by a stricter successor. Each superseded intent records two fields:
 
@@ -385,4 +305,4 @@ Files in `superseded/` are preserved as historical record; never deleted.
 
 ## Shipped
 
-`shipped/` holds capabilities built in Go. It is empty until the Go build ships them (Phase 1 onward); an intent moves here automatically when its linked spec closes and `intent-fidelity-reviewer` has run.
+[`shipped/`](shipped/) holds the capabilities built in Go. An intent moves here automatically when its linked spec closes and `intent-fidelity-reviewer` has run, and its "Audit Notes" section carries the per-criterion verdicts that move recorded.
