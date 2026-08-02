@@ -64,8 +64,9 @@ the cycle check disabled, the symlink file dereference dropped, `checkQuotation`
 and `checkLicence` stubbed out, and the ask-side no-match refusal, decline gate,
 provenance requirement and write call each neutralised in turn. No guard was
 found broken and no production behaviour diverged from its own documentation, so
-the increment is test-only and carries no CHANGELOG entry (the iss-30 precedent:
-an entry follows a user-facing change, not coverage). `go.mod` is untouched.
+the increment is test-only and carries no CHANGELOG entry — the repo's
+definition of done ties an entry to a user-facing change, and coverage alone
+is not one. `go.mod` is untouched.
 
 The entry's promotion path — a pairing lint between declared invariants and
 named tests — is NOT built here; it remains available as a separate convention
