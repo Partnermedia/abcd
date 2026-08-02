@@ -17,50 +17,75 @@ ls .abcd/development/intents/drafts/itd-*.md \
 
 Intents that have left `drafts/` (moved to `planned/`, `shipped/`, `superseded/`,
 or `disciplines/`) are NOT in this list at all — the enumeration command cannot
-emit them, and the bullet list is kept in lockstep with the command output.
-(itd-31 and itd-32, both superseded and moved to `superseded/`, are recorded only
-in the historical note at the end of this section, not here.)
+emit them. (itd-31 and itd-32, both superseded and moved to `superseded/`, are
+recorded only in the historical note at the end of this section, not here.)
 
-- itd-8 — `--with-code` bundling (lifeboat carries source code)
-- itd-9 — Cross-version lifeboat schema migration
-- itd-10 — `/abcd:ahoy destroy` deeper uninstall
-- itd-11 — Pass B transcript-noise mitigation
-- itd-12 — `.abcd/work/notes/` distiller weighting
-- itd-13 — Scheduled `dev-sync` (cron / launchd)
-- itd-14 — Prompt registry + versioning (heavier successor to itd-5)
-- itd-15 — Self-dogfooded SOTA audit (recurring per-disembark sibling to itd-5)
-- itd-16 — `/abcd:audit` umbrella + chain substrate (default application: hash-chain over conversation/edit history; reframed as umbrella on 2026-05-08, lifeboat-integrity application extracted to itd-35)
-- itd-17 — Per-backend per-agent oracle effectiveness tracking
-- itd-18 — `.claude/settings.local.json` permission templates
-- itd-19 — ABCDevelopment stage-aware defaults
-- itd-21 — `/abcd:init-project` empty-repo scaffolding
-- itd-22 — OpenCode harness implementation — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with a transport-agnostic Go core ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front doors, a second harness is just another host over the same core, not a special port
-- itd-23 — Spec Kit interop
-- itd-25 — `/abcd:dredge` cross-corpus synthesist (split from itd-4 capture)
-- itd-26 — `/abcd:loot` OSS-vendor with provenance (pulled to an earlier phase on 2026-05-08)
-- itd-30 — Design fictions as an alternative intent capture format (`--format=fiction`)
-- itd-33 — Agent-communication infrastructure (multi-agent coordination via `.abcd/coordination/`)
-- itd-35 — `/abcd:audit lifeboat <path>` lifeboat-integrity verification (sibling sub-verb under itd-16's umbrella; captured 2026-05-08)
-- itd-39 — Scope-aware memory retrieval (extends itd-3's recall hook to the memory store)
-- itd-41 — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
-- itd-44 — A fourth intent kind for infrastructure choices the product thinker wants to record
+The list is gated rather than trusted: the `index_drift` record-lint rule holds
+the marked region to the ids in [`drafts/`](../../intents/drafts/), so a capture,
+a promotion, or a supersession that does not edit this list fails the record
+gate. That is what keeps "not hand-counted" true after the day it was written.
+
+<!-- index: later-phase-intents -->
+- `itd-8` — `--with-code` bundling (lifeboat carries source code)
+- `itd-9` — Cross-version lifeboat schema migration
+- `itd-10` — `/abcd:ahoy destroy` deeper uninstall
+- `itd-11` — Pass B transcript-noise mitigation
+- `itd-12` — `.abcd/work/notes/` distiller weighting
+- `itd-13` — Scheduled `dev-sync` (cron / launchd)
+- `itd-14` — Prompt registry + versioning (heavier successor to itd-5)
+- `itd-15` — Self-dogfooded SOTA audit (recurring per-disembark sibling to itd-5)
+- `itd-16` — `/abcd:audit` umbrella + chain substrate (default application: hash-chain over conversation/edit history; reframed as umbrella on 2026-05-08, lifeboat-integrity application extracted to itd-35)
+- `itd-17` — Per-backend per-agent oracle effectiveness tracking
+- `itd-18` — `.claude/settings.local.json` permission templates
+- `itd-19` — ABCDevelopment stage-aware defaults
+- `itd-21` — `/abcd:init-project` empty-repo scaffolding
+- `itd-22` — OpenCode harness implementation — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with a transport-agnostic Go core ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front doors, a second harness is just another host over the same core, not a special port
+- `itd-23` — Spec Kit interop
+- `itd-25` — `/abcd:dredge` cross-corpus synthesist (split from itd-4 capture)
+- `itd-26` — `/abcd:loot` OSS-vendor with provenance (pulled to an earlier phase on 2026-05-08)
+- `itd-30` — Design fictions as an alternative intent capture format (`--format=fiction`)
+- `itd-33` — Agent-communication infrastructure (multi-agent coordination via `.abcd/coordination/`)
+- `itd-35` — `/abcd:audit lifeboat <path>` lifeboat-integrity verification (sibling sub-verb under itd-16's umbrella; captured 2026-05-08)
+- `itd-39` — Scope-aware memory retrieval (extends itd-3's recall hook to the memory store)
+- `itd-41` — Phase negotiator — Socratic phase-proposer (per [adr-10](../../decisions/adrs/0010-phase-negotiator-grounded-tradeoffs.md))
+- `itd-44` — A fourth intent kind for infrastructure choices the product thinker wants to record
+- `itd-51` — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
+- `itd-55` — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
+- `itd-57` — Manual-hold sentinel blocking a spec from autonomous pickup until a human lifts it
+- `itd-59` — Autonomous-run passes leave the same durable, queryable transcript an interactive session does
+- `itd-60` — Doc-fidelity anti-drift: a spec cannot close until the brief and public docs reflect what was built
+- `itd-61` — Brief-change derivation: a human brief edit reconciles its implied intents and principles before commit
+- `itd-62` — Pluggable fail-closed safety gate wrapping a trusted scanner
+- `itd-64` — Benchmark-driven configuration optimisation from abcd's own runs
+- `itd-70` — Launch release retention (newest-per-line prune of superseded releases)
+- `itd-75` — CLI eval harness: fixture-driven proof the CLI actually runs
+- `itd-76` — Source-provenance ledger: consult a source you cannot cite, and every debt is recorded
+- `itd-77` — Relocatable user-level home
+- `itd-78` — Intent-dependency graph: what to build first, even when it is something small
+- `itd-82` — Ledger drain: one verb triages the open ledger into work that ships itself and work a human must think about
+- `itd-83` — The review bar fires by itself, in every repo abcd manages
+- `itd-85` — Read-only repo-conformance audit
+- `itd-86` — Cold-reading surface: abcd reads its own design documents as a stranger would
+- `itd-87` — Recurrence escalation in capture: a finding that returns after closure is kept, not discarded
+- `itd-90` — Brief interview for the blanks: the product thinker is handed only the questions they alone can answer
+- `itd-91` — AI-attribution preference declared once and followed by every commit, PR, and record
+- `itd-92` — Branch-protection verification on managed repos, gating the launch
+- `itd-97` — The facilitator is a mode, not a person
+- `itd-98` — Solo vs duo is measured, not debated
+- `itd-99` — A team of product thinkers decides as one
+- `itd-106` — abcd sets up the CI a repo requires, and reports what it did
+- `itd-107` — Autonomous routines assemble from one versioned template
+<!-- /index -->
+
+**Later-phase items with no intent id.** These four were written into the brief
+before they were captured as intents, so no `itd-N` derives them and they sit
+outside the gated list above. Each is either superseded by a decision or waiting
+for a capture pass:
+
 - `.abcd/work/issues/` ledger cleanup bundle (sweep the workshop before a later phase)
-- itd-47 — oracle-backed gates pass honestly without a human in the loop
-- itd-51 — Harness-adoption-readiness rubric ("safe enough to adopt" before a new harness arrives)
 - abcd warns when you reach past it into a tool it was built to hide — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with native defaults there is no wrapped foreign surface to reach past; the abstraction boundary is retired
-- abcd's largest source files become navigable packages without changing behavior
-- itd-55 — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
+- abcd's largest source files become navigable packages without changing behaviour
 - One command re-vendors upstream and restores the abcd overlay in a single guarded step — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: no external tool re-vendors itself onto abcd's state, so there is no overlay to re-apply
-- itd-57 — Manual-hold sentinel blocking a spec from autonomous pickup until a human lifts it
-- itd-59 — Autonomous-run passes leave the same durable, queryable transcript an interactive session does
-- itd-60 — Doc-fidelity anti-drift: a spec cannot close until the brief and public docs reflect what was built
-- itd-61 — Brief-change derivation: a human brief edit reconciles its implied intents and principles before commit
-- itd-62 — Pluggable fail-closed safety gate wrapping a trusted scanner
-- itd-64 — Benchmark-driven configuration optimisation from abcd's own runs
-- itd-70 — Launch release retention (newest-per-line prune of superseded releases)
-- itd-73 — Derived versioning: the release number is computed, never typed (per [adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md))
-- itd-74 — Name banlist: banned names kept out of everything published
-- itd-75 — CLI eval harness: fixture-driven proof the CLI actually runs
 
 **Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied reviews in the native spec review store), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
 

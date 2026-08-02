@@ -37,7 +37,9 @@ const (
 //
 // Each configured index names a marked region in a document and the directory
 // the region describes, plus the regexp a backticked token must match to count
-// as an entry. Two modes:
+// as an entry — and, optionally, the mirror pattern reducing a directory entry's
+// name to what the document enumerates, so a listing may name records by id
+// rather than by filename. Two modes:
 //
 //   - exact: the enumerated set and the directory's contents must be equal —
 //     a file added to the directory and a name listed for a file that is gone
@@ -82,6 +84,16 @@ func checkOneIndex(repoRoot string, spec IndexSpec, i int, cfg RuleConfig) ([]Fi
 	if err != nil {
 		return nil, &configError{"index_drift entry " + who + " has an uncompilable entry pattern: " + err.Error()}
 	}
+	var dirEntryRe *regexp.Regexp
+	if spec.DirEntry != "" {
+		if mode == indexModeAbsent {
+			return nil, &configError{"index_drift entry " + who + " sets dir_entry in " + indexModeAbsent + " mode, which resolves listed paths rather than reading the directory"}
+		}
+		dirEntryRe, err = regexp.Compile(spec.DirEntry)
+		if err != nil {
+			return nil, &configError{"index_drift entry " + who + " has an uncompilable dir_entry pattern: " + err.Error()}
+		}
+	}
 
 	data, err := os.ReadFile(filepath.Join(repoRoot, spec.Doc))
 	if err != nil {
@@ -102,7 +114,7 @@ func checkOneIndex(repoRoot string, spec IndexSpec, i int, cfg RuleConfig) ([]Fi
 	if mode == indexModeAbsent {
 		return absentFindings(repoRoot, spec, listed, finding), nil
 	}
-	return exactFindings(repoRoot, spec, listed, start, finding)
+	return exactFindings(repoRoot, spec, dirEntryRe, listed, start, finding)
 }
 
 // listedEntry is one enumerated token and the line it sits on.
@@ -155,8 +167,8 @@ func indexRegion(lines []string, id string, entryRe *regexp.Regexp) ([]listedEnt
 }
 
 // exactFindings compares the enumeration against the directory both ways.
-func exactFindings(repoRoot string, spec IndexSpec, listed []listedEntry, start int, finding func(int, string) Finding) ([]Finding, error) {
-	actual, err := indexDirEntries(repoRoot, spec)
+func exactFindings(repoRoot string, spec IndexSpec, dirEntryRe *regexp.Regexp, listed []listedEntry, start int, finding func(int, string) Finding) ([]Finding, error) {
+	actual, err := indexDirEntries(repoRoot, spec, dirEntryRe)
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +211,10 @@ func absentFindings(repoRoot string, spec IndexSpec, listed []listedEntry, findi
 // of files carrying the configured suffix, or the immediate subdirectories when
 // no suffix is configured. A README is never an entry — it is the index itself.
 // A missing directory contributes nothing, so every listed name fires rather
-// than the rule passing on an empty comparison.
-func indexDirEntries(repoRoot string, spec IndexSpec) (map[string]bool, error) {
+// than the rule passing on an empty comparison. A configured dir_entry reduces
+// each stem to the part the document enumerates, and drops any stem the pattern
+// does not describe.
+func indexDirEntries(repoRoot string, spec IndexSpec, dirEntryRe *regexp.Regexp) (map[string]bool, error) {
 	set := map[string]bool{}
 	ents, err := os.ReadDir(filepath.Join(repoRoot, filepath.FromSlash(spec.Dir)))
 	if err != nil {
@@ -211,8 +225,8 @@ func indexDirEntries(repoRoot string, spec IndexSpec) (map[string]bool, error) {
 	}
 	for _, e := range ents {
 		if spec.Suffix == "" {
-			if e.IsDir() {
-				set[e.Name()] = true
+			if name := indexDirName(e.Name(), dirEntryRe); e.IsDir() && name != "" {
+				set[name] = true
 			}
 			continue
 		}
@@ -223,7 +237,27 @@ func indexDirEntries(repoRoot string, spec IndexSpec) (map[string]bool, error) {
 		if strings.EqualFold(name, "README") {
 			continue
 		}
-		set[name] = true
+		if name = indexDirName(name, dirEntryRe); name != "" {
+			set[name] = true
+		}
 	}
 	return set, nil
+}
+
+// indexDirName reduces a directory entry's name to the entry the document
+// enumerates: submatch 1 of the dir_entry pattern (the whole match when the
+// pattern has no group), or "" when the pattern does not match, which drops the
+// file from the comparison. A nil pattern returns the name unchanged.
+func indexDirName(name string, re *regexp.Regexp) string {
+	if re == nil {
+		return name
+	}
+	m := re.FindStringSubmatch(name)
+	if m == nil {
+		return ""
+	}
+	if len(m) > 1 {
+		return m[1]
+	}
+	return m[0]
 }

@@ -2,6 +2,7 @@ package lint
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -228,6 +229,93 @@ func TestIndexDriftFailsClosed(t *testing.T) {
 	})
 }
 
+// TestIndexDriftDirEntryComparesByRecordID reproduces the iss-41 corpus shape:
+// a brief section enumerating the uncommitted intent bench by id while the
+// directory names each file by id AND slug. Without dir_entry the two sides can
+// never agree; with it, a promoted intent left in the list and a fresh capture
+// missing from it are both findings.
+func TestIndexDriftDirEntryComparesByRecordID(t *testing.T) {
+	root := t.TempDir()
+	drafts := filepath.Join(".abcd", "development", "intents", "drafts")
+	// itd-108.md carries no slug. The canonical intent-filename rule accepts it,
+	// so an id-reduction pattern that does not is a gate that goes quiet on a
+	// schema-legal record instead of firing on it.
+	for _, f := range []string{"itd-8-with-code-bundling.md", "itd-60-doc-fidelity-anti-drift.md", "itd-76-source-provenance-ledger.md", "itd-108.md"} {
+		writeFile(t, root, filepath.Join(drafts, f), "# fixture\n")
+	}
+	writeFile(t, root, filepath.Join(drafts, "README.md"), "# drafts\n")
+
+	doc := filepath.Join(".abcd", "development", "brief", "06-delivery", "03-out-of-scope.md")
+	// Lists itd-47 (since moved to superseded/), omits itd-76 and itd-108 (later
+	// captures), and carries backticked prose the entry pattern must not read as
+	// an id.
+	writeFile(t, root, doc, strings.Join([]string{
+		"# Out of Phase Scope",
+		"",
+		"<!-- index: later-phase-intents -->",
+		"- `itd-8` — `--with-code` bundling",
+		"- `itd-47` — oracle-backed gates",
+		"- `itd-60` — doc-fidelity anti-drift",
+		"<!-- /index -->",
+	}, "\n")+"\n")
+
+	spec := IndexSpec{
+		ID: "later-phase-intents", Doc: doc, Dir: ".abcd/development/intents/drafts",
+		Entry: `^itd-[0-9]+$`, Suffix: ".md", DirEntry: `^(itd-[0-9]+)`,
+	}
+	fs, err := Lint(indexCfg(spec), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "index_drift"); n != 3 {
+		t.Fatalf("expected 3 index_drift findings (1 departed + 2 omitted), got %d: %+v", n, fs)
+	}
+	for _, want := range []string{"`itd-47`", "`itd-76`", "`itd-108`"} {
+		if !messageContains(fs, want) {
+			t.Errorf("expected a finding naming %s; got %+v", want, fs)
+		}
+	}
+	if messageContains(fs, "with-code") {
+		t.Errorf("expected the comparison to run on ids, not slugs; got %+v", fs)
+	}
+}
+
+// TestLaterPhaseIndexCoversEveryLegalIntentFilename is the wiring test between
+// the shipped config and the canonical filename rule. The later-phase index
+// enumerates the drafts bench by id, so its dir_entry pattern must reduce every
+// filename intentFileRe accepts; one it does not match is silently dropped from
+// the comparison, and the gate that claims "the filesystem is the list" goes
+// quiet on exactly the record it was meant to catch.
+func TestLaterPhaseIndexCoversEveryLegalIntentFilename(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..")
+	cfg, err := LoadConfig(filepath.Join(repoRoot, ".abcd", "record-lint.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec *IndexSpec
+	for i := range cfg.Rules["index_drift"].Indexes {
+		if s := cfg.Rules["index_drift"].Indexes[i]; s.ID == "later-phase-intents" {
+			spec = &s
+			break
+		}
+	}
+	if spec == nil {
+		t.Fatal("record-lint.json must declare the later-phase-intents index (iss-41)")
+	}
+	re, err := regexp.Compile(spec.DirEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"itd-8-with-code-bundling", "itd-108", "itd-1000-a-long-slug-here"} {
+		if !intentFileRe.MatchString(name + ".md") {
+			t.Fatalf("fixture %s.md is not a legal intent filename; fix the fixture", name)
+		}
+		if got := indexDirName(name, re); got != intentIDRe.FindString(name) {
+			t.Errorf("dir_entry reduces %q to %q; want the canonical id %q", name, got, intentIDRe.FindString(name))
+		}
+	}
+}
+
 // TestIndexDriftConfigGuards holds a malformed index to a loud error rather
 // than a quiet pass — a rule that no-ops on a typo gates nothing.
 func TestIndexDriftConfigGuards(t *testing.T) {
@@ -243,6 +331,8 @@ func TestIndexDriftConfigGuards(t *testing.T) {
 		{"no entry pattern", IndexSpec{ID: "x", Doc: filepath.Join("commands", "README.md"), Dir: "commands/abcd"}},
 		{"bad entry pattern", IndexSpec{ID: "x", Doc: filepath.Join("commands", "README.md"), Dir: "commands/abcd", Entry: `^[a-z`}},
 		{"unknown mode", IndexSpec{ID: "x", Doc: filepath.Join("commands", "README.md"), Dir: "commands/abcd", Entry: `^[a-z]+$`, Mode: "maybe"}},
+		{"bad dir_entry pattern", IndexSpec{ID: "x", Doc: filepath.Join("commands", "README.md"), Dir: "commands/abcd", Entry: `^[a-z]+$`, DirEntry: `^(a`}},
+		{"dir_entry in absent mode", IndexSpec{ID: "x", Doc: filepath.Join("commands", "README.md"), Dir: "commands/abcd", Entry: `^[a-z]+$`, Mode: "absent", DirEntry: `^(a)`}},
 		{"missing doc file", IndexSpec{ID: "x", Doc: filepath.Join("commands", "absent.md"), Dir: "commands/abcd", Entry: `^[a-z]+$`}},
 	}
 	for _, tc := range cases {
