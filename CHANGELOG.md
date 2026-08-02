@@ -454,6 +454,36 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **One canonical glossary, and its index is derived** (iss-40). The record held
+  two artefacts each calling itself the glossary: `.abcd/development/brief/glossary/`,
+  a directory of per-term files with the frontmatter the `GL002` forbidden-synonym
+  rule reads, and `02-constraints/04-naming.md`, whose vocabulary-registration
+  section declared that terms are registered in *it*. Nothing said which one won
+  for a given term, so "the glossary" resolved to two places. The naming file now
+  states the split it actually implements — the glossary directory holds
+  cross-cutting prose vocabulary, that file's own tables hold the naming
+  convention, controlled enums, and spec-pinned reserved names — and stops
+  claiming to be a glossary; its ~60 reserved-vocabulary rows are untouched,
+  because a closed enum is not a glossary term. The `VR001` descriptions that
+  carried the old framing across the brief and itd-37 are corrected with it.
+  The glossary's own index was stale in the way a hand-kept index always is: a
+  whole bounded context (`distribution/`, three terms) existed on disk and
+  appeared in neither the context list, the directory tree, nor the term index.
+  Both blocks are now RENDERED from the term files by `internal/core/glossary`
+  and held to them by a drift test, so a term file that lands without an index
+  row fails the build — the same generate-and-gate shape the brief↔lifeboat
+  mapping table already uses. The README also promised a JSON schema
+  (`internal/core/schema/terminology.schema.json`), a CLI verb
+  (`abcd lint terminology`), and a config allowlist key
+  (`terminology_exclude_files`), none of which exist; it now describes what does
+  — the frontmatter tables as the shape's own specification, `GL002` through
+  `abcd docs lint`, and the index drift gate — and says plainly that neither is a
+  full schema validator. `glossary/core/brief.md` no longer calls the brief
+  "immutable once approved", which contradicted adr-5's living-record decision,
+  and the brief's own navigation table and directory tree now list `glossary/`,
+  which the generated brief↔lifeboat mapping had been alone in knowing about. A
+  public banlist entry (`names/record/glossary-self-identification`) blocks the
+  retired self-identifying phrase from returning to the published surface.
 - **The plugin root is resolvable when abcd runs through the PATH symlink
   `ahoy install` itself pins** (iss-170). Resolution falls back to walking the
   executable's ancestors for a `hooks/` directory, but the executable path was
