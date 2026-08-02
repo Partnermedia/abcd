@@ -53,7 +53,7 @@ Technical files (`config.json`, `corpus.json`, `rules.json`) are exempt — no m
 
 ## Vocabulary-registration requirement (HARD from the start)
 
-Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabulary delta` sub-bullet (per itd-37) MUST be registered in the same spec, in whichever of the two registries below fits it. The vocabulary-registration lint blocks at plan-review on missing registrations. Lint code (reserved): `VR001` — vocabulary delta term not registered.
+Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabulary delta` sub-bullet (per itd-37) MUST be registered in the same spec, in whichever of the two registries below fits it. Lint code (reserved): `VR001` — vocabulary delta term not registered; no `SpecLinter` implementation exists yet, so today registration is enforced by review, not by lint.
 
 **Why hard from the start, not soft.** A discipline that ships with "soft initially, hard once stable" is structurally weaker than itd-1 (acceptance gates) and itd-5 (prompt-quality additions), both of which ship hard from day one. Cost of hard enforcement: ~30 seconds per new term. Cost of soft enforcement: vocabulary drift compounds; the cross-document fidelity reviewer (Role 2) finds drift post-hoc that should have been blocked at design time.
 
