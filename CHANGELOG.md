@@ -390,6 +390,21 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The plugin root is resolvable when abcd runs through the PATH symlink
+  `ahoy install` itself pins** (iss-170). Resolution falls back to walking the
+  executable's ancestors for a `hooks/` directory, but the executable path was
+  taken as invoked rather than canonicalised — and the installed layout puts a
+  symlink on PATH (`/usr/local/bin/abcd` -> `<plugin-root>/abcd`), so the walk
+  climbed `/usr/local/bin`, `/usr/local`, `/usr` and never reached the plugin
+  root (the walk's own guard excludes `/`, so it was never a candidate either).
+  The path is now resolved through its symlinks before the walk — falling back
+  to an absolutised form of the original path, then the original path itself,
+  only if resolution errors, which `os.Executable` never does on a shipped
+  platform, so no case that worked before can regress.
+  The gap was invisible inside the harness, where `CLAUDE_PLUGIN_ROOT` is set and
+  answers first; it appeared in a plain shell, on exactly the layout the
+  installer writes. Linux is unaffected — `os.Executable` already resolves
+  symlinks there; the unresolved path this fix accounts for is macOS's.
 - **Two frontmatter-parser defects that silently dropped a memory page's
   provenance** (iss-30). Both were found by the detectors written for that
   issue's last acceptance instances, and both broke the same invariant the parser
