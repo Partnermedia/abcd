@@ -37,6 +37,13 @@ plugin surface, and a future MCP server share one engine.
   the two agree. The table is a *hypothesis*: `abcd disembark probe` measures the
   same sections against real repositories in the same `grounded`/`partial`/`blank`
   vocabulary, and the evidence is expected to revise it (adr-35, itd-88).
+- **`core/glossary/`** — the brief glossary's index, derived. The term files under
+  `.abcd/development/brief/glossary/` are the source of truth for what terms exist
+  and in which bounded context; this package renders the directory tree and the
+  term index its README carries, and a test in the same package holds the
+  committed README to that render. It is a generator and a gate, not a validator:
+  the frontmatter shape is specified by the glossary README, and the rule that
+  READS a term's frontmatter for enforcement is `GL002` in `core/lint`.
 - **`core/guard/`** — the shell-hazard registry. Bundled hazard entries (id,
   command-position pattern over shell tokens, blocker/warn tier, safe successor,
   plain-language why) plus the deterministic allow/warn/block decision a harness
