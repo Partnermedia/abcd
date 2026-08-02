@@ -207,6 +207,183 @@ func TestSymlinkToRepoRootDoesNotLeakDenied(t *testing.T) {
 	}
 }
 
+// TestSymlinkDereferenceAcceptsInRepoTarget is the accept half of the
+// symlink-dereference guard (iss-34): the reject half (escape / denied target /
+// cycle) is only half the contract — a symlink that survives the structural
+// passes must actually be DEREFERENCED, so the bundle ships the target's bytes
+// under the symlink's logical name. A link to an in-repo file is classified
+// under its own logical path with the TARGET as ResolvedPath, and a link to an
+// in-repo directory has its whole subtree emitted under the link's prefix.
+func TestSymlinkDereferenceAcceptsInRepoTarget(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "shared/note.md", "shared note")
+	writeFile(t, root, "shared/nested/deep.md", "deep note")
+	writeFile(t, root, "docs/readme.md", "ok")
+
+	// docs/alias.md -> shared/note.md (in-repo regular file)
+	if err := os.Symlink(filepath.Join(root, "shared", "note.md"), filepath.Join(root, "docs", "alias.md")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	// docs/tree -> shared (in-repo directory)
+	if err := os.Symlink(filepath.Join(root, "shared"), filepath.Join(root, "docs", "tree")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	// t.TempDir can hand back a symlinked path; the resolver evaluates the root,
+	// so expected ResolvedPaths are built against the evaluated root too.
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.HasViolation() {
+		t.Fatalf("an in-repo symlink target must not be rejected: %+v", b.Rejected)
+	}
+	want := map[string]string{
+		"docs/readme.md":           filepath.Join(realRoot, "docs", "readme.md"),
+		"docs/alias.md":            filepath.Join(realRoot, "shared", "note.md"),
+		"docs/tree/note.md":        filepath.Join(realRoot, "shared", "note.md"),
+		"docs/tree/nested/deep.md": filepath.Join(realRoot, "shared", "nested", "deep.md"),
+	}
+	got := map[string]string{}
+	for _, f := range b.Included {
+		got[f.LogicalPath] = f.ResolvedPath
+	}
+	for logical, resolved := range want {
+		actual, ok := got[logical]
+		if !ok {
+			t.Errorf("%s not included (the symlink was not dereferenced): included=%+v excluded=%+v", logical, b.Included, b.Excluded)
+			continue
+		}
+		if actual != resolved {
+			t.Errorf("%s resolved to %q, want the dereferenced target %q", logical, actual, resolved)
+		}
+	}
+	// The target tree is reached only THROUGH the link: shared/** is not itself
+	// requested by the include list, so it must not appear under its own name.
+	for _, f := range b.Included {
+		if firstSegment(f.LogicalPath) == "shared" {
+			t.Errorf("unrequested target tree shipped under its own path: %s", f.LogicalPath)
+		}
+	}
+}
+
+// TestSymlinkDirectoryCycleRejected proves the dereferencing walk's cycle guard:
+// a directory symlink pointing back at one of its own ancestors is
+// rejected(symlink_cycle) on the second visit instead of recursing forever, and
+// no path from beyond the cycle point enters the bundle.
+func TestSymlinkDirectoryCycleRejected(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "docs/readme.md", "ok")
+
+	// docs/loop -> docs (a directory symlink onto its own parent)
+	if err := os.Symlink(filepath.Join(root, "docs"), filepath.Join(root, "docs", "loop")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	b, err := ResolveBundle(root, []string{"docs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cycle bool
+	for _, r := range b.Rejected {
+		if r.LogicalPath == "docs/loop/loop" && r.Reason == RejectedSymlinkCycle {
+			cycle = true
+		}
+	}
+	if !cycle {
+		t.Errorf("expected docs/loop/loop rejected(symlink_cycle): %+v", b.Rejected)
+	}
+	if !b.HasViolation() {
+		t.Errorf("a symlink cycle must fail a ship")
+	}
+	// The walk stops AT the cycle: nothing from a third traversal is admitted.
+	for _, f := range b.Included {
+		if strings.HasPrefix(f.LogicalPath, "docs/loop/loop") {
+			t.Errorf("walk descended past the cycle point: %s", f.LogicalPath)
+		}
+	}
+}
+
+// TestScriptsNotInRuntimeClosureRejected proves the scripts-closure guard: a
+// scripts/ file outside the runtime closure never ships. Named literally by an
+// include it is rejected(fs_error, scripts_not_in_runtime_closure) — an explicit
+// ship request that cannot be honoured — while one merely swept up by a broad
+// include, or matching the closure's own default-deny, is a benign
+// excluded(denied_namespace) prune. Either way it never reaches Included.
+func TestScriptsNotInRuntimeClosureRejected(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "scripts/keep.py", "in the runtime closure")
+	writeFile(t, root, "scripts/stray.py", "NOT in the runtime closure")
+	writeFile(t, root, "scripts/helper.py", "swept up by the dir include only")
+	writeFile(t, root, "scripts/__pycache__/keep.pyc", "compiled artefact")
+
+	includes := []string{"scripts", "scripts/stray.py", "scripts/__pycache__/keep.pyc"}
+	closureFn := func(string) (map[string]struct{}, error) {
+		return map[string]struct{}{"scripts/keep.py": {}}, nil
+	}
+
+	b, err := resolveBundle(root, includes, closureFn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The one file in the closure ships.
+	if !included(b, "scripts/keep.py") {
+		t.Fatalf("closure member dropped: included=%+v rejected=%+v", b.Included, b.Rejected)
+	}
+	// The explicitly-requested non-member is rejected with the pinned shape.
+	var stray bool
+	for _, r := range b.Rejected {
+		if r.LogicalPath == "scripts/stray.py" {
+			if r.Reason != RejectedFSError || r.Details["kind"] != "scripts_not_in_runtime_closure" {
+				t.Errorf("scripts/stray.py rejected with the wrong shape: %+v", r)
+			}
+			stray = true
+		}
+	}
+	if !stray {
+		t.Errorf("a literally-included script outside the closure must be rejected: %+v", b.Rejected)
+	}
+	if !b.HasViolation() {
+		t.Errorf("a script outside the runtime closure must fail a ship")
+	}
+	// The benign prunes: swept-up and closure-denied paths are excluded, not
+	// rejected — and none of the three non-members reaches Included.
+	for _, rel := range []string{"scripts/helper.py", "scripts/__pycache__/keep.pyc"} {
+		if reason, ok := excludedReason(b, rel); !ok || reason != ExcludedDeniedNamespace {
+			t.Errorf("%s not excluded(denied_namespace): reason=%q ok=%v", rel, reason, ok)
+		}
+		for _, r := range b.Rejected {
+			if r.LogicalPath == rel {
+				t.Errorf("%s must be a benign prune, not a rejection: %+v", rel, r)
+			}
+		}
+	}
+	for _, rel := range []string{"scripts/stray.py", "scripts/helper.py", "scripts/__pycache__/keep.pyc"} {
+		if included(b, rel) {
+			t.Errorf("a scripts/ path outside the runtime closure entered the bundle: %s", rel)
+		}
+	}
+
+	// Polarity control: with no closure at all (the default when the pinned
+	// closure list is absent), scripts/ behaves like any other include and every
+	// file ships — so the exclusions above are the closure gate's doing, not an
+	// unrelated default-deny.
+	nb, err := resolveBundle(root, includes, func(string) (map[string]struct{}, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"scripts/keep.py", "scripts/stray.py", "scripts/helper.py", "scripts/__pycache__/keep.pyc"} {
+		if !included(nb, rel) {
+			t.Errorf("without a closure, %s should ship: included=%+v rejected=%+v", rel, nb.Included, nb.Rejected)
+		}
+	}
+}
+
 // TestGitignoredSymlinkTargetExcluded proves a symlink whose TARGET is gitignored
 // is excluded even though the symlink's own (logical) name is not ignored — the
 // target is the content that would actually ship.

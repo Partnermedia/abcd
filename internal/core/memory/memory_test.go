@@ -1,7 +1,10 @@
 package memory
 
 import (
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -263,6 +266,17 @@ func TestLintRejectsMalformed(t *testing.T) {
 			wantCode: "ML001",
 		},
 		{
+			name: "multi_source_entry_missing_licence",
+			// The multi-source half of the ML001 licence check: an external
+			// sources[] entry with no `licence` key is the violation, even though a
+			// sibling entry of the same class declares one.
+			page: "---\nsource:\n  classes: [external_pdf]\n  sources:\n" +
+				"    -\n      class: external_pdf\n      citation: { type: knowledge }\n      licence: MIT\n      source_hash: " + strings.Repeat("a", 64) + "\n      ingested_at: 2026-07-06\n" +
+				"    -\n      class: external_pdf\n      citation: { type: knowledge }\n      source_hash: " + strings.Repeat("b", 64) + "\n      ingested_at: 2026-07-06\n" +
+				"topic_hash: " + strings.Repeat("c", 64) + "\n---\n\n# A fused claim\n",
+			wantCode: "ML001",
+		},
+		{
 			name: "mixed_classes_no_weighting_note",
 			page: "---\nsource:\n  classes: [external_pdf, external_transcript]\n  sources:\n" +
 				"    -\n      class: external_pdf\n      citation: { type: knowledge }\n      licence: MIT\n      source_hash: " + strings.Repeat("c", 64) + "\n      ingested_at: 2026-07-06\n" +
@@ -299,6 +313,332 @@ func TestLintRejectsMalformed(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Lint: the MQ001 quotation budget (iss-34)
+// ---------------------------------------------------------------------------
+
+// TestLintQuotationBudgetMQ001 covers both MQ001 refusals — the contiguous
+// quoted-span ceiling and the per-page share of a source — plus the under-budget
+// control that proves the finding is the budget's doing. MQ001 is curator-
+// advisory: it warns, never blocks (exit stays 0), and lint mutates no page.
+func TestLintQuotationBudgetMQ001(t *testing.T) {
+	sourceHash := strings.Repeat("a", 64)
+	topicHash := strings.Repeat("b", 64)
+	quote := "one two three four five six seven eight nine ten eleven twelve" // 12 words
+	page := "---\nsource:\n  class: external_pdf\n  citation: { type: knowledge }\n  licence: MIT\n" +
+		"  source_hash: " + sourceHash + "\n  ingested_at: 2026-07-06\n" +
+		"topic_hash: " + topicHash + "\n---\n\n# Rotation practice\n\n> " + quote + "\n"
+
+	cases := []struct {
+		name        string
+		budget      string
+		tokenCount  int
+		wantMQ001   int
+		wantMessage string
+	}{
+		{
+			name:        "contiguous_span_over_ceiling",
+			budget:      `{"max_contiguous_quote_words": 5, "per_page_pct": 0.5}`,
+			tokenCount:  1000, // 12/1000 = 1.2%, well under the per-page share
+			wantMQ001:   1,
+			wantMessage: "exceeds the 5-word ceiling",
+		},
+		{
+			name:        "per_page_share_over_budget",
+			budget:      `{"max_contiguous_quote_words": 500, "per_page_pct": 0.01}`,
+			tokenCount:  100, // 12/100 = 12%, over the 1% per-page budget
+			wantMQ001:   1,
+			wantMessage: "over the 1% per-page budget",
+		},
+		{
+			name:       "under_budget_is_clean",
+			budget:     `{"max_contiguous_quote_words": 500, "per_page_pct": 0.5}`,
+			tokenCount: 1000,
+			wantMQ001:  0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			mem := Dir(repo)
+			if err := os.MkdirAll(mem, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			pagePath := filepath.Join(mem, "topic_auth_rotation.md")
+			if err := os.WriteFile(pagePath, []byte(page), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(mem, "config.json"),
+				[]byte(`{"quotation_budget": `+tc.budget+`}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			registry := fmt.Sprintf(`{%q: {"source_token_count": %d}}`, sourceHash, tc.tokenCount)
+			if err := os.WriteFile(SourcesIndexPath(repo), []byte(registry), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			lr, err := Lint(LintRequest{RepoRoot: repo, Now: fixedNow})
+			if err != nil {
+				t.Fatalf("lint: %v", err)
+			}
+			var mq001 []Finding
+			for _, f := range lr.Findings {
+				if f.Code == "MQ001" {
+					mq001 = append(mq001, f)
+				}
+			}
+			if len(mq001) != tc.wantMQ001 {
+				t.Fatalf("got %d MQ001 finding(s), want %d; findings=%+v", len(mq001), tc.wantMQ001, lr.Findings)
+			}
+			for _, f := range mq001 {
+				if f.Severity != "warn" {
+					t.Errorf("MQ001 severity = %q, want warn (curator-advisory)", f.Severity)
+				}
+				if f.File != pagePath {
+					t.Errorf("MQ001 file = %q, want the offending page %q", f.File, pagePath)
+				}
+				if f.Line <= 0 {
+					t.Errorf("MQ001 carries no line: %+v", f)
+				}
+				if !strings.Contains(f.Message, tc.wantMessage) {
+					t.Errorf("MQ001 message = %q, want it to name %q", f.Message, tc.wantMessage)
+				}
+			}
+			// The budget is advisory: a warning never blocks the exit contract.
+			if lr.Summary.Blockers != 0 || lr.ExitCode != 0 {
+				t.Errorf("MQ001 must not block: blockers=%d exit=%d", lr.Summary.Blockers, lr.ExitCode)
+			}
+			// No side effects: lint mutates no memory-store page.
+			after, err := os.ReadFile(pagePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != page {
+				t.Errorf("lint mutated the linted page:\n%s", after)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Ask --file-back: the one mutating branch of ask (iss-34)
+// ---------------------------------------------------------------------------
+
+// storeSnapshot reads every file in the memory store (bar the advisory lock,
+// whose presence is not store state) so a refusal can be proved side-effect-free.
+func storeSnapshot(t *testing.T, repo string) map[string]string {
+	t.Helper()
+	snap := map[string]string{}
+	err := filepath.WalkDir(Dir(repo), func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Base(path) == ".lock" {
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		rel, relErr := filepath.Rel(Dir(repo), path)
+		if relErr != nil {
+			return nil
+		}
+		snap[filepath.ToSlash(rel)] = string(raw)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot store: %v", err)
+	}
+	return snap
+}
+
+func assertStoreUnchanged(t *testing.T, before, after map[string]string) {
+	t.Helper()
+	for name, content := range after {
+		prev, ok := before[name]
+		switch {
+		case !ok:
+			t.Errorf("a refused file-back wrote a new store file: %s", name)
+		case prev != content:
+			t.Errorf("a refused file-back mutated store file %s", name)
+		}
+	}
+	for name := range before {
+		if _, ok := after[name]; !ok {
+			t.Errorf("a refused file-back removed store file %s", name)
+		}
+	}
+}
+
+// seedAskStore ingests one source so the store holds a fully-attributed page,
+// returning its content hash.
+func seedAskStore(t *testing.T, repo string) string {
+	t.Helper()
+	src := writeSource(t, repo, "article.txt", "Token rotation policy: rotate tokens every 24 hours.")
+	res, err := Ingest(IngestRequest{
+		RepoRoot:  repo,
+		Source:    src,
+		Distiller: oneTopicDistiller("topic", "auth", "tokens", "# Token rotation\nRotate tokens every 24 hours."),
+		Now:       fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("seed ingest: %v", err)
+	}
+	return res.ContentHash
+}
+
+// TestAskFileBackWritesCitedPage is the accept path of `ask --file-back`: a page
+// filed back without its own source block inherits the provenance of the cited
+// matches, is written through the same seams as ingest, and is back-linked in the
+// registry under the cited source hash.
+func TestAskFileBackWritesCitedPage(t *testing.T) {
+	repo := t.TempDir()
+	hash := seedAskStore(t, repo)
+
+	ask, err := Ask(AskRequest{
+		RepoRoot: repo,
+		Question: "how does token rotation work?",
+		FileBackPage: map[string]any{
+			"type": "topic", "domain": "auth", "slug": "rotation-summary",
+			"body": "# Rotation summary\nTokens are rotated on a daily cadence.",
+		},
+		DecideFileBack: func(DistilledPage) bool { return true },
+		Now:            fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("ask --file-back: %v", err)
+	}
+	if ask.FileBack == nil {
+		t.Fatal("file-back result missing")
+	}
+	if ask.FileBack.Status != "written" {
+		t.Fatalf("file-back status = %q, want written", ask.FileBack.Status)
+	}
+	const filed = "topic_auth_rotation-summary.md"
+	if len(ask.FileBack.Pages) != 1 || ask.FileBack.Pages[0] != filed {
+		t.Fatalf("file-back pages = %v, want [%s]", ask.FileBack.Pages, filed)
+	}
+	raw, err := os.ReadFile(filepath.Join(Dir(repo), filed))
+	if err != nil {
+		t.Fatalf("filed-back page not written: %v", err)
+	}
+	// The derived source block cites the ingested source, not an invented one.
+	fm, err := parseFrontmatter(string(raw))
+	if err != nil {
+		t.Fatalf("filed-back page frontmatter: %v\n%s", err, raw)
+	}
+	src, ok := fm["source"].(map[string]any)
+	if !ok {
+		t.Fatalf("filed-back page carries no source block:\n%s", raw)
+	}
+	if err := validateSourceBlock(src); err != nil {
+		t.Fatalf("derived source block is invalid: %v\n%s", err, raw)
+	}
+	if got := SourceHashes(src); len(got) != 1 || got[0] != hash {
+		t.Fatalf("derived source hashes = %v, want [%s]", got, hash)
+	}
+	// The registry back-links the new page under the cited hash.
+	reg, err := LoadRegistry(SourcesIndexPath(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := reg[hash].(map[string]any)
+	if !ok {
+		t.Fatalf("registry entry for the cited hash missing: %+v", reg)
+	}
+	pages := anyToStrings(entry["consumers"].(map[string]any)["memory"].(map[string]any)["pages"])
+	if !contains(pages, filed) {
+		t.Errorf("registry pages = %v, want the filed-back page %s back-linked", pages, filed)
+	}
+}
+
+// TestAskFileBackRefusesWithoutWriting is the refusal corpus of the file-back
+// write path: each refusing condition must be raised BEFORE any write, with the
+// pinned error shape, and must leave the memory store byte-identical.
+func TestAskFileBackRefusesWithoutWriting(t *testing.T) {
+	fbPage := func() map[string]any {
+		return map[string]any{
+			"type": "topic", "domain": "auth", "slug": "rotation-summary",
+			"body": "# Rotation summary\nTokens are rotated on a daily cadence.",
+		}
+	}
+
+	t.Run("no_matches", func(t *testing.T) {
+		repo := t.TempDir()
+		seedAskStore(t, repo)
+		before := storeSnapshot(t, repo)
+
+		res, err := Ask(AskRequest{
+			RepoRoot: repo, Question: "photosynthesis chlorophyll",
+			FileBackPage: fbPage(), Now: fixedNow,
+		})
+		if err == nil {
+			t.Fatalf("a file-back with no cited matches must be refused, got %+v", res)
+		}
+		var ae *AskError
+		if !errors.As(err, &ae) {
+			t.Fatalf("error = %T (%v), want *AskError", err, err)
+		}
+		if !strings.Contains(err.Error(), "no matching memory pages") {
+			t.Errorf("refusal message = %q, want the unattributable-page refusal", err)
+		}
+		assertStoreUnchanged(t, before, storeSnapshot(t, repo))
+	})
+
+	t.Run("declined_by_decision", func(t *testing.T) {
+		repo := t.TempDir()
+		seedAskStore(t, repo)
+		before := storeSnapshot(t, repo)
+
+		ask, err := Ask(AskRequest{
+			RepoRoot: repo, Question: "how does token rotation work?",
+			FileBackPage:   fbPage(),
+			DecideFileBack: func(DistilledPage) bool { return false },
+			Now:            fixedNow,
+		})
+		if err != nil {
+			t.Fatalf("a declined file-back is not an error: %v", err)
+		}
+		if ask.FileBack == nil || ask.FileBack.Status != "declined" {
+			t.Fatalf("file-back = %+v, want status declined", ask.FileBack)
+		}
+		if len(ask.FileBack.Pages) != 0 || ask.FileBack.WriteReport != nil {
+			t.Errorf("a declined file-back must report no pages and no write: %+v", ask.FileBack)
+		}
+		assertStoreUnchanged(t, before, storeSnapshot(t, repo))
+	})
+
+	t.Run("cited_pages_without_provenance", func(t *testing.T) {
+		repo := t.TempDir()
+		mem := Dir(repo)
+		if err := os.MkdirAll(mem, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// A page whose source block carries a class but none of the per-source
+		// provenance a filed-back page would have to inherit.
+		page := "---\nsource:\n  class: session_memory\ntopic_hash: " + strings.Repeat("c", 64) +
+			"\n---\n\n# Token rotation\n"
+		if err := os.WriteFile(filepath.Join(mem, "topic_auth_tokens.md"), []byte(page), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		before := storeSnapshot(t, repo)
+
+		res, err := Ask(AskRequest{
+			RepoRoot: repo, Question: "token rotation",
+			FileBackPage: fbPage(), Now: fixedNow,
+		})
+		if err == nil {
+			t.Fatalf("a file-back citing pages without complete provenance must be refused, got %+v", res)
+		}
+		var ae *AskError
+		if !errors.As(err, &ae) {
+			t.Fatalf("error = %T (%v), want *AskError", err, err)
+		}
+		if !strings.Contains(err.Error(), "file-back needs provenance") {
+			t.Errorf("refusal message = %q, want the missing-provenance refusal", err)
+		}
+		assertStoreUnchanged(t, before, storeSnapshot(t, repo))
+	})
 }
 
 // ---------------------------------------------------------------------------
