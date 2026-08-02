@@ -477,7 +477,7 @@ called out in a **Breaking** section.
   (`abcd lint terminology`), and a config allowlist key
   (`terminology_exclude_files`), none of which exist; it now describes what does
   — the frontmatter tables as the shape's own specification, `GL002` through
-  `abcd docs lint`, and the index drift gate — and says plainly that neither is a
+  the record-lint gate, and the index drift gate — and says plainly that neither is a
   full schema validator. `glossary/core/brief.md` no longer calls the brief
   "immutable once approved", which contradicted adr-5's living-record decision,
   and the brief's own navigation table and directory tree now list `glossary/`,

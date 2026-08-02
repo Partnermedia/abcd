@@ -7,7 +7,7 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"
 found_at: ".abcd/development/brief/glossary"
-resolution: "One canonical glossary: brief/glossary/ keeps the name and 04-naming.md stops claiming it, keeping its reserved-vocabulary table as the distinct enum registry it is. The glossary index and directory tree are rendered from the term files by internal/core/glossary and gated by a drift test, so the missing distribution/ context cannot recur. The phantom terminology schema, abcd lint terminology verb, and terminology_exclude_files key are replaced by what ships (GL002 via abcd docs lint, plus the drift gate). core/brief.md matches adr-5, brief/README.md lists glossary/, and a public banlist entry blocks the retired phrase from the published surface."
+resolution: "One canonical glossary: brief/glossary/ keeps the name and 04-naming.md stops claiming it, keeping its reserved-vocabulary table as the distinct enum registry it is. The glossary index and directory tree are rendered from the term files by internal/core/glossary and gated by a drift test, so the missing distribution/ context cannot recur. The phantom terminology schema, abcd lint terminology verb, and terminology_exclude_files key are replaced by what ships (GL002 via the record-lint gate, plus the drift gate). core/brief.md matches adr-5, brief/README.md lists glossary/, and a public banlist entry blocks the retired phrase from the published surface."
 impact: fix
 ---
 

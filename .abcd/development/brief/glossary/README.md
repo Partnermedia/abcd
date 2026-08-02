@@ -94,12 +94,13 @@ glossary/
 Two mechanical checks read this directory. Neither is a full schema validator — the field tables
 above are the shape's specification, and conformance to them is a review responsibility.
 
-- **`GL002` forbidden synonyms** (`internal/core/lint`, run by `abcd docs lint`). The rule walks this
-  directory as the single source of truth for what a forbidden synonym is, then flags live prose that
-  substitutes an *enforced* synonym for its canonical term. Enforcement is a configured subset of the
-  declared synonyms, because most of them are common English words: a repo opts words in through the
-  `forbidden_synonyms` rule in its `.abcd/docs-lint.json`, and a word the glossary does not forbid is
-  refused as a configuration error. This repo declares synonyms here without enforcing any of them yet.
+- **`GL002` forbidden synonyms** (`internal/core/lint`, run by the record-lint gate — `go run
+  ./cmd/record-lint`). The rule walks this directory as the single source of truth for what a
+  forbidden synonym is, then flags live prose that substitutes an *enforced* synonym for its
+  canonical term. Enforcement is a configured subset of the declared synonyms, because most of them
+  are common English words: a repo opts words in through the `forbidden_synonyms` rule in its
+  `.abcd/record-lint.json`, and a word the glossary does not forbid is refused as a configuration
+  error. This repo currently enforces one — `epic` (itd-43) — via that rule's `enforce` list.
 - **The index drift gate** (`internal/core/glossary`, run by `go test ./internal/core/glossary/`).
   The Directory Layout and Term Index blocks above and below are rendered from the term files; the
   test fails the build when the committed README no longer matches what the directory holds. A term
@@ -116,7 +117,7 @@ above are the shape's specification, and conformance to them is a review respons
 1. Copy `_template.md` to the appropriate subdirectory (see the [Term Index](#term-index) for the current contexts, or create a new context directory).
 2. Fill in all required frontmatter fields.
 3. Write a narrative body below the closing `---`.
-4. Run `abcd docs lint` and `go test ./internal/core/glossary/`.
+4. Run `go run ./cmd/record-lint` and `go test ./internal/core/glossary/`.
 5. Copy the rendered blocks the drift gate prints into the generated regions above and below — the
    index is derived from the term files, never hand-typed.
 
@@ -195,7 +196,7 @@ The complete write-back protocol is a **design target** of `/abcd:intent grill`'
 
 `GL002` reads every term file here for its forbidden-synonym set, and it never scans this directory
 back: a term file names its own forbidden synonyms legitimately, so the glossary is always exempt from
-its own rule. Beyond that, a repo scopes the rule in its `.abcd/docs-lint.json` `forbidden_synonyms`
+its own rule. Beyond that, a repo scopes the rule in its `.abcd/record-lint.json` `forbidden_synonyms`
 entry — `exempt_prefixes` skips whole path prefixes (the historical, git-tracked records), and
 `allow_context` suppresses a line matching a named pattern (an external token that merely mentions the
 word).
