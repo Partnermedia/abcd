@@ -12,6 +12,26 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`record_schema` — the design record is checked across its stores, not just
+  inside each one** (iss-39). Every existing record rule asks a question about one
+  store: is this intent's bucket schema right, does this spec agree with its
+  intent. None of them asked the questions that only make sense between stores,
+  which is where a record actually drifts. The new rule reads the ADR, intent,
+  spec, and issue stores in one pass and holds four invariants: a cross-reference
+  field (`supersedes`, `related_adrs`, `related_intents`, `builds_on`,
+  `blocked_by`) names a record the corpus has — or one a successor declares it
+  superseded, since a pruned record is accounted for rather than lost; a
+  supersession is declared from BOTH sides, so a record can no longer contradict
+  itself about which decision is in force; a filename and the id inside it agree,
+  so one record cannot answer to two handles; and every lifecycle directory is
+  enumerated, so a bucket nobody declared is a finding rather than a state no rule
+  reads. A supersession may cross stores — an ADR that redecides the question an
+  intent rested on retires that intent — so `superseded_by` accepts `adr-N` as
+  well as `itd-N`. Cross-references are checked in frontmatter rather than in
+  prose on purpose: a frontmatter handle is a machine-readable claim that the
+  record exists, while prose legitimately names ids that do not resolve. Any
+  abcd-managed repo enables it by declaring its own `record_stores` in
+  `.abcd/record-lint.json`.
 - **`index_drift` — a hand-written directory index is gated, not trusted**
   (iss-38). A README that enumerates its sibling files by hand is a second copy
   of something the filesystem already knows, and it drifts the moment a file is
@@ -406,6 +426,17 @@ called out in a **Breaking** section.
   notice goes quiet for everyone and `.binary-meta` is the one place that says
   why. The release tag is sanitised before it is rendered, being the only value
   in the line that arrives unchecked from off the machine.
+
+### Changed
+
+- **The `superseded/` lint exemption narrows to content-authoring rules**
+  (iss-39). Being historical excuses a record from how it is WRITTEN — the banned
+  tokens, the persona roster — never from being well-formed. The exemption used to
+  reach the intent-lifecycle schema too, so the `superseded/` bucket excused its
+  own records from the one rule that checks a supersession is recorded: two
+  intents sat there carrying a prose note and no `superseded_by` field at all,
+  invisible for as long as the exemption held. Schema and structural rules now run
+  everywhere; only the content-authoring rules honour the exemption.
 
 ### Fixed
 
