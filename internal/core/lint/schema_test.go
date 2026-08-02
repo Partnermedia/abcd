@@ -216,6 +216,103 @@ func TestRecordSchemaFlatStoreHasNoSubdirectories(t *testing.T) {
 	}
 }
 
+// A DECLARED bucket holds its records directly, so a directory inside one is the
+// same escape as a directory inside a flat store — every check in the rule stops
+// at it. Closing it only for the store roots left three of the four stores open.
+func TestRecordSchemaBucketHasNoSubdirectories(t *testing.T) {
+	root := t.TempDir()
+	shipped := "rec/intents/shipped"
+	writeFile(t, root, shipped+"/itd-1-good.md", "---\nid: itd-1\nkind: standalone\nspec_id: spc-1-x\n---\n# ok\n")
+	// Two defects, each of a class the rule checks, one directory down.
+	writeFile(t, root, shipped+"/archive/itd-2-bad.md", "---\nid: itd-7\nkind: standalone\nsuperseded_by: itd-9999\n---\n# hidden\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(shipped, "archive"), ruleRecordSchema, "holds records directly, so subdirectory 'archive' is undeclared") {
+		t.Fatalf("expected an undeclared-subdirectory finding inside the bucket: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 finding, got %d: %+v", n, fs)
+	}
+}
+
+// The spec store is indexed by this rule, so a spec handle must PARSE as one. A
+// prefix the rule indexes but the pattern omits reads as "no handle at all": the
+// forward direction becomes a false blocker and the reverse is never checked.
+func TestRecordSchemaResolvesSpecHandles(t *testing.T) {
+	specs := "rec/specs"
+
+	t.Run("a bidirectional spec supersession is clean", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, specs+"/closed/spc-5-old.md", "---\nid: spc-5\nintent: itd-1\nslug: old\nsuperseded_by: spc-6\n---\n# x\n")
+		writeFile(t, root, specs+"/open/spc-6-new.md", "---\nid: spc-6\nintent: itd-1\nslug: new\nsupersedes: [spc-5]\n---\n# x\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("a fully-linked spec pair must be clean, got %d: %+v", n, fs)
+		}
+	})
+
+	t.Run("a one-way spec supersession is caught", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, specs+"/closed/spc-5-old.md", "---\nid: spc-5\nintent: itd-1\nslug: old\nsuperseded_by: spc-6\n---\n# x\n")
+		writeFile(t, root, specs+"/open/spc-6-new.md", "---\nid: spc-6\nintent: itd-1\nslug: new\nsupersedes: null\n---\n# x\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !findingWith(fs, filepath.Join(specs, "closed", "spc-5-old.md"), ruleRecordSchema, "one-way supersession") {
+			t.Fatalf("expected the reverse direction to be checked for specs: %+v", fs)
+		}
+	})
+}
+
+// An empty flow sequence is this record's house spelling for an empty list, so it
+// says "nothing here" — not "a value that is not a handle".
+func TestRecordSchemaEmptyListIsAbsent(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0001-model.md", "---\nid: adr-1\nsupersedes: []\nsuperseded_by: []\nrelated_adrs: []\n---\n# ADR-1\n")
+	writeFile(t, root, adrs+"/0002-kinds.md", "---\nid: adr-2\nsuperseded_by: [ ]\n---\n# ADR-2\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("an empty list is an absence, got %d: %+v", n, fs)
+	}
+}
+
+// A zero-padded id and its bare spelling are one handle — the rule says so about
+// its cross-references, and must not contradict itself about its filenames.
+func TestRecordSchemaFilenameIDComparesNumerically(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-0012\n---\n# ADR-12\n")
+	writeFile(t, root, adrs+"/0013-memory.md", "---\nid: ADR-13\n---\n# ADR-13\n")
+	// Still a mismatch: a different number, and a value that is no handle at all.
+	writeFile(t, root, adrs+"/0021-go.md", "---\nid: adr-0022\n---\n# ADR-21\n")
+	writeFile(t, root, adrs+"/0023-core.md", "---\nid: core\n---\n# ADR-23\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 2 {
+		t.Fatalf("expected 2 filename/id findings, got %d: %+v", n, fs)
+	}
+	for _, f := range []string{"0021-go.md", "0023-core.md"} {
+		if !findingWith(fs, filepath.Join(adrs, f), ruleRecordSchema, "filename claims id") {
+			t.Errorf("expected a mismatch on %s: %+v", f, fs)
+		}
+	}
+}
+
 // The retirement escape hatch is bounded by what the store has actually issued.
 // Unbounded it is self-attesting: one record naming a phantom in `supersedes`
 // would make that phantom resolvable in every other record's cross-references.

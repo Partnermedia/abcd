@@ -37,9 +37,17 @@ const ruleRecordSchema = "record_schema"
 
 var (
 	// A record handle as it is written in a cross-reference field: adr-6, ADR-6,
-	// itd-47, iss-39. The number is compared numerically, so the zero-padded and
-	// bare spellings of one id are the same handle.
-	recordHandleRe = regexp.MustCompile(`(?i)\b(adr|itd|iss)-(\d+)\b`)
+	// itd-47, iss-39, spc-5. The number is compared numerically, so the zero-padded
+	// and bare spellings of one id are the same handle. The alternation covers
+	// every store the rule INDEXES — a prefix indexed but not matched here reads as
+	// "no handle at all", which turns a well-formed link into a false blocker and
+	// leaves its reverse direction unchecked.
+	recordHandleRe = regexp.MustCompile(`(?i)\b(adr|itd|iss|spc)-(\d+)\b`)
+	// The same handle, anchored: a whole frontmatter id value and nothing else.
+	recordHandleFullRe = regexp.MustCompile(`(?i)^(adr|itd|iss|spc)-(\d+)$`)
+	// recordHandleKinds renders the legal prefixes for a message, composed from the
+	// stores rather than spelled as a literal so it cannot drift from the pattern.
+	recordHandleKinds = "adr-N, itd-N, spc-N, or iss-N"
 	// Filename → id number for each store. An ADR filename is the zero-padded
 	// sequential form (0012-<slug>.md); the other three carry the prose handle.
 	adrFileNumRe    = regexp.MustCompile(`^(\d+)-.*\.md$`)
@@ -204,8 +212,8 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		sb := r.fields["superseded_by"]
 		targets := r.refs["superseded_by"]
 		if len(targets) == 0 {
-			if !isNull(sb.value) {
-				add(r.rel, sb.line, "superseded_by '"+sb.value+"' is not a record handle (want adr-N, itd-N, or iss-N)")
+			if !isAbsentValue(sb.value) {
+				add(r.rel, sb.line, "superseded_by '"+sb.value+"' is not a record handle (want "+recordHandleKinds+")")
 			}
 			continue
 		}
@@ -250,13 +258,20 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 // schema question than this rule's, so only a present one is compared.
 func checkRecordFilename(r schemaRecord, severity string) []Finding {
 	f := r.fields["id"]
-	if isNull(f.value) {
+	if isAbsentValue(f.value) {
 		return nil
 	}
 	want := r.handle()
 	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
-	if strings.EqualFold(got, want) {
-		return nil
+	// Compared as a PARSED handle, not as a string: `adr-0012` and `adr-12` are one
+	// id written two ways (the rest of the rule already compares numerically), and
+	// a string comparison would report the record's own zero-padded spelling as a
+	// disagreement with itself.
+	if m := recordHandleFullRe.FindStringSubmatch(got); m != nil {
+		if n, err := strconv.Atoi(m[2]); err == nil &&
+			strings.EqualFold(m[1], r.store.prefix) && n == r.num {
+			return nil
+		}
 	}
 	line := f.line
 	if line == 0 {
@@ -314,11 +329,20 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				return err
 			}
 			for _, e := range es {
-				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				rel := filepath.Join(bucketRel, e.Name())
+				if e.IsDir() {
+					// A bucket (and a flat store) holds its records DIRECTLY. A
+					// directory inside one is a lifecycle nobody declared, and every
+					// check in this rule stops at it — which is the same escape the
+					// undeclared-bucket check closes one level up, so it is closed
+					// here too rather than only for the store roots. A dot-directory
+					// is tooling state, not a lifecycle the record authored.
+					if !strings.HasPrefix(e.Name(), ".") {
+						add(rel, undeclaredSubdirMessage(store, bucket, e.Name()))
+					}
 					continue
 				}
-				rel := filepath.Join(bucketRel, e.Name())
-				if strings.EqualFold(e.Name(), "README.md") {
+				if !strings.HasSuffix(e.Name(), ".md") || strings.EqualFold(e.Name(), "README.md") {
 					continue
 				}
 				m := store.fileNumRe.FindStringSubmatch(e.Name())
@@ -351,17 +375,9 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 
 		storeRel := repoRel(repoRoot, storeAbs)
 		if store.buckets == nil {
-			// A flat store declares NO buckets, so every subdirectory of it is
-			// undeclared by definition. Saying nothing here would let a whole
-			// directory of records — with their ids, filenames, and supersessions —
-			// sit one level down where no check in this rule ever reaches them,
-			// which is the exact escape the bucketed branch below exists to close.
-			for _, e := range entries {
-				if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-					add(filepath.Join(storeRel, e.Name()), "the "+store.noun+" store is flat, so subdirectory '"+e.Name()+
-						"' is undeclared; records inside it are read by no rule")
-				}
-			}
+			// A flat store declares NO buckets, so it holds its records directly and
+			// readBucket reports any subdirectory of it, exactly as it does for a
+			// declared bucket.
 			if err := readBucket(storeAbs, storeRel, ""); err != nil {
 				return nil, nil, err
 			}
@@ -399,6 +415,35 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 
 	sort.SliceStable(records, func(i, j int) bool { return records[i].rel < records[j].rel })
 	return records, out, nil
+}
+
+// undeclaredSubdirMessage names a directory that sits where records should. A
+// flat store and a declared bucket both hold records directly, so the defect is
+// the same and only the wording differs.
+func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
+	if bucket == "" {
+		return "the " + store.noun + " store is flat, so subdirectory '" + name +
+			"' is undeclared; records inside it are read by no rule"
+	}
+	return "lifecycle bucket '" + bucket + "' holds records directly, so subdirectory '" + name +
+		"' is undeclared; records inside it are read by no rule"
+}
+
+// isAbsentValue reports whether a frontmatter value says "nothing here". It is
+// isNull widened by the empty flow sequence, which is this record's house
+// spelling for an empty list (`related_rfcs: []`) and therefore an absence, not a
+// malformed value. It is local rather than folded into the shared isNull because
+// isNull also judges SCALAR fields (kind, impact, slug), where a list literal is a
+// wrong value rather than an unset one, and should keep saying so.
+func isAbsentValue(value string) bool {
+	v := strings.TrimSpace(value)
+	if isNull(v) {
+		return true
+	}
+	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
+		return strings.TrimSpace(v[1:len(v)-1]) == ""
+	}
+	return false
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.
