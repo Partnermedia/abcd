@@ -78,6 +78,10 @@ func deriveIdentity(cwd string) RepoIdentity {
 // plugin root resolution
 // ---------------------------------------------------------------------------
 
+// osExecutable is os.Executable, overridable so a test can drive the
+// executable-ancestor fallback without re-execing the test binary.
+var osExecutable = os.Executable
+
 // resolvePluginRoot resolves the plugin root via ABCD_PLUGIN_ROOT ->
 // CLAUDE_PLUGIN_ROOT -> executable-ancestor fallback, validating the expected
 // layout for each candidate. Returns ("", false) when every candidate fails.
@@ -89,9 +93,14 @@ func resolvePluginRoot() (string, bool) {
 	if v := os.Getenv("CLAUDE_PLUGIN_ROOT"); v != "" {
 		candidates = append(candidates, v)
 	}
-	if exe, err := os.Executable(); err == nil {
-		// Walk up looking for a directory with the plugin layout.
-		dir := filepath.Dir(exe)
+	if exe, err := osExecutable(); err == nil {
+		// Walk up looking for a directory with the plugin layout. Canonicalise
+		// first: os.Executable reports the path abcd was INVOKED through, and
+		// `ahoy install` pins a PATH symlink (/usr/local/bin/abcd ->
+		// <plugin-root>/abcd), so an unresolved path walks the symlink's
+		// ancestors and never reaches the plugin root (iss-170). resolvePath
+		// falls back to an absolutised form, then the original path, on error.
+		dir := filepath.Dir(resolvePath(exe))
 		for i := 0; i < 6 && dir != "/" && dir != "."; i++ {
 			candidates = append(candidates, dir)
 			dir = filepath.Dir(dir)
