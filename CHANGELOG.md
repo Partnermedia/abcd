@@ -436,20 +436,21 @@ called out in a **Breaking** section.
 
 ### Changed
 
-- **The `superseded/` lint exemption narrows to content-authoring rules**
-  (iss-39). Being historical excuses a record from how it is WRITTEN — the banned
-  tokens, the persona roster — never from being well-formed. The exemption used to
-  reach the intent-lifecycle schema too, so the `superseded/` bucket excused its
-  own records from the one rule that checks a supersession is recorded: two
-  intents sat there carrying a prose note and no `superseded_by` field at all,
-  invisible for as long as the exemption held. Both rules that read the intent
-  tree — `intent_lifecycle` and `intent_impact_valid`, which share one scan of it
-  — now run everywhere, `superseded/` included; if you arm `intent_impact_valid`
-  with `exempt_paths`, an exempt record carrying an illegal `impact:` value is a
-  finding on upgrade where it was silent before. The spec-store rules
-  (`spec_lifecycle`, `spec_id_unique`) still honour the exemption as before —
-  widening those is separate work. The new `record_schema` is cross-store and
-  never consulted the exemption at all.
+- **The intent tree's schema rules stop honouring the `superseded/` lint
+  exemption** (iss-39). Being historical excuses a record from how it is
+  WRITTEN — the banned tokens, the persona roster — never from being
+  well-formed. The exemption used to reach the intent-lifecycle schema too, so
+  the `superseded/` bucket excused its own records from the one rule that
+  checks a supersession is recorded: two intents sat there carrying a prose
+  note and no `superseded_by` field at all, invisible for as long as the
+  exemption held. Both rules that read the intent tree — `intent_lifecycle` and
+  `intent_impact_valid`, which share one scan of it — now run everywhere,
+  `superseded/` included; if you arm `intent_impact_valid` with `exempt_paths`,
+  an exempt record carrying an illegal `impact:` value is a finding on upgrade
+  where it was silent before. The spec-store rules (`spec_lifecycle`,
+  `spec_id_unique`) still honour the exemption as before — widening those is
+  separate work. The new `record_schema` is cross-store and never consulted the
+  exemption at all.
 
 ### Fixed
 

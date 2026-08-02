@@ -7,7 +7,7 @@ category: "drift"
 source: "agent-finding"
 found_during: "2026-07-08 multi-agent review"
 found_at: ".abcd/development/decisions"
-resolution: "record-lint gains the record_schema family: cross-reference resolution, bidirectional supersession, filename-id agreement, and a lifecycle-directory catch-all; the superseded/ exemption narrows to content-authoring rules only"
+resolution: "record-lint gains the record_schema family: cross-reference resolution, bidirectional supersession, filename-id agreement, and a lifecycle-directory catch-all; both intent-tree rules (intent_lifecycle, intent_impact_valid) stop honouring the superseded/ exemption, while the spec-store rules still honour it and the cross-store record_schema never did"
 impact: additive
 ---
 
