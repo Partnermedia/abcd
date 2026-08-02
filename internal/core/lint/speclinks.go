@@ -133,7 +133,7 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 	})
 
 	specsRoot := filepath.Join(repoRoot, filepath.FromSlash(specsDir))
-	for _, bucket := range []string{"open", "closed"} {
+	for _, bucket := range specBucketNames {
 		entries, err := os.ReadDir(filepath.Join(specsRoot, bucket))
 		if err != nil {
 			if os.IsNotExist(err) {

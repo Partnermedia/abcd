@@ -17,11 +17,13 @@ type Config struct {
 	// keyed by rule id (no_git_metadata, links_resolve, ...).
 	Rules map[string]RuleConfig `json:"rules"`
 	// ExemptPaths are repo-relative path prefixes whose files skip the
-	// content-drift checks (banned_tokens, intent_lifecycle) — the historical,
-	// non-forward-looking part of the record. Structural checks stay universal.
+	// content-AUTHORING checks (banned_tokens, persona_registry) — the historical,
+	// non-forward-looking part of the record, which is excused from how it is
+	// written but never from being well-formed. Structural and schema checks
+	// (record_schema, intent_lifecycle, spec_lifecycle) stay universal (iss-39).
 	ExemptPaths []string `json:"exempt_paths"`
 	// ExemptIfStatus lists leading-frontmatter status: values that likewise
-	// exempt a file from the content-drift checks (e.g. superseded records).
+	// exempt a file from the content-authoring checks (e.g. superseded records).
 	ExemptIfStatus []string `json:"exempt_if_status"`
 }
 
@@ -172,6 +174,14 @@ type RuleConfig struct {
 	// defaults to warn because the COMMIT gate never calendar-blocks (spc-17);
 	// the release gate is what promotes it to a blocker.
 	OverdueSeverity string `json:"overdue_severity"`
+	// RecordStores are the record_schema stores: the repo-relative directory of
+	// each identified record store, keyed by id prefix (adr, itd, spc, iss). The
+	// rule reasons ACROSS the stores, which straddle Roots (the issue ledger is
+	// working-tier, the rest is the design record), so each is named repo-relative
+	// here. An unnamed or absent store contributes nothing. Only the LOCATIONS are
+	// configurable — which lifecycle buckets each store declares is the record's
+	// schema and lives in code, so a config can never quietly add or hide one.
+	RecordStores map[string]string `json:"record_stores"`
 	// Indexes are the index_drift pairs: each names a marked region in a document
 	// and the directory that region enumerates. The rule reads documents outside
 	// Roots (a package or command README lives beside its code), so the pairs are

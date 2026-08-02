@@ -90,18 +90,25 @@ var (
 	stepMarkerRe   = regexp.MustCompile(`^\s+-\s+(.*\S)\s*$`)
 	stepNameKeyRe  = regexp.MustCompile(`^\s+name:\s*(.+?)\s*$`)
 	specIDRe       = regexp.MustCompile(`^spc-`)
-	supersededRe   = regexp.MustCompile(`^itd-\d+`)
+	// A superseded intent may be replaced by a later intent OR by an ADR: an ADR
+	// that redecides the question an intent rested on retires that intent as surely
+	// as a successor intent does (itd-47 → adr-22, itd-49 → adr-26). Restricting
+	// this to ^itd- forced such a record to carry no supersession at all (iss-39).
+	supersededRe = regexp.MustCompile(`^(itd|adr)-\d+`)
 	// spec_lifecycle: anchored id/link/filename matchers for the spec store.
 	specFileRe     = regexp.MustCompile(`^spc-\d+.*\.md$`)
 	specIDFullRe   = regexp.MustCompile(`^spc-\d+$`)
 	intentIDFullRe = regexp.MustCompile(`^itd-\d+$`)
-	intentBuckets  = map[string]bool{
-		"drafts": true, "planned": true, "shipped": true,
-		"disciplines": true, "superseded": true,
-	}
+	// The lifecycle directories each store declares. They are spelled ONCE, as
+	// ordered slices, because record_schema enumerates them to catch an undeclared
+	// bucket — a second, divergent copy would let a bucket be "known" to one rule
+	// and invisible to the other (iss-39).
+	intentBucketNames = []string{"drafts", "planned", "shipped", "disciplines", "superseded"}
+	specBucketNames   = []string{"open", "closed"}
 	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
 	// scans all three for a duplicated iss-N id).
 	issueStatusDirs = []string{"open", "resolved", "wontfix"}
+	intentBuckets   = bucketSet(intentBucketNames)
 	// intentImpactValues and issueImpactValues render the legal impact set an
 	// error message offers. They are composed from the shared enum's constants
 	// (internal/core/changelog) rather than spelled as literals, so a rename there
@@ -111,6 +118,16 @@ var (
 	intentImpactValues = joinImpacts(changelog.ImpactAdditive, changelog.ImpactBreaking, changelog.ImpactFix)
 	issueImpactValues  = joinImpacts(changelog.ImpactAdditive, changelog.ImpactBreaking, changelog.ImpactFix, changelog.ImpactInternal)
 )
+
+// bucketSet renders a declared-bucket slice as the membership set the walks test
+// against, so the ordered list stays the single declaration of what exists.
+func bucketSet(names []string) map[string]bool {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
 
 // joinImpacts renders an impact set the way the shared parser's own errors do,
 // so every message about the enum reads alike.
@@ -191,8 +208,10 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			rel := repoRel(repoRoot, fileAbs)
 			lines := strings.Split(string(content), "\n")
 			mask := fenceMask(lines)
-			// Content-drift checks (banned_tokens, intent_lifecycle) cover only
-			// the forward-looking record; structural checks below stay universal.
+			// Content-authoring checks (banned_tokens, persona_registry) cover only
+			// the forward-looking record; structural and schema checks stay
+			// universal — being historical excuses a record from how it is WRITTEN,
+			// never from being well-formed (iss-39).
 			exempt := contentExempt(rel, frontmatterFields(lines), cfg)
 
 			if len(tokenChecks) > 0 && !exempt {
@@ -252,7 +271,7 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			if t, ok := intentTrees[dir]; ok {
 				return t, nil
 			}
-			t, err := scanIntentTree(repoRoot, rootAbs, dir, cfg)
+			t, err := scanIntentTree(repoRoot, rootAbs, dir)
 			if err != nil {
 				return intentTree{}, err
 			}
@@ -330,6 +349,17 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, sc...)
+	}
+
+	// record_schema reasons ACROSS the record's stores (ADRs, intents, specs, and
+	// the issue ledger), which straddle cfg.Roots, so its stores are named
+	// repo-relative in its own config and it runs once here.
+	if rsCfg, ok := cfg.Rules[ruleRecordSchema]; ok && rsCfg.Enabled {
+		rs, err := checkRecordSchema(repoRoot, rsCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, rs...)
 	}
 
 	// index_drift reads documents that live beside the code they index (a package
@@ -1422,11 +1452,13 @@ type intentRecord struct {
 }
 
 // intentTree is ONE scan of the intent buckets, shared by every rule that reads
-// the tree (intent_lifecycle, intent_impact_valid). records excludes the
-// historically-exempt files (contentExempt), because every rule over this tree
-// is a content check; known and idFiles index EVERY intent file found anywhere
-// beneath it, exempt or not, because a superseded_by target and an id collision
-// must resolve against the whole corpus.
+// the tree (intent_lifecycle, intent_impact_valid). records holds EVERY intent
+// file in a declared bucket: both rules over this tree are schema rules (which
+// bucket demands which fields, which impact values are legal), and a schema rule
+// is not excused by the content exemption — that is what let two intents sit in
+// superseded/ carrying no supersession at all (iss-39). known and idFiles index
+// every intent file found anywhere beneath the tree, because a superseded_by
+// target and an id collision must resolve against the whole corpus.
 type intentTree struct {
 	records []intentRecord
 	known   map[string]bool
@@ -1445,7 +1477,7 @@ func intentsDirOf(cfg RuleConfig) string {
 
 // scanIntentTree reads the intent buckets once. A missing intents/ directory is
 // soft (no records, no error), mirroring the rest of the record lint.
-func scanIntentTree(repoRoot, rootAbs, intentsDir string, top Config) (intentTree, error) {
+func scanIntentTree(repoRoot, rootAbs, intentsDir string) (intentTree, error) {
 	intentsRoot := filepath.Join(rootAbs, intentsDir)
 	if _, err := os.Stat(intentsRoot); err != nil {
 		return intentTree{}, nil
@@ -1495,9 +1527,6 @@ func scanIntentTree(repoRoot, rootAbs, intentsDir string, top Config) (intentTre
 			}
 			rel := repoRel(repoRoot, fileAbs)
 			fields := frontmatterFields(strings.Split(string(content), "\n"))
-			if contentExempt(rel, fields, top) {
-				continue
-			}
 			tree.records = append(tree.records, intentRecord{
 				rel: rel, bucket: bucket, name: e.Name(), fields: fields,
 			})
@@ -1809,10 +1838,14 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 			add(spec.line, "disciplines: spec_id must be null")
 		}
 	case "superseded":
+		// The successor may be a later intent or the ADR that redecided the
+		// question (iss-39). Only an intent target is resolved here — the intent
+		// tree is the only corpus this rule reads; a cross-store target's existence
+		// is record_schema's, which reads every store.
 		sup, supOK := fields["superseded_by"]
 		if !supOK || !supersededRe.MatchString(sup.value) {
-			add(sup.line, "superseded: superseded_by must be present and match ^itd-\\d+")
-		} else if id := intentIDRe.FindString(sup.value); !known[id] {
+			add(sup.line, "superseded: superseded_by must be present and match ^(itd|adr)-\\d+")
+		} else if id := intentIDRe.FindString(sup.value); id != "" && !known[id] {
 			add(sup.line, "superseded: superseded_by target '"+id+"' does not exist in any bucket")
 		}
 		if kindNull {
@@ -2286,10 +2319,16 @@ func frontmatterFields(lines []string) map[string]fmField {
 	return fields
 }
 
-// contentExempt reports whether a file is excused from the content-drift checks
-// (banned_tokens, intent_lifecycle) because it is part of the historical record:
-// its repo-relative path begins with a configured prefix, or its leading
-// frontmatter status: value is listed. Structural checks never consult this.
+// contentExempt reports whether a file is excused from the content-AUTHORING
+// checks (banned_tokens, persona_registry) because it is part of the historical
+// record: its repo-relative path begins with a configured prefix, or its leading
+// frontmatter status: value is listed.
+//
+// Structural and schema checks never consult this. The exemption used to reach
+// the intent-lifecycle schema too, which is how two intents came to sit in
+// superseded/ with no supersession field at all — the one rule that would have
+// caught it was the rule the bucket exempted them from (iss-39). Being historical
+// excuses a record from how it is WRITTEN, never from being well-formed.
 func contentExempt(rel string, fields map[string]fmField, cfg Config) bool {
 	for _, p := range cfg.ExemptPaths {
 		if strings.HasPrefix(rel, p) {
