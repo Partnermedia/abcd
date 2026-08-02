@@ -5,6 +5,8 @@ spec_id: null
 kind: standalone
 suggested_kind: standalone
 reclassification_history: []
+superseded_by: adr-22
+kind_at_supersession: standalone
 related_adrs: []
 severity: nitpick
 ---

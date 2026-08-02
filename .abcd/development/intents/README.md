@@ -54,7 +54,7 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 | `planned/` | 📅 Planned | A committed capability awaiting its Go build — scheduled into a roadmap phase, or committed-but-unscheduled awaiting sequencing (the two axes are orthogonal, per [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). `spec_id` is `null` until the native spec layer schedules it (Phase 4), then points at a `spc-N`; bundle-member intents share a `spec_id` with their bundle-mates. |
 | `shipped/` | ✅ Shipped | Linked spec closed; `intent-fidelity-reviewer` ran. The intent's "Audit Notes" section contains per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
 | `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
-| `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <itd-N>` (the successor) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). Preserved as historical record. |
+| `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <handle>` (the successor — an intent, or the ADR that redecided the question the intent rested on) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). The successor names the intent back in its own `supersedes`. Preserved as historical record. |
 
 There is no `active/` state — "active" is implicit (a planned intent's linked spec is currently in flight in the native spec store; an active discipline is any intent in `disciplines/`).
 
@@ -294,7 +294,7 @@ The retired set is [`superseded/`](superseded/); each file names its own success
 
 Intents move here when they are killed by reclassification or absorption — e.g., when a smaller intent is folded into a larger one (`/abcd:intent reclassify <itd-N> --kind superseded --by <itd-M>`), or when a discipline is replaced by a stricter successor. Each superseded intent records two fields:
 
-- **`superseded_by: <itd-M>`** — the successor intent
+- **`superseded_by: <handle>`** — the successor. Usually a later intent (`itd-M`); an ADR (`adr-N`) when the decision the intent rested on is redecided rather than the capability re-scoped. The successor carries the other half of the pair, `supersedes: [<itd-N>]`, and `record_schema` blocks a supersession declared from one side only.
 - **`kind_at_supersession: <original-kind>`** — what shape the intent had when retired (`standalone`, `bundle-member`, or `discipline`)
 
 The original-kind preservation matters: "superseded" means different things depending on what the intent *was*. A superseded standalone is a retired capability. A superseded bundle-member is a retired half of a coupled pair. A superseded discipline is a retired rule that was inherited by every other spec. Without `kind_at_supersession`, future archaeology has to reconstruct the original shape from `reclassification_history` — which exists but is harder to query.

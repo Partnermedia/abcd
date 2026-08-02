@@ -3,7 +3,7 @@ id: adr-26
 slug: native-spec-layer-ccpm-backend
 status: accepted
 date: 2026-07-06
-supersedes: null
+supersedes: [itd-49]
 superseded_by: null
 related_intents: []
 related_rfcs: []

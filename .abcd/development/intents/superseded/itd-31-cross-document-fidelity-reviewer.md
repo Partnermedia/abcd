@@ -9,6 +9,7 @@ reclassification_history:
   - { date: 2026-05-07, from: bundle-member, to: standalone, reason: "Bundle dissolved when role-by-verb split landed (per command-structure-review round 2): three intent-review roles now have three distinct verbs (review/consistency/shape) under /abcd:intent, dissolving the unified-/abcd:audit-surface premise that the tier-0-audit-substrate bundle rested on. itd-32 superseded by this intent." }
   - { date: 2026-05-27, from: "standalone", to: "superseded", reason: "absorbed by itd-48" }
 kind_at_supersession: standalone
+supersedes: [itd-32]
 superseded_by: itd-48
 ---
 

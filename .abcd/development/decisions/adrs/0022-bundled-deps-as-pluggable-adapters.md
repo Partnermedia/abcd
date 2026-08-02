@@ -3,7 +3,7 @@ id: adr-22
 slug: bundled-deps-as-pluggable-adapters
 status: accepted
 date: 2026-07-06
-supersedes: [adr-14, adr-15, adr-17]
+supersedes: [adr-14, adr-15, adr-17, itd-47]
 superseded_by: null
 related_intents: []
 related_rfcs: []

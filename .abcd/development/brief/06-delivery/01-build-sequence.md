@@ -48,8 +48,8 @@ the packaging boundary holds.
 
 - **history seam** — the native local redacted transcript store
   ([adr-29](../../decisions/adrs/0029-native-transcript-corpus.md)): root-SHA-keyed,
-  gitignored, redacted on capture (reusing the two-stage redaction model of
-  adr-6).
+  gitignored, redacted on capture (reusing the two-stage redaction model that
+  adr-29 records).
   specstory is an opt-in import over the same store. This is the research and
   benchmark corpus abcd studies its own flows against.
 - **capture** — `/abcd:capture` issue ledger (itd-4) into the

@@ -3,7 +3,7 @@ id: adr-32
 slug: issue-ledger-is-working-tier-data
 status: accepted
 date: 2026-07-08
-supersedes: null
+supersedes: [adr-12]
 superseded_by: null
 related_intents: [itd-4, itd-36]
 related_rfcs: []

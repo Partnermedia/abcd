@@ -9,7 +9,7 @@
 | ahoy scanner probe | scanner seam defaults to the native secret/PII scan; a missing opt-in backend (gitleaks; TruffleHog when scan.deep=true) → native scan used, opt-in install offered with confirm — never a hard-fail on absence |
 | ahoy rules-loader install | Marker block from the bundled defaults injected; `.abcd/rules.json` skeleton written; the prompt-router hook registered |
 | Probe report | `/abcd:disembark probe` on corpus reports correct source-reader findings per repo (rich on idelphiDev, sparse on idelphiSubZero) |
-| Native transcript capture | A session transcript is written to the root-SHA-keyed native local store, **redacted at write time before anything lands on disk** (adr-29, reusing adr-6's two-stage model); the store is gitignored; an optional specstory import merges by timestamp/content hash over the same store |
+| Native transcript capture | A session transcript is written to the root-SHA-keyed native local store, **redacted at write time before anything lands on disk** (adr-29, which records the two-stage redaction model it reuses); the store is gitignored; an optional specstory import merges by timestamp/content hash over the same store |
 | Native spec store | Directory-as-truth (adr-26): a spec's location encodes its status; the dependency graph resolves ready work; planning and sequencing run with no external tool. With the ccpm backend wired, the same on-disk shape round-trips at the convention level (adr-24) |
 | Recency mechanic | Decision changed across specs → `spec-essence.json` body=latest, earlier in `superseded_by` |
 | Pass B targeting | chat-distiller receives only the time-windowed subset from the native transcript store; `rationale-fills.json` cites transcript filenames |
