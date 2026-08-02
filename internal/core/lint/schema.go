@@ -483,10 +483,16 @@ func recordRefsOf(lines []string, fields map[string]fmField) map[string][]record
 func blockSequenceAt(lines []string, line int) string {
 	var items []string
 	for i := line; i >= 1 && i < len(lines); i++ {
-		raw := lines[i]
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
-			break
+		trimmed := strings.TrimSpace(lines[i])
+		// A blank line or a comment INTERRUPTS a sequence without ending it: YAML
+		// reads `- a`, blank, `# why`, `- b` as one two-item list. Stopping at the
+		// interruption would drop the tail — and a dropped item is not a quiet
+		// under-read here, it makes the bidirectional check assert that ANOTHER
+		// file omits a link that file carries, the exact false claim this parse
+		// exists to prevent. The closing `---` is neither, so the scan still ends
+		// at the frontmatter boundary.
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
 		}
 		// A block sequence nested under a mapping key needs NO extra indentation:
 		// `key:\n- item` is the same list as `key:\n  - item`, and the record writes

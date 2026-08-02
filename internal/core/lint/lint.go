@@ -215,9 +215,11 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			lines := strings.Split(string(content), "\n")
 			mask := fenceMask(lines)
 			// Content-authoring checks (banned_tokens, persona_registry) cover only
-			// the forward-looking record; structural and schema checks stay
-			// universal — being historical excuses a record from how it is WRITTEN,
-			// never from being well-formed (iss-39).
+			// the forward-looking record — being historical excuses a record from
+			// how it is WRITTEN, never from being well-formed. The intent-tree
+			// checks (intent_lifecycle, intent_impact_valid) no longer consult the
+			// exemption and record_schema never did; the spec-store checks
+			// (spec_lifecycle, spec_id_unique) still do (iss-39).
 			exempt := contentExempt(rel, frontmatterFields(lines), cfg)
 
 			if len(tokenChecks) > 0 && !exempt {
@@ -2330,8 +2332,10 @@ func frontmatterFields(lines []string) map[string]fmField {
 // record: its repo-relative path begins with a configured prefix, or its leading
 // frontmatter status: value is listed.
 //
-// The intent tree's schema checks never consult this; the spec-store checks
-// (spec_lifecycle, spec_id_unique) still do. The exemption used to reach
+// Neither intent-tree check consults this — intent_lifecycle and
+// intent_impact_valid share one scan of the tree, so both stopped — and
+// record_schema never did; the spec-store checks (spec_lifecycle,
+// spec_id_unique) still do. The exemption used to reach
 // the intent-lifecycle schema too, which is how two intents came to sit in
 // superseded/ with no supersession field at all — the one rule that would have
 // caught it was the rule the bucket exempted them from (iss-39). Being historical

@@ -428,6 +428,39 @@ func TestRecordSchemaReadsBlockSequences(t *testing.T) {
 		}
 	})
 
+	// A blank line or a comment interrupts a sequence without ending it. Stopping
+	// at the interruption drops the tail — and the dropped handle then reads as a
+	// link the OTHER file omits, which is the false claim this parse prevents.
+	t.Run("a blank line or comment does not truncate the sequence", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0012-a.md", "---\nid: adr-12\nsuperseded_by: adr-32\n---\n# a\n")
+		writeFile(t, root, adrs+"/0013-b.md", "---\nid: adr-13\nsuperseded_by: adr-32\n---\n# b\n")
+		writeFile(t, root, adrs+"/0032-new.md",
+			"---\nid: adr-32\nsupersedes:\n- adr-12\n\n# the ledger-location pair\n- adr-13\nrelated_adrs: []\n---\n# new\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("an interrupted sequence is still one list, got %d: %+v", n, fs)
+		}
+	})
+
+	// The interruption skip must not run past the frontmatter: the closing `---`
+	// is neither blank nor a comment, so it still ends the scan.
+	t.Run("the scan still stops at the frontmatter boundary", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0032-new.md",
+			"---\nid: adr-32\nsupersedes:\n\n---\n\n- adr-9999\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countRule(fs, ruleRecordSchema); n != 0 {
+			t.Fatalf("a body list is not the key's sequence, got %d: %+v", n, fs)
+		}
+	})
+
 	t.Run("an unrelated block key does not leak into the next", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, root, "rec/intents/superseded/itd-31-cross-doc.md",

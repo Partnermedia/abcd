@@ -442,10 +442,14 @@ called out in a **Breaking** section.
   reach the intent-lifecycle schema too, so the `superseded/` bucket excused its
   own records from the one rule that checks a supersession is recorded: two
   intents sat there carrying a prose note and no `superseded_by` field at all,
-  invisible for as long as the exemption held. The intent tree's schema rules
-  (`record_schema`, `intent_lifecycle`) now run everywhere. The spec-store rules
+  invisible for as long as the exemption held. Both rules that read the intent
+  tree — `intent_lifecycle` and `intent_impact_valid`, which share one scan of it
+  — now run everywhere, `superseded/` included; if you arm `intent_impact_valid`
+  with `exempt_paths`, an exempt record carrying an illegal `impact:` value is a
+  finding on upgrade where it was silent before. The spec-store rules
   (`spec_lifecycle`, `spec_id_unique`) still honour the exemption as before —
-  widening those is separate work.
+  widening those is separate work. The new `record_schema` is cross-store and
+  never consulted the exemption at all.
 
 ### Fixed
 
