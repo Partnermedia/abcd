@@ -386,6 +386,48 @@ func TestRecordSchemaReadsBlockSequences(t *testing.T) {
 		}
 	})
 
+	// YAML nests a block sequence under a mapping key with NO extra indentation:
+	// `supersedes:\n- adr-12` is the same list as `supersedes:\n  - adr-12`, and the
+	// record writes both. Reading only the indented spelling makes the column-0 one
+	// look empty — the same false assertion about ANOTHER file, reached by a purely
+	// cosmetic difference in how the list was typed.
+	t.Run("the column-0 spelling reads the same as the indented one", func(t *testing.T) {
+		lint := func(t *testing.T, supersedes, related string) []Finding {
+			t.Helper()
+			root := t.TempDir()
+			writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-12\nsuperseded_by: adr-32\n---\n# ADR-12\n")
+			writeFile(t, root, adrs+"/0032-working-tier.md",
+				"---\nid: adr-32\nsupersedes:\n"+supersedes+"related_adrs:\n"+related+"---\n# ADR-32\n")
+			fs, err := Lint(schemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return fs
+		}
+
+		indented := lint(t, "  - adr-12\n", "  - adr-12\n")
+		column0 := lint(t, "- adr-12\n", "- adr-12\n")
+		if n := countRule(indented, ruleRecordSchema); n != 0 {
+			t.Fatalf("the indented spelling must be clean, got %d: %+v", n, indented)
+		}
+		if n := countRule(column0, ruleRecordSchema); n != 0 {
+			t.Fatalf("the column-0 spelling is the same list, got %d: %+v", n, column0)
+		}
+	})
+
+	t.Run("a one-way pair written at column 0 is still caught", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-12\nsuperseded_by:\n- adr-32\n---\n# ADR-12\n")
+		writeFile(t, root, adrs+"/0032-working-tier.md", "---\nid: adr-32\nsupersedes: null\n---\n# ADR-32\n")
+		fs, err := Lint(schemaConfig(), root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !findingWith(fs, filepath.Join(adrs, "0012-issue-ledger.md"), ruleRecordSchema, "one-way supersession") {
+			t.Fatalf("expected the one-way finding to survive the column-0 spelling: %+v", fs)
+		}
+	})
+
 	t.Run("an unrelated block key does not leak into the next", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, root, "rec/intents/superseded/itd-31-cross-doc.md",

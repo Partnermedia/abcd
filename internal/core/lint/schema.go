@@ -474,11 +474,12 @@ func recordRefsOf(lines []string, fields map[string]fmField) map[string][]record
 	return refs
 }
 
-// blockSequenceAt returns the indented `- item` lines that continue a frontmatter
-// key whose own line carries no value, joined so the handle scanner reads them as
-// one value. line is the key's 1-based source line, so the scan starts at the line
-// after it and stops at the first line that is not an indented list item — the
-// next key, the closing delimiter, or the end of the file.
+// blockSequenceAt returns the `- item` lines that continue a frontmatter key whose
+// own line carries no value, joined so the handle scanner reads them as one value.
+// line is the key's 1-based source line, so the scan starts at the line after it
+// and stops at the first line that is not a list item — the next key, the closing
+// delimiter, or the end of the file. Indentation is not required: YAML nests a
+// block sequence under a mapping key at column 0 too, which the record uses.
 func blockSequenceAt(lines []string, line int) string {
 	var items []string
 	for i := line; i >= 1 && i < len(lines); i++ {
@@ -487,9 +488,10 @@ func blockSequenceAt(lines []string, line int) string {
 		if trimmed == "" {
 			break
 		}
-		// An item must be INDENTED under the key: a `- ` at column 0 is a document
-		// -level construct, not this key's list.
-		if raw == trimmed || !strings.HasPrefix(trimmed, "- ") {
+		// A block sequence nested under a mapping key needs NO extra indentation:
+		// `key:\n- item` is the same list as `key:\n  - item`, and the record writes
+		// both. Only a line that is not a list item at all ends the scan.
+		if !strings.HasPrefix(trimmed, "- ") {
 			break
 		}
 		items = append(items, strings.TrimPrefix(trimmed, "- "))
