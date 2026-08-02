@@ -3,7 +3,7 @@ id: adr-22
 slug: bundled-deps-as-pluggable-adapters
 status: accepted
 date: 2026-07-06
-supersedes: [adr-14, adr-15, adr-17]
+supersedes: [adr-14, adr-15, adr-17, itd-47]
 superseded_by: null
 related_intents: []
 related_rfcs: []
@@ -47,7 +47,8 @@ operator can plug in, never a floor abcd stands on:
 
 Because no tool re-vendors itself onto abcd's state, the entire
 overlay/dispatcher/session-mirror/boundary subsystem **ceases to exist**. This
-ADR therefore **supersedes** the three decisions that built and tuned it:
+ADR therefore **supersedes** the three decisions that built and tuned it — and
+itd-47, the intent that rested on the same bundled cascade:
 
 - ADR-14 — the
   degraded-fallback guard over the required overlay manifest.

@@ -38,10 +38,10 @@ IDs are capture-stable. Once assigned, an ADR's ID never changes — superseding
 |---|---|
 | `proposed` | Draft; the decision is not yet locked. Rare — most ADRs are written after the fact. |
 | `accepted` | The decision is in force. Default for retrospective ADRs. |
-| `superseded` | Replaced by a newer ADR. Once the successor is in place, the superseded ADR is pruned from the record — the successor's `supersedes` note records what it replaced. |
+| `superseded` | Replaced by a newer record. The successor's `supersedes` and this ADR's `superseded_by` both name the pair, and one of two things follows: the ADR is pruned (its text is fully carried by the successor, and the `supersedes` declaration is the trace the record keeps), or it is retained because later records still cite it. |
 | `deprecated` | The decision no longer applies but no successor replaces it (the surface itself was removed). |
 
-Transitions are deliberate. Accepted ADRs are retained in the record; a superseded ADR is pruned once its successor lands and carries the transition rationale — git history preserves the original text.
+Transitions are deliberate. Accepted ADRs are retained in the record. A superseded ADR is pruned once its successor lands and carries the transition rationale — git history preserves the original text — unless later records still cite it, in which case it is retained and both halves of the supersession stay in its frontmatter.
 
 ---
 
@@ -55,8 +55,8 @@ id: adr-N
 slug: <kebab-case-slug>
 status: accepted                 # proposed | accepted | superseded | deprecated
 date: YYYY-MM-DD
-supersedes: null                 # adr-N if this replaces an earlier ADR
-superseded_by: null              # adr-N if a later ADR replaced this one
+supersedes: null                 # [adr-N, itd-N, ...] this record replaces
+superseded_by: null              # the record that replaced this one (adr-N or itd-N)
 related_intents: []              # [itd-N, ...] cross-references
 related_rfcs: []                 # [rfc-N, ...] cross-references
 related_adrs: []                 # [adr-N, ...] sibling decisions
@@ -93,7 +93,7 @@ What's now easier; what's now harder; what new obligations the decision creates
 |---|---|
 | `adrs/NNNN-<slug>.md` | `related_intents: [itd-N, ...]` (intents whose framework this ADR justifies) |
 | `adrs/NNNN-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
-| `adrs/NNNN-<slug>.md` | `supersedes: adr-N` / `superseded_by: adr-N` (chain) |
+| `adrs/NNNN-<slug>.md` | `supersedes: <handle>` / `superseded_by: <handle>` (chain) — **both directions are required**: if A declares `superseded_by: B`, B declares `supersedes: A`. A supersession may cross stores (an ADR that redecides the question an intent rested on retires that intent), so a handle here is `adr-N` or `itd-N`. `record_schema` enforces the pair. |
 | `intents/{drafts,planned,shipped,disciplines}/itd-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an intent references an ADR) |
 | `rfcs/rfc-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an RFC references an ADR or its resolution becomes one) |
 
@@ -117,7 +117,7 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-9](0009-phase-as-product-layer.md) | Phase as a product-reflection layer between brief and intent; replaces plugin-version language | accepted | 2026-05-16 |
 | [adr-10](0010-phase-negotiator-grounded-tradeoffs.md) | The phase negotiator — a Socratic agent that proposes phases and grounds every trade-off in the DAG / phase acceptance | accepted | 2026-05-16 |
 | [adr-11](0011-spec-terminology-rename.md) | One canonical word for a specced block of work — spec | accepted | 2026-05-18 |
-| [adr-12](0012-issue-ledger-live-vs-structured.md) | `.work/issues.md` (historical) stays the live operational ledger; structured `iss-*` store deferred until the native spec layer schedules the migration | accepted | 2026-06-06 |
+| [adr-12](0012-issue-ledger-live-vs-structured.md) | `.work/issues.md` (historical) stays the live operational ledger; structured `iss-*` store deferred until the native spec layer schedules the migration (superseded by adr-32, which redecides where the ledger lives) | superseded | 2026-06-06 |
 | [adr-13](0013-fn38-memory-single-writer-and-write-lint-split.md) | Durable memory writes — single-writer, atomic-rename crash model | accepted | 2026-06-09 |
 | [adr-19](0019-plugin-json-version-carve-out.md) | The plugin version lives only in the released artifact; the working tree stays unversioned, and the version location is chosen by a schema-validated decision artifact, not hard-coded | accepted | 2026-07-01 |
 | [adr-20](0020-manifest-version-lockstep.md) | The two release manifests stay version-consistent via a read-only anti-drift checker over a pinned per-view path list; the source view stays unversioned; `--allow-dirty` must never bypass manifest consistency (wiring policy); the marketplace changelog entry gets a committed schema | accepted | 2026-07-03 |
@@ -132,7 +132,7 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-29](0029-native-transcript-corpus.md) | A native local redacted transcript corpus | accepted | 2026-07-06 |
 | [adr-30](0030-record-information-architecture.md) | Design-record information architecture — flat artefact-type folders | accepted | 2026-07-06 |
 | [adr-31](0031-derived-versioning-from-intents.md) | The release version is derived from the intents in it, never authored (extends adr-19, adr-20) | accepted | 2026-07-07 |
-| [adr-32](0032-issue-ledger-is-working-tier-data.md) | The issue ledger is working-tier data, not authored record — move to `.abcd/work/issues/`, drop git-inferable timestamps, derive priority | accepted | 2026-07-08 |
+| [adr-32](0032-issue-ledger-is-working-tier-data.md) | The issue ledger is working-tier data, not authored record — move to `.abcd/work/issues/`, drop git-inferable timestamps, derive priority (supersedes adr-12) | accepted | 2026-07-08 |
 | [adr-33](0033-launch-phase-ownership-tiered.md) | Launch phase ownership is tiered — Phase 1 owns the curated-release cut; deepenings are separately scheduled intents; the phase index is the sole ownership source | accepted | 2026-07-08 |
 | [adr-34](0034-lifecycle-and-scheduling-orthogonal.md) | Intent lifecycle and phase scheduling are orthogonal axes — scheduled ⇒ committed (`planned/`), but planned intents may be unscheduled | accepted | 2026-07-08 |
 | [adr-35](0035-lifeboat-as-coverage-experiment.md) | The lifeboat is a coverage experiment — read-only, out-of-tree, and proven before it is packed (supersedes adr-4) | accepted | 2026-07-14 |

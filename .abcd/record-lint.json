@@ -26,6 +26,12 @@
     "issue_impact_valid": {"enabled": true, "severity": "blocker", "issues_dir": ".abcd/work/issues"},
     "spec_lifecycle": {"enabled": true, "severity": "blocker", "specs_dir": "specs", "intents_dir": "intents"},
     "spec_id_unique": {"enabled": true, "severity": "blocker", "specs_dir": "specs", "intents_dir": "intents"},
+    "record_schema": {"enabled": true, "severity": "blocker", "record_stores": {
+      "adr": ".abcd/development/decisions/adrs",
+      "itd": ".abcd/development/intents",
+      "spc": ".abcd/development/specs",
+      "iss": ".abcd/work/issues"
+    }},
     "persona_registry": {"enabled": true, "severity": "blocker", "registry": ".abcd/development/personas.json"},
     "context_status_free": {"enabled": true, "severity": "blocker", "target": ".abcd/work/CONTEXT.md"},
     "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands/abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"},
