@@ -110,9 +110,9 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 5. /abcd:intent reclassify <itd-N> --kind <new-kind> [--reason <text>]
    ├─ Records reclassification_history entry (date + from-kind + to-kind + reason)
    ├─ Moves the file between directories as the new kind dictates
-   └─ --kind superseded --by <itd-M> is the supersession path:
+   └─ --kind superseded --by <handle> is the supersession path:
         ├─ file moves to superseded/
-        ├─ frontmatter gains superseded_by: itd-M (the successor)
+        ├─ frontmatter gains superseded_by: <handle> (the successor)
         └─ frontmatter gains kind_at_supersession: <original-kind>
             (preserves the shape the intent had when retired —
              standalone vs bundle-member vs discipline change the
