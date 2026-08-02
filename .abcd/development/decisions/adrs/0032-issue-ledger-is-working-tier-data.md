@@ -75,3 +75,7 @@ opens and resolves, but it was living in the tree meant for authored, git-canoni
   outside the record tier and carries no git-inferable metadata.
 - A self-hosting datapoint: abcd's first real contradiction was found by running abcd on abcd
   (`iss-15`) — the dogfooding thesis paying out in practice.
+- [ADR-12](0012-issue-ledger-live-vs-structured.md) is **superseded**. It settled where the
+  structured ledger would live by deferring the migration to a path inside the design-record
+  tier; this ADR redecides the same question and sites the ledger in the working tier instead,
+  so the two cannot both be in force.

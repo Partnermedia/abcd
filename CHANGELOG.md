@@ -23,9 +23,11 @@ called out in a **Breaking** section.
   superseded, since a pruned record is accounted for rather than lost; a
   supersession is declared from BOTH sides, so a record can no longer contradict
   itself about which decision is in force; a filename and the id inside it agree,
-  so one record cannot answer to two handles; and every lifecycle directory is
-  enumerated, so a bucket nobody declared is a finding rather than a state no rule
-  reads. A supersession may cross stores — an ADR that redecides the question an
+  so one record cannot answer to two handles; and every directory that should
+  hold records is enumerated — an undeclared bucket in a store root, and a
+  subdirectory inside a bucket or a flat store — so a directory nobody declared is
+  a finding rather than a place records hide from every check. A supersession may
+  cross stores — an ADR that redecides the question an
   intent rested on retires that intent — so `superseded_by` accepts `adr-N` as
   well as `itd-N`. That widening makes `intent_lifecycle`'s own target check
   looser on its own: it reads only the intent tree, so a repo arming it WITHOUT
