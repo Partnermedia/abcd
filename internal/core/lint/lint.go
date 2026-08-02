@@ -332,6 +332,16 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, sc...)
 	}
 
+	// index_drift reads documents that live beside the code they index (a package
+	// or command README), all outside cfg.Roots, so it runs once here too.
+	if idxCfg, ok := cfg.Rules["index_drift"]; ok && idxCfg.Enabled {
+		id, err := checkIndexDrift(repoRoot, idxCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, id...)
+	}
+
 	// receipt_gate is the release-time verification of the semantic gates. It is
 	// disabled for ordinary development (a commit under review has no receipt yet)
 	// and armed only at release time with a target commit; it reads sha-keyed

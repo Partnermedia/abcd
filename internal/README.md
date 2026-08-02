@@ -9,9 +9,10 @@ plugin surface, and a future MCP server share one engine.
 ## Package map
 
 - **`core/`** — the engine. One package per capability; no stdout, prompt text,
-  or transport coupling. Currently: identity/version and the read-only status
-  snapshot. Grows per phase (ahoy, launch, capture, memory, intent, brief,
-  review, spec, run, lifeboat, history, changelog).
+  or transport coupling. The capability set is the subdirectory set — browse
+  [`core/`](core/) for it rather than a list kept here, which drifts the moment a
+  phase lands (adr-5, derive don't store). The bullets below cover the packages
+  whose boundary is not obvious from the name.
 - **`core/changelog/`** — release derivation. Holds `impact`, the one product
   judgement a record declares, and derives the next SemVer from the records that
   entered the terminal folders since the anchor tag. It owns the enum so the
@@ -77,6 +78,16 @@ plugin surface, and a future MCP server share one engine.
   committed guard hooks, the `.gitattributes` line keeping them at LF, the public
   family, and the gitignored stub) into a repo it configures, importing this package
   for the paths and for the one canonical statement of the private layer's reach.
+- **`adapter/scanner/`** — the secret/PII seam, and the first adapter seam to
+  ship. Its native implementation is pure Go with no external dependency: a
+  bundled secret-pattern set plus the probed machine identity, layered with an
+  optional per-repo `.abcd/config/pii.json` override that may raise a severity
+  but never lower one past the floor. It fails closed — an override that cannot
+  be read, parsed, or compiled marks the scanner unavailable rather than letting
+  a caller sanitise with a silently weakened pattern set — and redaction masks by
+  byte span, so two secrets on one line cannot leak each other through the
+  snippet they share. `core/launch` consumes it before a bundle is published;
+  external scanners stay config-selected plug-ins behind the same seam.
 - **`surface/cli/`** — the default front door: a Cobra command tree that calls
   `core` and formats results as text or `--json`. Holds no business logic.
 - **`surface/mcp/`** *(later)* — an additive front door exposing the same core
@@ -85,9 +96,13 @@ plugin surface, and a future MCP server share one engine.
 
 ## Planned seams (added when a phase consumes them, never as dead scaffolding)
 
-Per the project rule "wired or it isn't done," the pluggable adapter seams are
-introduced by the phase that first uses them, not pre-emptively:
+Per the project rule "wired or it isn't done," the remaining pluggable adapter
+seams are introduced by the phase that first uses them, not pre-emptively. The
+list is gated rather than trusted: the `index_drift` record-lint rule holds every
+path in the marked region to being absent from the tree, so a seam that ships
+cannot go on being described here as planned.
 
+<!-- index: planned-seams -->
 - **`adapter/oracle/`** — LLM review. Native default = host-delegated (the host
   runs subagents); opt-in plug-ins: claude CLI, Anthropic API, MCP oracle.
 - **`adapter/history/`** — transcripts. Native default = redacted local store;
@@ -96,9 +111,8 @@ introduced by the phase that first uses them, not pre-emptively:
   `ccpm` at the convention level.
 - **`adapter/run/`** — autonomous run. Native thin loop fallback; host backends:
   Claude Workflows, the companion harness's agent loop.
-- **`adapter/scanner/`** — secret/PII. Native default; opt-in: gitleaks,
-  trufflehog.
 - **`registry/`, `config/`** — declarative wiring of chosen adapters.
+<!-- /index -->
 
 The full rationale is in the plan and the design record under
 `.abcd/development/`.

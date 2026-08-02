@@ -172,6 +172,34 @@ type RuleConfig struct {
 	// defaults to warn because the COMMIT gate never calendar-blocks (spc-17);
 	// the release gate is what promotes it to a blocker.
 	OverdueSeverity string `json:"overdue_severity"`
+	// Indexes are the index_drift pairs: each names a marked region in a document
+	// and the directory that region enumerates. The rule reads documents outside
+	// Roots (a package or command README lives beside its code), so the pairs are
+	// declared here rather than discovered by the walk.
+	Indexes []IndexSpec `json:"indexes"`
+}
+
+// IndexSpec is one index_drift pair — a hand-written enumeration of a
+// directory's contents, and the directory it must agree with.
+type IndexSpec struct {
+	// ID names the region: the document fences it with `<!-- index: <id> -->`
+	// and `<!-- /index -->`.
+	ID string `json:"id"`
+	// Doc is the enumerating document, repo-relative.
+	Doc string `json:"doc"`
+	// Dir is the enumerated directory, repo-relative. In absent mode it is the
+	// base each listed path resolves against.
+	Dir string `json:"dir"`
+	// Entry is the regexp a backticked token in the region must match to count as
+	// an entry. It is what keeps the rule off the prose around the list: a token
+	// the pattern does not describe (a flag, a tool name) is not an entry.
+	Entry string `json:"entry"`
+	// Suffix is the file extension an exact index enumerates (".md" lists file
+	// stems); empty enumerates the directory's immediate subdirectories.
+	Suffix string `json:"suffix"`
+	// Mode is "exact" (default — the listing and the directory must agree) or
+	// "absent" (every listed path must NOT exist, the planned-seams shape).
+	Mode string `json:"mode"`
 }
 
 // ArmReceiptGate returns cfg with the receipt_gate rule armed for a release: it
