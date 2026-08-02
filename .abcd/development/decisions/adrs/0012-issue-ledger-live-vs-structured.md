@@ -1,10 +1,10 @@
 ---
 id: adr-12
 slug: issue-ledger-live-vs-structured
-status: accepted
+status: superseded
 date: 2026-06-06
 supersedes: null
-superseded_by: null
+superseded_by: adr-32
 related_intents: [itd-4, itd-46]
 related_rfcs: []
 related_adrs: [adr-26]

@@ -7,7 +7,7 @@ supersedes: null
 superseded_by: null
 related_intents: []
 related_rfcs: []
-related_adrs: [adr-6, adr-22]
+related_adrs: [adr-22]
 ---
 
 # ADR-29: A native local redacted transcript corpus

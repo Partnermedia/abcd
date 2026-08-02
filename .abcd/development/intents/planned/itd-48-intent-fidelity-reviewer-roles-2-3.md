@@ -6,6 +6,7 @@ kind: standalone
 suggested_kind: bundle-member
 reclassification_history:
   - { date: 2026-05-27, from: "null", to: "standalone", reason: "overrode erroneous capture-time `suggested_kind: bundle-member`; formal bundle-member requires multiple intent files sharing an `spec_id` and `bundle:` id per itd-34, and itd-48 is one intent file." }
+supersedes: [itd-31]
 related_adrs: []
 routed_from: ["spc-33:A1", "spc-33:A2", "spc-33:A3", "spc-33:A4", "spc-33:G1"]
 builds_on: [itd-34, itd-5]

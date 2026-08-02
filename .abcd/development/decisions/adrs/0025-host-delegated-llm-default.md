@@ -7,7 +7,7 @@ supersedes: [adr-8]
 superseded_by: null
 related_intents: []
 related_rfcs: []
-related_adrs: [adr-6, adr-22, adr-23]
+related_adrs: [adr-22, adr-23]
 ---
 
 # ADR-25: The LLM is host-delegated by default; oracles are opt-in adapters

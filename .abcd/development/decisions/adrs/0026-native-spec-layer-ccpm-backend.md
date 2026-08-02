@@ -3,7 +3,7 @@ id: adr-26
 slug: native-spec-layer-ccpm-backend
 status: accepted
 date: 2026-07-06
-supersedes: null
+supersedes: [itd-49]
 superseded_by: null
 related_intents: []
 related_rfcs: []
@@ -64,3 +64,6 @@ harness `ccpm` as the primary deeper backend**, and **flow-next is not built**.
   specs and tasks regardless of which backend holds them.
 - flow-next references in the design record are reconciled away as the native
   store and ccpm backend land; nothing re-introduces a flow-next contract.
+- itd-49 (the flow-state drift detector) is **superseded** by this decision: it
+  compared checkpoint blocks against flow-next's runtime state store, and
+  flow-next is not built, so there is nothing left to drift against.
