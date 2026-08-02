@@ -27,11 +27,16 @@ called out in a **Breaking** section.
   enumerated, so a bucket nobody declared is a finding rather than a state no rule
   reads. A supersession may cross stores — an ADR that redecides the question an
   intent rested on retires that intent — so `superseded_by` accepts `adr-N` as
-  well as `itd-N`. Cross-references are checked in frontmatter rather than in
-  prose on purpose: a frontmatter handle is a machine-readable claim that the
-  record exists, while prose legitimately names ids that do not resolve. Any
-  abcd-managed repo enables it by declaring its own `record_stores` in
-  `.abcd/record-lint.json`.
+  well as `itd-N`. That widening makes `intent_lifecycle`'s own target check
+  looser on its own: it reads only the intent tree, so a repo arming it WITHOUT
+  `record_schema` accepts an `adr-N` successor without resolving it. The two are
+  meant to be armed together, and `record_schema` is what resolves a cross-store
+  target. Cross-references are checked in frontmatter rather than in prose on
+  purpose: a frontmatter handle is a machine-readable claim that the record
+  exists, while prose legitimately names ids that do not resolve. A retirement
+  declaration is bounded by what the store has issued, so `supersedes:` cannot
+  mint a phantom id that then resolves everywhere else. Any abcd-managed repo
+  enables it by declaring its own `record_stores` in `.abcd/record-lint.json`.
 - **`index_drift` — a hand-written directory index is gated, not trusted**
   (iss-38). A README that enumerates its sibling files by hand is a second copy
   of something the filesystem already knows, and it drifts the moment a file is
