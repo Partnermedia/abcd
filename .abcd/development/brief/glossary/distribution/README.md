@@ -5,6 +5,6 @@ what a release is, the version it carries, and the end-user who installs it. The
 distinguish the outputs of publishing from the internal development vocabulary —
 an end-user is not a persona, and a version is not a phase.
 
-Each term is a Markdown file with YAML frontmatter conforming to the terminology
-schema. For the format specification, the validation command, and the full term
+Each term is a Markdown file with YAML frontmatter in the shape the glossary
+README specifies. For that shape, the checks that read it, and the full term
 index, see the [glossary README](../README.md).

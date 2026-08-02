@@ -17,7 +17,10 @@ versions: null
 
 The **brief** is the authoritative root document for a project. It establishes what the project
 exists to do, the constraints it operates under, and the success criteria by which completion is
-judged. It is written by a human stakeholder and treated as immutable once approved.
+judged. It is written by a human stakeholder and kept as a living record: the brief is the project's
+*current* state, carrying no version label and no archive directory, so every section is revised in
+place as the project moves ([adr-5](../../../decisions/adrs/0005-brief-is-current-state.md)). History
+lives in `git log`; inflection-point rationale lives in the ADRs.
 
 ## When to use
 

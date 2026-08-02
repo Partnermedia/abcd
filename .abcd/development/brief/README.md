@@ -25,6 +25,7 @@ It is split across numbered folders for concurrent editing, diff legibility, and
 | [`04-surfaces/`](04-surfaces) | One file per user-facing command surface |
 | [`05-internals/`](05-internals) | Plumbing — agents, adapters, configuration, universal patterns, prompt quality |
 | [`06-delivery/`](06-delivery) | Build sequence, verification matrix, out-of-scope |
+| [`glossary/`](glossary) | The canonical terminology glossary — one file per term per bounded context |
 
 The directory layout (each folder's `README.md` — where present — indexes its files):
 
@@ -37,7 +38,8 @@ brief/
 ├── 03-evidence/                 # what worked / what didn't / open questions / tradeoffs
 ├── 04-surfaces/                 # one file per user-facing command surface (see 04-surfaces/README.md)
 ├── 05-internals/                # agents, adapters, configuration, universal patterns, prompt quality, lint, memory, skills, provenance, in-session dispatch (see 05-internals/README.md)
-└── 06-delivery/                 # build sequence, verification matrix, out-of-scope
+├── 06-delivery/                 # build sequence, verification matrix, out-of-scope
+└── glossary/                    # the canonical terminology glossary, by bounded context (see glossary/README.md)
 ```
 
 ## Three-layer reading guide
