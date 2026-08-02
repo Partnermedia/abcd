@@ -53,11 +53,16 @@ Technical files (`config.json`, `corpus.json`, `rules.json`) are exempt — no m
 
 ## Vocabulary-registration requirement (HARD from the start)
 
-Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabulary delta` sub-bullet (per itd-37) MUST be registered in this glossary file in the same spec. The vocabulary-registration lint blocks at plan-review on missing registrations. Lint code (reserved): `VR001` — vocabulary delta term not registered in glossary.
+Every term introduced in any spec's `## Modification Grammar > Ripple > Vocabulary delta` sub-bullet (per itd-37) MUST be registered in the same spec, in whichever of the two registries below fits it. The vocabulary-registration lint blocks at plan-review on missing registrations. Lint code (reserved): `VR001` — vocabulary delta term not registered.
 
 **Why hard from the start, not soft.** A discipline that ships with "soft initially, hard once stable" is structurally weaker than itd-1 (acceptance gates) and itd-5 (prompt-quality additions), both of which ship hard from day one. Cost of hard enforcement: ~30 seconds per new term. Cost of soft enforcement: vocabulary drift compounds; the cross-document fidelity reviewer (Role 2) finds drift post-hoc that should have been blocked at design time.
 
-**Glossary location.** Terms are registered in this file (`02-constraints/04-naming.md`) under either the maritime convention table (if the term is a `/abcd:<verb>` command or `.abcd/<directory>` artefact with a maritime cognate), the metaphor-exemptions list (if it's a meta-development surface), or a new "Reserved vocabulary" section below. The reviewer Role 2 cross-document audit verifies registration on every plan-review.
+**Which registry.** The project keeps two, and they hold different kinds of thing.
+
+- **The glossary** — [`../glossary/`](../glossary) — is the one canonical glossary, and the only place a *glossary* lives. It holds cross-cutting natural-language vocabulary as one file per term per bounded context, each declaring its aliases and forbidden synonyms, and it is what the `GL002` forbidden-synonym rule reads. A vocabulary-delta term that names a concept the record uses in prose is registered there.
+- **This file** — `02-constraints/04-naming.md` — is the naming-convention and reserved-vocabulary register. It holds the maritime convention table (a `/abcd:<verb>` command or `.abcd/<directory>` artefact with a maritime cognate), the metaphor-exemptions list (a meta-development surface), and the "Reserved vocabulary" table below (a controlled enum or a spec-pinned reserved name). These are closed vocabularies tied to a named spec, not glossary terms; this file is not a glossary and holds no term files.
+
+The reviewer Role 2 cross-document audit verifies registration on every plan-review.
 
 **Reserved vocabulary** (controlled enums, PR-to-extend):
 
