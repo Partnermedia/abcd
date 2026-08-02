@@ -19,8 +19,9 @@ type Config struct {
 	// ExemptPaths are repo-relative path prefixes whose files skip the
 	// content-AUTHORING checks (banned_tokens, persona_registry) — the historical,
 	// non-forward-looking part of the record, which is excused from how it is
-	// written but never from being well-formed. Structural and schema checks
-	// (record_schema, intent_lifecycle, spec_lifecycle) stay universal (iss-39).
+	// written but never from being well-formed. The intent tree's schema checks
+	// (record_schema, intent_lifecycle) stay universal (iss-39); the spec-store
+	// checks (spec_lifecycle, spec_id_unique) still skip an exempt file.
 	ExemptPaths []string `json:"exempt_paths"`
 	// ExemptIfStatus lists leading-frontmatter status: values that likewise
 	// exempt a file from the content-authoring checks (e.g. superseded records).

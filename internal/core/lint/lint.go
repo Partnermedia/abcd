@@ -2330,7 +2330,8 @@ func frontmatterFields(lines []string) map[string]fmField {
 // record: its repo-relative path begins with a configured prefix, or its leading
 // frontmatter status: value is listed.
 //
-// Structural and schema checks never consult this. The exemption used to reach
+// The intent tree's schema checks never consult this; the spec-store checks
+// (spec_lifecycle, spec_id_unique) still do. The exemption used to reach
 // the intent-lifecycle schema too, which is how two intents came to sit in
 // superseded/ with no supersession field at all — the one rule that would have
 // caught it was the rule the bucket exempted them from (iss-39). Being historical
