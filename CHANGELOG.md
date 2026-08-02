@@ -12,6 +12,25 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`index_drift` — a hand-written directory index is gated, not trusted**
+  (iss-38). A README that enumerates its sibling files by hand is a second copy
+  of something the filesystem already knows, and it drifts the moment a file is
+  added, renamed, or shipped — silently, because nothing was checking. The rule
+  reads a region a document fences with `<!-- index: <id> -->` and holds it to
+  the directory it enumerates: in `exact` mode the listing and the directory must
+  agree in both directions, so a file added without a line and a line kept for a
+  file that has gone are each a finding; in `absent` mode every listed path must
+  still be missing from the tree, which is the shape a "planned seams" list has,
+  where the drift is a seam that shipped while the list still calls it planned.
+  Scoping is by explicit marker plus a configured entry pattern rather than by
+  parsing arbitrary markdown, so unrelated prose around a list cannot produce a
+  finding and no bespoke parser is needed per README. It fails closed on the
+  three ways a gate could be quietly disarmed — a region deleted while its config
+  entry remains, a region that parses to no entries at all, and a malformed index
+  spec (no document, no directory, no entry pattern, an uncompilable pattern, an
+  unknown mode) — the last as a loud configuration error rather than a pass. Any
+  abcd-managed repo enables it the same way: an `index_drift` block naming its
+  own document/directory pairs in `.abcd/docs-lint.json`.
 - **`abcd banlist` — the names a repo must not publish, in two layers** (itd-74,
   spc-20). Enforcement splits by sensitivity, because a deterministic CI gate is
   the right tool for a public banned name and the wrong place for a private one:
