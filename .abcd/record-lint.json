@@ -13,8 +13,7 @@
     {"id":"dev-repo-name","pattern":"\\babcdDev\\b","message":"single-repo (adr-28): use 'the frozen reference implementation' / abcd-cli","severity":"blocker","successor":"abcd-cli","allow_context":["historical"]},
     {"id":"workspaces-json","pattern":"workspaces\\.json","message":"the workspace concept is dropped; only a negation may mention it","severity":"blocker","successor":"index.json (the sole user-scope history registry, keyed by root_commit)","allow_context":["no ","not ","there is no","sole user-scope","dropped","without a"]},
     {"id":"meta-json-file","pattern":"\\bmeta\\.json\\b","message":"meta.json is abolished as a repo file; setup metadata is config.json[\"meta\"]","severity":"blocker","successor":"config.json[\"meta\"]","allow_context":["history","root-sha","root-commit","per-root","index.json","identity","no ","there is no","separate","abolished","not ","without"]},
-    {"id":"phantom-research-spikes","pattern":"research/spikes","message":"research/ has no spikes/ subdirectory; its children are notes/ (dated write-ups) and prompting/ (prompt R&D)","severity":"blocker","successor":"research/notes/ or research/prompting/","allow_context":["historical"]},
-    {"id":"research-note-outside-notes","pattern":"research/2026-07-(13-agent-definition-schema|14-cross-model-review|14-research-platform-benchmarks|17-bug-hunting-principles|26-itd-88-coverage-experiment)","message":"a dated research note lives in research/notes/, not directly in research/ (research/README.md)","severity":"blocker","successor":"research/notes/<date>-<slug>.md","allow_context":["historical"]},
+    {"id":"research-note-outside-notes","pattern":"research/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-","message":"a dated research note lives in research/notes/, not directly in research/ (research/README.md)","severity":"blocker","successor":"research/notes/<date>-<slug>.md","allow_context":["historical"]},
     {"id":"presidio-default","pattern":"Presidio","message":"native Go PII engine is the default; Presidio is only one opt-in scanner adapter","severity":"warn","successor":"the native Go PII engine","allow_context":["gitleaks","opt-in","adapter","seam"]}
   ],
   "rules": {
@@ -46,6 +45,7 @@
     "index_drift": {"enabled": true, "severity": "blocker", "indexes": [
       {"id": "commands", "doc": "commands/README.md", "dir": "commands/abcd", "entry": "^[a-z][a-z-]*$", "suffix": ".md"},
       {"id": "planned-seams", "doc": "internal/README.md", "dir": "internal", "entry": "^[a-z][a-z0-9-]*(/[a-z0-9-]+)*/$", "mode": "absent"},
+      {"id": "research-children", "doc": ".abcd/development/README.md", "dir": ".abcd/development/research", "entry": "^[a-z][a-z0-9-]*/$"},
       {"id": "later-phase-intents", "doc": ".abcd/development/brief/06-delivery/03-out-of-scope.md", "dir": ".abcd/development/intents/drafts", "entry": "^itd-[0-9]+$", "suffix": ".md", "dir_entry": "^(itd-[0-9]+)"}
     ]},
     "delivery_state": {"enabled": true, "severity": "blocker", "changelog": "CHANGELOG.md", "intents_root": ".abcd/development/intents"},

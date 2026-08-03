@@ -34,6 +34,11 @@ called out in a **Breaking** section.
   records at all, which reads exactly like a clean section. Any abcd-managed repo
   enables it by declaring its own `target` and `record_stores` in
   `.abcd/record-lint.json`, and may name a different section with `section`.
+- **The development record map's `research/` row is derived rather than
+  hand-kept.** An `index_drift` region holds the row to the directory's actual
+  subdirectories, so a routing claim naming a child that does not exist — or
+  omitting one that does — fails the record gate instead of quietly misdirecting
+  a reader.
 - **`delivery_state` — the changelog cannot credit an intent the record calls
   unbuilt** (iss-41). An intent in `drafts/` is a captured idea nobody has
   committed to build, so the intent tree and a delivery entry citing it say
