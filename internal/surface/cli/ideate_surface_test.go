@@ -83,8 +83,12 @@ func TestIdeateRecordWiredFromTheCLI(t *testing.T) {
 	if res.Verdict != ideate.VerdictSurvives || !res.Graduates {
 		t.Errorf("verdict = %q graduates = %v; want survives/true", res.Verdict, res.Graduates)
 	}
-	if !strings.HasPrefix(res.Path, ideate.ResearchRelDir+"/") || !strings.HasSuffix(res.Path, "-ideate-the-ideate-gate.md") {
-		t.Errorf("path = %q; want a dated ideate record under %s", res.Path, ideate.ResearchRelDir)
+	// The literal directory, not ideate.ResearchRelDir: a check written against
+	// the constant follows the constant wherever it moves, so it can never notice
+	// the record landing outside the home research/README.md gives a dated note.
+	const wantDir = ".abcd/development/research/notes/"
+	if !strings.HasPrefix(res.Path, wantDir) || !strings.HasSuffix(res.Path, "-ideate-the-ideate-gate.md") {
+		t.Errorf("path = %q; want a dated ideate record under %s", res.Path, wantDir)
 	}
 	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(res.Path))); err != nil {
 		t.Errorf("the reported record is not on disk: %v", err)
