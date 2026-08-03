@@ -348,6 +348,16 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, cs...)
 	}
 
+	// context_citation_currency reads the same work-tier CONTEXT.md against the
+	// record's stores, both outside cfg.Roots, so it runs once here too.
+	if ccCfg, ok := cfg.Rules[ruleContextCitationCurrency]; ok && ccCfg.Enabled {
+		cc, err := checkContextCitationCurrency(repoRoot, ccCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, cc...)
+	}
+
 	// surface_coverage cross-checks the plugin surface (commands/, skills/ —
 	// outside cfg.Roots) against the brief's surface registry (inside a root), so
 	// it too runs once, outside the per-root loop.

@@ -12,6 +12,28 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`context_citation_currency` — the orientation doc cannot ground a live
+  caveat in a record that is finished** (iss-42). `CONTEXT.md` is the first file
+  a session reads and its sharp-edges list is the paragraph a reader trusts
+  before they have read anything else, yet nothing required that list to be
+  revisited when the record it cites moved — so the staleness was structural, not
+  incidental, and recurred every time a cited record shipped, resolved, closed,
+  or was superseded. The rule resolves every `iss-N`, `itd-N`, `spc-N`, and
+  `adr-N` handle the sharp-edges section names against the store that holds it,
+  and blocks any citation whose target sits in a terminal lifecycle state —
+  `resolved`/`wontfix` for an issue, `shipped`/`superseded` for an intent,
+  `closed` for a spec, and a declared supersession or a retired status for an
+  ADR, whose flat store carries its lifecycle in frontmatter rather than in a
+  directory. Scope is one section of one document on purpose: a shipped intent's
+  evidence trail, a supersession chain, and a dated plan all name closed records
+  legitimately, and only the living orientation doc claims to describe what is
+  true right now. A handle that resolves to no record is left alone — dangling
+  cross-references are `record_schema`'s question, already answered there. It
+  fails closed on the three ways an armed gate could check nothing: no target to
+  read, no sharp-edges section in it, and configured stores that resolve no
+  records at all, which reads exactly like a clean section. Any abcd-managed repo
+  enables it by declaring its own `target` and `record_stores` in
+  `.abcd/record-lint.json`, and may name a different section with `section`.
 - **`delivery_state` — the changelog cannot credit an intent the record calls
   unbuilt** (iss-41). An intent in `drafts/` is a captured idea nobody has
   committed to build, so the intent tree and a delivery entry citing it say
