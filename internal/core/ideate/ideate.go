@@ -45,8 +45,15 @@ const MaxSlugLen = 64
 // DecisionsRelDir is the log its dated pointer is appended to. Both are constants
 // rather than parameters: a configurable target would let a verdict land somewhere
 // no future session looks.
+//
+// It is the research store's notes/ bucket rather than its root because a verdict
+// record IS a dated research note (spc-18: "killed ideas are research outcomes,
+// and the research directory is where a future session looks before re-proposing
+// one"), and research/README.md files dated notes under notes/. Writing to the
+// root would make the shipped binary the standing producer of the very
+// convention violation iss-42 cleared out of that directory by hand.
 const (
-	ResearchRelDir  = ".abcd/development/research"
+	ResearchRelDir  = ".abcd/development/research/notes"
 	DecisionsRelDir = ".abcd/work/DECISIONS.md"
 )
 

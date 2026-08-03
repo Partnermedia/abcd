@@ -52,7 +52,7 @@ have. A binary that invented one would be doing the judging.
 
 The verb writes two things:
 
-- `.abcd/development/research/YYYY-MM-DD-ideate-<idea-slug>.md` — the verdict
+- `.abcd/development/research/notes/YYYY-MM-DD-ideate-<idea-slug>.md` — the verdict
   record: the idea as captured, the three legs, the verdict, and the rejected
   alternatives, rendered for a human.
 - one dated pointer line in `.abcd/work/DECISIONS.md`.
@@ -77,7 +77,7 @@ recordable or it is not.
 | A slug that is not lower-case kebab-case | The slug becomes a filename; the grammar is the lexical half of the write containment, `os.Root` the other |
 | A verdict record that already exists for this slug and date | Overwriting would erase a recorded reason, which is the one thing the verb exists to preserve |
 | A repository with no `.abcd/work/DECISIONS.md` | A record nothing points at is a record nobody finds — refused before anything is written |
-| A symlinked component anywhere in `.abcd/development/research/` | The write goes through one `os.Root` opened at the repository root, which refuses symlink traversal at every level, not just the leaf |
+| A symlinked component anywhere in `.abcd/development/research/notes/` | The write goes through one `os.Root` opened at the repository root, which refuses symlink traversal at every level, not just the leaf |
 
 The research directory itself is **created when absent**: nothing else in abcd
 establishes it and no convention check requires it, so refusing would fail the

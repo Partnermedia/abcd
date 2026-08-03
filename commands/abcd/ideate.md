@@ -121,7 +121,7 @@ weighed nothing" are indistinguishable to a later reader.
 
 ## What the binary does with it
 
-It writes `.abcd/development/research/<date>-ideate-<slug>.md` — the idea, the
+It writes `.abcd/development/research/notes/<date>-ideate-<slug>.md` — the idea, the
 three legs, the verdict, and the rejected alternatives, rendered for a human —
 and appends one dated pointer line to `.abcd/work/DECISIONS.md`.
 

@@ -487,6 +487,14 @@ called out in a **Breaking** section.
 
 ### Changed
 
+- **`abcd ideate record` files its verdict record where dated research notes
+  live.** The record it writes is a dated research note by spc-18's own
+  reasoning, and `research/README.md` files those under `notes/`; it was landing
+  in `research/` root, so the verb was a standing producer of a convention
+  violation the record then had to clean up by hand. It now writes
+  `.abcd/development/research/notes/<date>-ideate-<slug>.md`. The path is still a
+  constant, not a parameter — a configurable target would let a verdict land
+  somewhere no future session looks.
 - **The intent tree's schema rules stop honouring the `superseded/` lint
   exemption** (iss-39). Being historical excuses a record from how it is
   WRITTEN — the banned tokens, the persona roster — never from being
