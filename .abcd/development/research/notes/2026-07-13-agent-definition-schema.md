@@ -6,7 +6,7 @@ Recency anchored to 2026-07-13. Sources are cited only where a page was actually
 opened; index-only hits are marked.
 
 This is the **gate** (the audit reference), not the **source** (a prompt template),
-per the standing convention in [`prompting/agents/README.md`](prompting/agents/README.md).
+per the standing convention in [`prompting/agents/README.md`](../prompting/agents/README.md).
 
 ## 1. Why this research exists
 
@@ -354,8 +354,8 @@ abcd's shape — the schema should encode it, not relax it.
 
 ## Related documentation
 
-- [`prompting/01-general-best-practices.md`](prompting/01-general-best-practices.md) — the
+- [`prompting/01-general-best-practices.md`](../prompting/01-general-best-practices.md) — the
   standing prompting baseline this research updates.
-- [`../brief/05-internals/01-agents.md`](../brief/05-internals/01-agents.md) — the agent
+- [`../brief/05-internals/01-agents.md`](../../brief/05-internals/01-agents.md) — the agent
   catalog and the frontmatter the record declares.
 - itd-5 — the intent that owns the agent-file schema.

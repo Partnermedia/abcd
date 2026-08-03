@@ -782,7 +782,7 @@ parallel-agent merge contention bites.
   on the easier adjacent task (SpecBench) and no precision/recall for
   implementation-vs-spec is published anywhere. It ships advisory only, per
   verifier-selects-gates-decide. Full evidence:
-  .abcd/development/research/2026-07-14-cross-model-review.md
+  .abcd/development/research/notes/2026-07-14-cross-model-review.md
 - 2026-07-14 (research): REJECTED building an authoritative benchmark from abcd's own
   data. Three independently fatal defects: (1) the corpus is n=2 labelled triples, both
   graded by the model that wrote the code, with exactly one NOT_MET; (2) circularity —
@@ -813,7 +813,7 @@ parallel-agent merge contention bites.
   free to apply. Also adopted: fix-guided verification filter (execute the proposed fix
   as a counterfactual; if no test outcome changes, the rejection was hallucinated —
   FNR 54.8% -> 16.3%). Full evidence:
-  .abcd/development/research/2026-07-14-research-platform-benchmarks.md
+  .abcd/development/research/notes/2026-07-14-research-platform-benchmarks.md
 - 2026-07-14 (research, UNVERIFIED): the SWE-bench Pro audit figures (27.4% automated /
   34.1% human) and the SWE-bench Verified figures (>=59.4% flawed tests / 35.5% hidden
   implementation details) come from SECONDARY sources — openai.com 403s to the research

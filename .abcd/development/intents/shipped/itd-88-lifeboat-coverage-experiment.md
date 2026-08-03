@@ -80,7 +80,7 @@ The honesty discipline is the other half. A rescue tool that invents a plausible
 Fidelity review — receipt rcp-4d07032fc6ab (verifier abcd:intent-fidelity-reviewer claude-fable-5).
 
 Provenance: abcd:intent-fidelity-reviewer@claude-fable-5 · rubric_hash sha256:bda482993615f6ee00d06f9649bff9c9bc8f22c989683386437eea4db28369b2 · prompt_hash sha256:95792472ae74ca0469f69a51c618946e0d33cb1380032460099ed4b469d67e86
-Input attestations: diff:docs/itd-88-coverage-experiment @ 7b24b98befbd20440b335a96d0154bd33cbcec6e: internal/core/lifeboat/ (probe/coverage/plan/pack/graveyard), internal/surface/cli/cli.go disembark wiring, commands/abcd/disembark.md, .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md@-; rubric:.abcd/.work.local/reviews/rcp-4d07032fc6ab.request.md@sha256:bda482993615f6ee00d06f9649bff9c9bc8f22c989683386437eea4db28369b2;
+Input attestations: diff:docs/itd-88-coverage-experiment @ 7b24b98befbd20440b335a96d0154bd33cbcec6e: internal/core/lifeboat/ (probe/coverage/plan/pack/graveyard), internal/surface/cli/cli.go disembark wiring, commands/abcd/disembark.md, .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md@-; rubric:.abcd/.work.local/reviews/rcp-4d07032fc6ab.request.md@sha256:bda482993615f6ee00d06f9649bff9c9bc8f22c989683386437eea4db28369b2;
 
 Acceptance rollup: MET 6 · MET_WITH_CONCERNS 2 · NOT_MET 0 · INCONCLUSIVE 0
 
@@ -98,7 +98,7 @@ Per-criterion verdicts:
   evidence: cmd: disembark probe --json over abcd-cli/cobra/requests, checked for evidence-less non-blank rows — "non-blank rows missing evidence: NONE (all three repos)"
 - ac-4 — MET: Live `disembark coverage self.json cobra.json requests.json` renders one 23-section × 3-repo status table, the per-repo probe summaries put the delta in numbers (grounded 21 vs 4 vs 3), and the research note states it as 17–18 grounded sections.
   evidence: cmd: go run ./cmd/abcd disembark coverage <3 reports> (exit 0) — "brief section  abcd-cli  cobra  requests  verdict … 0 of 23 sections are blank in every probed repo."
-  evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:39-42 — "Keeping an abcd-native record is worth roughly **17–18 grounded sections**"
+  evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:39-42 — "Keeping an abcd-native record is worth roughly **17–18 grounded sections**"
   evidence: internal/core/lifeboat/coverage.go:203 — "func Aggregate(covs []Coverage) AggregateReport"
 - ac-5 — MET: TestProbeIsDeterministic requires byte-identical JSON across two probes and ran green, and a live double probe of this repository produced byte-identical output under cmp.
   evidence: internal/core/lifeboat/probe_test.go:385 — "func TestProbeIsDeterministic … if string(ja) != string(jb)"
@@ -107,7 +107,7 @@ Per-criterion verdicts:
   evidence: cmd: disembark probe <git-only fixture> — "tiers present: git … + graveyard grounded (git, high) / evidence: 1 files deleted (e.g. f.txt), 1 reverted commits"
   evidence: internal/core/lifeboat/grounding_test.go:115 — "func TestProbeGraveyardFromGitAlone"
   evidence: internal/core/lifeboat/sources_git.go:81-89 — "deletions without any revert are only partial evidence, not a grounded graveyard"
-  evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:118-120 — "only `partial (git, medium)` on this repository (40 deletions, no reverts detected)"
+  evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:118-120 — "only `partial (git, medium)` on this repository (40 deletions, no reverts detected)"
 - ac-7 — MET: IngestLessons drops any lesson whose evidence refs resolve to no layer-1/2 finding id ("no valid evidence refs") and TestIngestLessonsCiteOrDropped asserts the uncited lesson is dropped while the cited one is written; the test ran green.
   evidence: internal/core/lifeboat/graveyard_lessons.go:116 — "drop(\"no valid evidence refs\")"
   evidence: internal/core/lifeboat/graveyard_lessons_test.go:96 — "func TestIngestLessonsCiteOrDropped … Evidence: []string{\"no-such-id\"} … res.Dropped != 1"
@@ -122,19 +122,19 @@ Gap audit:
 - honoured:
   - Probe before pack, read-only and out-of-tree — reads a repo without touching it
     evidence: internal/core/lifeboat/probe_test.go:254 — "TestProbeLeavesEveryFileByteIdentical"
-    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:24-25 — "Both were byte-identical after probing"
+    evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:24-25 — "Both were byte-identical after probing"
   - A blank is a first-class result: what was searched and the question a human must answer
     evidence: internal/core/lifeboat/coverage.go:112-121 — "searched: … / ? %s"
     evidence: cmd: disembark probe <git-only fixture> — "every one of 18 blanks carries searched + question"
   - The cross-repo table answers what keeping a record is worth, in a number
-    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:39-42 — "grounds **21 of 23** … the two git-plus-conventions repositories ground **4** and **3**"
+    evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:39-42 — "grounds **21 of 23** … the two git-plus-conventions repositories ground **4** and **3**"
   - Stable, aggregatable coverage schema with schema_version, enforced at the aggregate
     evidence: internal/core/lifeboat/coverage.go:16 — "SchemaVersion int `json:\"schema_version\"`"
     evidence: internal/surface/cli/cli.go:369-375 — "missing schema_version … upgrade abcd"
   - Graveyard as a first-class section with a code-enforced cite-or-be-dropped validator
     evidence: internal/core/lifeboat/graveyard_lessons.go:116 — "drop(\"no valid evidence refs\")"
   - Packer built after the aggregate settled the section list
-    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:77-78 — "the packer is built to all 23 brief sections"
+    evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:77-78 — "the packer is built to all 23 brief sections"
 - diverged:
   - Packer surface promised as `disembark <repo> to <dest>` with `dry-run`; shipped as `disembark plan [repo]` and `disembark pack <repo> <dest>`
     evidence: .abcd/development/intents/shipped/itd-88-lifeboat-coverage-experiment.md:41 — "The packer (`disembark <repo> to <dest>`)"
@@ -146,7 +146,7 @@ Gap audit:
     evidence: commands/abcd/disembark.md:4 — "argument-hint: \"<source-repo> <dest> | plan <source-repo>\""
     evidence: internal/surface/cli/cli.go:306 — "Use: \"probe [repo]\""
   - The recorded delta compares record-rich against git+conventions repos, not a strictly git-only repo; the corpus is two foreign repositories
-    evidence: .abcd/development/research/2026-07-26-itd-88-coverage-experiment.md:134-137 — "suggestive but not yet a trustworthy population — the finding here is a first reading"
+    evidence: .abcd/development/research/notes/2026-07-26-itd-88-coverage-experiment.md:134-137 — "suggestive but not yet a trustworthy population — the finding here is a first reading"
 - missing:
   - Pass B ships as a declared exemption in `_provenance.json`, never a silent gap — no exemption field or marker exists anywhere in the lifeboat package or the Provenance struct
     evidence: internal/core/lifeboat/plan.go:65-80 — "type Provenance struct { SchemaVersion … Omissions } — no exemption field; grep 'exemption' across internal/core/lifeboat/ returns nothing"

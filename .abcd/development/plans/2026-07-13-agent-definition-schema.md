@@ -1,7 +1,7 @@
 # Plan: agent-definition schema and its enforcement
 
 Companion to the research record:
-[`../research/2026-07-13-agent-definition-schema.md`](../research/2026-07-13-agent-definition-schema.md).
+[`../research/notes/2026-07-13-agent-definition-schema.md`](../research/notes/2026-07-13-agent-definition-schema.md).
 
 **Revision note.** Two earlier drafts were rejected by three independent adversarial
 reviews (Claude and GPT-5.5, neither the author). They were right, and § 7 records what
