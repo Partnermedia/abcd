@@ -100,6 +100,11 @@ type RuleConfig struct {
 	// Patterns is the context_status_free line-match regexp list; when empty the
 	// rule falls back to contextStatusDefaultPatterns.
 	Patterns []string `json:"patterns"`
+	// Section is the context_citation_currency heading matcher: the rule reads only
+	// the section of Target whose heading matches (the sharp-edges list), because a
+	// citation to a terminal record is legitimate everywhere else. Empty falls back
+	// to defaultContextSection.
+	Section string `json:"section"`
 	// ReceiptsDir is the receipt_gate directory of sha-keyed semantic-pass
 	// receipts (VSA-shaped JSON), repo-relative (default .abcd/work/reviews).
 	// Outside Roots.

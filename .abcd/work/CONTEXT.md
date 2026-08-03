@@ -12,6 +12,11 @@ dashboard (`../development/roadmap/README.md`), and the intent buckets — never
 written here, where they would only go stale. A record-lint rule
 (`context_status_free`) enforces this.
 
+A second rule (`context_citation_currency`) watches the sharp-edges list below:
+it blocks a bullet that grounds a live constraint in a record which has since
+resolved, shipped, closed, or been superseded, so a caveat cannot outlive the
+record it rests on.
+
 ## What this repo is
 
 `abcd-cli` is the from-scratch **Go** rebuild of abcd as a host-agnostic
@@ -22,9 +27,17 @@ Python reference implementation.
 
 ## Live constraints / sharp edges
 
-- Parts of the copied design record may still describe superseded
-  architecture; the brief-vs-surface reconciliation (iss-35 in the ledger) is
-  the open cross-check. Where the record and the binary disagree, verify
-  against the binary before trusting either.
+- Trust the binary over the record where they disagree. Less of the
+  brief↔surface agreement is machine-enforced than the record's five named
+  surfaces suggest: `surface_coverage` holds Direction B (every shipped surface
+  resolves to a brief row) on every run, but reads only the command and skill
+  surfaces — the agent, hook, and CLI-verb surfaces are not covered by it.
+  Direction A — the brief's prose describing what the binary actually DOES — is
+  irreducibly semantic. Everything outside that one structural check is carried
+  by the periodic release-gate cross-check
+  (`../development/release-gate/brief-surface-crosscheck.js`, pinned by its
+  manifest and tiered by release impact), which runs at a release, not
+  continuously. So a brief sentence about behaviour can be wrong between
+  releases.
 - Single repo, curated release (no dev→public mirror). `.abcd/**` never ships.
 - Never commit/push without the maintainer asking; new deps need sign-off.

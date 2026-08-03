@@ -13,7 +13,7 @@ canonical home per concept:
 | [`decisions/`](decisions) | ADRs (MADR) — ratified architecture decisions, one canonical home; plus `notes/`. |
 | [`roadmap/`](roadmap) | Sequencing: `phases/` + `rfcs/` (an accepted RFC produces an ADR). |
 | [`plans/`](plans) | Dated design / implementation plans (`YYYY-MM-DD-*`). |
-| [`research/`](research) | Investigations: `notes/` (dated) + `spikes/` (prototypes). |
+| [`research/`](research) | <!-- index: research-children -->Investigations: `notes/` (dated write-ups) + `prompting/` (prompt R&D).<!-- /index --> |
 
 Also here: `personas.json` — data for press-release quote attribution (migrates to
 embedded Go data when the intent surface is built).

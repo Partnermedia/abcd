@@ -115,7 +115,9 @@ func TestRecordWritesTheVerdictRecord(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	wantPath := ".abcd/development/research/2026-07-28-ideate-the-ideate-gate.md"
+	// A verdict record is a DATED research note, and research/README.md files
+	// dated notes under notes/ — the record's own convention decides the path.
+	wantPath := ".abcd/development/research/notes/2026-07-28-ideate-the-ideate-gate.md"
 	if res.Path != wantPath {
 		t.Errorf("Path = %q, want %q", res.Path, wantPath)
 	}
