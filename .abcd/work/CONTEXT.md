@@ -22,9 +22,14 @@ Python reference implementation.
 
 ## Live constraints / sharp edges
 
-- Parts of the copied design record may still describe superseded
-  architecture; the brief-vs-surface reconciliation (iss-35 in the ledger) is
-  the open cross-check. Where the record and the binary disagree, verify
-  against the binary before trusting either.
+- Trust the binary over the record where they disagree. Only half the
+  brief↔surface agreement is machine-enforced: the `surface_coverage`
+  record-lint rule structurally holds Direction B (every shipped surface
+  resolves to a brief row) on every run. Direction A — the brief's prose
+  describing what the binary actually DOES — is irreducibly semantic and is
+  checked periodically by the release-gate cross-check
+  (`../development/release-gate/brief-surface-crosscheck.js`, pinned by its
+  manifest and tiered by release impact), not continuously. So a brief
+  sentence about behaviour can be wrong between releases.
 - Single repo, curated release (no dev→public mirror). `.abcd/**` never ships.
 - Never commit/push without the maintainer asking; new deps need sign-off.
