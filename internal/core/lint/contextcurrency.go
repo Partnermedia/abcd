@@ -140,6 +140,13 @@ func checkContextCitationCurrency(repoRoot string, cfg RuleConfig) ([]Finding, e
 	return out, nil
 }
 
+// markdownHeadingRe matches a real ATX heading and nothing else: one to six
+// hashes at column 0, followed by a space or the end of the line. The looser
+// "starts with # after trimming" test ends the section early on an indented code
+// line or a bare `#hashtag`, which would silently shrink the scanned corpus —
+// the one failure mode a gate must not have, since it looks exactly like a pass.
+var markdownHeadingRe = regexp.MustCompile(`^#{1,6}(\s|$)`)
+
 // contextLine is one line of the scanned section and its 1-based source line.
 type contextLine struct {
 	text string
@@ -164,7 +171,7 @@ func contextSectionLines(lines []string, sectionRe *regexp.Regexp) ([]contextLin
 			}
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+		if markdownHeadingRe.MatchString(line) {
 			break
 		}
 		out = append(out, contextLine{text: line, line: i + 1})

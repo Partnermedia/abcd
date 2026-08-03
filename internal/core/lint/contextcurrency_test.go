@@ -189,6 +189,34 @@ func TestContextCitationCurrencyReadsOnlyTheSharpEdges(t *testing.T) {
 	}
 }
 
+// TestContextCitationCurrencyEndsOnlyOnAHeading guards the scan's boundary. A
+// line that merely STARTS with a hash after trimming — an indented code line, a
+// bare hashtag — is not a heading, and treating one as the end of the section
+// would silently shrink the corpus the gate reads. A shrunken corpus reports
+// nothing, which is indistinguishable from a clean one, so the terminal citation
+// is placed AFTER the decoys: only a scan that ran to the real heading finds it.
+func TestContextCitationCurrencyEndsOnlyOnAHeading(t *testing.T) {
+	root := t.TempDir()
+	liveCorpus(t, root)
+	writeIssue(t, root, "resolved", "iss-35-brief-surface-reconciliation.md")
+	writeContext(t, root,
+		"- A live bullet: iss-42 is open.",
+		"",
+		"    # an indented code line, not a heading",
+		"    #hashtag, also not a heading",
+		"",
+		"- The reconciliation (iss-35) is the open cross-check.",
+	)
+
+	fs, err := Lint(contextCurrencyCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleContextCitationCurrency); n != 1 {
+		t.Fatalf("expected the scan to run past the non-heading hash lines and find iss-35, got %d: %+v", n, fs)
+	}
+}
+
 // TestContextCitationCurrencyFailsClosed covers the three ways an armed gate
 // could check nothing at all: no target to read, no sharp-edges section in it,
 // and a record corpus that resolves nothing (every citation would then read as

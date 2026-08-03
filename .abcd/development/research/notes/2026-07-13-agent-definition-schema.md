@@ -356,6 +356,6 @@ abcd's shape — the schema should encode it, not relax it.
 
 - [`prompting/01-general-best-practices.md`](../prompting/01-general-best-practices.md) — the
   standing prompting baseline this research updates.
-- [`../brief/05-internals/01-agents.md`](../../brief/05-internals/01-agents.md) — the agent
+- [`../../brief/05-internals/01-agents.md`](../../brief/05-internals/01-agents.md) — the agent
   catalog and the frontmatter the record declares.
 - itd-5 — the intent that owns the agent-file schema.
