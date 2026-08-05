@@ -258,7 +258,8 @@ make build                   # cross-compile bin/abcd-<goos>-<arch>
   see [`internal/README.md`](internal/README.md).
 - [`commands/`](commands/), [`.claude-plugin/`](.claude-plugin/) — the plugin
   surface (auto-loaded).
-- [`.abcd/`](.abcd/) — the development record and working files (excluded from
-  the release artifact; present in a marketplace checkout).
+- [`.abcd/`](.abcd/) — the development record and working files (present in
+  every repository checkout, marketplace installs and release source archives
+  included; never in the released binaries).
 
 Contributor guidance: [`AGENTS.md`](AGENTS.md).
