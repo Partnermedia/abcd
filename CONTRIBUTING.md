@@ -4,9 +4,14 @@ abcd is a private incubation repo for now; it flips public at maturity. See
 [`AGENTS.md`](AGENTS.md) for build/test/checks and working conventions, and
 [`.abcd/development/`](.abcd/development/) for the design record.
 
-- **Branch + PR** for substantive changes; CI (build/vet/test on macOS + Linux,
-  gitleaks, zizmor) gates the merge. `make preflight` runs the same checks locally
-  via the pre-push hook.
+- **Branch + PR** for substantive changes; CI gates the merge. Its `check` job
+  builds, vets and tests (plain and race-enabled) on macOS + Linux, and on the
+  Linux leg alone adds the `gofmt -l .` format gate and the record-lint and
+  docs-lint steps; separate jobs run the reviews-charter check, `gitleaks`,
+  `zizmor` and the smoke harness. `make preflight` runs the same build, vet, test
+  and race steps locally via the pre-push hook, together with the lint-reviews,
+  record-lint and docs-lint gates — but not gofmt, so run `gofmt -l .` before
+  pushing.
 - **Conventional-commit prefixes** (`feat`/`fix`/`docs`/`chore`/`refactor`/`test`/`ci`),
   no scopes; short title, body explains why.
 - A **CHANGELOG** entry accompanies any user-facing change.
