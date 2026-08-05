@@ -518,6 +518,11 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The README layout line says what each distribution channel contains**
+  (iss-43). `.abcd/` was described as "never shipped", which holds for the
+  release artifact — binaries and `checksums.txt` only — but not for the plugin
+  channel, whose marketplace entry installs from the repository root and so
+  carries the directory. The line names both.
 - **The installed plugin surface is the surface the documentation describes**
   (iss-44, iss-160, iss-161, iss-162). The verb files lived in
   `commands/abcd/`, a subdirectory named after the plugin itself, and a harness
