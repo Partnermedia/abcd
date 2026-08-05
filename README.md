@@ -219,7 +219,8 @@ sourced from the repository root. Pull the current state of the marketplace with
 
 The marketplace is served from the repository itself, so an install tracks the
 repository rather than a versioned artefact: the manifests here carry no version
-key, and a release publishes the `abcd` binaries and their checksums.
+key, and a release publishes the `abcd` binaries and their checksums, alongside
+the source archives GitHub attaches for the tagged tree.
 
 The plugin provisions its own binary. This repository commits none, and every
 plugin update lands in a fresh cache directory, so a plugin root starts empty
@@ -258,6 +259,8 @@ make build                   # cross-compile bin/abcd-<goos>-<arch>
   see [`internal/README.md`](internal/README.md).
 - [`commands/`](commands/), [`.claude-plugin/`](.claude-plugin/) — the plugin
   surface (auto-loaded).
-- [`.abcd/`](.abcd/) — the development record and working files (never shipped).
+- [`.abcd/`](.abcd/) — the development record and working files (present in
+  every repository checkout, marketplace installs and release source archives
+  included; never in the released binaries).
 
 Contributor guidance: [`AGENTS.md`](AGENTS.md).
