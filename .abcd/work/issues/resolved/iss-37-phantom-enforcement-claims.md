@@ -19,4 +19,4 @@ Phantom enforcement claims: developer docs describe gates that do not run as des
 
 Of the five instances originally filed, instance 1 — `docs/reference/cli/README.md` describing CI-generated reference pages and a freshness check — was verified accurate in round 13 and carries no work.
 
-The brief's 06-lint.md section 1 catalogue (the predecessor project's Python-era `IL001`–`RC007` families) and the proposed gate cross-check detector are re-filed as iss-181, which carries the maintainer's disposition on both: the catalogue is removed rather than archived and is not replaced by a Go-equivalent table, and the detector's two open scoping questions are settled in that issue's body before any round implements it.
+The brief's 06-lint.md section 1 catalogue (the predecessor project's Python-era `IL001`–`RC007` families) and the proposed gate cross-check detector are re-filed as iss-181, which carries the maintainer's disposition on both: the catalogue is removed rather than archived and is not replaced by a Go-equivalent table, and the detector's two open scoping questions must be settled in that issue's body before any round implements it.
