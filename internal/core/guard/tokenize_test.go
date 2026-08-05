@@ -130,11 +130,6 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cat", "0:grep|x"},
 		},
 		{
-			name: "an unterminated heredoc swallows the rest of the input",
-			line: "cat <<EOF\nrm -rf *",
-			want: []string{"0:cat"},
-		},
-		{
 			name: "a blank line does not break a list continuation",
 			line: "cd scratch &&\n\nrm -rf *",
 			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
@@ -198,6 +193,88 @@ func TestTokenizeRejectsUnterminatedQuote(t *testing.T) {
 	for _, line := range []string{`echo "unterminated`, `echo 'unterminated`, `echo trailing\`} {
 		if _, err := tokenize(line); !errors.Is(err, ErrUnparsableCommand) {
 			t.Fatalf("tokenize(%q) error = %v, want ErrUnparsableCommand", line, err)
+		}
+	}
+}
+
+// TestTokenizeRejectsUnterminatedHeredoc: a here-document whose delimiter line
+// never appears is unparsable, not a silent swallow of the remaining input —
+// the guard must fail open LOUDLY on it rather than allow whatever commands
+// happened to follow with no signal at all.
+func TestTokenizeRejectsUnterminatedHeredoc(t *testing.T) {
+	const line = "cat <<EOF\nrm -rf *"
+	if _, err := tokenize(line); !errors.Is(err, ErrUnparsableCommand) {
+		t.Fatalf("tokenize(%q) error = %v, want ErrUnparsableCommand", line, err)
+	}
+}
+
+// TestArithmeticShiftByIdentifierIsNotAHeredoc pins the identifier-operand
+// form of the same boundary the literal-digit case above already covers: an
+// unquoted `<<` whose "delimiter" word is immediately followed by a bare paren
+// — e.g. `$((1<<shift))`, where readHeredocDelim reads "shift" and stops at
+// the arithmetic expression's own closing paren — is never a real heredoc. A
+// genuine delimiter word is always followed by its body and terminator line,
+// never by `(` or `)` with no separator. Classifying this correctly at parse
+// time (rather than merely erroring when no terminator line happens to exist)
+// matters: an unquoted `<<` misread this way must still let every later line
+// reach command position and be matched normally, not merely fail loud.
+func TestArithmeticShiftByIdentifierIsNotAHeredoc(t *testing.T) {
+	const line = "shift=8\necho $((1<<shift))\ngit push --force origin main"
+	segs, err := tokenize(line)
+	if err != nil {
+		t.Fatalf("tokenize(%q): unexpected error: %v", line, err)
+	}
+	got := render(segs)
+	swallowed := true
+	for _, s := range got {
+		if strings.Contains(s, "push") {
+			swallowed = false
+		}
+	}
+	if swallowed {
+		t.Errorf("tokenize(%q) = %q: the `git push --force` line never reached command position", line, got)
+	}
+
+	d, err := Defaults().Check(line)
+	if err != nil {
+		t.Fatalf("Check(%q): unexpected error: %v", line, err)
+	}
+	if d.Verdict != VerdictBlock {
+		t.Fatalf("Check(%q).Verdict = %q (entry %q), want %q via git-push-force", line, d.Verdict, d.EntryID, VerdictBlock)
+	}
+
+	// Control: the literal-operand form must still parse and block normally.
+	const lit = "echo $((1<<20))\ngit push --force origin main"
+	dl, err := Defaults().Check(lit)
+	if err != nil {
+		t.Fatalf("Check(%q): unexpected error: %v", lit, err)
+	}
+	if dl.Verdict != VerdictBlock {
+		t.Fatalf("control: Check(%q).Verdict = %q, want %q", lit, dl.Verdict, VerdictBlock)
+	}
+}
+
+// TestArithmeticShiftCoincidentalDelimiterStillBlocks is the adversarial case
+// that TestArithmeticShiftByIdentifierIsNotAHeredoc alone would miss: an
+// attacker who knows the tokenizer once looked for a line matching the
+// misread "delimiter" could supply exactly that line (here, a bare `shift`
+// with no arguments — a harmless no-op POSIX builtin), so the earlier,
+// narrower fix (erroring only when no such line exists) would still let this
+// swallow the guarded command with no error and no signal. Classifying the
+// `<<` correctly up front — never treating it as a heredoc in the first place
+// — closes this regardless of what later lines happen to contain.
+func TestArithmeticShiftCoincidentalDelimiterStillBlocks(t *testing.T) {
+	for _, line := range []string{
+		"echo $((1<<shift))\ngit push --force origin main\nshift",
+		"echo $((1<<k))\ngit push --force origin main\nk",
+		"echo $(( $((1<<a)) ))\ngit push --force origin main\na",
+	} {
+		d, err := Defaults().Check(line)
+		if err != nil {
+			t.Fatalf("Check(%q): unexpected error: %v", line, err)
+		}
+		if d.Verdict != VerdictBlock {
+			t.Fatalf("Check(%q).Verdict = %q, want %q — the guarded line must not be silently swallowed", line, d.Verdict, VerdictBlock)
 		}
 	}
 }

@@ -127,7 +127,11 @@ func tokenize(line string) ([]segment, error) {
 			// is not complete, so the body waits — what follows it is still
 			// command text.
 			if len(pending) > 0 && !lastList {
-				i = skipHeredocBodies(line, i, pending)
+				next, ok := skipHeredocBodies(line, i, pending)
+				if !ok {
+					return nil, fmt.Errorf("%w: unterminated here-document body", ErrUnparsableCommand)
+				}
+				i = next
 				pending = nil
 			}
 			// lastList is NOT cleared here: a blank or comment-only line after a
@@ -158,7 +162,19 @@ func tokenize(line string) ([]segment, error) {
 			if err != nil {
 				return nil, err
 			}
-			if !hd.quoted && !isDelimStart(hd.delim) {
+			// A real heredoc delimiter is never immediately followed by a bare
+			// paren: its body and terminator line have to come first, so nothing
+			// legitimate places `(` or `)` directly against the delimiter word
+			// with no separator. `$((expr<<ident))` produces exactly this shape
+			// -- readHeredocDelim reads the shift's right-hand identifier as if
+			// it were a delimiter and stops at the arithmetic expression's own
+			// closing paren. Catching this at classification time (rather than
+			// only an unterminated body, below) matters: without it, an
+			// attacker can supply a later line that happens to equal the
+			// misread "delimiter" and have it swallow real commands with no
+			// error at all.
+			followedByParen := next < len(line) && (line[next] == '(' || line[next] == ')')
+			if !hd.quoted && (!isDelimStart(hd.delim) || followedByParen) {
 				cur = append(cur, '<', '<')
 				hasCur = true
 				lastList = false
@@ -259,10 +275,17 @@ func readHeredocDelim(line string, pos int) (heredoc, int, error) {
 
 // skipHeredocBodies consumes the body of every pending here-document, starting
 // at pos (the first byte after the newline that ended the command line), and
-// returns the position just past the last body. An unterminated body swallows
-// the rest of the input — exactly as a shell would treat it.
-func skipHeredocBodies(line string, pos int, pending []heredoc) int {
+// returns the position just past the last body. The second return is false if
+// any body never finds its terminating delimiter line before the input ends —
+// which is either a genuinely truncated heredoc, or a `<<` that isDelimStart
+// mistook for one (an identifier-operand arithmetic shift, `$((1<<shift))`,
+// reads as a delimiter word). Either way, silently consuming the remainder of
+// the line as unchecked "body" text would swallow real commands with no
+// signal; the caller turns a false result into ErrUnparsableCommand so the
+// guard fails open LOUDLY on it instead of silently.
+func skipHeredocBodies(line string, pos int, pending []heredoc) (int, bool) {
 	for _, hd := range pending {
+		found := false
 		for pos < len(line) {
 			end := pos
 			for end < len(line) && line[end] != '\n' {
@@ -278,9 +301,13 @@ func skipHeredocBodies(line string, pos int, pending []heredoc) int {
 				pos = end
 			}
 			if text == hd.delim {
+				found = true
 				break
 			}
 		}
+		if !found {
+			return pos, false
+		}
 	}
-	return pos
+	return pos, true
 }
