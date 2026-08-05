@@ -857,6 +857,25 @@ called out in a **Breaking** section.
   quantifier is open-ended rather than fixed-length can still greedily
   consume into a following token before this recovery ever runs; that is a
   separate, broader gap, tracked as iss-188.
+- **The secret scanner now also detects an abutting token whose leading bytes
+  the preceding pattern's greedy quantifier had already swallowed** (iss-188).
+  A pattern with an open-ended length bound consumes as many class-matching
+  bytes as it can find, including the next token's own prefix when those bytes
+  fall in the same character class — so the boundary between the two tokens
+  sits before the reported end of the match, where the adjacency probe above
+  never looks. Two concatenated GitHub PATs were reported as one over-long
+  finding and the second token's tail survived redaction raw, with the
+  fail-closed residual re-scan reporting the output clean, so a live
+  credential still reached disk. Before a match's end is accepted as final,
+  the scan now walks back over a bounded window looking for a cut where the
+  shortened match is still valid for its own pattern and another token can
+  begin, and probes there as well. Whether a pattern needs that search is
+  decided from the pattern itself — one whose match cannot survive losing a
+  byte has a rigid length and is skipped — so a pattern added later is covered
+  without being annotated. The backward window, like the forward one, is a
+  small fixed size and the candidate scan is a single pass over the whole
+  pattern set, so a legitimately huge match (a base64 blob, a minified line)
+  costs no more than a short one.
 
 ## [0.4.1] - 2026-07-28
 
