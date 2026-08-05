@@ -62,9 +62,9 @@ jobs:
       - name: Test (race, internal)
         run: go test -race ./internal/...
 
-      # Drift gate for the .abcd/development design record. Visible but
-      # non-blocking for now: the record still carries violations that a
-      # follow-up fix pass clears before this becomes a hard gate.
+      # Drift gate for the .abcd/development design record. Blocking: a
+      # blocker-severity finding exits non-zero and fails the job; warn-level
+      # findings surface in the log only.
       - name: Record-lint (drift gate)
         if: matrix.os == 'ubuntu-latest'
         run: go run ./cmd/record-lint

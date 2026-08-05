@@ -518,6 +518,12 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The developer docs describe the gate suite that actually runs** (iss-37).
+  `AGENTS.md`, `README.md`, `CONTRIBUTING.md` and the `ci.yml` step comment name
+  the three lint gates `make preflight` runs (`lint-reviews`, `record-lint`,
+  `docs-lint`) alongside build, vet, test and the race-enabled internal tests;
+  the format gate is attributed to CI's own `gofmt` step rather than to
+  preflight, and the record-lint step reads as the blocking gate it is.
 - **The record can say what has been delivered, and the brief's later-phase list
   is derived again** (iss-41). Two entries credited an intent that never left the
   uncommitted bench: the v0.1.0 `abcd docs lint` entry cited `itd-60`, whose

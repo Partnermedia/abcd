@@ -244,7 +244,8 @@ release the binary in place did not come from.
 ## Build
 
 ```bash
-make preflight   # build + vet + test + race (the pre-push gate)
+make preflight   # the pre-push gate: lint-reviews, record-lint and docs-lint,
+                 # then build, vet, test and race (internal)
 go run ./cmd/abcd            # bare status board for the current directory
 go run ./cmd/abcd version    # print the version
 make build                   # cross-compile bin/abcd-<goos>-<arch>
