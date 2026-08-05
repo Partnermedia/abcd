@@ -234,7 +234,7 @@ func TestResolveInstallSurfaceCommittedPayload(t *testing.T) {
 		kind SurfaceKind
 		path string
 	}{
-		{SurfaceCommand, "commands/abcd/launch.md"},
+		{SurfaceCommand, "commands/launch.md"},
 		{SurfaceAgent, "agents/ruthless-reviewer.md"},
 		{SurfaceHook, "hooks/hooks.json"},
 	} {

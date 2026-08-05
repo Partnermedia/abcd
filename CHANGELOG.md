@@ -518,6 +518,33 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The installed plugin surface is the surface the documentation describes**
+  (iss-44, iss-160, iss-161, iss-162). The verb files lived in
+  `commands/abcd/`, a subdirectory named after the plugin itself, and a harness
+  maps each `commands/` subdirectory to a namespace segment — so every verb
+  registered as `/abcd:abcd:<verb>`, the plugin name twice, and each documented
+  `/abcd:<verb>` was an unknown command. The verb files move flat into
+  `commands/`, which also makes the surface's own next-step guidance runnable:
+  it already spelled `/abcd:<verb>` throughout, so it was correct prose about a
+  name nothing registered. `commands/README.md` shipped as a spurious
+  `/abcd:README` because the loader reads every markdown file under `commands/`
+  as a command, requiring no frontmatter and exempting no name; the directory's
+  documentation moves out of the auto-discovery root into the brief's surface
+  registry, which already enumerates the same surface. `/abcd:ahoy` reaches the
+  sub-verbs the binary registers — `install`, `uninstall`, `doctor` and
+  `dry-run` each have a section, and `identity-check` an explicit note saying
+  why it stays CLI-only — where the command file previously drove only the bare
+  read-only detect. Every "the `abcd` binary is not on `PATH`" remedy named
+  `make build`, which cross-compiles `bin/abcd-<goos>-<arch>` and never a
+  PATH-resolvable `abcd`; each now names the `go run ./cmd/abcd …` fallback the
+  same paragraphs already carried. And `abcd memory ask` run from a plain
+  terminal no longer heads its output with a plugin slash command: the renders
+  live in the transport-agnostic core, so they name the binary invocation and
+  stay true whichever front door produced them. A surface-parity test holds all
+  of it — the command surface is one flat level of markdown commands and
+  nothing else, every binary sub-verb is reachable from its command file or
+  carries a scoping note, and no remedy offers a build that cannot put `abcd`
+  on `PATH`.
 - **The developer docs describe the gate suite that actually runs** (iss-37).
   `AGENTS.md`, `README.md` and `CONTRIBUTING.md` name the three lint gates
   `make preflight` runs (`lint-reviews`, `record-lint`, `docs-lint`) alongside

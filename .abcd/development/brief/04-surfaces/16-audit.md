@@ -48,7 +48,7 @@ export additive. No new dependency.
 
 ## References
 
-- Plugin command: [`commands/abcd/audit.md`](../../../../commands/abcd/audit.md)
+- Plugin command: [`commands/audit.md`](../../../../commands/audit.md)
 - Design record: [`plans/2026-07-13-abcd-audit-verb.md`](../../plans/2026-07-13-abcd-audit-verb.md)
 - Intent: [`itd-85`](../../intents/drafts/itd-85-audit-verb.md)
 - Onboarding consumer: [`15-prepare-this-repo.md`](15-prepare-this-repo.md)

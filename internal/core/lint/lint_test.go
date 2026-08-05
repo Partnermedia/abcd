@@ -514,11 +514,15 @@ func TestExemptions(t *testing.T) {
 func TestSurfaceCoverage(t *testing.T) {
 	root := t.TempDir()
 
-	// Real plugin surfaces: three commands and one skill.
-	writeFile(t, root, "commands/abcd/ahoy.md", "# ahoy\n")
-	writeFile(t, root, "commands/abcd/capture.md", "# capture\n")
-	writeFile(t, root, "commands/abcd/orphan.md", "# orphan\n") // no registry row → coverage fires
-	writeFile(t, root, "commands/abcd/README.md", "# index\n")  // README is not a surface, skipped
+	// Real plugin surfaces: three commands and one skill. The directory is flat —
+	// a subdirectory would be an extra harness namespace segment, so anything
+	// nested is a different command name than the registry describes.
+	writeFile(t, root, "commands/ahoy.md", "# ahoy\n")
+	writeFile(t, root, "commands/capture.md", "# capture\n")
+	writeFile(t, root, "commands/orphan.md", "# orphan\n") // no registry row → coverage fires
+	writeFile(t, root, "commands/README.md", "# index\n")  // README is not a surface, skipped
+	writeFile(t, root, "commands/abcd.md", "# board\n")    // the bare top-level, skipped via BareCommand
+	writeFile(t, root, "commands/nested/deep.md", "# deep\n")
 	writeFile(t, root, "skills/review/SKILL.md", "# review skill\n")
 
 	// The brief surface registry. Column order deliberately differs from the
@@ -540,7 +544,8 @@ func TestSurfaceCoverage(t *testing.T) {
 			"surface_coverage": {
 				Enabled:     true,
 				Severity:    "blocker",
-				CommandsDir: filepath.Join("commands", "abcd"),
+				CommandsDir: "commands",
+				BareCommand: "abcd",
 				SkillsDir:   "skills",
 				Registry:    filepath.Join("rec", "registry.md"),
 			},
@@ -557,7 +562,7 @@ func TestSurfaceCoverage(t *testing.T) {
 		line int
 		desc string
 	}{
-		{filepath.Join("commands", "abcd", "orphan.md"), 0, "command with no registry row"},
+		{filepath.Join("commands", "orphan.md"), 0, "command with no registry row"},
 		{reg, 7, "staged row with a backing surface"},
 		{reg, 8, "shipped row with no backing surface"},
 		{reg, 11, "row with an unknown status"},
@@ -584,7 +589,7 @@ func TestSurfaceCoverage(t *testing.T) {
 	writeFile(t, root, "rec/clean.md", clean)
 	cfg.Rules["surface_coverage"] = RuleConfig{
 		Enabled: true, Severity: "blocker",
-		CommandsDir: filepath.Join("commands", "abcd"), SkillsDir: "skills",
+		CommandsDir: "commands", BareCommand: "abcd", SkillsDir: "skills",
 		Registry: filepath.Join("rec", "clean.md"),
 	}
 	fs, err = Lint(cfg, root)
@@ -598,7 +603,7 @@ func TestSurfaceCoverage(t *testing.T) {
 	// A missing registry file is not an error (nothing to cross-check).
 	cfg.Rules["surface_coverage"] = RuleConfig{
 		Enabled: true, Severity: "blocker",
-		CommandsDir: filepath.Join("commands", "abcd"), Registry: filepath.Join("rec", "absent.md"),
+		CommandsDir: "commands", BareCommand: "abcd", Registry: filepath.Join("rec", "absent.md"),
 	}
 	if _, err := Lint(cfg, root); err != nil {
 		t.Fatalf("missing registry must not error: %v", err)
@@ -625,7 +630,7 @@ func TestSurfaceCoverage(t *testing.T) {
 	writeFile(t, root, "rec/fenced.md", fenced)
 	cfg.Rules["surface_coverage"] = RuleConfig{
 		Enabled: true, Severity: "blocker",
-		CommandsDir: filepath.Join("commands", "abcd"), SkillsDir: "skills",
+		CommandsDir: "commands", BareCommand: "abcd", SkillsDir: "skills",
 		Registry: filepath.Join("rec", "fenced.md"),
 	}
 	fs, err = Lint(cfg, root)

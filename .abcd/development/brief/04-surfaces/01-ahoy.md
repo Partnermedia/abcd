@@ -361,7 +361,7 @@ JSON envelope shape is `{folder_kind, adopted, root_sha,
 plugin_root_status, repo_identity, signals, guard, gaps}` (the `guard` key
 reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
 `binary_reachable`, `registry_loadable`, `disabled`, and `entries`) so the plugin command
-(`commands/abcd/ahoy.md`) summarises state off `folder_kind` + `gaps` and
+(`commands/ahoy.md`) summarises state off `folder_kind` + `gaps` and
 names `abcd ahoy install` for anything actionable.
 
 **Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only

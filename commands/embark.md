@@ -68,6 +68,7 @@ this abcd understands, manifest verification fails, or the target is not a real
 directory — exit with a single diagnostic line and write nothing.
 
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd embark ...` from the repo root, or build it with `make build`.
+`go run ./cmd/abcd embark ...` from the repo root, or run
+`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS

@@ -49,6 +49,6 @@ across projects.
 
 ## References
 
-- Plugin command: [`commands/abcd/history.md`](../../../../commands/abcd/history.md)
+- Plugin command: [`commands/history.md`](../../../../commands/history.md)
 - Store + redaction engine: `internal/core/history`
 - Install-time provisioning of the per-repo store: [`01-ahoy.md`](01-ahoy.md)

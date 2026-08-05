@@ -611,11 +611,12 @@ type surfaceRow struct {
 // brief↔surface cross-check. It reads the plugin surface (commands/ + skills/,
 // which live outside cfg.Roots) and the brief's surface registry table, then
 // asserts three invariants:
-//   - coverage: every real surface (a commands/abcd/*.md file or a skills/*/
+//   - coverage: every real surface (a commands/*.md file or a skills/*/
 //     directory) has a registry row;
 //   - status fidelity: a row marked "shipped" has a backing surface, and a row
-//     marked "staged" does not — the bare "/abcd" top-level is binary-backed,
-//     has no command file, and is exempt from the file check;
+//     marked "staged" does not — the bare "/abcd" top-level names no sub-verb,
+//     so its command file is the configured BareCommand and it is exempt from
+//     the file check;
 //   - registry integrity: every row's status is "shipped" or "staged".
 //
 // The semantic half (a brief claim vs. binary behaviour — flags, exit codes,
@@ -694,8 +695,14 @@ func surfaceLabel(name string) string {
 
 // realSurfaces enumerates the shipped plugin surface as a name set plus a
 // name→repo-relative-path map. Command surfaces are the *.md files directly under
-// CommandsDir (README excepted); skill surfaces are the immediate subdirectories
-// of SkillsDir. A missing directory contributes nothing and is not an error.
+// CommandsDir (README and the bare top-level file excepted); skill surfaces are
+// the immediate subdirectories of SkillsDir. A missing directory contributes
+// nothing and is not an error.
+//
+// Only the files DIRECTLY under CommandsDir count, because that is what the
+// harness registers as /<plugin>:<verb>: a subdirectory becomes an extra
+// namespace segment, so anything nested is a different command name than the
+// registry describes and must not be read as backing a row.
 func realSurfaces(repoRoot string, cfg RuleConfig) (map[string]bool, map[string]string, error) {
 	set := map[string]bool{}
 	paths := map[string]string{}
@@ -711,6 +718,9 @@ func realSurfaces(repoRoot string, cfg RuleConfig) (map[string]bool, map[string]
 			}
 			name := strings.TrimSuffix(e.Name(), ".md")
 			if strings.EqualFold(name, "README") {
+				continue
+			}
+			if cfg.BareCommand != "" && name == cfg.BareCommand {
 				continue
 			}
 			set[name] = true

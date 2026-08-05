@@ -1,7 +1,7 @@
 # `/abcd:reflect` — Phase Retrospective
 
 > **Delivery state**: `/abcd:reflect` is a design-target surface — no `reflect`
-> verb exists on the shipped binary, no `commands/abcd/reflect.md` plugin command
+> verb exists on the shipped binary, no `commands/reflect.md` plugin command
 > exists, and nothing this page describes is shipped: there is no `reflect-writer`
 > capability or `--allow-empty`/`--overwrite` flag in the binary, no
 > `reflection-composer` agent (the `agents/` catalog ships, but has no
@@ -24,7 +24,7 @@ This surface doc records the design contract; the runtime behaviour (contract
 verification, README write, consumed-receipt-path + phase/audit/member-spec
 links) is owned by the predecessor store's task
 `spc-83-operator-surfaces-manifest-lockstep.3` and the
-command file `commands/abcd/reflect.md`.
+command file `commands/reflect.md`.
 
 ## Argument
 
@@ -123,7 +123,7 @@ shipped capability.
 
 ## Related documentation
 
-- Command file: `commands/abcd/reflect.md`
+- Command file: `commands/reflect.md`
 - Agent: `agents/reflection-composer.md` (the 16th catalog agent — see
   [`../05-internals/01-agents.md`](../05-internals/01-agents.md))
 - Intent: `itd-24` (`../../intents/planned/itd-24-reflect-command.md`)

@@ -10,7 +10,7 @@
 > binary behaviour. This chapter is the design record for the full surface; the
 > shipped subset is `from` + `probe`.
 
-> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The reconciled prose lands with the unpacker (the `embark` verb and `commands/abcd/embark.md` now ship — with adr-35's out-of-tree model, not this chapter's in-tree prose). Four changes:
+> **⚠ Partly superseded by [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).** The reconciled prose lands with the unpacker (the `embark` verb and `commands/embark.md` now ship — with adr-35's out-of-tree model, not this chapter's in-tree prose). Four changes:
 >
 > | This chapter says | adr-35 decides |
 > |---|---|

@@ -15,6 +15,6 @@ abcd version --json
 
 Then tell the user the `name` and `version` from the JSON. If the `abcd` binary
 is not on `PATH`, fall back to `go run ./cmd/abcd version --json` from the repo
-root, or tell the user to build it with `make build`.
+root, or run `go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS
