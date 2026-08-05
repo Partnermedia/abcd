@@ -275,11 +275,19 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 	return matches, nil
 }
 
+// AskReportHeading heads every ask render. It is the BINARY invocation, not the
+// `/abcd:memory ask` slash command, because this is core: the same bytes are
+// rendered whether the caller came through the plugin surface, the bare CLI, or
+// a later transport, and a heading naming one front door is a falsehood in the
+// other two (iss-44). A reader who ran `abcd memory ask` in a terminal must not
+// be told they invoked a plugin command they may not even have installed.
+const AskReportHeading = "abcd memory ask"
+
 // RenderCitedMatches is the default deterministic synthesizer — a
 // citation-renderer, not an LLM. Missing provenance renders as explicit (none).
 func RenderCitedMatches(question string, matches []MatchedPage) string {
 	lines := []string{
-		"# /abcd:memory ask — " + termsafe.Sanitize(question),
+		"# " + AskReportHeading + " — " + termsafe.Sanitize(question),
 		"",
 		fmt.Sprintf("Matched pages (%d, overlap-ranked):", len(matches)),
 		"",
@@ -314,7 +322,7 @@ func RenderCitedMatches(question string, matches []MatchedPage) string {
 
 // RenderNoMatches is the explicit empty-result render.
 func RenderNoMatches(question string) string {
-	return "# /abcd:memory ask — " + question + "\n\n" +
+	return "# " + AskReportHeading + " — " + question + "\n\n" +
 		"No matching memory pages (token overlap found nothing; an empty or absent store matches nothing).\n" +
 		"Try different terms, an explicit class:<source-class> / domain:<domain> filter, or ingest a source first.\n"
 }
