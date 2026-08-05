@@ -130,11 +130,6 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cat", "0:grep|x"},
 		},
 		{
-			name: "an unterminated heredoc swallows the rest of the input",
-			line: "cat <<EOF\nrm -rf *",
-			want: []string{"0:cat"},
-		},
-		{
 			name: "a blank line does not break a list continuation",
 			line: "cd scratch &&\n\nrm -rf *",
 			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
@@ -199,5 +194,46 @@ func TestTokenizeRejectsUnterminatedQuote(t *testing.T) {
 		if _, err := tokenize(line); !errors.Is(err, ErrUnparsableCommand) {
 			t.Fatalf("tokenize(%q) error = %v, want ErrUnparsableCommand", line, err)
 		}
+	}
+}
+
+// TestTokenizeRejectsUnterminatedHeredoc: a here-document whose delimiter line
+// never appears is unparsable, not a silent swallow of the remaining input —
+// the guard must fail open LOUDLY on it rather than allow whatever commands
+// happened to follow with no signal at all.
+func TestTokenizeRejectsUnterminatedHeredoc(t *testing.T) {
+	const line = "cat <<EOF\nrm -rf *"
+	if _, err := tokenize(line); !errors.Is(err, ErrUnparsableCommand) {
+		t.Fatalf("tokenize(%q) error = %v, want ErrUnparsableCommand", line, err)
+	}
+}
+
+// TestArithmeticShiftByIdentifierIsRejected pins the identifier-operand form of
+// the same boundary the literal-digit case above already covers: an unquoted
+// `<<` whose "delimiter" word is never terminated by a matching line — because
+// it was never a real heredoc delimiter to begin with, e.g. `$((1<<shift))` —
+// must not silently swallow the rest of the command as unchecked body text. It
+// is unparsable, exactly like an unterminated quote, so tokenize errors rather
+// than dropping the remaining lines from command position.
+func TestArithmeticShiftByIdentifierIsRejected(t *testing.T) {
+	const line = "shift=8\necho $((1<<shift))\ngit push --force origin main"
+	if _, err := tokenize(line); !errors.Is(err, ErrUnparsableCommand) {
+		t.Fatalf("tokenize(%q) error = %v, want ErrUnparsableCommand", line, err)
+	}
+
+	// The guard must not silently allow the command either: Check surfaces the
+	// same error rather than returning VerdictAllow.
+	if _, err := Defaults().Check(line); !errors.Is(err, ErrUnparsableCommand) {
+		t.Fatalf("Check(%q) error = %v, want ErrUnparsableCommand", line, err)
+	}
+
+	// Control: the literal-operand form must still parse and block normally.
+	const lit = "echo $((1<<20))\ngit push --force origin main"
+	d, err := Defaults().Check(lit)
+	if err != nil {
+		t.Fatalf("Check(%q): unexpected error: %v", lit, err)
+	}
+	if d.Verdict != VerdictBlock {
+		t.Fatalf("control: Check(%q).Verdict = %q, want %q", lit, d.Verdict, VerdictBlock)
 	}
 }
