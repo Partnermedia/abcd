@@ -820,6 +820,16 @@ called out in a **Breaking** section.
   false block, and a backtick command substitution, which stays a disclosed v1
   gap: the fourth part of iss-148 was attempted on this branch and reverted, and
   the issue stays open on it alone.
+- **The guard no longer silently drops the rest of a command when a `<<`
+  is mistaken for a here-document** (iss-184). An unquoted arithmetic left
+  shift with an identifier operand (`$((1<<shift))`) parsed as a heredoc
+  delimiter; the tokenizer then scanned for a closing line that never
+  appears and consumed every line after it — including a later `git push
+  --force` or `rm -rf` — as unchecked body text, so the guard returned an
+  allow verdict with no error and no signal at all. A genuinely
+  unterminated heredoc had the same silent-swallow gap. Both now surface
+  as an unparsable command, the same error class an unterminated quote
+  already uses, so the guard fails open loudly instead of silently.
 
 ## [0.4.1] - 2026-07-28
 
