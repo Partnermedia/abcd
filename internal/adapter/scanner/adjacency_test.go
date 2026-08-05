@@ -3,6 +3,7 @@ package scanner
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestConcatenatedSecretsBothDetected is the repro for iss-185: a
@@ -95,5 +96,23 @@ func TestGoogleAPIKeyDashJunctionNotDoubleCounted(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected exactly 2 google_api findings (no double count), got %d: %+v", count, findings)
+	}
+}
+
+// TestAdjacencyProbeStaysLinearOnLongLines is the regression guard for a
+// performance bug the adjacency fix's first pass introduced: an unanchored
+// probe re-scans the ENTIRE remainder of the line for every candidate match
+// end, discarding the result unless it happened to start at offset 0 — an
+// O(matches × patterns × line length) blow-up on exactly the large
+// single-line input (a minified asset, a base64 blob) a secret scanner must
+// handle. Pre-PR adversarial security review measured this at 14+ seconds on
+// a 200KB line; anchoring the probe (adjacencyProbe) restores it to a single
+// O(1) attempt per candidate.
+func TestAdjacencyProbeStaysLinearOnLongLines(t *testing.T) {
+	line := strings.Repeat("10.0.0.1 ", 300) + strings.Repeat("x", 200000)
+	start := time.Now()
+	scanLine(line)
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("scan of a 200KB line took %v, want well under 2s (unanchored-probe regression)", elapsed)
 	}
 }

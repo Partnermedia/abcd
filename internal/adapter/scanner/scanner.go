@@ -257,38 +257,40 @@ type errUnreadable string
 func (e errUnreadable) Error() string { return string(e) }
 
 // leadingFlagGroup matches an inline flag group (e.g. `(?i)`) at the very
-// start of a compiled regexp's source, so adjacencyRegexp can look past it
+// start of a compiled regexp's source, so adjacencyProbe can look past it
 // for a leading \b — two of the bundled network patterns (lanHostRe,
 // deviceHostRe) compile with `(?i)\b...`, not a bare `\b...`.
 var leadingFlagGroup = regexp.MustCompile(`^\(\?[a-zA-Z]+\)`)
 
-// adjacencyRegexp returns re with its leading \b stripped (after any inline
-// flag group), or nil when re has no leading \b — nothing to recover. Every
-// bundled secret pattern anchors on a leading \b to bound its start; when a
-// second token immediately abuts a first with no separating byte, the byte
-// just before it is itself a word character (the first token's last byte),
-// so \b can never hold there and the second token is silently never
-// matched. scanAllPatterns uses this boundary-free variant ONLY to probe the
-// exact byte offset right after a prior match — a hit there is anchored by
-// the adjacency itself, not by \b, so stripping the anchor cannot introduce
-// a false match anywhere else in the line.
-func adjacencyRegexp(re *regexp.Regexp) *regexp.Regexp {
+// adjacencyProbe returns a version of re, ANCHORED to match only at the very
+// start of whatever string it is run against, with any leading \b stripped
+// (after an inline flag group, if present). Every bundled secret pattern
+// anchors its own start on a leading \b; when a second fixed-length token
+// immediately abuts a first with no separating byte, the byte just before it
+// is itself a word character (the first token's last byte), so \b can never
+// hold there and the second token is silently never matched. scanAllPatterns
+// runs this probe ONLY at the exact byte offset right after a prior match —
+// a hit there is anchored by the adjacency itself, not by \b, so dropping the
+// anchor cannot introduce a false match anywhere else in the line. The `\A`
+// anchor here is what makes that probe O(1) rather than O(remaining line
+// length): without it, FindStringIndex would search the entire remainder of
+// the line for a match anywhere, then discard everything not starting at
+// offset 0 — turning one probe per candidate junction into a full rescan of
+// the rest of the line, which a single long line (a minified asset, a base64
+// blob) can turn into a multi-second hang per call.
+func adjacencyProbe(re *regexp.Regexp) *regexp.Regexp {
 	src := re.String()
 	flags := leadingFlagGroup.FindString(src)
-	body := src[len(flags):]
-	stripped := strings.TrimPrefix(body, `\b`)
-	if stripped == body {
-		return nil
-	}
-	adj, err := regexp.Compile(flags + stripped)
+	body := strings.TrimPrefix(src[len(flags):], `\b`)
+	anchored, err := regexp.Compile(flags + `\A(?:` + body + `)`)
 	if err != nil {
-		return nil
+		return re
 	}
-	return adj
+	return anchored
 }
 
 // patMatch is one pattern match location in a line, plus which pattern (by
-// index into the patterns/adjRes slices passed to scanAllPatterns) it
+// index into the patterns/probes slices passed to scanAllPatterns) it
 // belongs to.
 type patMatch struct {
 	patIdx     int
@@ -297,17 +299,22 @@ type patMatch struct {
 
 // scanAllPatterns returns every match of every pattern in line, plus any
 // further FIXED-LENGTH token — of the SAME pattern or a DIFFERENT one — that
-// immediately abuts a match with no separating byte (see adjacencyRegexp).
-// This closes the exact gap iss-185 named: a fixed-length pattern's own
-// match always ends exactly where a genuinely adjacent token begins, so
-// probing every pattern's boundary-free variant at that one byte offset is
-// sufficient and cannot introduce a false match elsewhere. A pattern whose
-// quantifier is open-ended (e.g. `{36,}`) can instead greedily over-consume
+// immediately abuts an already-found match with no separating byte (see
+// adjacencyProbe). This closes the exact gap iss-185 named: a fixed-length
+// pattern's own match always ends exactly where a genuinely adjacent token
+// begins, so probing every pattern at that one byte offset recovers it. It
+// does NOT help a real secret preceded by content that is not itself a
+// match found here — e.g. unrecognized filler text, or an identity-derived
+// match from matchers.findings — since there is no existing patMatch for
+// the probe to run after; that is the same pre-existing \b-boundary
+// limitation every bundled pattern already accepts elsewhere in this
+// package, not something this function claims to close. A pattern whose
+// quantifier is open-ended (e.g. `{36,}`) can also greedily over-consume
 // into a following token BEFORE this check ever runs, shifting the true
-// junction earlier than the match's reported end; recovering that case needs
-// a backward search this function does not attempt, and is tracked as a
-// separate, broader issue rather than folded in here.
-func scanAllPatterns(patterns []Pattern, adjRes []*regexp.Regexp, line string) []patMatch {
+// junction earlier than the match's reported end; recovering that needs a
+// backward search this function does not attempt, and is tracked separately
+// (iss-188) rather than folded in here.
+func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, line string) []patMatch {
 	var all []patMatch
 	seen := map[patMatch]bool{}
 	add := func(m patMatch) {
@@ -324,12 +331,8 @@ func scanAllPatterns(patterns []Pattern, adjRes []*regexp.Regexp, line string) [
 	}
 	for qi := 0; qi < len(all); qi++ {
 		end := all[qi].end
-		for j, cp := range patterns {
-			probe := adjRes[j]
-			if probe == nil {
-				probe = cp.Re
-			}
-			m := probe.FindStringIndex(line[end:])
+		for j := range patterns {
+			m := probes[j].FindStringIndex(line[end:])
 			if m == nil || m[0] != 0 || m[1] == 0 {
 				continue
 			}
@@ -347,9 +350,9 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 		id2sev = DefaultIdentitySeverities()
 	}
 	matchers := newIdentityMatchers(id)
-	adjRes := make([]*regexp.Regexp, len(patterns))
+	probes := make([]*regexp.Regexp, len(patterns))
 	for i, cp := range patterns {
-		adjRes[i] = adjacencyRegexp(cp.Re)
+		probes[i] = adjacencyProbe(cp.Re)
 	}
 	var findings []Finding
 	lineno := 0
@@ -357,7 +360,7 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 		line = strings.TrimRight(line, "\r")
 		lineno++
 		findings = append(findings, matchers.findings(line, lineno, id2sev, file)...)
-		for _, m := range scanAllPatterns(patterns, adjRes, line) {
+		for _, m := range scanAllPatterns(patterns, probes, line) {
 			cp := patterns[m.patIdx]
 			matched := line[m.start:m.end]
 			if cp.Skip != nil && cp.Skip(matched) {
