@@ -838,6 +838,20 @@ called out in a **Breaking** section.
   still surfaces as an unparsable command rather than silently swallowing
   the rest of the input, the same error class an unterminated quote already
   uses.
+- **The secret scanner now detects a second secret token that immediately
+  abuts a first with no separator, instead of silently missing it** (iss-185).
+  Every bundled secret pattern anchors its start on a leading `\b`; when two
+  same-family tokens are concatenated with no separating byte, the byte just
+  before the second token is itself a word character — the first token's own
+  last byte — so that boundary can never hold and the second token was never
+  matched at all. Because detection missed it, `Redact` left its whole body
+  raw in the output, and the fail-closed residual re-scan that stage-two
+  history capture relies on reported the redacted text clean anyway, letting
+  a live secret reach disk. Fixed at the scan pass: immediately after each
+  match, a boundary-free variant of the same pattern (its `\b` stripped) is
+  tried at the exact byte offset where the match ended — anchored by the
+  adjacency itself rather than by `\b`, so it cannot introduce a false match
+  anywhere else in the line.
 
 ## [0.4.1] - 2026-07-28
 
