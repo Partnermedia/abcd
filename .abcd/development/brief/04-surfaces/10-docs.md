@@ -11,7 +11,7 @@ when a maintainer asks.
 ## Sub-verbs
 
 - **`/abcd:docs lint`** — lint this repo's documentation for currency and print
-  the findings. The plugin command (`commands/abcd/docs.md`) invokes
+  the findings. The plugin command (`commands/docs.md`) invokes
   `abcd docs lint --json` and summarises the result.
 - **`abcd docs cite refresh`** — fetch every cited URL once and rewrite the
   committed citation baseline. Each URL gets exactly one bounded attempt with no
@@ -85,6 +85,6 @@ blocker while a release still cuts, and refuses on ones past it.
 
 ## References
 
-- Plugin command: [`commands/abcd/docs.md`](../../../../commands/abcd/docs.md)
+- Plugin command: [`commands/docs.md`](../../../../commands/docs.md)
 - Lint engine: `internal/core/lint`
 - The documentation invariants it enforces: [`../02-constraints`](../02-constraints)

@@ -163,18 +163,18 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 
 	raw, err := os.ReadFile(indexPath)
 	if err != nil {
-		return []string{header + " coverage index not built yet — run /abcd:memory lint"}
+		return []string{header + " coverage index not built yet — run `abcd memory lint`"}
 	}
 	var stored map[string]any
 	if json.Unmarshal(raw, &stored) != nil {
-		return []string{header + " headroom unavailable — run /abcd:memory lint"}
+		return []string{header + " headroom unavailable — run `abcd memory lint`"}
 	}
 	storedFP, okFP := stored["fingerprint"].(string)
 	sources, okSrc := stored["sources"].(map[string]any)
 	unavailable, okUn := stored["unavailable"].(map[string]any)
 	budgetBlock, okBud := stored["quotation_budget"].(map[string]any)
 	if !okFP || !okSrc || !okUn || !okBud {
-		return []string{header + " headroom unavailable — run /abcd:memory lint"}
+		return []string{header + " headroom unavailable — run `abcd memory lint`"}
 	}
 
 	// Read-only crawl over the same typed pages the lint crawls.
@@ -208,7 +208,7 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 	}
 	currentFP := computeFingerprint(pages, registry, referenced, budget)
 	if currentFP != storedFP {
-		return []string{header + " coverage index stale — run /abcd:memory lint"}
+		return []string{header + " coverage index stale — run `abcd memory lint`"}
 	}
 	if len(sources) == 0 && len(unavailable) == 0 {
 		return []string{header + " no external-source coverage yet"}
@@ -235,12 +235,12 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 	for _, sh := range srcKeys {
 		cov, ok := sources[sh].(map[string]any)
 		if !ok {
-			return []string{header + " headroom unavailable — run /abcd:memory lint"}
+			return []string{header + " headroom unavailable — run `abcd memory lint`"}
 		}
 		covTotal, okT := num(cov["coverage_total"])
 		covUnamb, okU := num(cov["coverage_unambiguous"])
 		if !okT || !okU {
-			return []string{header + " headroom unavailable — run /abcd:memory lint"}
+			return []string{header + " headroom unavailable — run `abcd memory lint`"}
 		}
 		lines = append(lines, fmt.Sprintf("  %s: warn %s, block %s",
 			short12(sh), fmtSignedPct(warnPct-covTotal), fmtSignedPct(blockPct-covUnamb)))

@@ -9,7 +9,7 @@ later take over, in a shape the CLI can adopt without unpicking.
 
 It is a **host-delegated command**: no dedicated Go verb backs it and there is
 no bare-status render. The workflow runs in the host agent from the markdown in
-[`commands/abcd/prepare-this-repo.md`](../../../../commands/abcd/prepare-this-repo.md),
+[`commands/prepare-this-repo.md`](../../../../commands/prepare-this-repo.md),
 invoking the binary's read-only `abcd audit --json` for the engine-backed
 conformance core. It takes no argument — it always operates on the current
 repository.
@@ -91,6 +91,6 @@ end state is the `.abcd/` layout the shipped abcd surfaces
 
 ## References
 
-- Plugin command: [`commands/abcd/prepare-this-repo.md`](../../../../commands/abcd/prepare-this-repo.md)
+- Plugin command: [`commands/prepare-this-repo.md`](../../../../commands/prepare-this-repo.md)
 - The three-tier layout it adopts: [`../01-product`](../01-product) and the abcd `.abcd/README.md`
 - The invariants the working-conventions block encodes: [`../02-constraints`](../02-constraints)

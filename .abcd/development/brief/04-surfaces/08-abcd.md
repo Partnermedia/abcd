@@ -72,15 +72,17 @@ top-level command would be *replaced*. Investigation found NO such stub: the
 predecessor's spc-17 work is credited with probe/bare renders for the *sub-verb*
 surfaces. The `disembark`,
 `embark`, `launch`, and `intent` CLI verbs all ship today, and each has its
-plugin command file present (`commands/abcd/disembark.md`, `embark.md`,
-`launch.md`, `intent.md`). `commands/abcd/` ships `ahoy`, `audit`, `capture`,
-`consult`, `disembark`, `docs`, `embark`, `guard`, `history`, `ideate`,
-`identity`, `ingest`, `intent`, `launch`, `memory`, `prepare-this-repo`, and
-`version` (17 files). The investigation found no predecessor spc-17 probe STUB behind the
-top-level command to replace — the "stub replacement" premise is therefore
-recorded here as not-applicable. The top-level command file itself is present
-today (`commands/abcd.md`, referenced above and scaffolded with the repo), so a
-later reader should hunt for neither a stub nor a missing file.
+plugin command file present (`commands/disembark.md`, `embark.md`,
+`launch.md`, `intent.md`). The `/abcd:<verb>` surface covers `ahoy`, `audit`,
+`banlist`, `capture`, `consult`, `disembark`, `docs`, `embark`, `guard`,
+`history`, `ideate`, `identity`, `ingest`, `intent`, `launch`, `memory`,
+`prepare-this-repo`, and `version` (18 verb files, one per command directly
+under `commands/`). The investigation found no predecessor spc-17 probe STUB
+behind the top-level command to replace — the "stub replacement" premise is
+therefore recorded here as not-applicable. The top-level command file itself
+is present today (`commands/abcd.md`, referenced above and scaffolded with the
+repo, alongside the eighteen verb files), so a later reader should hunt for
+neither a stub nor a missing file.
 
 ## The six sections (fixed order)
 

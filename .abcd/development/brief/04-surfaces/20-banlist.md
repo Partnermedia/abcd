@@ -251,7 +251,7 @@ pattern, and a guard is only ever asked about what git asks it about.
 
 ## References
 
-- Plugin command: [`commands/abcd/banlist.md`](../../../../commands/abcd/banlist.md)
+- Plugin command: [`commands/banlist.md`](../../../../commands/banlist.md)
 - Spec: [`spc-20`](../../specs/closed/spc-20-name-banlist.md)
 - Intent: [`itd-74`](../../intents/shipped/itd-74-name-banlist.md)
 - Public-layer gate: [`10-docs.md`](10-docs.md)

@@ -202,6 +202,7 @@ payload). The audit files are a mutable synthesis layer and are **not** part of
 `manifest_sha256`.
 
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd disembark ...` from the repo root, or build it with `make build`.
+`go run ./cmd/abcd disembark ...` from the repo root, or run
+`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS

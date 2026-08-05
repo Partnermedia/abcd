@@ -10,7 +10,7 @@ abcd version --json
 ```
 
 emits `{ "name": "abcd", "version": "<version>" }`. The plugin command
-(`commands/abcd/version.md`) reads the JSON and tells the user the `name` and
+(`commands/version.md`) reads the JSON and tells the user the `name` and
 `version`. Without `--json`, bare `abcd version` prints the version string only
 (e.g. `abcd dev` in a development build) — it does **not** render a status board;
 the bare-status convention is scoped to `ahoy`/`capture`/`intent`/`memory`/`spec`
@@ -25,5 +25,5 @@ the release artefact; `/abcd:version` only reports what is installed.
 
 ## References
 
-- Plugin command: [`commands/abcd/version.md`](../../../../commands/abcd/version.md)
+- Plugin command: [`commands/version.md`](../../../../commands/version.md)
 - Derived versioning: [`04-launch.md § 3`](04-launch.md#3-versioning--marketplace)

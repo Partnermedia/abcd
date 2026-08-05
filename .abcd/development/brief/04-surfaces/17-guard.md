@@ -9,7 +9,7 @@ loader injecting the same registry's entries before shell-heavy work.
 
 - **`/abcd:guard check`** — evaluate one candidate command line and report the
   decision. The candidate comes from `--command "<line>"` or from stdin. The
-  plugin command (`commands/abcd/guard.md`) passes it on **stdin**, inside a
+  plugin command (`commands/guard.md`) passes it on **stdin**, inside a
   quoted-delimiter heredoc: a candidate interpolated into a double-quoted
   `--command` argument is expanded by the shell before the guard starts, so a
   command substitution inside it would run at check time — the one moment the
@@ -110,7 +110,7 @@ promoted into the bundled defaults through the admission gate.
 
 ## References
 
-- Plugin command: [`commands/abcd/guard.md`](../../../../commands/abcd/guard.md)
+- Plugin command: [`commands/guard.md`](../../../../commands/guard.md)
 - Spec: [`spc-16`](../../specs/closed/spc-16-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
 - Intent: [`itd-103`](../../intents/shipped/itd-103-abcd-teaches-repo-agents-the-shell-commands-they-must-never.md)
 - Install/health surface: [`01-ahoy.md`](01-ahoy.md)

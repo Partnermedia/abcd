@@ -62,6 +62,6 @@ is the write side that adds a source to the corpus. The two share the corpus at
 
 ## References
 
-- Plugin command: [`commands/abcd/consult.md`](../../../../commands/abcd/consult.md)
+- Plugin command: [`commands/consult.md`](../../../../commands/consult.md)
 - Corpus store and its schema: `~/.abcd/sources/README.md`
 - The confidentiality invariants it enforces: [`../02-constraints`](../02-constraints)

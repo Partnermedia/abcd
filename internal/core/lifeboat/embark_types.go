@@ -12,7 +12,7 @@ package lifeboat
 //   - Agent B (embark.go): EmbarkProbe / EmbarkFrom / VerifyManifest and the
 //     conflict/marker/coverage machinery, plus ahoy.EnsureMarker in package ahoy.
 //   - Agent C (surface/cli): the `abcd embark probe|from` command tree,
-//     commands/abcd/embark.md, and the surface-registry row-3 flip.
+//     commands/embark.md, and the surface-registry row-3 flip.
 //
 // See adr-35 and .abcd/development/plans/2026-07-14-lifeboat-coverage-experiment.md
 // (the "M5 — embark and the round-trip" section) for the ratified contract.

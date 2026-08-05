@@ -511,11 +511,15 @@ func findingsToMaps(findings []Finding) []any {
 	return out
 }
 
+// LintReportHeading heads the run-log report, on the same rule as
+// AskReportHeading: core names the binary invocation, never one front door.
+const LintReportHeading = "abcd memory lint"
+
 func renderLintReportMD(fields map[string]any) string {
 	summary, _ := fields["summary"].(map[string]any)
 	cov, _ := fields["coverage_index"].(map[string]any)
 	lines := []string{
-		"# /abcd:memory lint — curator health-check",
+		"# " + LintReportHeading + " — curator health-check",
 		"",
 		fmt.Sprintf("Generated: %v", fields["generated_at"]),
 		fmt.Sprintf("Store: %v", fields["store_path"]),

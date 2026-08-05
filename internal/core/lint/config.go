@@ -86,10 +86,21 @@ type RuleConfig struct {
 	// surface_coverage it is the brief surface table
 	// (.abcd/development/brief/04-surfaces/README.md).
 	Registry string `json:"registry"`
-	// CommandsDir is the surface_coverage plugin-command directory (commands/abcd);
-	// each *.md file (README excepted) is a shipped command surface. It lies
-	// outside Roots — the rule reads the surface tree and cross-checks the brief.
+	// CommandsDir is the surface_coverage plugin-command directory (commands);
+	// each *.md file (README and BareCommand excepted) is a shipped command
+	// surface. It lies outside Roots — the rule reads the surface tree and
+	// cross-checks the brief. The directory is flat: a harness maps a
+	// subdirectory of it to an extra namespace segment, so a file one level down
+	// registers as /<plugin>:<dir>:<verb> rather than the documented
+	// /<plugin>:<verb>.
 	CommandsDir string `json:"commands_dir"`
+	// BareCommand is the CommandsDir file stem that backs the plugin's BARE
+	// top-level command rather than a /<plugin>:<verb> surface — for abcd, the
+	// `abcd.md` whose registry row is the bare `/abcd`. It is excluded from the
+	// command-surface set the way README is, because the registry names it
+	// without a sub-verb and matching it by name would demand a row that cannot
+	// exist. Empty means the plugin has no such file.
+	BareCommand string `json:"bare_command"`
 	// SkillsDir is the surface_coverage skills directory (skills); each immediate
 	// subdirectory is a shipped skill surface. Also outside Roots.
 	SkillsDir string `json:"skills_dir"`

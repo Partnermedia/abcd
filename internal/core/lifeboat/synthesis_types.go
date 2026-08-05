@@ -16,7 +16,7 @@ package lifeboat
 //     manifest+coverage verdict mapping, the delegated verdict/finding validator, the
 //     .md render. Depends on A1's shared helpers (same package, so a build-order dep).
 //   - Agent B (surface/cli): the `disembark principles|press-release|oracle` verbs and
-//     the three orchestration sections in commands/abcd/disembark.md.
+//     the three orchestration sections in commands/disembark.md.
 //   - Agent C (agents/*.md + fixtures): the four host-delegated agent prompt files
 //     (principle-distiller, graveyard-interpreter, press-release-composer,
 //     lifeboat-oracle) with itd-5 frontmatter and injection-canary fixtures.

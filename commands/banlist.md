@@ -112,6 +112,7 @@ is refused rather than treated as a no-op.
 ## Fallback
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd banlist …`
-from the repo root, or tell the user to build it with `make build`.
+from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
+`PATH`.
 
 **User input:** $ARGUMENTS

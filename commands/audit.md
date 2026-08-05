@@ -36,7 +36,7 @@ A finding on a deliberately illustrative line can be waived by adding
 `abcd-audit:allow` on that line.
 
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd audit --json` from the repo root, or tell the user to build it
-with `make build`.
+`go run ./cmd/abcd audit --json` from the repo root, or run
+`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS
