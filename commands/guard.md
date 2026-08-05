@@ -103,6 +103,6 @@ binary is reachable, and whether the registry loads.
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd guard
 check --json` from the repo root, with the same quoted-delimiter heredoc on
-stdin, or tell the user to build it with `make build`.
+stdin, or run `go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS

@@ -37,7 +37,7 @@ is a host-delegated command file `commands/abcd/run.md`, reconciled into itd-29.
 then (step C) it lives as a run PLAN + protocol invoked under the harness loop.
 
 - The repo's `/abcd:*` surface is `commands/abcd/<verb>.md`
-  ([`commands/README.md`](../../../commands/README.md)). Most verbs are thin
+  ([`brief/04-surfaces/README.md`](../brief/04-surfaces/README.md)). Most verbs are thin
   binary wrappers, but there is firm precedent for **prose-only agent-instruction
   commands** that call no binary: `prepare-this-repo.md`, `consult.md`,
   `ingest.md`. `/abcd:auto-loop` is that kind — an orchestration protocol, not a

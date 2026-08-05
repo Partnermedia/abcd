@@ -89,6 +89,7 @@ engine verb writes that edge today, so the back-link is done by hand or deferred
 until a capture back-link verb lands (tracked in the issue-capture spec).
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd capture …`
-from the repo root, or tell the user to build it with `make build`.
+from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
+`PATH`.
 
 **User input:** $ARGUMENTS

@@ -65,6 +65,7 @@ It rebuilds the regenerable `.coverage_index.json` and writes a report under
 Blockers exit nonzero; warn-only exits 0.
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd memory …`
-from the repo root, or tell the user to build it with `make build`.
+from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
+`PATH`.
 
 **User input:** $ARGUMENTS

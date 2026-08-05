@@ -329,7 +329,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 //   - `pack <repo> <dest>` writes that file set to <dest> — never to the source.
 //
 // `pack` is the packer M3b ships, backed by the `/abcd:disembark` command
-// surface (`commands/abcd/disembark.md`), so the surface-registry row is
+// surface (`commands/disembark.md`), so the surface-registry row is
 // `shipped`. probe/coverage/plan are read-only; pack writes only to <dest>,
 // behind a destination safety gate, and never mutates the source repository.
 func newDisembarkCommand(asJSON *bool) *cobra.Command {
@@ -644,7 +644,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 // The target defaults to the working directory. Structural faults (not a lifeboat,
 // schema too new, failed manifest verification, bad target) exit 2 with a scrubbed
 // diagnostic; the conflict refusal exits 1 after rendering the report. `embark`
-// backs the `/abcd:embark` command surface (commands/abcd/embark.md), so its
+// backs the `/abcd:embark` command surface (commands/embark.md), so its
 // surface-registry row is shipped.
 func newEmbarkCommand(asJSON *bool) *cobra.Command {
 	embarkCmd := &cobra.Command{

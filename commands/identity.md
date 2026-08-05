@@ -79,7 +79,7 @@ description, and the conventions file's opening. Further surfaces are registrabl
 in that same file; none are ever registered silently.
 
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd identity --json` from the repo root, or tell the user to build
-it with `make build`.
+`go run ./cmd/abcd identity --json` from the repo root, or run
+`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS

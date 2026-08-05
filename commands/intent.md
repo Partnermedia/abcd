@@ -120,6 +120,7 @@ Ingest is fail-closed: report the returned status (`ingested`, `dead_letter`,
 or `noop`) and, for `dead_letter`, the reason.
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd intent …`
-from the repo root, or tell the user to build it with `make build`.
+from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
+`PATH`.
 
 **User input:** $ARGUMENTS

@@ -345,7 +345,7 @@ abcd/
 │   └── surface/
 │       ├── cli/                        # Cobra front door (ships in the MVP)
 │       └── mcp/                        # MCP front door (later)
-├── commands/abcd/                      # markdown command surfaces that shell to the binary — canonical list in ../04-surfaces/README.md
+├── commands/                      # markdown command surfaces that shell to the binary — canonical list in ../04-surfaces/README.md
 │   ├── ahoy.md / capture.md / docs.md / history.md / launch.md / memory.md / version.md
 │   └── …                               # plus operator-internal commands
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command

@@ -68,6 +68,6 @@ command prefers explicit `add-source` flags because it has better metadata in ha
 
 ## References
 
-- Plugin command: [`commands/abcd/ingest.md`](../../../../commands/abcd/ingest.md)
+- Plugin command: [`commands/ingest.md`](../../../../commands/ingest.md)
 - Read side of the same corpus: [`13-consult.md`](13-consult.md)
 - Corpus contract: `~/.abcd/sources/README.md`

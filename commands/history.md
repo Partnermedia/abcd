@@ -48,6 +48,7 @@ identical transcript already stored is a no-op. If any hard-fail secret or the
 caller's own home path survives redaction, capture refuses to write.
 
 If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd history …`
-from the repo root, or tell the user to build it with `make build`.
+from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
+`PATH`.
 
 **User input:** $ARGUMENTS

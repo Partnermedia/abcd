@@ -92,7 +92,7 @@ later session trusts it.
 
 ## References
 
-- Plugin command: [`commands/abcd/ideate.md`](../../../../commands/abcd/ideate.md)
+- Plugin command: [`commands/ideate.md`](../../../../commands/ideate.md)
 - Intent: [`itd-104`](../../intents/shipped/itd-104-abcd-gates-a-new-idea-before-it-becomes-a-record-entry-resea.md)
 - Spec: [`spc-18`](../../specs/closed/spc-18-abcd-gates-a-new-idea-before-it-becomes-a-record-entry-resea.md)
 - Routing-help neighbours: [`05-intent.md`](05-intent.md), [`06-capture.md`](06-capture.md)

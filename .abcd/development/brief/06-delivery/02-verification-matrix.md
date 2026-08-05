@@ -2,7 +2,7 @@
 
 | Test | What to check |
 |---|---|
-| Front-door wiring (CLI↔core↔plugin) | A `commands/abcd/*.md` surface shells to the binary → `internal/surface/cli` parses input → the core returns a **structured result** the door renders. The same core call is reachable from the MCP door with no logic re-expressed (adr-23). Core behaviour with no front door calling it is dead scaffolding — fails the wiring check |
+| Front-door wiring (CLI↔core↔plugin) | A `commands/*.md` surface shells to the binary → `internal/surface/cli` parses input → the core returns a **structured result** the door renders. The same core call is reachable from the MCP door with no logic re-expressed (adr-23). Core behaviour with no front door calling it is dead scaffolding — fails the wiring check |
 | ahoy idempotency | Run twice same version → no marker duplication, "already up to date", transparent re-confirm of visibility |
 | ahoy upgrade | Bump plugin version → `config.json["meta"]` updated, marker content refreshed, no duplication |
 | ahoy visibility flip | Switch private→public → `.gitignore` updated correctly, user shown resulting tracked-vs-ignored list |

@@ -5,7 +5,7 @@ package cli
 //
 // The verb is deliberately SMALL. Everything the protocol is actually made of —
 // the primary-source research, the record grill, the adversarial review — is host
-// work orchestrated by `commands/abcd/ideate.md`; the binary's whole job is to
+// work orchestrated by `commands/ideate.md`; the binary's whole job is to
 // validate what those legs produced and write the durable verdict. So this file
 // reads a payload, calls one core function, and formats the outcome.
 //

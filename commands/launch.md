@@ -177,7 +177,7 @@ A refusal is a result to relay, not a crash. Never hand-edit the workflows to wo
 around it: re-run with `--confirm` when the operator intends to replace the drift.
 
 If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd launch ...` from the repo root, or tell the user to build it
-with `make build`.
+`go run ./cmd/abcd launch ...` from the repo root, or run
+`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
 
 **User input:** $ARGUMENTS

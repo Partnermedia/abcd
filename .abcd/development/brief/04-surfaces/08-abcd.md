@@ -72,8 +72,8 @@ top-level command would be *replaced*. Investigation found NO such stub: the
 predecessor's spc-17 work is credited with probe/bare renders for the *sub-verb*
 surfaces. The `disembark`,
 `embark`, `launch`, and `intent` CLI verbs all ship today, and each has its
-plugin command file present (`commands/abcd/disembark.md`, `embark.md`,
-`launch.md`, `intent.md`). `commands/abcd/` ships `ahoy`, `audit`, `capture`,
+plugin command file present (`commands/disembark.md`, `embark.md`,
+`launch.md`, `intent.md`). `commands/` ships `ahoy`, `audit`, `capture`,
 `consult`, `disembark`, `docs`, `embark`, `guard`, `history`, `ideate`,
 `identity`, `ingest`, `intent`, `launch`, `memory`, `prepare-this-repo`, and
 `version` (17 files). The investigation found no predecessor spc-17 probe STUB behind the
