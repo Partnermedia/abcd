@@ -256,47 +256,87 @@ type errUnreadable string
 
 func (e errUnreadable) Error() string { return string(e) }
 
-// adjacencyRegexp returns re with its leading \b stripped, or nil when re has
-// no leading \b (nothing to recover). Every bundled secret pattern anchors on
-// a leading \b to bound its start; when a second same-family token
-// immediately abuts a first with no separating byte, the byte just before the
-// second token is itself a word character (the first token's last byte), so
-// \b can never hold there and the second token is silently never matched.
-// findAllMatches uses this boundary-free variant ONLY to probe the exact byte
-// offset right after a prior match — a hit there is anchored by the
-// adjacency itself, not by \b, so stripping the anchor cannot introduce a
-// false match anywhere else in the line.
+// leadingFlagGroup matches an inline flag group (e.g. `(?i)`) at the very
+// start of a compiled regexp's source, so adjacencyRegexp can look past it
+// for a leading \b — two of the bundled network patterns (lanHostRe,
+// deviceHostRe) compile with `(?i)\b...`, not a bare `\b...`.
+var leadingFlagGroup = regexp.MustCompile(`^\(\?[a-zA-Z]+\)`)
+
+// adjacencyRegexp returns re with its leading \b stripped (after any inline
+// flag group), or nil when re has no leading \b — nothing to recover. Every
+// bundled secret pattern anchors on a leading \b to bound its start; when a
+// second token immediately abuts a first with no separating byte, the byte
+// just before it is itself a word character (the first token's last byte),
+// so \b can never hold there and the second token is silently never
+// matched. scanAllPatterns uses this boundary-free variant ONLY to probe the
+// exact byte offset right after a prior match — a hit there is anchored by
+// the adjacency itself, not by \b, so stripping the anchor cannot introduce
+// a false match anywhere else in the line.
 func adjacencyRegexp(re *regexp.Regexp) *regexp.Regexp {
 	src := re.String()
-	stripped := strings.TrimPrefix(src, `\b`)
-	if stripped == src {
+	flags := leadingFlagGroup.FindString(src)
+	body := src[len(flags):]
+	stripped := strings.TrimPrefix(body, `\b`)
+	if stripped == body {
 		return nil
 	}
-	adj, err := regexp.Compile(stripped)
+	adj, err := regexp.Compile(flags + stripped)
 	if err != nil {
 		return nil
 	}
 	return adj
 }
 
-// findAllMatches returns every match of re in line, plus any further same-
-// pattern token that immediately abuts a match with no separating byte (see
-// adjacencyRegexp) — a case re.FindAllStringIndex can never find on its own.
-// adjRe is re with its leading \b stripped, or nil if re has none.
-func findAllMatches(re, adjRe *regexp.Regexp, line string) [][]int {
-	locs := re.FindAllStringIndex(line, -1)
-	if adjRe == nil {
-		return locs
-	}
-	for i := 0; i < len(locs); i++ {
-		end := locs[i][1]
-		m := adjRe.FindStringIndex(line[end:])
-		if m == nil || m[0] != 0 || m[1] == 0 {
-			continue
+// patMatch is one pattern match location in a line, plus which pattern (by
+// index into the patterns/adjRes slices passed to scanAllPatterns) it
+// belongs to.
+type patMatch struct {
+	patIdx     int
+	start, end int
+}
+
+// scanAllPatterns returns every match of every pattern in line, plus any
+// further FIXED-LENGTH token — of the SAME pattern or a DIFFERENT one — that
+// immediately abuts a match with no separating byte (see adjacencyRegexp).
+// This closes the exact gap iss-185 named: a fixed-length pattern's own
+// match always ends exactly where a genuinely adjacent token begins, so
+// probing every pattern's boundary-free variant at that one byte offset is
+// sufficient and cannot introduce a false match elsewhere. A pattern whose
+// quantifier is open-ended (e.g. `{36,}`) can instead greedily over-consume
+// into a following token BEFORE this check ever runs, shifting the true
+// junction earlier than the match's reported end; recovering that case needs
+// a backward search this function does not attempt, and is tracked as a
+// separate, broader issue rather than folded in here.
+func scanAllPatterns(patterns []Pattern, adjRes []*regexp.Regexp, line string) []patMatch {
+	var all []patMatch
+	seen := map[patMatch]bool{}
+	add := func(m patMatch) {
+		if seen[m] {
+			return
 		}
-		locs = append(locs, []int{end, end + m[1]})
+		seen[m] = true
+		all = append(all, m)
 	}
-	return locs
+	for i, cp := range patterns {
+		for _, loc := range cp.Re.FindAllStringIndex(line, -1) {
+			add(patMatch{i, loc[0], loc[1]})
+		}
+	}
+	for qi := 0; qi < len(all); qi++ {
+		end := all[qi].end
+		for j, cp := range patterns {
+			probe := adjRes[j]
+			if probe == nil {
+				probe = cp.Re
+			}
+			m := probe.FindStringIndex(line[end:])
+			if m == nil || m[0] != 0 || m[1] == 0 {
+				continue
+			}
+			add(patMatch{j, end, end + m[1]})
+		}
+	}
+	return all
 }
 
 // ScanText scans text for every secret pattern and identity-derived match,
@@ -317,21 +357,20 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 		line = strings.TrimRight(line, "\r")
 		lineno++
 		findings = append(findings, matchers.findings(line, lineno, id2sev, file)...)
-		for i, cp := range patterns {
-			for _, loc := range findAllMatches(cp.Re, adjRes[i], line) {
-				matched := line[loc[0]:loc[1]]
-				if cp.Skip != nil && cp.Skip(matched) {
-					continue
-				}
-				if cp.SkipAt != nil && cp.SkipAt(line, loc[0], loc[1]) {
-					continue
-				}
-				findings = append(findings, Finding{
-					File: file, Line: lineno, Column: loc[0] + 1, Kind: cp.Kind,
-					Severity: cp.Severity, Snippet: snippet(line), Matched: matched,
-					Suggested: cp.Suggestion, line: line,
-				})
+		for _, m := range scanAllPatterns(patterns, adjRes, line) {
+			cp := patterns[m.patIdx]
+			matched := line[m.start:m.end]
+			if cp.Skip != nil && cp.Skip(matched) {
+				continue
 			}
+			if cp.SkipAt != nil && cp.SkipAt(line, m.start, m.end) {
+				continue
+			}
+			findings = append(findings, Finding{
+				File: file, Line: lineno, Column: m.start + 1, Kind: cp.Kind,
+				Severity: cp.Severity, Snippet: snippet(line), Matched: matched,
+				Suggested: cp.Suggestion, line: line,
+			})
 		}
 	}
 	sealSnippets(findings)
