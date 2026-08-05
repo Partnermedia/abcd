@@ -2,6 +2,12 @@
 # [Unreleased], so a literal merge conflicts. The union driver keeps both sides.
 CHANGELOG.md merge=union
 
+# Same shape, same remedy (iss-118): DECISIONS.md and ACKNOWLEDGEMENTS.md are
+# append-only ledgers of anonymous, dated, order-independent entries that never
+# need identity, so two concurrent appends have nothing to actually disagree on.
+.abcd/work/DECISIONS.md merge=union
+ACKNOWLEDGEMENTS.md merge=union
+
 # The committed git hooks are executed by bash on every platform that runs them,
 # and a CRLF checkout makes the shebang line unparseable ("bad interpreter").
 # Pinning LF keeps the guard runnable after a checkout with autocrlf on, and keeps
