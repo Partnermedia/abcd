@@ -162,7 +162,19 @@ func tokenize(line string) ([]segment, error) {
 			if err != nil {
 				return nil, err
 			}
-			if !hd.quoted && !isDelimStart(hd.delim) {
+			// A real heredoc delimiter is never immediately followed by a bare
+			// paren: its body and terminator line have to come first, so nothing
+			// legitimate places `(` or `)` directly against the delimiter word
+			// with no separator. `$((expr<<ident))` produces exactly this shape
+			// -- readHeredocDelim reads the shift's right-hand identifier as if
+			// it were a delimiter and stops at the arithmetic expression's own
+			// closing paren. Catching this at classification time (rather than
+			// only an unterminated body, below) matters: without it, an
+			// attacker can supply a later line that happens to equal the
+			// misread "delimiter" and have it swallow real commands with no
+			// error at all.
+			followedByParen := next < len(line) && (line[next] == '(' || line[next] == ')')
+			if !hd.quoted && (!isDelimStart(hd.delim) || followedByParen) {
 				cur = append(cur, '<', '<')
 				hasCur = true
 				lastList = false
