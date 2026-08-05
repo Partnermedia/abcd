@@ -256,6 +256,49 @@ type errUnreadable string
 
 func (e errUnreadable) Error() string { return string(e) }
 
+// adjacencyRegexp returns re with its leading \b stripped, or nil when re has
+// no leading \b (nothing to recover). Every bundled secret pattern anchors on
+// a leading \b to bound its start; when a second same-family token
+// immediately abuts a first with no separating byte, the byte just before the
+// second token is itself a word character (the first token's last byte), so
+// \b can never hold there and the second token is silently never matched.
+// findAllMatches uses this boundary-free variant ONLY to probe the exact byte
+// offset right after a prior match — a hit there is anchored by the
+// adjacency itself, not by \b, so stripping the anchor cannot introduce a
+// false match anywhere else in the line.
+func adjacencyRegexp(re *regexp.Regexp) *regexp.Regexp {
+	src := re.String()
+	stripped := strings.TrimPrefix(src, `\b`)
+	if stripped == src {
+		return nil
+	}
+	adj, err := regexp.Compile(stripped)
+	if err != nil {
+		return nil
+	}
+	return adj
+}
+
+// findAllMatches returns every match of re in line, plus any further same-
+// pattern token that immediately abuts a match with no separating byte (see
+// adjacencyRegexp) — a case re.FindAllStringIndex can never find on its own.
+// adjRe is re with its leading \b stripped, or nil if re has none.
+func findAllMatches(re, adjRe *regexp.Regexp, line string) [][]int {
+	locs := re.FindAllStringIndex(line, -1)
+	if adjRe == nil {
+		return locs
+	}
+	for i := 0; i < len(locs); i++ {
+		end := locs[i][1]
+		m := adjRe.FindStringIndex(line[end:])
+		if m == nil || m[0] != 0 || m[1] == 0 {
+			continue
+		}
+		locs = append(locs, []int{end, end + m[1]})
+	}
+	return locs
+}
+
 // ScanText scans text for every secret pattern and identity-derived match,
 // returning findings sorted deterministically. It is pure: identity, patterns
 // and severities are all passed in.
@@ -264,14 +307,18 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 		id2sev = DefaultIdentitySeverities()
 	}
 	matchers := newIdentityMatchers(id)
+	adjRes := make([]*regexp.Regexp, len(patterns))
+	for i, cp := range patterns {
+		adjRes[i] = adjacencyRegexp(cp.Re)
+	}
 	var findings []Finding
 	lineno := 0
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimRight(line, "\r")
 		lineno++
 		findings = append(findings, matchers.findings(line, lineno, id2sev, file)...)
-		for _, cp := range patterns {
-			for _, loc := range cp.Re.FindAllStringIndex(line, -1) {
+		for i, cp := range patterns {
+			for _, loc := range findAllMatches(cp.Re, adjRes[i], line) {
 				matched := line[loc[0]:loc[1]]
 				if cp.Skip != nil && cp.Skip(matched) {
 					continue
