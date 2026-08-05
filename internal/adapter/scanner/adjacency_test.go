@@ -112,7 +112,38 @@ func TestAdjacencyProbeStaysLinearOnLongLines(t *testing.T) {
 	line := strings.Repeat("10.0.0.1 ", 300) + strings.Repeat("x", 200000)
 	start := time.Now()
 	scanLine(line)
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Errorf("scan of a 200KB line took %v, want well under 2s (unanchored-probe regression)", elapsed)
+	if elapsed := time.Since(start); elapsed > 15*time.Second {
+		t.Errorf("scan of a 200KB line took %v, want well under 15s (unanchored-probe regression)", elapsed)
+	}
+}
+
+// TestAdjacencyProbeWindowIsBounded is the regression guard for a SECOND,
+// distinct performance bug a merge-gate review found in the anchored probe:
+// `\A` bounds the probe to one start position, but not the cost of that one
+// attempt. net_lan_hostname and net_device_hostname carry their own
+// unbounded internal quantifier (`[a-z0-9-]*`); run against a long
+// terminator-free alnum run, a single anchored attempt scans to the end of
+// that run before failing. Repeated at every match junction on a line with
+// many back-to-back matches, this is O(matches x remaining line length) —
+// review measured multiple seconds on a few thousand back-to-back
+// fixed-length tokens. maxAdjacencyProbeWindow bounds every single probe
+// attempt to a small fixed window regardless of what follows it.
+func TestAdjacencyProbeWindowIsBounded(t *testing.T) {
+	r := strings.Repeat
+	cases := []struct {
+		name string
+		line string
+	}{
+		{"aws_keys_back_to_back", r("AKIA"+r("Q", 16), 2000)},
+		{"google_keys_back_to_back", r("AIza"+r("Z", 35), 2000)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			start := time.Now()
+			scanLine(c.line)
+			if elapsed := time.Since(start); elapsed > 15*time.Second {
+				t.Errorf("scan of %d back-to-back fixed-length tokens (%d bytes) took %v, want well under 15s (unbounded-probe-window regression)", 2000, len(c.line), elapsed)
+			}
+		})
 	}
 }

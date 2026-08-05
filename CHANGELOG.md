@@ -838,20 +838,25 @@ called out in a **Breaking** section.
   still surfaces as an unparsable command rather than silently swallowing
   the rest of the input, the same error class an unterminated quote already
   uses.
-- **The secret scanner now detects a second secret token that immediately
-  abuts a first with no separator, instead of silently missing it** (iss-185).
-  Every bundled secret pattern anchors its start on a leading `\b`; when two
-  same-family tokens are concatenated with no separating byte, the byte just
-  before the second token is itself a word character — the first token's own
-  last byte — so that boundary can never hold and the second token was never
-  matched at all. Because detection missed it, `Redact` left its whole body
-  raw in the output, and the fail-closed residual re-scan that stage-two
-  history capture relies on reported the redacted text clean anyway, letting
-  a live secret reach disk. Fixed at the scan pass: immediately after each
-  match, a boundary-free variant of the same pattern (its `\b` stripped) is
-  tried at the exact byte offset where the match ended — anchored by the
-  adjacency itself rather than by `\b`, so it cannot introduce a false match
-  anywhere else in the line.
+- **The secret scanner now detects a fixed-length secret token that
+  immediately abuts another, same-family or not, with no separator, instead
+  of silently missing it** (iss-185). Every bundled secret pattern anchors
+  its start on a leading `\b`; when two such tokens are concatenated with no
+  separating byte, the byte just before the second token is itself a word
+  character — the first token's own last byte — so that boundary can never
+  hold and the second token was never matched at all. Because detection
+  missed it, `Redact` left its whole body raw in the output, and the
+  fail-closed residual re-scan that stage-two history capture relies on
+  reported the redacted text clean anyway, letting a live secret reach disk.
+  Fixed at the scan pass: immediately after each match, every pattern's
+  `\A`-anchored, `\b`-stripped variant is tried (within a small bounded
+  window, so one attempt can never cost more than a constant amount of work
+  regardless of what follows it) at the exact byte offset where the match
+  ended — anchored by the adjacency itself rather than by `\b`, so it cannot
+  introduce a false match anywhere else in the line. A pattern whose
+  quantifier is open-ended rather than fixed-length can still greedily
+  consume into a following token before this recovery ever runs; that is a
+  separate, broader gap, tracked as iss-188.
 
 ## [0.4.1] - 2026-07-28
 
