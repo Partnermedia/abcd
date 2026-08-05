@@ -11,11 +11,14 @@ found_at: ".abcd/development/brief/05-internals/06-lint.md"
 
 06-lint.md section 1 (the lint-code namespace) is a catalogue of a predecessor project's Python-era implementation — the `IL001`–`RC007` code families and the class names they cite (`IntentLinter`, `BundleLinter`, `PromptLinter`, `SpecLinter`) describe code this repo does not carry. Re-filed here from iss-37 (2026-08-03 maintainer disposition), which is re-scoped to its three doc-claim instances.
 
-Disposition, explicit and not open for reinterpretation by the round that implements it:
+The removal is the **maintainer's decision**, explicit and not open for reinterpretation by the round that implements it:
 
 - The catalogue is **removed, never archived**. It documents another project's implementation, not this one, so it has no historical claim on the brief.
-- It is **not replaced with a Go-equivalent table**. The Go lint engine has no numbered-code scheme, and minting one is taxonomy design rather than doc repair; a hand-typed catalogue would already be stale against this cycle's own rules (`record_schema`, `index_drift`, `delivery_state`, `context_citation_currency`).
-- Section 1 is **reworked in generic language**: what the lint engine covers, stated in categories and in the present tense, pointing at the live sources of truth — the armed rules in `.abcd/record-lint.json` and `.abcd/docs-lint.json`, and the engine in `internal/core/lint`. Any literal enumeration of rules must be generated and gated (an `index_drift`-style marked region), never hand-kept.
+
+The replacement form is the **orchestrating session's recommendation**, and it stands unless the maintainer overrides it in a later trusted comment before this issue is picked up:
+
+- The catalogue is **not replaced with a Go-equivalent table**. The Go lint engine has no numbered-code scheme, and minting one is taxonomy design rather than doc repair; a hand-typed catalogue would already be stale against this cycle's own rules (`record_schema`, `index_drift`, `delivery_state`, `context_citation_currency`).
+- Section 1 is **reworked in generic language**: what the lint engine covers, stated in categories and in the present tense, pointing at the live sources of truth — the armed rules in `.abcd/record-lint.json` and `.abcd/docs-lint.json`, and the engine in `internal/core/lint`. Any literal enumeration of rules must be generated and gated (an `index_drift`-style marked region), never hand-kept — the same discipline iss-38 and iss-42 established.
 
 The **gate cross-check detector** moves here from iss-37: every named gate, lint code, Makefile target, or workflow step in the record resolves to a live definition, and a planned check is written as an intent rather than in the present tense. Its scoping is unsettled: both questions below MUST be settled in this body before any round implements the detector.
 
