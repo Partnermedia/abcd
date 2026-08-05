@@ -297,6 +297,24 @@ type patMatch struct {
 	start, end int
 }
 
+// maxAdjacencyProbeWindow bounds how much of the line a single adjacency
+// probe attempt (see scanAllPatterns) is run against. `\A` bounds the probe
+// to ONE start position, but not the cost of that one attempt: two bundled
+// patterns (net_lan_hostname, net_device_hostname) carry their own unbounded
+// internal quantifier (`[a-z0-9-]*`) and, on a long following run with no
+// terminator, scan all the way to the end of it before failing — turning
+// many candidate junctions on one long line into an O(matches × remaining
+// line length) cost. Slicing the probe's input to a small fixed window
+// bounds every single attempt to O(window) regardless of pattern internals
+// (Go's RE2-based regexp package guarantees no worse than linear cost in
+// the length of the string it is run against), which is what actually
+// caps the whole function at O(line length) rather than quadratic. The
+// window is generously larger than every bundled fixed-length pattern's
+// real match (the longest, github_pat_finegrained, is 93 bytes) and than a
+// realistic DNS hostname (~253 bytes) — a legitimate match longer than this
+// is not a shape any bundled pattern produces.
+const maxAdjacencyProbeWindow = 512
+
 // scanAllPatterns returns every match of every pattern in line, plus any
 // further FIXED-LENGTH token — of the SAME pattern or a DIFFERENT one — that
 // immediately abuts an already-found match with no separating byte (see
@@ -331,8 +349,13 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, line string) [
 	}
 	for qi := 0; qi < len(all); qi++ {
 		end := all[qi].end
+		limit := end + maxAdjacencyProbeWindow
+		if limit > len(line) {
+			limit = len(line)
+		}
+		window := line[end:limit]
 		for j := range patterns {
-			m := probes[j].FindStringIndex(line[end:])
+			m := probes[j].FindStringIndex(window)
 			if m == nil || m[0] != 0 || m[1] == 0 {
 				continue
 			}
