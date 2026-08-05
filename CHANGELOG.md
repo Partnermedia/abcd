@@ -873,9 +873,14 @@ called out in a **Breaking** section.
   decided from the pattern itself — one whose match cannot survive losing a
   byte has a rigid length and is skipped — so a pattern added later is covered
   without being annotated. The backward window, like the forward one, is a
-  small fixed size and the candidate scan is a single pass over the whole
-  pattern set, so a legitimately huge match (a base64 blob, a minified line)
-  costs no more than a short one.
+  small fixed size and candidates come from one combined probe over the whole
+  pattern set, so the work done per match never scales with what follows the
+  match — a legitimately huge match (a base64 blob, a minified line) keeps the
+  whole scan linear in the length of the line rather than quadratic. The
+  recovery is bounded, not exhaustive: a recovered token longer than the probe
+  window is still truncated to it (or, for a pattern whose required separators
+  fall outside the window, missed), so an abutting token behind one of those is
+  not yet covered — tracked as iss-190.
 
 ## [0.4.1] - 2026-07-28
 

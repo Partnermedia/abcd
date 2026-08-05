@@ -357,11 +357,14 @@ type patMatch struct {
 // realistic DNS hostname (~253 bytes) — the class of match this function
 // exists to recover. An open-ended-quantifier pattern (jwt_shaped, ghp_,
 // etc.) recovered here can still exceed the window, in which case its span is
-// truncated to it and the recovered token's far tail stays raw. That is the
-// standing cost of bounding the probe, not a defect of the junction search
-// that feeds it: the token's prefix and the bulk of its entropy are masked,
-// and the alternative — letting one probe attempt run to the end of the line
-// — is the hang this constant exists to prevent.
+// truncated to it and the recovered token's far tail stays raw — and for a
+// pattern whose earliest REQUIRED structural marker can itself fall past the
+// window (jwt_shaped needs two literal '.' separators, both of which a long
+// header pushes out of reach), the anchored probe finds no match at all, so
+// such a token can be missed ENTIRELY rather than merely truncated. That is
+// the standing cost of bounding the probe (iss-185), not a defect of the
+// junction search that feeds it; the alternative — letting one probe attempt
+// run to the end of the line — is the hang this constant exists to prevent.
 const maxAdjacencyProbeWindow = 512
 
 // maxAdjacencyBacktrack bounds how far BACK from an open-ended match's
@@ -451,18 +454,22 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 // satisfied and the cut is a real token end, not an arbitrary byte), and some
 // pattern's junction probe can start a token there.
 //
-// Cost is bounded per match, not per match LENGTH, which is what keeps a
-// legitimately huge match (a base64 blob, a minified line) off a performance
-// cliff. Three things do that. A pattern that cannot match one byte shorter has
-// a rigid length, so its reported end already IS its junction and the whole
-// search is skipped after one test — that is how a fixed-length pattern is told
-// from an open-ended one without hand-annotating either, and a pattern added
-// later inherits the classification for free. The search window is capped at
-// maxAdjacencyBacktrack behind the end and maxAdjacencyProbeWindow past it. And
-// candidate cuts come from one linear pass of the single combined junction
-// probe over that window, not from re-probing every byte in it with every
-// pattern — the difference between a handful of prefix validations per match
-// and a full window scan per pattern per match.
+// The work done per match is bounded by a constant factor independent of the
+// REST OF THE LINE — proportional to the match's OWN length, since each
+// candidate is validated by re-running the probe over line[m.start:cut], but
+// never to what follows the match. That is what keeps a legitimately huge match
+// (a base64 blob, a minified line) off a performance cliff: the whole scan
+// stays linear in line length rather than quadratic. Three things do that. A
+// pattern that cannot match one byte shorter has a rigid length, so its
+// reported end already IS its junction and the whole search is skipped after
+// one test — that is how a fixed-length pattern is told from an open-ended one
+// without hand-annotating either, and a pattern added later inherits the
+// classification for free. The search window is capped at maxAdjacencyBacktrack
+// behind the end and maxAdjacencyProbeWindow past it, so the number of
+// candidates is capped too. And candidates come from the single COMBINED
+// junction probe over that window, not from re-probing every byte in it with
+// every pattern — the difference between one window-bounded search per
+// candidate and a full window scan per pattern per match.
 func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) []int {
 	if m.end-m.start < 2 || !wholeMatch(probe, line[m.start:m.end-1]) {
 		return nil
@@ -476,10 +483,18 @@ func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) [
 		hi = len(line)
 	}
 	var cuts []int
-	// Walk the window one hit at a time, resuming past each hit, and stop at the
-	// first that is not inside m: a hit at or past m.end is already the forward
-	// probe's business, so a match whose over-run can only be a few bytes never
-	// pays for a scan of the whole window.
+	// Walk the window one hit at a time, resuming one byte past each hit's
+	// START, and stop at the first hit that is not inside m: a hit at or past
+	// m.end is already the forward probe's business, so a match whose over-run
+	// can only be a few bytes never pays for a scan of the whole window.
+	// Resuming past a hit's END would be wrong: junctions is UNANCHORED, so a
+	// hit can SPAN the true junction — start before it and end after it —
+	// without starting at it. Skipping to that hit's end then steps over the
+	// real junction, which nothing else revisits, and the second token's tail
+	// survives redaction raw again (the very failure iss-188 closed). One byte
+	// per rejected candidate costs at most maxAdjacencyBacktrack passes of a
+	// window-bounded search per match — a constant, still independent of the
+	// line's length.
 	for off := lo; off < m.end; {
 		loc := junctions.FindStringIndex(line[off:hi])
 		if loc == nil {
@@ -492,11 +507,7 @@ func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) [
 		if wholeMatch(probe, line[m.start:cut]) {
 			cuts = append(cuts, cut)
 		}
-		if loc[1] > loc[0] {
-			off += loc[1]
-			continue
-		}
-		off = cut + 1 // an empty hit would not advance on its own
+		off = cut + 1
 	}
 	return cuts
 }
