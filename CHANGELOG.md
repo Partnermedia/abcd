@@ -518,6 +518,12 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The README layout line says where the development record travels**
+  (iss-43). `.abcd/` was described as "never shipped", which holds for the
+  released binaries alone: a marketplace install takes the repository root, and
+  every release carries an auto-generated source archive, so both hold the
+  directory. The line divides on the real boundary — any repository checkout
+  against the released binaries.
 - **The installed plugin surface is the surface the documentation describes**
   (iss-44, iss-160, iss-161, iss-162). The verb files lived in
   `commands/abcd/`, a subdirectory named after the plugin itself, and a harness

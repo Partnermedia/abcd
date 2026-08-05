@@ -25,4 +25,6 @@ The **gate cross-check detector** moves here from iss-37: every named gate, lint
 1. **Scan root** — which trees the check reads (`.abcd/development/` alone, or the repo root markdown and `docs/` as well), and whether dated plans, ratified ADRs and superseded intents are in scope or exempt as chronological records.
 2. **What "a live definition" means for a prose-named gate** — a Makefile target and a workflow step name resolve mechanically, but a gate named only in prose has no symbol to resolve against, so the check needs either a declared registry of gate names or a rule that confines it to citations carrying a resolvable handle.
 
+From the 2026-08-05 maintainer disposition on iss-43, a **candidate extension** of the detector's scope, to be settled alongside those two questions rather than committed to here: README capability and status claims, where a claimed-shipped capability resolves to a wired verb and a phase claim resolves against the roadmap (dropped from iss-43, whose one surviving instance is doc repair).
+
 Related fact recorded in DECISIONS.md under the iss-40 entry: 06-lint.md's `TM003`–`TM011` rows and the `H1` schema-load row claim "Delivered" schema validation that no Go code implements. That is the same phantom-claim class and is in scope for this issue.
