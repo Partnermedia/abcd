@@ -309,10 +309,14 @@ type patMatch struct {
 // (Go's RE2-based regexp package guarantees no worse than linear cost in
 // the length of the string it is run against), which is what actually
 // caps the whole function at O(line length) rather than quadratic. The
-// window is generously larger than every bundled fixed-length pattern's
+// window is generously larger than every bundled FIXED-LENGTH pattern's
 // real match (the longest, github_pat_finegrained, is 93 bytes) and than a
-// realistic DNS hostname (~253 bytes) — a legitimate match longer than this
-// is not a shape any bundled pattern produces.
+// realistic DNS hostname (~253 bytes) — the class of match this function
+// exists to recover. An open-ended-quantifier pattern (jwt_shaped, ghp_,
+// etc.) recovered here can still be longer than the window and get
+// truncated; that is the same already-tracked iss-188 gap, not a new one —
+// truncated-but-partially-redacted is strictly better than this function's
+// pre-existing behavior of not recovering it at all.
 const maxAdjacencyProbeWindow = 512
 
 // scanAllPatterns returns every match of every pattern in line, plus any
