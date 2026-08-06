@@ -1,7 +1,10 @@
 name: ci
 
-# Lightweight checks on every push and pull request: build, vet, and test on
-# macOS and Linux, plus full-history secret scanning and a workflow audit.
+# Checks on every push and pull request. The check job builds, vets and tests on
+# macOS and Linux, with race-enabled internal tests on both and the `gofmt -l .`
+# format gate, record-lint and docs-lint on the ubuntu leg alone. Separate jobs
+# run full-history secret scanning, a workflow audit, the reviews-charter
+# discipline, and the smoke harness.
 on:
   push:
     branches: ['**']

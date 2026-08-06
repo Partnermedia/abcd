@@ -9,9 +9,12 @@
 #      (see the public-flip checklist). It refuses: a direct push to the
 #      protected branch, a deletion of it, and any non-fast-forward (force)
 #      push to any branch.
-#   2. The CI check-job trio (build/vet/test + internal race) must pass
-#      natively before a push leaves this machine. Secret-scan and
-#      workflow-audit lanes stay in Actions.
+#   2. `make preflight` must pass natively before a push leaves this machine —
+#      the three lint gates (lint-reviews, record-lint, docs-lint), then build,
+#      vet, test and the race-enabled internal tests. CI's check job adds a
+#      `gofmt -l .` format gate on top of those four Go steps, and the
+#      secret-scan, workflow-audit and smoke lanes run in Actions only; the
+#      reviews-charter job there repeats what lint-reviews already ran here.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 

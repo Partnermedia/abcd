@@ -7,6 +7,8 @@ category: "documentation"
 source: "impl-review"
 found_during: "2026-08-05 iss-37 merge-gate review"
 found_at: "Makefile"
+resolution: "Three build-plumbing comments corrected to state what actually runs. The Makefile preflight comment names the three lint-gate prerequisites (lint-reviews, record-lint, docs-lint) ahead of build/vet/test/race and attributes the `gofmt -l .` format gate to CI's check job rather than to preflight. The .githooks/pre-push comment describes what the hook enforces — `make preflight`, i.e. the three lint gates then the four Go steps — instead of a check-job trio, and its Actions-only list now carries the smoke lane and notes that CI's reviews-charter job repeats what lint-reviews already ran locally. The ci.yml header comment names the check job's gofmt, record-lint and docs-lint steps (ubuntu leg alone) and the separate reviews-charter and smoke jobs alongside the secret scan and workflow audit. Comment-only: no recipe, hook logic, workflow step, or gate behaviour changed."
+impact: fix
 ---
 
 Three build-plumbing comments still describe the pre-push gate and CI by an older, smaller shape. Same class as iss-37 (claims must match reality), in living files its re-scope does not cover, and no ledger entry records them until now. The fix direction is the same bar: state what actually runs, verified against the recipe or workflow beside the comment.

@@ -55,9 +55,11 @@ record-lint:
 docs-lint:
 	@go run ./cmd/abcd docs lint
 
-# Pre-push gate (invoked by .githooks/pre-push): the same steps CI's check job
-# runs — build, vet, test, and race-enabled internal tests — natively, plus the
-# reviews-charter discipline. Host-native `go build` (not the cross-compiling
+# Pre-push gate (invoked by .githooks/pre-push): the three lint gates
+# (lint-reviews, record-lint, docs-lint) as prerequisites, then build, vet, test,
+# and race-enabled internal tests natively. CI's check job runs those same four
+# Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
+# separately before pushing. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
 preflight: lint-reviews record-lint docs-lint
 	go build ./...
