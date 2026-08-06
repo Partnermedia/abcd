@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-06
+
 ### Added
 
 - **`context_citation_currency` — the orientation doc cannot ground a live
@@ -311,73 +313,6 @@ called out in a **Breaking** section.
   hand-added `method` or transcript is a refusal rather than a quietly-kept
   note. Manual entries age on the same clock as automatic ones, so a human
   confirmation buys no exemption from going stale.
-- **`abcd launch scaffold` — the changelog-driven release-gate scaffolder**
-  (itd-93, spc-14). Writes the fixed release machinery into a managed repo that
-  lacks it: `.github/workflows/release.yml` (verify → build → publish, the verify
-  gate armed against the reviewed **content** commit so the first public release
-  cannot hit the receipt-vs-tag self-reference), `.github/workflows/auto-release.yml`
-  (newest dated CHANGELOG heading → tag that commit → call `release.yml`), and the
-  adr-37 runbook — wired to the repo's own default branch and Go version,
-  `GITHUB_TOKEN`-only and injection-safe. The workflows ship from a **single
-  embedded template** that abcd-cli's own release workflows are regenerated from
-  (self-scaffold parity, proven by a byte-exact test), so every abcd release
-  exercises the exact machinery a managed repo receives. The scaffolded
-  `release.yml` carries a `workflow_dispatch` **rehearsal** that arms the full gate
-  against a simulated changelog roll and reviewed-content commit and publishes
-  nothing — a green rehearsal is the runbook precondition for the first real
-  release. A bare repo with no semantic detector degrades cleanly to the
-  deterministic gates and a generic build. The verb is idempotent and fail-safe: a
-  re-run on current machinery is a no-op, a hand-edited file is refused rather than
-  clobbered (unless `--confirm`), and it refuses rather than half-writing.
-- **A public terminology crosswalk at `docs/reference/terminology.md`** (itd-100).
-  One reference page maps 26 established agentic-AI terms — protocols, the core
-  loop, context, safety, governance, operations — to abcd's position on each:
-  USES (naming the native verb or principle), ADAPTS (the sharper native name and
-  why), REJECTS (with the recorded reason), or WATCHING (with the record id).
-  Every established definition carries a footnote citation to a primary source
-  (specification, standards body, DOI-bearing paper, or origin engineering doc);
-  every abcd claim is grounded in the committed record. Vendor names appear only
-  inside citation footnotes, keeping the page body host-agnostic.
-
-- **`abcd ahoy install --dev` — a track-latest dogfood install mode** (iss-75).
-  Normal `ahoy install` symlinks the pinned built binary, so tracking live
-  development meant hand-rolling a `~/.local/bin/abcd` wrapper that ran
-  `go build -C <repo> && exec` on every call. That manual workaround now dies:
-  `--dev` installs a shim at the same `PATH` target that rebuilds abcd from the
-  source tip on every invocation and execs the fresh binary. A broken build fails
-  loudly and never execs a stale binary (loud-staging). `abcd ahoy` status reports
-  the mode as `install: dev (tip build)`, detected from the installed shim itself
-  (never recorded in the tracked repo config, so it can never go stale), so a dev
-  install is never invisible. Installing over an existing
-  install applies-as-update in either direction — `--dev` replaces the pinned
-  symlink with the shim, a plain re-install restores the symlink — and a foreign
-  occupant is still never clobbered.
-- **Record-id minting now sees every branch, and a spec-id uniqueness lint closes
-  the class** (iss-115, iss-120). Sequential ids (`iss-N`, `itd-N`, `spc-N`) were
-  minted from the local working tree only, so two branches cut from the same base
-  silently minted the same next id — invisible on each branch and surfacing only
-  at merge. Minting now folds in the highest id committed on every local and
-  remote-tracking branch (a single canonical refs-union scan), so once one branch
-  commits an id, the other mints past it. When git cannot be read over a present
-  repository the mint degrades to working-tree-only and says so loudly on stderr
-  (never a silent fallback); a directory that is not a repository has no branches
-  to collide with and mints quietly. The residual window — two branches that both
-  mint before either commits — is caught by the record-lint uniqueness rules on
-  the merged pull request, which now cover spec ids too: the new `spec_id_unique`
-  rule flags every file claiming a duplicate `spc-N`, mirroring the existing
-  `issue_id_unique` and intent-id guards.
-- **`abcd capture resolve` and `abcd intent "<text>"` can now stamp a product
-  `impact`** (iss-117). A resolved issue and a shipped intent are in the release
-  set, so the `issue_impact_valid` and `intent_impact_valid` record-lint blockers
-  require a valid `impact` on those records — but the verbs that mint them had no
-  way to set one, so the tool's own path produced records its own gates rejected.
-  `capture resolve` now takes a mandatory `--impact <additive|breaking|fix|internal>`
-  (there is no default: an absent or misspelled value is refused, not guessed),
-  and `abcd intent "<text>"` takes an optional `--impact <additive|breaking|fix>`
-  that is stamped onto the seeded draft and travels unchanged through planning to
-  `shipped/`. `internal` is rejected on an intent (a press-release-first intent is
-  user-facing by definition). `capture wontfix` is unchanged — a non-action ships
-  nothing, so `wontfix/` carries no impact.
 - **The hazard registry refuses destructive GitHub remote operations and a force
   push spelled as a refspec** (iss-159, iss-148). Three shapes that verdicted
   `allow` now block. `gh repo delete` destroys the remote copy of a repository
@@ -757,54 +692,6 @@ called out in a **Breaking** section.
   a forward slash inside a Windows path is read as the nested name it is; the
   scanner's own identity matcher shares the allowlist for the POSIX paths it
   recognises, which are the only ones it has ever matched.
-- **The disembark probe's recursive file walk is bounded per directory, opens
-  each child in O(1), and skips the common ecosystems' dependency trees**
-  (iss-112, iss-114, iss-116). The walk now reads every directory with a bounded
-  `ReadDir` (the same 50 000-entry guard `ListDir` uses), so a single directory
-  of millions of entries can no longer balloon memory before the file cap
-  applies. It holds a sub-root per directory (`os.Root.OpenRoot`) instead of
-  re-resolving every path from the containment root one component at a time, so a
-  deep tree costs O(entries) rather than O(entries × depth) — a 48 000-directory
-  depth-30 tree walks in ~1.4 s where the old walk took ~7 s, and the cost is now
-  independent of depth. The `os.Root` containment guarantee is unchanged: a
-  symlink is still refused rather than followed out of the tree. The skip set
-  widens beyond Node and Go to the common dependency, cache, and build-output
-  trees — Python (`.venv`, `venv`, `.tox`, `__pycache__`), Rust and generic
-  build output (`target`, `build`, `dist`), and CocoaPods (`Pods`) — so a
-  vendored `TODO` is no longer cited as the project's own open question, and a
-  large dot-prefixed dependency tree can no longer exhaust the walk cap before
-  the project's own `src/` is reached.
-- **The open-questions marker scan no longer reads documentation about markers as
-  open questions** (iss-111). The pattern that grounds `evidence/open-questions`
-  admitted a bare uppercase `TODO`/`FIXME` followed by whitespace, so on a
-  repository that documents its own conventions every prose mention of a marker
-  was cited as a work marker — 14 such false positives across the durable record
-  (`.abcd/development/`) on this repository, all documentation, none a real
-  marker, down to 3 after the fix (each an irreducible prose quotation of the
-  literal `TODO:` form). `TODO` and `FIXME`
-  now require a trailing `:` or `(` (the conventional `TODO:` / `TODO(alice):`
-  spellings), which is how genuine markers are almost always written; `XXX`,
-  `HACK`, and `BUG` still admit their conventional bare form, because they are
-  rarely written as bare words in prose and carry no measured false-positive
-  cost.
-- **Concurrent runs can no longer drop a repo registration or delete a
-  just-committed issue file** (iss-101, iss-102). Two `abcd ahoy install` runs
-  from different worktrees shared one `~/.abcd/history/index.json`, and its
-  registration was an unlocked load-modify-write: atomic rename kept the file
-  intact but the last writer clobbered the other's update, silently erasing a
-  repo entry or a re-founding lineage link. The history registry now serializes
-  its load-modify-write behind an inter-process lock and re-loads inside it, so
-  concurrent registrations compose instead of overwriting; the store bootstrap
-  creates `index.json` with an exclusive create, so exactly one racing run seeds
-  it. The re-founding lineage confirmation is still asked before the lock is
-  taken — never across an interactive prompt — and the state it validated is
-  re-checked under the lock, surfacing a conflict rather than writing a link the
-  user approved against a stale index. Separately, the capture ledger's orphan
-  sweep and its commit write now take the same ledger lock, closing a window in
-  which a capture stalled more than sixty seconds could have its committed issue
-  file swept away after the capture reported success. The inter-process lock is a
-  single shared primitive; the capture allocator and the history registry both
-  route through it.
 - **A wrapper carrying its own flags no longer defangs the hazard entry behind
   it** (iss-148). Of the
   matcher's gaps this was the one a facilitator would reasonably assume was
