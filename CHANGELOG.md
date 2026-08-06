@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-06
+
 ### Added
 
 - **`context_citation_currency` — the orientation doc cannot ground a live
