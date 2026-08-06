@@ -12,6 +12,15 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Merging a rule-set overlay onto a base that declares no domains no longer
+  panics** (iss-187). `rules.Merge` promises that new domain keys are added, but
+  it wrote them into a map it never allocated when the base carried no domains of
+  its own — a valid rule set that the validator accepts — so the merge crashed
+  instead of returning the overlay's domains. It now allocates that map before
+  adding the overlay's keys, matching the guard registry's loader. No behaviour
+  changes for the rules a repo loads today, where the base is always the bundled
+  default set.
+
 - **`abcd capture resolve`/`wontfix` no longer strand an issue across two status
   directories on a failed move** (iss-186). The transition wrote the destination
   file, then removed the source; if the removal failed for a reason other than

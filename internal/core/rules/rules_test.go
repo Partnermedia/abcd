@@ -431,6 +431,44 @@ func TestMergeKillSwitchIsSticky(t *testing.T) {
 	}
 }
 
+// A base with no domains is a valid RuleSet (Validate accepts it), and Merge
+// promises new domain keys are added — so merging onto it must add them rather
+// than panic on an unallocated map.
+func TestMergeNilBaseDomainsAddsNewKeys(t *testing.T) {
+	base := RuleSet{SchemaVersion: 1}
+	if err := Validate(base); err != nil {
+		t.Fatalf("base with nil Domains should validate: %v", err)
+	}
+	over := RuleSet{
+		SchemaVersion: 1,
+		Domains: map[string]Domain{
+			"CUSTOM": {State: StateActive, Recall: []string{"widget"}, Rules: []string{"do the thing"}},
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Merge onto a nil-Domains base panicked: %v", r)
+		}
+	}()
+	merged := Merge(base, over)
+	got, ok := merged.Domains["CUSTOM"]
+	if !ok {
+		t.Fatalf("custom domain not merged in, got %v", merged.Domains)
+	}
+	if got.State != StateActive {
+		t.Fatalf("state = %q, want %q", got.State, StateActive)
+	}
+	if len(got.Recall) != 1 || got.Recall[0] != "widget" {
+		t.Fatalf("recall = %v, want [widget]", got.Recall)
+	}
+	if len(got.Rules) != 1 || got.Rules[0] != "do the thing" {
+		t.Fatalf("rules = %v, want [do the thing]", got.Rules)
+	}
+	if !has(merged.Match("build a widget"), "CUSTOM") {
+		t.Fatal("merged custom domain does not recall-match")
+	}
+}
+
 func TestValidateRejectsBadDomainName(t *testing.T) {
 	rs := RuleSet{SchemaVersion: 1, Domains: map[string]Domain{"bad-name": {}}}
 	if err := Validate(rs); err == nil {
