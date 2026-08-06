@@ -24,6 +24,21 @@ called out in a **Breaking** section.
   reviews-charter and smoke jobs. All three now state what actually runs.
   Comment-only — no recipe, hook logic, workflow step, or gate behaviour moves.
 
+- **The record describes the `.abcd/**` exclusion by the channel it is true of**
+  (iss-183). The blanket present-tense claim — `.abcd/**` "never ships", or is
+  "excluded from the release artifact by packaging" — survived across
+  `CONTEXT.md`, `AGENTS.md`, both `.abcd/` READMEs, four brief sections, the
+  release glossary term, the Phase 1 expectation and a scanner code comment,
+  after the README alone was corrected. The exclusion is implemented but has
+  never run on a release: the launch bundler denies the `.abcd` namespace
+  structurally, while a marketplace install takes the repository root and GitHub
+  attaches an auto-generated source archive to every release, so only the
+  released binaries omit the directory. Each descriptive instance now says so —
+  present in every repository checkout, marketplace installs and release source
+  archives included, never in the released binaries — and names the bundler as
+  the implemented mechanism it is. Decision records, dated plans and intent
+  bodies keep their original wording.
+
 - **Merging a rule-set overlay onto a base that declares no domains no longer
   panics** (iss-187). `rules.Merge` promises that new domain keys are added, but
   it wrote them into a map it never allocated when the base carried no domains of

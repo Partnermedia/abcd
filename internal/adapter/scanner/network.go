@@ -114,7 +114,7 @@ var (
 // (.abcd/development/personas.json). A device name derived from a persona is a
 // fixture host by construction, so it is allowed. The list is embedded rather
 // than read at run time because the registry lives under .abcd/development/,
-// which is excluded from the released artifact.
+// which the released binaries do not carry.
 var personaNames = map[string]bool{
 	"alice": true, "bob": true, "carol": true, "dave": true, "eve": true,
 	"frank": true, "grace": true, "henry": true, "iris": true, "jack": true,

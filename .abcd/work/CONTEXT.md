@@ -39,5 +39,8 @@ Python reference implementation.
   manifest and tiered by release impact), which runs at a release, not
   continuously. So a brief sentence about behaviour can be wrong between
   releases.
-- Single repo, curated release (no dev→public mirror). `.abcd/**` never ships.
+- Single repo, curated release (no dev→public mirror). `.abcd/**` is in every
+  repository checkout — marketplace installs and release source archives
+  included — and never in the released binaries. The launch bundler denies the
+  namespace structurally, but that filter has not yet run on a cut release.
 - Never commit/push without the maintainer asking; new deps need sign-off.

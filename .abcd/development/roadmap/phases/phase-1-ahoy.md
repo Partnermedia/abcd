@@ -8,8 +8,9 @@ classified (managed-repo / unmanaged-repo / unmanaged-folder), registered in
 the history store's `~/.abcd/history/index.json`, given its CLAUDE.md marker
 block, and wired with the modular rules loader; re-running is idempotent. `/abcd:launch` cuts a **curated
 single-repo release** — a release artifact built from the one repository, with
-`.abcd/**` excluded by packaging so the design record never ships in the
-artifact (per [adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)).
+the packaging filter denying `.abcd/**` so the design record is not carried by
+the released binaries (per
+[adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)).
 There is no separate public repository to promote into: the repo *is* the
 marketplace, and launch is the packaging-and-scrub step that produces the
 distributable.
