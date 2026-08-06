@@ -1,0 +1,26 @@
+{
+  "subject": {
+    "digest": { "gitCommit": "33779807b9f0311a4a2bb2281d65e1c5b5c7cfb1" }
+  },
+  "verifier": { "id": "docs-currency-reviewer@release" },
+  "timeVerified": "2026-08-06T09:45:03Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3250b8ba510180464817cf05ccccf7e5af09a24481820ea234576c657f5c0a7e",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.4.1"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [],
+  "_reviewProvenance": "Host-run agent-harness semantic review, PROMOTE with zero findings, two passes in one release session. Pass 1 (full sweep, fresh reviewer agent): README.md, every docs/ page, the generated CLI reference, the plugin command pages, CLI help text of the freshly built binary, and ten CHANGELOG Unreleased spot-checks, all verified claim-by-claim against the implementing code over the v0.4.1..HEAD window — zero STALE, one UNVERIFIED host-CLI syntax claim (unverifiable from this repository, recorded for the maintainer) and one INCOMPLETE judgement call (terminology Guardrails row), the latter fixed before the cut. Pass 2 (independent confirmation, fresh reviewer agent, at this content commit 3377980 exactly): deterministic docs lint (0 blockers, 1 advisory), the full post-sweep delta verified file-by-file (terminology phrase, two audit-waiver fixture comments, the dedup of eight [0.4.1]-duplicate entries at 8fbab11, the dated 0.4.2 heading matching the derived version), five independently chosen user-facing claims plus three 0.4.2 record citations re-verified against code and record stores, and a re-announcement check over the dated section — zero findings in all five categories. VERDICT: PROMOTE. The judge is the release session's pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is withheld from committed artifacts by harness policy and recorded in the session transcript."
+}
