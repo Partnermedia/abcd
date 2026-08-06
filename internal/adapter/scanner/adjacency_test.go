@@ -257,7 +257,7 @@ func TestGoogleAPIKeyDashJunctionNotDoubleCounted(t *testing.T) {
 // a 200KB line; anchoring the probe (adjacencyProbe) restores it to a single
 // O(1) attempt per candidate.
 func TestAdjacencyProbeStaysLinearOnLongLines(t *testing.T) {
-	line := strings.Repeat("10.0.0.1 ", 300) + strings.Repeat("x", 200000)
+	line := strings.Repeat("10.0.0.1 ", 300) + strings.Repeat("x", 200000) // abcd-audit:allow — adversarial perf fixture; the quad is stress input, not an identifier
 	start := time.Now()
 	scanLine(line)
 	if elapsed := time.Since(start); elapsed > 15*time.Second {
@@ -328,7 +328,7 @@ func TestJunctionBacktrackIsBounded(t *testing.T) {
 		{"dense_candidate_junctions", "ghp_" + r("AKIA", n(50000))},
 		{"open_ended_chain_inside_open_ended", "xoxb-" + r("ghp_"+r("a", 36), n(1500))},
 		// Dense short matches whose pattern is itself shrinkable.
-		{"dense_dotted_quads", r("1.2.3.4", n(10000))},
+		{"dense_dotted_quads", r("1.2.3.4", n(10000))}, // abcd-audit:allow — single-digit octets maximise match density; a reserved quad would weaken the stress
 		// The worst case for resuming one byte past a REJECTED candidate rather
 		// than past its whole span (see stolenJunctions): every match's backtrack
 		// window is packed with junction-probe hits that ALL fail validation, so
