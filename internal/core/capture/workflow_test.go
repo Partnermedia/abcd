@@ -295,6 +295,47 @@ func TestResolveConflictAndUnknown(t *testing.T) {
 	}
 }
 
+// TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs (iss-186) proves a
+// non-ENOENT os.Remove(src) failure inside commitTransition — an EPERM/EROFS/EIO
+// on the source status dir, e.g. an immutable-attribute or read-only remount —
+// rolls back the destination it already wrote instead of leaving the issue id
+// present in both open/ and resolved/, which would make findIssue reject every
+// later transition on that id as ErrDuplicateIssueID.
+func TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "body", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "strand", FoundDuring: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	injected := errors.New("injected non-ENOENT remove failure")
+	removeSourceHook = func(string) error { return injected }
+	defer func() { removeSourceHook = nil }()
+
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); !errors.Is(err, injected) {
+		t.Fatalf("expected the injected remove failure to surface, got %v", err)
+	}
+
+	src := filepath.Join(repo, res.Path)
+	dst := filepath.Join(ir, statusDirName[StateResolved], filepath.Base(src))
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source should still exist after a failed transition: %v", err)
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatalf("destination should have been rolled back after the remove failure, stat err=%v", err)
+	}
+
+	// A single copy must remain findable: a retry (remove now unblocked) should
+	// succeed cleanly rather than tripping ErrDuplicateIssueID.
+	removeSourceHook = nil
+	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); err != nil {
+		t.Fatalf("retry after rollback should succeed, got %v", err)
+	}
+}
+
 func TestWontfixTransition(t *testing.T) {
 	repo, ir := ledger(t)
 	res, _ := Capture(CaptureRequest{

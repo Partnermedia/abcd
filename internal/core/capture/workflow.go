@@ -249,9 +249,23 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 	return result, nil
 }
 
+// removeSourceHook, when non-nil, replaces os.Remove(src) inside
+// commitTransition. It is a test-only seam (nil in production, zero overhead)
+// used to force a deterministic non-ENOENT remove failure without relying on
+// platform-specific filesystem tricks (immutable attributes, read-only
+// remounts) that a portable test cannot set up.
+var removeSourceHook func(path string) error
+
 // commitTransition re-verifies the source's checksum, writes the destination
 // atomically, then removes the source. A concurrent edit surfaces as a
 // checksum mismatch or transition conflict rather than a lost update.
+//
+// A non-ENOENT remove failure (iss-186: EPERM/EROFS/EIO on the source status
+// dir) rolls the destination back rather than leaving the issue split across
+// both directories — findIssue rejects any id present in more than one status
+// dir, so a stranded copy could never again be transitioned without manual
+// repair. Rolling back restores the pre-call state (src present, dst absent)
+// so the caller can simply retry once the underlying failure clears.
 func commitTransition(src, dst, newContent, expected string) error {
 	_, current, err := readWithChecksum(src)
 	if os.IsNotExist(err) {
@@ -266,7 +280,14 @@ func commitTransition(src, dst, newContent, expected string) error {
 	if err := fsutil.WriteFileAtomicPreserveMode(dst, []byte(newContent)); err != nil {
 		return err
 	}
-	if err := os.Remove(src); err != nil && !os.IsNotExist(err) {
+	removeSrc := os.Remove
+	if removeSourceHook != nil {
+		removeSrc = removeSourceHook
+	}
+	if err := removeSrc(src); err != nil && !os.IsNotExist(err) {
+		if rbErr := os.Remove(dst); rbErr != nil && !os.IsNotExist(rbErr) {
+			return fmt.Errorf("%w (rollback of %s also failed: %v)", err, dst, rbErr)
+		}
 		return err
 	}
 	return nil
