@@ -269,24 +269,67 @@ var leadingFlagGroup = regexp.MustCompile(`^\(\?[a-zA-Z]+\)`)
 // immediately abuts a first with no separating byte, the byte just before it
 // is itself a word character (the first token's last byte), so \b can never
 // hold there and the second token is silently never matched. scanAllPatterns
-// runs this probe ONLY at the exact byte offset right after a prior match —
-// a hit there is anchored by the adjacency itself, not by \b, so dropping the
-// anchor cannot introduce a false match anywhere else in the line. The `\A`
-// anchor here is what makes that probe O(1) rather than O(remaining line
-// length): without it, FindStringIndex would search the entire remainder of
-// the line for a match anywhere, then discard everything not starting at
-// offset 0 — turning one probe per candidate junction into a full rescan of
-// the rest of the line, which a single long line (a minified asset, a base64
-// blob) can turn into a multi-second hang per call.
+// runs this probe ONLY at a byte offset where a token is already known to
+// begin — right after a prior match, or at a junction a greedy match ran past
+// (stolenJunctions) — a hit there is anchored by the adjacency itself, not by
+// \b, so dropping the anchor cannot introduce a false match anywhere else in
+// the line. The `\A` anchor here is what makes that probe O(1) rather than
+// O(remaining line length): without it, FindStringIndex would search the
+// entire remainder of the line for a match anywhere, then discard everything
+// not starting at offset 0 — turning one probe per candidate junction into a
+// full rescan of the rest of the line, which a single long line (a minified
+// asset, a base64 blob) can turn into a multi-second hang per call.
 func adjacencyProbe(re *regexp.Regexp) *regexp.Regexp {
-	src := re.String()
-	flags := leadingFlagGroup.FindString(src)
-	body := strings.TrimPrefix(src[len(flags):], `\b`)
+	flags, body := probeParts(re)
 	anchored, err := regexp.Compile(flags + `\A(?:` + body + `)`)
 	if err != nil {
 		return re
 	}
 	return anchored
+}
+
+// junctionProbe is adjacencyProbe's UNANCHORED counterpart, and ONE regexp for
+// the whole pattern set rather than one per pattern: every pattern's
+// boundary-free body, alternated, free to match anywhere in the string it is
+// run against. It is a candidate GENERATOR for stolenJunctions and nothing
+// else — it answers "could ANY token begin at this offset", which is exactly
+// what a backward search needs to narrow 512 offsets down to a handful, and
+// answers it in one linear pass instead of one pass per pattern (the per-match
+// cost of the backward search is otherwise multiplied by the size of the
+// pattern set, which a scanner cannot pay on a long line). Nothing is ever
+// added off a junctionProbe hit: every offset it yields is re-tested with the
+// ANCHORED probe before a match is recorded, so the "an unanchored
+// boundary-free match cannot be trusted on its own" reasoning above still
+// holds, and a generator that over-produces only costs time.
+//
+// Each pattern's own inline flag group is rewritten into a SCOPED one
+// (`(?i)x` → `(?i:x)`) so a case-insensitive pattern cannot fold the case of
+// every alternative after it. If the alternation somehow will not compile, the
+// fallback is a regexp that matches at every offset: slower, never blinder —
+// the generator may over-produce, never under-produce.
+func junctionProbe(patterns []Pattern) *regexp.Regexp {
+	alts := make([]string, 0, len(patterns))
+	for _, cp := range patterns {
+		flags, body := probeParts(cp.Re)
+		if flags != "" {
+			alts = append(alts, flags[:len(flags)-1]+`:`+body+`)`)
+			continue
+		}
+		alts = append(alts, `(?:`+body+`)`)
+	}
+	combined, err := regexp.Compile(strings.Join(alts, `|`))
+	if err != nil {
+		return regexp.MustCompile(`(?s).`)
+	}
+	return combined
+}
+
+// probeParts splits a compiled pattern's source into its leading inline flag
+// group (if any) and the rest with a leading \b stripped.
+func probeParts(re *regexp.Regexp) (flags, body string) {
+	src := re.String()
+	flags = leadingFlagGroup.FindString(src)
+	return flags, strings.TrimPrefix(src[len(flags):], `\b`)
 }
 
 // patMatch is one pattern match location in a line, plus which pattern (by
@@ -313,30 +356,54 @@ type patMatch struct {
 // real match (the longest, github_pat_finegrained, is 93 bytes) and than a
 // realistic DNS hostname (~253 bytes) — the class of match this function
 // exists to recover. An open-ended-quantifier pattern (jwt_shaped, ghp_,
-// etc.) recovered here can still be longer than the window and get
-// truncated; that is the same already-tracked iss-188 gap, not a new one —
-// truncated-but-partially-redacted is strictly better than this function's
-// pre-existing behavior of not recovering it at all.
+// etc.) recovered here can still exceed the window, in which case its span is
+// truncated to it and the recovered token's far tail stays raw — and for a
+// pattern whose earliest REQUIRED structural marker can itself fall past the
+// window (jwt_shaped needs two literal '.' separators, both of which a long
+// header pushes out of reach), the anchored probe finds no match at all, so
+// such a token can be missed ENTIRELY rather than merely truncated. That is
+// the standing cost of bounding the probe (iss-185), not a defect of the
+// junction search that feeds it; the alternative — letting one probe attempt
+// run to the end of the line — is the hang this constant exists to prevent.
 const maxAdjacencyProbeWindow = 512
 
+// maxAdjacencyBacktrack bounds how far BACK from an open-ended match's
+// reported end stolenJunctions looks for the junction that match over-ran. It
+// mirrors maxAdjacencyProbeWindow for the same reason and on the same terms:
+// what has to stay bounded is not the length of a match (a base64 blob or a
+// minified line is legitimately hundreds of kilobytes) but the work done per
+// match, and a fixed window is the only thing that caps it independently of
+// how long the match is. The bound is not arbitrary: over-consumption can only
+// reach as far as the following token's own leading bytes that fall inside the
+// first pattern's trailing character class, so the junction is at most one
+// bundled token's length behind the reported end — 512 bytes clears every
+// bundled pattern's longest real token by a wide margin. A junction further
+// back than that would need a crafted multi-kilobyte token, which no bundled
+// pattern can produce.
+const maxAdjacencyBacktrack = 512
+
 // scanAllPatterns returns every match of every pattern in line, plus any
-// further FIXED-LENGTH token — of the SAME pattern or a DIFFERENT one — that
-// immediately abuts an already-found match with no separating byte (see
-// adjacencyProbe). This closes the exact gap iss-185 named: a fixed-length
-// pattern's own match always ends exactly where a genuinely adjacent token
-// begins, so probing every pattern at that one byte offset recovers it. It
-// does NOT help a real secret preceded by content that is not itself a
+// further token — of the SAME pattern or a DIFFERENT one — that immediately
+// abuts an already-found match with no separating byte (see adjacencyProbe).
+// It probes two kinds of junction. A FIXED-LENGTH pattern's match always ends
+// exactly where a genuinely adjacent token begins, so probing every pattern at
+// that one byte offset recovers it (iss-185). A pattern whose quantifier is
+// open-ended (`{36,}`) instead greedily consumes the following token's own
+// leading bytes whenever they fall inside its trailing character class, which
+// puts the true junction BEFORE the reported end and out of the forward
+// probe's reach — that one needs stolenJunctions' bounded backward search
+// (iss-188). The over-long match is left as it is rather than trimmed back to
+// the junction: it only ever over-reports the first token's span, which
+// over-redacts by a few bytes, while the recovered second token is what closes
+// the leak.
+//
+// Neither probe helps a real secret preceded by content that is not itself a
 // match found here — e.g. unrecognized filler text, or an identity-derived
-// match from matchers.findings — since there is no existing patMatch for
-// the probe to run after; that is the same pre-existing \b-boundary
-// limitation every bundled pattern already accepts elsewhere in this
-// package, not something this function claims to close. A pattern whose
-// quantifier is open-ended (e.g. `{36,}`) can also greedily over-consume
-// into a following token BEFORE this check ever runs, shifting the true
-// junction earlier than the match's reported end; recovering that needs a
-// backward search this function does not attempt, and is tracked separately
-// (iss-188) rather than folded in here.
-func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, line string) []patMatch {
+// match from matchers.findings — since there is no existing patMatch for the
+// probe to run after; that is the same pre-existing \b-boundary limitation
+// every bundled pattern already accepts elsewhere in this package, not
+// something this function claims to close.
+func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *regexp.Regexp, line string) []patMatch {
 	var all []patMatch
 	seen := map[patMatch]bool{}
 	add := func(m patMatch) {
@@ -346,27 +413,111 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, line string) [
 		seen[m] = true
 		all = append(all, m)
 	}
-	for i, cp := range patterns {
-		for _, loc := range cp.Re.FindAllStringIndex(line, -1) {
-			add(patMatch{i, loc[0], loc[1]})
-		}
-	}
-	for qi := 0; qi < len(all); qi++ {
-		end := all[qi].end
-		limit := end + maxAdjacencyProbeWindow
+	// probeAt records every pattern whose boundary-free variant matches
+	// starting exactly at byte offset at.
+	probeAt := func(at int) {
+		limit := at + maxAdjacencyProbeWindow
 		if limit > len(line) {
 			limit = len(line)
 		}
-		window := line[end:limit]
+		window := line[at:limit]
 		for j := range patterns {
 			m := probes[j].FindStringIndex(window)
 			if m == nil || m[0] != 0 || m[1] == 0 {
 				continue
 			}
-			add(patMatch{j, end, end + m[1]})
+			add(patMatch{j, at, at + m[1]})
+		}
+	}
+	for i, cp := range patterns {
+		for _, loc := range cp.Re.FindAllStringIndex(line, -1) {
+			add(patMatch{i, loc[0], loc[1]})
+		}
+	}
+	// The loop reads a growing slice on purpose: a token recovered at one
+	// junction is itself greedy and can have over-run the next one, so a run of
+	// three or more abutting tokens unwinds one junction per iteration.
+	for qi := 0; qi < len(all); qi++ {
+		m := all[qi]
+		probeAt(m.end)
+		for _, cut := range stolenJunctions(probes[m.patIdx], junctions, line, m) {
+			probeAt(cut)
 		}
 	}
 	return all
+}
+
+// stolenJunctions returns the byte offsets INSIDE m at which a second token
+// really begins — the junctions m's own greedy quantifier ran past. A cut is
+// reported only when both halves hold: line[m.start:cut] is still a whole match
+// for m's own pattern (so the minimum-length bound of its quantifier is still
+// satisfied and the cut is a real token end, not an arbitrary byte), and some
+// pattern's junction probe can start a token there.
+//
+// The work done per match is bounded by a constant factor independent of the
+// REST OF THE LINE — proportional to the match's OWN length, since each
+// candidate is validated by re-running the probe over line[m.start:cut], but
+// never to what follows the match. That is what keeps a legitimately huge match
+// (a base64 blob, a minified line) off a performance cliff: the whole scan
+// stays linear in line length rather than quadratic. Three things do that. A
+// pattern that cannot match one byte shorter has a rigid length, so its
+// reported end already IS its junction and the whole search is skipped after
+// one test — that is how a fixed-length pattern is told from an open-ended one
+// without hand-annotating either, and a pattern added later inherits the
+// classification for free. The search window is capped at maxAdjacencyBacktrack
+// behind the end and maxAdjacencyProbeWindow past it, so the number of
+// candidates is capped too. And candidates come from the single COMBINED
+// junction probe over that window, not from re-probing every byte in it with
+// every pattern — the difference between one window-bounded search per
+// candidate and a full window scan per pattern per match.
+func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) []int {
+	if m.end-m.start < 2 || !wholeMatch(probe, line[m.start:m.end-1]) {
+		return nil
+	}
+	lo := m.end - maxAdjacencyBacktrack
+	if lo < m.start+1 {
+		lo = m.start + 1
+	}
+	hi := m.end + maxAdjacencyProbeWindow
+	if hi > len(line) {
+		hi = len(line)
+	}
+	var cuts []int
+	// Walk the window one hit at a time, resuming one byte past each hit's
+	// START, and stop at the first hit that is not inside m: a hit at or past
+	// m.end is already the forward probe's business, so a match whose over-run
+	// can only be a few bytes never pays for a scan of the whole window.
+	// Resuming past a hit's END would be wrong: junctions is UNANCHORED, so a
+	// hit can SPAN the true junction — start before it and end after it —
+	// without starting at it. Skipping to that hit's end then steps over the
+	// real junction, which nothing else revisits, and the second token's tail
+	// survives redaction raw again (the very failure iss-188 closed). One byte
+	// per rejected candidate costs at most maxAdjacencyBacktrack passes of a
+	// window-bounded search per match — a constant, still independent of the
+	// line's length.
+	for off := lo; off < m.end; {
+		loc := junctions.FindStringIndex(line[off:hi])
+		if loc == nil {
+			break
+		}
+		cut := off + loc[0]
+		if cut >= m.end {
+			break
+		}
+		if wholeMatch(probe, line[m.start:cut]) {
+			cuts = append(cuts, cut)
+		}
+		off = cut + 1
+	}
+	return cuts
+}
+
+// wholeMatch reports whether s is entirely one match of probe, an anchored
+// boundary-free adjacencyProbe. The anchor makes the match start at 0, so only
+// its end has to reach the end of s.
+func wholeMatch(probe *regexp.Regexp, s string) bool {
+	loc := probe.FindStringIndex(s)
+	return loc != nil && loc[1] == len(s)
 }
 
 // ScanText scans text for every secret pattern and identity-derived match,
@@ -381,13 +532,14 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 	for i, cp := range patterns {
 		probes[i] = adjacencyProbe(cp.Re)
 	}
+	junctions := junctionProbe(patterns)
 	var findings []Finding
 	lineno := 0
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimRight(line, "\r")
 		lineno++
 		findings = append(findings, matchers.findings(line, lineno, id2sev, file)...)
-		for _, m := range scanAllPatterns(patterns, probes, line) {
+		for _, m := range scanAllPatterns(patterns, probes, junctions, line) {
 			cp := patterns[m.patIdx]
 			matched := line[m.start:m.end]
 			if cp.Skip != nil && cp.Skip(matched) {
