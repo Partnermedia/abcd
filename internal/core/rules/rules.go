@@ -189,6 +189,9 @@ func Merge(base, over RuleSet) RuleSet {
 		out.SchemaVersion = over.SchemaVersion
 	}
 	out.Disabled = base.Disabled || over.Disabled
+	if out.Domains == nil && len(over.Domains) > 0 {
+		out.Domains = make(map[string]Domain, len(over.Domains))
+	}
 	for name, od := range over.Domains {
 		out.Domains[name] = mergeDomain(out.Domains[name], od)
 	}
