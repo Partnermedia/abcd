@@ -10,6 +10,20 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`abcd capture resolve`/`wontfix` no longer strand an issue across two status
+  directories on a failed move** (iss-186). The transition wrote the destination
+  file, then removed the source; if the removal failed for a reason other than
+  "already gone" (a read-only remount or a restrictive attribute on the source
+  directory), the error surfaced after the destination already existed, leaving
+  the same issue id present in both `open/` and its target directory. From then
+  on every later transition on that id was refused as a duplicate, with no
+  repair verb — the file had to be deleted by hand. The move now rolls the
+  destination back when the source can't be removed, so a failed transition
+  leaves the ledger exactly as it was before the attempt and a retry is all
+  that's needed.
+
 ## [0.4.2] - 2026-08-06
 
 ### Added
@@ -768,17 +782,6 @@ called out in a **Breaking** section.
   window is still truncated to it (or, for a pattern whose required separators
   fall outside the window, missed), so an abutting token behind one of those is
   not yet covered — tracked as iss-190.
-- **`abcd capture resolve`/`wontfix` no longer strand an issue across two status
-  directories on a failed move** (iss-186). The transition wrote the destination
-  file, then removed the source; if the removal failed for a reason other than
-  "already gone" (a read-only remount or a restrictive attribute on the source
-  directory), the error surfaced after the destination already existed, leaving
-  the same issue id present in both `open/` and its target directory. From then
-  on every later transition on that id was refused as a duplicate, with no
-  repair verb — the file had to be deleted by hand. The move now rolls the
-  destination back when the source can't be removed, so a failed transition
-  leaves the ledger exactly as it was before the attempt and a retry is all
-  that's needed.
 
 ## [0.4.1] - 2026-07-28
 
