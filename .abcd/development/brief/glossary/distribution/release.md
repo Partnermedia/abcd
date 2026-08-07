@@ -17,8 +17,9 @@ versions: null
 A **release** is a published, version-tagged snapshot of abcd — both the act of
 cutting a curated release from the single repo
 ([adr-28](../../../decisions/adrs/0028-single-repo-curated-release.md)) and the
-resulting artefact, a GitHub Release with `.abcd/**` excluded by packaging,
-carrying a [version](version.md), a changelog entry, and a git tag.
+resulting artefact, a GitHub Release whose published binaries do not carry
+`.abcd/**` (the packaging filter's structural deny, which no cut release has
+run yet), carrying a [version](version.md), a changelog entry, and a git tag.
 
 As with [version](version.md), [phase](../core/phase.md) forbids "release" as a
 synonym *in the core context* — abcd does not organise development by releases.

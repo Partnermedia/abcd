@@ -84,7 +84,7 @@ smoke harness (`make smoke`).
 Development material lives under `.abcd/`; `docs/` is user-facing only.
 
 - `.abcd/development/` — **durable record** (committed): brief, intents, ADRs,
-  plans, research. Excluded from the release artifact.
+  plans, research. In every repository checkout; not in the released binaries.
 - `.abcd/work/` — **shared working** (committed): `CONTEXT.md` (current
   orientation) and `DECISIONS.md` (append-only decision log; architecture-shaping
   decisions graduate to ADRs under `.abcd/development/decisions/adrs/`).
@@ -109,8 +109,11 @@ irreversible; guessing downward costs nothing.**
   plugin markdown surface and demonstrably executes there — no dead scaffolding.
 - **Host-delegated by default.** LLM review/agent work is delegated to the host;
   native/CLI/API/MCP oracles are opt-in adapters.
-- **Single repo, curated release.** `.abcd/**` stays in-tree but is excluded from
-  the release artifact by packaging; the repo is the plugin marketplace.
+- **Single repo, curated release.** `.abcd/**` stays in-tree and is present in
+  every repository checkout — marketplace installs and release source archives
+  included — never in the released binaries; the launch bundler denies the
+  namespace structurally, though that filter has yet to run on a cut release.
+  The repo is the plugin marketplace.
 - **Never commit or push without being asked.** Substantive work goes on a branch
   and PR; new dependencies need explicit sign-off before `go get`.
 

@@ -206,7 +206,7 @@ Because the lifeboat lands out-of-tree, `embark` reads it from wherever disembar
 
 | Tier | Path | Committed? | Holds |
 |---|---|---|---|
-| **record** | `.abcd/development/` | committed — excluded from the release artefact by packaging | the durable design record: brief, roadmap, intents, ADRs, research |
+| **record** | `.abcd/development/` | committed — in every repository checkout, never in the released binaries | the durable design record: brief, roadmap, intents, ADRs, research |
 | **shared work** | `.abcd/work/` | committed | shared working files — `CONTEXT.md` + `DECISIONS.md` |
 | **local ephemeral** | `.abcd/.work.local/` | gitignored | machine-local scratch — `NEXT.md`, `scratch/`, `logs/` |
 
