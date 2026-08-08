@@ -40,6 +40,21 @@ gitignores. None of these differences was a decision — each was drift from
 hand-assembly. Re-hardening the fleet meant editing every routine individually,
 a full session of expert attention for changes that were mechanically identical.
 
+A live bug-hunt loop on this repository's own state issue (#197) independently
+found three more invariants a hand-assembled prompt is prone to miss, none
+caught by the original fleet audit because none had happened yet: an
+orchestration-side cleanup racing a still-running reviewer subagent's own git
+operations in a shared checkout (round 8, recovered only by chance from a
+dangling stash); a stop-streak counter that could not tell three rounds of
+convergent diagnosis — each one narrowing the same root cause — from three
+rounds that learned nothing, and declared the loop wedged when it was actually
+converging on a correct fix; and a blocked bug (iss-186/PR #203) that kept
+resurfacing at STATE step 3's automatic PR-resumption every round until a human
+happened to intervene by hand, with no way for the loop to set it aside and work
+on something else in the meantime. A hand-assembled prompt fixes the instance in
+front of it; only a shared template propagates the fix to every routine that
+hasn't hit that failure yet.
+
 The assembly is deterministic work sitting outside the binary. Detecting a
 toolchain from its manifest, finding where the tracked decision log lives,
 choosing gate commands, slotting a hunt focus into a template — all of it is
@@ -64,6 +79,26 @@ schedule it. The binary never contacts a scheduling service.
   footers are banned from all public text, and because the harness can append
   them outside the model's own words, every created pull request, issue, and
   comment is re-read as stored and stripped by edit before the round continues.
+- Working-tree isolation: every subagent that inspects, builds, tests, or
+  diffs repository state — each hunt angle, each verify candidate, the fix
+  itself, every pre-PR and merge-gate review — runs in its own dedicated git
+  worktree, never the orchestrator's own checkout and never another
+  subagent's. The orchestrator never mutates or discards state a subagent may
+  still be reading; when several reviews of one diff are dispatched together,
+  it waits for all of them to return before acting on any single verdict.
+- Root-cause escalation in place of blunt strike-counting: a stop-eligible
+  BLOCK that traces to the same underlying coupling as an earlier BLOCK — not
+  merely the same bug, the same mechanism — is diagnostic progress, not
+  failure, and does not by itself count toward the loop's stop streak. It
+  instead queues a mandatory structural-fix attempt (removing the coupling,
+  not special-casing around it, through the same unrelaxed review gates) for
+  the next round; only a BLOCK on that structural attempt is a genuine stop.
+- Ledger shelving: a bug (or its already-open, already-blocked PR) that a stop
+  or an exhausted root-cause escalation rules out of autonomous reach is
+  marked needs-human in the loop-state ledger once, not rediscovered every
+  round — excluded from future picking and from automatic PR-resumption until
+  a trusted comment or ledger edit clears it, so the round that follows works
+  on the next fixable thing instead of re-litigating the same block.
 - `abcd routine render`: repo detection (toolchain and gate commands from the
   manifest; tracked-versus-ignored working tiers, so a rendered prompt can
   never instruct a commit into an ignored path; platform caveats for
@@ -106,6 +141,20 @@ schedule it. The binary never contacts a scheduling service.
   session URLs and harness attribution footers from every public artifact and
   directs a post-create re-read-and-strip of each pull request, issue, and
   comment the loop creates.
+- Given a rendered bug-hunt archetype, When any round dispatches more than one
+  subagent against the same ref (a multi-angle hunt, a paired pre-PR review, a
+  merge-gate review pair), Then the prompt directs each to its own isolated
+  git worktree and directs the orchestrator to wait for every dispatched
+  subagent to return before mutating or discarding the state they inspected.
+- Given a rendered bug-hunt archetype, When a second BLOCK traces to the same
+  underlying coupling as an earlier BLOCK in the same round or a prior one,
+  Then the prompt directs the next round to attempt a structural fix removing
+  that coupling — through the same review gates, not a relaxed one — before
+  counting the pair toward the loop's stop streak.
+- Given a rendered bug-hunt archetype, When a bug or its open PR is ruled out
+  of autonomous reach (a stop, or an exhausted root-cause escalation), Then
+  the prompt directs it marked needs-human in the loop-state ledger and
+  excluded from future picking and PR-resumption until a human clears it.
 
 ## Open Questions
 
