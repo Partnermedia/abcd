@@ -4,7 +4,7 @@ id: "iss-203"
 slug: "audit-privacy-degraded-scanner-silent"
 severity: "major"
 category: "bug"
-source: "user-observation"
+source: "agent-finding"
 found_during: "bug-hunt loop round 9 (state issue #197), contract-fidelity hunt angle + independent adversarial verification"
 found_at: "internal/core/audit/rule_privacy.go:87 (err == nil guard), internal/adapter/scanner/scanner.go:92-124 (New, degradation paths)"
 ---
