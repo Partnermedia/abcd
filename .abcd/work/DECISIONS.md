@@ -1076,7 +1076,9 @@ parallel-agent merge contention bites.
   documentation addresses and silently corrupts them via `Redact`, on top of
   the previously-known cost regression (up to ~54x on colon-hex content, worse
   than the ledger's original 1.9x-27x table) — worse than its `minor` label
-  suggests, but its own fix is out of scope for this round (sits in the
-  reviewed-and-shelved scanner adjacency-recovery area alongside iss-189/190/191
-  per the maintainer's 2026-08-08 ruling above). No ledger or code change made
-  for iss-195 this round beyond this reconfirmation note.
+  suggests. Its own fix is out of scope for this round, but iss-195 is a
+  distinct bug in the scanner's rigid/open-ended heuristic, not part of the
+  shelved scanner adjacency-recovery mechanism (iss-189/190/191, shelved per
+  the maintainer's 2026-08-07 ruling); iss-195 itself remains fix-eligible, not
+  shelved. No ledger or code change made for iss-195 this round beyond this
+  reconfirmation note.

@@ -4,7 +4,7 @@ id: "iss-202"
 slug: "scanner-pii-config-unguarded-read"
 severity: "critical"
 category: "bug"
-source: "user-observation"
+source: "agent-finding"
 found_during: "bug-hunt loop round 9 (state issue #197), security + resource/error-handling hunt angles + independent adversarial verification"
 found_at: "internal/adapter/scanner/scanner.go:103 (New, config read)"
 ---

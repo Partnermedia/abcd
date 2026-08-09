@@ -4,7 +4,7 @@ id: "iss-201"
 slug: "guard-hook-stdin-overflow-fail-open"
 severity: "major"
 category: "bug"
-source: "user-observation"
+source: "agent-finding"
 found_during: "bug-hunt loop round 9 (state issue #197), security hunt angle + independent adversarial verification"
 found_at: "internal/surface/cli/guard.go:154 (hook verb stdin read), guard.go:159-161 (fail-open routing)"
 ---
