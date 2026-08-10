@@ -75,6 +75,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-99` — A team of product thinkers decides as one
 - `itd-106` — abcd sets up the CI a repo requires, and reports what it did
 - `itd-107` — Autonomous routines assemble from one versioned template
+- `itd-108` — The plugin installs from the curated release artifact, not the repo, and every cut release reaches users automatically
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief
