@@ -12,6 +12,21 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The AI-attribution convention is enforced, not merely written down.** A new
+  `attribution` workflow fails a pull request whose commit messages or body break
+  the rule `AGENTS.md` and `CONTRIBUTING.md` state: the kernel trailer
+  `Assisted-by: Claude:<model-version>`, never `Co-Authored-By:` for an AI, and
+  never a tool's own "Generated with <tool>" footer. `scripts/check-attribution.sh`
+  holds the logic and runs locally as `make check-attribution` for the commit half.
+  The convention had been prose since the beginning and drifted anyway — a
+  reconciliation sweep across 78 pull requests was needed once before, after PR
+  bodies picked up a tool's default footer. The body half is the half that slips,
+  because it comes
+  from a tool default rather than from a contributor's habit, so the trigger
+  includes `edited`: a body corrected or broken after opening is re-checked. Bot
+  authors are exempt, and the gate binds only once it is added to the branch's
+  required status checks.
+
 - **A dependency bump that lands on a release workflow can be carried into the
   template it was rendered from** (iss-209). `.github/workflows/release.yml` and
   `auto-release.yml` are rendered from
