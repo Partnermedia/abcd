@@ -42,6 +42,13 @@ vet:
 lint-reviews:
 	@bash scripts/check-reviews.sh
 
+# AI-attribution gate (AGENTS.md § Attribution). Checks the commit trailers on
+# this branch against the default branch; the pull-request BODY half runs only in
+# CI, where the body exists. Not a preflight prerequisite — preflight guards a
+# push, and the body it must agree with is not written until the PR is opened.
+check-attribution:
+	@bash scripts/check-attribution.sh commits origin/main HEAD
+
 # Deterministic drift gate for the .abcd/development design record (first slice
 # of internal/core/lint). Blocking: any record drift (stale tool names, dropped
 # concepts, lifecycle or reference breakage) fails preflight and CI.
