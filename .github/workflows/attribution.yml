@@ -1,0 +1,67 @@
+name: attribution
+
+# Fails a pull request whose commits or body break abcd's AI-attribution
+# convention: the kernel trailer `Assisted-by: Claude:<model-version>`, never
+# `Co-Authored-By:` for an AI, never a tool's own "Generated with <tool>" footer
+# (AGENTS.md § Attribution and acknowledgements, CONTRIBUTING.md).
+#
+# WHY A GATE AND NOT PROSE: the convention has been written down since the
+# beginning and drifted anyway — itd-91 records a reconciliation sweep across 78
+# pull requests after PR bodies picked up a tool's default footer, and it drifted
+# again on PR #212/#215. The commit half rarely slips, because a contributor
+# writes it from AGENTS.md habit; the BODY half slips constantly, because it comes
+# from a tool default that nothing was looking at. itd-91 owns the general version
+# (a per-repo declared preference every surface reads); this enforces abcd's own
+# answer meanwhile.
+#
+# `edited` is in the trigger list deliberately: without it, a body that passed at
+# open can be edited afterwards and the gate never re-runs. It is a separate
+# workflow rather than a job in ci.yml precisely so a body edit re-runs THIS and
+# not the two-platform build matrix.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: attribution-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  attribution:
+    # A bot cannot write a trailer. Failing dependabot's PRs would leave a
+    # permanently red gate on exactly the pull requests where a red gate most needs
+    # to be trusted, so bots are exempt here as well as in the script.
+    if: github.event.pull_request.user.type != 'Bot'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the commit half walks base..head, and the default shallow
+      # checkout would not contain the base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The body is attacker-controlled text, so it reaches the shell ONLY as an
+      # environment variable. Interpolating ${{ github.event.pull_request.body }}
+      # directly into a run: block would splice that text into the script the runner
+      # executes — the classic template-injection hole. `printf '%s' "$PR_BODY"` is
+      # an ordinary variable expansion and is never re-scanned for substitutions.
+      - name: Check the pull-request body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+          bash scripts/check-attribution.sh body "$RUNNER_TEMP/pr-body.md"
+
+      - name: Check the commit trailers
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/check-attribution.sh commits "$BASE_SHA" "$HEAD_SHA"
