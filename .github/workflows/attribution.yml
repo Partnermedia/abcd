@@ -71,6 +71,13 @@ jobs:
           printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
           bash scripts/check-attribution.sh body "$RUNNER_TEMP/pr-body.md"
 
+      # The gate's own rules are proven in CI, not only asserted. iss-214 asked for
+      # this: the trailer regex must be checked against the forms actually in this
+      # repository's history, because its first cut rejected the bracketed model
+      # identifiers 38 commits already use.
+      - name: Check the gate's own test corpus
+        run: bash scripts/check-attribution-cases.sh
+
       - name: Check the commit trailers
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
