@@ -12,6 +12,22 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The attribution gate reads the git identity, not only the message.** A commit
+  authored and committed as `Claude <noreply@anthropic.com>` carried a fully
+  compliant message — `Assisted-by:` trailer, no banned footer — and sailed
+  through the gate, because the gate read only messages and bodies. The
+  contributor graph is built from commit authorship plus `Co-authored-by:`
+  trailers, so that one identity put an AI at #2 in the graph twice over: once
+  for the commit itself, and again on every squash merge, where the forge
+  auto-appends a `Co-authored-by:` for any branch author who is not the PR
+  author. The commits half now refuses an AI author or committer identity —
+  whole-name match on the assistant names AI tools stamp by default, plus the
+  vendors' address space, vendor-agnostic in intent like the co-authorship ban —
+  while the bot exemption is untouched and a human whose name merely contains an
+  assistant's name still passes. The corpus at
+  `scripts/check-attribution-cases.sh` grows a commits-mode section that proves
+  all of it against a scratch repository.
+
 - **The attribution gate accepts the trailer forms actually in use, and refuses AI
   co-authorship whoever wrote it.** Two defects in the gate's first cut. Its trailer
   pattern had no bracket in its character class, so `Assisted-by:

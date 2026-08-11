@@ -64,12 +64,44 @@ GENERATED_RE='^[[:space:]]*(🤖[[:space:]]*)?[Gg]enerated (with|by) \['
 # a real human co-author arrives, this is the line to revisit.
 COAUTHOR_RE='^[[:space:]]*[Cc]o-[Aa]uthored-[Bb]y:'
 
+# The git IDENTITY itself, not only the message. A commit authored AND committed
+# as `Claude <noreply@anthropic.com>` carried a fully compliant message and
+# sailed through the message-only gate — but the contributor graph is built from
+# commit authorship plus Co-authored-by trailers, so it put an AI at #2 in the
+# graph. Worse, a squash merge auto-appends a Co-authored-by for any branch
+# author who is not the PR author, so one mis-identified branch commit inflates
+# the graph again on every squash. Refusing the identity here closes both routes.
+#
+# Names are matched whole (a human named Claudette is not an AI identity) and
+# case-insensitively; the address rule covers the vendor domains AI tools stamp
+# by default. As with COAUTHOR_RE the intent is vendor-agnostic, but an identity
+# ban can only enumerate — extend both lists as new defaults are met in the wild.
+AI_IDENT_NAME_RE='^[[:space:]]*(claude|chatgpt|copilot|github copilot|gemini|codex|devin)[[:space:]]*$'
+AI_IDENT_MAIL_RE='@anthropic\.com$|@openai\.com$'
+
 fail=0
 note() { echo "  $1" >&2; }
 
 usage() {
 	echo "usage: check-attribution.sh commits <base-ref> <head-ref> | body <file>" >&2
 	exit 2
+}
+
+# check_ident refuses an AI git identity in one role (author or committer) of
+# one commit; a human is the author of record, and the tool's disclosure lives
+# in the trailer, never in the identity fields the contributor graph reads.
+check_ident() {
+	local label="$1" role="$2" name="$3" mail="$4"
+	if printf '%s' "$name" | grep -Eiq "$AI_IDENT_NAME_RE" ||
+		printf '%s' "$mail" | grep -Eiq "$AI_IDENT_MAIL_RE"; then
+		echo "check-attribution: $label has an AI $role identity: $name <$mail>" >&2
+		note "The human is the author of record (AGENTS.md); the contributor graph is built"
+		note "from these identity fields, so an AI here asserts an authorship the tool does"
+		note "not hold. Fix the commit identity (git commit --amend --reset-author with"
+		note "user.name/user.email set to the human) and disclose the tool in the trailer:"
+		note "Assisted-by: <Vendor>:<model-version>"
+		fail=1
+	fi
 }
 
 # check_text applies both halves to one artefact: the banned footer must be
@@ -129,8 +161,15 @@ commits)
 			continue
 			;;
 		esac
-		check_text "commit ${sha:0:12} ($(git show -s --format='%s' "$sha" | cut -c1-50))" \
-			"$(git show -s --format='%B' "$sha")"
+		label="commit ${sha:0:12} ($(git show -s --format='%s' "$sha" | cut -c1-50))"
+		{
+			IFS= read -r author_name
+			IFS= read -r committer_name
+			IFS= read -r committer_email
+		} <<<"$(git show -s --format='%an%n%cn%n%ce' "$sha")"
+		check_ident "$label" author "$author_name" "$author_email"
+		check_ident "$label" committer "$committer_name" "$committer_email"
+		check_text "$label" "$(git show -s --format='%B' "$sha")"
 	done <<<"$range"
 	;;
 body)
