@@ -79,9 +79,61 @@ construction — a plugin update creates a fresh plugin root, and a fresh plugin
 root is exactly what makes the bootstrap fetch the matching binary. The skew
 this project currently *reports* becomes a skew it cannot *have*.
 
-## Direction (ungrilled — not yet commitments)
+## Decisions (grilled 2026-08-11)
 
-Recorded so the grill has something to argue with. None of this is settled.
+The maintainer resolved the shape questions in a grill session; these are
+commitments, not options.
+
+- **The marketplace source stays `REPPL/abcd-cli`; only the PLUGIN source
+  becomes an archive.** The install line is typed into the harness as a
+  slash-command argument, where a catalog URL runs to 99 characters against 38
+  for the repo form. Users are the audience and contributors are incidental, so
+  the short front door wins. Accepted cost, stated rather than discovered later:
+  the marketplace clone remains (~16 MB including git history), so the plugin
+  cache falls from ~22 MB to the payload plus the binary while the catalog clone
+  does not move. The "abcd stops shipping its design record to strangers" half of
+  the press release therefore does NOT hold under this shape — and since the repo
+  is public, that residue is weight, not exposure.
+- **No second repository.** A public-facing `abcd` beside `abcd-cli` was
+  considered and rejected: it is the dev→public mirror
+  [[adr-28-single-repo-curated-release]] retired, and it hides nothing, because
+  `abcd-cli` is already public.
+- **[[adr-28-single-repo-curated-release]] needs no amendment.** An earlier
+  reading of this intent assumed the catalog would move off the repo, which would
+  have falsified "the repo is the marketplace". With the catalog still committed,
+  that clause stays literally true.
+- **The archive is unpinned, and the attestation extends to cover it.** A
+  committed catalog cannot carry a per-release `sha256` without a per-release
+  commit, and a bot commit to the default branch during a release run trips
+  `release.yml`'s no-branch-commit tripwire. So the catalog names a stable
+  `releases/latest/download/` URL and pins nothing. The integrity story is the
+  signing `release.yml` ALREADY performs — `actions/attest-build-provenance` over
+  the binaries and `checksums.txt` — extended to the plugin zip, so both halves of
+  the distribution carry the same guarantee instead of one having none.
+- **An offline signing key is recorded as a future extension, not adopted now.**
+  The attestation proves "built by this workflow in this repo", which defends a
+  stolen upload token and not a full repository compromise, because the identity
+  root is still the forge. A key held offline (minisign) closes that and costs a
+  key to keep. It becomes relevant, and is deliberately deferred.
+- **One bundle, less `docs/assets/**`.** The plugin zip is the release payload
+  `launch-payload.json` already declares, rather than a second manifest to keep in
+  step. But two PNGs — `intro.png` at 1.07 MB and `logo.png` at 182 KB — are
+  1.25 MB of a 1.6 MB payload, against 42 KB for all eight markdown files, and
+  nothing the harness loads reads the shipped `docs/` at all (the `docs/` paths in
+  `commands/` and `agents/` address a lifeboat's internal record or a target
+  repo's pages, never this one's). Excluding the assets takes the payload to
+  ~340 KB and keeps the prose.
+- **No migration is owed, because there are no users yet.** The archive source
+  requires harness v2.1.224 or later; below it the install fails, and older hosts
+  still fail to load the marketplace. With no installed base the question is moot
+  and is not designed for. The version floor is still stated in the README, and
+  the multi-harness install story is captured separately as a getting-started
+  concern rather than carried here.
+
+## Superseded direction (pre-grill)
+
+Kept only to show what the grill moved. Every bullet below is now governed by
+the Decisions above where the two disagree.
 
 - **Mechanism: an `archive` plugin source.** It is the only source type that
   needs neither git nor npm on the user's machine, and the harness looks for
@@ -164,33 +216,21 @@ Recorded so the grill has something to argue with. None of this is settled.
 
 ## Open Questions
 
-- **What actually signals "an update is available" for an archive source, and
-  can it hold without a per-release catalog edit?** This is the crux, and the
-  two candidate answers pull against different accepted decisions.
-  - *Digest-signalled*: omit the version from both the artifact's
-    `plugin.json` and the marketplace entry, leaving the zip's bytes as the
-    signal. Needs no catalog edit ever — but it contradicts
-    [[adr-19-plugin-json-version-carve-out]], whose recorded ACCEPT outcome puts
-    the version in the released artifact at `plugin.json./version`, and it would
-    fail `CheckLockstep`'s PUBLIC polarity check, which requires that version
-    present and strict-SemVer.
-  - *SemVer-signalled*: keep ADR-19 intact and rewrite the catalog's URL and
-    `/plugins/0/version` on each cut. But `release.yml` carries an armed
-    no-branch-commit tripwire that fails the run if a `github-actions[bot]`
-    commit lands on the default branch during the job — so this buys automation
-    by disarming a guard the project deliberately built.
-  A third shape (the catalog is regenerated somewhere that is not the release
-  job) may dissolve the conflict. Settle this before speccing: the answer
-  determines whether ADR-19 needs amending, whether the tripwire needs a
-  carve-out, or neither.
-- **Is the loss of a `sha256` pin acceptable?** An unpinned archive rests on
-  TLS-to-GitHub alone. Arguably that is already the true root of trust for the
-  binary too — its `checksums.txt` comes from the same origin as the payload it
-  verifies, a vacuity `hooks/bootstrap.sh` names in its own comments — but the
-  gap should be accepted explicitly rather than inherited by accident.
-- **What impact does this carry?** Left unjudged deliberately. It is additive
-  for a new user and plausibly breaking for an installed user on a host below
-  the minimum version. The judgement is the maintainer's at planning.
+- **Does an unpinned archive at a stable URL actually re-check for a new
+  release?** The remaining empirical unknown, and the only thing between this
+  shape and settled. The catalog never changes and the URL never changes, so the
+  harness must fetch or head the zip to notice a new cut. The published version
+  ladder says an archive source resolves its version from the `sha256` pin, or
+  from the digest of the downloaded file when no pin is set — which implies a
+  fetch — but "implies" is not "observed". Settle it against a real pre-release
+  cut before Cut B is called done, not by reading the documentation twice.
+  If it turns out the harness caches by URL and never re-fetches, the unpinned
+  decision above is void and the per-release-commit question reopens.
+- **Does the attestation actually cover a new asset for free?** The decision to
+  extend signing to the plugin zip assumes adding it to the attest step's
+  `subject-path` is sufficient. Unverified: the attestation steps are gated on
+  repository visibility and have never run on a cut release, so the whole signing
+  path is unproven in practice, not merely unextended.
 
 ## Prerequisites
 
