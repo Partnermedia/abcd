@@ -48,6 +48,7 @@ lint-reviews:
 # push, and the body it must agree with is not written until the PR is opened.
 check-attribution:
 	@bash scripts/check-attribution.sh commits origin/main HEAD
+	@bash scripts/check-attribution-cases.sh
 
 # Deterministic drift gate for the .abcd/development design record (first slice
 # of internal/core/lint). Blocking: any record drift (stale tool names, dropped
