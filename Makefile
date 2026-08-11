@@ -55,6 +55,22 @@ record-lint:
 docs-lint:
 	@go run ./cmd/abcd docs lint
 
+# Propagate the pinned action refs in the committed release workflows back into
+# the scaffold templates they were rendered from (iss-209). Dependabot only ever
+# edits the rendered workflow, which breaks the self-scaffold parity test; this
+# is the one-way fix — re-rendering the template over the workflow would revert
+# the bump instead.
+#
+# Nothing in CI calls either target. The drift is GATED by `go test`
+# (TestSelfScaffoldParity and TestSyncRepoPinsIsCleanToday, both under
+# preflight), which is what fails a bump that only landed on the workflow;
+# these are the human's read-only look at it and the one-command fix.
+scaffold-sync:
+	@go run ./cmd/scaffold-sync
+
+scaffold-sync-check:
+	@go run ./cmd/scaffold-sync -check
+
 # Pre-push gate (invoked by .githooks/pre-push): the three lint gates
 # (lint-reviews, record-lint, docs-lint) as prerequisites, then build, vet, test,
 # and race-enabled internal tests natively. CI's check job runs those same four
