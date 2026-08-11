@@ -24,8 +24,11 @@ called out in a **Breaking** section.
   because it comes
   from a tool default rather than from a contributor's habit, so the trigger
   includes `edited`: a body corrected or broken after opening is re-checked. Bot
-  authors are exempt, and the gate binds only once it is added to the branch's
-  required status checks.
+  authors are exempt — announced in the log rather than silent, and applied inside
+  the steps so the job always runs and the check always reports, which is what makes
+  the workflow safe to mark required: a required check that never reports leaves a
+  pull request waiting on it forever. The gate binds only once it is added to the
+  branch's required status checks.
 
 - **A dependency bump that lands on a release workflow can be carried into the
   template it was rendered from** (iss-209). `.github/workflows/release.yml` and
