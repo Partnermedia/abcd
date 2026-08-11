@@ -106,5 +106,74 @@ if [ -e "$tmp/PWNED" ]; then
 	fail=$((fail + 1))
 fi
 
+# --- The git identity itself (commits mode) -----------------------------------
+# The contributor graph is built from commit AUTHORSHIP plus Co-authored-by
+# trailers, not from messages alone. A commit authored as
+# `Claude <noreply@anthropic.com>` with a fully compliant message sailed through
+# the message-only gate, put an AI at #2 in the contributor graph, and — because
+# a squash merge auto-appends a Co-authored-by for any branch author who is not
+# the PR author — inflated it again on every squash of that branch. These cases
+# prove the commits half reads the identity, not only the message.
+repo="$tmp/repo"
+git init -q "$repo"
+git -C "$repo" -c user.name=REPPL -c user.email=human@example.invalid \
+	commit -q --allow-empty -m 'base'
+base="$(git -C "$repo" rev-parse HEAD)"
+SCRIPT_ABS="$(pwd)/$SCRIPT"
+
+# commits_case <want> <label> — checks base..HEAD in the scratch repo, then resets.
+commits_case() {
+	local want="$1" label="$2" got
+	if (cd "$repo" && bash "$SCRIPT_ABS" commits "$base" HEAD >/dev/null 2>&1); then
+		got=accept
+	else
+		got=reject
+	fi
+	if [ "$got" = "$want" ]; then
+		pass=$((pass + 1))
+	else
+		fail=$((fail + 1))
+		echo "FAIL: $label — wanted $want, got $got" >&2
+	fi
+	git -C "$repo" reset -q --hard "$base"
+}
+
+# commit_as <author-name> <author-email> <committer-name> <committer-email> <msg>
+commit_as() {
+	GIT_AUTHOR_NAME="$1" GIT_AUTHOR_EMAIL="$2" \
+		GIT_COMMITTER_NAME="$3" GIT_COMMITTER_EMAIL="$4" \
+		git -C "$repo" commit -q --allow-empty -m "$5"
+}
+
+MSG_OK='Text.
+
+Assisted-by: Claude:claude-opus-5'
+
+commit_as REPPL human@example.invalid REPPL human@example.invalid "$MSG_OK"
+commits_case accept "human identity, compliant message"
+
+# The bf68242 case: identity is the AI, message is fully compliant.
+commit_as Claude noreply@anthropic.com Claude noreply@anthropic.com "$MSG_OK"
+commits_case reject "AI author and committer, compliant message"
+
+commit_as REPPL human@example.invalid Claude noreply@anthropic.com "$MSG_OK"
+commits_case reject "AI committer only, compliant message"
+
+commit_as Claude claude@example.invalid REPPL human@example.invalid "$MSG_OK"
+commits_case reject "AI author by name alone, compliant message"
+
+# Vendor-agnostic, as with the co-authorship ban (iss-215).
+commit_as ChatGPT bot@openai.com REPPL human@example.invalid "$MSG_OK"
+commits_case reject "another vendor's AI author, compliant message"
+
+# A human whose name merely CONTAINS an AI name is not an AI identity.
+commit_as 'Claudette Martin' claudette@example.invalid 'Claudette Martin' claudette@example.invalid "$MSG_OK"
+commits_case accept "human name containing an AI name"
+
+# The bot exemption still holds: dependabot writes no trailer and stays exempt.
+commit_as 'dependabot[bot]' '49699333+dependabot[bot]@users.noreply.github.com' \
+	'GitHub' 'noreply@github.com' 'chore(deps): bump something'
+commits_case accept "bot author without trailer (exemption)"
+
 echo "check-attribution-cases: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
