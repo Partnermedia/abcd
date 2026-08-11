@@ -115,6 +115,35 @@ schedule it. The binary never contacts a scheduling service.
   flow instead of only posting the stop sentinel. The routine never bypasses a
   release gate — in an abcd-managed repo that means the changelog-driven
   release gate runs exactly as it would for a human-initiated cut.
+- **Merge-lifecycle invariants for the loop's own pull requests.** Auto-merge
+  eligibility splits on *additive versus editing*, never on "documentation
+  versus code": a change qualifies only when every path it touches is a new
+  record file or an append to the decision log, the diff carries no deletions,
+  the record gate is green, and it is a single commit. Anything that rewrites
+  an existing claim — published documentation, the brief, the changelog —
+  stays behind the run's explicit merge authorisation, because that is where a
+  repository's post-merge corrections cluster: they fix false claims about the
+  system, which no deterministic gate catches. The eligible set is an
+  allowlist of inert paths, never a denylist of source extensions — in an
+  abcd-managed repo the plugin command pages, the rules file, the lint
+  configuration and the agent-instruction router are all markdown or JSON that
+  change behaviour, so a "no source touched" test fails open on every one of
+  them. Intent drafts count as additive: the lifecycle already gates at
+  promotion, so a second gate at merge is redundant.
+- **The up-to-date requirement is load-bearing and is never relaxed.** A
+  queued auto-merge whose base moves waits indefinitely, and the tempting fix
+  — dropping the strict status-check policy — is the one change the template
+  forbids: strict is what re-runs the record gate against the merged result,
+  and that is the only place a record id minted concurrently on two branches
+  becomes visible, since each branch passes in isolation and the mint lock is
+  a filesystem lock that does not span checkouts. The loop clears the stall by
+  updating the branch, which preserves the gate.
+- **The loop's platform calls live in the rendered prompt, never in the
+  binary.** Arming auto-merge, polling merge state, updating a stale branch,
+  and re-reading a created artefact are host-executed steps carrying the
+  host's own credentials, so the binary acquires no platform CLI dependency.
+  A repository-scoped credential that a scaffolded workflow needs is consumed
+  by that workflow, never held or read by abcd.
 
 ## Acceptance Criteria
 
@@ -170,6 +199,18 @@ schedule it. The binary never contacts a scheduling service.
   machinery directly, or open the release cut as a final gated pull request —
   and how the closing round interacts with receipt-gated releases that need
   host-run semantic reviews.
+- Whether the merge-lifecycle protocol ships only as rendered prompt steps, or
+  also as a scaffolded workflow — and if the latter, whether that workflow
+  takes a repository-scoped credential or points at a platform merge queue
+  where the plan allows one.
+- Whether a repository's merge style — collapsing a single-commit record
+  change, keeping the history of a multi-commit branch — is declared by the
+  template or detected per repo.
+- Whether two peer sessions sharing one checkout are prevented by policy or by
+  giving every session its own worktree, given that the orchestrator/subagent
+  isolation rule above does not cover independent peers.
+- Whether attribution-footer defence is detection, post-create stripping, or
+  both, and whether a detection blocks the round or only annotates it.
 
 ## Audit Notes
 
