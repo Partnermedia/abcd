@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-215"
+slug: "attribution-gate-is-provider-asymmetric"
+severity: "major"
+category: "inconsistency"
+source: "agent-finding"
+found_during: "post-#217 verification while writing an autonomous-run prompt (2026-08-11)"
+found_at: "scripts/check-attribution.sh"
+---
+
+The attribution gate is provider-asymmetric: its POSITIVE check is vendor-agnostic while its NEGATIVE check and the prose it enforces are Claude-specific, so the gate stops the failure it was built for only as long as the assisting model is Claude. Verified 2026-08-11 against scripts/check-attribution.sh: TRAILER_RE accepts any '<Vendor>:<version>' pair, so 'Assisted-by: OpenAI:gpt-5' and 'Assisted-by: Google:gemini-3' both PASS — correct and desirable. But GENERATED_RE bans only 'Generated with [', the robot-emoji 'Generated with', and 'Co-authored-by: Claude' / 'Co-Authored-By: Claude', so a body carrying 'Co-authored-by: ChatGPT <bot@openai.com>' alongside a valid trailer PASSES. That is precisely the failure mode the workflow header says it exists to stop — itd-91 records a reconciliation sweep across 78 pull requests after PR bodies picked up a tool's default footer — merely wearing a different vendor's name. The AI-co-authorship objection AGENTS.md:132 states is about authorship the tool does not hold and contributor-graph inflation, neither of which is Claude-specific. Second half of the same asymmetry: the documented convention hardcodes one vendor in the template — CONTRIBUTING.md:31 writes 'Assisted-by: Claude:<model-version>' and AGENTS.md:132 gives 'Assisted-by: Claude:claude-opus-4-8' — so prose names a vendor the gate does not require, leaving a contributor using another provider without a stated correct form even though the gate would accept one. Fix direction is itd-91's, whose scope is a per-repo declared attribution preference every surface reads; .github/workflows/attribution.yml calls itself a stopgap until that lands, and iss-211 already raises itd-91's priority on multi-project adoption. Two things this record asks of that work specifically: make the co-authorship ban match on the TRAILER KEY rather than on a vendor name, so 'Co-authored-by:' naming any AI is refused; and state the convention as '<Vendor>:<model-version>' with Claude as an example rather than as the literal.
