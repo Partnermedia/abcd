@@ -31,10 +31,15 @@ permissions:
 
 jobs:
   attribution:
-    # A bot cannot write a trailer. Failing dependabot's PRs would leave a
-    # permanently red gate on exactly the pull requests where a red gate most needs
-    # to be trusted, so bots are exempt here as well as in the script.
-    if: github.event.pull_request.user.type != 'Bot'
+    # The bot exemption lives INSIDE the steps, deliberately, and not as a job-level
+    # `if:`. A required status check that never reports leaves a pull request stuck
+    # on "Expected — waiting for status" forever, and whether a job skipped by an
+    # `if:` emits a check run with conclusion "skipped" is not a property worth
+    # betting dependabot's mergeability on. Running the job unconditionally means the
+    # check ALWAYS reports, so this workflow is safe to add to the required checks
+    # (iss-212). The exemption itself still holds: a bot cannot write a trailer, and
+    # a permanently red gate on its pull requests would train a maintainer to
+    # discount red on exactly the ones where red most needs trusting.
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -50,11 +55,19 @@ jobs:
       # directly into a run: block would splice that text into the script the runner
       # executes — the classic template-injection hole. `printf '%s' "$PR_BODY"` is
       # an ordinary variable expansion and is never re-scanned for substitutions.
+      # The exemption is announced rather than silent: a step that no-ops must say
+      # so, or a green tick reads as "the body was checked and passed" when nothing
+      # was checked at all.
       - name: Check the pull-request body
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
         run: |
           set -euo pipefail
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "attribution: pull request authored by a bot — body check exempt, nothing was checked."
+            exit 0
+          fi
           printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
           bash scripts/check-attribution.sh body "$RUNNER_TEMP/pr-body.md"
 
@@ -62,6 +75,11 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
         run: |
           set -euo pipefail
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "attribution: pull request authored by a bot — commit check exempt, nothing was checked."
+            exit 0
+          fi
           bash scripts/check-attribution.sh commits "$BASE_SHA" "$HEAD_SHA"
