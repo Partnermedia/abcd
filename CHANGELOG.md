@@ -10,6 +10,27 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **A dependency bump that lands on a release workflow can be carried into the
+  template it was rendered from** (iss-209). `.github/workflows/release.yml` and
+  `auto-release.yml` are rendered from
+  `internal/core/launch/scaffold/templates/*.tmpl`, and `TestSelfScaffoldParity`
+  holds the two byte-identical so that abcd's own release exercises the machinery
+  a managed repo receives. Dependabot sees only the rendered side — its
+  github-actions ecosystem discovers `.github/workflows/*` and composite action
+  manifests, and no ecosystem scans a `.tmpl` under `internal/` — so every action
+  bump it opens broke that parity with no mechanical way back. `make
+  scaffold-sync` now propagates the pinned refs from the committed workflows into
+  the templates, and `make scaffold-sync-check` reports the same drift without
+  writing. Only the ref moves: indentation, list markers and version comments
+  survive byte-for-byte, an action the workflow does not pin is left alone, and an
+  action pinned to two different refs in one workflow is refused rather than
+  guessed. The propagation is one-way by design — re-rendering the template over
+  the workflow would revert the bump. `TestSyncRepoPinsIsCleanToday` fails
+  preflight when a workflow pin has moved without the template following, and
+  names the command that fixes it.
+
 ### Fixed
 
 - **The build plumbing's own comments describe the gate suite that runs**
