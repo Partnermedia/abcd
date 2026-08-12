@@ -271,5 +271,16 @@ fi
 # The one place PATH setup is suggested; the symlink itself stays owned by ahoy.
 # This prints once per plugin root, because every later session takes the fast
 # path above.
-notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session. For the abcd command in your own terminal, run `abcd ahoy install` once.%s' \
-	"$release_tag" "$meta_note")"
+#
+# The instruction names the binary by the ABSOLUTE path this script already
+# holds, and does so for a reason worth stating: the sentence is addressed to a
+# reader for whom `abcd` is not a name the shell can resolve — that is the whole
+# condition it exists to fix — so an instruction reading `abcd ahoy install`
+# fails with "command not found" for everyone who needs it. On the first manual
+# install the agent that read it invented a `go run` incantation into the
+# harness's plugin cache instead (iss-207). $binary is resolvable right now, by
+# anyone, with no toolchain. Keep the invocation LAST on the line so it stays
+# copy-pasteable, and keep the success leading the first word: only the first
+# line of a hook's stderr reaches the transcript.
+notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session.%s For the abcd command in your own terminal, run this once — the path is absolute because abcd is not on your PATH yet, which is exactly what the command fixes: "%s" ahoy install' \
+	"$release_tag" "$meta_note" "$binary")"

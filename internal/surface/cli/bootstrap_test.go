@@ -411,6 +411,103 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	}
 }
 
+// bootstrapRepoFile locates a committed file at the repository root from this
+// test file's own on-disk position, the same way bootstrapScript does, so the
+// assertions below read the bytes that actually ship.
+func bootstrapRepoFile(t *testing.T, rel string) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed to locate the test source file")
+	}
+	path := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", rel))
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the committed %s must exist: %v", rel, err)
+	}
+	return path
+}
+
+// bootstrapReadmeInstruction is the shape the README's one-time PATH setup
+// instruction has to take. The README cannot know the absolute plugin root at
+// authoring time, so it carries the same INVOCATION with the one part it cannot
+// know left as a placeholder the notice fills in — not a bare `abcd`, which is
+// the name that does not resolve, and not `${CLAUDE_PLUGIN_ROOT}` either, which
+// is set for a hook and unset in the terminal the sentence is addressed to.
+const bootstrapReadmeInstruction = `"<plugin-root>/abcd" ahoy install`
+
+// bootstrapEveryInvocationIsPathQualified reports each occurrence of `ahoy
+// install` in body that is NOT reached through prefix. Splitting on the verb
+// rather than searching for the good form is deliberate: a text may hold the
+// runnable instruction AND still leave the unrunnable one standing beside it,
+// and only an every-occurrence check sees the second one.
+func bootstrapEveryInvocationIsPathQualified(body, prefix string) []string {
+	parts := strings.Split(body, "ahoy install")
+	var bad []string
+	for _, before := range parts[:len(parts)-1] {
+		if strings.HasSuffix(before, prefix) {
+			continue
+		}
+		if len(before) > 80 {
+			before = "…" + before[len(before)-80:]
+		}
+		bad = append(bad, before+"ahoy install")
+	}
+	return bad
+}
+
+// TestBootstrapPrintsARunnableInstruction is iss-207: the ONE instruction that
+// resolves the no-binary-on-PATH state could not be run in that state. The
+// notice said "run `abcd ahoy install` once" while `abcd` is, by the notice's
+// own premise, not a name the shell can resolve — so the sentence fails with
+// "command not found" for exactly the reader it is written for. On the first
+// manual install this was not a cosmetic failure: the agent reading it could not
+// run the printed command, invented a `go run` incantation reaching into the
+// harness's plugin cache, and told the user to run that instead — a
+// source-build path needing a Go toolchain, which is not the documented install
+// at all.
+//
+// The script already holds the absolute path as $binary, so the fix is to print
+// it. Both surfaces are held here: the notice, whose path is concrete, and the
+// README, whose corresponding sentence carries the same invocation with a
+// placeholder for the one part a committed file cannot know.
+func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
+	t.Run("the notice names the absolute binary", func(t *testing.T) {
+		root := bootstrapRoot(t)
+		body := []byte("payload")
+		fx := bootstrapServer(t, body, bootstrapManifest(body))
+
+		out, code := runBootstrap(t, root, fx, "")
+		if code != 2 {
+			t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+		}
+		binary := filepath.Join(root, "abcd")
+		prefix := `"` + binary + `" `
+		if !strings.Contains(out, prefix+"ahoy install") {
+			t.Errorf("the notice must print the absolute plugin-root binary the script already holds, so the instruction runs in the state it describes; want %q in output %q", prefix+"ahoy install", out)
+		}
+		for _, bad := range bootstrapEveryInvocationIsPathQualified(out, prefix) {
+			t.Errorf("the notice still prints an `ahoy install` a reader cannot run — `abcd` is not on PATH, which is the very state this sentence addresses: %q", bad)
+		}
+		// A2's contract, held here because this test rewrites the same sentence:
+		// the transcript renders only the first line of a hook's stderr, so the
+		// success has to lead it.
+		if got := firstLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
+			t.Errorf("the success must still lead the first visible line; first line = %q", got)
+		}
+	})
+
+	t.Run("the README carries the same concrete form", func(t *testing.T) {
+		body := mustReadFile(t, bootstrapRepoFile(t, "README.md"))
+		if !strings.Contains(body, bootstrapReadmeInstruction) {
+			t.Errorf("README.md must give the one-time PATH setup as %q; a bare `abcd ahoy install` cannot be run by the reader it is written for", bootstrapReadmeInstruction)
+		}
+		prefix := `"<plugin-root>/abcd" `
+		for _, bad := range bootstrapEveryInvocationIsPathQualified(body, prefix) {
+			t.Errorf("README.md still instructs an `ahoy install` that cannot be run before `abcd` is on PATH: %q", bad)
+		}
+	})
+}
+
 // TestBootstrapRecordsTheRawPluginRootBasename is the observability half of the
 // commit-stamped-cache WARRANT. plugin_sha is gated to exactly forty lowercase
 // hex characters because itd-105 assumes the harness names each plugin cache

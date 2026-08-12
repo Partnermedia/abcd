@@ -233,8 +233,12 @@ and arm64) installs nothing and says why in plain language. A plugin root that
 already holds the binary costs one file test and no network.
 
 That covers the hooks. For the `abcd` command in your own terminal, keep the
-[install](#install) above, or run `abcd ahoy install` once to put the
-plugin-root binary on your `PATH`. For a stronger root of trust than
+[install](#install) above, or put the plugin-root binary on your `PATH` by
+running it once by its absolute path — `"<plugin-root>/abcd" ahoy install`,
+where `<plugin-root>` is the directory named in the bootstrap's own success
+notice, which prints the path in full. The path is absolute because `abcd` is
+not on your `PATH` yet, which is what that one run fixes. For a stronger root
+of trust than
 same-origin checksums, build from source — `go build ./cmd/abcd` — and place
 the binary in the plugin root and on your `PATH` yourself. A binary placed
 there by hand takes the same no-network fast path, so the `.binary-meta`
