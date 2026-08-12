@@ -356,7 +356,9 @@ abcd/
 │   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
 └── hooks/                              # Claude Code event hooks — each command shells directly to the binary
-    └── hooks.json                      # UserPromptSubmit → hook prompt-router; SessionStart → prompt-router-reset + session-start;
+    └── hooks.json                      # UserPromptSubmit → hook prompt-router; SessionStart → ONE chained command:
+                                        #   bootstrap.sh, then session-start + prompt-router-reset, each fed a copy of the
+                                        #   payload (siblings would run in parallel and share one stdin);
                                         # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end
 ```
 

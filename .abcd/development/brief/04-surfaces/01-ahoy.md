@@ -164,8 +164,10 @@ Steps, run in parallel where independent:
    `hooks/hooks.json` is present in the plugin install AND contains the three
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
    each referencing the expected prompt-router hook commands. The shipped
-   manifest also wires `abcd hook session-start` (a second `SessionStart`
-   command), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
+   manifest also wires `abcd hook session-start` (chained after the bootstrap
+   and ahead of `prompt-router-reset` inside the ONE `SessionStart` command —
+   the harness runs sibling hooks in parallel, so the event carries a single
+   entry), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
    hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
    against the hazard registry before it runs) — five event types in all;
    verification covers only the three prompt-router commands above. A missing or
