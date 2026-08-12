@@ -61,6 +61,63 @@ func RepoRel(base, target string) string {
 	return target
 }
 
+// RedactRoot replaces every occurrence of the absolute directory root in s with
+// repl — both a path UNDER the root (root + separator + …) and the BARE root
+// itself when it sits at a right boundary (end of string or a non-path
+// character). The bare-root case matters because a message that names exactly
+// $HOME (e.g. "cannot access /Users/alex") would otherwise leak the developer abcd-audit:allow
+// identity — its base segment IS the username. The filesystem root ("/") and
+// empty or relative roots are skipped so a message is never mangled.
+//
+// It is the one statement of what a developer-identity root looks like in
+// rendered output: the CLI's error scrub redacts the working directory and the
+// home directory out of every command error, and `ahoy install`'s receipt
+// redacts the same two roots out of every write it reports (iss-177). Callers
+// pass the root and the replacement because the polarity differs — "." for the
+// repo, "~" for home — but the boundary rule must not.
+func RedactRoot(s, root, repl string) string {
+	if len(root) <= 1 || !filepath.IsAbs(root) {
+		return s
+	}
+	sep := string(os.PathSeparator)
+	s = strings.ReplaceAll(s, root+sep, repl+sep)
+	return replaceBareRoot(s, root, repl)
+}
+
+// replaceBareRoot replaces occurrences of root that end at a path boundary (end
+// of string or a character that cannot continue a path segment), leaving a longer
+// path that merely shares this prefix untouched.
+func replaceBareRoot(s, root, repl string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(s, root)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		after := i + len(root)
+		b.WriteString(s[:i])
+		if after >= len(s) || isPathBoundary(s[after]) {
+			b.WriteString(repl)
+		} else {
+			b.WriteString(root)
+		}
+		s = s[after:]
+	}
+}
+
+// isPathBoundary reports whether c cannot be part of a path segment, so a root
+// immediately followed by c is a whole path rather than a prefix of a longer one.
+func isPathBoundary(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return false
+	case c == '/' || c == '.' || c == '-' || c == '_':
+		return false
+	}
+	return true
+}
+
 // notPresent reports whether a stat/open error means the path cannot exist: it
 // is absent (ErrNotExist), or a component of its prefix is not a directory
 // (ENOTDIR, e.g. asking about a/b where a is a regular file). Both are "not
