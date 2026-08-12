@@ -96,6 +96,12 @@ called out in a **Breaking** section.
   in a fresh cache directory with no binary. The three entries are now ONE
   command that runs the bootstrap and then both binary calls in a single shell,
   so the sequencing is owned by the manifest rather than assumed of the harness.
+  Chaining them makes two further properties load-bearing, and both are held
+  explicitly: the hook payload is read once and piped to each call separately,
+  because every hook verb consumes the whole of stdin and a shared stdin would
+  leave `session-start` reading EOF and silently disabling its notices; and
+  `session-start` runs ahead of `prompt-router-reset`, whose unconditional
+  success diagnostic would otherwise be the one line the transcript renders.
   The bootstrap's own message is emitted first, which is what the transcript
   renders: on a fresh install the visible line is the checksum-verified success
   rather than one of two missing-binary complaints, and the two complaints

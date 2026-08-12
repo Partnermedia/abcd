@@ -165,8 +165,8 @@ Steps, run in parallel where independent:
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
    each referencing the expected prompt-router hook commands. The shipped
    manifest also wires `abcd hook session-start` (chained after the bootstrap
-   and `prompt-router-reset` inside the ONE `SessionStart` command — the
-   harness runs sibling hooks in parallel, so the event carries a single
+   and ahead of `prompt-router-reset` inside the ONE `SessionStart` command —
+   the harness runs sibling hooks in parallel, so the event carries a single
    entry), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
    hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
    against the hazard registry before it runs) — five event types in all;
