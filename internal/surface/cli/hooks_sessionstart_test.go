@@ -73,16 +73,20 @@ func sessionStartCommand(t *testing.T) string {
 }
 
 // sessionStartRun executes the shipped SessionStart command under `sh -c` with a
-// constructed environment, returning stdout, stderr and the exit code SEPARATELY
-// — the split is the point. A SessionStart hook's stdout becomes model context
-// while only a non-zero exit puts its stderr in front of the human, and the
-// transcript shows only the FIRST line of that stderr (iss-208).
-func sessionStartRun(t *testing.T, root string, extraEnv ...string) (string, string, int) {
+// constructed environment and stdin, returning stdout, stderr and the exit code
+// SEPARATELY — the split is the point. A SessionStart hook's stdout becomes model
+// context while only a non-zero exit puts its stderr in front of the human, and
+// the transcript shows only the FIRST line of that stderr (iss-208).
+//
+// stdin is never left nil: the harness delivers the hook payload there, and a
+// command that reads it must be exercised with it.
+func sessionStartRun(t *testing.T, root, stdin string, extraEnv ...string) (string, string, int) {
 	t.Helper()
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh unavailable")
 	}
 	cmd := exec.Command("sh", "-c", sessionStartCommand(t))
+	cmd.Stdin = strings.NewReader(stdin)
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + t.TempDir(),
@@ -124,18 +128,30 @@ func sessionStartRoot(t *testing.T, bootstrap, binary string) (root, calls strin
 	return root, calls
 }
 
-// stubBinary records each invocation, writes to stdout (the model-context
-// channel) and returns 2 from `hook session-start`, which is what the real
-// binary does when it has a notice to report.
+// stubBinary stands in for the real binary, and it models the three things
+// about it the chained command has to respect:
+//
+//   - every hook verb CONSUMES stdin whole (readHookInput is io.ReadAll over a
+//     LimitReader), so two calls sharing one stdin leave the second reading EOF;
+//   - `hook prompt-router-reset` writes an UNCONDITIONAL success diagnostic to
+//     stderr, so whichever call runs first owns the line the transcript renders;
+//   - `hook session-start` exits 2 when it has a notice, which is the only way
+//     its warning reaches the human.
 const stubBinary = `#!/bin/sh
-printf '%s %s\n' "$1" "$2" >> "$ABCD_CALLS"
+in=$(cat)
+printf '%s %s stdin=[%s]\n' "$1" "$2" "$in" >> "$ABCD_CALLS"
 printf 'stdout from %s\n' "$2"
-if [ "$2" = "session-start" ]; then
-	printf 'abcd: a session-start notice\n' >&2
-	exit 2
+if [ "$2" = "prompt-router-reset" ]; then
+	printf 'abcd rules: reset session ("SessionStart")\n' >&2
+	exit 0
 fi
-exit 0
+printf 'abcd: a session-start notice\n' >&2
+exit 2
 `
+
+// sessionStartPayload is a harness SessionStart payload of the shape
+// readHookInput unmarshals. Every chained call must receive it in full.
+const sessionStartPayload = `{"session_id":"s1","hook_event_name":"SessionStart","source":"startup","cwd":"/tmp"}`
 
 // callLog returns the recorded invocations, or "" when nothing ran.
 func callLog(t *testing.T, path string) string {
@@ -199,7 +215,7 @@ exit 2
 	if err := os.WriteFile(filepath.Join(root, "staged-abcd"), []byte(stubBinary), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code := sessionStartRun(t, root, "ABCD_CALLS="+calls)
+	stdout, stderr, code := sessionStartRun(t, root, sessionStartPayload, "ABCD_CALLS="+calls)
 
 	if got := firstLine(stderr); !strings.HasPrefix(got, "abcd bootstrap: installed") {
 		t.Errorf("the first stderr line must be the bootstrap's success (it is the only line the transcript shows); got %q\nfull stderr:\n%s", got, stderr)
@@ -223,20 +239,47 @@ exit 2
 
 // TestSessionStartSteadyStateRunsBothCalls is the boring session: the binary is
 // already there, the bootstrap takes its fast path and says nothing, and both
-// calls run with the binary's own notice leading.
+// calls run.
+//
+// The first-line assertion is the one with teeth. `hook prompt-router-reset`
+// ends by writing an UNCONDITIONAL "abcd rules: reset session" diagnostic to
+// stderr (cli.go), so if it runs first it owns the only line the transcript
+// renders and `hook session-start`'s actionable notice — "transcripts will not
+// be captured", the version-skew line — is never seen. The chain therefore runs
+// session-start FIRST; the exit precedence is computed from the saved codes and
+// does not depend on the order.
 func TestSessionStartSteadyStateRunsBothCalls(t *testing.T) {
 	root, calls := sessionStartRoot(t, "#!/bin/sh\nexit 0\n", stubBinary)
-	_, stderr, code := sessionStartRun(t, root, "ABCD_CALLS="+calls)
+	_, stderr, code := sessionStartRun(t, root, sessionStartPayload, "ABCD_CALLS="+calls)
 
 	log := callLog(t, calls)
 	if !strings.Contains(log, "hook prompt-router-reset") || !strings.Contains(log, "hook session-start") {
 		t.Errorf("both binary calls must run in the steady state; call log = %q", log)
 	}
 	if got := firstLine(stderr); got != "abcd: a session-start notice" {
-		t.Errorf("the binary's own notice must reach the human unchanged; first line = %q", got)
+		t.Errorf("session-start's notice must be the line the transcript renders, not the reset's success diagnostic; first line = %q\nfull stderr:\n%s", got, stderr)
 	}
 	if code != 2 {
 		t.Errorf("the binary's notice exit must propagate; code = %d", code)
+	}
+}
+
+// TestSessionStartFeedsThePayloadToEveryCall is the defect a shared stdin
+// creates. Every hook verb reads its payload with io.ReadAll over the whole of
+// stdin (readHookInput), so two calls chained on ONE stdin leave the second
+// reading EOF: json.Unmarshal fails and `hook session-start` takes its silent
+// return-nil path, permanently disabling both of its notices in every session.
+// The wrapper therefore reads the payload once and feeds each call a copy.
+func TestSessionStartFeedsThePayloadToEveryCall(t *testing.T) {
+	root, calls := sessionStartRoot(t, "#!/bin/sh\nexit 0\n", stubBinary)
+	sessionStartRun(t, root, sessionStartPayload, "ABCD_CALLS="+calls)
+
+	log := callLog(t, calls)
+	for _, verb := range []string{"prompt-router-reset", "session-start"} {
+		want := "hook " + verb + " stdin=[" + sessionStartPayload + "]"
+		if !strings.Contains(log, want) {
+			t.Errorf("`hook %s` must receive the whole payload, not what a previous call left; call log = %q", verb, log)
+		}
 	}
 }
 
@@ -245,7 +288,7 @@ func TestSessionStartSteadyStateRunsBothCalls(t *testing.T) {
 // sibling hooks that raced the download.
 func TestSessionStartReportsAMissingBinaryOnce(t *testing.T) {
 	root, calls := sessionStartRoot(t, "#!/bin/sh\nexit 0\n", "")
-	_, stderr, code := sessionStartRun(t, root, "ABCD_CALLS="+calls)
+	_, stderr, code := sessionStartRun(t, root, sessionStartPayload, "ABCD_CALLS="+calls)
 
 	if n := strings.Count(stderr, "the plugin binary is not installed"); n != 1 {
 		t.Errorf("the missing binary must be reported exactly once, got %d; stderr:\n%s", n, stderr)
@@ -267,7 +310,7 @@ func TestSessionStartKeepsTheBootstrapRefusalFirst(t *testing.T) {
 printf 'abcd bootstrap: the latest release tag could not be resolved\n\nThe abcd binary is not installed in the plugin root.\n' >&2
 exit 1
 `, "")
-	_, stderr, code := sessionStartRun(t, root, "ABCD_CALLS="+calls)
+	_, stderr, code := sessionStartRun(t, root, sessionStartPayload, "ABCD_CALLS="+calls)
 
 	if got := firstLine(stderr); got != "abcd bootstrap: the latest release tag could not be resolved" {
 		t.Errorf("the bootstrap's refusal must lead; first line = %q", got)
@@ -289,6 +332,7 @@ func TestSessionStartWithoutAPluginRootDoesNothing(t *testing.T) {
 	}
 	cmd := exec.Command("sh", "-c", sessionStartCommand(t))
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
+	cmd.Stdin = strings.NewReader(sessionStartPayload)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

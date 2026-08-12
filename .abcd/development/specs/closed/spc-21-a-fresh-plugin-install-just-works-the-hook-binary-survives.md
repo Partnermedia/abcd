@@ -90,8 +90,19 @@ Behaviour, in order:
 bootstrap and then the two binary-backed calls in a single shell:
 
 ```json
-{"type": "command", "timeout": 240, "command": "… bootstrap.sh …; abcd hook prompt-router-reset; abcd hook session-start"}
+{"type": "command", "timeout": 240, "command": "… bootstrap.sh …; i=$(cat); … abcd hook session-start; … abcd hook prompt-router-reset"}
 ```
+
+Two properties of that chain are load-bearing and easy to lose. **The payload is
+read once and piped to each call separately.** Every hook verb takes its input
+with `io.ReadAll` over the whole of stdin (`readHookInput`), so two calls sharing
+one stdin leave the second reading EOF — `hook session-start` would fail to
+unmarshal and take its silent `return nil` path, disabling both of its notices
+in every session. **`session-start` runs before `prompt-router-reset`**, because
+the reset ends with an unconditional "abcd rules: reset session" diagnostic on
+stderr, and whichever call runs first owns the only line the transcript renders.
+The exit precedence (bootstrap, then `session-start`, then the reset) is
+computed from saved status codes and does not depend on that order.
 
 **Correction (2026-08-12, iss-204 / iss-208).** This section wired the
 bootstrap as the first of THREE sibling `SessionStart` entries on the warrant

@@ -1561,10 +1561,20 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				if len(res.Remaining) > 0 {
 					fmt.Fprintf(w, "  remaining gaps: %s\n", strings.Join(res.Remaining, ", "))
 				}
+				// --yes approves every category but never writes the identity
+				// pin, so say which optional work it left and how to apply it.
+				if len(res.OptionalSkipped) > 0 {
+					fmt.Fprintf(w, "  optional, not covered by --yes: %s\n", strings.Join(res.OptionalSkipped, ", "))
+					fmt.Fprint(w, "    the pin records the current git identity, so it is only written against an answered prompt:\n")
+					fmt.Fprint(w, "    run `abcd ahoy install` (no --yes) and answer y at each prompt — non-interactively, `yes | abcd ahoy install`\n")
+				}
 			})
 		},
 	}
-	installCmd.Flags().BoolVar(&yes, "yes", false, "approve every resolvable change category without prompting")
+	// No backquotes in a flag's usage string: cobra reads the first backquoted
+	// word as the flag's argument placeholder, so a quoted answer would render
+	// this boolean as "--yes y" in the help and the generated reference.
+	installCmd.Flags().BoolVar(&yes, "yes", false, "approve every resolvable change category without prompting; excludes the optional git-identity pin, which needs an answered prompt (run without --yes, or answer every prompt with: yes | abcd ahoy install)")
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
 	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
@@ -1732,27 +1742,61 @@ func symlinkNote(r ahoy.UninstallReceipt) string {
 	return r.Symlink.Note
 }
 
-// newPrompter returns an interactive stdin prompter when stdin is a terminal,
-// and a refusing prompter otherwise so non-interactive runs never block on input.
+// newPrompter returns the stdin-reading prompter. On a terminal it is the
+// interactive path, unchanged. When stdin is NOT a terminal the same prompter
+// reads the piped answers (iss-167): `yes | abcd ahoy install` is what a host
+// agent reaches for, and a TTY-only prompt turned every such answer into a
+// decline, so the interactive path could not be driven at all. One answer
+// answers one question, and the questions come in a fixed order
+// (ahoy.categoryPromptOrder), so a piped stream lines up with them.
+//
+// The safe default survives: answers that run out — an empty pipe, a closed
+// stdin, /dev/null — read as EOF, and EOF declines every confirm and takes the
+// default for every prompt, exactly as the refusing prompter did.
 func newPrompter(cmd *cobra.Command) ahoy.Prompter {
-	if f, ok := cmd.InOrStdin().(*os.File); ok {
+	in := cmd.InOrStdin()
+	if in == nil {
+		return ahoy.RefusingPrompter{}
+	}
+	p := &stdinPrompter{r: bufio.NewReader(in), w: cmd.ErrOrStderr()}
+	if f, ok := in.(*os.File); ok {
 		if fi, err := f.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-			return &stdinPrompter{r: bufio.NewReader(f), w: cmd.ErrOrStderr()}
+			p.tty = true
 		}
 	}
-	return ahoy.RefusingPrompter{}
+	return p
 }
 
-// stdinPrompter is the interactive Prompter: it reads answers from stdin.
+// stdinPrompter is the Prompter: it reads answers from stdin, whether a human
+// types them or a caller pipes them in.
 type stdinPrompter struct {
 	r *bufio.Reader
 	w io.Writer
+	// tty records that a human is answering: the terminal echoes their own
+	// typing, so the prompter must not echo it a second time. Off a terminal
+	// nothing echoes, so the prompter writes the answer it read — a piped run
+	// leaves a transcript of what was asked and what it was answered, instead
+	// of a column of unanswered-looking questions.
+	tty bool
+}
+
+// echo reports the answer read off a non-terminal stdin. The bytes come from
+// the caller, so they are sanitised before reaching the terminal.
+func (p *stdinPrompter) echo(answer string) {
+	if p.tty {
+		return
+	}
+	if answer == "" {
+		answer = "<no answer>"
+	}
+	fmt.Fprintf(p.w, "%s\n", termsafe.Sanitize(answer))
 }
 
 func (p *stdinPrompter) Confirm(question string) bool {
 	fmt.Fprintf(p.w, "%s [y/N] ", question)
 	line, _ := p.r.ReadString('\n')
 	line = strings.ToLower(strings.TrimSpace(line))
+	p.echo(line)
 	return line == "y" || line == "yes"
 }
 
@@ -1760,6 +1804,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 	fmt.Fprintf(p.w, "%s (%s) [%s]: ", key, strings.Join(choices, "/"), def)
 	line, _ := p.r.ReadString('\n')
 	line = strings.TrimSpace(line)
+	p.echo(line)
 	if line == "" {
 		return def
 	}
@@ -2548,13 +2593,18 @@ type errorEnvelope struct {
 // verb-level echoes is tracked separately (iss-81). Scrubbing here rather than by
 // regex is deliberate: this error surface also carries URLs (fetch failures) that
 // an absolute-path regex would mangle.
+//
+// The root redaction itself is fsutil.RedactRoot: it moved out of this file when
+// the ahoy install receipt had to redact the same two roots (iss-177), so what
+// counts as a developer-identity root is stated once and read by both the error
+// surface here and the receipt in core.
 func scrubPaths(err error) string {
 	msg := err.Error()
 	if cwd, e := os.Getwd(); e == nil {
-		msg = redactRoot(msg, cwd, ".")
+		msg = fsutil.RedactRoot(msg, cwd, ".")
 	}
 	if home, e := os.UserHomeDir(); e == nil {
-		msg = redactRoot(msg, home, "~")
+		msg = fsutil.RedactRoot(msg, home, "~")
 	}
 	for _, p := range embeddedPaths(err) {
 		if filepath.IsAbs(p) {
@@ -2562,56 +2612,6 @@ func scrubPaths(err error) string {
 		}
 	}
 	return msg
-}
-
-// redactRoot replaces every occurrence of the absolute directory root in s with
-// repl — both a path UNDER the root (root + separator + …) and the BARE root
-// itself when it sits at a right boundary (end of string or a non-path
-// character). The bare-root case matters because a PathError or message that
-// names exactly $HOME (e.g. "cannot access /Users/alex") would otherwise leak the abcd-audit:allow
-// developer identity — its base segment IS the username. The filesystem root
-// ("/") and empty or relative roots are skipped so a message is never mangled.
-func redactRoot(s, root, repl string) string {
-	if len(root) <= 1 || !filepath.IsAbs(root) {
-		return s
-	}
-	sep := string(os.PathSeparator)
-	s = strings.ReplaceAll(s, root+sep, repl+sep)
-	return replaceBareRoot(s, root, repl)
-}
-
-// replaceBareRoot replaces occurrences of root that end at a path boundary (end
-// of string or a character that cannot continue a path segment), leaving a longer
-// path that merely shares this prefix untouched.
-func replaceBareRoot(s, root, repl string) string {
-	var b strings.Builder
-	for {
-		i := strings.Index(s, root)
-		if i < 0 {
-			b.WriteString(s)
-			return b.String()
-		}
-		after := i + len(root)
-		b.WriteString(s[:i])
-		if after >= len(s) || isPathBoundary(s[after]) {
-			b.WriteString(repl)
-		} else {
-			b.WriteString(root)
-		}
-		s = s[after:]
-	}
-}
-
-// isPathBoundary reports whether c cannot be part of a path segment, so a root
-// immediately followed by c is a whole path rather than a prefix of a longer one.
-func isPathBoundary(c byte) bool {
-	switch {
-	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-		return false
-	case c == '/' || c == '.' || c == '-' || c == '_':
-		return false
-	}
-	return true
 }
 
 // embeddedPaths collects the filesystem paths carried by os.PathError/os.LinkError

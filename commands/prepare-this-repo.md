@@ -66,7 +66,7 @@ The conformance core is **engine-backed**: run the binary's read-only audit and
 build the gap report on its result, rather than hand-producing the whole thing.
 
 ```bash
-abcd audit --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" audit --json
 ```
 
 Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
@@ -74,8 +74,16 @@ Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
 `.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency, and
 privacy hygiene (absolute local paths in committed files). Its `skipped` list
 names rules that did not apply (e.g. `docs-currency` where there is no `docs/`).
-The exit code is the tri-state (`0` clean, `1` warnings, `2` any error). If the
-binary is not on `PATH`, fall back to `go run ./cmd/abcd audit --json`.
+The exit code is the tri-state (`0` clean, `1` warnings, `2` any error).
+
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 Then supplement with the judgement the binary does not make:
 
@@ -128,7 +136,7 @@ target's `.abcd/.work.local/scratch/` (create the directory via
    ask nothing:
 
    ```bash
-   abcd identity init --file <path-to-that-file> --heading "<that heading>"
+   "${CLAUDE_PLUGIN_ROOT}/abcd" identity init --file <path-to-that-file> --heading "<that heading>"
    ```
 
    `init` adopts the existing block byte-for-byte and writes only the pointer.
@@ -147,7 +155,7 @@ target's `.abcd/.work.local/scratch/` (create the directory via
    Then record the answers:
 
    ```bash
-   abcd identity init --title "…" --tagline "…" [--pitch "…"]
+   "${CLAUDE_PLUGIN_ROOT}/abcd" identity init --title "…" --tagline "…" [--pitch "…"]
    ```
 
    This writes the markdown block (markdown stays the source of truth) and

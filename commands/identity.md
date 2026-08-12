@@ -15,7 +15,7 @@ surfaces still say it.
 ## Bare — what this repo says about itself
 
 ```bash
-abcd identity --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" identity --json
 ```
 
 emits `{ "block": …, "severity": …, "surfaces": [ … ] }`:
@@ -37,7 +37,7 @@ drift: this form is a status render, and the gate is `abcd audit`.
 ## `render` — the proposed correction
 
 ```bash
-abcd identity render
+"${CLAUDE_PLUGIN_ROOT}/abcd" identity render
 ```
 
 prints a unified diff per drifted surface. It **writes nothing**, and no flag
@@ -51,7 +51,7 @@ this same command chases the surfaces.
 Run this only as part of onboarding a repo, and only after the interview below.
 
 ```bash
-abcd identity init --title "…" --tagline "…" [--pitch "…"] [--file <path>] [--heading <text>]
+"${CLAUDE_PLUGIN_ROOT}/abcd" identity init --title "…" --tagline "…" [--pitch "…"] [--file <path>] [--heading <text>]
 ```
 
 **Detect before you interview.** If the repo already carries an identity block,
@@ -78,8 +78,13 @@ render from it — by default the README strapline, the plugin or package manife
 description, and the conventions file's opening. Further surfaces are registrable
 in that same file; none are ever registered silently.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd identity --json` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS

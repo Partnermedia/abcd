@@ -117,6 +117,12 @@ called out in a **Breaking** section.
   in a fresh cache directory with no binary. The three entries are now ONE
   command that runs the bootstrap and then both binary calls in a single shell,
   so the sequencing is owned by the manifest rather than assumed of the harness.
+  Chaining them makes two further properties load-bearing, and both are held
+  explicitly: the hook payload is read once and piped to each call separately,
+  because every hook verb consumes the whole of stdin and a shared stdin would
+  leave `session-start` reading EOF and silently disabling its notices; and
+  `session-start` runs ahead of `prompt-router-reset`, whose unconditional
+  success diagnostic would otherwise be the one line the transcript renders.
   The bootstrap's own message is emitted first, which is what the transcript
   renders: on a fresh install the visible line is the checksum-verified success
   rather than one of two missing-binary complaints, and the two complaints
@@ -129,6 +135,69 @@ called out in a **Breaking** section.
   hook execution and the plugin cache are not present in CI, so the end-to-end
   proof is the manual install gate; what CI holds is the manifest's shape and the
   chained command's behaviour against fixtures.
+- **`ahoy install` prompts read a piped answer, in a fixed order, and `--yes` says
+  what it does not cover** (iss-167, iss-166). The prompter attached to stdin only
+  when stdin was a terminal, so `yes | abcd ahoy install` — the first thing an
+  agent reaches for — arrived as a decline on every question, and the interactive
+  path could not be driven at all: the agent reported failure and handed the step
+  back to the human. Prompts now read stdin whether or not it is a terminal, and
+  off a terminal each question's answer is echoed to stderr, so a piped run leaves
+  a transcript of what was asked and answered. Piped answers are positional, so
+  the approval questions are now asked in a **fixed order** — dependency,
+  safe-autocreate, config-change, user-state, plugin-owned, the order the apply
+  pass acts in — where the walk previously ranged over a map and handed out a
+  fresh permutation on every run: the same command approved a different category
+  each time, exiting 0 and reading as a clean install. One line answers one
+  question, which is why `yes` is the documented form. The safe default is
+  unchanged:
+  answers that run out read as EOF, and EOF declines every confirm and takes the
+  default for every prompt, so an unattended run still adopts nothing it was not
+  told to adopt. The interactive path at a terminal is untouched. Folded in:
+  `--yes` deliberately does not adopt the optional git-identity pin — the pin
+  records whatever identity is currently configured, and a blanket approval would
+  canonicalise a sandbox or agent identity, the very value the identity gate
+  exists to reject — but it reported "already up to date" without mentioning the
+  skip. The exclusion is now stated in the flag's own help, carried in the install
+  envelope as `optional_skipped`, and printed with the way to apply it —
+  `yes | abcd ahoy install` — which the piped answer makes available to a
+  non-interactive caller for the first time. A run that must neither block nor
+  prompt closes stdin and pre-answers
+  (`abcd ahoy install --yes --refuse-adopt < /dev/null`); the plugin surface says
+  so, because reading a non-terminal stdin means a stdin held open and silent
+  makes a prompt wait rather than decline.
+- **An `ahoy install` receipt is safe to paste** (iss-177). Every apply step
+  reported its write as an absolute path and the CLI printed them verbatim, so a
+  receipt pasted into an issue or a transcript carried the developer's home
+  directory and username — while the sibling verbs already routed their error
+  text through a shared path scrub the receipt did not use. The receipt now
+  reports a repo write repo-relative (`.abcd/config.json`) and a user-scope write
+  home-relative (`~/.abcd/history/index.json`), leaving a location that names no
+  developer (`/usr/local/bin/abcd`) exactly as written — the same limit the error
+  scrub already states, through the same primitive, which moved to
+  `internal/fsutil` so the two cannot drift. The scrub sits at the one seam every
+  step reports through rather than in each step's string, and a test holds that
+  seam to being the only writer of the receipt, so a step added later cannot
+  reintroduce an absolute path by forgetting.
+- **The command surface reaches the binary a plugin install actually provisions**
+  (iss-205). Every command file resolved the binary as a bare `abcd` on `PATH`
+  with a `go run ./cmd/abcd` fallback, and none named `${CLAUDE_PLUGIN_ROOT}` —
+  while the bootstrap hook installs its checksum-verified binary *into the plugin
+  root* and leaves nothing on `PATH`. The two halves never met: a fresh install
+  worked only because the marketplace clone happened to carry `cmd/`, costing 54
+  seconds and a Go toolchain, and on a machine without Go the whole `/abcd:*`
+  surface was non-functional despite a healthy binary sitting in the plugin root.
+  The resolution ladder in all 17 binary-invoking command files now runs
+  `"${CLAUDE_PLUGIN_ROOT}/abcd"` first, `abcd` on `PATH` second, and `go run
+  ./cmd/abcd` third and explicitly only in a source checkout — the published
+  payload carries no `cmd/`, so an unqualified third rung prints an instruction a
+  plugin user cannot follow. Every fenced command line, which is what an agent
+  runs verbatim, carries the plugin-root form.
+  `TestCommandSurfaceResolvesBinaryFromPluginRoot` keeps it that way: it fails if
+  any file under `commands/` names the binary without the plugin-root rung first,
+  hands over a fenced invocation that resolves any other way, leaves a `go run`
+  rung unqualified, or drops the ladder paragraph. It runs under `go test ./...`,
+  so `make preflight` and CI already execute it rather than needing a target
+  anyone can forget to wire.
 
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same
