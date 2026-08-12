@@ -66,7 +66,7 @@ The conformance core is **engine-backed**: run the binary's read-only audit and
 build the gap report on its result, rather than hand-producing the whole thing.
 
 ```bash
-abcd audit --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" audit --json
 ```
 
 Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
@@ -74,8 +74,14 @@ Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
 `.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency, and
 privacy hygiene (absolute local paths in committed files). Its `skipped` list
 names rules that did not apply (e.g. `docs-currency` where there is no `docs/`).
-The exit code is the tri-state (`0` clean, `1` warnings, `2` any error). If the
-binary is not on `PATH`, fall back to `go run ./cmd/abcd audit --json`.
+The exit code is the tri-state (`0` clean, `1` warnings, `2` any error).
+
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 Then supplement with the judgement the binary does not make:
 
@@ -128,7 +134,7 @@ target's `.abcd/.work.local/scratch/` (create the directory via
    ask nothing:
 
    ```bash
-   abcd identity init --file <path-to-that-file> --heading "<that heading>"
+   "${CLAUDE_PLUGIN_ROOT}/abcd" identity init --file <path-to-that-file> --heading "<that heading>"
    ```
 
    `init` adopts the existing block byte-for-byte and writes only the pointer.
@@ -147,7 +153,7 @@ target's `.abcd/.work.local/scratch/` (create the directory via
    Then record the answers:
 
    ```bash
-   abcd identity init --title "…" --tagline "…" [--pitch "…"]
+   "${CLAUDE_PLUGIN_ROOT}/abcd" identity init --title "…" --tagline "…" [--pitch "…"]
    ```
 
    This writes the markdown block (markdown stays the source of truth) and

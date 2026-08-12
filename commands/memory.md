@@ -12,7 +12,7 @@ Bare invocation **performs zero writes**.
 ## Status (bare)
 
 ```bash
-abcd memory --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" memory --json
 ```
 
 Summarise the JSON: `pages` and `by_class` (page count per source class),
@@ -28,7 +28,7 @@ cited memory pages. **You** are the distiller: read the source, produce the
 content hash, validates every page, and writes atomically.
 
 ```bash
-abcd memory ingest <path-or-url> --pages-json distilled.json --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" memory ingest <path-or-url> --pages-json distilled.json --json
 ```
 
 Add `--keep-original` to retain the source at
@@ -41,7 +41,7 @@ already-known source re-ingests from the registry with no `--pages-json`.
 Deterministic retrieval over the store, then a cited answer:
 
 ```bash
-abcd memory ask "<question>" --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" memory ask "<question>" --json
 ```
 
 The default answer is the deterministic citation-renderer over the top-ranked
@@ -56,7 +56,7 @@ Full-store curator health-check — per-page quotation budgets, cumulative sourc
 coverage, source-class and licence advisories:
 
 ```bash
-abcd memory lint --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" memory lint --json
 ```
 
 It rebuilds the regenerable `.coverage_index.json` and writes a report under
@@ -64,8 +64,11 @@ It rebuilds the regenerable `.coverage_index.json` and writes a report under
 `summary.warnings` / `summary.infos` and each finding's `code` and `message`.
 Blockers exit nonzero; warn-only exits 0.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd memory …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

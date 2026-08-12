@@ -16,7 +16,7 @@ invocation **performs zero writes**.
 To render recent captures and counts:
 
 ```bash
-abcd capture --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture --json
 ```
 
 Summarise the JSON for the user: `open_count` / `resolved_count` /
@@ -34,7 +34,7 @@ It is a pointer, never a precondition — capture friction stays at one line.
 Append a structured issue from free-form text:
 
 ```bash
-abcd capture "<text>" --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture "<text>" --json
 ```
 
 Provide provenance and taxonomy through flags when known (each falls back to a
@@ -54,7 +54,7 @@ one direction only (the inverse is computed).
 `list` is the one earned filter-flag exception — a filter is **required**:
 
 ```bash
-abcd capture list --open --json      # or --resolved / --wontfix / --all
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture list --open --json      # or --resolved / --wontfix / --all
 ```
 
 The unfiltered form `abcd capture list` exits 2 with a "choose a filter"
@@ -66,8 +66,8 @@ blocked by an open dependency are demoted and annotated `[blocked-by iss-N,…]`
 ## Resolve / wontfix
 
 ```bash
-abcd capture resolve <iss-N> "<resolution-note>" --impact <additive|breaking|fix|internal> --json
-abcd capture wontfix <iss-N> "<reason>" --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture resolve <iss-N> "<resolution-note>" --impact <additive|breaking|fix|internal> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture wontfix <iss-N> "<reason>" --json
 ```
 
 Each moves the issue out of `open/` and records the note; report the `id` and
@@ -88,8 +88,11 @@ write the reciprocal `related_intents` back-link onto the `iss-N` record: no
 engine verb writes that edge today, so the back-link is done by hand or deferred
 until a capture back-link verb lands (tracked in the issue-capture spec).
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd capture …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

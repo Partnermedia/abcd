@@ -12,15 +12,18 @@ result. This command performs **zero writes**.
 Run:
 
 ```bash
-abcd --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" --json
 ```
 
 Then summarise the JSON for the user: the directory, whether it is a git repo,
 whether the abcd development record is present, and which `.abcd/` work tiers
 exist. `status` is a positional alias for the same bare render.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd --json`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

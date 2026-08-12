@@ -15,7 +15,7 @@ command performs **zero writes**.
 Pass the candidate on **stdin**, inside a quoted-delimiter heredoc:
 
 ```bash
-abcd guard check --json <<'ABCD_GUARD_EOF'
+"${CLAUDE_PLUGIN_ROOT}/abcd" guard check --json <<'ABCD_GUARD_EOF'
 <the command line, verbatim, on one or more lines>
 ABCD_GUARD_EOF
 ```
@@ -47,7 +47,7 @@ On a `block`, do not run the command. Tell the user the `why`, then run the
 ## `hook` — the host adapter
 
 ```bash
-abcd guard hook
+"${CLAUDE_PLUGIN_ROOT}/abcd" guard hook
 ```
 
 Reads a host pre-tool-use hook payload on stdin and applies the same decision
@@ -101,8 +101,14 @@ To check whether the guard is actually armed in this repo, run `abcd ahoy` and
 read its `guard:` line: it reports whether the hook is installed, whether the
 binary is reachable, and whether the registry loads.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd guard
-check --json` from the repo root, with the same quoted-delimiter heredoc on
-stdin, or run `go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
+
+Whichever rung fires, the candidate still goes in on stdin via the
+quoted-delimiter heredoc shown above.
 
 **User input:** $ARGUMENTS

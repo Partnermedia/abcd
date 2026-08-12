@@ -18,7 +18,7 @@ written. The target defaults to the working directory when omitted.
 Inspect what a lifeboat would write into a target without touching either:
 
 ```bash
-abcd embark probe <lifeboat-dir> [target-dir] --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" embark probe <lifeboat-dir> [target-dir] --json
 ```
 
 The lifeboat is **untrusted input**: probe gates it, verifies its
@@ -44,7 +44,7 @@ of the handoff. Then summarise the plan.
 ## Write
 
 ```bash
-abcd embark from <lifeboat-dir> [target-dir] --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" embark from <lifeboat-dir> [target-dir] --json
 ```
 
 `from` runs the same planner as `probe`, then writes each `create` file into the
@@ -67,8 +67,11 @@ Structural faults — the directory is not an abcd lifeboat, its schema is newer
 this abcd understands, manifest verification fails, or the target is not a real
 directory — exit with a single diagnostic line and write nothing.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd embark ...` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

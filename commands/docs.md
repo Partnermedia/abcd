@@ -14,7 +14,7 @@ maintains the committed citation baseline that the lint then enforces offline.
 Run:
 
 ```bash
-abcd docs lint --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" docs lint --json
 ```
 
 Then summarise the JSON for the user:
@@ -49,7 +49,7 @@ If `blockers` is zero the docs are currency-clean.
 Run:
 
 ```bash
-abcd docs cite refresh --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" docs cite refresh --json
 ```
 
 This fetches every cited URL once, bounded and without retries, and rewrites the
@@ -74,14 +74,14 @@ being dead. Never suggest editing the baseline by hand to clear one.
 Once the user has opened a queued link and seen the document, record it:
 
 ```bash
-abcd docs cite confirm <url> [<url>...]
+"${CLAUDE_PLUGIN_ROOT}/abcd" docs cite confirm <url> [<url>...]
 ```
 
 For a batch, or to record a redirect the user followed, pass a receipt file
 instead:
 
 ```bash
-abcd docs cite confirm --receipt receipts.json
+"${CLAUDE_PLUGIN_ROOT}/abcd" docs cite confirm --receipt receipts.json
 ```
 
 ```json
@@ -101,10 +101,11 @@ loading rejects unknown keys.
 Confirm on the user's word that they checked. An agent must never run `confirm`
 on its own initiative to clear a red gate.
 
-## Fallback
-
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd docs …` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

@@ -19,7 +19,7 @@ read-only detection pass below.
 Run:
 
 ```bash
-abcd ahoy --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy --json
 ```
 
 Then summarise the JSON for the user:
@@ -48,7 +48,7 @@ them. If `folder_kind` is `unmanaged-folder`, note there is nothing to act on
 ## `install` — apply the outstanding gaps
 
 ```bash
-abcd ahoy install --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install --json
 ```
 
 **This writes.** It applies the actionable gaps the detection pass found — the
@@ -64,7 +64,7 @@ the source tip on every call and fails loudly on a broken build. Re-running
 ## `uninstall` — reversible marker-only removal
 
 ```bash
-abcd ahoy uninstall --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy uninstall --json
 ```
 
 **This writes.** It removes the BEGIN/END marker block and abcd's own `PATH`
@@ -74,7 +74,7 @@ symlink and leaves `.abcd/` intact, so the repo's record survives. Report
 ## `doctor` — the full read-only report
 
 ```bash
-abcd ahoy doctor --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy doctor --json
 ```
 
 Runs the same detection pass plus a read-only audit sweep and reports **every**
@@ -86,7 +86,7 @@ render says a repo is healthy and the user's experience says otherwise.
 ## `dry-run` — the canonical detection envelope
 
 ```bash
-abcd ahoy dry-run
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy dry-run
 ```
 
 Renders the canonical `DetectionResult` JSON envelope and writes nothing — the
@@ -102,8 +102,11 @@ its exit code is the whole point, so it stays a bare-CLI entrypoint rather than 
 plugin sub-verb; report it only if a user asks how the identity gate fails
 closed.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd ahoy --json` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS

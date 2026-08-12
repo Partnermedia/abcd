@@ -17,7 +17,7 @@ See which brief sections a lifeboat could ground from the source, without writin
 anything. The repo argument is optional and defaults to the current directory:
 
 ```bash
-abcd disembark probe <source-repo> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark probe <source-repo> --json
 ```
 
 This is the coverage experiment's read-only readout: every brief section comes
@@ -30,7 +30,7 @@ writes nothing into the source and runs in a small fraction of a full pack's tim
 Show the exact file set a pack would write, without writing anything:
 
 ```bash
-abcd disembark plan <source-repo> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark plan <source-repo> --json
 ```
 
 Report `file_count`, `total_bytes`, `manifest_sha256`, and any `omissions` (records
@@ -43,7 +43,7 @@ coverage table — the experiment's evidence that the packer's section list hold
 across a rich-record repo and a git-only one:
 
 ```bash
-abcd disembark coverage <report.json>... --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark coverage <report.json>... --json
 ```
 
 Each positional argument is a probe report emitted with `probe --json`.
@@ -51,7 +51,7 @@ Each positional argument is a probe report emitted with `probe --json`.
 ## Pack
 
 ```bash
-abcd disembark pack <source-repo> <dest> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark pack <source-repo> <dest> --json
 ```
 
 Summarise the JSON result for the user:
@@ -87,7 +87,7 @@ files, have it emit a lesson JSON document (each lesson **citing** the finding i
 it rests on), write that document to a file, then:
 
 ```bash
-abcd disembark graveyard <lifeboat-dir> --lessons-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark graveyard <lifeboat-dir> --lessons-json <path>   # or - for stdin
 ```
 
 The verb is a **cite-or-be-dropped** gate. A lesson survives only if at least one
@@ -118,7 +118,7 @@ settled, each citing the record it rests on. Run the `principle-distiller` agent
 distils from), write that document to a file, then:
 
 ```bash
-abcd disembark principles <lifeboat-dir> --principles-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark principles <lifeboat-dir> --principles-json <path>   # or - for stdin
 ```
 
 **Without the flag** the verb runs deterministic mode: it writes an evidence-only
@@ -146,7 +146,7 @@ agent (`agents/press-release-composer.md`) over the packed `brief/`,
 document whose `evidence` cites those inputs, write it to a file, then:
 
 ```bash
-abcd disembark press-release <lifeboat-dir> --press-release-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark press-release <lifeboat-dir> --press-release-json <path>   # or - for stdin
 ```
 
 **Without the flag** the verb composes deterministically from the packed brief
@@ -173,7 +173,7 @@ have it emit an audit JSON document (verdict + findings, each **citing** a packe
 lifeboat path), write it to a file, then:
 
 ```bash
-abcd disembark oracle <lifeboat-dir> <source-repo> --oracle-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark oracle <lifeboat-dir> <source-repo> --oracle-json <path>   # or - for stdin
 ```
 
 The `<source-repo>` argument is **required**; its content is never read — the
@@ -201,8 +201,11 @@ a `<source-repo>` that is not a real directory, or an unreadable/oversize/malfor
 payload). The audit files are a mutable synthesis layer and are **not** part of
 `manifest_sha256`.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd disembark ...` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root. If that path is absent, fall back to
+`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
+there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
+a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
+for a plugin user.
 
 **User input:** $ARGUMENTS
