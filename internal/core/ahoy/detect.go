@@ -381,65 +381,157 @@ func detectMarkerDrift(cwd string) []Gap {
 	return gaps
 }
 
+// detectPathSymlink reports the state of abcd's own entry on PATH. It scans
+// PATH rather than inspecting one blessed location (iss-171): a working
+// ~/.local/bin/abcd is an install, wherever the default happens to point, so the
+// detector can no longer report "not installed" while running as that very
+// binary. Every path it renders goes through displayPath, so a gap pasted into
+// an issue carries no username.
 func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 	if !pluginOK {
 		return nil
 	}
-	target := binTarget()
-	expected := pluginBinaryPath(pluginRoot)
-	fi, err := lstat(target)
-	if err != nil {
-		if isNotExist(err) {
-			return []Gap{{
-				ID: "symlink.missing", Category: ConfigChange, Scope: "machine",
-				Title: "PATH symlink not installed", Detail: target + " does not exist.",
-				FixHint: "ahoy install creates the symlink (refuses to clobber).", Required: true, Resolvable: true,
-			}}
-		}
-		return nil
+	var gaps []Gap
+
+	// A link of ours whose binary has gone shadows whatever else on PATH would
+	// have answered. It is neither "installed" nor "missing" — it is its own gap.
+	if e, ok := danglingPathEntry(pluginRoot); ok {
+		gaps = append(gaps, Gap{
+			ID: "symlink.dangling", Category: ConfigChange, Scope: "machine",
+			Title:    "PATH entry points at a binary that is gone",
+			Detail:   displayPath(e.path) + " is an abcd-owned entry whose target no longer exists, so it shadows every later PATH entry.",
+			FixHint:  "ahoy install repoints it once the plugin binary is present; remove it with `ahoy uninstall` if abcd is gone.",
+			Required: true, Resolvable: true,
+		})
 	}
-	if fi.Mode()&modeSymlink == 0 {
+
+	target := effectiveBinTarget(pluginRoot)
+	if target == "" {
+		return gaps // no home directory: there is no user-scope target to report on
+	}
+	installed := false
+
+	fi, err := lstat(target)
+	switch {
+	case err != nil && isNotExist(err):
+		gaps = append(gaps, Gap{
+			ID: "symlink.missing", Category: ConfigChange, Scope: "machine",
+			Title: "abcd is not on PATH", Detail: "No abcd-owned entry was found on PATH, and " + displayPath(target) + " does not exist.",
+			FixHint: "ahoy install writes the entry (refuses to clobber, and never escalates privileges).", Required: true, Resolvable: true,
+		})
+	case err != nil:
+		// Present but unstattable: never claim anything about it.
+	case fi.Mode()&modeSymlink == 0:
 		if isDevShimFile(target) {
 			// Our own track-latest dev shim (abcd ahoy install --dev) — a valid
 			// install, not a foreign occupant. Surfaced via the install_mode signal.
-			return nil
+			installed = true
+		} else {
+			gaps = append(gaps, Gap{
+				ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
+				Title: "non-symlink at " + displayPath(target), Detail: "A regular file occupies the PATH entry abcd would write.",
+				FixHint: "Resolve manually; ahoy refuses to clobber.", Required: false, Resolvable: false,
+			})
 		}
-		return []Gap{{
-			ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
-			Title: "non-symlink at " + target, Detail: "A regular file occupies the PATH symlink target.",
-			FixHint: "Resolve manually; ahoy refuses to clobber.", Required: false, Resolvable: false,
-		}}
+	default:
+		dest, rerr := readlink(target)
+		switch {
+		case rerr != nil:
+			// Unreadable link: say nothing rather than guess.
+		case resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)):
+			installed = true
+		default:
+			gaps = append(gaps, Gap{
+				ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
+				Title:   "foreign symlink at " + displayPath(target),
+				Detail:  displayPath(target) + " -> " + displayPath(dest) + " (expected " + displayPath(pluginBinaryPath(pluginRoot)) + ").",
+				FixHint: "Resolve manually; ahoy refuses to clobber.", Required: false, Resolvable: false,
+			})
+		}
 	}
-	dest, err := readlink(target)
-	if err != nil {
-		return nil
-	}
-	if resolveSymlinkDest(target, dest) == resolvePath(expected) {
+
+	gaps = append(gaps, detectBinDirOnPath(filepath.Dir(target), installed)...)
+	gaps = append(gaps, detectShadowedEntry(pluginRoot, target)...)
+	return gaps
+}
+
+// detectShadowedEntry reports an `abcd` that precedes abcd's own entry on PATH.
+// Without it the most common pre-iss-171 machine reports a clean, pinned install
+// forever while a stale copy keeps executing: the old one-liner COPIED the binary
+// to /usr/local/bin, and a copy is a regular file, so it classifies foreign, is
+// never adopted, and the new entry lands behind it. abcd cannot resolve this —
+// removing a binary it does not own is exactly what it refuses to do — so the gap
+// is required and diagnostic, naming the occupant and both remedies.
+func detectShadowedEntry(pluginRoot, target string) []Gap {
+	e, ok := shadowingEntry(pluginRoot, target)
+	if !ok {
 		return nil
 	}
 	return []Gap{{
-		ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
-		Title: "foreign symlink at " + target, Detail: target + " -> " + dest + " (expected " + expected + ").",
-		FixHint: "Resolve manually; ahoy refuses to clobber.", Required: false, Resolvable: false,
+		ID: "symlink.shadowed", Category: ConfigChange, Scope: "machine",
+		Title:    "another abcd on PATH answers first",
+		Detail:   shadowMessage(e, target),
+		FixHint:  "Remove or rename " + displayPath(e.path) + ", or install ahead of it with `abcd ahoy install --bin-dir <dir>`.",
+		Required: true, Resolvable: false,
+	}}
+}
+
+// detectBinDirOnPath reports an install directory that is not on PATH. It is a
+// gap in its own right: the entry exists and abcd still cannot be run by name,
+// which otherwise reads as a broken install. The remedy is printed, never
+// applied — abcd states the one-line export and leaves the user's shell profile
+// alone (script-first), so the gap is required but NOT resolvable.
+func detectBinDirOnPath(dir string, installed bool) []Gap {
+	if dir == "" || dirOnPath(dir) {
+		return nil
+	}
+	// Silent while there is nothing there yet AND no install: the missing-entry
+	// gap already says what to do, and the install run itself emits the same
+	// wording as a note for the directory it actually writes (which is the only
+	// place that knows about an explicit --bin-dir).
+	if !installed {
+		return nil
+	}
+	return []Gap{{
+		ID: "path.bin_dir_not_on_path", Category: ConfigChange, Scope: "machine",
+		Title:    displayPath(dir) + " is not on PATH",
+		Detail:   "abcd is installed at " + displayPath(filepath.Join(dir, binName)) + ". " + pathReachMessage(dir),
+		FixHint:  "Add it to your shell profile: " + exportPathLine(dir),
+		Required: true, Resolvable: false,
 	}}
 }
 
 // detectInstallMode reports the current PATH-target install mode: "dev (tip
 // build)" when the track-latest shim occupies it, "pinned" when our owned symlink
 // does, and "" when the target is absent, foreign, or the plugin root is
-// unresolved (nothing to attribute a mode to).
+// unresolved (nothing to attribute a mode to). A mode that another `abcd` earlier
+// on PATH shadows is reported as shadowed rather than as a healthy install: the
+// entry is correct and it is still not what runs.
 func detectInstallMode(pluginRoot string, pluginOK bool) string {
 	if !pluginOK {
 		return ""
 	}
-	switch classifyBinTarget(binTarget(), pluginRoot) {
+	target := effectiveBinTarget(pluginRoot)
+	if target == "" {
+		return ""
+	}
+	// A link whose binary is gone is not an install mode; it is the dangling gap.
+	if present, err := fsutil.Exists(target); err == nil && !present {
+		return ""
+	}
+	mode := ""
+	switch classifyBinTarget(target, pluginRoot) {
 	case binTargetDevShim:
-		return "dev (tip build)"
+		mode = "dev (tip build)"
 	case binTargetOwnedSymlink:
-		return "pinned"
+		mode = "pinned"
 	default:
 		return ""
 	}
+	if _, shadowed := shadowingEntry(pluginRoot, target); shadowed {
+		return mode + " (shadowed on PATH)"
+	}
+	return mode
 }
 
 func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {

@@ -55,6 +55,7 @@ Install or update abcd in this repo (idempotent)
 
 ```
       --adopt                   adopt an unmanaged repo without prompting
+      --bin-dir string          directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges
       --dev                     track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary
       --docs-target string      marker target: claude_md | agents_md | both | skip
       --oracle-backend string   oracle backend: host-delegated | native | cli | api | mcp
@@ -68,7 +69,13 @@ Install or update abcd in this repo (idempotent)
 
 Remove the marker block and owned PATH symlink (leaves .abcd/ intact)
 
-**Usage:** `abcd ahoy uninstall`
+**Usage:** `abcd ahoy uninstall [flags]`
+
+**Flags:**
+
+```
+      --bin-dir string   directory holding the PATH entry to remove; needed only when it was installed with --bin-dir into a directory that is not on PATH
+```
 
 ### `abcd audit`
 

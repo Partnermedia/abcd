@@ -1525,6 +1525,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 		adopt         bool
 		refuseAdopt   bool
 		dev           bool
+		binDir        string
 		visibility    string
 		docsTarget    string
 		oracleBackend string
@@ -1539,7 +1540,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, visibility, docsTarget, oracleBackend, scanDeep)
+			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, binDir, visibility, docsTarget, oracleBackend, scanDeep)
 			if err != nil {
 				return err
 			}
@@ -1554,6 +1555,12 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				}
 				for _, p := range res.Writes {
 					fmt.Fprintf(w, "  wrote: %s\n", p)
+				}
+				// A refusal is louder than an unexplained missing write: it says
+				// what abcd did not do and why (a dangling PATH entry it declined
+				// to create, a directory it could not write).
+				for _, n := range res.Notes {
+					fmt.Fprintf(w, "  note: %s\n", n)
 				}
 				if len(res.DeclinedCategories) > 0 {
 					fmt.Fprintf(w, "  declined: %s\n", strings.Join(res.DeclinedCategories, ", "))
@@ -1578,6 +1585,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
 	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
+	installCmd.Flags().StringVar(&binDir, "bin-dir", "", "directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges")
 	installCmd.Flags().StringVar(&visibility, "visibility", "", "repo visibility: private | public")
 	installCmd.Flags().StringVar(&docsTarget, "docs-target", "", "marker target: claude_md | agents_md | both | skip")
 	installCmd.Flags().StringVar(&oracleBackend, "oracle-backend", "", "oracle backend: host-delegated | native | cli | api | mcp")
@@ -1585,7 +1593,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	ahoyCmd.AddCommand(installCmd)
 
 	// uninstall
-	ahoyCmd.AddCommand(&cobra.Command{
+	var uninstallBinDir string
+	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove the marker block and owned PATH symlink (leaves .abcd/ intact)",
 		Args:  cobra.NoArgs,
@@ -1594,7 +1603,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			receipt, err := ahoy.Uninstall(cwd)
+			receipt, err := ahoy.Uninstall(cwd, uninstallBinDir)
 			if err != nil {
 				return err
 			}
@@ -1604,7 +1613,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  symlink: %s\n", symlinkNote(receipt))
 			})
 		},
-	})
+	}
+	uninstallCmd.Flags().StringVar(&uninstallBinDir, "bin-dir", "", "directory holding the PATH entry to remove; needed only when it was installed with --bin-dir into a directory that is not on PATH")
+	ahoyCmd.AddCommand(uninstallCmd)
 
 	// doctor
 	ahoyCmd.AddCommand(&cobra.Command{
@@ -1681,8 +1692,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 // installOptionsFromFlags validates the install flags and builds InstallOptions.
 // Only explicitly-set value flags become overrides; unset values fall through to
 // the prompter (interactive) or its default (non-interactive).
-func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev bool, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
-	opts := ahoy.InstallOptions{Yes: yes, Dev: dev}
+func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev bool, binDir, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
+	opts := ahoy.InstallOptions{Yes: yes, Dev: dev, BinDir: binDir}
 	if adopt && refuseAdopt {
 		return opts, fmt.Errorf("abcd ahoy install: --adopt and --refuse-adopt are mutually exclusive")
 	}

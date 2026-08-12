@@ -10,6 +10,36 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Breaking
+
+- **The documented install location is `~/.local/bin`, and nothing abcd runs asks
+  for administrator rights** (iss-171). The README one-liner drops `sudo` and
+  copies the verified binary into `~/.local/bin`; `abcd ahoy install` writes its
+  `PATH` entry there too, creating the directory when absent. **What existing
+  users see depends on how their binary got there.** An abcd-owned symlink — the
+  thing `ahoy install` writes — is found anywhere on `PATH` and adopted in place,
+  so nothing changes. A binary the old one-liner *copied* into `/usr/local/bin`
+  is a plain file abcd does not own: it is never adopted, and a new entry in
+  `~/.local/bin` lands behind it on `PATH`, so the copy is still what runs. That
+  case now reports a `symlink.shadowed` gap naming the copy, both from `ahoy`
+  and on the install run itself; the remedy is to delete the stale copy
+  (`rm /usr/local/bin/abcd`, which needs the rights that put it there) or to
+  install ahead of it with `--bin-dir`. abcd will not remove it — it never
+  touches a binary it does not own. A system-wide directory is reachable only
+  through an explicit `--bin-dir`, which fails loudly when it is not writable
+  rather than re-running itself with privilege: abcd escalates nothing, so there
+  is no fallback to hide the refusal behind. Two more gaps arrive with it:
+  `~/.local/bin` not on `PATH` is its own named gap carrying the one-line
+  `export PATH="$HOME/.local/bin:$PATH"` fix (abcd prints it and never edits a
+  shell profile), and an abcd-owned `PATH` entry whose binary has gone is
+  reported as dangling rather than silently trusted. Install refuses to create a
+  link whose target does not exist, because a dangling `abcd` early on `PATH`
+  shadows every working one behind it, and it reports every such refusal on the
+  result rather than leaving a gap to speak for it. The old detector recognised
+  exactly one blessed target, so a working `~/.local/bin/abcd` reported
+  `symlink.missing` while the detector was itself running as that very binary,
+  and "fixing" it would have written the shadowing link.
+
 ### Added
 
 - **The attribution gate reads the git identity, not only the message.** A commit

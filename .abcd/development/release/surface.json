@@ -46,6 +46,13 @@
           "hidden": false
         },
         {
+          "name": "bin-dir",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "dev",
           "shorthand": "",
           "type": "bool",
@@ -99,7 +106,15 @@
     {
       "path": "abcd ahoy uninstall",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "bin-dir",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd audit",
