@@ -3,7 +3,36 @@ package ahoy
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// displayPath renders p for any surface a human reads or pastes: a path inside
+// the user's home directory becomes its tilde form (~/.local/bin/abcd), so a gap
+// line or an uninstall receipt carries the location without carrying the
+// username. Everything outside home is unchanged — a system path is not
+// sensitive and shortening it would lose information.
+//
+// This is the same hygiene iss-177 applies inside the install receipt's note
+// seam; it lives here because the two print sites outside that seam (the doctor
+// gap text and the uninstall receipt) render paths of their own. Both can be
+// unified onto one primitive once the receipt scrub lands.
+func displayPath(p string) string {
+	if p == "" {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == string(os.PathSeparator) {
+		return p
+	}
+	home = filepath.Clean(home)
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+string(os.PathSeparator)) {
+		return "~" + string(os.PathSeparator) + p[len(home)+1:]
+	}
+	return p
+}
 
 // modeSymlink aliases os.ModeSymlink so detection reads naturally.
 const modeSymlink = os.ModeSymlink

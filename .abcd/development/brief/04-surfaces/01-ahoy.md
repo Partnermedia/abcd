@@ -17,7 +17,7 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
   (idempotent; covers first-install and upgrade). Runs the detection pass, then
   the apply pass over the resulting gaps.
 - **`/abcd:ahoy uninstall`** — reversible marker-only removal: removes the
-  marker block and the `/usr/local/bin/abcd` symlink (if owned by this plugin).
+  marker block and abcd's own `PATH` entry (if owned by this plugin).
   NEVER mutates `hooks/hooks.json` (plugin-static per spc-14 T7 + spc-16 T1).
   Leaves `.abcd/` intact. Re-running `install` re-installs cleanly.
 - **`/abcd:ahoy dry-run`** — run the detection pass and render the
@@ -158,8 +158,14 @@ Steps, run in parallel where independent:
    against the current template; classify `current` / `outdated` / `missing`.
    The marker block stands alone — there is no parent-`CLAUDE.md` reference to
    verify.
-8. **PATH symlink** — does `/usr/local/bin/abcd` exist, and does it point at
-   this plugin, a different binary, or nothing?
+8. **PATH entry** — scan `PATH` for `abcd`, resolving symlinks, and classify each
+   hit as this plugin's own entry, our dev shim, or a foreign binary. An
+   abcd-owned entry anywhere on `PATH` is the install. With none, the default
+   location `~/.local/bin/abcd` answers the same question — present, pointing at
+   this plugin, at a different binary, or at nothing. An owned entry whose target
+   has gone is `symlink.dangling`; an install directory absent from `PATH` is
+   `path.bin_dir_not_on_path`, required but not resolvable — abcd prints the
+   one-line `export` fix and never edits a shell profile (iss-171).
 9. **Hook manifest verification** (verify-only per spc-16 T1) — VERIFY that
    `hooks/hooks.json` is present in the plugin install AND contains the three
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
@@ -297,11 +303,16 @@ interactive confirmation.
    users edit outside the markers.** Content comes from
    `internal/core/ahoy/defaults/claude-md-marker-block.md`. Write the minimal
    `.abcd/rules.json` skeleton if missing.
-9. **PATH symlink** (`config-change`) — transparent prompt: "Install `abcd`
-   symlink to `/usr/local/bin/abcd`? Default: yes for private repos, no for
-   public." If accepted AND the target is absent or already points at this
-   plugin → write it. If a different `abcd` binary exists → refuse, show what
-   it points to, suggest manual resolution.
+9. **PATH entry** (`config-change`) — transparent prompt: "Install `abcd`
+   symlink to `~/.local/bin/abcd`? Default: yes for private repos, no for
+   public." An abcd-owned entry already on `PATH` is adopted where it stands
+   rather than duplicated; `--bin-dir <dir>` names a different directory (the
+   only route to a system-wide one) and fails loudly when it is not writable.
+   abcd NEVER escalates privileges. If accepted AND the target is absent or
+   already points at this plugin → write it, provided the binary it would point
+   at exists; a link to a missing target is refused, because a dangling `abcd`
+   early on `PATH` shadows every working one behind it. If a different `abcd`
+   binary exists → refuse, show what it points to, suggest manual resolution.
 10. **Hook registration** (`plugin-owned`, VERIFY-ONLY per spc-16 T1) — install
     verifies that `hooks/hooks.json` is present (the manifest is plugin-static
     per spc-14 T7). Install NEVER writes `hooks.json`; uninstall NEVER mutates
@@ -342,7 +353,8 @@ notes the orphaned-predecessor possibility in the summary.
 ## Sub-verb semantics
 
 **Uninstall (`/abcd:ahoy uninstall`):** removes the BEGIN/END marker block from
-CLAUDE.md/AGENTS.md and the `/usr/local/bin/abcd` symlink **if it points at this
+CLAUDE.md/AGENTS.md and abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever
+on `PATH` it sits) **if it points at this
 plugin** (otherwise leave it alone). `hooks/hooks.json` is plugin-static per
 spc-14 T7 — uninstall NEVER mutates it (per spc-16 T1 brief amendment).
 **Leaves the entire `.abcd/` namespace intact** (`config/`, `config.json`,

@@ -125,12 +125,160 @@ func pluginBinaryPath(pluginRoot string) string {
 	return filepath.Join(pluginRoot, "abcd")
 }
 
-// binTarget is the PATH symlink target, overridable for tests.
+// binName is the name abcd occupies on PATH.
+const binName = "abcd"
+
+// userBinDir is the single-user install directory, ~/.local/bin — the location
+// uv/pipx/rustup-class tools use, writable without privilege escalation. Empty
+// when the home directory cannot be resolved.
+func userBinDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".local", "bin")
+}
+
+// binTarget is the DEFAULT PATH entry: ~/.local/bin/abcd (iss-171). abcd never
+// escalates privileges, so a system-wide directory is reachable only through an
+// explicit --bin-dir. Overridable for tests via ABCD_BIN_TARGET; empty when the
+// home directory cannot be resolved, which every caller reads as "no target to
+// act on" rather than falling back to a privileged path.
 func binTarget() string {
 	if v := os.Getenv("ABCD_BIN_TARGET"); v != "" {
 		return v
 	}
-	return "/usr/local/bin/abcd"
+	dir := userBinDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, binName)
+}
+
+// pathDirs returns the PATH entries in order, dropping empties.
+func pathDirs() []string {
+	var dirs []string
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d != "" {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
+// dirOnPath reports whether dir is one of the PATH entries, comparing canonical
+// forms so /home/x/.local/bin and a symlinked route to it are the same entry.
+func dirOnPath(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	want := resolvePath(dir)
+	for _, d := range pathDirs() {
+		if resolvePath(d) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// pathEntry is one `abcd` found on PATH, classified.
+type pathEntry struct {
+	path     string        // the entry as it sits on PATH (unresolved)
+	kind     binTargetKind // dev-shim / owned / foreign
+	dangling bool          // ours, but the binary it points at is gone
+}
+
+// owned reports whether the entry is one abcd installed (a pinned symlink or the
+// dev shim) rather than a foreign occupant.
+func (e pathEntry) owned() bool {
+	return e.kind == binTargetOwnedSymlink || e.kind == binTargetDevShim
+}
+
+// scanPathEntries walks PATH in order and classifies every `abcd` it finds. It
+// is the fix-the-detector half of iss-171: abcd is installed if abcd is on PATH,
+// wherever it sits, rather than at one blessed location. Symlinks are resolved
+// through the same seam as iss-170 (resolvePath -> filepath.EvalSymlinks), so a
+// relative or indirect link classifies the same as a direct one.
+func scanPathEntries(pluginRoot string) []pathEntry {
+	var entries []pathEntry
+	seen := map[string]bool{}
+	for _, dir := range pathDirs() {
+		candidate := filepath.Join(dir, binName)
+		if seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		if _, err := os.Lstat(candidate); err != nil {
+			continue
+		}
+		e := pathEntry{path: candidate, kind: classifyBinTarget(candidate, pluginRoot)}
+		if e.owned() {
+			// Stat FOLLOWS the link: a dangling entry is one whose target is gone.
+			// A stat error other than not-exist is not proof of a dangling link, so
+			// it reads as healthy rather than manufacturing a gap.
+			if present, err := fsutil.Exists(candidate); err == nil && !present {
+				e.dangling = true
+			}
+		}
+		entries = append(entries, e)
+	}
+	return entries
+}
+
+// ownedPathEntry returns the first healthy abcd-owned entry on PATH. That entry
+// IS the install: `ahoy install` adopts it in place rather than planting a second
+// one, and detection reports it rather than a false symlink.missing.
+func ownedPathEntry(pluginRoot string) (pathEntry, bool) {
+	for _, e := range scanPathEntries(pluginRoot) {
+		if e.owned() && !e.dangling {
+			return e, true
+		}
+	}
+	return pathEntry{}, false
+}
+
+// danglingPathEntry returns the first abcd-owned entry on PATH whose target has
+// gone — a link that shadows whatever else on PATH would have answered.
+func danglingPathEntry(pluginRoot string) (pathEntry, bool) {
+	for _, e := range scanPathEntries(pluginRoot) {
+		if e.owned() && e.dangling {
+			return e, true
+		}
+	}
+	return pathEntry{}, false
+}
+
+// effectiveBinTarget is the PATH entry every verb acts on: an existing owned
+// install (adopted where it stands), else the default target.
+func effectiveBinTarget(pluginRoot string) string {
+	if e, ok := ownedPathEntry(pluginRoot); ok {
+		return e.path
+	}
+	return binTarget()
+}
+
+// dirWritable reports whether a file can actually be created in dir. It probes
+// rather than reading the mode bits, so an ACL or a read-only mount answers
+// honestly. A directory abcd cannot write to is refused, never escalated.
+func dirWritable(dir string) bool {
+	f, err := os.CreateTemp(dir, ".abcd-write-probe-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return true
+}
+
+// exportPathLine renders the one-line PATH fix for dir, in the form a user can
+// paste. abcd prints it and never patches a shell profile (script-first).
+func exportPathLine(dir string) string {
+	d := displayPath(dir)
+	if strings.HasPrefix(d, "~/") {
+		d = "$HOME/" + strings.TrimPrefix(d, "~/")
+	}
+	return `export PATH="` + d + `:$PATH"`
 }
 
 // ---------------------------------------------------------------------------

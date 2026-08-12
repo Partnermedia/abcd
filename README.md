@@ -177,22 +177,34 @@ That "someone" is your technical facilitator, who triages those captures later: 
 
 ## Install
 
-One line, checksum-verified. It detects your OS/architecture, downloads the
-binary and the `checksums.txt` manifest from the latest release, verifies the
-binary's SHA-256 against the manifest (and refuses to install on any
-mismatch — or if the manifest doesn't list the binary at all), then installs
-to `/usr/local/bin`:
+One line, checksum-verified, no administrator rights. It detects your
+OS/architecture, downloads the binary and the `checksums.txt` manifest from the
+latest release, verifies the binary's SHA-256 against the manifest (and refuses
+to install on any mismatch — or if the manifest doesn't list the binary at all),
+then installs to `~/.local/bin`, the single-user location:
 
 ```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; sudo install -m 0755 "$b" /usr/local/bin/abcd; abcd version'
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
+
+If `abcd` isn't found by name afterwards, `~/.local/bin` isn't on your `PATH`.
+Add this line to your shell profile:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+`abcd ahoy` reports the same thing as a named gap with the same one-line fix,
+and `abcd ahoy install` writes its own `PATH` entry to `~/.local/bin` unless you
+point it elsewhere with `--bin-dir`. abcd never escalates privileges: a
+directory it can't write to is an error, not a prompt for your password.
 
 Prefer to inspect before running? The command is exactly what it says: two
 downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
-a checksum verification, and a `sudo install`. You can do the same by hand —
-grab the binary for your platform plus `checksums.txt` from the releases
-page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching line,
-and copy the binary anywhere on your `PATH`. Every release is built and
+a checksum verification, and a copy into a directory you own. You can do the
+same by hand — grab the binary for your platform plus `checksums.txt` from the
+releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching
+line, and copy the binary anywhere on your `PATH`. Every release is built and
 published by CI from the exact tagged commit, with the checksums generated
 over the same bytes that are uploaded.
 

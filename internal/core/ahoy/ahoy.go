@@ -108,6 +108,12 @@ type InstallOptions struct {
 	// binary (failing loudly on a broken build), instead of a symlink to the
 	// pinned built binary. --dev.
 	Dev bool
+	// BinDir is an explicit directory for the PATH entry (--bin-dir), the only
+	// way to reach a system-wide location. Empty means the default single-user
+	// location (~/.local/bin), or an existing owned install adopted in place.
+	// abcd NEVER escalates privileges: a BinDir it cannot write to is a loud
+	// error, never a silent skip and never a re-run under sudo.
+	BinDir string
 }
 
 // InstallResult is the outcome of Install.
@@ -117,6 +123,10 @@ type InstallResult struct {
 	Changes            []string `json:"changes,omitempty"`   // value overwrites an explicit override forced ("visibility: private -> public")
 	Remaining          []string `json:"remaining"`           // required+resolvable gap ids left
 	DeclinedCategories []string `json:"declined_categories"` // sorted category wire values
+	// Notes carries an apply step's loud refusal — a thing abcd deliberately did
+	// not do, and why. A refusal that only shows up as a still-open gap reads as a
+	// silent failure, so the reason travels with the result.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // ApplyResult is the outcome of one apply step.

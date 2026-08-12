@@ -52,9 +52,20 @@ them. If `folder_kind` is `unmanaged-folder`, note there is nothing to act on
 ```
 
 **This writes.** It applies the actionable gaps the detection pass found — the
-marker block, the `.abcd/` scaffolding, the owned `PATH` symlink. Report the
-returned `status` and what changed; the engine prompts before an ambiguous
-adoption, so surface any prompt to the user rather than answering it for them.
+marker block, the `.abcd/` scaffolding, the owned `PATH` entry. Report the
+returned `status`, what changed, and any `notes` — a note is a refusal, stating
+something abcd deliberately did not do and why. The engine prompts before an
+ambiguous adoption, so surface any prompt to the user rather than answering it
+for them.
+
+The `PATH` entry goes to `~/.local/bin` (created when absent), or to an
+abcd-owned entry already on `PATH`, which is adopted exactly where it stands.
+`--bin-dir <dir>` names a different directory — the only way to reach a
+system-wide one — and fails loudly when it is not writable. abcd never escalates
+privileges, so never suggest re-running any of this under `sudo`; report the
+failure and let the user pick a directory they own. If the report carries a
+`path.bin_dir_not_on_path` gap, relay its one-line `export` fix verbatim and
+leave the user's shell profile alone.
 
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
@@ -68,8 +79,10 @@ the source tip on every call and fails loudly on a broken build. Re-running
 ```
 
 **This writes.** It removes the BEGIN/END marker block and abcd's own `PATH`
-symlink and leaves `.abcd/` intact, so the repo's record survives. Report
-`marker.removed` and the symlink note. It never touches `hooks.json`.
+entry — found wherever it sits on `PATH` — and leaves `.abcd/` intact, so the
+repo's record survives. Report `marker.removed` and the symlink note; the
+receipt's `symlink.target` is already rendered in tilde form, so relay it as
+given rather than expanding it. It never touches `hooks.json`.
 
 ## `doctor` — the full read-only report
 

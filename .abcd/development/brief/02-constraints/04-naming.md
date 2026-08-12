@@ -6,7 +6,7 @@ Commands and abcd-owned directories use ship/voyage metaphors where natural.
 |---|---|
 | `/abcd:ahoy` | bare invocation — status + help: shows folder kind, install state, detected gaps, last install date. ZERO writes. |
 | `/abcd:ahoy install` | mutating sub-verb — applies detected gaps (skeleton, config-change, history-store, marker-block, PATH symlink, version stamp). Centralised per-category approval. |
-| `/abcd:ahoy uninstall` | reversible removal — strips the marker block from `CLAUDE.md` / `AGENTS.md` and the `/usr/local/bin/abcd` symlink if owned. Preserves `.abcd/`, `~/.abcd/`, and `hooks/hooks.json`. |
+| `/abcd:ahoy uninstall` | reversible removal — strips the marker block from `CLAUDE.md` / `AGENTS.md` and abcd's own `PATH` entry (`~/.local/bin/abcd` by default) if owned. Preserves `.abcd/`, `~/.abcd/`, and `hooks/hooks.json`. |
 | `/abcd:ahoy dry-run` | read-only emit of the `DetectionResult` envelope as JSON. ZERO writes. Drives the Claude Code skill's two-pass approval protocol. |
 | `/abcd:ahoy doctor` | read-only audit — detection envelope + cross-machine `history_audit.audit_repos()` gaps. ZERO writes. |
 | `/abcd:disembark` | leave the ship → pack a lifeboat for the journey |

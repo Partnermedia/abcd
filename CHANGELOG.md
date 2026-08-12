@@ -10,6 +10,28 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Breaking
+
+- **The documented install location is `~/.local/bin`, and nothing abcd runs asks
+  for administrator rights** (iss-171). The README one-liner drops `sudo` and
+  copies the verified binary into `~/.local/bin`; `abcd ahoy install` writes its
+  `PATH` entry there too, creating the directory when absent. Anyone whose binary
+  sits in `/usr/local/bin` keeps a working `abcd` — the detector finds an
+  abcd-owned entry anywhere on `PATH` and adopts it in place — but the documented
+  path, the one a fresh install follows, moves. A system-wide directory is
+  reachable only through an explicit `--bin-dir`, which fails loudly when it is
+  not writable rather than re-running itself with privilege: abcd escalates
+  nothing, so there is no fallback to hide the refusal behind. Two matching gaps
+  arrive with it: `~/.local/bin` not on `PATH` is its own named gap carrying the
+  one-line `export PATH="$HOME/.local/bin:$PATH"` fix (abcd prints it and never
+  edits a shell profile), and an abcd-owned `PATH` entry whose binary has gone
+  is reported as dangling rather than silently trusted. Install refuses to create
+  a link whose target does not exist, because a dangling `abcd` early on `PATH`
+  shadows every working one behind it. The old detector recognised exactly one
+  blessed target, so a working `~/.local/bin/abcd` reported `symlink.missing`
+  while the detector was itself running as that very binary, and "fixing" it
+  would have written the shadowing link.
+
 ### Added
 
 - **The attribution gate reads the git identity, not only the message.** A commit

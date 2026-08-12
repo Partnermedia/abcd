@@ -46,6 +46,13 @@
           "hidden": false
         },
         {
+          "name": "bin-dir",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "dev",
           "shorthand": "",
           "type": "bool",
