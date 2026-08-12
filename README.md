@@ -233,14 +233,25 @@ and arm64) installs nothing and says why in plain language. A plugin root that
 already holds the binary costs one file test and no network.
 
 That covers the hooks. For the `abcd` command in your own terminal, keep the
-[install](#install) above, or run `abcd ahoy install` once to put the
-plugin-root binary on your `PATH`. For a stronger root of trust than
-same-origin checksums, build from source — `go build ./cmd/abcd` — and place
-the binary in the plugin root and on your `PATH` yourself. A binary placed
-there by hand takes the same no-network fast path, so the `.binary-meta`
-provenance record beside it still describes whichever release the bootstrap
-last fetched: delete that file so no version-skew notice is rendered from a
-release the binary in place did not come from.
+[install](#install) above, or put the plugin-root binary on your `PATH` by
+running it once by its absolute path — `'<plugin-root>/abcd' ahoy install`.
+The path is absolute because `abcd` is not on your `PATH` yet, which is what
+that one run fixes. `<plugin-root>` is the directory the agent harness unpacked
+the abcd plugin into, with the binary sitting directly inside it as `abcd`; the
+bootstrap's success notice prints that full binary path, so the shortest route
+is to copy the command straight out of the notice. That notice appears once per
+plugin root — later sessions take the fast path and stay silent — so if it has
+scrolled away and you would rather not go looking for the directory, the
+[install](#install) one-liner above needs no plugin root at all and gets you to
+the same place.
+
+For a stronger root of trust than same-origin checksums, build from source —
+`go build ./cmd/abcd` — and place the binary in the plugin root and on your
+`PATH` yourself. A binary placed there by hand takes the same no-network fast
+path, so the `.binary-meta` provenance record beside it still describes
+whichever release the bootstrap last fetched: delete that file so no
+version-skew notice is rendered from a release the binary in place did not come
+from.
 
 ## Build
 

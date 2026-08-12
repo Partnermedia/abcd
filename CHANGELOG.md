@@ -86,6 +86,27 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The one instruction that resolves the no-binary-on-`PATH` state can now be run
+  in that state** (iss-207). The bootstrap's success notice and the README both
+  said to run `abcd ahoy install` once — a command whose whole premise is that
+  `abcd` is not a name the shell can resolve, so it failed with "command not
+  found" for precisely the reader it was written for. On the first manual install
+  the consequence was not cosmetic: the agent reading the notice could not run the
+  printed command, invented a `go run` incantation reaching into the harness's
+  plugin cache, and told the user to run that instead — a source-build path
+  needing a Go toolchain, and not the documented install at all. The notice now
+  prints the absolute plugin-root path the script already holds, shell-quoted so
+  a plugin root containing a space, an apostrophe, a `$` or a backtick still
+  pastes as one word, and with the invocation last on the line so it stays
+  copy-pasteable to the end. The README carries the same form with the one part a
+  committed file cannot know left as a placeholder, says what that placeholder is
+  in host-agnostic terms, and points a reader who cannot instantiate it at the
+  install one-liner, which needs no plugin root. CI holds both surfaces — every
+  `ahoy install` either one prints must be reached through a path, not a bare
+  name, and the printed command is handed to a real shell against a hostile path
+  to prove it runs as pasted — while the end-to-end reading of it on a real
+  plugin cache remains the manual install gate.
+
 - **The session-start hooks run after the bootstrap that provisions their binary,
   and a successful install reads as success** (iss-204, iss-208). The hook
   manifest listed the bootstrap and the two binary-backed commands as three
