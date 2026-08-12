@@ -9,9 +9,25 @@ package launch
 // ROOT, and itd-105 deferred PATH to `ahoy`. So a by-the-book plugin install
 // leaves nothing on PATH, and a command file that reaches for a bare `abcd`
 // reaches for something that is not there. The command surface must therefore
-// name `"${CLAUDE_PLUGIN_ROOT}/abcd"` FIRST — the plugins reference substitutes
-// that placeholder in command content wherever it appears, so this is a text
-// contract, not a mechanism.
+// name `"${CLAUDE_PLUGIN_ROOT}/abcd"` FIRST.
+//
+// # What the record supports, and what it does not
+//
+// Stated precisely, because a comfortable warrant nobody checked is exactly how
+// spc-21 caused iss-204. The plugins reference quoted in iss-205 covers "Skill
+// and agent content: anywhere the placeholder appears". `.abcd/work/DECISIONS.md`
+// (2026-08-02, iss-170) records only that the harness sets CLAUDE_PLUGIN_ROOT
+// inside HOOK invocations, and adds in as many words that this codebase has no
+// independent evidence for whether any other context also sets it.
+//
+// That the same substitution reaches COMMAND content is therefore an
+// EXTRAPOLATION from those two, not something this repository has verified. It is
+// plausible — a command file is the same class of plugin-bundled markdown — and
+// it is the plan's premise, but it stays PENDING the §4 manual install gate,
+// which asserts that a bare /abcd resolves via ${CLAUDE_PLUGIN_ROOT} sub-second
+// with `go` removed from PATH. Until §4 passes, read this detector as pinning the
+// TEXT CONTRACT only: it proves the files say the right thing, never that the
+// harness substitutes what they say.
 //
 // The `go run ./cmd/abcd` rung is worse than slow: under the curated payload
 // there is no `cmd/`, no `go.mod` and no source at all, so for a plugin user it
@@ -137,8 +153,15 @@ func invokesBareBinary(line string) bool {
 // collectRefs finds every binary reference in one command file, in source order.
 //
 // Fence tracking is line-based on a leading ``` marker, which is all these files
-// use; a file that adopts tilde fences or indented code would need this taught
-// about them, and the ordering rule would fail loudly rather than silently pass.
+// use today.
+//
+// KNOWN BLIND SPOT, measured rather than assumed: an invocation inside a tilde
+// fence (~~~) or a four-space-indented code block is invisible to this scan. It
+// yields NO ref, so the file passes SILENTLY — and if that file also carries the
+// standard Binary-resolution paragraph, all four rules go green over a command
+// surface that still hands the agent a bare `abcd`. Both shapes were planted
+// under commands/ and watched to pass. A file adopting either needs this taught
+// about them first; nothing here will announce the gap.
 func collectRefs(body string) []binaryRef {
 	var refs []binaryRef
 

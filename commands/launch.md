@@ -177,10 +177,12 @@ A refusal is a result to relay, not a crash. Never hand-edit the workflows to wo
 around it: re-run with `--confirm` when the operator intends to replace the drift.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
-provisions the binary into the plugin root. If that path is absent, fall back to
-`abcd` on `PATH`, and run `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install` to put one
-there. In a source checkout of this repo, and only there, `go run ./cmd/abcd` is
-a third rung; the published plugin payload carries no `cmd/`, so it cannot fire
-for a plugin user.
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS
