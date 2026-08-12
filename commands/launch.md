@@ -21,7 +21,7 @@ it reads the dated heading `ship` writes.
 Run:
 
 ```bash
-abcd launch --dry-run --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" launch --dry-run --json
 ```
 
 Then summarise the JSON for the user:
@@ -47,7 +47,7 @@ delegated composition, a validating ingest.
 ### 1. Emit the cut (deterministic, writes nothing)
 
 ```bash
-abcd launch ship --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" launch ship --json
 ```
 
 The binary derives everything the release is allowed to be: the base tag, the
@@ -94,8 +94,8 @@ that the cut from step 1 is still valid and can be shipped once it is reachable.
 Write the agent's payload to a file and hand it back to the binary:
 
 ```bash
-abcd launch ship --changelog-json <path>   # or - for stdin
-abcd launch ship --changelog-json <path> --payload-dir <dir>   # also stage the payload
+"${CLAUDE_PLUGIN_ROOT}/abcd" launch ship --changelog-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" launch ship --changelog-json <path> --payload-dir <dir>   # also stage the payload
 ```
 
 With `--payload-dir` the binary additionally stages the release payload in that
@@ -144,7 +144,7 @@ lacks it** — a different job from `ship` (which cuts a release in a repo that
 already has the machinery). It **never publishes**.
 
 ```bash
-abcd launch scaffold --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" launch scaffold --json
 ```
 
 It writes three files, wired to the repo's own default branch and Go version:
@@ -176,8 +176,13 @@ It is idempotent and fail-safe. Exit codes gate the flow:
 A refusal is a result to relay, not a crash. Never hand-edit the workflows to work
 around it: re-run with `--confirm` when the operator intends to replace the drift.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd launch ...` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS

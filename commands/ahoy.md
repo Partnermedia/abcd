@@ -19,7 +19,7 @@ read-only detection pass below.
 Run:
 
 ```bash
-abcd ahoy --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy --json
 ```
 
 Then summarise the JSON for the user:
@@ -48,13 +48,49 @@ them. If `folder_kind` is `unmanaged-folder`, note there is nothing to act on
 ## `install` — apply the outstanding gaps
 
 ```bash
-abcd ahoy install --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install --json
 ```
 
 **This writes.** It applies the actionable gaps the detection pass found — the
 marker block, the `.abcd/` scaffolding, the owned `PATH` symlink. Report the
 returned `status` and what changed; the engine prompts before an ambiguous
 adoption, so surface any prompt to the user rather than answering it for them.
+
+Prompts read stdin whether or not stdin is a terminal, so an answer can be
+relayed without one:
+
+```bash
+yes | "${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install
+```
+
+**One line answers one question.** The install asks one approval per gap
+category present — often several — and every line after the last one you supply
+reads end-of-input and DECLINES. `yes` is the reliable form because it never
+runs out; a single `printf 'y\n'` answers the first question only and silently
+declines the rest. The questions come in a fixed order (dependency,
+safe-autocreate, config-change, user-state, plugin-owned), so a scripted stream
+of specific answers lines up with them. Each answer is echoed back, so the
+transcript shows what was asked and what it was answered — read it back rather
+than assuming. Under `set -o pipefail` the pipeline reports 141: `yes` takes
+SIGPIPE when abcd stops reading, by design — judge the run by abcd's own output
+and exit status, not the pipeline's.
+
+That is a channel for passing on an answer the user has GIVEN — ask first, then
+pipe; it is never a licence to answer on their behalf. Note that `yes |`
+approves EVERY question, so only reach for it once the user has agreed to all of
+them.
+
+**Stdin must end, or the prompt waits.** With stdin at end-of-input every
+question declines, so a run that was told nothing writes nothing — but a stdin
+that is held open and silent (a pipe from a still-running command) makes the
+prompt WAIT for the answer that never comes, rather than declining. For a run
+that must not block and must not prompt, close stdin or pre-answer everything:
+`abcd ahoy install --yes --refuse-adopt < /dev/null`.
+
+`--yes` approves every resolvable category but never adopts the optional
+git-identity pin, because the pin records whatever git identity is currently
+configured. When the result carries `optional_skipped`, report it and offer the
+`yes |` form above as the way to apply it.
 
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
@@ -64,7 +100,7 @@ the source tip on every call and fails loudly on a broken build. Re-running
 ## `uninstall` — reversible marker-only removal
 
 ```bash
-abcd ahoy uninstall --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy uninstall --json
 ```
 
 **This writes.** It removes the BEGIN/END marker block and abcd's own `PATH`
@@ -74,7 +110,7 @@ symlink and leaves `.abcd/` intact, so the repo's record survives. Report
 ## `doctor` — the full read-only report
 
 ```bash
-abcd ahoy doctor --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy doctor --json
 ```
 
 Runs the same detection pass plus a read-only audit sweep and reports **every**
@@ -86,7 +122,7 @@ render says a repo is healthy and the user's experience says otherwise.
 ## `dry-run` — the canonical detection envelope
 
 ```bash
-abcd ahoy dry-run
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy dry-run
 ```
 
 Renders the canonical `DetectionResult` JSON envelope and writes nothing — the
@@ -102,8 +138,13 @@ its exit code is the whole point, so it stays a bare-CLI entrypoint rather than 
 plugin sub-verb; report it only if a user asks how the identity gate fails
 closed.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd ahoy --json` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS
