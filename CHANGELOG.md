@@ -86,6 +86,20 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **An `ahoy install` receipt is safe to paste** (iss-177). Every apply step
+  reported its write as an absolute path and the CLI printed them verbatim, so a
+  receipt pasted into an issue or a transcript carried the developer's home
+  directory and username — while the sibling verbs already routed their error
+  text through a shared path scrub the receipt did not use. The receipt now
+  reports a repo write repo-relative (`.abcd/config.json`) and a user-scope write
+  home-relative (`~/.abcd/history/index.json`), leaving a location that names no
+  developer (`/usr/local/bin/abcd`) exactly as written — the same limit the error
+  scrub already states, through the same primitive, which moved to
+  `internal/fsutil` so the two cannot drift. The scrub sits at the one seam every
+  step reports through rather than in each step's string, and a test holds that
+  seam to being the only writer of the receipt, so a step added later cannot
+  reintroduce an absolute path by forgetting.
+
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same
   steps CI's check job runs" and named only the reviews-charter gate, though the

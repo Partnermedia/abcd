@@ -139,7 +139,8 @@ type applyCtx struct {
 	markerRetract    []string // marker files a narrowed docs-target override de-selected
 }
 
-func (a *applyCtx) note(path string) { a.writes = append(a.writes, path) }
+// note is the receipt seam; it lives in receipt.go with the path scrub it
+// applies, because every apply step below reports its writes through it.
 
 // stepIdentityPin adopts the iss-62 identity gate for an un-pinned repo: it
 // writes .abcd/config/identity.json from the current git author identity (the
