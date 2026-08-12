@@ -116,6 +116,39 @@ called out in a **Breaking** section.
   (`abcd ahoy install --yes --refuse-adopt < /dev/null`); the plugin surface says
   so, because reading a non-terminal stdin means a stdin held open and silent
   makes a prompt wait rather than decline.
+- **An `ahoy install` receipt is safe to paste** (iss-177). Every apply step
+  reported its write as an absolute path and the CLI printed them verbatim, so a
+  receipt pasted into an issue or a transcript carried the developer's home
+  directory and username — while the sibling verbs already routed their error
+  text through a shared path scrub the receipt did not use. The receipt now
+  reports a repo write repo-relative (`.abcd/config.json`) and a user-scope write
+  home-relative (`~/.abcd/history/index.json`), leaving a location that names no
+  developer (`/usr/local/bin/abcd`) exactly as written — the same limit the error
+  scrub already states, through the same primitive, which moved to
+  `internal/fsutil` so the two cannot drift. The scrub sits at the one seam every
+  step reports through rather than in each step's string, and a test holds that
+  seam to being the only writer of the receipt, so a step added later cannot
+  reintroduce an absolute path by forgetting.
+- **The command surface reaches the binary a plugin install actually provisions**
+  (iss-205). Every command file resolved the binary as a bare `abcd` on `PATH`
+  with a `go run ./cmd/abcd` fallback, and none named `${CLAUDE_PLUGIN_ROOT}` —
+  while the bootstrap hook installs its checksum-verified binary *into the plugin
+  root* and leaves nothing on `PATH`. The two halves never met: a fresh install
+  worked only because the marketplace clone happened to carry `cmd/`, costing 54
+  seconds and a Go toolchain, and on a machine without Go the whole `/abcd:*`
+  surface was non-functional despite a healthy binary sitting in the plugin root.
+  The resolution ladder in all 17 binary-invoking command files now runs
+  `"${CLAUDE_PLUGIN_ROOT}/abcd"` first, `abcd` on `PATH` second, and `go run
+  ./cmd/abcd` third and explicitly only in a source checkout — the published
+  payload carries no `cmd/`, so an unqualified third rung prints an instruction a
+  plugin user cannot follow. Every fenced command line, which is what an agent
+  runs verbatim, carries the plugin-root form.
+  `TestCommandSurfaceResolvesBinaryFromPluginRoot` keeps it that way: it fails if
+  any file under `commands/` names the binary without the plugin-root rung first,
+  hands over a fenced invocation that resolves any other way, leaves a `go run`
+  rung unqualified, or drops the ladder paragraph. It runs under `go test ./...`,
+  so `make preflight` and CI already execute it rather than needing a target
+  anyone can forget to wire.
 
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same

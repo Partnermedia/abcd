@@ -9,6 +9,8 @@ found_during: "first manual plugin install test (2026-08-10)"
 found_at: "commands/"
 related_intents: [itd-108]
 related_issues: [iss-206]
+resolution: "The command surface resolves the binary from ${CLAUDE_PLUGIN_ROOT} first, PATH second, and go run ./cmd/abcd only in a source checkout; a Go detector test under internal/core/launch fails any commands/ file that regresses the ladder."
+impact: fix
 ---
 
 Every one of the 17 files under commands/ resolves the binary as bare 'abcd' on PATH, with a documented fallback to 'go run ./cmd/abcd'. None of them mentions ${CLAUDE_PLUGIN_ROOT} — grep confirms zero occurrences across commands/. But itd-105 decided 'PATH: deferred to ahoy', so a by-the-book marketplace install provisions the binary ONLY into the plugin root and leaves nothing on PATH. The two halves therefore still do not meet: bootstrap installs a checksum-verified binary that no command can see. Observed on the first manual install (2026-08-10): 'which abcd' reports not found, and bare /abcd fell through to the source-build path — 54s, requiring a Go toolchain, and succeeding only because the marketplace clone happened to be on disk. On a clean machine without Go the entire plugin command surface is non-functional despite a healthy binary sitting in the plugin root. This directly contradicts itd-105's own premise: 'Nobody clones the repo to use abcd: the binary is all a user needs.' The fix is supported and cheap — the plugins reference confirms ${CLAUDE_PLUGIN_ROOT} substitutes in 'Skill and agent content: anywhere the placeholder appears'. Put "${CLAUDE_PLUGIN_ROOT}/abcd" first in the resolution order in all 17 command files, PATH second, 'go run' last.
