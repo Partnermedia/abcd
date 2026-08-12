@@ -60,7 +60,7 @@ Prompts read stdin whether or not stdin is a terminal, so an answer can be
 relayed without one:
 
 ```bash
-yes | abcd ahoy install
+yes | "${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install
 ```
 
 **One line answers one question.** The install asks one approval per gap
@@ -90,7 +90,7 @@ that must not block and must not prompt, close stdin or pre-answer everything:
 `--yes` approves every resolvable category but never adopts the optional
 git-identity pin, because the pin records whatever git identity is currently
 configured. When the result carries `optional_skipped`, report it and offer the
-`yes | abcd ahoy install` form above as the way to apply it.
+`yes |` form above as the way to apply it.
 
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
