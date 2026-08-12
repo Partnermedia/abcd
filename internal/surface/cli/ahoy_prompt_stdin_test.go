@@ -230,7 +230,10 @@ func TestAhoyInstallPipedAnswerAdoptsOptionalIdentityPin(t *testing.T) {
 		t.Fatalf("install exited non-zero: %v\n%s", err, out)
 	}
 
-	if out, err := runCLIPipedStdin(t, "y\n", "ahoy", "install"); err != nil {
+	// One `y` per remaining category, not one in total: the approval walk
+	// iterates a map, so which category is asked first is not fixed, and a
+	// single answer would land on whichever question happened to come up.
+	if out, err := runCLIPipedStdin(t, strings.Repeat("y\n", 8), "ahoy", "install"); err != nil {
 		t.Fatalf("piped re-install exited non-zero: %v\n%s", err, out)
 	}
 	body, err := os.ReadFile(filepath.Join(repo, ".abcd", "config", "identity.json"))
