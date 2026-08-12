@@ -56,6 +56,18 @@ marker block, the `.abcd/` scaffolding, the owned `PATH` symlink. Report the
 returned `status` and what changed; the engine prompts before an ambiguous
 adoption, so surface any prompt to the user rather than answering it for them.
 
+Prompts read stdin whether or not stdin is a terminal, so an answer can be
+relayed without one: `printf 'y\n' | abcd ahoy install` feeds one `y` per
+question, and each answer is echoed back so the transcript shows what was
+agreed. That is a channel for passing on an answer the user has GIVEN — ask
+first, then pipe; it is never a licence to answer on their behalf. With nothing
+on stdin every question declines, so a run that was told nothing writes nothing.
+
+`--yes` approves every resolvable category but never adopts the optional
+git-identity pin, because the pin records whatever git identity is currently
+configured. When the result carries `optional_skipped`, report it and offer the
+piped-answer form above as the way to apply it.
+
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
 the source tip on every call and fails loudly on a broken build. Re-running

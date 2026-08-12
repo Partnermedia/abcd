@@ -86,6 +86,25 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`ahoy install` prompts read a piped answer, and `--yes` says what it does not
+  cover** (iss-167, iss-166). The prompter attached to stdin only when stdin was a
+  terminal, so `printf 'y\n' | abcd ahoy install` — the first thing an agent
+  reaches for — arrived as a decline on every question, and the interactive path
+  could not be driven at all: the agent reported failure and handed the step back
+  to the human. Prompts now read stdin whether or not it is a terminal, and off a
+  terminal each question's answer is echoed to stderr, so a piped run leaves a
+  transcript of what was asked and answered. The safe default is unchanged:
+  answers that run out read as EOF, and EOF declines every confirm and takes the
+  default for every prompt, so an unattended run still adopts nothing it was not
+  told to adopt. The interactive path at a terminal is untouched. Folded in:
+  `--yes` deliberately does not adopt the optional git-identity pin — the pin
+  records whatever identity is currently configured, and a blanket approval would
+  canonicalise a sandbox or agent identity, the very value the identity gate
+  exists to reject — but it reported "already up to date" without mentioning the
+  skip. The exclusion is now stated in the flag's own help, carried in the install
+  envelope as `optional_skipped`, and printed with the way to apply it, which the
+  piped answer makes available to a non-interactive caller for the first time.
+
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same
   steps CI's check job runs" and named only the reviews-charter gate, though the

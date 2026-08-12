@@ -117,6 +117,14 @@ type InstallResult struct {
 	Changes            []string `json:"changes,omitempty"`   // value overwrites an explicit override forced ("visibility: private -> public")
 	Remaining          []string `json:"remaining"`           // required+resolvable gap ids left
 	DeclinedCategories []string `json:"declined_categories"` // sorted category wire values
+	// OptionalSkipped names the optional gaps a --yes run deliberately did not
+	// apply — today the advisory git-identity pin alone. --yes approves every
+	// resolvable CATEGORY, but it never writes the pin, because the pin captures
+	// whatever git identity happens to be configured and an unattended run would
+	// canonicalise a sandbox or agent identity. The exclusion is reported rather
+	// than assumed: a run that says "already up to date" while leaving optional
+	// work on the table has to say so (iss-166).
+	OptionalSkipped []string `json:"optional_skipped,omitempty"`
 }
 
 // ApplyResult is the outcome of one apply step.

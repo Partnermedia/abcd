@@ -237,7 +237,19 @@ unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 dogfood mode (the PATH entry rebuilds from the source tip on every call instead
 of pinning the built binary). `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
-interactive confirmation.
+answered prompt. The identity-pin exclusion is stated, never assumed: `--yes`
+names it in its own help, the install envelope carries it as `optional_skipped`,
+and the completion output prints it with the way to apply it (iss-166).
+
+**Answers arrive from stdin whether or not stdin is a terminal** (iss-167).
+The prompts are the same prompts; only the reader differs. At a terminal a human
+types them; off one, a caller pipes them — `printf 'y\n' | abcd ahoy install`
+is how a host agent drives the identity pin, the one approval no flag covers.
+Off a terminal each answer is echoed to the diagnostic stream, so a piped run
+leaves a transcript rather than a column of questions with no visible reply.
+Answers that run out read as EOF, and EOF declines every confirm and takes the
+default for every prompt: an unattended run with nothing on stdin still adopts
+nothing it was not told to adopt.
 
 1. Run the detection pass (above).
 2. **Dependency gaps** (`dependency`) — surface brew/pip commands for missing
