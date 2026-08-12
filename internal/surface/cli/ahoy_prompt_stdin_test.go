@@ -105,6 +105,14 @@ func TestAhoyInstallAcceptsPipedAnswersFromNonTTYStdin(t *testing.T) {
 	// The answers are positional, so the questions must arrive in the fixed
 	// order the surface documents. Asserted end to end here, not only over the
 	// core helper: the transcript is what a caller lines its answers up against.
+	//
+	// A fresh unmanaged repo always has gaps in at least three categories
+	// (skeleton, config, marker) whatever the host has on PATH, so this is the
+	// one place the count itself can be asserted — an order claim over one
+	// question would be vacuous.
+	if asked := categoryQuestionsAsked(string(errOut)); len(asked) < 3 {
+		t.Fatalf("a fresh unmanaged repo asked only %v; too few to prove an order:\n%s", asked, errOut)
+	}
 	assertCategoryQuestionOrder(t, string(errOut))
 }
 
@@ -118,18 +126,18 @@ var categoryPromptOrder = []string{
 // assertCategoryQuestionOrder checks that the category approvals appearing in a
 // prompt transcript do so in the documented order. Categories absent from this
 // run are simply skipped; what must never happen is two of them out of order.
+//
+// Fewer than two questions is a no-op, not a failure. Which categories a repo
+// has gaps in depends on the HOST: the dependency approval exists only while
+// the opt-in scanners are off PATH, and PATH is the one thing the hermetic repo
+// does not redirect. A maintainer who follows abcd's own `brew install gitleaks`
+// hint must not thereby turn preflight red — so a caller that needs a minimum
+// number of questions asserts that itself, over a repo state it controls.
 func assertCategoryQuestionOrder(t *testing.T, transcript string) {
 	t.Helper()
-	var seen []string
-	for _, line := range strings.Split(transcript, "\n") {
-		for _, c := range categoryPromptOrder {
-			if strings.Contains(line, "Apply "+c+" changes?") {
-				seen = append(seen, c)
-			}
-		}
-	}
+	seen := categoryQuestionsAsked(transcript)
 	if len(seen) < 2 {
-		t.Fatalf("transcript asked %d category approvals; too few to prove an order:\n%s", len(seen), transcript)
+		return
 	}
 	rank := map[string]int{}
 	for i, c := range categoryPromptOrder {
@@ -140,6 +148,20 @@ func assertCategoryQuestionOrder(t *testing.T, transcript string) {
 			t.Fatalf("category approvals asked out of order: %v (want the order %v)", seen, categoryPromptOrder)
 		}
 	}
+}
+
+// categoryQuestionsAsked returns the category approvals a transcript asked, in
+// the order they were asked.
+func categoryQuestionsAsked(transcript string) []string {
+	var seen []string
+	for _, line := range strings.Split(transcript, "\n") {
+		for _, c := range categoryPromptOrder {
+			if strings.Contains(line, "Apply "+c+" changes?") {
+				seen = append(seen, c)
+			}
+		}
+	}
+	return seen
 }
 
 // TestAhoyInstallEmptyStdinStillDeclines guards the safe default the non-TTY

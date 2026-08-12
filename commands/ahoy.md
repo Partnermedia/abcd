@@ -71,7 +71,9 @@ declines the rest. The questions come in a fixed order (dependency,
 safe-autocreate, config-change, user-state, plugin-owned), so a scripted stream
 of specific answers lines up with them. Each answer is echoed back, so the
 transcript shows what was asked and what it was answered — read it back rather
-than assuming.
+than assuming. Under `set -o pipefail` the pipeline reports 141: `yes` takes
+SIGPIPE when abcd stops reading, by design — judge the run by abcd's own output
+and exit status, not the pipeline's.
 
 That is a channel for passing on an answer the user has GIVEN — ask first, then
 pipe; it is never a licence to answer on their behalf. Note that `yes |`
