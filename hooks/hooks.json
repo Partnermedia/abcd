@@ -5,9 +5,7 @@
     ],
     "SessionStart": [
       {"hooks": [
-        {"type": "command", "timeout": 240, "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/bootstrap.sh\""},
-        {"type": "command", "command": "if [ -f \"$CLAUDE_PLUGIN_ROOT/abcd\" ] && [ -x \"$CLAUDE_PLUGIN_ROOT/abcd\" ]; then \"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset; else echo \"abcd: the plugin binary is not installed, so the rule loader did not reset for this session — hooks/bootstrap.sh provisions it at session start; start a session with network access, or install per https://github.com/REPPL/abcd-cli#install\" >&2; exit 2; fi"},
-        {"type": "command", "command": "if [ -f \"$CLAUDE_PLUGIN_ROOT/abcd\" ] && [ -x \"$CLAUDE_PLUGIN_ROOT/abcd\" ]; then \"$CLAUDE_PLUGIN_ROOT/abcd\" hook session-start; else echo \"abcd: the plugin binary is not installed, so the session-start checks did not run — hooks/bootstrap.sh provisions it at session start; start a session with network access, or install per https://github.com/REPPL/abcd-cli#install\" >&2; exit 2; fi"}
+        {"type": "command", "timeout": 240, "command": "[ -n \"${CLAUDE_PLUGIN_ROOT:-}\" ] || exit 0; b=''; s=0; if [ -x \"$CLAUDE_PLUGIN_ROOT/hooks/bootstrap.sh\" ]; then b=$(\"$CLAUDE_PLUGIN_ROOT/hooks/bootstrap.sh\" 2>&1 >/dev/null); s=$?; fi; [ -z \"$b\" ] || printf '%s\\n' \"$b\" >&2; if [ -f \"$CLAUDE_PLUGIN_ROOT/abcd\" ] && [ -x \"$CLAUDE_PLUGIN_ROOT/abcd\" ]; then \"$CLAUDE_PLUGIN_ROOT/abcd\" hook prompt-router-reset; p=$?; \"$CLAUDE_PLUGIN_ROOT/abcd\" hook session-start; e=$?; [ \"$s\" -eq 0 ] || exit \"$s\"; [ \"$e\" -eq 0 ] || exit \"$e\"; exit \"$p\"; fi; [ -n \"$b\" ] || printf '%s\\n' \"abcd: the plugin binary is not installed, so the rule loader did not reset and the session-start checks did not run — hooks/bootstrap.sh provisions it at session start; start a session with network access, or install per https://github.com/REPPL/abcd-cli#install\" >&2; [ \"$s\" -eq 0 ] || exit \"$s\"; exit 2"}
       ]}
     ],
     "PreToolUse": [

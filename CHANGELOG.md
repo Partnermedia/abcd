@@ -86,6 +86,29 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The session-start hooks run after the bootstrap that provisions their binary,
+  and a successful install reads as success** (iss-204, iss-208). The hook
+  manifest listed the bootstrap and the two binary-backed commands as three
+  sibling `SessionStart` entries and relied on list order; the harness runs every
+  hook matching an event in parallel, so both gated entries raced a ~10.7 MB
+  download, lost, printed "the plugin binary is not installed", and genuinely did
+  not run — on every fresh install and every plugin update, since an update lands
+  in a fresh cache directory with no binary. The three entries are now ONE
+  command that runs the bootstrap and then both binary calls in a single shell,
+  so the sequencing is owned by the manifest rather than assumed of the harness.
+  The bootstrap's own message is emitted first, which is what the transcript
+  renders: on a fresh install the visible line is the checksum-verified success
+  rather than one of two missing-binary complaints, and the two complaints
+  collapse into one. The honest-failure posture is unchanged — a refusal keeps
+  its message and its exit code, a binary that is genuinely absent is still said
+  out loud, and the binary calls' stdout still reaches the model untouched. The
+  spec that shipped the bootstrap carried the false warrant ("ordering within one
+  event's hook list is preserved by the harness") as a load-bearing claim; it is
+  corrected in place, with the brief's two descriptions of the manifest. Parallel
+  hook execution and the plugin cache are not present in CI, so the end-to-end
+  proof is the manual install gate; what CI holds is the manifest's shape and the
+  chained command's behaviour against fixtures.
+
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same
   steps CI's check job runs" and named only the reviews-charter gate, though the
