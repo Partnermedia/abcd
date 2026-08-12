@@ -53,8 +53,8 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	_ = adopted
 
 	// Idempotency: zero required+resolvable gaps => exact no-op. Two exceptions
-	// fall through: the advisory git-identity pin, which install adopts through an
-	// interactive confirmation (never under --yes), as the gap's fix hint
+	// fall through: the advisory git-identity pin, which install adopts against a
+	// confirmed answer (never under --yes), as the gap's fix hint
 	// advertises; and an explicit value override that differs from the persisted
 	// config, which forces an apply-as-update on an otherwise-clean repo (iss-107).
 	// An explicit --dev (or a plain install over an existing dev shim) forces an
@@ -67,7 +67,10 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		!(!opts.Yes && pinAdoptable(det.Gaps)) &&
 		!overridesWouldChange(abs, opts.ValueOverrides) &&
 		!modeForced {
-		return InstallResult{Status: "already_up_to_date"}, nil
+		return InstallResult{
+			Status:          "already_up_to_date",
+			OptionalSkipped: optionalSkipped(opts, det.Gaps),
+		}, nil
 	}
 
 	approved, declined := resolveApproval(det.Gaps, opts, p)
@@ -116,6 +119,7 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		Changes:            ac.changes,
 		Remaining:          remaining,
 		DeclinedCategories: declined,
+		OptionalSkipped:    optionalSkipped(opts, final.Gaps),
 	}, nil
 }
 
@@ -149,11 +153,13 @@ type applyCtx struct {
 // identity — so it stays a guided manual fix.
 //
 // It does NOT auto-adopt under --yes: pinning captures whatever git identity is
-// currently set, so a non-interactive run could pin a wrong/sandbox identity as
+// currently set, so a blanket approval could pin a wrong/sandbox identity as
 // canonical (the very value the gate exists to reject). Under --yes the
-// un-pinned gap simply remains, to be adopted with an interactive confirmation.
+// un-pinned gap simply remains, to be adopted against a confirmed answer — typed
+// at a terminal, or piped to a non-interactive run (iss-167). The exclusion is
+// reported in InstallResult.OptionalSkipped, never left silent (iss-166).
 func (a *applyCtx) stepIdentityPin() {
-	if a.autoYes || !a.approved[ConfigChange] || !a.has("git_identity.unpinned") {
+	if a.autoYes || !a.approved[ConfigChange] || !a.has(OptionalPinGapID) {
 		return
 	}
 	eff, err := identity.EffectiveIdentity(a.cwd)
@@ -870,13 +876,29 @@ func Status(cwd string) (string, error) {
 // approval + gap helpers
 // ---------------------------------------------------------------------------
 
+// OptionalPinGapID is the one optional gap --yes does not cover. Named here so
+// the front doors can point at it without re-deriving the string.
+const OptionalPinGapID = "git_identity.unpinned"
+
+// optionalSkipped lists the optional gaps a --yes run left un-applied. --yes
+// approves every resolvable category but never adopts the identity pin (see
+// stepIdentityPin), so the skip is deliberate — and therefore has to be
+// reported rather than left ambient (iss-166). Outside --yes the pin is offered
+// as a confirmation, so nothing is skipped silently and the list stays empty.
+func optionalSkipped(opts InstallOptions, gaps []Gap) []string {
+	if !opts.Yes || !pinAdoptable(gaps) {
+		return nil
+	}
+	return []string{OptionalPinGapID}
+}
+
 // pinAdoptable reports whether the advisory git-identity pin is the remaining
 // work. It is the one gap install closes through an interactive confirmation
 // (never under --yes), so it must not be short-circuited by the
 // "already_up_to_date" early return.
 func pinAdoptable(gaps []Gap) bool {
 	for _, g := range gaps {
-		if g.ID == "git_identity.unpinned" {
+		if g.ID == OptionalPinGapID {
 			return true
 		}
 	}
@@ -911,6 +933,53 @@ func gapIDSet(gaps []Gap) map[string]bool {
 	return set
 }
 
+// categoryPromptOrder is the order the approval questions are asked in. It is
+// the order the apply pass acts in — dependencies surfaced, the skeleton
+// written, config values settled, user-scope state touched, and the marker
+// block written last — so what the user is asked about follows what will
+// happen to their repo.
+//
+// A fixed order is a contract, not a cosmetic. The questions are answered
+// POSITIONALLY: a human reads down the list, and a non-interactive caller pipes
+// answers in sequence. Ranging over the presence map instead handed out a fresh
+// permutation on every run, so "answer y to the first question" approved a
+// different category each time — a wrong answer that exits 0 and looks like a
+// clean install (iss-167).
+var categoryPromptOrder = []GapCategory{
+	Dependency,
+	SafeAutocreate,
+	ConfigChange,
+	UserState,
+	PluginOwned,
+}
+
+// presentInPromptOrder returns the present categories in categoryPromptOrder,
+// with any category the order does not name appended sorted. The tail matters:
+// a category added to the type and forgotten here must still land in a FIXED
+// place, so the order contract cannot be broken by omission — only made less
+// meaningful, which the coverage test catches.
+func presentInPromptOrder(present map[GapCategory]bool) []GapCategory {
+	out := make([]GapCategory, 0, len(present))
+	named := map[GapCategory]bool{}
+	for _, c := range categoryPromptOrder {
+		named[c] = true
+		if present[c] {
+			out = append(out, c)
+		}
+	}
+	var rest []string
+	for c := range present {
+		if !named[c] {
+			rest = append(rest, string(c))
+		}
+	}
+	sort.Strings(rest)
+	for _, c := range rest {
+		out = append(out, GapCategory(c))
+	}
+	return out
+}
+
 // resolveApproval computes the approved category set once and the declined list.
 func resolveApproval(gaps []Gap, opts InstallOptions, p Prompter) (map[GapCategory]bool, []string) {
 	// Categories that have at least one resolvable gap can be approved.
@@ -933,7 +1002,7 @@ func resolveApproval(gaps []Gap, opts InstallOptions, p Prompter) (map[GapCatego
 			approved[c] = true
 		}
 	default:
-		for c := range present {
+		for _, c := range presentInPromptOrder(present) {
 			if p.Confirm("Apply " + string(c) + " changes?") {
 				approved[c] = true
 			}
