@@ -15,7 +15,7 @@ survive capture.
 ## List
 
 ```bash
-abcd history list --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" history list --json
 ```
 
 Summarise each record newest-first: `captured_at`, `session_id`, `source_kind`,
@@ -25,7 +25,7 @@ no transcripts are stored for this repo yet.
 ## Show
 
 ```bash
-abcd history show <session-id-or-filename> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" history show <session-id-or-filename> --json
 ```
 
 Fetch one record's metadata and its full redacted `body`, matched by session id
@@ -35,8 +35,8 @@ the metadata and, if the user wants it, the body.
 ## Capture
 
 ```bash
-abcd history capture <transcript-file> --json
-abcd history capture --session <id> - < transcript.txt
+"${CLAUDE_PLUGIN_ROOT}/abcd" history capture <transcript-file> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" history capture --session <id> - < transcript.txt
 ```
 
 Read a raw transcript from a file argument (or stdin with `-`), redact it
@@ -47,8 +47,13 @@ session id defaults to the transcript filename; reading from stdin requires
 identical transcript already stored is a no-op. If any hard-fail secret or the
 caller's own home path survives redaction, capture refuses to write.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd history …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS

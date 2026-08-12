@@ -23,7 +23,7 @@ would have to contain the very string it forbids.
 ## Render both layers (bare)
 
 ```bash
-abcd banlist --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" banlist --json
 ```
 
 Summarise the JSON: for `private`, its `present` flag and each entry's `key` —
@@ -53,14 +53,14 @@ first line declares the keyed format.
 `list` is the same render with an optional scope:
 
 ```bash
-abcd banlist list --private --json      # or --public
+"${CLAUDE_PLUGIN_ROOT}/abcd" banlist list --private --json      # or --public
 ```
 
 ## Add an entry
 
 ```bash
-printf %s '<pattern>' | abcd banlist add --private <key> - --json
-abcd banlist add --public <key> "<pattern>" --json
+printf %s '<pattern>' | "${CLAUDE_PLUGIN_ROOT}/abcd" banlist add --private <key> - --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" banlist add --public <key> "<pattern>" --json
 ```
 
 The layer is **never** guessed: an add with no layer flag, or with both, exits 2.
@@ -101,18 +101,21 @@ the user to commit it: the public layer gates everyone.
 ## Remove an entry
 
 ```bash
-abcd banlist remove --private <key> --json
-abcd banlist remove --public  <key> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" banlist remove --private <key> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" banlist remove --public  <key> --json
 ```
 
 A public removal is refused for a hand-curated entry (an id outside `names/`):
 those are edited in the config by a human, in a reviewable commit. An unknown key
 is refused rather than treated as a no-op.
 
-## Fallback
-
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd banlist …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS

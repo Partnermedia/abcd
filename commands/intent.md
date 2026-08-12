@@ -14,7 +14,7 @@ invocation **performs zero writes**.
 ## Status (bare)
 
 ```bash
-abcd intent --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent --json
 ```
 
 Summarise the JSON for the user: counts per bucket, open/closed spec counts,
@@ -30,7 +30,7 @@ thing to do.
 ## Create a draft
 
 ```bash
-abcd intent "<text>" [--impact <additive|breaking|fix>] --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent "<text>" [--impact <additive|breaking|fix>] --json
 ```
 
 Files `drafts/itd-N-<slug>.md` seeded from the text. Report the new `id` and
@@ -50,7 +50,7 @@ Before implementing ANY `itd-N` — or whenever the user asks you to "build",
 "implement", or "work" an intent — run the gate first:
 
 ```bash
-abcd intent ready <itd-N> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent ready <itd-N> --json
 ```
 
 - **Exit 0 (ready):** proceed. The linked spec's body is the design record to
@@ -83,7 +83,7 @@ answer, but silence is not consent.
 6. Only after the human explicitly confirms the criteria are theirs, run:
 
    ```bash
-   abcd intent plan <itd-N> --json
+   "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> --json
    ```
 
    This invocation IS the maintainer's sign-off act — never run it unattended
@@ -103,7 +103,7 @@ authoring, and `abcd intent plan` are human-session-only acts.
 ## Link
 
 ```bash
-abcd intent link <itd-N> <spc-N> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent link <itd-N> <spc-N> --json
 ```
 
 Retroactively writes a planned intent's `spec_id` when a spec already claims
@@ -112,15 +112,20 @@ it (the one-sided-link remedy `ready` reports). Report the linked pair.
 ## Review / ingest
 
 ```bash
-abcd intent review <itd-N> --json                       # re-emit a shipped intent's review request
-abcd intent review ingest --verdict-json <file> --json  # apply a host-produced verdict
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent review <itd-N> --json                       # re-emit a shipped intent's review request
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent review ingest --verdict-json <file> --json  # apply a host-produced verdict
 ```
 
 Ingest is fail-closed: report the returned status (`ingested`, `dead_letter`,
 or `noop`) and, for `dead_letter`, the reason.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd intent …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS

@@ -82,7 +82,7 @@ Ask it for concrete **kill attempts**, each with an outcome: `survived`,
 Compose the verdict document and hand it to the binary:
 
 ```bash
-abcd ideate record <idea-slug> --verdict-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" ideate record <idea-slug> --verdict-json <path>   # or - for stdin
 ```
 
 `<idea-slug>` is lower-case kebab-case (it becomes a filename). The document:
@@ -144,8 +144,13 @@ Exit codes:
 - **reframed** — any graduation carries the reframing recorded in leg 3, not the
   original wording.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd ideate …`
-from the repo root, or run `go run ./cmd/abcd ahoy install` to put a binary on
-`PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS
