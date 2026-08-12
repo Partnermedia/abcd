@@ -282,5 +282,14 @@ fi
 # anyone, with no toolchain. Keep the invocation LAST on the line so it stays
 # copy-pasteable, and keep the success leading the first word: only the first
 # line of a hook's stderr reaches the transcript.
-notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session.%s For the abcd command in your own terminal, run this once — the path is absolute because abcd is not on your PATH yet, which is exactly what the command fixes: "%s" ahoy install' \
-	"$release_tag" "$meta_note" "$binary")"
+#
+# The path is wrapped in SINGLE quotes, the same form internal/core/ahoy's
+# shSingleQuote produces, because this string is printed to be pasted into a
+# shell and the plugin root is not a path this script chose. Double quotes carry
+# a space or an apostrophe safely and then leave $, a backtick and a " live: a
+# path holding one of those would expand, substitute, or terminate the string on
+# paste. The sed rewrites each embedded ' as '\'' — close, escape, reopen — which
+# is the one form that survives every byte a path can contain.
+binary_quoted="'$(printf '%s' "$binary" | sed "s/'/'\\\\''/g")'"
+notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session.%s For the abcd command in your own terminal, run this once — the path is absolute because abcd is not on your PATH yet, which is exactly what the command fixes: %s ahoy install' \
+	"$release_tag" "$meta_note" "$binary_quoted")"
