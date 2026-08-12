@@ -35,14 +35,6 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		return InstallResult{Status: "aborted"}, nil
 	}
 
-	// Where the PATH entry goes, decided BEFORE any write: an explicit --bin-dir
-	// abcd cannot write to fails the whole install loudly rather than being
-	// discovered halfway through, and abcd never re-runs itself with privilege.
-	binTargetPath, err := resolveInstallTarget(opts, det.pluginRoot)
-	if err != nil {
-		return InstallResult{}, err
-	}
-
 	// Adoption gate for an unmanaged repo.
 	adopted := false
 	if det.FolderKind == UnmanagedRepo {
@@ -59,6 +51,17 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		}
 	}
 	_ = adopted
+
+	// Where the PATH entry goes, decided BEFORE any write but AFTER the adoption
+	// gate: an explicit --bin-dir abcd cannot write to fails the whole install
+	// loudly rather than being discovered halfway through, and abcd never re-runs
+	// itself with privilege. Deciding it after adoption keeps the writability
+	// probe — which creates and removes a temp file — out of a run the user
+	// declines.
+	binTargetPath, err := resolveInstallTarget(opts, det.pluginRoot)
+	if err != nil {
+		return InstallResult{}, err
+	}
 
 	// Idempotency: zero required+resolvable gaps => exact no-op. Two exceptions
 	// fall through: the advisory git-identity pin, which install adopts through an
@@ -107,6 +110,8 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	ac.stepRules()
 	ac.stepVersionStamp()
 	ac.stepIdentityPin()
+	// Last, because it describes the entry the steps above actually wrote.
+	ac.noteReachability()
 
 	// Re-detect to compute what remains.
 	final, err := Detect(abs)
@@ -716,7 +721,14 @@ func (a *applyCtx) stepSymlink() {
 	a.clearDanglingEntry(target)
 	kind := classifyBinTarget(target, a.det.pluginRoot)
 	if kind == binTargetForeign {
-		return // never clobber something we do not own
+		// Never clobber something we do not own — and never in silence. The
+		// symlink.foreign gap is advisory, so it is filtered out of Remaining, and
+		// with no note the run reports nothing written and no reason why; under an
+		// explicit --bin-dir the detection gap does not even describe this location.
+		a.refuse("refused to write the PATH entry " + displayPath(target) +
+			": it is occupied by " + describeEntry(pathEntry{path: target, kind: kind}) +
+			". abcd never clobbers a binary it does not own — remove it, or choose another directory with `--bin-dir`.")
+		return
 	}
 	if a.devMode {
 		a.installDevShim(target, kind)
@@ -764,10 +776,14 @@ func (a *applyCtx) clearDanglingEntry(target string) {
 		return
 	}
 	if !fileExists(pluginBinaryPath(a.det.pluginRoot)) {
-		return // nothing to repoint it at; the refusal below states why
+		// Nothing to repoint it at. Leaving the link is the lesser evil (removing
+		// it would take abcd off PATH entirely for no gain), and installPinnedSymlink
+		// states the reason — its source check runs before the owned-entry early
+		// return precisely so this case is never silent.
+		return
 	}
 	if err := os.Remove(target); err != nil {
-		a.refuse("could not remove the dangling PATH entry " + displayPath(target) + ": " + err.Error())
+		a.refuse("could not remove the dangling PATH entry " + displayPath(target) + ": " + errText(err))
 	}
 }
 
@@ -777,13 +793,17 @@ func (a *applyCtx) clearDanglingEntry(target string) {
 // PATH shadows whatever else would have answered, so a broken plugin install must
 // not be converted into a broken PATH (iss-171).
 func (a *applyCtx) installPinnedSymlink(target string, kind binTargetKind) {
-	if kind == binTargetOwnedSymlink {
-		return
-	}
+	// The source check comes FIRST, before the idempotent early return: an owned
+	// entry whose binary is gone classifies as owned, so checking the kind first
+	// would return silently and leave a dangling link reported as a healthy
+	// install with no reason recorded anywhere.
 	source := pluginBinaryPath(a.det.pluginRoot)
 	if !fileExists(source) {
-		a.refuse("refused to create the PATH entry " + displayPath(target) +
+		a.refuse("refused to write the PATH entry " + displayPath(target) +
 			": its target " + displayPath(source) + " does not exist — a dangling link would shadow any working abcd on PATH. Reinstall the plugin, then re-run `abcd ahoy install`.")
+		return
+	}
+	if kind == binTargetOwnedSymlink {
 		return
 	}
 	if kind == binTargetDevShim {
@@ -793,13 +813,39 @@ func (a *applyCtx) installPinnedSymlink(target string, kind binTargetKind) {
 		a.echoChange("install_mode", "dev", "pinned")
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		a.refuse("could not create the install directory " + displayPath(filepath.Dir(target)) + ": " + err.Error())
+		a.refuse("could not create the install directory " + displayPath(filepath.Dir(target)) + ": " + errText(err))
 		return
 	}
 	if err := os.Symlink(source, target); err == nil {
 		a.note(target)
 	} else {
-		a.refuse("could not write the PATH entry " + displayPath(target) + ": " + err.Error())
+		a.refuse("could not write the PATH entry " + displayPath(target) + ": " + errText(err))
+	}
+}
+
+// noteReachability describes, on the install result itself, whether the entry
+// that was just written can actually be RUN.
+//
+// Both conditions are required gaps no apply step can close, and neither reaches
+// the user any other way: a required+non-resolvable gap is excluded from
+// Remaining, InstallResult carries no gaps, and `abcd ahoy doctor` — where the
+// gap text lives — cannot be invoked by name on a machine where abcd is not yet
+// on PATH. Install is the one place a fresh user sees output, so it says both
+// things here. It also computes them against the target actually written, which
+// is the only place an explicit --bin-dir is known.
+func (a *applyCtx) noteReachability() {
+	if a.binTarget == "" {
+		return
+	}
+	present, err := fsutil.ExistsNoFollow(a.binTarget)
+	if err != nil || !present {
+		return // nothing was installed here; a refusal already said why
+	}
+	if dir := filepath.Dir(a.binTarget); !dirOnPath(dir) {
+		a.refuse(pathReachMessage(dir))
+	}
+	if e, ok := shadowingEntry(a.det.pluginRoot, a.binTarget); ok {
+		a.refuse(shadowMessage(e, a.binTarget))
 	}
 }
 
@@ -868,7 +914,12 @@ func (a *applyCtx) stepVersionStamp() {
 
 // Uninstall removes the marker block and the owned PATH symlink only. It never
 // mutates hooks.json or the .abcd/ namespace.
-func Uninstall(cwd string) (UninstallReceipt, error) {
+//
+// binDir names the directory to look in, for the one case detection cannot
+// derive: an install placed by `--bin-dir` in a directory that is not on PATH is
+// invisible to a PATH scan, so uninstall would otherwise orphan it. Empty means
+// the derived location — an abcd-owned entry anywhere on PATH, else the default.
+func Uninstall(cwd, binDir string) (UninstallReceipt, error) {
 	abs, err := filepath.Abs(cwd)
 	if err != nil {
 		return UninstallReceipt{}, err
@@ -891,6 +942,11 @@ func Uninstall(cwd string) (UninstallReceipt, error) {
 	// rather than one blessed path.
 	pluginRoot, ok := resolvePluginRoot()
 	target := adoptedBinTarget(pluginRoot)
+	if binDir != "" {
+		if abs, aerr := filepath.Abs(binDir); aerr == nil {
+			target = filepath.Join(abs, binName)
+		}
+	}
 	if target == "" {
 		receipt.Symlink.Note = "no user-scope install location; left untouched"
 		return receipt, nil

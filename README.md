@@ -199,6 +199,12 @@ and `abcd ahoy install` writes its own `PATH` entry to `~/.local/bin` unless you
 point it elsewhere with `--bin-dir`. abcd never escalates privileges: a
 directory it can't write to is an error, not a prompt for your password.
 
+Already have an `abcd` in a system directory from an earlier install? Delete it
+(`rm /usr/local/bin/abcd`, with whatever rights put it there) — otherwise it
+comes first on `PATH` and keeps answering instead of the new one. `abcd ahoy`
+names it in a gap rather than removing it: abcd does not touch a binary it does
+not own.
+
 Prefer to inspect before running? The command is exactly what it says: two
 downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
 a checksum verification, and a copy into a directory you own. You can do the

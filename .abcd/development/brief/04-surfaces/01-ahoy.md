@@ -165,7 +165,11 @@ Steps, run in parallel where independent:
    this plugin, at a different binary, or at nothing. An owned entry whose target
    has gone is `symlink.dangling`; an install directory absent from `PATH` is
    `path.bin_dir_not_on_path`, required but not resolvable — abcd prints the
-   one-line `export` fix and never edits a shell profile (iss-171).
+   one-line `export` fix and never edits a shell profile; and any `abcd` that
+   comes BEFORE abcd's own entry on `PATH` is `symlink.shadowed`, because an
+   entry that is correct and never reached is not an install (iss-171). Install
+   carries the two non-resolvable ones on its own result as notes: a fresh user
+   cannot run `doctor` by name on a machine where abcd is not yet on `PATH`.
 9. **Hook manifest verification** (verify-only per spc-16 T1) — VERIFY that
    `hooks/hooks.json` is present in the plugin install AND contains the three
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)

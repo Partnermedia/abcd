@@ -1583,7 +1583,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	ahoyCmd.AddCommand(installCmd)
 
 	// uninstall
-	ahoyCmd.AddCommand(&cobra.Command{
+	var uninstallBinDir string
+	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove the marker block and owned PATH symlink (leaves .abcd/ intact)",
 		Args:  cobra.NoArgs,
@@ -1592,7 +1593,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			receipt, err := ahoy.Uninstall(cwd)
+			receipt, err := ahoy.Uninstall(cwd, uninstallBinDir)
 			if err != nil {
 				return err
 			}
@@ -1602,7 +1603,9 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "  symlink: %s\n", symlinkNote(receipt))
 			})
 		},
-	})
+	}
+	uninstallCmd.Flags().StringVar(&uninstallBinDir, "bin-dir", "", "directory holding the PATH entry to remove; needed only when it was installed with --bin-dir into a directory that is not on PATH")
+	ahoyCmd.AddCommand(uninstallCmd)
 
 	// doctor
 	ahoyCmd.AddCommand(&cobra.Command{

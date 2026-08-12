@@ -69,7 +69,13 @@ Install or update abcd in this repo (idempotent)
 
 Remove the marker block and owned PATH symlink (leaves .abcd/ intact)
 
-**Usage:** `abcd ahoy uninstall`
+**Usage:** `abcd ahoy uninstall [flags]`
+
+**Flags:**
+
+```
+      --bin-dir string   directory holding the PATH entry to remove; needed only when it was installed with --bin-dir into a directory that is not on PATH
+```
 
 ### `abcd audit`
 

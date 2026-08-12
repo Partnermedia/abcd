@@ -212,13 +212,14 @@ func scanPathEntries(pluginRoot string) []pathEntry {
 			continue
 		}
 		e := pathEntry{path: candidate, kind: classifyBinTarget(candidate, pluginRoot)}
-		if e.owned() {
-			// Stat FOLLOWS the link: a dangling entry is one whose target is gone.
-			// A stat error other than not-exist is not proof of a dangling link, so
-			// it reads as healthy rather than manufacturing a gap.
-			if present, err := fsutil.Exists(candidate); err == nil && !present {
-				e.dangling = true
-			}
+		// Stat FOLLOWS the link: a dangling entry is one whose target is gone. It
+		// is computed for EVERY entry, ours or not — a foreign dangling `abcd`
+		// still occupies the name and still shadows the entries behind it, and a
+		// scan that only looked at our own would report it as nothing at all. A
+		// stat error other than not-exist is not proof of a dangling link, so it
+		// reads as healthy rather than manufacturing a gap.
+		if present, err := fsutil.Exists(candidate); err == nil && !present {
+			e.dangling = true
 		}
 		entries = append(entries, e)
 	}
@@ -255,6 +256,79 @@ func effectiveBinTarget(pluginRoot string) string {
 		return e.path
 	}
 	return binTarget()
+}
+
+// sameEntry reports whether two PATH entries name the same file. The DIRECTORY
+// is canonicalised and the leaf name compared verbatim: resolving the leaf would
+// follow the symlink and compare an entry against the binary it points at, which
+// is a different question (and would make an owned entry equal to every other
+// link into the same plugin root).
+func sameEntry(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if filepath.Base(a) != filepath.Base(b) {
+		return false
+	}
+	return resolvePath(filepath.Dir(a)) == resolvePath(filepath.Dir(b))
+}
+
+// shadowingEntry returns the first `abcd` on PATH that precedes target — the
+// binary that actually answers when the user types `abcd`, whatever abcd itself
+// installed. Writing a correct entry BEHIND an existing one leaves the machine
+// running the old binary while every report says the install is clean, which is
+// exactly the state a copied pre-iss-171 install (a regular file at
+// /usr/local/bin/abcd, foreign because it is not a symlink of ours) produces.
+func shadowingEntry(pluginRoot, target string) (pathEntry, bool) {
+	if target == "" {
+		return pathEntry{}, false
+	}
+	for _, e := range scanPathEntries(pluginRoot) {
+		if sameEntry(e.path, target) {
+			return pathEntry{}, false // target is reached first: nothing shadows it
+		}
+		return e, true
+	}
+	return pathEntry{}, false
+}
+
+// describeEntry names what occupies a PATH entry, in the words a human needs to
+// decide what to do about it. It never guesses: an entry abcd does not own is
+// described by its shape, not by an assumption about its provenance.
+func describeEntry(e pathEntry) string {
+	switch {
+	case e.kind == binTargetDevShim:
+		return "abcd's own dev-mode shim"
+	case e.kind == binTargetOwnedSymlink && e.dangling:
+		return "an abcd symlink whose target is gone"
+	case e.kind == binTargetOwnedSymlink:
+		return "an abcd symlink"
+	case e.dangling:
+		return "a symlink whose target is gone"
+	}
+	if fi, err := os.Lstat(e.path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if dest, rerr := os.Readlink(e.path); rerr == nil {
+			return "a symlink to " + displayPath(dest) + ", which abcd does not own"
+		}
+		return "a symlink abcd does not own"
+	}
+	return "a file abcd does not own"
+}
+
+// shadowMessage is the single wording for a shadowed install, shared by the
+// detection gap and the install-time note so the two can never drift.
+func shadowMessage(e pathEntry, target string) string {
+	return displayPath(e.path) + " (" + describeEntry(e) + ") comes before " +
+		displayPath(target) + " on PATH, so it is what runs when you type `abcd`. " +
+		"Remove or rename it, or install ahead of it with `abcd ahoy install --bin-dir <dir>`. " +
+		"abcd never clobbers a binary it does not own."
+}
+
+// pathReachMessage is the single wording for an install directory that is not on
+// PATH, shared by the detection gap and the install-time note.
+func pathReachMessage(dir string) string {
+	return displayPath(dir) + " is not on PATH, so `abcd` cannot be run by name. " +
+		"Add it to your shell profile: " + exportPathLine(dir)
 }
 
 // dirWritable reports whether a file can actually be created in dir. It probes

@@ -451,7 +451,29 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 	}
 
 	gaps = append(gaps, detectBinDirOnPath(filepath.Dir(target), installed)...)
+	gaps = append(gaps, detectShadowedEntry(pluginRoot, target)...)
 	return gaps
+}
+
+// detectShadowedEntry reports an `abcd` that precedes abcd's own entry on PATH.
+// Without it the most common pre-iss-171 machine reports a clean, pinned install
+// forever while a stale copy keeps executing: the old one-liner COPIED the binary
+// to /usr/local/bin, and a copy is a regular file, so it classifies foreign, is
+// never adopted, and the new entry lands behind it. abcd cannot resolve this —
+// removing a binary it does not own is exactly what it refuses to do — so the gap
+// is required and diagnostic, naming the occupant and both remedies.
+func detectShadowedEntry(pluginRoot, target string) []Gap {
+	e, ok := shadowingEntry(pluginRoot, target)
+	if !ok {
+		return nil
+	}
+	return []Gap{{
+		ID: "symlink.shadowed", Category: ConfigChange, Scope: "machine",
+		Title:    "another abcd on PATH answers first",
+		Detail:   shadowMessage(e, target),
+		FixHint:  "Remove or rename " + displayPath(e.path) + ", or install ahead of it with `abcd ahoy install --bin-dir <dir>`.",
+		Required: true, Resolvable: false,
+	}}
 }
 
 // detectBinDirOnPath reports an install directory that is not on PATH. It is a
@@ -464,14 +486,16 @@ func detectBinDirOnPath(dir string, installed bool) []Gap {
 		return nil
 	}
 	// Silent while there is nothing there yet AND no install: the missing-entry
-	// gap already says what to do, and install will surface this straight after.
+	// gap already says what to do, and the install run itself emits the same
+	// wording as a note for the directory it actually writes (which is the only
+	// place that knows about an explicit --bin-dir).
 	if !installed {
 		return nil
 	}
 	return []Gap{{
 		ID: "path.bin_dir_not_on_path", Category: ConfigChange, Scope: "machine",
 		Title:    displayPath(dir) + " is not on PATH",
-		Detail:   "abcd is installed at " + displayPath(filepath.Join(dir, binName)) + ", but " + displayPath(dir) + " is not in PATH, so `abcd` cannot be run by name.",
+		Detail:   "abcd is installed at " + displayPath(filepath.Join(dir, binName)) + ". " + pathReachMessage(dir),
 		FixHint:  "Add it to your shell profile: " + exportPathLine(dir),
 		Required: true, Resolvable: false,
 	}}
@@ -480,7 +504,9 @@ func detectBinDirOnPath(dir string, installed bool) []Gap {
 // detectInstallMode reports the current PATH-target install mode: "dev (tip
 // build)" when the track-latest shim occupies it, "pinned" when our owned symlink
 // does, and "" when the target is absent, foreign, or the plugin root is
-// unresolved (nothing to attribute a mode to).
+// unresolved (nothing to attribute a mode to). A mode that another `abcd` earlier
+// on PATH shadows is reported as shadowed rather than as a healthy install: the
+// entry is correct and it is still not what runs.
 func detectInstallMode(pluginRoot string, pluginOK bool) string {
 	if !pluginOK {
 		return ""
@@ -493,14 +519,19 @@ func detectInstallMode(pluginRoot string, pluginOK bool) string {
 	if present, err := fsutil.Exists(target); err == nil && !present {
 		return ""
 	}
+	mode := ""
 	switch classifyBinTarget(target, pluginRoot) {
 	case binTargetDevShim:
-		return "dev (tip build)"
+		mode = "dev (tip build)"
 	case binTargetOwnedSymlink:
-		return "pinned"
+		mode = "pinned"
 	default:
 		return ""
 	}
+	if _, shadowed := shadowingEntry(pluginRoot, target); shadowed {
+		return mode + " (shadowed on PATH)"
+	}
+	return mode
 }
 
 func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {

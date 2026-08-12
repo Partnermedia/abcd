@@ -235,7 +235,7 @@ func TestUninstallRemovesDevShim(t *testing.T) {
 	if _, err := Install(repo, devInstallOpts(), RefusingPrompter{}); err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := Uninstall(repo)
+	receipt, err := Uninstall(repo, "")
 	if err != nil {
 		t.Fatal(err)
 	}

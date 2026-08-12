@@ -356,7 +356,7 @@ func TestUninstallReceiptCarriesNoAbsoluteHomePath(t *testing.T) {
 	t.Setenv("PATH", binDir)
 	linkOwned(t, filepath.Join(binDir, "abcd"), pluginRoot)
 
-	receipt, err := Uninstall(managedRepo(t))
+	receipt, err := Uninstall(managedRepo(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,5 +368,215 @@ func TestUninstallReceiptCarriesNoAbsoluteHomePath(t *testing.T) {
 	}
 	if want := "~/.local/bin/abcd"; receipt.Symlink.Target != want {
 		t.Errorf("receipt target = %q, want %q", receipt.Symlink.Target, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// review round: what shadows what, and what says so
+// ---------------------------------------------------------------------------
+
+// writeForeign plants a binary abcd does not own at path.
+func writeForeign(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("#!/bin/sh\necho stale\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func notesJoined(notes []string) string { return strings.Join(notes, "\n") }
+
+// TestDetectShadowedByForeignCopyOnPath is the population the old README
+// one-liner created: it COPIED the binary to /usr/local/bin, and a copy is a
+// regular file, so it classifies foreign, is never adopted, and a correct entry
+// installed behind it is never what runs. Reporting that as a clean pinned
+// install is the lie this gap ends.
+func TestDetectShadowedByForeignCopyOnPath(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	stale := filepath.Join(t.TempDir(), "usr-local-bin")
+	t.Setenv("PATH", stale+string(os.PathListSeparator)+binDir)
+	writeForeign(t, filepath.Join(stale, "abcd"))
+	linkOwned(t, filepath.Join(binDir, "abcd"), pluginRoot)
+
+	det, err := Detect(managedRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := gapByID(det.Gaps, "symlink.shadowed")
+	if g == nil {
+		t.Fatalf("a stale copy earlier on PATH produced no symlink.shadowed gap: %+v", det.Gaps)
+	}
+	if !g.Required {
+		t.Errorf("symlink.shadowed must be required: %+v", g)
+	}
+	if !strings.Contains(g.Detail, filepath.Join(stale, "abcd")) {
+		t.Errorf("the gap does not name the occupant: %q", g.Detail)
+	}
+	if m, _ := det.Signals["install_mode"].(string); m == "pinned" {
+		t.Errorf("install_mode = %q — a shadowed entry must not report as a healthy pinned install", m)
+	}
+}
+
+// TestInstallBehindForeignCopyReportsShadowing is the same defect at the moment
+// it is created: install writes a correct entry BEHIND the stale copy, and must
+// say so on the result. A clean status with no note is how a machine ends up
+// running the old binary forever.
+func TestInstallBehindForeignCopyReportsShadowing(t *testing.T) {
+	home, _ := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	stale := filepath.Join(t.TempDir(), "usr-local-bin")
+	t.Setenv("PATH", stale+string(os.PathListSeparator)+binDir)
+	writeForeign(t, filepath.Join(stale, "abcd"))
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(binDir, "abcd")); err != nil {
+		t.Fatalf("install wrote no entry at all: %v", err)
+	}
+	if !strings.Contains(notesJoined(res.Notes), filepath.Join(stale, "abcd")) {
+		t.Errorf("install did not report the shadowing binary; notes = %v", res.Notes)
+	}
+}
+
+// TestDetectDanglingForeignEntryIsDescribed pins the half the first cut missed:
+// dangling was computed only for entries abcd owns, so a foreign `abcd` pointing
+// at nothing was reported as nothing at all — while still occupying the name.
+func TestDetectDanglingForeignEntryIsDescribed(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	stale := filepath.Join(t.TempDir(), "stale")
+	t.Setenv("PATH", stale+string(os.PathListSeparator)+binDir)
+	if err := os.MkdirAll(stale, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "gone", "abcd"), filepath.Join(stale, "abcd")); err != nil {
+		t.Fatal(err)
+	}
+	linkOwned(t, filepath.Join(binDir, "abcd"), pluginRoot)
+
+	det, err := Detect(managedRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := gapByID(det.Gaps, "symlink.shadowed")
+	if g == nil {
+		t.Fatalf("a dangling foreign entry produced no gap: %+v", det.Gaps)
+	}
+	if !strings.Contains(g.Detail, "target is gone") {
+		t.Errorf("the gap does not describe the occupant as dangling: %q", g.Detail)
+	}
+}
+
+// TestInstallForeignOccupantAtBinDirIsRefusedLoudly: the foreign bail-out wrote
+// nothing and recorded nothing, and symlink.foreign is advisory so it is
+// filtered out of Remaining — under an explicit --bin-dir the run reported a
+// clean status while the remedy text pointed at a location the user overrode.
+func TestInstallForeignOccupantAtBinDirIsRefusedLoudly(t *testing.T) {
+	setupUserScope(t)
+	dir := filepath.Join(t.TempDir(), "opt", "bin")
+	t.Setenv("PATH", dir)
+	writeForeign(t, filepath.Join(dir, "abcd"))
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts := installOpts()
+	opts.BinDir = dir
+
+	res, err := Install(repo, opts, RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := notesJoined(res.Notes)
+	if !strings.Contains(joined, dir) || !strings.Contains(joined, "does not own") {
+		t.Errorf("the foreign occupant was refused in silence; notes = %v", res.Notes)
+	}
+}
+
+// TestInstallFreshPathGapIsCarriedOnNotes: "~/.local/bin is not on PATH" is a
+// required, non-resolvable gap, so it is excluded from Remaining, absent from
+// InstallResult, and printed only by `doctor` — which cannot be run by name on
+// the very machine where abcd is not on PATH. Install carries it.
+func TestInstallFreshPathGapIsCarriedOnNotes(t *testing.T) {
+	home, _ := setupUserScope(t, filepath.Join(t.TempDir(), "elsewhere"))
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := notesJoined(res.Notes)
+	if !strings.Contains(joined, `export PATH="$HOME/.local/bin:$PATH"`) {
+		t.Errorf("install did not carry the PATH fix; notes = %v", res.Notes)
+	}
+	if strings.Contains(joined, home) {
+		t.Errorf("a note leaks the absolute home path: %v", res.Notes)
+	}
+}
+
+// TestInstallDanglingEntryWithMissingBinaryRefusesLoudly: the owned-symlink
+// early return preceded the source check, so a dangling entry plus a missing
+// plugin binary produced status=partial with no note and no reason anywhere.
+func TestInstallDanglingEntryWithMissingBinaryRefusesLoudly(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	linkOwned(t, filepath.Join(binDir, "abcd"), pluginRoot)
+	if err := os.Remove(pluginBinaryPath(pluginRoot)); err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(notesJoined(res.Notes), "does not exist") {
+		t.Errorf("a dangling entry with no binary to repoint at was silent; notes = %v", res.Notes)
+	}
+}
+
+// TestInstallBinDirOffPathIsDescribedAndRemovable: an entry written outside PATH
+// by an explicit --bin-dir is invisible to a PATH scan, so it was written and
+// never described, and uninstall could not reach it. Install describes the
+// directory it actually wrote, and uninstall takes the same flag.
+func TestInstallBinDirOffPathIsDescribedAndRemovable(t *testing.T) {
+	setupUserScope(t, filepath.Join(t.TempDir(), "elsewhere"))
+	dir := filepath.Join(t.TempDir(), "opt", "bin")
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts := installOpts()
+	opts.BinDir = dir
+
+	res, err := Install(repo, opts, RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(notesJoined(res.Notes), `export PATH="`+dir+`:$PATH"`) {
+		t.Errorf("the --bin-dir entry was written without describing its reachability; notes = %v", res.Notes)
+	}
+	receipt, err := Uninstall(repo, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.Symlink.Removed {
+		t.Errorf("uninstall could not reach the --bin-dir entry: %+v", receipt.Symlink)
 	}
 }

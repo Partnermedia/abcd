@@ -67,6 +67,14 @@ failure and let the user pick a directory they own. If the report carries a
 `path.bin_dir_not_on_path` gap, relay its one-line `export` fix verbatim and
 leave the user's shell profile alone.
 
+A `symlink.shadowed` gap (or a note saying the same) means another `abcd` comes
+first on `PATH`, so the entry abcd just wrote is NOT what runs — typically a
+binary an older install copied into a system directory. Relay it prominently:
+the install is not finished from the user's point of view. abcd will not remove
+that binary, and neither should you offer to; state the two remedies it gives
+(delete the stale one, or install ahead of it with `--bin-dir`) and let the user
+choose.
+
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
 the source tip on every call and fails loudly on a broken build. Re-running
@@ -82,7 +90,9 @@ the source tip on every call and fails loudly on a broken build. Re-running
 entry — found wherever it sits on `PATH` — and leaves `.abcd/` intact, so the
 repo's record survives. Report `marker.removed` and the symlink note; the
 receipt's `symlink.target` is already rendered in tilde form, so relay it as
-given rather than expanding it. It never touches `hooks.json`.
+given rather than expanding it. It never touches `hooks.json`. An entry that was
+installed with `--bin-dir` into a directory outside `PATH` cannot be found by a
+`PATH` scan — pass the same `--bin-dir <dir>` to `uninstall` to remove it.
 
 ## `doctor` — the full read-only report
 

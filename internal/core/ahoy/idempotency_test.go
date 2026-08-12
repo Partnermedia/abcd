@@ -172,7 +172,7 @@ func TestUninstallInstallRoundTrip(t *testing.T) {
 	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Uninstall(repo); err != nil {
+	if _, err := Uninstall(repo, ""); err != nil {
 		t.Fatal(err)
 	}
 	// After uninstall the marker block is gone but .abcd/ survives.
