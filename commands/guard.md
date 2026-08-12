@@ -15,7 +15,7 @@ command performs **zero writes**.
 Pass the candidate on **stdin**, inside a quoted-delimiter heredoc:
 
 ```bash
-abcd guard check --json <<'ABCD_GUARD_EOF'
+"${CLAUDE_PLUGIN_ROOT}/abcd" guard check --json <<'ABCD_GUARD_EOF'
 <the command line, verbatim, on one or more lines>
 ABCD_GUARD_EOF
 ```
@@ -47,7 +47,7 @@ On a `block`, do not run the command. Tell the user the `why`, then run the
 ## `hook` — the host adapter
 
 ```bash
-abcd guard hook
+"${CLAUDE_PLUGIN_ROOT}/abcd" guard hook
 ```
 
 Reads a host pre-tool-use hook payload on stdin and applies the same decision
@@ -97,12 +97,21 @@ coverage — never that the guard cleared the command.
 A candidate too long to read is refused (exit 2), not answered on the part that
 fitted.
 
-To check whether the guard is actually armed in this repo, run `abcd ahoy` and
-read its `guard:` line: it reports whether the hook is installed, whether the
-binary is reachable, and whether the registry loads.
+To check whether the guard is actually armed in this repo, run
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy` and read its `guard:` line: it reports
+whether the hook is installed, whether the binary is reachable, and whether the
+registry loads.
 
-If the `abcd` binary is not on `PATH`, fall back to `go run ./cmd/abcd guard
-check --json` from the repo root, with the same quoted-delimiter heredoc on
-stdin, or run `go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
+
+Whichever rung fires, the candidate still goes in on stdin via the
+quoted-delimiter heredoc shown above.
 
 **User input:** $ARGUMENTS

@@ -13,7 +13,7 @@ never fixes them (remediation stays with `/abcd:prepare-this-repo`).
 Run:
 
 ```bash
-abcd audit --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" audit --json
 ```
 
 Then summarise the JSON for the user. Its shape is `{ "findings": [ … ],
@@ -35,8 +35,13 @@ Conftest tri-state — `0` clean, `1` warnings only, `2` any error — so
 A finding on a deliberately illustrative line can be waived by adding
 `abcd-audit:allow` on that line.
 
-If the `abcd` binary is not on `PATH`, fall back to
-`go run ./cmd/abcd audit --json` from the repo root, or run
-`go run ./cmd/abcd ahoy install` to put a binary on `PATH`.
+**Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
+provisions the binary into the plugin root, so this is the rung that fires for a
+plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
+too, you are in a source checkout of this repo, where — and only there —
+`go run ./cmd/abcd` works, the published payload carrying no `cmd/`. To put a
+binary on `PATH`, run `ahoy install` through whichever rung just resolved:
+`"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
+`go run ./cmd/abcd ahoy install` in a source checkout.
 
 **User input:** $ARGUMENTS
