@@ -7,6 +7,8 @@ category: "security"
 source: "impl-review"
 found_during: "itd-74-increment-2-review"
 found_at: "internal/core/ahoy/apply.go"
+resolution: "install receipt reports repo-relative and ~-relative paths; the scrub sits at the note seam, which a test holds to being the receipt's only writer"
+impact: fix
 ---
 
 ahoy install reports every written artefact as an absolute filesystem path, so an install receipt pasted into an issue or a transcript carries the developer's home directory and username

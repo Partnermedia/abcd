@@ -116,6 +116,98 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The one instruction that resolves the no-binary-on-`PATH` state can now be run
+  in that state** (iss-207). The bootstrap's success notice and the README both
+  said to run `abcd ahoy install` once — a command whose whole premise is that
+  `abcd` is not a name the shell can resolve, so it failed with "command not
+  found" for precisely the reader it was written for. On the first manual install
+  the consequence was not cosmetic: the agent reading the notice could not run the
+  printed command, invented a `go run` incantation reaching into the harness's
+  plugin cache, and told the user to run that instead — a source-build path
+  needing a Go toolchain, and not the documented install at all. The notice now
+  prints the absolute plugin-root path the script already holds, shell-quoted so
+  a plugin root containing a space, an apostrophe, a `$` or a backtick still
+  pastes as one word, and with the invocation last on the line so it stays
+  copy-pasteable to the end. The README carries the same form with the one part a
+  committed file cannot know left as a placeholder, says what that placeholder is
+  in host-agnostic terms, and points a reader who cannot instantiate it at the
+  install one-liner, which needs no plugin root. CI holds both surfaces — every
+  `ahoy install` either one prints must be reached through a path, not a bare
+  name, and the printed command is handed to a real shell against a hostile path
+  to prove it runs as pasted — while the end-to-end reading of it on a real
+  plugin cache remains the manual install gate.
+
+- **The session-start hooks run after the bootstrap that provisions their binary,
+  and a successful install reads as success** (iss-204, iss-208). The hook
+  manifest listed the bootstrap and the two binary-backed commands as three
+  sibling `SessionStart` entries and relied on list order; the harness runs every
+  hook matching an event in parallel, so both gated entries raced a ~10.7 MB
+  download, lost, printed "the plugin binary is not installed", and genuinely did
+  not run — on every fresh install and every plugin update, since an update lands
+  in a fresh cache directory with no binary. The three entries are now ONE
+  command that runs the bootstrap and then both binary calls in a single shell,
+  so the sequencing is owned by the manifest rather than assumed of the harness.
+  Chaining them makes two further properties load-bearing, and both are held
+  explicitly: the hook payload is read once and piped to each call separately,
+  because every hook verb consumes the whole of stdin and a shared stdin would
+  leave `session-start` reading EOF and silently disabling its notices; and
+  `session-start` runs ahead of `prompt-router-reset`, whose unconditional
+  success diagnostic would otherwise be the one line the transcript renders.
+  The bootstrap's own message is emitted first, which is what the transcript
+  renders: on a fresh install the visible line is the checksum-verified success
+  rather than one of two missing-binary complaints, and the two complaints
+  collapse into one. The honest-failure posture is unchanged — a refusal keeps
+  its message and its exit code, a binary that is genuinely absent is still said
+  out loud, and the binary calls' stdout still reaches the model untouched. The
+  spec that shipped the bootstrap carried the false warrant ("ordering within one
+  event's hook list is preserved by the harness") as a load-bearing claim; it is
+  corrected in place, with the brief's two descriptions of the manifest. Parallel
+  hook execution and the plugin cache are not present in CI, so the end-to-end
+  proof is the manual install gate; what CI holds is the manifest's shape and the
+  chained command's behaviour against fixtures.
+- **`ahoy install` prompts read a piped answer, in a fixed order, and `--yes` says
+  what it does not cover** (iss-167, iss-166). The prompter attached to stdin only
+  when stdin was a terminal, so `yes | abcd ahoy install` — the first thing an
+  agent reaches for — arrived as a decline on every question, and the interactive
+  path could not be driven at all: the agent reported failure and handed the step
+  back to the human. Prompts now read stdin whether or not it is a terminal, and
+  off a terminal each question's answer is echoed to stderr, so a piped run leaves
+  a transcript of what was asked and answered. Piped answers are positional, so
+  the approval questions are now asked in a **fixed order** — dependency,
+  safe-autocreate, config-change, user-state, plugin-owned, the order the apply
+  pass acts in — where the walk previously ranged over a map and handed out a
+  fresh permutation on every run: the same command approved a different category
+  each time, exiting 0 and reading as a clean install. One line answers one
+  question, which is why `yes` is the documented form. The safe default is
+  unchanged:
+  answers that run out read as EOF, and EOF declines every confirm and takes the
+  default for every prompt, so an unattended run still adopts nothing it was not
+  told to adopt. The interactive path at a terminal is untouched. Folded in:
+  `--yes` deliberately does not adopt the optional git-identity pin — the pin
+  records whatever identity is currently configured, and a blanket approval would
+  canonicalise a sandbox or agent identity, the very value the identity gate
+  exists to reject — but it reported "already up to date" without mentioning the
+  skip. The exclusion is now stated in the flag's own help, carried in the install
+  envelope as `optional_skipped`, and printed with the way to apply it —
+  `yes | abcd ahoy install` — which the piped answer makes available to a
+  non-interactive caller for the first time. A run that must neither block nor
+  prompt closes stdin and pre-answers
+  (`abcd ahoy install --yes --refuse-adopt < /dev/null`); the plugin surface says
+  so, because reading a non-terminal stdin means a stdin held open and silent
+  makes a prompt wait rather than decline.
+- **An `ahoy install` receipt is safe to paste** (iss-177). Every apply step
+  reported its write as an absolute path and the CLI printed them verbatim, so a
+  receipt pasted into an issue or a transcript carried the developer's home
+  directory and username — while the sibling verbs already routed their error
+  text through a shared path scrub the receipt did not use. The receipt now
+  reports a repo write repo-relative (`.abcd/config.json`) and a user-scope write
+  home-relative (`~/.abcd/history/index.json`), leaving a location that names no
+  developer (`/usr/local/bin/abcd`) exactly as written — the same limit the error
+  scrub already states, through the same primitive, which moved to
+  `internal/fsutil` so the two cannot drift. The scrub sits at the one seam every
+  step reports through rather than in each step's string, and a test holds that
+  seam to being the only writer of the receipt, so a step added later cannot
+  reintroduce an absolute path by forgetting.
 - **The command surface reaches the binary a plugin install actually provisions**
   (iss-205). Every command file resolved the binary as a bare `abcd` on `PATH`
   with a `go run ./cmd/abcd` fallback, and none named `${CLAUDE_PLUGIN_ROOT}` —

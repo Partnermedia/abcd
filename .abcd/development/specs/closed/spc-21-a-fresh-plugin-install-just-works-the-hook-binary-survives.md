@@ -18,9 +18,10 @@ plus wiring plus reporting: no `internal/core` behaviour changes.
 
 - **`hooks/bootstrap.sh`** (new, committed): the self-provisioning script.
   Needs no abcd binary to run — the binary is exactly what is missing.
-- **`hooks/hooks.json`**: the bootstrap becomes the first `SessionStart`
-  entry, ahead of the binary-backed `prompt-router-reset` / `session-start`
-  commands.
+- **`hooks/hooks.json`**: the `SessionStart` event is ONE entry whose command
+  runs the bootstrap and then the binary-backed `prompt-router-reset` /
+  `session-start` calls in the same shell (see Hook wiring, and the correction
+  recorded there).
 - **`$CLAUDE_PLUGIN_ROOT/.binary-meta`** (new, written by the bootstrap): one
   small key=value file recording `release_tag`, `release_sha` (when
   resolvable), `fetched_at`, and `plugin_sha` — the input for skew reporting.
@@ -85,15 +86,41 @@ Behaviour, in order:
 
 ### Hook wiring
 
-`hooks.json` gains, as the first `SessionStart` hook:
+`hooks.json` declares ONE `SessionStart` entry, whose command runs the
+bootstrap and then the two binary-backed calls in a single shell:
 
 ```json
-{"type": "command", "command": "\"$CLAUDE_PLUGIN_ROOT/hooks/bootstrap.sh\""}
+{"type": "command", "timeout": 240, "command": "… bootstrap.sh …; i=$(cat); … abcd hook session-start; … abcd hook prompt-router-reset"}
 ```
 
-Ordering within one event's hook list is preserved by the harness, so the
-binary-backed session hooks run after the bootstrap in the same event. The
-`UserPromptSubmit`/`PreToolUse`/`PreCompact`/`SessionEnd` commands are
+Two properties of that chain are load-bearing and easy to lose. **The payload is
+read once and piped to each call separately.** Every hook verb takes its input
+with `io.ReadAll` over the whole of stdin (`readHookInput`), so two calls sharing
+one stdin leave the second reading EOF — `hook session-start` would fail to
+unmarshal and take its silent `return nil` path, disabling both of its notices
+in every session. **`session-start` runs before `prompt-router-reset`**, because
+the reset ends with an unconditional "abcd rules: reset session" diagnostic on
+stderr, and whichever call runs first owns the only line the transcript renders.
+The exit precedence (bootstrap, then `session-start`, then the reset) is
+computed from saved status codes and does not depend on that order.
+
+**Correction (2026-08-12, iss-204 / iss-208).** This section wired the
+bootstrap as the first of THREE sibling `SessionStart` entries on the warrant
+that *"ordering within one event's hook list is preserved by the harness, so
+the binary-backed session hooks run after the bootstrap in the same event"*.
+That warrant is **false**, and it was load-bearing: the harness runs every hook
+matching an event **in parallel** (the hooks reference says so verbatim). Both
+gated entries raced the ~10.7 MB download, lost, printed "the plugin binary is
+not installed", and genuinely did not run — on every fresh install and every
+plugin update, since an update lands in a fresh commit-stamped cache directory
+with no binary. The three entries are collapsed into the one command above, so
+the sequencing is OWNED by the manifest rather than assumed of the harness; the
+two gated messages become one; and the bootstrap's own message is emitted
+first, so the single line the transcript renders is the success rather than a
+missing-binary complaint (iss-208). Nothing else in this spec rests on hook
+ordering. Do not restore the ordering warrant.
+
+The `UserPromptSubmit`/`PreToolUse`/`PreCompact`/`SessionEnd` commands are
 unchanged — on the first-ever event before any `SessionStart` completed they
 fail as today (fail-open guard with UNGUARDED warning, per the intent's
 guard-window decision).

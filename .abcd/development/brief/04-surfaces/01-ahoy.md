@@ -174,8 +174,10 @@ Steps, run in parallel where independent:
    `hooks/hooks.json` is present in the plugin install AND contains the three
    required event entries (`UserPromptSubmit`, `SessionStart`, `PreCompact`)
    each referencing the expected prompt-router hook commands. The shipped
-   manifest also wires `abcd hook session-start` (a second `SessionStart`
-   command), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
+   manifest also wires `abcd hook session-start` (chained after the bootstrap
+   and ahead of `prompt-router-reset` inside the ONE `SessionStart` command —
+   the harness runs sibling hooks in parallel, so the event carries a single
+   entry), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
    hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
    against the hazard registry before it runs) — five event types in all;
    verification covers only the three prompt-router commands above. A missing or
@@ -247,7 +249,33 @@ unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 dogfood mode (the PATH entry rebuilds from the source tip on every call instead
 of pinning the built binary). `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
-interactive confirmation.
+answered prompt. The identity-pin exclusion is stated, never assumed: `--yes`
+names it in its own help, the install envelope carries it as `optional_skipped`,
+and the completion output prints it with the way to apply it (iss-166).
+
+**Answers arrive from stdin whether or not stdin is a terminal** (iss-167).
+The prompts are the same prompts; only the reader differs. At a terminal a human
+types them; off one, a caller pipes them — `yes | abcd ahoy install` is how a
+host agent drives the identity pin, the one approval no flag covers. Off a
+terminal each answer is echoed to the diagnostic stream, so a piped run leaves a
+transcript rather than a column of questions with no visible reply.
+
+**The questions come in a fixed order**, held by `categoryPromptOrder`:
+`dependency`, `safe-autocreate`, `config-change`, `user-state`, `plugin-owned` —
+the order the apply pass acts in, with any later-added category appended sorted.
+The order is a contract, not a presentation choice: answers are positional, so
+without it the Nth piped answer approves a different category on every run — a
+wrong answer that exits 0 and reads as a clean install. **One line answers one
+question**, so a caller must supply one per category present; `yes` is the
+reliable form precisely because it never runs out.
+
+Answers that run out read as EOF, and EOF declines every confirm and takes the
+default for every prompt: an unattended run with nothing on stdin still adopts
+nothing it was not told to adopt. The cost of reading a non-terminal stdin is
+that a stdin held OPEN and silent makes a prompt wait rather than decline — the
+same contract every prompting CLI has. A run that must neither block nor prompt
+closes stdin and pre-answers: `abcd ahoy install --yes --refuse-adopt
+< /dev/null`.
 
 1. Run the detection pass (above).
 2. **Dependency gaps** (`dependency`) — surface brew/pip commands for missing

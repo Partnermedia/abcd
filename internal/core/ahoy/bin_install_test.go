@@ -202,11 +202,9 @@ func TestInstallDefaultsToUserLocalBin(t *testing.T) {
 		t.Errorf("symlink dest = %q, want %q", dest, pluginBinaryPath(pluginRoot))
 	}
 	// The write is recorded on the receipt through the same note seam as every
-	// other apply step, so the receipt scrub owned by iss-177 covers it. Scrubbing
-	// the receipt itself belongs to that change, not this one — what this change
-	// owns is the two print sites OUTSIDE the seam (the gap text and the uninstall
-	// receipt), asserted by their own tests.
-	if !containsPath(res.Writes, target) {
+	// other apply step, and the receipt scrub owned by iss-177 renders a
+	// user-scope write home-relative — so the entry appears in tilde form.
+	if !containsPath(res.Writes, "~/.local/bin/abcd") {
 		t.Errorf("the PATH entry was not recorded on the receipt: %v", res.Writes)
 	}
 	if m, _ := detectSignal(t, repo, "install_mode").(string); m != "pinned" {
