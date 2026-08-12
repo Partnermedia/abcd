@@ -1566,7 +1566,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				if len(res.OptionalSkipped) > 0 {
 					fmt.Fprintf(w, "  optional, not covered by --yes: %s\n", strings.Join(res.OptionalSkipped, ", "))
 					fmt.Fprint(w, "    the pin records the current git identity, so it is only written against an answered prompt:\n")
-					fmt.Fprint(w, "    run `abcd ahoy install` (no --yes) and answer y — piping `printf 'y\\n' | abcd ahoy install` works too\n")
+					fmt.Fprint(w, "    run `abcd ahoy install` (no --yes) and answer y at each prompt — non-interactively, `yes | abcd ahoy install`\n")
 				}
 			})
 		},
@@ -1574,7 +1574,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	// No backquotes in a flag's usage string: cobra reads the first backquoted
 	// word as the flag's argument placeholder, so a quoted answer would render
 	// this boolean as "--yes y" in the help and the generated reference.
-	installCmd.Flags().BoolVar(&yes, "yes", false, "approve every resolvable change category without prompting; excludes the optional git-identity pin, which needs an answered prompt (run without --yes, or pipe 'y' to stdin)")
+	installCmd.Flags().BoolVar(&yes, "yes", false, "approve every resolvable change category without prompting; excludes the optional git-identity pin, which needs an answered prompt (run without --yes, or answer every prompt with: yes | abcd ahoy install)")
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
 	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
@@ -1744,9 +1744,11 @@ func symlinkNote(r ahoy.UninstallReceipt) string {
 
 // newPrompter returns the stdin-reading prompter. On a terminal it is the
 // interactive path, unchanged. When stdin is NOT a terminal the same prompter
-// reads the piped answers (iss-167): `printf 'y\n' | abcd ahoy install` is what
-// a host agent already tries, and a TTY-only prompt turned every such answer
-// into a decline, so the interactive path could not be driven at all.
+// reads the piped answers (iss-167): `yes | abcd ahoy install` is what a host
+// agent reaches for, and a TTY-only prompt turned every such answer into a
+// decline, so the interactive path could not be driven at all. One answer
+// answers one question, and the questions come in a fixed order
+// (ahoy.categoryPromptOrder), so a piped stream lines up with them.
 //
 // The safe default survives: answers that run out — an empty pipe, a closed
 // stdin, /dev/null — read as EOF, and EOF declines every confirm and takes the

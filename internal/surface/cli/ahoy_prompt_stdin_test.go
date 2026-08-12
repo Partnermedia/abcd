@@ -61,7 +61,8 @@ func runCLIPipedStdinSplit(t *testing.T, stdin string, args ...string) (stdout, 
 func TestAhoyInstallAcceptsPipedAnswersFromNonTTYStdin(t *testing.T) {
 	repo := hermeticRepo(t)
 
-	// One `y` per question: the adoption gate, then one per gap category.
+	// One `y` per question: the adoption gate, then one per gap category. This
+	// is what `yes | abcd ahoy install` — the documented form — supplies.
 	answers := strings.Repeat("y\n", 12)
 	out, errOut, err := runCLIPipedStdinSplit(t, answers, "ahoy", "install",
 		"--visibility", "private", "--docs-target", "both",
@@ -100,6 +101,44 @@ func TestAhoyInstallAcceptsPipedAnswersFromNonTTYStdin(t *testing.T) {
 	// the diagnostic stream is a transcript of what was asked and answered.
 	if !strings.Contains(string(errOut), "Adopt this unmanaged repo into abcd? [y/N] y") {
 		t.Fatalf("the piped answer left no transcript on stderr:\n%s", errOut)
+	}
+	// The answers are positional, so the questions must arrive in the fixed
+	// order the surface documents. Asserted end to end here, not only over the
+	// core helper: the transcript is what a caller lines its answers up against.
+	assertCategoryQuestionOrder(t, string(errOut))
+}
+
+// categoryPromptOrder mirrors ahoy's documented approval order. Duplicated as a
+// literal on purpose: a test that imported the production slice would agree
+// with any order the production code happened to adopt, including a wrong one.
+var categoryPromptOrder = []string{
+	"dependency", "safe-autocreate", "config-change", "user-state", "plugin-owned",
+}
+
+// assertCategoryQuestionOrder checks that the category approvals appearing in a
+// prompt transcript do so in the documented order. Categories absent from this
+// run are simply skipped; what must never happen is two of them out of order.
+func assertCategoryQuestionOrder(t *testing.T, transcript string) {
+	t.Helper()
+	var seen []string
+	for _, line := range strings.Split(transcript, "\n") {
+		for _, c := range categoryPromptOrder {
+			if strings.Contains(line, "Apply "+c+" changes?") {
+				seen = append(seen, c)
+			}
+		}
+	}
+	if len(seen) < 2 {
+		t.Fatalf("transcript asked %d category approvals; too few to prove an order:\n%s", len(seen), transcript)
+	}
+	rank := map[string]int{}
+	for i, c := range categoryPromptOrder {
+		rank[c] = i
+	}
+	for i := 1; i < len(seen); i++ {
+		if rank[seen[i]] <= rank[seen[i-1]] {
+			t.Fatalf("category approvals asked out of order: %v (want the order %v)", seen, categoryPromptOrder)
+		}
 	}
 }
 
@@ -230,12 +269,20 @@ func TestAhoyInstallPipedAnswerAdoptsOptionalIdentityPin(t *testing.T) {
 		t.Fatalf("install exited non-zero: %v\n%s", err, out)
 	}
 
-	// One `y` per remaining category, not one in total: the approval walk
-	// iterates a map, so which category is asked first is not fixed, and a
-	// single answer would land on whichever question happened to come up.
-	if out, err := runCLIPipedStdin(t, strings.Repeat("y\n", 8), "ahoy", "install"); err != nil {
-		t.Fatalf("piped re-install exited non-zero: %v\n%s", err, out)
+	// Drive it exactly as the completion notice says to: `yes | abcd ahoy
+	// install`, an answer for every question asked. More than one category is
+	// still open after a --yes run (the dependency scanners as well as the pin),
+	// which is why the documented remedy is `yes` and not a single `y`.
+	_, errOut, err := runCLIPipedStdinSplit(t, strings.Repeat("y\n", 8), "ahoy", "install")
+	if err != nil {
+		t.Fatalf("piped re-install exited non-zero: %v\n%s", err, errOut)
 	}
+	// The pin lives behind the config-change approval, so that question must
+	// have been asked and answered y — not merely "some question was".
+	if !strings.Contains(string(errOut), "Apply config-change changes? [y/N] y") {
+		t.Fatalf("the config-change approval carrying the pin was not answered:\n%s", errOut)
+	}
+	assertCategoryQuestionOrder(t, string(errOut))
 	body, err := os.ReadFile(filepath.Join(repo, ".abcd", "config", "identity.json"))
 	if err != nil {
 		t.Fatalf("piped `y` did not adopt the optional identity pin: %v", err)

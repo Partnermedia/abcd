@@ -932,6 +932,53 @@ func gapIDSet(gaps []Gap) map[string]bool {
 	return set
 }
 
+// categoryPromptOrder is the order the approval questions are asked in. It is
+// the order the apply pass acts in — dependencies surfaced, the skeleton
+// written, config values settled, user-scope state touched, and the marker
+// block written last — so what the user is asked about follows what will
+// happen to their repo.
+//
+// A fixed order is a contract, not a cosmetic. The questions are answered
+// POSITIONALLY: a human reads down the list, and a non-interactive caller pipes
+// answers in sequence. Ranging over the presence map instead handed out a fresh
+// permutation on every run, so "answer y to the first question" approved a
+// different category each time — a wrong answer that exits 0 and looks like a
+// clean install (iss-167).
+var categoryPromptOrder = []GapCategory{
+	Dependency,
+	SafeAutocreate,
+	ConfigChange,
+	UserState,
+	PluginOwned,
+}
+
+// presentInPromptOrder returns the present categories in categoryPromptOrder,
+// with any category the order does not name appended sorted. The tail matters:
+// a category added to the type and forgotten here must still land in a FIXED
+// place, so the order contract cannot be broken by omission — only made less
+// meaningful, which the coverage test catches.
+func presentInPromptOrder(present map[GapCategory]bool) []GapCategory {
+	out := make([]GapCategory, 0, len(present))
+	named := map[GapCategory]bool{}
+	for _, c := range categoryPromptOrder {
+		named[c] = true
+		if present[c] {
+			out = append(out, c)
+		}
+	}
+	var rest []string
+	for c := range present {
+		if !named[c] {
+			rest = append(rest, string(c))
+		}
+	}
+	sort.Strings(rest)
+	for _, c := range rest {
+		out = append(out, GapCategory(c))
+	}
+	return out
+}
+
 // resolveApproval computes the approved category set once and the declined list.
 func resolveApproval(gaps []Gap, opts InstallOptions, p Prompter) (map[GapCategory]bool, []string) {
 	// Categories that have at least one resolvable gap can be approved.
@@ -954,7 +1001,7 @@ func resolveApproval(gaps []Gap, opts InstallOptions, p Prompter) (map[GapCatego
 			approved[c] = true
 		}
 	default:
-		for c := range present {
+		for _, c := range presentInPromptOrder(present) {
 			if p.Confirm("Apply " + string(c) + " changes?") {
 				approved[c] = true
 			}

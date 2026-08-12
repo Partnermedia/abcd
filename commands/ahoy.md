@@ -57,16 +57,38 @@ returned `status` and what changed; the engine prompts before an ambiguous
 adoption, so surface any prompt to the user rather than answering it for them.
 
 Prompts read stdin whether or not stdin is a terminal, so an answer can be
-relayed without one: `printf 'y\n' | abcd ahoy install` feeds one `y` per
-question, and each answer is echoed back so the transcript shows what was
-agreed. That is a channel for passing on an answer the user has GIVEN — ask
-first, then pipe; it is never a licence to answer on their behalf. With nothing
-on stdin every question declines, so a run that was told nothing writes nothing.
+relayed without one:
+
+```bash
+yes | abcd ahoy install
+```
+
+**One line answers one question.** The install asks one approval per gap
+category present — often several — and every line after the last one you supply
+reads end-of-input and DECLINES. `yes` is the reliable form because it never
+runs out; a single `printf 'y\n'` answers the first question only and silently
+declines the rest. The questions come in a fixed order (dependency,
+safe-autocreate, config-change, user-state, plugin-owned), so a scripted stream
+of specific answers lines up with them. Each answer is echoed back, so the
+transcript shows what was asked and what it was answered — read it back rather
+than assuming.
+
+That is a channel for passing on an answer the user has GIVEN — ask first, then
+pipe; it is never a licence to answer on their behalf. Note that `yes |`
+approves EVERY question, so only reach for it once the user has agreed to all of
+them.
+
+**Stdin must end, or the prompt waits.** With stdin at end-of-input every
+question declines, so a run that was told nothing writes nothing — but a stdin
+that is held open and silent (a pipe from a still-running command) makes the
+prompt WAIT for the answer that never comes, rather than declining. For a run
+that must not block and must not prompt, close stdin or pre-answer everything:
+`abcd ahoy install --yes --refuse-adopt < /dev/null`.
 
 `--yes` approves every resolvable category but never adopts the optional
 git-identity pin, because the pin records whatever git identity is currently
 configured. When the result carries `optional_skipped`, report it and offer the
-piped-answer form above as the way to apply it.
+`yes | abcd ahoy install` form above as the way to apply it.
 
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from

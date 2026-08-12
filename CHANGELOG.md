@@ -86,14 +86,21 @@ called out in a **Breaking** section.
 
 ### Fixed
 
-- **`ahoy install` prompts read a piped answer, and `--yes` says what it does not
-  cover** (iss-167, iss-166). The prompter attached to stdin only when stdin was a
-  terminal, so `printf 'y\n' | abcd ahoy install` — the first thing an agent
-  reaches for — arrived as a decline on every question, and the interactive path
-  could not be driven at all: the agent reported failure and handed the step back
-  to the human. Prompts now read stdin whether or not it is a terminal, and off a
-  terminal each question's answer is echoed to stderr, so a piped run leaves a
-  transcript of what was asked and answered. The safe default is unchanged:
+- **`ahoy install` prompts read a piped answer, in a fixed order, and `--yes` says
+  what it does not cover** (iss-167, iss-166). The prompter attached to stdin only
+  when stdin was a terminal, so `yes | abcd ahoy install` — the first thing an
+  agent reaches for — arrived as a decline on every question, and the interactive
+  path could not be driven at all: the agent reported failure and handed the step
+  back to the human. Prompts now read stdin whether or not it is a terminal, and
+  off a terminal each question's answer is echoed to stderr, so a piped run leaves
+  a transcript of what was asked and answered. Piped answers are positional, so
+  the approval questions are now asked in a **fixed order** — dependency,
+  safe-autocreate, config-change, user-state, plugin-owned, the order the apply
+  pass acts in — where the walk previously ranged over a map and handed out a
+  fresh permutation on every run: the same command approved a different category
+  each time, exiting 0 and reading as a clean install. One line answers one
+  question, which is why `yes` is the documented form. The safe default is
+  unchanged:
   answers that run out read as EOF, and EOF declines every confirm and takes the
   default for every prompt, so an unattended run still adopts nothing it was not
   told to adopt. The interactive path at a terminal is untouched. Folded in:
@@ -102,8 +109,13 @@ called out in a **Breaking** section.
   canonicalise a sandbox or agent identity, the very value the identity gate
   exists to reject — but it reported "already up to date" without mentioning the
   skip. The exclusion is now stated in the flag's own help, carried in the install
-  envelope as `optional_skipped`, and printed with the way to apply it, which the
-  piped answer makes available to a non-interactive caller for the first time.
+  envelope as `optional_skipped`, and printed with the way to apply it —
+  `yes | abcd ahoy install` — which the piped answer makes available to a
+  non-interactive caller for the first time. A run that must neither block nor
+  prompt closes stdin and pre-answers
+  (`abcd ahoy install --yes --refuse-adopt < /dev/null`); the plugin surface says
+  so, because reading a non-terminal stdin means a stdin held open and silent
+  makes a prompt wait rather than decline.
 
 - **The build plumbing's own comments describe the gate suite that runs**
   (iss-182). The `Makefile` preflight comment claimed the target ran "the same
