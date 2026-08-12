@@ -224,7 +224,13 @@ B PRs. A failure here is a Cut A defect, not a Cut B blocker.
 
 **Prerequisite: §4 green.**
 
-### B1 — publish the curated payload and the catalog as release assets
+### B1 — publish the curated payload as a release asset
+
+**Superseded by the itd-108 grill (2026-08-11, later than this plan's
+interview).** This section previously also published `marketplace.json` as a
+release asset. The grill kept `REPPL/abcd-cli` as the marketplace source, so the
+catalog stays committed and only the PLUGIN source moves to an archive. Where
+this plan and itd-108's Decisions disagree, **itd-108 wins**.
 
 `internal/core/launch` today contains **no zip or archive code** (verified
 2026-08-11) — `launch --dry-run` computes the bundle (54 files, 0 scan
@@ -233,33 +239,45 @@ hardfails) and discards it. `release.yml:306` uploads `bin/abcd-*` and
 
 - Package the payload declared by `.abcd/config/launch-payload.json` into a
   zip, attached to the release with its digest recorded next to the binaries'.
-- Render `marketplace.json` with the version and payload URL stamped, and
-  upload it as a release asset (decision 2). The committed
-  `.claude-plugin/marketplace.json` stays the unversioned source template and
-  keeps satisfying the DEV polarity.
-- **Drop `docs/` from `launch-payload.json`** (decision 3), taking the bundle
-  to roughly 300 KB. Two knock-ons: the payload README's
-  `<img src="docs/assets/img/...">` tags break — rewrite them to absolute
-  GitHub URLs in the rendered payload, or docs-lint's broken-relative-link rule
-  fires on the artefact; and itd-108's "What's Out of Scope" must be edited,
-  since it currently takes the manifest as given.
+- Extend the existing build-provenance attestation to cover the zip, so both
+  halves of the distribution carry the same signature. The signing path already
+  runs on a real cut (v0.4.2's binaries carry attestations); only the extension
+  is new.
+- **Do NOT publish `marketplace.json` as a release asset.** The committed
+  catalog stays the source of truth and stays unversioned, satisfying the DEV
+  polarity of [adr-19](../decisions/adrs/0019-plugin-json-version-carve-out.md)
+  and [adr-20](../decisions/adrs/0020-manifest-version-lockstep.md).
+- **Trim `docs/assets/**` from `launch-payload.json`** — not all of `docs/`. Two
+  PNGs are 1.25 MB of the 1.6 MB payload against 42 KB for all eight markdown
+  files, so trimming the assets alone takes it to roughly 340 KB and keeps the
+  prose. `launchPayloadConfig` has an `includes` list and **no exclusion
+  syntax**, so express this as narrower includes. Knock-on: the payload
+  README's `<img src="docs/assets/img/...">` tags break — rewrite them to
+  absolute GitHub URLs in the same change, or docs-lint's broken-relative-link
+  rule fires on the artefact.
 - Note `launch-payload.json` also includes `.gitignore`, which itd-108's quoted
   payload list omits. Reconcile the intent to the file.
 - Assert in CI: the published zip's contents match what `abcd launch --dry-run`
   reports, so preview and artefact cannot disagree.
 - Assert: the no-branch-commit tripwire still passes — the release job pushed
-  nothing to any branch. Under decision 2 this should hold by construction;
-  prove it anyway.
+  nothing to any branch. Under the grill's decision this holds by construction,
+  because nothing is committed per release; prove it anyway.
 
-### B2 — repoint the install path
+### B2 — repoint the plugin source
 
-- README install section points at the `releases/latest/download/marketplace.json`
-  add-command, and states the **minimum host version** an `archive` source
-  requires (v2.1.224), so a failure below it names the version rather than
-  presenting as a broken plugin.
-- A user installed under the previous relative-path source must either land on
-  the archive-sourced install or be told plainly what to re-add. An install
-  that silently stops updating fails itd-108's own acceptance criterion.
+**Superseded in part by the itd-108 grill.** The README's `add` line does NOT
+change: the marketplace source stays `REPPL/abcd-cli`.
+
+- `.claude-plugin/marketplace.json`'s PLUGIN source becomes an `archive` at a
+  stable `releases/latest/download/` URL, **unpinned** — a `sha256` pin would
+  change every release and the catalog is committed, so pinning would require a
+  per-release commit. That commit is foreclosed twice: it trips the
+  no-branch-commit tripwire AND violates adr-20's source polarity.
+- README states the **minimum host version** an `archive` source requires
+  (v2.1.224), so a failure below it names the version rather than presenting as
+  a broken plugin.
+- **No migration is owed** — there are no users yet (grill decision). Do not
+  build one.
 
 ### B3 — retire the version-skew notice (iss-206)
 
@@ -268,27 +286,25 @@ field with it. The gate was never wrong to be diagnosed — `bootstrap.sh`
 recorded the raw ungated `plugin_root_basename` beside the gated field
 precisely so "why has this never fired" had an answer in the file. It fired as
 designed; the condition it guards is what disappears. Record the retirement so
-itd-105's shipped claim stays honest.
+itd-105's shipped claim stays honest. Resolve iss-206 in this PR.
 
 ### B4 — the record consequences
 
-These are not cleanup; itd-108 makes an invariant false **by design** and it
-must move in the same change.
-
 - `AGENTS.md` states `.abcd/**` is "present in every repository checkout —
-  **marketplace installs** and release source archives included." Cut B makes
-  that sentence false. Rewrite it, and drop the concession that the bundler
-  "denies the namespace structurally, though that filter has yet to run on a
-  cut release" — after B1 it has run.
-- [adr-28](../decisions/adrs/0028-single-repo-curated-release.md) decided the
-  *what* (a curated artefact) but not *how it reaches a user*. An amendment
-  recording the catalog-as-release-asset mechanism belongs with this work.
-  "The repo is the marketplace" stays literally true — the catalog is still a
-  file in this repo; only the fetch method changes.
-- adr-19 needs **no** amendment under decision 2. State that explicitly in the
-  amendment to adr-28, so a later reader does not re-open it.
-- Promote itd-108 drafts → planned with the interview decisions folded into its
-  Open Questions as settled, and its scope widened for `docs/`.
+  **marketplace installs** and release source archives included." Under the
+  grill's decision that stays **TRUE of a marketplace install**, whose clone
+  remains, and becomes false only of the plugin payload. **Re-scope the
+  sentence; do not delete it.** The bundler concession ("has yet to run on a cut
+  release") can go once B1 has run.
+- **[adr-28](../decisions/adrs/0028-single-repo-curated-release.md) needs NO
+  amendment.** An earlier reading assumed the catalog would move off the repo,
+  which would have falsified "the repo is the marketplace". With the catalog
+  still committed, that clause stays literally true.
+- **adr-19 and adr-20 need no amendment either.** State both explicitly in B4's
+  PR so a later reader does not re-open them.
+- Promote itd-108 drafts → planned. Do this FIRST in Cut B, not last: a
+  CHANGELOG delivery entry citing an intent still in `drafts/` fails
+  record-lint's `delivery_state` rule, which is a required check.
 
 ---
 

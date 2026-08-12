@@ -17,21 +17,27 @@ warrants_assumed:
 
 ## Press Release
 
-> **Installing the abcd plugin now delivers the plugin — not the repository that
-> builds it.** Today a marketplace install clones the whole repo twice: 16 MB for
-> the catalog directory and another 11 MB into the plugin cache, carrying
-> `internal/`, `cmd/`, `evals/`, `go.sum`, the full `.abcd/` design record and
-> 4.5 MB of git history to every user, so that the harness can read 296 KB of
-> commands, agents, and hooks. With this intent the marketplace points at a
-> curated zip published with each release — exactly the bundle
-> `.abcd/config/launch-payload.json` already declares and `abcd launch` already
-> computes — and the design record stops shipping to strangers. The install
-> needs neither git nor a Go toolchain on the user's machine. And because the
-> catalog names the *latest* release rather than a pinned one, cutting a release
-> is the whole publication step: the next update a user takes brings the new
-> surface, and the binary bootstrap that already tracks `releases/latest` brings
-> the matching binary into the same fresh plugin root. Surface and binary arrive
-> from one release, together, with no manual step between the tag and the user.
+> **Installing the abcd plugin now delivers the plugin, not the source tree that
+> builds it.** Today the plugin cache holds a second full clone of the repo — 11 MB
+> of `internal/`, `cmd/`, `evals/`, `go.sum` and the `.abcd/` design record — so
+> that the harness can read 296 KB of commands, agents and hooks. With this intent
+> the marketplace's PLUGIN source points at a curated zip published with each
+> release: about 340 KB, no source, no git history, and no Go toolchain or git
+> needed on the machine. Because the catalog names the *latest* release rather
+> than a pinned one, cutting a release is the whole publication step — the next
+> update a user takes brings the new surface, and the bootstrap that already
+> tracks `releases/latest` brings the matching binary into the same fresh plugin
+> root. Surface and binary arrive from one release, together, with no manual step
+> between the tag and the user.
+
+> **What this deliberately does NOT do**, stated here because the obvious reading
+> is wrong: the marketplace SOURCE stays `REPPL/abcd-cli`, so adding the
+> marketplace still clones the repo (~16 MB including git history and `.abcd/`).
+> The design record therefore keeps reaching users, and this intent does not stop
+> it. That is an accepted cost, taken deliberately in the grill below: the
+> alternative front door is a 99-character catalog URL typed into the harness as a
+> slash-command argument, against 38 characters for the repo form, and the repo is
+> public so the residue is weight rather than exposure.
 
 > "I install a plugin, I expect a plugin," said Alice, who added abcd on a
 > laptop with no Go toolchain. "I got a source tree, somebody's architecture
@@ -40,7 +46,7 @@ warrants_assumed:
 > published binaries, and then the plugin surface just… didn't move. I'd tag,
 > and nothing reached anyone until I remembered the second step." Carol, who
 > reviews what her team installs, put it plainest: "I could not tell you which
-> of those 11 megabytes the harness actually executes."
+> of those 11 megabytes in the plugin cache the harness actually executes."
 
 ## Why This Matters
 
@@ -123,6 +129,12 @@ commitments, not options.
   `commands/` and `agents/` address a lifeboat's internal record or a target
   repo's pages, never this one's). Excluding the assets takes the payload to
   ~340 KB and keeps the prose.
+  Two mechanics the implementer needs and the review surfaced: `launchPayloadConfig`
+  (`internal/core/launch/includes.go`) carries an `includes` list and no exclusion
+  syntax, so this is expressed as NARROWER INCLUDES, never as an exclude; and
+  `README.md` — itself in the payload — embeds two `docs/assets/img/*.png` tags,
+  so trimming the assets leaves a payload README with broken images unless those
+  tags are pointed at absolute URLs in the same change.
 - **No migration is owed, because there are no users yet.** The archive source
   requires harness v2.1.224 or later; below it the install fails, and older hosts
   still fail to load the marketplace. With no installed base the question is moot
@@ -153,19 +165,21 @@ the Decisions above where the two disagree.
 
 ## What's In Scope
 
-- Publishing the curated bundle as a release asset from the existing release
-  workflow, checksummed alongside the binaries it already hashes.
-- Repointing `.claude-plugin/marketplace.json` at that asset, and the README
-  install section at whatever add-command the catalog delivery implies.
-- Whatever update-signal mechanism the open question below resolves to, wired
-  so that a cut release reaches an installed user with no maintainer step
-  after the tag.
-- The record consequences: `AGENTS.md` currently states as an invariant that
-  `.abcd/**` is "present in every repository checkout — **marketplace installs**
-  and release source archives included." This intent makes that sentence false
-  by design, and it must move in the same change. ADR-28 decided the *what*
-  (a curated artifact) but not the *how it reaches a user*; an amendment
-  recording the mechanism belongs with this work.
+- Publishing the curated bundle as a zip release asset from the existing release
+  workflow, and extending the build-provenance attestation to cover it.
+- Repointing `.claude-plugin/marketplace.json`'s PLUGIN source at that asset. The
+  marketplace source stays `REPPL/abcd-cli` and the catalog stays committed, so
+  the README's `add` line does not change.
+- Amending `.abcd/config/launch-payload.json` so the declared payload is what a
+  plugin needs — see the Decisions on `docs/assets`. One manifest, not two.
+- The record consequence, narrowly: `AGENTS.md` states that `.abcd/**` is
+  "present in every repository checkout — **marketplace installs** and release
+  source archives included." Under the decided shape that stays TRUE of a
+  marketplace install, whose clone remains, and becomes false only of the plugin
+  payload. The sentence is re-scoped, not deleted. Neither
+  [[adr-28-single-repo-curated-release]] nor
+  [[adr-19-plugin-json-version-carve-out]] needs amending, and the change should
+  say so explicitly so a later reader does not re-open them.
 - A stated minimum host version in the README, since `archive` sources require
   harness v2.1.224 or later and fail loudly below it.
 
@@ -179,9 +193,9 @@ the Decisions above where the two disagree.
   (same-origin checksums, build-from-source as the full-trust escape hatch)
   and this intent does not reopen it.
 - Windows support, which remains its own future intent.
-- The contents of the payload manifest. `launch-payload.json` is taken as
-  given; whether `docs/` (1.3 MB of the 1.6 MB bundle) belongs in a plugin
-  payload is a separate judgement.
+- Restructuring `docs/` itself, or where its images live in the repository. The
+  manifest is amended to stop shipping `docs/assets/**` in the payload; how the
+  repository organises those assets is untouched.
 
 ## Acceptance Criteria
 
@@ -189,8 +203,9 @@ the Decisions above where the two disagree.
 
 - **Given** a machine with no Go toolchain and no git, **when** a user adds the
   abcd marketplace and installs the plugin, **then** the install succeeds and
-  the plugin root contains the curated payload only — no `internal/`, no
-  `cmd/`, no `.abcd/`, no `go.mod`, and no git history.
+  the PLUGIN ROOT contains the curated payload only — no `internal/`, no `cmd/`,
+  no `.abcd/`, no `go.mod`, and no git history. (The marketplace clone is out of
+  scope by decision and is not what this criterion measures.)
 - **Given** a completed install, **when** the user runs any `/abcd:*` command,
   **then** it executes against the plugin-root binary without falling back to a
   source build — because no source is present to build from.
@@ -209,10 +224,6 @@ the Decisions above where the two disagree.
 - **Given** a host older than the minimum version an `archive` source requires,
   **when** a user attempts the install, **then** the failure names the required
   host version rather than presenting as a broken plugin.
-- **Given** a user who installed under the previous relative-path source,
-  **when** they update, **then** they end on the archive-sourced install or are
-  told plainly what to re-add — an install that silently stops updating is a
-  failure of this criterion.
 
 ## Open Questions
 
@@ -223,14 +234,33 @@ the Decisions above where the two disagree.
   ladder says an archive source resolves its version from the `sha256` pin, or
   from the digest of the downloaded file when no pin is set — which implies a
   fetch — but "implies" is not "observed". Settle it against a real pre-release
-  cut before Cut B is called done, not by reading the documentation twice.
+  cut before Cut B is called done, not by reading the documentation twice. It
+  must be a FULL release: GitHub's `releases/latest` excludes prereleases, so a
+  prerelease leaves `releases/latest/download/` pointing at the previous cut and
+  the experiment reports "no update" whatever the harness does — a false negative
+  that would wrongly void the unpinned decision. The no-users-yet decision makes
+  a throwaway full release free.
   If it turns out the harness caches by URL and never re-fetches, the unpinned
-  decision above is void and the per-release-commit question reopens.
-- **Does the attestation actually cover a new asset for free?** The decision to
-  extend signing to the plugin zip assumes adding it to the attest step's
-  `subject-path` is sufficient. Unverified: the attestation steps are gated on
-  repository visibility and have never run on a cut release, so the whole signing
-  path is unproven in practice, not merely unextended.
+  decision above is void — and note the fallback is foreclosed TWICE, not once: a
+  per-release version write into the committed catalog trips `release.yml`'s
+  no-branch-commit tripwire AND violates
+  [[adr-20-manifest-version-lockstep]]'s source polarity, which requires
+  `/plugins/0/version` ABSENT in the working tree. That branch has no in-record
+  recovery and would need adr-19/adr-20 amended, so it is a genuine dead end
+  rather than a cheaper alternative.
+- **Does extending the attestation to a new asset cost anything?** The decision to
+  cover the plugin zip assumes adding it to the attest step's `subject-path` is
+  sufficient. The signing path itself is NOT unproven — v0.4.2 carries a
+  verifiable build-provenance attestation for its binaries, so the machinery runs
+  on a real cut. Only the extension is unexercised.
+- **Nothing verifies the zip at install time, and that gap is accepted rather than
+  closed.** `bootstrap.sh` checksums the binary and refuses on mismatch, per
+  [[itd-105]]'s bar; the harness would verify an archive against a `sha256` pin,
+  which the Decisions decline. So the two halves carry the same attestation but
+  not the same operative check — the binary is machine-verified on every install
+  and the zip is verified by nobody. Recorded so the asymmetry is a known
+  position, not an oversight, and so the future offline-key work has a stated
+  target.
 
 ## Prerequisites
 
