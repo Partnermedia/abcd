@@ -99,6 +99,18 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		binTarget:  binTargetPath,
 	}
 
+	// itd-111 refusal: a binary that is stale against its own source tip, or
+	// whose vintage cannot be determined, must not run stale install logic
+	// against the machine — the trap the evidence session (iss-228) fell into.
+	// The check is disk-only; an explicit --allow-stale-binary override proceeds.
+	// It sits before the first apply step so nothing is written on a refusal.
+	if !opts.AllowStaleBinary {
+		if reason := staleBinaryRefusal(currentVintage(), abs); reason != "" {
+			ac.refuse(reason)
+			return InstallResult{Status: "refused", Notes: ac.notes}, nil
+		}
+	}
+
 	// Ordered apply steps.
 	ac.stepDependencies()
 	ac.stepSkeleton()

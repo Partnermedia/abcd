@@ -46,6 +46,13 @@
           "hidden": false
         },
         {
+          "name": "allow-stale-binary",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "bin-dir",
           "shorthand": "",
           "type": "string",

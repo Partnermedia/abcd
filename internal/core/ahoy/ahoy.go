@@ -114,11 +114,16 @@ type InstallOptions struct {
 	// abcd NEVER escalates privileges: a BinDir it cannot write to is a loud
 	// error, never a silent skip and never a re-run under sudo.
 	BinDir string
+	// AllowStaleBinary overrides the itd-111 staleness refusal: an install run
+	// through a binary that is stale against its source tip, or whose vintage
+	// cannot be determined, otherwise refuses before any write. The override is
+	// the documented escape when a rebuild is not an option. --allow-stale-binary.
+	AllowStaleBinary bool
 }
 
 // InstallResult is the outcome of Install.
 type InstallResult struct {
-	Status             string   `json:"status"` // already_up_to_date | clean | partial | aborted
+	Status             string   `json:"status"` // already_up_to_date | clean | partial | aborted | refused
 	Writes             []string `json:"writes"`
 	Changes            []string `json:"changes,omitempty"`   // value overwrites an explicit override forced ("visibility: private -> public")
 	Remaining          []string `json:"remaining"`           // required+resolvable gap ids left

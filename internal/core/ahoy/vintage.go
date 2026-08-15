@@ -1,6 +1,7 @@
 package ahoy
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -9,6 +10,25 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
+
+// currentVintage is the seam for reading the running binary's build vintage. A
+// package var so the refusal, notice, and render paths can be exercised with an
+// explicit vintage without rebuilding the test binary; production reads the real
+// embedded build info.
+var currentVintage = vintage.CurrentBuildVintage
+
+// SetCurrentVintageForTest overrides the build-vintage seam and returns a
+// restore func. It is a test-only seam (in the manner of this package's history
+// hooks): a go-test binary is itself unstamped, so without an override every
+// install path in a front-door test package would hit the itd-111
+// unknown-vintage refusal. Front-door test packages, which cannot reach the
+// unexported seam, install a deterministic vintage through this. Production never
+// calls it — it reads the embedded build info.
+func SetCurrentVintageForTest(f func() vintage.Current) (restore func()) {
+	prev := currentVintage
+	currentVintage = f
+	return func() { currentVintage = prev }
+}
 
 // VintageStatus is the assembled vintage picture for a repo: the install mode,
 // the comparator's report, and the human name of the reference compared against.
@@ -37,7 +57,7 @@ func Vintage(cwd string) VintageStatus {
 	if pluginOK {
 		pinTag = readPinnedTag(pluginRoot)
 	}
-	return vintageFrom(vintage.CurrentBuildVintage(), mode, abs, core.Version, pinTag)
+	return vintageFrom(currentVintage(), mode, abs, core.Version, pinTag)
 }
 
 // vintageFrom is the pure assembly, split from Vintage so its branch selection
@@ -81,7 +101,7 @@ type DogfoodReport struct {
 // source checkout it was built from, for the session-start notice. It reads the
 // binary's own build vintage and compares against cwd's HEAD.
 func DogfoodStaleness(cwd string) DogfoodReport {
-	return dogfoodStalenessFrom(vintage.CurrentBuildVintage(), cwd)
+	return dogfoodStalenessFrom(currentVintage(), cwd)
 }
 
 // dogfoodStalenessFrom is the pure core, split so the fresh/stale/unknown and
@@ -118,6 +138,23 @@ func dogfoodStalenessFrom(cur vintage.Current, cwd string) DogfoodReport {
 		r.Outcome = vintage.Stale
 	}
 	return r
+}
+
+// staleBinaryRefusal returns the reason `ahoy install` must refuse to run
+// through this binary, or "" to proceed. It refuses in two cases (AC2 and
+// design decision 7): a build vintage that cannot be determined (an unstamped
+// or modified/dirty build), and a dogfood binary behind its own source tip.
+// Everything else — a determinable vintage that is not a dogfood-stale binary —
+// proceeds. The check is disk-only; it never touches the network.
+func staleBinaryRefusal(cur vintage.Current, cwd string) string {
+	if !cur.Known {
+		return "the running abcd binary's vintage cannot be determined (an unstamped or modified/dirty build), so it may be applying stale install logic. Rebuild it with `make build`, or re-run with --allow-stale-binary to proceed anyway."
+	}
+	if rep := dogfoodStalenessFrom(cur, cwd); rep.IsDogfood && rep.Outcome == vintage.Stale {
+		return fmt.Sprintf("the running abcd binary was built from commit %s but this checkout is at %s — it is behind its own source and may apply stale install logic. Rebuild it with `make build`, or re-run with --allow-stale-binary to proceed anyway.",
+			shortRev(rep.Revision), shortRev(rep.Tip))
+	}
+	return ""
 }
 
 // DisplayVintage renders the vintage for a one-line surface: a short revision
