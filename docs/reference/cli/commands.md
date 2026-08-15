@@ -648,6 +648,6 @@ Close a spec (open/ -> closed/) and ship its linked intent (planned/ -> shipped/
 
 ### `abcd version`
 
-Print abcd's version
+Print abcd's version, install mode, and vintage
 
 **Usage:** `abcd version`

@@ -79,17 +79,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.PersistentFlags().BoolVar(&asJSON, "json", false, "emit machine-readable JSON")
 
-	root.AddCommand(&cobra.Command{
-		Use:   "version",
-		Short: "Print abcd's version",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			v := core.NewVersion()
-			return render(cmd.OutOrStdout(), asJSON, v, func(w io.Writer) {
-				fmt.Fprintf(w, "%s %s\n", v.Name, v.Version)
-			})
-		},
-	})
+	root.AddCommand(newVersionCommand(&asJSON))
 
 	root.AddCommand(newAhoyCommand(&asJSON))
 	root.AddCommand(newAuditCommand(&asJSON))
@@ -1489,6 +1479,11 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				if mode, _ := res.Signals["install_mode"].(string); mode != "" {
 					fmt.Fprintf(w, "  install:     %s\n", mode)
 				}
+				// Vintage + staleness from the shared comparator (itd-111): the
+				// same source `abcd version` and the session-start notice read.
+				vin := ahoy.Vintage(cwd)
+				fmt.Fprintf(w, "  vintage:     %s\n", vin.DisplayVintage())
+				fmt.Fprintf(w, "  staleness:   %s\n", vin.Staleness())
 				// The citation baseline's coverage and age, present only in a repo
 				// that has armed the citation gate. The line embeds counts and a
 				// date derived from repo content, so it is sanitised.
