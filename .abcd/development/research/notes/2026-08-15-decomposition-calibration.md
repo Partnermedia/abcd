@@ -1,0 +1,40 @@
+# Decomposition calibration — graded hand-runs of the itd-84 protocol
+
+The calibration corpus for the
+[itd-84](../../intents/disciplines/itd-84-intent-decomposition.md) hand-run
+decomposition protocol (the four-piece table in the `/abcd:intent` surface
+page). Every hand-run appends one graded entry; roughly **50 graded captures**
+is the recorded threshold before the automated capture-time validator may be
+built, and the grading follows the
+[itd-81](../../intents/disciplines/itd-81-judge-calibration.md) recipe: the
+initial routing is the prediction, the human-confirmed routing is the label.
+
+## Entry format
+
+Per hand-run, append:
+
+- **Date, proposal** (one line), and the session context.
+- **Initial routing table** — part | type | home, plus typed links and any
+  reversal flags, exactly as proposed before the human ruled.
+- **Confirmed routing** — what the human adopted, with edits marked.
+- **Verdict** — FILE-AS-IS / SPLIT / HOLD, and whether the initial verdict
+  survived confirmation (the graded outcome).
+- **Notes** — over-flags, missed parts, taxonomy ambiguities (feeds the
+  open-question on the enum).
+
+## Graded entries
+
+### 2026-07-13 — the auto-merge proposal (founding case, graded retrospectively)
+
+- **Proposal:** a single "`--auto-merge` feature" intent.
+- **Initial routing (as filed at the time):** one part | intent | intents/ —
+  a monolith.
+- **Confirmed routing (from the 2026-07-13 review):** four parts — the
+  auto-merge *experience* | intent | intents/; the *trust rule* on what may
+  merge unattended | ADR + brief invariant | decisions/adrs/ + brief; the
+  additive-vs-editing *stance* | principle | principles/; the eligibility
+  *plumbing* | brief | brief.
+- **Verdict:** SPLIT. The initial (implicit FILE-AS-IS) routing did **not**
+  survive review — the case that motivated itd-84.
+- **Notes:** graded from the review record, not a live protocol run; counts
+  toward the corpus as the canonical SPLIT exemplar.

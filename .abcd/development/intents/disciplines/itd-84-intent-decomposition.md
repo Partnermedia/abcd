@@ -2,7 +2,7 @@
 id: itd-84
 slug: intent-decomposition
 kind: discipline
-kind_notes: "Cross-cutting gate over /abcd:intent capture: a proposed intent is decomposed into its record homes and its interdependencies surfaced BEFORE it is filed, as an advisory analysis a human confirms. No user moment of its own. It is a verdict-rendering agent, so it inherits itd-81. Enforcement is STAGED per the promotion ladder: the principle + hand-run protocol + a deterministic Go pre-pass are the MVP rung (build first); the automated capture-time agent is the discipline rung (build after the protocol is calibrated). Draft — awaiting maintainer adoption."
+kind_notes: "Cross-cutting gate over /abcd:intent capture: a proposed intent is decomposed into its record homes and its interdependencies surfaced BEFORE it is filed, as an advisory analysis a human confirms. No user moment of its own. It is a verdict-rendering agent, so it inherits itd-81. Enforcement is STAGED per the promotion ladder: the principle + hand-run protocol + a deterministic Go pre-pass are the MVP rung (build first); the automated capture-time agent is the discipline rung (build after the protocol is calibrated). Adopted 2026-08-15 at the MVP rung: the decompose-before-filing principle and the hand-run protocol in the /abcd:intent surface page are live, the deterministic Go pre-pass is queued in the predictable-development plan, and the capture-time agent stays deferred until the protocol is calibrated (~50 graded captures)."
 suggested_kind: null
 spec_id: null
 reclassification_history: []

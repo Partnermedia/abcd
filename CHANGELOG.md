@@ -42,6 +42,15 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`/abcd:intent` decomposes a proposal before filing it** (itd-84, MVP
+  rung). The surface page now carries a hand-run protocol that routes each
+  part of a proposal to its record home (capability → intent, trust rule →
+  ADR plus brief invariant, stance → principle, plumbing → brief), surfaces
+  typed links to existing records, and renders an advisory FILE-AS-IS /
+  SPLIT / HOLD verdict a human confirms; the planning interview runs the same
+  step. Not yet automated: the deterministic pre-pass and the capture-time
+  validator are future rungs, and every hand-run is graded into a calibration
+  corpus that gates them.
 - **The attribution gate reads the git identity, not only the message.** A commit
   authored and committed as `Claude <noreply@anthropic.com>` carried a fully
   compliant message — `Assisted-by:` trailer, no banned footer — and sailed

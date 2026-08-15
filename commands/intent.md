@@ -27,6 +27,33 @@ and the intent↔spec links. Nothing is created or moved by this invocation.
 It is a pointer, never a precondition — filing a draft without it is a normal
 thing to do.
 
+## Decompose before filing (itd-84, hand-run)
+
+One proposal is rarely one record. Before running the create command below,
+run the itd-84 decomposition as an advisory analysis the human confirms —
+capture routes the pieces, it never files a monolith:
+
+1. **Route.** Split the proposal into parts and route each to its record
+   home — user-facing capability → an intent; trust-boundary rule → an ADR
+   (plus a brief invariant); standing stance → a principle; plumbing → the
+   brief. Render the result as a table: part | type | home.
+2. **Link.** Surface the existing records the proposal touches, with typed
+   links — `supersedes` / `reverses` / `duplicates` / `refines` — never
+   "related". A reversal ("this reverses invariant X") is *flagged for the
+   human to confirm*, never auto-classified.
+3. **Verdict.** Propose one of three outcomes — FILE-AS-IS / SPLIT / HOLD.
+   The human adopts the routing; only the part they confirm as an intent
+   proceeds to the create command, and the other parts go to their homes in
+   the same session (or are captured so they are not lost).
+4. **Grade.** Append the confirmed table — and whether the initial routing
+   survived the human's confirmation — to the dated decomposition-calibration
+   note under the development record's `research/notes/`. That corpus (about
+   50 graded captures) is what gates the automated rung.
+
+**Not yet automated.** The deterministic pre-pass and the capture-time
+validator are future rungs of the itd-84 discipline; until they ship, this
+documented protocol is the gate.
+
 ## Create a draft
 
 ```bash
@@ -73,14 +100,18 @@ answer, but silence is not consent.
 1. Read the draft record; summarise it back: the press release, why it
    matters, the current Acceptance Criteria (say explicitly when they are
    facilitator- or agent-seeded and unconfirmed), and any open questions.
-2. **Press release:** confirm or refine the user moment with the human.
-3. **Open questions:** resolve each with the human, or record an explicit
+2. **Decomposition (itd-84):** run the hand-run table above over the draft —
+   parts → homes, typed links, advisory reversal flags. A part that is not
+   this intent moves to its home (or is captured) before planning proceeds;
+   grade the run into the calibration note either way.
+3. **Press release:** confirm or refine the user moment with the human.
+4. **Open questions:** resolve each with the human, or record an explicit
    deferral in the draft. An open question that gates scope blocks planning.
-4. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
+5. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
    accepts, edits, or strikes each, and adds what is missing. Seeded criteria
    are proposals, never approvals.
-5. Edit the draft file to the confirmed content.
-6. Only after the human explicitly confirms the criteria are theirs, run:
+6. Edit the draft file to the confirmed content.
+7. Only after the human explicitly confirms the criteria are theirs, run:
 
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> --json
@@ -89,10 +120,10 @@ answer, but silence is not consent.
    This invocation IS the maintainer's sign-off act — never run it unattended
    or infer consent. It mints the spec stub, links both sides, and moves the
    intent `drafts/ → planned/`.
-7. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
+8. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
    the real design record — scope, approach, and how it satisfies each
    acceptance criterion.
-8. Re-run `abcd intent ready <itd-N>` and report READY to the user.
+9. Re-run `abcd intent ready <itd-N>` and report READY to the user.
 
 ## Autonomous runs
 

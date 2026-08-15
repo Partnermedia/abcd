@@ -1,6 +1,14 @@
 {
   "disabled": false,
   "domains": {
+    "DECOMPOSITION": {
+      "recall": ["intent", "decompose", "capture", "draft"],
+      "rules": [
+        "Decompose before filing (itd-84, adopted 2026-08-15 at the MVP rung): before filing an intent, run the hand-run four-piece table documented in the /abcd:intent surface page — each part routed to its record home (capability -> intent; trust rule -> ADR + brief invariant; stance -> principle; plumbing -> brief), verdict FILE-AS-IS / SPLIT / HOLD, and a human confirms the routing.",
+        "Cross-record links are typed — supersedes / reverses / duplicates / refines — never a vague 'related'. A reversal flag is advisory-only: flagged for the human to confirm, never auto-classified, never auto-filed.",
+        "Not yet automated (loud-staging): the deterministic pre-pass and the capture-time validator are future rungs; until they ship the documented protocol is the gate. Grade every hand-run into the dated decomposition-calibration research note — the corpus that gates the automated rung."
+      ]
+    },
     "BUGHUNT": {
       "recall": ["bug", "hunt", "security", "vulnerability", "harden"],
       "rules": [

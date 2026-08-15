@@ -41,13 +41,14 @@ subprocess/environment handling.
   sha-keyed receipts, `abcd verify`, environment classes, gating,
   calibration-first rollout. This is the plan's headline: it is the machinery
   that lets acceptance criteria check themselves.
-- **Flag to the maintainer: the
-  [itd-84](../intents/disciplines/itd-84-intent-decomposition.md) adoption
-  decision is pending.** The discipline sits in `disciplines/` awaiting
-  adoption, and both queued intent promotions (itd-109 here, itd-111 in the
-  plugin-user-safety plan) invoke its decomposition step. Adopting — or
-  explicitly staging — it is a maintainer call to make before or at the first
-  of those interviews, not one a session may improvise.
+- **[itd-84](../intents/disciplines/itd-84-intent-decomposition.md) is
+  adopted (maintainer, 2026-08-15) at the MVP rung**: the
+  decompose-before-filing principle and the hand-run protocol in the
+  `/abcd:intent` surface page are live, so the queued intent promotions
+  (itd-109 here, itd-111 in the plugin-user-safety plan) run the hand-run
+  decomposition step and grade it into the calibration note
+  (`../research/notes/2026-08-15-decomposition-calibration.md`). The
+  capture-time agent rung stays deferred until ~50 graded captures exist.
 
 ## Workstream B — the loop stops fighting itself
 
@@ -97,6 +98,15 @@ subprocess/environment handling.
    — abcd sets up the CI a repo requires and reports what it did: the
    cross-repo consistency intent. A later promotion (its own grill first);
    listed so the plan names where "managed repos behave alike" is headed.
+10. **The itd-84 deterministic pre-pass** (admitted 2026-08-15, with the
+    adoption) — the plain-Go lexical candidate-finder plus atomicity smell,
+    as a subverb on the existing `intent` family. Design decides the front
+    door (a `decompose` subverb versus a check inside `intent ready`) and
+    whether it runs in preflight — itd-84's own open question. Human-paired
+    design, then a normal TDD arc. Collision:
+    [iss-210](../../work/issues/open/iss-210-lone-token-subverb-guess-writes-a-record.md)
+    lives in exactly this verb-family parsing — fix it first or in the same
+    arc, never around it.
 
 ## Ordering and collisions
 
@@ -113,9 +123,11 @@ subprocess/environment handling.
 
 ## STOP conditions (this plan)
 
-1. **itd-84 enforcement before adoption.** Running its capture-time
-   decomposition as if adopted, before the maintainer's explicit adoption
-   decision, is a STOP — the discipline's own staging says so.
+1. **itd-84's agent rung before calibration.** The discipline is adopted at
+   the MVP rung only: building or running the automated capture-time
+   validator before the hand-run protocol is calibrated (~50 graded
+   captures, per itd-81) is a STOP — the hand-run protocol is the gate
+   until then.
 2. **iss-209's dead end stays dead.** Any `workflow_run`-style automation
    re-attempt is a STOP; the four preconditions recorded in the issue body
    are the only door.
