@@ -1005,6 +1005,15 @@ func newHookCommand() *cobra.Command {
 					notices = append(notices, n)
 				}
 			}
+			// itd-111 (AC6): a version transition performed since this repo was
+			// last set up — the running binary differs from the recorded
+			// setup_version. Report only; the fetch that changed it is
+			// provisioning's job. Both values come from disk (config + build info).
+			if from, to, changed := ahoy.VersionTransition(cwd); changed {
+				notices = append(notices, fmt.Sprintf(
+					"abcd: the running binary is version %s, but this repo was last set up with %s — run `/abcd:ahoy install` (or `abcd ahoy install`) to reconcile the recorded version.",
+					termsafe.Sanitize(to), termsafe.Sanitize(from)))
+			}
 			if len(notices) == 0 {
 				return nil
 			}
