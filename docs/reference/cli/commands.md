@@ -651,4 +651,10 @@ Close a spec (open/ -> closed/) and ship its linked intent (planned/ -> shipped/
 
 Print abcd's version, install mode, and vintage
 
-**Usage:** `abcd version`
+**Usage:** `abcd version [flags]`
+
+**Flags:**
+
+```
+      --check   fetch the latest release once and compare (the only command that touches the network); names its source
+```

@@ -827,7 +827,15 @@
     {
       "path": "abcd version",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "check",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
     }
   ],
   "manifest": [
