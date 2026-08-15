@@ -1,7 +1,12 @@
 # Install experience — release plan, two cuts (2026-08-11)
 
-**Status:** the backlog for the next implementation cycle, consumed by the
-generic protocol at
+**Status:** Cut A's items are merged; the pick-up order for Cut B is owned
+since 2026-08-15 by
+[`2026-08-15-plugin-user-safety.md`](2026-08-15-plugin-user-safety.md)
+(Workstream A), which references this plan rather than copying it — the §4
+verification gate, the collision notes and the itd-108 precedence rule here
+remain authoritative. Originally: the backlog for the next implementation
+cycle, consumed by the generic protocol at
 [`2026-07-12-abcd-run-protocol.md`](2026-07-12-abcd-run-protocol.md). Scoped
 to one theme: what a new user goes through between deciding to try abcd and
 having a working `/abcd:*` surface.
