@@ -997,6 +997,14 @@ func newHookCommand() *cobra.Command {
 			if n := binarySkewNotice(); n != "" {
 				notices = append(notices, n)
 			}
+			// itd-111: a dogfood binary behind (or dirty against) its own source
+			// checkout tip. os.Executable names the binary; the comparison is
+			// git-only and never touches the network (adr-38 tier 1).
+			if exe, err := os.Executable(); err == nil {
+				if n := stalenessNotice(cwd, exe); n != "" {
+					notices = append(notices, n)
+				}
+			}
 			if len(notices) == 0 {
 				return nil
 			}

@@ -7,6 +7,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/vintage"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // VintageStatus is the assembled vintage picture for a repo: the install mode,
@@ -64,6 +65,59 @@ func vintageFrom(cur vintage.Current, mode, cwd, version, pinTag string) Vintage
 		Report: vintage.Compare(pinCur, vintage.PinnedVersion(pinTag)),
 		Source: "plugin manifest pin",
 	}
+}
+
+// DogfoodReport is the source-checkout-tip comparison the session-start notice
+// consumes. It is scoped to the dogfood case on purpose: a pinned install in a
+// user's own repo must never be nagged, so IsDogfood gates the whole notice.
+type DogfoodReport struct {
+	IsDogfood bool            // cwd is abcd's own source checkout (the binary was built from it)
+	Outcome   vintage.Outcome // Fresh (silent) / Stale / Unknown (a dirty rebuild)
+	Revision  string          // the binary's embedded revision (full)
+	Tip       string          // the checkout tip it should match (full)
+}
+
+// DogfoodStaleness reports whether the running binary trails the tip of the
+// source checkout it was built from, for the session-start notice. It reads the
+// binary's own build vintage and compares against cwd's HEAD.
+func DogfoodStaleness(cwd string) DogfoodReport {
+	return dogfoodStalenessFrom(vintage.CurrentBuildVintage(), cwd)
+}
+
+// dogfoodStalenessFrom is the pure core, split so the fresh/stale/unknown and
+// not-dogfood branches can be exercised with an explicit current vintage against
+// a fixture checkout. IsDogfood is true only when the binary's embedded revision
+// is contained in cwd's history — proof cwd is abcd's own checkout — so a pinned
+// install elsewhere yields no notice.
+func dogfoodStalenessFrom(cur vintage.Current, cwd string) DogfoodReport {
+	if cur.Revision == "" {
+		return DogfoodReport{} // no embedded revision: nothing to locate against a tip
+	}
+	abs, err := filepath.Abs(cwd)
+	if err != nil {
+		abs = cwd
+	}
+	head, err := gitutil.Run(abs, "rev-parse", "HEAD")
+	if err != nil || head == "" {
+		return DogfoodReport{}
+	}
+	// The binary's revision must be a commit in this checkout for the comparison
+	// to be about THIS checkout at all; --is-ancestor also fixes the direction.
+	if _, err := gitutil.Run(abs, "merge-base", "--is-ancestor", cur.Revision, head); err != nil {
+		return DogfoodReport{}
+	}
+	r := DogfoodReport{IsDogfood: true, Revision: cur.Revision, Tip: head}
+	switch {
+	case !cur.Known:
+		// A dirty rebuild atop a real commit: the revision no longer identifies
+		// what is running, so the vintage is unknown and worth surfacing.
+		r.Outcome = vintage.Unknown
+	case cur.Revision == head:
+		r.Outcome = vintage.Fresh
+	default:
+		r.Outcome = vintage.Stale
+	}
+	return r
 }
 
 // DisplayVintage renders the vintage for a one-line surface: a short revision
