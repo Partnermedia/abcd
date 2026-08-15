@@ -7,6 +7,8 @@ category: "process"
 source: "user-observation"
 found_during: "post-merge verification of PR #217 (2026-08-11)"
 found_at: ".github/workflows/attribution.yml"
+resolution: "attribution added to the main-protection ruleset's required status checks via ruleset update; the dependabot precondition (skipped conclusion does not block) was settled empirically 2026-08-11, so the wiring completes the gate"
+impact: internal
 ---
 
 The attribution gate merged in PR #217 is dead scaffolding until it is added to the branch's required status checks, and it is not there. Verified 2026-08-11 after the merge: main's required contexts are still check (macos-latest), check (ubuntu-latest), gitleaks, record-lint, smoke, zizmor — no "attribution" — and enforce_admins is false. The workflow runs and reports green on every pull request, so the repo now LOOKS gated while nothing is actually blocked; that is the false green the loud-staging principle refuses, and it fails the "wired or it isn't done" boundary the same way (no dead scaffolding). The gate was built precisely because the maintainer said it must be certain they do not have to check for attribution drift by hand; in its current state that certainty does not exist, and the appearance of it is worse than the previous honest absence.
