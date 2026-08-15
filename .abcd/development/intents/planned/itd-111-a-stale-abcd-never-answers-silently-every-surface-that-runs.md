@@ -1,8 +1,8 @@
 ---
 id: itd-111
 slug: a-stale-abcd-never-answers-silently-every-surface-that-runs
-spec_id: null
-kind: null
+spec_id: spc-22
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: [itd-108]
@@ -57,12 +57,13 @@ version. What is missing is only the comparison and the refusal to stay quiet.
    this ships a standing invariant across both channels. itd-111 never
    writes and never heals — rebuild is the dev shim's job, re-download is
    itd-105/108's provisioning job. It detects and refuses to be silent.
-2. **The network trichotomy.** Implicit checks are disk-only (embedded
-   revision vs checkout tip; binary version vs plugin-cache manifest, which
-   the harness's own update cycle refreshes). The network answers only an
-   explicit user-invoked `--check`. Provisioning after a plugin update may
-   fetch — but only the manifest-named, checksum-verified version: no
-   version-discovery request exists anywhere in abcd.
+2. **The network trichotomy is a system-wide trust rule, extracted.** The
+   itd-84 decomposition at planning (2026-08-15) routed it out of this intent:
+   the rule now lives as
+   [adr-38](../../decisions/adrs/0038-implicit-checks-are-disk-only.md) and
+   brief invariant 7, which this intent cites and implements — implicit
+   checks disk-only; the network answers only an explicit ask; provisioning
+   fetches only the manifest-named, checksum-verified version.
 3. **Warning surfaces.** SessionStart notice (the existing gap-notice
    channel) names the stale binary, its vintage, and the one-command fix.
    `abcd version` and `abcd ahoy` always print install mode + vintage.
@@ -78,6 +79,23 @@ version. What is missing is only the comparison and the refusal to stay quiet.
    same paths and semantics by design; the claim becomes a machine-class
    criterion in the itd-109 calibration set (fresh Linux box on the (b)
    page), not an assumption in prose.
+6. **The explicit check lives at `abcd version --check`** (planning ruling,
+   2026-08-15). Vintage is `version`'s domain; `ahoy` stays disk-only.
+7. **Unknown vintage fails closed at the refusal gate** (planning ruling,
+   2026-08-15, from the fit-challenge's stamping-gaps finding). A binary
+   whose vintage cannot be determined — unstamped build, `-buildvcs=false`,
+   or a dirty (`vcs.modified`) rebuild — is reported as **unknown**, never
+   silently treated as fresh; `ahoy install` refuses through it, naming a
+   rebuild (or an explicit override flag, specced there) as the out.
+8. **Decomposition record (itd-84 hand-run, 2026-08-15).** Verdict SPLIT:
+   the network posture → adr-38 + brief invariant 7 (above); the anti-
+   wallpaper micro-prompt seed → iss-230. Typed links: `refines` itd-105
+   (this intent reports the transition provisioning performs), `refines`
+   itd-109 (parity as a machine-class calibration criterion), `refines` the
+   iss-206 skew-notice retirement — a scoped replacement, not a reversal:
+   steady-state skew machinery stays retired; this intent covers the
+   non-steady states (dev checkouts, failed provisioning) pinned
+   provisioning cannot reach.
 
 ## SOTA
 
@@ -87,10 +105,24 @@ VCS stamping). **Declared path: 2 — native floor.** The anchors' implicit
 network checks fail the fit-challenge outright (a privacy-positioned tool
 making background HTTP calls is the posture this record scores against
 elsewhere); what survives is their UX grammar — cached comparison, gentle
-nudge, one-command fix — implemented over disk-only sources. The seam: the
-vintage comparison is one documented function over (embedded revision,
-checkout tip, manifest version); any future channel or harness reuses it.
-The independent fit-challenge of this declaration runs at plan time.
+nudge, one-command fix — implemented over disk-only sources.
+
+**Fit-challenge (independent, 2026-08-15): UPHELD**, with three recorded
+caveats. (a) The seam is a **version-source provider interface feeding one
+comparator** — `compare(current, expected)` with `expected` drawn from a
+provider (disk providers now: embedded revision, checkout tip, manifest pin;
+a network/selfupdate provider is a drop-in later, behind the new-dependency
+gate). A fixed-arity function over three disk sources would be reuse, not
+swappability. (b) The closest disk-only precedent joins the anchors: git's
+own "behind upstream" notice — comparison against locally cached refs,
+refreshed only by explicit fetch — is exactly the grammar built here.
+(c) Go's VCS stamping has known holes (`go run`/`go test` binaries,
+`-buildvcs=false`, `.git`-less builds, `go install module@version` history,
+`vcs.modified` dirty rebuilds), so the comparator has an explicit
+**unknown** outcome — see design decision 7. The challenge also confirmed
+no adoptable path-1 candidate exists (every checker in the class is
+network-based) and that the pattern's ecosystems offer opt-out, not a
+disk-only mode.
 
 ## Acceptance Criteria
 
@@ -106,32 +138,35 @@ The independent fit-challenge of this declaration runs at plan time.
 - Given any verb without an explicit check flag, when it runs, then no
   network request for version discovery is made — verifiable in the
   zero-network test harness the citation gate already uses.
-- Given the explicit check flag, when the user invokes it, then the latest
-  release is fetched once, compared, and reported with its source named.
-- Given a plugin update that names a new required binary version, when the
-  next session starts, then provisioning fetches that pinned,
-  checksum-verified artifact and the session reports the version transition
-  it performed.
+- Given the explicit check (`abcd version --check`), when the user invokes
+  it, then the latest release is fetched once, compared, and reported with
+  its source named.
+- Given provisioning has fetched a new pinned binary (itd-105/108's job),
+  when the next session starts, then the session reports the version
+  transition performed.
+- Given a binary whose vintage cannot be determined (unstamped build, dirty
+  `vcs.modified` rebuild), when staleness is evaluated, then the state is
+  reported as unknown — never as fresh — and `abcd ahoy install` run through
+  it refuses before any write, naming the rebuild fix.
 - Given the same staleness scenarios on macOS and on Linux, when the itd-109
   calibration runs, then observed behaviour matches — recorded as a
   machine-class criterion, human-verified per platform.
 
 ## Open Questions
 
-- **Sampled re-surfacing (the harness-survey pattern).** After the first
-  SessionStart notice, an unacted staleness should not repeat every session
-  (wallpaper) nor vanish; a pseudo-random low-probability re-surface — the
-  cadence Claude Code's own session-quality survey uses — may be the right
-  anti-wallpaper mechanism. Whether a general one-tap micro-prompt channel
-  (press 1/2/3) is worth building is bigger than this intent: it could also
-  carry itd-109's part-(b) verdicts and lightweight feedback capture. Park
-  for its own capture if the pattern proves wanted.
-- Naming and home of the explicit check (`abcd version --check` vs an ahoy
-  flag).
-- Harness portability of the SessionStart channel (OpenCoder equivalent —
-  ties to the itd-22 lineage and the host-delegated boundary).
-- Whether the refusal-on-stale extends beyond `ahoy install` to other
-  state-writing verbs (launch scaffold?) or stays deliberately narrow.
+_All resolved or explicitly deferred at planning (2026-08-15):_
+
+- **Sampled re-surfacing / one-tap micro-prompt** — graduated to its own
+  capture, iss-230 (facilitator-experience plan); struck from this intent.
+- **Explicit check naming** — resolved: `abcd version --check` (design
+  decision 6).
+- **Harness portability of the SessionStart channel** — **explicit
+  deferral** to the itd-22 lineage: the comparison provider is host-agnostic
+  core; each harness adapter wires its own session-start channel when that
+  harness lands. Not a criterion of this intent.
+- **Refusal breadth** — resolved: deliberately narrow, `ahoy install` only
+  (design decision 3); extending to other state-writing verbs is a later
+  intent if evidence arrives.
 
 ## Audit Notes
 
