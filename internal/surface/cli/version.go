@@ -35,6 +35,14 @@ type versionOutput struct {
 	Check       *checkResult `json:"check,omitempty"`
 }
 
+// ahoyOutput is `abcd ahoy`'s bare render: the detection envelope plus the
+// shared vintage/staleness, so the JSON surface relays them too (AC3).
+type ahoyOutput struct {
+	ahoy.DetectionResult
+	Vintage   string `json:"vintage"`
+	Staleness string `json:"staleness"`
+}
+
 // checkResult is the explicit network check's outcome, named source and all.
 type checkResult struct {
 	Latest  string `json:"latest,omitempty"`

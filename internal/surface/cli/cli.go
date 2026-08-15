@@ -1489,18 +1489,20 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+			// Vintage + staleness from the shared comparator (itd-111): the same
+			// source `abcd version` and the session-start notice read. Computed
+			// once and carried in both the JSON and the text render.
+			vin := ahoy.Vintage(cwd)
+			out := ahoyOutput{DetectionResult: res, Vintage: vin.DisplayVintage(), Staleness: vin.Staleness()}
+			return render(cmd.OutOrStdout(), *asJSON, out, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd ahoy — %s\n", res.FolderKind)
 				fmt.Fprintf(w, "  plugin root: %s\n", res.PluginRootStatus)
 				fmt.Fprintf(w, "  root sha:    %s\n", res.RootSHA)
 				if mode, _ := res.Signals["install_mode"].(string); mode != "" {
 					fmt.Fprintf(w, "  install:     %s\n", mode)
 				}
-				// Vintage + staleness from the shared comparator (itd-111): the
-				// same source `abcd version` and the session-start notice read.
-				vin := ahoy.Vintage(cwd)
-				fmt.Fprintf(w, "  vintage:     %s\n", vin.DisplayVintage())
-				fmt.Fprintf(w, "  staleness:   %s\n", vin.Staleness())
+				fmt.Fprintf(w, "  vintage:     %s\n", out.Vintage)
+				fmt.Fprintf(w, "  staleness:   %s\n", out.Staleness)
 				// The citation baseline's coverage and age, present only in a repo
 				// that has armed the citation gate. The line embeds counts and a
 				// date derived from repo content, so it is sanitised.
