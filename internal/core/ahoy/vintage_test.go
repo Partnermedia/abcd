@@ -87,10 +87,16 @@ func TestVintageDisplayAndStaleness(t *testing.T) {
 			wantStale:   "up to date",
 		},
 		{
-			name:        "stale shows the reference it trails",
+			name:        "stale checkout tip is directional (behind)",
 			v:           VintageStatus{Report: vintage.Report{Outcome: vintage.Stale, Current: sha, Expected: "2222222222222222222222222222222222222222"}, Source: "checkout tip"},
 			wantVintage: sha[:12],
-			wantStale:   "stale",
+			wantStale:   "behind the checkout tip",
+		},
+		{
+			name:        "stale pinned reference is non-directional (differs from)",
+			v:           VintageStatus{Report: vintage.Report{Outcome: vintage.Stale, Current: "v1.2.3", Expected: "v1.0.0"}, Source: "plugin manifest pin"},
+			wantVintage: "v1.2.3",
+			wantStale:   "differs from",
 		},
 		{
 			name:        "pinned version is shown verbatim",

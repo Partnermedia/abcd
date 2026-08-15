@@ -9,6 +9,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/vintage"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // currentVintage is the seam for reading the running binary's build vintage. A
@@ -182,12 +183,25 @@ func (v VintageStatus) Staleness() string {
 		ref := v.Report.Expected
 		if isHexSHA(ref) {
 			ref = shortRev(ref)
+		} else {
+			// A version/tag reference comes from the plugin-cache manifest, which
+			// is not shape-checked upstream; sanitise it like every other
+			// untrusted string this repo renders to a terminal (as skew.go does).
+			ref = termsafe.Sanitize(ref)
+		}
+		// Only the checkout-tip comparison is ancestry-guarded, so only it may
+		// claim a direction. A version/pin comparison is string equality — a
+		// binary newer than its pin is the same inequality read the other way —
+		// so it stays non-directional ("differs from"), the caution skew.go and
+		// VersionTransition already take.
+		if v.Source == "checkout tip" {
+			return "stale — behind the checkout tip (" + ref + ")"
 		}
 		src := v.Source
 		if src == "" {
 			src = "reference"
 		}
-		return "stale — behind the " + src + " (" + ref + ")"
+		return "stale — differs from the " + src + " (" + ref + ")"
 	default:
 		return "unknown"
 	}

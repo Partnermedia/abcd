@@ -10,6 +10,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core"
 	"github.com/REPPL/abcd-cli/internal/core/ahoy"
 	"github.com/REPPL/abcd-cli/internal/core/vintage"
+	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
 // newReleaseFetcher is the seam through which `version --check` reaches the
@@ -105,10 +106,12 @@ func runReleaseCheck(currentVersion string) *checkResult {
 		res.Verdict = "the latest release could not be determined (no network, or the source is unreachable)"
 		return res
 	}
-	res.Latest = exp.Revision
+	// The tag is read off an HTTP redirect (shape-checked only by the tag regex);
+	// sanitise it before it is rendered, as the retired skew notice does.
+	res.Latest = termsafe.Sanitize(exp.Revision)
 	cur := vintage.Current{Revision: currentVersion, Known: currentVersion != "" && currentVersion != "dev"}
 	if !cur.Known {
-		res.Verdict = "latest is " + exp.Revision + "; this is an unversioned (dev) build, so there is nothing to compare"
+		res.Verdict = "latest is " + res.Latest + "; this is an unversioned (dev) build, so there is nothing to compare"
 		return res
 	}
 	// Compare through the shared comparator over the tag already fetched, so the
@@ -116,7 +119,7 @@ func runReleaseCheck(currentVersion string) *checkResult {
 	if vintage.Compare(cur, vintage.PinnedVersion(exp.Revision)).Outcome == vintage.Fresh {
 		res.Verdict = "up to date"
 	} else {
-		res.Verdict = "update available: " + currentVersion + " -> " + exp.Revision
+		res.Verdict = "update available: " + currentVersion + " -> " + res.Latest
 	}
 	return res
 }
