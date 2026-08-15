@@ -38,3 +38,26 @@ Per hand-run, append:
   survive review — the case that motivated itd-84.
 - **Notes:** graded from the review record, not a live protocol run; counts
   toward the corpus as the canonical SPLIT exemplar.
+
+### 2026-08-15 — itd-111 planning interview (first live hand-run)
+
+- **Proposal:** itd-111 (staleness detection), an already-filed draft at its
+  planning interview — the decomposition ran over the draft before promotion.
+- **Initial routing:** five parts — staleness detection + refusal
+  (capability | this intent); the network trichotomy (trust rule | ADR +
+  brief invariant — flagged as system-binding: "no version-discovery request
+  exists anywhere in abcd" outlives the feature); anti-wallpaper micro-prompt
+  (capability seed | already extracted to iss-230); vintage-comparison seam
+  (plumbing | brief via the spec); platform parity (verification | itd-109
+  calibration set, `refines`). One advisory reversal flag: the SessionStart
+  staleness notice vs the iss-206 skew-notice retirement (install-experience
+  decision 7).
+- **Confirmed routing:** adopted unchanged. The reversal flag was ruled a
+  **scoped replacement** (`refines`, not `reverses`): steady-state machinery
+  stays retired; itd-111 covers the non-steady states.
+- **Verdict:** SPLIT (network posture → adr-38 + brief invariant 7),
+  proposed and confirmed — the initial verdict survived confirmation.
+- **Notes:** no over-flags; the one reversal candidate was genuinely
+  ambiguous and worth the human ruling (advisory-only behaved as designed).
+  Taxonomy: "trust rule → ADR + brief invariant" fit cleanly; no enum
+  ambiguity encountered.

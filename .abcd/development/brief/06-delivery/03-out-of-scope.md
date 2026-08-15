@@ -78,7 +78,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-108` — The plugin installs from the curated release artifact, not the repo, and every cut release reaches users automatically
 - `itd-109` — Acceptance criteria verify themselves; the manual rest renders for a human (`abcd verify`, sha-keyed receipts)
 - `itd-110` — The grill interview renders with clear structure and colour
-- `itd-111` — A stale abcd never answers silently (vintage-aware surfaces, loud staleness)
 - `itd-112` — Generated ferry-style CLI banner from the identity block, for abcd and managed CLIs
 <!-- /index -->
 

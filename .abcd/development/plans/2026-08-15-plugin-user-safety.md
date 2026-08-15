@@ -53,13 +53,14 @@ once. Human-paired (the §4 gate is manual by design).
 
 ## Workstream B — intent milestone
 
-- **Promote [itd-111](../intents/drafts/itd-111-a-stale-abcd-never-answers-silently-every-surface-that-runs.md)
-  via `/abcd:intent plan`** (human-paired: the planning interview runs the
-  adversarial fit-challenge and the itd-84 decomposition). The intent is
-  grill-complete. At planning, strike the one-tap micro-prompt open question —
-  it graduated to
-  [iss-230](../../work/issues/open/iss-230-one-tap-micro-prompt-channel.md),
-  homed in the facilitator-experience plan.
+- **[itd-111](../intents/planned/itd-111-a-stale-abcd-never-answers-silently-every-surface-that-runs.md)
+  is planned (interview run 2026-08-15, spc-22, `intent ready` exit 0).**
+  The interview ran the itd-84 decomposition (SPLIT: network posture →
+  adr-38 + brief invariant 7) and the SOTA fit-challenge (path 2 UPHELD);
+  the micro-prompt open question was struck to
+  [iss-230](../../work/issues/open/iss-230-one-tap-micro-prompt-channel.md).
+  Next step here: implement against spc-22 when this plan's fix queue
+  permits.
 
 ## Workstream C — fix queue (sequenced)
 

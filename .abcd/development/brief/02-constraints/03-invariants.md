@@ -18,4 +18,12 @@ The following are non-negotiable invariants — any architectural choice that vi
 
 6. **Lifeboat is always *output*, and disembark never writes to the source** — the lifeboat is regenerable, and it is written **out-of-tree** to an operator-chosen `<dest>`, never back into the repo being read (`disembark <source-repo> to <dest>`). Operations history lives at the operator level, `~/.abcd/voyage/<source-root-sha>/`, keyed on the root-commit SHA like the history store — never committed, and never accumulated as stale snapshots. Per [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), superseding adr-4's in-tree `.abcd/lifeboat/` and `.abcd/development/voyage/`. See [`02-constraints/01-platform.md § Lifeboat path`](01-platform.md#lifeboat-path) and [`04-surfaces/03-embark.md § 7`](../04-surfaces/03-embark.md#7-voyage-layout-embarkdisembark-provenance-and-history).
 
-7. **Acceptance discipline applies uniformly** — every intent's press release is followed by a `## Acceptance Criteria` block in Given-When-Then format (per itd-1). Every brief phase has an `## Acceptance` block in the same format. The format is uniform across the boundary; the *home* differs to match the nature of the work. See [`01-product/03-mental-model.md`](../01-product/03-mental-model.md).
+7. **Implicit operations never touch the network** — abcd asks the network
+   nothing on its own: implicit checks read only disk state; a fetch happens
+   only when the user invokes a verb or flag whose documented meaning is that
+   fetch; provisioning fetches only a manifest-named, pinned,
+   checksum-verified artifact. No version-discovery request exists anywhere
+   in abcd ([adr-38](../../decisions/adrs/0038-implicit-checks-are-disk-only.md)).
+   Tier-1 paths are enforceable in the zero-network test harness.
+
+8. **Acceptance discipline applies uniformly** — every intent's press release is followed by a `## Acceptance Criteria` block in Given-When-Then format (per itd-1). Every brief phase has an `## Acceptance` block in the same format. The format is uniform across the boundary; the *home* differs to match the nature of the work. See [`01-product/03-mental-model.md`](../01-product/03-mental-model.md).
