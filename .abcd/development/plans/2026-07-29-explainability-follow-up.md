@@ -1,6 +1,11 @@
 # "explainability" — follow-up plan and run queue (2026-07-29)
 
-**Status:** queued behind the v0.5.0 cycle
+**Status:** superseded 2026-08-15 by
+[`2026-08-15-facilitator-experience.md`](2026-08-15-facilitator-experience.md),
+which carries this plan's framing, STOP conditions and persona-lens review
+forward and absorbs its remaining queue (iss-166/167/171 landed earlier via
+[`2026-08-11-install-experience.md`](2026-08-11-install-experience.md) Cut A).
+Originally: queued behind the v0.5.0 cycle
 ([`2026-07-29-v0.5.0-security-and-consistency.md`](2026-07-29-v0.5.0-security-and-consistency.md));
 consumed by the same generic protocol
 ([`2026-07-12-abcd-run-protocol.md`](2026-07-12-abcd-run-protocol.md)) once
