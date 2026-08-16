@@ -1,7 +1,7 @@
 ---
 id: adr-40
 slug: review-audit-lint-are-three-verbs
-status: proposed
+status: accepted
 date: 2026-08-16
 supersedes: null
 superseded_by: null
