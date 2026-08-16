@@ -64,73 +64,78 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 
 ---
 
-## Lifecycle (mostly automatic, with deliberate manual steps)
+## Lifecycle (three transition verbs, with deliberate manual steps)
+
+Each step is marked `[shipped]` or `[design target]` on the same convention the
+brief's [surface registry](../brief/04-surfaces/README.md) uses. A design target
+is aspiration the binary does not yet reach.
 
 ```
-1. /abcd:intent "<free-text>"
-   ├─ Interview captures press release (headline + persona quote + scope)
+1. /abcd:intent "<free-text>"                                        [shipped]
    ├─ Assigns next itd-N ID (capture-stable — never renumbered)
-   ├─ Requires `## Acceptance Criteria` section (per the itd-1 discipline) — refuses to write if missing/malformed
-   ├─ LLM classifier writes advisory `suggested_kind` (default: standalone)
-   └─ Writes intents/drafts/itd-N-<slug>.md (no spec-plan call yet)
+   ├─ Writes intents/drafts/itd-N-<slug>.md, seeded from the text
+   ├─ Seeds a PLACEHOLDER `## Acceptance Criteria` section — the itd-1
+   │  refusal fires at plan time, not here
+   ├─ Optional --impact <additive|breaking|fix>, validated and stamped
+   └─ The press-release interview is host-run (commands/intent.md), not
+      performed by the binary
+      └─ LLM classifier writing advisory `suggested_kind`      [design target]
 
-2. /abcd:intent plan <itd-N> [<itd-M>...]    (when ready to commit to work)
-   ├─ Lints acceptance criteria; refuses promotion if missing/malformed
-   ├─ Reads suggested_kind + cross-references; proposes a kind
-   ├─ User confirms or overrides; binding `kind:` is written
+2. /abcd:intent plan <itd-N>            (the maintainer's sign-off act)
    │
-   ├─ standalone (single intent ID):
-   │     ├─ Plans the native spec (plan + plan-review)
-   │     ├─ Injects bidirectional link (spec.intent = itd-N; intent.spec_id = spc-N)
+   ├─ standalone (exactly one intent ID):                            [shipped]
+   │     ├─ Refuses if `## Acceptance Criteria` is missing or empty (itd-1)
+   │     ├─ Writes binding `kind:` — defaults to standalone
+   │     ├─ Mints the spec, injects the bidirectional link
+   │     │  (spec.intent = itd-N; intent.spec_id = spc-N)
    │     └─ drafts/ → planned/
    │
-   ├─ bundle-member (multiple intent IDs in one plan call):
-   │     ├─ Plans one native spec with all intents as joint input
-   │     ├─ spec.intent = [itd-A, itd-B]; each intent.spec_id = spc-N; each intent.bundle = <bundle-id>
-   │     └─ All members: drafts/ → planned/
+   ├─ Kind proposal + user confirmation, plan-review        [design target]
    │
-   └─ discipline (single intent, kind chosen explicitly):
-         ├─ NO spec-plan call
-         ├─ Registers acceptance gates in .abcd/disciplines/<itd-N>.json
-         ├─ Plan-review on the discipline's `## Rule` for sanity
-         └─ drafts/ → disciplines/ (active state encoded by directory location; no `status:` field)
+   ├─ bundle-member (multiple intent IDs in one call)       [design target]
+   │
+   └─ discipline (registers gates in .abcd/disciplines/)    [design target]
 
-3. /abcd:intent ship <itd-N>          (standalone + bundle only — disciplines never ship)
-   ├─ If intent is in drafts/: runs full pipeline (plan + plan-review first)
-   ├─ Runs the native spec work
-   └─ Spec continues in the native spec store
+3. Implementation                                                    [manual]
+   ├─ `intent ready <itd-N>` gates it (exit 0 proceed / 1 SKIP / 2 fault)
+   └─ There is NO `intent ship` verb; the work is done in a session
+      └─ /abcd:intent ship                                   [design target]
 
-4. Spec marked done in the native spec store   (standalone + bundle: work complete, automatic from here)
-   ├─ intent_lifecycle_hook detects status change via the intent: link
-   ├─ planned/ → shipped/ (bundles: all members move together)
-   └─ Triggers intent-fidelity-reviewer agent (single-document role)
-       └─ Per-criterion verdicts (MET / MET_WITH_CONCERNS / NOT_MET / INCONCLUSIVE)
-           plus three-bucket prose audit (honoured / diverged / missing)
-           appended to intent file's "Audit Notes" section.
-           For bundles, review runs per-intent against the same delivered reality.
+4. /abcd:spec close <spc-N>                                          [shipped]
+   ├─ Closes the spec (open/ → closed/) and, in the same synchronous call,
+   │  reconciles the linked intent planned/ → shipped/
+   │  (intent.Reconcile — there is no background hook)
+   └─ Emits an OWED review receipt into the intent's `## Audit Notes`
+      plus an ephemeral request under .abcd/.work.local/reviews/
+      (report-only: a failure here never blocks the ship)
 
-5. /abcd:intent reclassify <itd-N> --kind <new-kind> [--reason <text>]
-   ├─ Records reclassification_history entry (date + from-kind + to-kind + reason)
-   ├─ Moves the file between directories as the new kind dictates
-   └─ --kind superseded --by <handle> is the supersession path:
-        ├─ file moves to superseded/
-        ├─ frontmatter gains superseded_by: <handle> (the successor)
-        └─ frontmatter gains kind_at_supersession: <original-kind>
-            (preserves the shape the intent had when retired —
-             standalone vs bundle-member vs discipline change the
-             meaning of "superseded")
+5. Fidelity verdict — three deliberate steps                         [shipped]
+   ├─ /abcd:intent review <itd-N>       re-emits the request
+   ├─ host runs intent-fidelity-reviewer (single-document role)
+   └─ /abcd:intent review ingest --verdict-json <f>
+      ├─ Validates FAIL-CLOSED against the schema and the parked receipt
+      ├─ INGESTED: replaces the OWED stub with per-criterion verdicts
+      │  (MET / MET_WITH_CONCERNS / NOT_MET / INCONCLUSIVE) plus the
+      │  three-bucket prose audit (honoured / diverged / missing)
+      └─ DEAD_LETTER: quarantines the payload — never a partial apply
 
-Continuously: intent-fidelity-reviewer's shape-classification role suggests
-              reclassifications based on cross-reference patterns, scope overlap,
-              and supersession candidates. User accepts via /abcd:intent reclassify.
+      The receipt digest is sha256 over the `## Acceptance Criteria` body
+      alone, so writing the verdict cannot change it and re-ingest stays
+      idempotent. Editing the criteria after shipping invalidates the
+      receipt — a stale verdict is detectable, by design.
+
+6. /abcd:intent reclassify <itd-N> --kind <new-kind>          [design target]
+   └─ Including the --kind superseded --by <handle> supersession path.
+      The intents in superseded/ were moved by hand.
 ```
+
+**Shipped verb set:** `intent "<text>"`, `intent plan`, `intent ready`,
+`intent link`, `intent review`, `intent review ingest`, and `spec close`.
 
 **Manual overrides:**
 
-- `/abcd:intent ship` can force-move planned→shipped if the hook missed (standalone + bundle only)
 - `/abcd:intent link <itd-N> <spc-N>` for retroactive linking of pre-existing specs
-- `/abcd:intent review <itd-N>` to manually re-run the fidelity reviewer at any time (Role 1 — single-doc fidelity)
-- `/abcd:intent reclassify <itd-N> --kind <new-kind>` for late kind changes
+- `/abcd:intent review <itd-N>` to re-emit the fidelity request at any time (Role 1 — single-doc fidelity)
 
 **No `/abcd:intent move`** — file location follows verb side-effects, not user intervention.
 
@@ -294,7 +299,7 @@ The commitment set is [`planned/`](planned/); which of those a phase has sequenc
 
 The retired set is [`superseded/`](superseded/); each file names its own successor and the shape it had when it was retired, so the directory answers "what happened to itd-N" without a roll-call here.
 
-Intents move here when they are killed by reclassification or absorption — e.g., when a smaller intent is folded into a larger one (`/abcd:intent reclassify <itd-N> --kind superseded --by <itd-M>`), or when a discipline is replaced by a stricter successor. Each superseded intent records two fields:
+Intents move here when they are killed by reclassification or absorption — e.g., when a smaller intent is folded into a larger one, or when a discipline is replaced by a stricter successor. The move is made by hand; `/abcd:intent reclassify <itd-N> --kind superseded --by <itd-M>` is a design target. Each superseded intent records two fields:
 
 - **`superseded_by: <handle>`** — the successor. Usually a later intent (`itd-M`); an ADR (`adr-N`) when the decision the intent rested on is redecided rather than the capability re-scoped. The successor carries the other half of the pair, `supersedes: [<itd-N>]`, and `record_schema` blocks a supersession declared from one side only.
 - **`kind_at_supersession: <original-kind>`** — what shape the intent had when retired (`standalone`, `bundle-member`, or `discipline`)
