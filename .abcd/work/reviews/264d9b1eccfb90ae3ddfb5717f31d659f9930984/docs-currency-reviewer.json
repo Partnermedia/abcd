@@ -1,0 +1,47 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "264d9b1eccfb90ae3ddfb5717f31d659f9930984"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-16T19:44:22Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3250b8ba510180464817cf05ccccf7e5af09a24481820ea234576c657f5c0a7e",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.5.0"
+  },
+  "categories": {
+    "false-claim": 1,
+    "undocumented-surface": 1,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [
+    {
+      "item": "README.md",
+      "where": "README.md:214",
+      "claim": "\"Every hook that needs the binary\" resolves plugin-root first then PATH",
+      "reality": "the SessionStart chain has no PATH fallback by design; the ladder covers the four other binary-invoking hooks, as the tests and the changelog state precisely",
+      "class": "false-claim",
+      "disposition": "fixed in the receipts commit: the sentence now reads \"Every other hook\", matching the shipped manifest and the test scope"
+    },
+    {
+      "item": "README.md",
+      "where": "README.md (Resources)",
+      "claim": "the README carries no route to the contributor guidance",
+      "reality": "the restructure removed the trailing AGENTS.md pointer",
+      "class": "undocumented-surface",
+      "disposition": "maintainer-directed removal (explicit instruction during the restructure); no change"
+    }
+  ],
+  "_reviewProvenance": "Host-run agent-harness semantic review at this content commit exactly: the maintainer-requested README Install verification (plugin commands vs the marketplace manifests, the hook resolution-ladder paragraphs vs hooks/hooks.json, the one-liner’s asset-name construction vs the Makefile TARGETS and release.yml checksums step, anchors and links after the restructure), all three 0.5.1 CHANGELOG entries verified claim-by-claim against the implementing code, docs/ unchanged since v0.5.0 with the terminology fix spot-checked, deterministic docs lint 0 blockers. Two findings, dispositioned as recorded; VERDICT: PROMOTE. The judge is the release session’s pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is withheld from committed artifacts by harness policy and recorded in the session transcript."
+}
