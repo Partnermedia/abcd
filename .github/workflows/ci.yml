@@ -1,17 +1,21 @@
 name: ci
 
-# Checks on every push and pull request. The check job builds, vets and tests on
-# macOS and Linux, with race-enabled internal tests on both and the `gofmt -l .`
-# format gate, record-lint and docs-lint on the ubuntu leg alone. Separate jobs
-# run full-history secret scanning, a workflow audit, the reviews-charter
-# discipline, and the smoke harness.
+# Checks on every pull request and on every push to the default branch. Branch
+# work is covered by the pull_request trigger alone, so a PR push runs the matrix
+# once; the default-branch push keeps the merged tip checked. The check job
+# builds, vets and tests on macOS and Linux, with race-enabled internal tests on
+# both and the `gofmt -l .` format gate, record-lint and docs-lint on the ubuntu
+# leg alone. Separate jobs run full-history secret scanning, a workflow audit,
+# the reviews-charter discipline, and the smoke harness.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
-# Cancel superseded runs of the same ref (PRs and branch pushes); a merged
-# default-branch push is never cancelled mid-run because each ref has its own group.
+# One group per ref, so a new push to a PR supersedes the run still in flight for
+# it. Default-branch pushes all share a single group, so the cancel expression —
+# not the group key — is what keeps a merge from being cancelled mid-run by the
+# merge behind it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
