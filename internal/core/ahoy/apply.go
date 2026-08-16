@@ -535,6 +535,15 @@ func (a *applyCtx) stepVisibility(cfg *InstallConfig) {
 	if err == nil && wrote {
 		a.note(filepath.Join(a.cwd, ".gitignore"))
 	}
+	// A narrowed public fence is said out loud (iss-255): the reader must learn
+	// that the committed record tiers stay published, from the receipt rather
+	// than from a later surprise in git status. Gated on the write succeeding —
+	// a refused .gitignore holds no fence, and the note must not assert one.
+	if err == nil {
+		if _, narrowed := effectiveVisibilityEntries(a.cwd, cfg.Visibility); narrowed {
+			a.refuse("visibility is public, but .abcd/ holds tracked files — an ignore rule cannot untrack committed records, so the .abcd/ fence covers only the local tier (.abcd/.work.local/; the memory/ snapshot fence is kept) and the committed record tiers remain published")
+		}
+	}
 }
 
 // stepHistory bootstraps ~/.abcd/history/, creates the per-root-sha dirs, writes

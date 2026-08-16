@@ -5,9 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"strings"
+	"github.com/REPPL/abcd-cli/internal/gitutil"
 )
 
 // Canonical .gitignore fence markers and the do-not-hand-edit header.
@@ -38,10 +39,47 @@ var visibilityEntries = map[string][]string{
 	"public":  {"/.abcd/", "/memory/"},
 }
 
-// canonicalGitignoreBlock returns the block lines (EOL-naive) for a visibility.
-func canonicalGitignoreBlock(visibility string) []string {
+// effectiveVisibilityEntries resolves the entry set actually written for a
+// repo, and whether it was narrowed. The table's public set fences the whole
+// .abcd/ namespace — but an ignore rule cannot untrack committed files, so on
+// a repo that COMMITS the record tiers (the documented three-tier layout, and
+// this repository itself) the wholesale fence only hides every NEW record from
+// git status and makes `git add` refuse them (iss-255). When .abcd/ holds
+// tracked files, the /.abcd/ entry — and ONLY that entry — narrows to the
+// local-ephemeral tier; every other declared entry (the /memory/ snapshot
+// fence) is kept, because its justification is untouched by the tracked-tier
+// argument. Narrowing needs positive evidence: a repo whose git cannot be
+// asked keeps the declared set — the fence is the public setting's whole
+// purpose, and a repair applied on no evidence would remove it. A directory
+// that is not a git repository at all likewise keeps the declared set: no git
+// means no ignore semantics to break.
+func effectiveVisibilityEntries(cwd, visibility string) (entries []string, narrowed bool) {
+	declared, ok := visibilityEntries[visibility]
+	if !ok || visibility != "public" {
+		return declared, false
+	}
+	if !gitutil.InRepo(cwd) {
+		return declared, false
+	}
+	out, err := gitutil.RunLimited(cwd, 4096, "ls-files", "--", ".abcd")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return declared, false
+	}
+	narrowedSet := make([]string, 0, len(declared))
+	for _, e := range declared {
+		if e == "/.abcd/" {
+			narrowedSet = append(narrowedSet, visibilityEntries["private"]...)
+			continue
+		}
+		narrowedSet = append(narrowedSet, e)
+	}
+	return narrowedSet, true
+}
+
+// canonicalGitignoreBlock returns the block lines (EOL-naive) for an entry set.
+func canonicalGitignoreBlock(entries []string) []string {
 	lines := []string{gitignoreBegin, gitignoreHeader}
-	lines = append(lines, visibilityEntries[visibility]...)
+	lines = append(lines, entries...)
 	lines = append(lines, gitignoreEnd)
 	return lines
 }
@@ -62,10 +100,10 @@ func gitignoreEOL(raw []byte) string {
 // differs from the canonical entry set for visibility. Read-only; fail-closed
 // (drift) on any unsafe/unreadable shape so apply is offered.
 func gitignoreBlockDrifts(cwd, visibility string) bool {
-	entries, ok := visibilityEntries[visibility]
-	if !ok {
+	if _, ok := visibilityEntries[visibility]; !ok {
 		return false
 	}
+	entries, _ := effectiveVisibilityEntries(cwd, visibility)
 	path := filepath.Join(cwd, ".gitignore")
 	// ReadGuarded folds the absent / symlink / non-regular / oversize / unreadable
 	// cases into one guarded open (iss-109): every one is drift here (fail-closed),
@@ -147,6 +185,7 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 	if _, ok := visibilityEntries[visibility]; !ok {
 		return false, &ahoyError{"unknown visibility: " + visibility}
 	}
+	entries, _ := effectiveVisibilityEntries(cwd, visibility)
 	path := filepath.Join(cwd, ".gitignore")
 
 	// Keep the symlink pre-check: it yields a DISTINCT refusal that ReadGuarded's
@@ -164,7 +203,7 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 		// existing regular file within cap — fall through to the round-trip below
 	case os.IsNotExist(err):
 		eol := "\n"
-		body := strings.Join(canonicalGitignoreBlock(visibility), eol) + eol
+		body := strings.Join(canonicalGitignoreBlock(entries), eol) + eol
 		if werr := fsutil.WriteFileAtomicPreserveMode(path, []byte(body)); werr != nil {
 			return false, werr
 		}
@@ -180,7 +219,7 @@ func applyVisibilityBlock(cwd, visibility string) (bool, error) {
 	eol := gitignoreEOL(raw)
 	withoutBlocks := removeGitignoreBlocks(string(raw), eol)
 	trimmedLeft := strings.TrimRight(withoutBlocks, "\r\n")
-	canonical := strings.Join(canonicalGitignoreBlock(visibility), eol) + eol
+	canonical := strings.Join(canonicalGitignoreBlock(entries), eol) + eol
 
 	var newText string
 	if trimmedLeft != "" {
