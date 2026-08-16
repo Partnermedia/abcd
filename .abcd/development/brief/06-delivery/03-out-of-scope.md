@@ -39,7 +39,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-18` — `.claude/settings.local.json` permission templates
 - `itd-19` — ABCDevelopment stage-aware defaults
 - `itd-21` — `/abcd:init-project` empty-repo scaffolding
-- `itd-22` — OpenCode harness implementation — **obsolete under no-hard-deps ([adr-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md))**: with a transport-agnostic Go core ([adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)) behind thin front doors, a second harness is just another host over the same core, not a special port
+- `itd-22` — Harness portability — the shared adaptor machinery for multi-harness support (host profile seam, adaptor ladder, parity suite) under the host-tier policy ([adr-39](../../decisions/adrs/0039-host-tier-policy.md), mechanism per [adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)); per-host adoption files as its own intent at an explicit decision; awaiting the planning interview
 - `itd-23` — Spec Kit interop
 - `itd-25` — `/abcd:dredge` cross-corpus synthesist (split from itd-4 capture)
 - `itd-26` — `/abcd:loot` OSS-vendor with provenance (pulled to an earlier phase on 2026-05-08)
@@ -79,6 +79,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-109` — Acceptance criteria verify themselves; the manual rest renders for a human (`abcd verify`, sha-keyed receipts)
 - `itd-110` — The grill interview renders with clear structure and colour
 - `itd-112` — Generated ferry-style CLI banner from the identity block, for abcd and managed CLIs
+- `itd-113` — The MCP front door opens — abcd's core verbs from any MCP-capable harness (the [adr-39](../../decisions/adrs/0039-host-tier-policy.md) universal floor)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

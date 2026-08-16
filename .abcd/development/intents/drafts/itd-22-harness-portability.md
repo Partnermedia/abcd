@@ -1,0 +1,54 @@
+---
+id: itd-22
+slug: harness-portability
+spec_id: null
+kind: standalone
+suggested_kind: null
+reclassification_history: []
+blocked_by: [itd-2]
+severity: major
+---
+
+# abcd Reaches Any Harness Through an Adaptor
+
+## Press Release
+
+> **abcd runs wherever the user's harness runs.** abcd's core is a transport-agnostic engine, and each harness reaches it through a thin adaptor built on one shared seam. An adaptor climbs a fixed ladder — the host's own plugin format first, any other native seam second, the MCP floor always — and one parity suite proves every host gets the same conventions, intents, and lifeboats. Adding a harness is one adaptor over an unchanged core, never a second copy of abcd.
+>
+> "We switched harnesses and abcd came with us," said Carol, whose team moved for cost reasons. "Same record, same gates, byte-identical lifeboats. The adaptor was thin because the machinery was already shared."
+
+## Why This Matters
+
+adr-23's portability promise — front doors over an unchanged core — needs shared machinery to be true in practice. Today the hook entrypoints hard-code one host's stdin payload schema, exit-code semantics, and tool naming; without a host profile seam, every port re-solves those, and without one parity suite, "supported on host X" is an unverifiable claim. adr-39 (host-tier policy) sets the tiers — MCP floor, reference host, an eventual open-source default gated on parity — and this intent builds the machinery all of those tiers stand on.
+
+## What's In Scope
+
+- **The host profile seam** — the host-specific payload schema, exit-code semantics, and tool-name assumptions currently hard-coded in the CLI hook entrypoints move behind a host profile; the current host becomes profile #1 with behaviour unchanged.
+- **The adaptor ladder as testable behaviour** — each rung declares its capabilities; a rung a host cannot support degrades to the next and reports what it cannot do (loud staging), never a silent no-op.
+- **The parity conformance suite, defined once and run per host** — install parity, byte-identical lifeboats (modulo timestamps and oracle adapter ids), in-session subagent dispatch per itd-2's wire-protocol contract, and docs that treat every adopted host as a peer. Its per-check report is the adr-39 default-flip evidence.
+- **Docs structure** — a host-neutral install/configuration skeleton that per-host pages slot into without editing existing pages.
+
+## What's Out of Scope
+
+- The MCP front door itself — its own intent; it is the floor the ladder ends on.
+- Per-host adoption — one intent per harness at its explicit adoption decision (adr-39), including any concept mapping onto a host's native work-plane.
+- The default-host flip — adr-39's gate, exercised with the parity report as evidence; not built here.
+
+## Acceptance Criteria
+
+> _BDD format, per `itd-1-acceptance-gates`. Seeded criteria are proposals until the planning interview confirms them._
+
+- **Given** the hook entrypoints run behind host profile #1, **when** the current host drives them across the existing hook corpus, **then** observable behaviour is identical to the pre-seam baseline — the seam lands with zero behaviour change.
+- **Given** a second host profile is declared, **when** its adaptor exercises a rung the host cannot support, **then** the adaptor reports the degradation explicitly AND the parity report records it as a documented host difference, never a silent pass.
+- **Given** the parity suite passes on the reference host, **when** the same suite runs against any declared profile, **then** it emits a comparable per-check report suitable as adr-39 default-flip evidence.
+- **Given** the host-neutral docs skeleton, **when** a host's page is added at its adoption, **then** no existing page changes AND no committed page names a harness whose adoption is undecided.
+
+## Open Questions
+
+- Does a host profile live in code (a Go type per host) or in committed configuration the adaptor reads?
+- Testing strategy for parity: run the entire acceptance matrix on every adopted host, or a pinned sample per release?
+- Where does the parity report live — a dated research note per run, or a receipt-shaped artefact beside the release gates?
+
+## Audit Notes
+
+_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._

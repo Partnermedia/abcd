@@ -61,3 +61,31 @@ Per hand-run, append:
   ambiguous and worth the human ruling (advisory-only behaved as designed).
   Taxonomy: "trust rule → ADR + brief invariant" fit cleanly; no enum
   ambiguity encountered.
+
+### 2026-08-16 — the multi-harness proposal (hand-run at user confirmation)
+
+- **Proposal:** "make abcd available on further harnesses, as native as
+  possible, mapping concepts where the host has them, MCP as the fallback,
+  never double-writing per host" — plus a host-tier statement (MCP floor for
+  any harness; the current plugin host as the assumed SOTA surface for the
+  time being; an open-source harness as the eventual default).
+- **Initial routing:** four parts — the host-tier policy incl. the
+  default-flip gate (trust/strategy rule | ADR | decisions/adrs/); the shared
+  adaptor machinery — host profile seam, ladder semantics, parity suite
+  (capability | reworked itd-22, renamed `harness-portability`); the MCP
+  front door (capability, the floor | new intent); per-host adoptions incl.
+  concept mapping (capability | one intent per host, DEFERRED to explicit
+  adoption decisions, nameless until then). Typed links: the 2026-08-15
+  DECISIONS entry `reverses` the out-of-scope annotation on itd-22 (human
+  had already confirmed that reversal); adr-39 `refines` that decision;
+  itd-22 rework `supersedes` its own prior single-host framing (id kept).
+- **Confirmed routing:** adopted structurally unchanged; two content edits at
+  confirmation — the reference-host rationale reworded to "assumed SOTA
+  surface for the time being", and the routing's own justification prose
+  ordered kept OUT of the record.
+- **Verdict:** SPLIT, proposed and confirmed — the initial verdict survived.
+- **Notes:** the stance piece ("never double-write per host") routed into the
+  ADR rather than a standalone principle — it restates one-canonical-primitive
+  at the host boundary, so a new principle file would have been a second copy;
+  flagged here for the ~50-capture calibration review. Rename executed with a
+  retire-the-name ban (`retired-itd-22-slug`).
