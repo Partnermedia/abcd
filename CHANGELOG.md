@@ -10,6 +10,17 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-16
+
+### Added
+
+- **abcd is citable, and its sources are on the record.** A root `CITATION.cff` (CFF 1.2.0) powers the forge's cite-this-repository box; the References & sources section of `ACKNOWLEDGEMENTS.md` records the academic literature the design record draws on as a curated, alphabetically ordered list of primary sources; and the canonical CSL-JSON metadata lives at `.abcd/development/research/references.csl.json`, with a documented on-demand `.bib` export for LaTeX toolchains — generated, never committed. (iss-257)
+
+### Fixed
+
+- **A missing plugin binary no longer degrades the whole session in silence.** Session start was the only hook that ever provisioned the binary, so when that one hook did not fire the session stayed broken for good, with every later hook failing as a raw `No such file or directory`. Every binary-invoking hook — the prompt router, the shell guard, the compaction reset, the session-end capture — now guards on the plugin root, attempts a rate-limited silent bootstrap salvage when the binary is absent (one attempt per ten-minute window), resolves the binary plugin-root first and then from `PATH`, and on continued absence prints one plain line naming exactly what is degraded and the install remedy. Session start keeps its loud primary-provisioner role unchanged. (iss-254)
+- **`ahoy install` no longer hides a repo's committed record tiers from git.** The public visibility block used to ignore `/.abcd/` wholesale, so on any repo that commits the durable tiers — this one included — new intents and issues vanished from `git status` and `git add` refused them. When `.abcd/` holds tracked files, the block's `.abcd/` entry — and only that entry — now narrows to the local-ephemeral tier, and the install receipt says out loud that the committed record tiers remain published. Narrowing needs positive evidence: a directory whose git cannot be asked, or no repo at all, keeps the declared set, and the `memory/` snapshot fence is unchanged. (iss-255)
+
 ## [0.5.0] - 2026-08-16
 
 ### Breaking
