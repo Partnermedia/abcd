@@ -139,3 +139,29 @@ Per hand-run, append:
 - **Notes:** typed links refines iss-172 / itd-92 / itd-106 / itd-114 (itd-114
   unlocks the future relax-strict option). A clean case of the interdependency
   pass preventing a record-contradicting design.
+
+### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
+
+- **Proposal:** a verb that selects validated GitHub issues (the bughunt's
+  filings), reviews them, and captures them into the ledger — "bug-adoption
+  owner" made a tool.
+- **Initial routing:** four parts — the adoption capability (intent itd-116);
+  the host-delegated select/review + fail-closed ingest trust rule (already
+  adr-25 + the core boundary — spec constraint, no new ADR); the
+  human-adoption-gate stance (already `verifier-selects-gates-decide` — cite,
+  don't re-file); provenance/dedupe plumbing (spec detail; consumes itd-87
+  later). Duplicate check against itd-82 (drain) came back negative: opposite
+  pipeline directions (GitHub→ledger vs ledger→PRs).
+- **Confirmed routing:** adopted, with one live design exchange at capture —
+  the author floated `drain --github-issues` as an alternative surface; set
+  aside (drain is an unbuilt draft already stubbing itd-46; different blast
+  radius) in favour of a capture extension, recorded in the draft as
+  considered-and-rejected. Mint stays capture-only (one-canonical-primitive).
+- **Verdict:** FILE-AS-IS (no reversal flags). Initial verdict survived; the
+  surface-spelling exchange narrowed open question 1 rather than changing the
+  routing.
+- **Notes:** typed links builds_on itd-4; refines the DECISIONS.md
+  bughunt-hybrid line ("adoption is a downstream human/fix step"); prose
+  cross-refs itd-82 (downstream consumer) and itd-87 (recurrence semantics).
+  Filed the same day the bughunt's first validated issue (#250) landed —
+  itself the first adoption candidate.

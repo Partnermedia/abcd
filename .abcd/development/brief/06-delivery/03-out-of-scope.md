@@ -82,6 +82,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-113` — The MCP front door opens — abcd's core verbs from any MCP-capable harness (the [adr-39](../../decisions/adrs/0039-host-tier-policy.md) universal floor)
 - `itd-114` — Two agents can mint at the same instant and never collide (collision-proof record ids: native time+hash default, optional forge backend)
 - `itd-115` — A ready PR merges without ever wedging BEHIND (managed-repo merge queue by default, rung-1 auto-update fallback, strict preserved)
+- `itd-116` — Validated GitHub issues become ledger entries without retyping (capture extension adopts externally filed findings with provenance; mint stays capture-only)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief
