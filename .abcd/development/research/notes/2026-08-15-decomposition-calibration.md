@@ -140,6 +140,29 @@ Per hand-run, append:
   unlocks the future relax-strict option). A clean case of the interdependency
   pass preventing a record-contradicting design.
 
+### 2026-08-16 — itd-119 capture promote (hand-run at planning, process plan intent 1)
+
+- **Proposal:** `abcd capture promote <iss-N>` — an issue graduates into an
+  intent without retyping; `promoted_to` stamped in the same invocation (the
+  first walkability intent of the process-coherence plan).
+- **Initial routing:** four parts — the promote capability (capability | this
+  intent); the "capture now, decide later" stance (already embodied in the
+  Which-ledger note + `PromotedTo` schema — cite, file nothing); the docs
+  corrections (capture.md / 04-naming.md / 04-surfaces | ride the sweep); the
+  intent-side reciprocal edge field (spec detail | spec body). Typed link:
+  `refines` iss-245 (its `promoted_to` half). No reversal flags.
+- **Confirmed routing:** adopted structurally unchanged. Two AC-level edits at
+  the walk/grill: the proposal's only-open-issues restriction was struck
+  (promotion ruled orthogonal to fix-status — the maintainer's challenge), and
+  the seed moved from body-copy to a by-id pointer + first line (SSOT) after
+  the maintainer floated the link alternative mid-grill.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** the interesting failure was an *over-restriction*, not an
+  over-flag: the proposed AC invented a status gate the schema never implied.
+  Grill surfaced a real unimplementability (two-store atomicity) that became
+  the mint-first + `--intent` repair contract. Filed as itd-119/spc-24.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
