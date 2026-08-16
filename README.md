@@ -211,7 +211,7 @@ platform, or a platform outside the released matrix (darwin and linux on amd64
 and arm64) installs nothing and says why in plain language. A plugin root that
 already holds the binary costs one file test and no network.
 
-Session start is not the only chance. Every hook that needs the binary
+Session start is not the only chance. Every other hook that needs the binary
 resolves it the same way the command files do — the plugin root first, then an
 `abcd` on `PATH` — and when the plugin root is empty it first attempts the
 bootstrap itself, silently and at most once per ten-minute window. A session
