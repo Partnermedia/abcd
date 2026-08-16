@@ -61,14 +61,16 @@ func TestGuardHookAllowsSilently(t *testing.T) {
 }
 
 // TestGuardHookWarnAllowsAndSurfaces is AC 2's warn half on the guard plane: the
-// command runs (exit 0, never the blocking status) and the warning is still said
-// out loud.
+// command runs (never the blocking status 2) and the warning is said out loud. It
+// exits 1, not 0, because a pre-tool-use hook that exits 0 has its stderr
+// DISCARDED — the same loud-but-non-blocking status failOpen uses — so a warn is
+// visible rather than silent (iss-231).
 func TestGuardHookWarnAllowsAndSurfaces(t *testing.T) {
 	dir := guardRepo(t)
 	_, stderr, code := runGuard(preToolUse(t, "Bash", "git clean -fd", dir), "guard", "hook")
 
-	if code != 0 {
-		t.Errorf("a warn must never block: want exit 0, got %d", code)
+	if code != 1 {
+		t.Errorf("a warn must be loud but non-blocking: want exit 1, got %d", code)
 	}
 	if !strings.Contains(stderr, "git-clean") {
 		t.Errorf("the warning must be surfaced and name its entry; stderr = %q", stderr)

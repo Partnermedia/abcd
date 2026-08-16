@@ -153,8 +153,16 @@ type Decision struct {
 	// the refusal itself teaches the safe form.
 	Message string `json:"message,omitempty"`
 	// Matches lists every entry the command tripped (blocker ids first, then
-	// warn, each in id order), so a warn plane can surface all of them.
+	// warn, each in id order), so a warn plane can surface all of them. It
+	// includes the reserved synthetic id when an execute-a-string payload raised
+	// an entry-less verdict.
 	Matches []string `json:"matches,omitempty"`
+	// Family and Reason describe an entry-less (synthetic) verdict from the
+	// execute-a-string family: the wrapper family that raised it and the
+	// plain-language reason. They are empty on an ordinary registry match. The raw
+	// payload is deliberately not carried — nothing reads it yet.
+	Family string `json:"family,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 //go:embed defaults/guard.json
@@ -353,6 +361,12 @@ func (r Registry) Check(command string) (Decision, error) {
 	if err != nil {
 		return Decision{}, err
 	}
+	// Expand every execute-a-string payload ONCE, here, before the entry loop —
+	// never inside a per-entry callee (that path went quadratic). Every entry then
+	// sees the payload segments for free, and any payload the guard cannot read
+	// raises a synthetic (entry-less) signal folded in by severity below.
+	segs, signals := expandPayloads(segs)
+
 	ids := make([]string, 0, len(r.Entries))
 	for id := range r.Entries {
 		ids = append(ids, id)
@@ -369,26 +383,92 @@ func (r Registry) Check(command string) (Decision, error) {
 			}
 		}
 	}
-	matches := append(append([]string(nil), blockers...), warns...)
-	if len(matches) == 0 {
+
+	// The first synthetic block and warn (id order is not meaningful for the
+	// entry-less verdicts, so the first encountered wins its pool).
+	var synBlock, synWarn *payloadSignal
+	for i := range signals {
+		switch {
+		case signals[i].verdict == VerdictBlock && synBlock == nil:
+			synBlock = &signals[i]
+		case signals[i].verdict == VerdictWarn && synWarn == nil:
+			synWarn = &signals[i]
+		}
+	}
+
+	// Merge by SEVERITY POOL, not a single "registry outranks synthetic" rule: a
+	// synthetic block never hides behind a registry warn, and a registry blocker
+	// still outranks a synthetic warn.
+	blockPool := len(blockers) > 0 || synBlock != nil
+	warnPool := len(warns) > 0 || synWarn != nil
+	if !blockPool && !warnPool {
 		return Decision{Verdict: VerdictAllow}, nil
 	}
-	// A blocker outranks a warn; within a tier the id order is the tiebreak, so
-	// the decision is deterministic for the same registry and command.
-	win := r.Entries[matches[0]]
-	verdict := VerdictWarn
-	if win.Tier == TierBlocker {
-		verdict = VerdictBlock
+	matches := append(append([]string(nil), blockers...), warns...)
+	if synBlock != nil || synWarn != nil {
+		matches = append(matches, syntheticEntryID)
+	}
+
+	// Within the winning pool a concrete registry entry supplies the message and
+	// successor (its lesson is more specific); a synthetic verdict supplies them
+	// only when it is the sole member of the winning pool. A synthetic id must NOT
+	// index r.Entries — that yields a zero Entry and a blank message — so the
+	// winner construction branches on it.
+	if blockPool {
+		if len(blockers) > 0 {
+			return decisionFromEntry(VerdictBlock, r.Entries[blockers[0]], matches), nil
+		}
+		return syntheticDecision(VerdictBlock, *synBlock, matches), nil
+	}
+	if len(warns) > 0 {
+		return decisionFromEntry(VerdictWarn, r.Entries[warns[0]], matches), nil
+	}
+	return syntheticDecision(VerdictWarn, *synWarn, matches), nil
+}
+
+// decisionFromEntry builds the decision a concrete registry match produces.
+func decisionFromEntry(v Verdict, e Entry, matches []string) Decision {
+	return Decision{
+		Verdict:   v,
+		EntryID:   e.ID,
+		Tier:      e.Tier,
+		Successor: e.Successor,
+		Why:       e.Why,
+		Message:   message(v, e),
+		Matches:   matches,
+	}
+}
+
+// syntheticDecision builds the decision an entry-less execute-a-string verdict
+// produces. It populates Why/Successor (the fields writeGuardDecision reads) as
+// well as Family/Reason and the ready-to-surface Message, so the human report is
+// never blank.
+func syntheticDecision(v Verdict, sig payloadSignal, matches []string) Decision {
+	tier := TierBlocker
+	if v == VerdictWarn {
+		tier = TierWarn
 	}
 	return Decision{
-		Verdict:   verdict,
-		EntryID:   win.ID,
-		Tier:      win.Tier,
-		Successor: win.Successor,
-		Why:       win.Why,
-		Message:   message(verdict, win),
+		Verdict:   v,
+		EntryID:   syntheticEntryID,
+		Tier:      tier,
+		Successor: sig.successor,
+		Why:       sig.reason,
+		Message:   syntheticMessage(v, sig),
 		Matches:   matches,
-	}, nil
+		Family:    sig.family,
+		Reason:    sig.reason,
+	}
+}
+
+// syntheticMessage renders the sentence for an entry-less verdict, in the same
+// shape as message() so a front door treats the two uniformly.
+func syntheticMessage(v Verdict, sig payloadSignal) string {
+	lead := "Blocked"
+	if v == VerdictWarn {
+		lead = "Warning"
+	}
+	return fmt.Sprintf("%s by the abcd guard (%s): %s Run instead: %s", lead, syntheticEntryID, sig.reason, sig.successor)
 }
 
 // message renders the sentence a front door surfaces: what happened, why in

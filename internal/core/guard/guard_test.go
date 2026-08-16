@@ -226,13 +226,13 @@ func TestBlockerWinsOverWarn(t *testing.T) {
 	}
 }
 
-// TestEvalPayloadIsDocumentedV1Gap records the v1 gap explicitly: a hazard
-// carried as a string payload to sh -c is NOT matched. It is a stated gap, not a
-// silent one — this test is what makes it visible if the behaviour ever changes.
-func TestEvalPayloadIsDocumentedV1Gap(t *testing.T) {
+// TestExecuteStringPayloadIsInspected closes what was the v1 gap (iss-200): a
+// hazard carried as a string payload to sh -c is now expanded and matched. The
+// payload's cd-chain fires the rm blocker just as the same command would inline.
+func TestExecuteStringPayloadIsInspected(t *testing.T) {
 	d := checkOK(t, `sh -c 'cd scratch && rm -rf *'`)
-	if d.Verdict != VerdictAllow {
-		t.Fatalf("v1 parses no payload strings; got %+v — update the documented gap before changing this", d)
+	if d.Verdict != VerdictBlock || d.EntryID != "rm-rf-after-cd-chain" {
+		t.Fatalf("sh -c payload must be inspected and block; got %+v", d)
 	}
 }
 

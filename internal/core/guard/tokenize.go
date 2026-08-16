@@ -23,12 +23,12 @@ type segment struct {
 // exactly what keeps a hazard named inside a quoted argument from ever reaching
 // command position.
 //
-// v1 GAP (documented, not silent): the tokenizer stops at the token boundary. A
-// command string carried as a DATA argument — `sh -c '<payload>'`, `eval
-// '<payload>'`, `bash -lc "<payload>"` — stays one opaque token and its payload
-// is never parsed, so a hazard hidden there is not matched. Descending into
-// those payloads is out of scope for v1 (spc-16 "Out of scope"); it is stated in
-// the verb's reference doc and the registry README rather than silently assumed.
+// The tokenizer stops at the token boundary: a command string carried as a DATA
+// argument — `sh -c '<payload>'`, `eval '<payload>'`, `bash -lc "<payload>"`,
+// `env -S<value>` — stays one opaque token here. Descending into that payload is
+// the execute-a-string family's job, done ONCE in Check via expandPayloads
+// (payload.go), never in this splitter — so a hazard hidden there is matched
+// (iss-200), while an uninspectable payload takes the family's posture.
 func tokenize(line string) ([]segment, error) {
 	var (
 		segs    []segment

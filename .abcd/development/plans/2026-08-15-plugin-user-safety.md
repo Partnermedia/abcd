@@ -64,7 +64,7 @@ once. Human-paired (the §4 gate is manual by design).
 
 ## Workstream C — fix queue (sequenced)
 
-1. **[iss-200](../../work/issues/open/iss-200-guard-env-split-string-glued-form-bypass.md)**
+1. **[iss-200](../../work/issues/resolved/iss-200-guard-env-split-string-glued-form-bypass.md)**
    (critical) — the `env -S`/`--split-string` guard bypass. Autonomous-eligible:
    the repair design is agreed and recorded (handle the glued
    `-S<value>`/`--split-string=<value>` forms alongside the separate-token form
