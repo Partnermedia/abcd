@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-16
+
 ### Breaking
 
 - **The documented install location is `~/.local/bin`, and nothing abcd runs asks
@@ -81,7 +83,7 @@ called out in a **Breaking** section.
   all of it against a scratch repository.
 
 - **The attribution gate accepts the trailer forms actually in use, and refuses AI
-  co-authorship whoever wrote it.** Two defects in the gate's first cut. Its trailer
+  co-authorship whoever wrote it** (iss-214, iss-215). Two defects in the gate's first cut. Its trailer
   pattern had no bracket in its character class, so `Assisted-by:
   Claude:claude-opus-5[1m]` — an exact model identifier, carried by 38 commits of
   this repository's own history — was rejected while the unbracketed form passed,
