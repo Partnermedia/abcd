@@ -7,6 +7,33 @@ name: ci
 # both and the `gofmt -l .` format gate, record-lint and docs-lint on the ubuntu
 # leg alone. Separate jobs run full-history secret scanning, a workflow audit,
 # the reviews-charter discipline, and the smoke harness.
+#
+# The `changes` job classifies the diff, and the duplicated lanes stand down on a
+# change confined to the record and the user-facing docs. Two properties make
+# that safe to rely on:
+#
+#   - It classifies fail-closed. Only an explicit allowlist counts as inert, and
+#     every other outcome — one unlisted path, a non-PR event, an empty diff, an
+#     unreadable base, an aborted script, a failed classifier job — runs the full
+#     matrix. Markdown and JSON outside that allowlist (commands/, agents/,
+#     hooks/, .abcd/*.json, the harness routers at the repo root) carry
+#     behaviour, so they are not inert.
+#   - It gates jobs and steps, never the workflow triggers. Every required check
+#     context still reports on every pull request; `paths:` filtering would leave
+#     one permanently pending and wedge the merge.
+#
+# What an inert change skips is the SECOND copy of the work and the lanes that
+# only a source change can move: the macOS leg, the race lane, the smoke harness,
+# and the workflow audit (anything under .github/ is not inert, so the audit
+# still runs on every change it could be auditing).
+#
+# What it does not skip is the ubuntu unit lane. Tests read the live tree under
+# the allowlist — lifeboat coverage and the glossary index are asserted against
+# the real .abcd/development/**, and grounding thresholds against README.md — so
+# a prose-only record change can genuinely turn `go test ./...` red while
+# record-lint and docs-lint both pass. Skipping it would let that reach the
+# default branch. Alongside it the record gates are `go run` invocations of this
+# module, so a record-only change compiles most of the module either way.
 on:
   push:
     branches: [main]
@@ -24,9 +51,147 @@ permissions:
   contents: read
 
 jobs:
+  # Classify the diff so the duplicated lanes can stand down on a change that
+  # cannot move them. This job must never fail: a skipped dependent reports the
+  # same conclusion whether it stood down deliberately or lost its classifier,
+  # and the second reading would let a source change through unbuilt. So it
+  # reports its verdict on stdout and exits zero on every path, an abort resolves
+  # to the full matrix, and the dependents guard against it failing anyway.
+  changes:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      inert: ${{ steps.classify.outputs.inert }}
+    steps:
+      # Full history: the diff is taken against the merge base with the pull
+      # request's base commit, which a shallow checkout does not carry.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify the changed paths
+        id: classify
+        env:
+          # Read through the environment rather than expanding the expression
+          # into the script body, which would splice event data into shell source.
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          inert=false
+          reason='the classifier did not reach a verdict'
+          written=false
+          changed="$RUNNER_TEMP/changed-paths.z"
+
+          # Errexit cannot be the safety net here: a failed step would fail the
+          # job and skip the matrix, the one outcome worse than running it. The
+          # trap converts every abort into the full matrix, loudly.
+          finish() {
+            status=$?
+            if [ "$written" = false ]; then
+              echo "::error::the inert-path classifier aborted (exit ${status}); running the full matrix"
+              # Recording the verdict is itself a step that can fail, and it must
+              # not take the job down with it: an output nobody set reads as
+              # empty, which is already the full matrix.
+              if ! printf 'inert=false\n' >>"$GITHUB_OUTPUT"; then
+                echo "::error::the verdict could not be recorded either"
+              fi
+            fi
+            exit 0
+          }
+          trap finish EXIT
+
+          # The inert allowlist: user-facing documentation, the durable record,
+          # and the shared working tier, plus the root files that are prose or
+          # licence text. The harness routers (AGENTS.md, CLAUDE.md, GEMINI.md)
+          # are deliberately absent — they configure agent behaviour.
+          is_inert_path() {
+            case "$1" in
+              docs/*|.abcd/development/*|.abcd/work/*) return 0 ;;
+              README.md|CHANGELOG.md|CONTRIBUTING.md|SECURITY.md|ACKNOWLEDGEMENTS.md|LICENSE|LICENSE.md) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          # Errexit is suspended inside an `if` condition, so every command below
+          # tests its own status. Returning non-zero means "not proven inert".
+          classify() {
+            if [ "$EVENT_NAME" != pull_request ]; then
+              reason="the ${EVENT_NAME} event carries no base to diff against"
+              return 1
+            fi
+            if [ -z "$BASE_SHA" ]; then
+              reason='the pull request payload carries no base commit'
+              return 1
+            fi
+            if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+              reason="base commit ${BASE_SHA} is absent from this checkout"
+              return 1
+            fi
+            # Three-dot, so the comparison is against the merge base. When the
+            # base branch has moved on, the merge base is still the recorded base
+            # commit and the diff widens to include what landed meanwhile — which
+            # errs towards the full matrix.
+            #
+            # --no-renames is load-bearing: with detection on, moving a source
+            # file into docs/ reports the destination alone, and the vanished
+            # source path never reaches the allowlist. Reported as a delete plus
+            # an add, both paths are judged.
+            if ! git diff --no-renames --name-only -z "${BASE_SHA}...HEAD" -- >"$changed"; then
+              reason='diffing against the merge base failed'
+              return 1
+            fi
+            if [ ! -s "$changed" ]; then
+              reason='the diff against the merge base is empty'
+              return 1
+            fi
+            echo 'changed paths:'
+            # Indented so no byte of a hostile filename lands in column 1,
+            # where the runner's log parser reads `::`-prefixed lines as
+            # workflow commands.
+            tr '\0' '\n' <"$changed" | sed 's/^/  /'
+            # NUL-delimited, so a path holding a newline, a space, a glob
+            # character or a leading dash stays one record and is only ever
+            # matched as a pattern subject, never expanded or executed.
+            count=0
+            while IFS= read -r -d '' path; do
+              count=$((count + 1))
+              if ! is_inert_path "$path"; then
+                reason="${path} is outside the inert allowlist"
+                return 1
+              fi
+            done <"$changed"
+            reason="all ${count} changed paths are documentation or record"
+            return 0
+          }
+
+          if classify; then
+            inert=true
+          fi
+          printf 'inert=%s\n' "$inert" >>"$GITHUB_OUTPUT"
+          written=true
+          # The reason can embed a hostile filename, newlines included; indent
+          # every line of it off column 1 for the same non-injection guarantee
+          # as the path list.
+          echo "verdict: inert=${inert}"
+          printf '%s\n' "$reason" | sed 's/^/  /'
+
   # Build + vet + test on both host OSes. Race-enabled unit tests catch data
-  # races the plain `go test` would miss.
+  # races the plain `go test` would miss. On an inert change the macos leg and
+  # the race lane stand down, while the ubuntu leg builds, vets, tests and runs
+  # the record gates as usual. The macos leg is gated step by step rather than
+  # dropped from the matrix, so `check (macos-latest)` keeps reporting a
+  # conclusion instead of a required context that never arrives.
+  #
+  # `!cancelled()` rather than the implicit `success()`: a classifier that fails
+  # for its own reasons — a flaky checkout, the timeout — must not skip this job.
+  # An unset output is empty, which reads as not inert, so the fallback is the
+  # full matrix.
   check:
+    needs: changes
+    if: ${{ !cancelled() }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -38,7 +203,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # The ubuntu leg always needs a toolchain, because it always builds and
+      # tests. The macos leg needs one only when it is the second opinion on a
+      # source change.
       - name: Set up Go
+        if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25'
@@ -57,16 +226,25 @@ jobs:
             exit 1
           fi
 
+      # Unconditional on ubuntu, because tests assert against the live record;
+      # the macos leg is the cross-platform second opinion a record change does
+      # not need.
       - name: Build
+        if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         run: go build ./...
 
       - name: Vet
+        if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         run: go vet ./...
 
       - name: Test
+        if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         run: go test ./...
 
+      # Only a source change can introduce a data race, and the plain lane above
+      # has already run the same tests over the record.
       - name: Test (race, internal)
+        if: needs.changes.outputs.inert != 'true'
         run: go test -race ./internal/...
 
       # Drift gate for the .abcd/development design record. Blocking: a
@@ -115,7 +293,11 @@ jobs:
   # Audit the workflows themselves (pwn requests, template injection, cache
   # poisoning, unpinned uses). Run as a pinned CLI image (no SARIF upload to
   # code-scanning, which a private repo lacks). A non-zero exit means a finding.
+  # Anything under .github/ is outside the inert allowlist, so the audit runs on
+  # every change that could alter what it audits.
   zizmor:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
@@ -149,8 +331,14 @@ jobs:
   # command tree in-process, and runs every command's --help plus the read-only
   # verbs against the built binary. Catches a command that compiles but panics when
   # actually invoked — which the unit lane (go test ./...) misses, because the
-  # harness is behind the `smoke` build tag.
+  # harness is behind the `smoke` build tag. What it walks is the command tree,
+  # which only a source change moves. The read-only verbs also read the live
+  # record, which an inert change can edit — a record-only panic surfaces one
+  # hop later, on the push-to-main run (non-inert by classification) and again
+  # in the release verify job, an accepted latency trade.
   smoke:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
