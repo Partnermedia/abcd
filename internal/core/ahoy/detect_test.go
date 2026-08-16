@@ -3,6 +3,7 @@ package ahoy
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +36,19 @@ func setupHermetic(t *testing.T) (home, pluginRoot string) {
 	t.Setenv("ABCD_PLUGIN_ROOT", pluginRoot)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("ABCD_BIN_TARGET", binTargetPath)
+	// The detector walks PATH looking for abcd entries, so a machine that has a
+	// real install — exactly the machines that dogfood the install — leaks
+	// "(shadowed on PATH)" into every hermetic assertion (iss-249). Keep the
+	// utilities the code under test shells out to; drop only the directories
+	// that resolve an abcd.
+	var kept []string
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if fi, err := os.Stat(filepath.Join(dir, "abcd")); err == nil && !fi.IsDir() {
+			continue
+		}
+		kept = append(kept, dir)
+	}
+	t.Setenv("PATH", strings.Join(kept, string(os.PathListSeparator)))
 	return home, pluginRoot
 }
 
