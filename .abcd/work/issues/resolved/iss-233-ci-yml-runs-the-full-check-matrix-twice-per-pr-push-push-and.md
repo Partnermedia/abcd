@@ -6,6 +6,8 @@ severity: "minor"
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"
+resolution: "Scoped ci.yml's push trigger to main; PRs run once via pull_request, concurrency expressions unchanged and still correct"
+impact: internal
 ---
 
 ci.yml runs the full check matrix twice per PR push — push and pull_request triggers overlap
