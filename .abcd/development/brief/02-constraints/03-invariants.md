@@ -27,3 +27,5 @@ The following are non-negotiable invariants — any architectural choice that vi
    Tier-1 paths are enforceable in the zero-network test harness.
 
 8. **Acceptance discipline applies uniformly** — every intent's press release is followed by a `## Acceptance Criteria` block in Given-When-Then format (per itd-1). Every brief phase has an `## Acceptance` block in the same format. The format is uniform across the boundary; the *home* differs to match the nature of the work. See [`01-product/03-mental-model.md`](../01-product/03-mental-model.md).
+
+9. **Corpus documents and ledgers never leave the user tier, and a public citation requires both gates** — what crosses from the sources corpus into any repo or render is citation data only, never a document or an influence ledger; and a citation becomes public only when the source's `permission_status` permits *and* a human has flipped the ledger line's `cited_publicly` flag. Per [adr-41](../../decisions/adrs/0041-corpus-trust-boundary.md); consumed by itd-76, itd-126, itd-127.
