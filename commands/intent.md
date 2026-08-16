@@ -131,6 +131,19 @@ In an unattended run, exit 1 from `ready` is a SKIP: journal the rendered
 findings and move to the next item. The planning interview, acceptance-criteria
 authoring, and `abcd intent plan` are human-session-only acts.
 
+An unattended run MAY prepare an interview without performing it: for a
+plannable draft, write a planning brief to the local work tier
+(`.abcd/.work.local/scratch/planning-briefs/`) — the summary-back with per-AC
+provenance (seeded vs human-confirmed), the itd-84 hand-run as an ungraded
+proposal, proposed acceptance criteria and open-question resolutions, and any
+blocks-planning flags. The SOTA fit-challenge runs as a separate, independent
+pass (evaluator outside the loop), filed alongside the brief. The pre-pass
+reads the records the draft touches — a contradiction with a recorded
+invariant is exactly what it exists to catch. It never edits the draft, never
+files the routing, and never runs `plan`; the interview then starts from the
+brief instead of a cold read, and grading into the calibration note still
+happens only when the human confirms the routing.
+
 ## Link
 
 ```bash
