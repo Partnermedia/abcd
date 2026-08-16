@@ -1,6 +1,7 @@
 {
   "roots": [".abcd/development"],
   "banned_tokens": [
+    {"id":"retired-itd-22-slug","pattern":"opencode-portability","message":"itd-22's slug is harness-portability (renamed 2026-08-16; policy in adr-39)","severity":"blocker","successor":"harness-portability","allow_context":["historical"]},
     {"id":"moved-intents-path","pattern":"roadmap/intents","message":"intents live at intents/ (record IA); update the path","severity":"blocker","successor":"intents/","allow_context":["historical"]},
     {"id":"flow-next-spec-prefix","pattern":"\\bfn-","message":"fn- is the flow-next spec prefix (dropped tool); abcd specs use spc-","severity":"blocker","successor":"spc-","allow_context":["historical"]},
     {"id":"python-lint-names","pattern":"\\bintent_lint\\b|inventory\\.py","message":"Python tool name; the lint engine is internal/core/lint (Go)","severity":"blocker","successor":"internal/core/lint","allow_context":["historical","spc-15"]},

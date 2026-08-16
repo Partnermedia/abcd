@@ -346,7 +346,7 @@ place." (practice-scout)
 - ``scripts/abcd/harness.py`` — the interface file this ADR governs
 - ``.abcd/development/intents/planned/itd-6-rp-mcp-only-integration.md``
   — architectural lock: RP is MCP-only
-- ``.abcd/development/intents/drafts/itd-22-opencode-portability.md``
+- ``.abcd/development/intents/drafts/itd-22-harness-portability.md``
   — OpenCode portability target that harness.py is designed to serve
 - ``.abcd/development/intents/drafts/itd-2-in-session-subagent-dispatch.md``
   — in-session subagent dispatch (one of the three oracle transports)

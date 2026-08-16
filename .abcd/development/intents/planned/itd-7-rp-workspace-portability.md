@@ -47,7 +47,7 @@ See [`research/legacy-harvest.md`](../../research/legacy-harvest.md) for the bro
 - **Auto-attach RP window to current repo session** — beyond `abcd rp link` reporting the window ID, automatic window selection / activation.
 - **Per-command preset binding** — declaring in `.abcd/config.json` "this preset for review-collator runs, that preset for press-release-composer runs."
 - **Backend switching mid-session** — switching the backend RP routes to (Claude Code vs local model vs Codex) without leaving the abcd command.
-- **Cross-tool portability** — pulling equivalent state from an OpenCode-equivalent tool. Couples to [`itd-22-opencode-portability`][itd-22].
+- **Cross-tool portability** — pulling equivalent state from another harness's workspace tooling. Couples to [`itd-22-harness-portability`][itd-22].
 - **CodeMapCaches / Partitions / windowSessions / Settings** — pure tool state, not project-shaped. Stays in RP's Application Support; not pulled.
 - **Workspace partitioning auto-derivation** — abcd inferring an RP partition strategy from `.gitignore` + repo structure if no workspace exists. Heuristic; out of scope.
 
@@ -76,5 +76,5 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-[itd-22]: itd-22-opencode-portability.md "itd-22 — OpenCode portability"
+[itd-22]: ../drafts/itd-22-harness-portability.md "itd-22 — harness portability"
 [itd-6]: ../superseded/itd-6-rp-mcp-only-integration.md "itd-6 — RP-only integration via MCP"

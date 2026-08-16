@@ -74,7 +74,7 @@ Source: `~/ABCDevelopment/.claude/agents/` (7 agents). Disposition: 1 new plugin
 | `architecture-advisor` | **Drop** | Opus-tier general-purpose; no abcd-specific use case |
 | `git-documentation-committer` | **Drop** | Overlaps modern Claude commit flow + retired `/commit` command |
 | `task-decomposer` | **Drop** | Superseded by flow-next (`/flow-next:plan` → `/flow-next:work` → plan-sync) |
-| `ux-architect` | **Drop; revisit in a later phase** | Niche for now; revisit alongside `itd-22-opencode-portability` and a future Typer CLI |
+| `ux-architect` | **Drop; revisit in a later phase** | Niche for now; revisit alongside `itd-22-harness-portability` and a future Typer CLI |
 
 **Net:** 7 agents reviewed → 1 new plugin agent file (`documentation-auditor`); 2 existing agents (`embark-scaffolder`, `launch-gatekeeper`) gain extended responsibilities; 4 dropped. `intent-fidelity-reviewer` also gains a retrospective output mode for major intents (Pass 4 retrospective decision).
 
