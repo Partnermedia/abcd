@@ -138,6 +138,29 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The guard now reads the execute-a-string wrapper family, and a warn is no
+  longer silent on the hook** (iss-200, iss-231). A command carried as a data
+  argument — `sh -c '<payload>'`, `bash -lc "<payload>"`, `eval '<payload>'`, and
+  GNU `env -S<value>`/`--split-string` — used to sail past every blocker: the
+  payload was one opaque token the matchers never looked inside, so `env -S 'gh
+  repo delete owner/repo'` and `sh -c 'git push --force'` were accepted. The guard
+  now expands each payload once and matches it as if it had been typed inline, so a
+  hazard inside blocks (or, for a warn-tier hazard, warns) exactly as the bare
+  command would. The `sh`/`bash`/`dash` `-c` command string is read as the shell's
+  first non-option operand, so an option wedged after `-c` (`sh -c -x '<payload>'`,
+  `bash -c -- '<payload>'`) can no longer hide it, and `eval` drops a leading `--`
+  before joining; when options make the operand impossible to locate the guard warns
+  rather than allowing. `env -S` is read on the raw tokens in every spelling — separate,
+  glued, `--split-string=`, its abbreviations, and bundled short clusters — at
+  every `env` in a wrapper chain, and its value is split only when it decodes to a
+  provably plain command; anything else (an expansion, a quote, a leading option, an
+  escape env itself would reject) is refused rather than guessed. A payload the
+  guard cannot read splits by posture: an uninspectable `sh -c`/`bash -c`
+  (a `$(...)` substitution, a pipe into an interpreter) is a loud warning, while an
+  uninspectable `env -S` or a nest deeper than two layers is blocked outright. And a
+  warn on the pre-tool-use hook now exits non-zero-but-non-blocking so its message
+  is actually seen — a hook that exits zero has its stderr discarded, so every warn
+  (for example `git reset --hard`) had been running as if allowed with nobody told.
 - **The one instruction that resolves the no-binary-on-`PATH` state can now be run
   in that state** (iss-207). The bootstrap's success notice and the README both
   said to run `abcd ahoy install` once — a command whose whole premise is that

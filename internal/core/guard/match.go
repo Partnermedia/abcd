@@ -39,8 +39,11 @@ var wrapperValueFlags = map[string][]string{
 		"-p", "--prompt", "-R", "--chroot", "-r", "--role", "-T",
 		"--command-timeout", "-t", "--type", "-U", "--other-user", "-u", "--user",
 	},
-	"doas":    {"-a", "-C", "-u"},
-	"env":     {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+	"doas": {"-a", "-C", "-u"},
+	// `env`'s -S/--split-string are deliberately NOT here: the execute-a-string
+	// pre-pass (payload.go) owns them on the raw token chain, because the wrapper
+	// walk would otherwise consume and discard the value it needs to inspect.
+	"env":     {"-u", "--unset", "-C", "--chdir"},
 	"time":    {"-f", "--format", "-o", "--output"},
 	"xargs":   {"-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars", "--process-slot-var"},
 	"timeout": {"-k", "--kill-after", "-s", "--signal"},

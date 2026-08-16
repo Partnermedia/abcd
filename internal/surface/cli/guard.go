@@ -50,15 +50,17 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"hazard named inside a quoted argument never fires.\n\n" +
 			"An allow means no registry entry matched — it is never a statement that a\n" +
 			"command is safe. The guard reads command names it can see in command\n" +
-			"position, so a hazard reached any other way is not seen: a command string\n" +
-			"handed to an interpreter (`eval`, `sh -c`), one launched through a wrapper\n" +
-			"outside the known set, one launched through a known wrapper carrying a\n" +
-			"value-taking flag the guard does not name (`sudo -u bob <hazard>` is seen,\n" +
-			"the bundled short form `sudo -Hu bob <hazard>` is not), one whose API path an\n" +
-			"entry names by its ROOT segment but the host serves under a prefix (a GitHub\n" +
-			"Enterprise Server install mounts the same endpoints under `/api/v3/`; the\n" +
-			"api.github.com URL form IS read), one inside a backtick substitution, or a\n" +
-			"dangerous form no entry describes. Coverage is what the registry names.\n\n" +
+			"position, so a hazard reached any other way is not seen: one launched\n" +
+			"through a wrapper outside the known set, one launched through a known\n" +
+			"wrapper carrying a value-taking flag the guard does not name (`sudo -u bob\n" +
+			"<hazard>` is seen, the bundled short form `sudo -Hu bob <hazard>` is not),\n" +
+			"one whose API path an entry names by its ROOT segment but the host serves\n" +
+			"under a prefix (a GitHub Enterprise Server install mounts the same endpoints\n" +
+			"under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside\n" +
+			"an interpreter payload (an execute-a-string payload IS read — `sh -c`,\n" +
+			"`env -S`; one the guard cannot read is warned or, for `env -S`, blocked),\n" +
+			"or a dangerous form no entry describes. Coverage is what the registry\n" +
+			"names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +
 			"Prefer stdin for a command line you did not type yourself: the shell expands\n" +
 			"a double-quoted --command argument before this verb starts, so a candidate\n" +
@@ -113,9 +115,9 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 //
 // The mapping is the host's own convention for a pre-execution hook: exit 2 is
 // the blocking status and the hook's stderr is what the host replays to the
-// agent, so the refusal — successor and why — goes to stderr and nowhere else. A
-// warn and an allow both exit 0, which is what lets the command proceed; the
-// warning still goes to stderr so it is on the record.
+// agent, so the refusal — successor and why — goes to stderr and nowhere else. An
+// allow exits 0 and is silent; a warn exits 1 (loud, non-blocking) so its message
+// is not discarded — neither exit status blocks, so the command still runs.
 //
 // Every path that is NOT a decision — an unreadable payload, a tool that is not
 // the shell, a command the tokenizer cannot split, a registry that will not
@@ -201,8 +203,14 @@ func newGuardHookCommand() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), termsafe.Sanitize(dec.Message))
 				return &exitError{Code: 2}
 			case guard.VerdictWarn:
+				// Exit 1, not 0, is what makes a warn LOUD on a pre-tool-use hook.
+				// Exit 0 has the hook's stderr DISCARDED — the same reason failOpen
+				// uses exit 1 — so a warn that returned nil would write a message
+				// nobody ever sees and run as if allowed (iss-231). A non-zero,
+				// non-blocking status both lets the command run and surfaces the
+				// warning. Only the blocking status (2) stops anything.
 				fmt.Fprintln(cmd.ErrOrStderr(), termsafe.Sanitize(dec.Message))
-				return nil
+				return &exitError{Code: 1}
 			default:
 				return nil // allow: silent, and cheap
 			}
