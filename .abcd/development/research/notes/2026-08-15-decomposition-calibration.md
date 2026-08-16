@@ -246,6 +246,27 @@ Per hand-run, append:
 - **Notes:** the live sweep enumerates to 23 files (the plan's ~37 counted
   historical records the boundary ruling excludes). Filed as itd-123/spc-28.
 
+### 2026-08-16 — itd-124 audit→lint rename (hand-run at planning, process plan intent 6)
+
+- **Proposal:** `abcd audit` → `abcd lint`, breaking; `/abcd:audit` returns
+  to itd-16's reservation (adr-40's second named rename; name ruled in
+  planning question 1).
+- **Initial routing:** four parts — the rename sweep (capability, breaking |
+  this intent); the reservation return (already recorded in 04-naming.md —
+  the sweep reinstates it); the chosen name (ruled today — recorded in
+  draft); no-aliases (settled — cite). No reversal flags.
+- **Confirmed routing:** adopted unchanged. The grill's package question
+  (`repolint` vs merging the two lint engines) went to adversarial review at
+  the maintainer's direction: rename-only won — the engines have different
+  rule models and blast radii, and adr-40 rules implementation orthogonal to
+  bucket. The merge is captured as iss-251, a deliberate future intent.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** the maintainer's "adversarially review both" instruction is a
+  useful grill pattern: the review moved the ruling from taste to facts
+  (importer counts, existing cross-import, contract differences). Filed as
+  itd-124/spc-29.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
