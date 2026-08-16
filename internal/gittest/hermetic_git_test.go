@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
 // helperImportPath is the import a test file must carry once it spawns git, so
@@ -172,5 +174,23 @@ func moduleRoot(t *testing.T) string {
 			t.Fatalf("could not find go.mod above %s", dir)
 		}
 		dir = parent
+	}
+}
+
+// TestNewRepoDisablesBackgroundMaintenance pins the iss-252 guarantee: no git
+// command run in a fixture repo — by the fixture or by the code under test —
+// may spawn a background maintenance process that outlives the test, because
+// t.TempDir cleanup then races it on .git/objects and fails the run.
+func TestNewRepoDisablesBackgroundMaintenance(t *testing.T) {
+	r := gittest.NewRepo(t)
+	for key, want := range map[string]string{
+		"gc.auto":          "0",
+		"gc.autodetach":    "false",
+		"maintenance.auto": "false",
+		"core.fsmonitor":   "false",
+	} {
+		if got := r.Git("config", "--local", "--get", key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }

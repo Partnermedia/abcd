@@ -63,7 +63,7 @@ func TestCanonicalGitignoreBlockContent(t *testing.T) {
 		"public":  {gitignoreBegin, gitignoreHeader, "/.abcd/", "/memory/", gitignoreEnd},
 	}
 	for vis, want := range cases {
-		got := canonicalGitignoreBlock(vis)
+		got := canonicalGitignoreBlock(visibilityEntries[vis])
 		if strings.Join(got, "\n") != strings.Join(want, "\n") {
 			t.Errorf("canonicalGitignoreBlock(%q) =\n%s\nwant\n%s", vis, strings.Join(got, "\n"), strings.Join(want, "\n"))
 		}
@@ -236,5 +236,68 @@ func TestRemoveGitignoreBlocksUnbalancedPreservesUserContent(t *testing.T) {
 	}
 	if strings.Contains(got, "# BEGIN ABCD") {
 		t.Errorf("orphan BEGIN marker should be dropped; got %q", got)
+	}
+}
+
+// TestPublicVisibilityBlockNarrowsWhenRecordTiersAreTracked pins iss-255: on a
+// repo that COMMITS the .abcd/ record tiers, an ignore rule cannot untrack
+// them — a wholesale /.abcd/ fence only hides every NEW record from git status
+// and makes `git add` refuse them, silently breaking the record workflow. The
+// public fence therefore narrows to the local tier when .abcd/ is tracked.
+func TestPublicVisibilityBlockNarrowsWhenRecordTiersAreTracked(t *testing.T) {
+	repo := gittest.NewRepo(t)
+	repo.Write(".abcd/work/DECISIONS.md", "- a decision\n")
+	repo.Commit("record tier")
+	if _, err := applyVisibilityBlock(repo.Root(), "public"); err != nil {
+		t.Fatalf("applyVisibilityBlock: %v", err)
+	}
+	// A new record file must stay visible to git.
+	if gitCheckIgnored(t, repo, ".abcd/work/issues/open/iss-1-finding.md") {
+		t.Error("a new record file is ignored; the narrowed fence must leave committed tiers workable")
+	}
+	// The local-ephemeral tier (and with it the private banlist store) stays fenced.
+	if !gitCheckIgnored(t, repo, ".abcd/.work.local/scratch/notes.md") {
+		t.Error("the local tier is not ignored; narrowing must keep the private fence")
+	}
+	// Narrowing touches ONLY the .abcd entry: the memory/ snapshot fence — the
+	// personal session snapshot the public setting exists to withhold — stays.
+	if !gitCheckIgnored(t, repo, "memory/session.md") {
+		t.Error("narrowing dropped the memory/ snapshot fence")
+	}
+	// And the drift check must agree with what apply wrote — a narrowed block is
+	// canonical for this repo, never perpetual drift re-prompting every install.
+	if gitignoreBlockDrifts(repo.Root(), "public") {
+		t.Error("gitignoreBlockDrifts reports drift immediately after apply (perpetual re-prompt)")
+	}
+}
+
+// TestPublicVisibilityBlockUnchangedWhenNothingTracked: an empty repo keeps the
+// wholesale public fence — narrowing is strictly a tracked-tier repair.
+func TestPublicVisibilityBlockUnchangedWhenNothingTracked(t *testing.T) {
+	repo := gittest.NewRepo(t)
+	if _, err := applyVisibilityBlock(repo.Root(), "public"); err != nil {
+		t.Fatalf("applyVisibilityBlock: %v", err)
+	}
+	if !gitCheckIgnored(t, repo, ".abcd/config.json") {
+		t.Error("public fence on an untracked repo must ignore the .abcd namespace")
+	}
+	if gitignoreBlockDrifts(repo.Root(), "public") {
+		t.Error("drift reported immediately after apply on an untracked repo")
+	}
+}
+
+// TestPublicVisibilityBlockKeepsDeclaredWhenGitUnaskable: narrowing needs
+// positive evidence of tracked tiers. A repo whose index is corrupt still
+// answers rev-parse --is-inside-work-tree but fails ls-files; the fence is the
+// public setting's whole purpose, so no evidence means the declared set.
+func TestPublicVisibilityBlockKeepsDeclaredWhenGitUnaskable(t *testing.T) {
+	repo := gittest.NewRepo(t)
+	repo.Write(".git/index", "corrupt")
+	entries, narrowed := effectiveVisibilityEntries(repo.Root(), "public")
+	if narrowed {
+		t.Fatal("an unaskable git must not narrow the fence")
+	}
+	if strings.Join(entries, ",") != strings.Join(visibilityEntries["public"], ",") {
+		t.Fatalf("entries = %v, want the declared public set", entries)
 	}
 }

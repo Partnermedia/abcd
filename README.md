@@ -21,7 +21,7 @@
 ---
 
 <div align="center">
-  <p><a href="#roles">Roles</a> — <a href="#artefacts">Artefacts</a> — <a href="#process">Process</a> — <a href="#resources">Resources</a></p>
+  <p><a href="#roles">Roles</a> — <a href="#artefacts">Artefacts</a> — <a href="#process">Process</a> — <a href="#install">Install</a> — <a href="#resources">Resources</a></p>
 </div>
 
 ---
@@ -173,46 +173,7 @@ One line, deliberately shaped like intent capture but for un-typed thoughts: `ab
 That "someone" is your technical facilitator, who triages those captures later: They sweep the open captures and route each one — a bug gets fixed (finding first, fix after); a feature seed gets promoted into an intent draft; a doubt about the brief becomes a brief correction; a deliberate non-action goes to `wontfix` with the reasoning recorded, so the question never gets re-litigated.
 
 
-# Resources
-
-## Install
-
-One line, checksum-verified, no administrator rights. It detects your
-OS/architecture, downloads the binary and the `checksums.txt` manifest from the
-latest release, verifies the binary's SHA-256 against the manifest (and refuses
-to install on any mismatch — or if the manifest doesn't list the binary at all),
-then installs to `~/.local/bin`, the single-user location:
-
-```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
-```
-
-If `abcd` isn't found by name afterwards, `~/.local/bin` isn't on your `PATH`.
-Add this line to your shell profile:
-
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-`abcd ahoy` reports the same thing as a named gap with the same one-line fix,
-and the installer writes its own `PATH` entry to `~/.local/bin` unless you
-point it elsewhere with `--bin-dir`. abcd never escalates privileges: a
-directory it can't write to is an error, not a prompt for your password.
-
-Already have an `abcd` in a system directory from an earlier install? Delete it
-(`rm /usr/local/bin/abcd`, with whatever rights put it there) — otherwise it
-comes first on `PATH` and keeps answering instead of the new one. `abcd ahoy`
-names it in a gap rather than removing it: abcd does not touch a binary it does
-not own.
-
-Prefer to inspect before running? The command is exactly what it says: two
-downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
-a checksum verification, and a copy into a directory you own. You can do the
-same by hand — grab the binary for your platform plus `checksums.txt` from the
-releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching
-line, and copy the binary anywhere on your `PATH`. Every release is built and
-published by CI from the exact tagged commit, with the checksums generated
-over the same bytes that are uploaded.
+# Install
 
 ## Plugin
 
@@ -256,12 +217,12 @@ resolves it the same way the command files do — the plugin root first, then an
 bootstrap itself, silently and at most once per ten-minute window. A session
 where provisioning cannot succeed degrades loudly rather than noisily: each
 affected hook says in one line what is inactive (the rules loader, the shell
-guard, the transcript capture) and that the [install](#install) one-liner
+guard, the transcript capture) and that the [install](#cli) one-liner
 restores it — after which the hooks resolve the `PATH` binary with no session
 restart needed.
 
 That covers the hooks. For the `abcd` command in your own terminal, keep the
-[install](#install) above, or put the plugin-root binary on your `PATH` by
+[install](#cli) below, or put the plugin-root binary on your `PATH` by
 running it once by its absolute path — `'<plugin-root>/abcd' ahoy install`.
 The path is absolute because `abcd` is not on your `PATH` yet, which is what
 that one run fixes. `<plugin-root>` is the directory the agent harness unpacked
@@ -270,7 +231,7 @@ bootstrap's success notice prints that full binary path, so the shortest route
 is to copy the command straight out of the notice. That notice appears once per
 plugin root — later sessions take the fast path and stay silent — so if it has
 scrolled away and you would rather not go looking for the directory, the
-[install](#install) one-liner above needs no plugin root at all and gets you to
+[install](#cli) one-liner below needs no plugin root at all and gets you to
 the same place.
 
 For a stronger root of trust than same-origin checksums, build from source —
@@ -280,6 +241,45 @@ path, so the `.binary-meta` provenance record beside it still describes
 whichever release the bootstrap last fetched: delete that file so no
 version-skew notice is rendered from a release the binary in place did not come
 from.
+
+## CLI
+
+One line, checksum-verified, no administrator rights. It detects your
+OS/architecture, downloads the binary and the `checksums.txt` manifest from the
+latest release, verifies the binary's SHA-256 against the manifest (and refuses
+to install on any mismatch — or if the manifest doesn't list the binary at all),
+then installs to `~/.local/bin`, the single-user location:
+
+```sh
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+```
+
+If `abcd` isn't found by name afterwards, `~/.local/bin` isn't on your `PATH`.
+Add this line to your shell profile:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+`abcd ahoy` reports the same thing as a named gap with the same one-line fix,
+and the installer writes its own `PATH` entry to `~/.local/bin` unless you
+point it elsewhere with `--bin-dir`. abcd never escalates privileges: a
+directory it can't write to is an error, not a prompt for your password.
+
+Already have an `abcd` in a system directory from an earlier install? Delete it
+(`rm /usr/local/bin/abcd`, with whatever rights put it there) — otherwise it
+comes first on `PATH` and keeps answering instead of the new one. `abcd ahoy`
+names it in a gap rather than removing it: abcd does not touch a binary it does
+not own.
+
+Prefer to inspect before running? The command is exactly what it says: two
+downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
+a checksum verification, and a copy into a directory you own. You can do the
+same by hand — grab the binary for your platform plus `checksums.txt` from the
+releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching
+line, and copy the binary anywhere on your `PATH`. Every release is built and
+published by CI from the exact tagged commit, with the checksums generated
+over the same bytes that are uploaded.
 
 ## Build
 
@@ -291,7 +291,7 @@ go run ./cmd/abcd version    # print the version
 make build                   # cross-compile bin/abcd-<goos>-<arch>
 ```
 
-## Layout
+# Resources
 
 - [`cmd/abcd/`](cmd/abcd/) — CLI entry point.
 - [`internal/`](internal/) — the engine (`core/`) and front doors (`surface/`);
@@ -301,5 +301,3 @@ make build                   # cross-compile bin/abcd-<goos>-<arch>
 - [`.abcd/`](.abcd/) — the development record and working files (present in
   every repository checkout, marketplace installs and release source archives
   included; never in the released binaries).
-
-Contributor guidance: [`AGENTS.md`](AGENTS.md).

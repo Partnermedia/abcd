@@ -220,7 +220,7 @@ Set by ahoy:
 
 | Directory | Public default | Private default |
 |---|---|---|
-| `.abcd/` | gitignored | **committed** (entire namespace: `development/` (brief, roadmap, research, personas), the native spec store, `memory/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
+| `.abcd/` | gitignored² | **committed** (entire namespace: `development/` (brief, roadmap, research, personas), the native spec store, `memory/`, `logbook/`, `rp/` — visibility is the single switch, no per-subdirectory exceptions) |
 | `memory/` (legacy snapshot) | gitignored | **committed** if present¹ |
 | `.abcd/.work.local/` | gitignored | gitignored (local-only scratch, per global abcd CLAUDE.md) |
 
@@ -231,7 +231,16 @@ Two artefacts are absent from this table by construction, not by exception:
 
 ¹ New projects use `.abcd/memory/` (curated by `dev-sync memory`). `memory/` is the legacy `cp -r` snapshot pattern that some existing projects maintain manually — abcd respects it if present, but doesn't write to it.
 
-**No exceptions to the visibility rule.** Earlier drafts of this brief carved out `.abcd/logbook/` as always-gitignored (sensitivity concern). Locked decision: visibility is **one switch**. If sensitivity is a concern, set visibility=public (which gitignores all of `.abcd/` including logbook). Per-subdirectory exceptions create maintenance burden and contradict the transparent-prompts principle ([`04-universal-patterns.md § 1`](04-universal-patterns.md#1-transparent-prompts)).
+² On a repo whose `.abcd/` already holds **tracked** files, install narrows the
+`.abcd/` entry to the local tier (`.abcd/.work.local/`) and keeps every other
+entry, `memory/` included (iss-255). An ignore rule cannot untrack committed
+records: the wholesale fence on such a repo only hides every new record file
+from `git status` and makes `git add` refuse them, while the committed tiers
+stay published regardless. Narrowing needs positive evidence of tracked files
+(a repo whose git cannot be asked keeps the declared fence), and the install
+receipt states the narrowing out loud.
+
+**No exceptions to the visibility rule.** Earlier drafts of this brief carved out `.abcd/logbook/` as always-gitignored (sensitivity concern). Locked decision: visibility is **one switch**. If sensitivity is a concern, set visibility=public (which gitignores all of `.abcd/` including logbook). Per-subdirectory exceptions create maintenance burden and contradict the transparent-prompts principle ([`04-universal-patterns.md § 1`](04-universal-patterns.md#1-transparent-prompts)). The tracked-tier narrowing (²) is not a per-subdirectory carve-out of that decision: it is the mechanical boundary of what an ignore rule can do at all — the switch stays single, and where git already tracks the namespace the fence covers the one part git can still fence.
 
 **Sensitivity concern still valid for `/abcd:launch` payload**: regardless of visibility, the launch payload manifest ([`../04-surfaces/04-launch.md § 2`](../04-surfaces/04-launch.md#2-payload-manifest-default-deny)) excludes `.abcd/` entirely from what ships in the curated release artifact. So a private repo that commits its logbook locally still doesn't leak it on launch.
 

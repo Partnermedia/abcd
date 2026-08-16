@@ -39,6 +39,24 @@ func NewRepo(t *testing.T) *Repo {
 	if out, err := init.CombinedOutput(); err != nil {
 		t.Skipf("git init unavailable: %v (%s)", err, out)
 	}
+	// Background maintenance is disabled in the REPO config, not per command,
+	// because the code under test runs its own git against this repository: an
+	// auto-gc or fsmonitor child spawned by any of those commands can outlive
+	// the test and race t.TempDir cleanup on .git/objects (iss-252 — a release
+	// verify run lost to exactly that). Repo-level config covers every git
+	// invocation here, whoever makes it.
+	for key, value := range map[string]string{
+		"gc.auto":          "0",
+		"gc.autodetach":    "false",
+		"maintenance.auto": "false",
+		"core.fsmonitor":   "false",
+	} {
+		cfg := exec.Command("git", "-C", r.root, "config", "--local", key, value)
+		cfg.Env = r.env
+		if out, err := cfg.CombinedOutput(); err != nil {
+			t.Fatalf("git config %s: %v (%s)", key, err, out)
+		}
+	}
 	return r
 }
 
