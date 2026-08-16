@@ -89,3 +89,30 @@ Per hand-run, append:
   at the host boundary, so a new principle file would have been a second copy;
   flagged here for the ~50-capture calibration review. Rename executed with a
   retire-the-name ban (`retired-itd-22-slug`).
+
+### 2026-08-16 — itd-114 collision-proof ids (hand-run at capture)
+
+- **Proposal:** abcd mints collision-proof record ids across parallel agents —
+  native time+content-hash default, optional GitHub forge backend for capture.
+- **Initial routing:** four parts — the collision-proof minting capability
+  (capability | intent itd-114); the native-scheme + forge-adapter seam (SOTA
+  declaration path-2 | inside the intent's SOTA section); the
+  "collision-proof-by-construction, native-default forge-optional" stance
+  (stance | embodies existing basics-built-in / adapter-over-native-default /
+  prefer-sota principles — no new principle); and the id-FORMAT change
+  (architecture decision | a future ADR, only if adopted). One advisory reversal
+  flag: a pure time+hash id reverses the human-sequential-readable property of
+  today's iss-N.
+- **Confirmed routing:** adopted (author-confirmed at capture). No separate
+  principle or ADR filed now — both are conditional-on-adoption. Reversal flag
+  handled by writing an acceptance criterion that FORBIDS the readability
+  regression, leaving the exact scheme (time-sortable / git-style dual id /
+  forge number) to the grill.
+- **Verdict:** FILE-AS-IS with flags (not SPLIT — nothing separate to file yet).
+  Initial verdict survived.
+- **Notes:** typed link `refines` iss-80 (the resolved issue whose body deferred
+  this exact "SOTA under research" scheme). The reversal flag was the valuable
+  part — it forced the readability requirement into the ACs rather than letting
+  a hash-only scheme ship. Filed while the peer was concurrently minting iss-N
+  in a parallel session: a live instance of the collision class the intent
+  addresses (no actual collision — different family).
