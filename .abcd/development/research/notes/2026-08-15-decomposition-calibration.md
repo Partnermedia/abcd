@@ -267,6 +267,30 @@ Per hand-run, append:
   (importer counts, existing cross-import, contract differences). Filed as
   itd-124/spc-29.
 
+### 2026-08-16 — itd-125 disembark-review rename (hand-run at planning, process plan intent 7)
+
+- **Proposal:** `disembark oracle` → `disembark review`, breaking — the
+  seventh intent, created by the session's own investigation of planning
+  question 2 (the plan had recommended keep-the-verb).
+- **Initial routing:** three parts — the rename sweep incl. artefacts and
+  agent (capability, breaking | this intent); the adr-40 §5 amendment
+  (decision | home ruled by the maintainer: dated in-place amendment in
+  adr-40 + a DECISIONS.md line); the oracle seam itself (adr-25 — cite,
+  untouched). **One reversal flag, the session's first genuine one:**
+  reverses adr-40 §5, investigated and confirmed by the maintainer before
+  routing.
+- **Confirmed routing:** adopted unchanged. Rulings: agent becomes
+  `lifeboat-reviewer` and artefacts `review/review-<manifest12>.*`
+  (target-grain + role, self-describing basenames); older lifeboats get
+  clean replacement across the rename (the grill's AC — one manifest never
+  holds two verdicts).
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** the reversal path worked as itd-84 designed it: flagged
+  advisory, investigated against the code (the verb never invokes the seam
+  — compute-or-ingest only), ruled by the human, homed before filing. Filed
+  as itd-125/spc-30.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
