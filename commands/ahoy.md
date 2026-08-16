@@ -30,6 +30,11 @@ Then summarise the JSON for the user:
   the track-latest dogfood shim is installed, `pinned` for the built-binary
   symlink, empty when there is nothing on `PATH` yet. Report it so a dev install
   is never invisible.
+- `vintage` and `staleness` — the running binary's build revision (in a source
+  checkout) or pinned version, and whether it is up to date, stale, or of an
+  undeterminable vintage relative to the on-disk reference. Report them so a
+  binary running behind its own source is never silent. The comparison is
+  disk-only — no network.
 - `banlist` — the two-layer name guard, when the folder is a repo: `hook` and
   `merge_hook` (`installed` / `absent` / `foreign` / `unreadable`), whether this
   clone is armed (`hooks_path_armed`), `public_family`, and the private layer's

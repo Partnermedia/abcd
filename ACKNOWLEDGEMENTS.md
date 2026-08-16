@@ -56,6 +56,18 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **GEPA (reflective prompt evolution)** — the score → reflect-on-failing-traces
   → minimal-delta → re-score loop that itd-81 adopts as a human-approved manual
   procedure rather than as a library dependency.
+- **Go's embedded build info (`runtime/debug.BuildInfo` VCS stamping)** — the
+  source of the running binary's vintage that itd-111's staleness detection
+  reads (build revision and the `vcs.modified` dirty flag), with its documented
+  stamping holes driving the first-class *unknown* outcome.
+- **Homebrew's auto-update-on-use and the `update-notifier` pattern (npm)** — the
+  UX grammar itd-111 keeps (cached comparison, a gentle nudge, a one-command
+  fix) while rejecting their implicit background network check: abcd implements
+  the same grammar over disk-only sources, and the network answers only an
+  explicit `--check` (adr-38).
+- **git's "behind upstream" notice** — the disk-only precedent itd-111 follows:
+  a comparison against locally cached refs, refreshed only by an explicit fetch,
+  never a background poll.
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
 - **Priority inheritance (real-time scheduling)** — the derived-priority rule

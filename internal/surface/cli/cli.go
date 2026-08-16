@@ -79,17 +79,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.PersistentFlags().BoolVar(&asJSON, "json", false, "emit machine-readable JSON")
 
-	root.AddCommand(&cobra.Command{
-		Use:   "version",
-		Short: "Print abcd's version",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			v := core.NewVersion()
-			return render(cmd.OutOrStdout(), asJSON, v, func(w io.Writer) {
-				fmt.Fprintf(w, "%s %s\n", v.Name, v.Version)
-			})
-		},
-	})
+	root.AddCommand(newVersionCommand(&asJSON))
 
 	root.AddCommand(newAhoyCommand(&asJSON))
 	root.AddCommand(newAuditCommand(&asJSON))
@@ -1007,6 +997,23 @@ func newHookCommand() *cobra.Command {
 			if n := binarySkewNotice(); n != "" {
 				notices = append(notices, n)
 			}
+			// itd-111: a dogfood binary behind (or dirty against) its own source
+			// checkout tip. os.Executable names the binary; the comparison is
+			// git-only and never touches the network (adr-38 tier 1).
+			if exe, err := os.Executable(); err == nil {
+				if n := stalenessNotice(cwd, exe); n != "" {
+					notices = append(notices, n)
+				}
+			}
+			// itd-111 (AC6): a version transition performed since this repo was
+			// last set up — the running binary differs from the recorded
+			// setup_version. Report only; the fetch that changed it is
+			// provisioning's job. Both values come from disk (config + build info).
+			if from, to, changed := ahoy.VersionTransition(cwd); changed {
+				notices = append(notices, fmt.Sprintf(
+					"abcd: the running binary is version %s, but this repo was last set up with %s — run `/abcd:ahoy install` (or `abcd ahoy install`) to reconcile the recorded version.",
+					termsafe.Sanitize(to), termsafe.Sanitize(from)))
+			}
 			if len(notices) == 0 {
 				return nil
 			}
@@ -1482,13 +1489,20 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+			// Vintage + staleness from the shared comparator (itd-111): the same
+			// source `abcd version` and the session-start notice read. Computed
+			// once and carried in both the JSON and the text render.
+			vin := ahoy.Vintage(cwd)
+			out := ahoyOutput{DetectionResult: res, Vintage: vin.DisplayVintage(), Staleness: vin.Staleness()}
+			return render(cmd.OutOrStdout(), *asJSON, out, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd ahoy — %s\n", res.FolderKind)
 				fmt.Fprintf(w, "  plugin root: %s\n", res.PluginRootStatus)
 				fmt.Fprintf(w, "  root sha:    %s\n", res.RootSHA)
 				if mode, _ := res.Signals["install_mode"].(string); mode != "" {
 					fmt.Fprintf(w, "  install:     %s\n", mode)
 				}
+				fmt.Fprintf(w, "  vintage:     %s\n", out.Vintage)
+				fmt.Fprintf(w, "  staleness:   %s\n", out.Staleness)
 				// The citation baseline's coverage and age, present only in a repo
 				// that has armed the citation gate. The line embeds counts and a
 				// date derived from repo content, so it is sanitised.
@@ -1525,6 +1539,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 		adopt         bool
 		refuseAdopt   bool
 		dev           bool
+		allowStale    bool
 		binDir        string
 		visibility    string
 		docsTarget    string
@@ -1540,7 +1555,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, binDir, visibility, docsTarget, oracleBackend, scanDeep)
+			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, allowStale, binDir, visibility, docsTarget, oracleBackend, scanDeep)
 			if err != nil {
 				return err
 			}
@@ -1585,6 +1600,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
 	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
+	installCmd.Flags().BoolVar(&allowStale, "allow-stale-binary", false, "proceed even when the running binary is stale against its source tip or its vintage cannot be determined; the default is to refuse before any write and name the rebuild fix")
 	installCmd.Flags().StringVar(&binDir, "bin-dir", "", "directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges")
 	installCmd.Flags().StringVar(&visibility, "visibility", "", "repo visibility: private | public")
 	installCmd.Flags().StringVar(&docsTarget, "docs-target", "", "marker target: claude_md | agents_md | both | skip")
@@ -1692,8 +1708,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 // installOptionsFromFlags validates the install flags and builds InstallOptions.
 // Only explicitly-set value flags become overrides; unset values fall through to
 // the prompter (interactive) or its default (non-interactive).
-func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev bool, binDir, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
-	opts := ahoy.InstallOptions{Yes: yes, Dev: dev, BinDir: binDir}
+func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev, allowStale bool, binDir, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
+	opts := ahoy.InstallOptions{Yes: yes, Dev: dev, BinDir: binDir, AllowStaleBinary: allowStale}
 	if adopt && refuseAdopt {
 		return opts, fmt.Errorf("abcd ahoy install: --adopt and --refuse-adopt are mutually exclusive")
 	}

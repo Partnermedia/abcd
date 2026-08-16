@@ -1,11 +1,14 @@
 ---
 name: version
-description: Print the installed abcd version by invoking the abcd binary. Read-only.
+description: Print the installed abcd version, install mode, and vintage by invoking the abcd binary. Read-only unless --check is passed.
 ---
 
 # `/abcd:version`
 
-Report the installed abcd version. This command performs **zero writes**.
+Report the installed abcd version, install mode, and vintage — the running
+binary's build revision (in a source checkout) or pinned version, and whether it
+is up to date, stale, or of an undeterminable vintage relative to the on-disk
+reference. This command performs **zero writes** and touches no network.
 
 Run:
 
@@ -13,7 +16,19 @@ Run:
 "${CLAUDE_PLUGIN_ROOT}/abcd" version --json
 ```
 
-Then tell the user the `name` and `version` from the JSON.
+Then tell the user the `name`, `version`, `install_mode`, `vintage`, and
+`staleness` from the JSON.
+
+**Checking for a newer release.** Only when the user explicitly asks whether a
+newer version exists, add `--check`:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" version --check --json
+```
+
+This is the **one** command that reaches the network. It fetches the latest
+release once, compares, and reports under `check` (with its `source` named).
+Every other path reads only what is on disk.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

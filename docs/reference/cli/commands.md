@@ -55,6 +55,7 @@ Install or update abcd in this repo (idempotent)
 
 ```
       --adopt                   adopt an unmanaged repo without prompting
+      --allow-stale-binary      proceed even when the running binary is stale against its source tip or its vintage cannot be determined; the default is to refuse before any write and name the rebuild fix
       --bin-dir string          directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges
       --dev                     track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary
       --docs-target string      marker target: claude_md | agents_md | both | skip
@@ -648,6 +649,12 @@ Close a spec (open/ -> closed/) and ship its linked intent (planned/ -> shipped/
 
 ### `abcd version`
 
-Print abcd's version
+Print abcd's version, install mode, and vintage
 
-**Usage:** `abcd version`
+**Usage:** `abcd version [flags]`
+
+**Flags:**
+
+```
+      --check   fetch the latest release once and compare (the only command that touches the network); names its source
+```

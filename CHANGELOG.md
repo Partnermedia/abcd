@@ -42,6 +42,19 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A stale abcd never answers silently** (itd-111). Every surface now knows its
+  own vintage and says so. `abcd version` and `abcd ahoy` print the install mode,
+  the running binary's vintage (its build revision in a source checkout, its
+  pinned version otherwise), and whether it is up to date, stale, or of an
+  undeterminable vintage relative to the on-disk reference. At session start, a
+  binary behind (or a dirty rebuild atop) its own source tip is named with the
+  one-command rebuild fix. `abcd ahoy install` refuses before any write when the
+  binary is stale against its tip or its vintage cannot be determined — the trap
+  where month-stale install logic silently ran against a machine — with
+  `--allow-stale-binary` as the documented override. And `abcd version --check`
+  is the one command that reaches the network: it fetches the latest release
+  once, compares, and reports with its source named. Every other path reads only
+  what is on disk.
 - **`/abcd:intent` decomposes a proposal before filing it** (itd-84, MVP
   rung). The surface page now carries a hand-run protocol that routes each
   part of a proposal to its record home (capability → intent, trust rule →
