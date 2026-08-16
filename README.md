@@ -250,6 +250,16 @@ platform, or a platform outside the released matrix (darwin and linux on amd64
 and arm64) installs nothing and says why in plain language. A plugin root that
 already holds the binary costs one file test and no network.
 
+Session start is not the only chance. Every hook that needs the binary
+resolves it the same way the command files do — the plugin root first, then an
+`abcd` on `PATH` — and when the plugin root is empty it first attempts the
+bootstrap itself, silently and at most once per ten-minute window. A session
+where provisioning cannot succeed degrades loudly rather than noisily: each
+affected hook says in one line what is inactive (the rules loader, the shell
+guard, the transcript capture) and that the [install](#install) one-liner
+restores it — after which the hooks resolve the `PATH` binary with no session
+restart needed.
+
 That covers the hooks. For the `abcd` command in your own terminal, keep the
 [install](#install) above, or put the plugin-root binary on your `PATH` by
 running it once by its absolute path — `'<plugin-root>/abcd' ahoy install`.

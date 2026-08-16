@@ -62,3 +62,4 @@ references.bib
 /.binary-meta
 /.bootstrap.lock
 /.bootstrap.tmp.*
+/.bootstrap.attempt
