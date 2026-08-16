@@ -163,6 +163,25 @@ Per hand-run, append:
   Grill surfaced a real unimplementability (two-store atomicity) that became
   the mint-first + `--intent` repair contract. Filed as itd-119/spc-24.
 
+### 2026-08-16 — itd-120 resolve provenance (hand-run at planning, process plan intent 2)
+
+- **Proposal:** `abcd capture resolve` writes `resolved_by` via `--intent` /
+  `--spec` / `--commit` (the second walkability intent of the
+  process-coherence plan).
+- **Initial routing:** four parts — the provenance-write capability
+  (capability | this intent); validation depth (spec detail | spec body);
+  docs (capture.md + issues README | ride the sweep); the two-evidence-
+  standards observation (motivation | press-release prose, no new record).
+  Typed link: `refines` iss-245 (its `resolved_by` half). No reversal flags.
+- **Confirmed routing:** adopted unchanged. Rulings at the walk: provenance
+  optional (never defaulted, never demanded); existence-checked ids,
+  shape-checked sha; backfill of already-resolved issues ruled OUT of scope.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** clean run; the only near-part was the backfill idea, which the
+  grill surfaced and the maintainer scoped out rather than routed. Filed as
+  itd-120/spc-25.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
