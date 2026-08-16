@@ -99,3 +99,32 @@ Canonical bibliography for `.abcd/development/` documents. When citing prior art
 4. Use `[Display name][slug]` (or `[slug]` for the bare slug) in body text.
 
 If a reference appears in three or more documents, that's a signal the registry entry is well-established; no further action required — the duplication is intentional, not a bug.
+
+## Academic sources
+
+Academic literature (books, papers, reports) has a second home alongside the
+URL registry above: canonical bibliographic metadata lives in
+[`references.csl.json`](references.csl.json) (CSL-JSON — the bibliography
+format ruled canonical in
+[the confidential-sources SOTA note](notes/2026-07-08-confidential-sources-provenance-sota.md),
+§1), and the human-readable entry lives in the References & sources section of
+the repo-root `ACKNOWLEDGEMENTS.md`. Admission criteria and the curation
+rationale: [notes/2026-08-16-academic-references-baseline.md](notes/2026-08-16-academic-references-baseline.md).
+
+To add an academic source, in one change:
+
+1. Add the CSL-JSON entry — key `<authorfamily><year><distinctiveword>`
+   (e.g. `naur1985theory`), verified metadata only, no guessed DOIs.
+2. Add the matching entry to the numbered reference list in
+   `ACKNOWLEDGEMENTS.md`, in its alphabetical position (first author's family
+   name), ACM reference style.
+3. Cite it from the record document that draws on it (the usual
+   `[slug]: URL "title"` form works; a matching kebab slug of the CSL key is
+   fine).
+
+A `.bib` for LaTeX toolchains is a generated, disposable artefact — derive it
+on demand and never commit it (`references.bib` is gitignored):
+
+```bash
+pandoc references.csl.json -f csljson -t biblatex -o references.bib
+```

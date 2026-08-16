@@ -81,10 +81,97 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 
 ## References & sources
 
-Books, articles, and papers cited in the design record.
+CSL-JSON: [`.abcd/development/research/references.csl.json`](.abcd/development/research/references.csl.json)
 
-- Eric Evans, *Domain-Driven Design* (Addison-Wesley, 2003).
-- A. Mavin, P. Wilkinson, A. Harwood, M. Novak, "Easy Approach to Requirements
-  Syntax (EARS)" (RE, 2009).
-- U.S. Copyright Office, *Copyright and Artificial Intelligence, Part 2:
-  Copyrightability* (2025).
+1. Lisanne Bainbridge. 1983. Ironies of automation. *Automatica* 19, 6 (1983),
+   775–779. [doi:10.1016/0005-1098(83)90046-8](https://doi.org/10.1016/0005-1098%2883%2990046-8)
+2. Shraddha Barke, Michael B. James, and Nadia Polikarpova. 2023. Grounded
+   Copilot: How programmers interact with code-generating models. *Proceedings
+   of the ACM on Programming Languages* 7, OOPSLA1 (2023), 85–111.
+   [doi:10.1145/3586030](https://doi.org/10.1145/3586030)
+3. Joel Becker, Nate Rush, Elizabeth Barnes, and David Rein. 2025. Measuring
+   the impact of early-2025 AI on experienced open-source developer
+   productivity. METR. [arXiv:2507.09089](https://arxiv.org/abs/2507.09089)
+4. Colin Bryar and Bill Carr. 2021. *Working Backwards: Insights, Stories, and
+   Secrets from Inside Amazon*. St. Martin's Press, New York.
+   <https://openlibrary.org/works/OL20924654W>
+5. Parmit K. Chilana, Rishabh Singh, and Philip J. Guo. 2016. Understanding
+   conversational programmers: A perspective from the software industry. In
+   *Proceedings of the 2016 CHI Conference on Human Factors in Computing
+   Systems (CHI '16)*, 1462–1472. [doi:10.1145/2858036.2858323](https://doi.org/10.1145/2858036.2858323)
+6. Eric Evans. 2003. *Domain-Driven Design: Tackling Complexity in the Heart
+   of Software*. Addison-Wesley, Boston.
+   <https://openlibrary.org/works/OL4464385W>
+7. Ahmed Fawzy, Amjed Tahir, and Kelly Blincoe. 2026. Vibe coding in practice:
+   Motivations, challenges, and a future outlook — a grey literature review.
+   In *Proceedings of the 48th International Conference on Software
+   Engineering: Software Engineering in Practice (ICSE-SEIP 2026)*, 212–223.
+   [doi:10.1145/3786583.3786866](https://doi.org/10.1145/3786583.3786866)
+8. Alan R. Hevner, Salvatore T. March, Jinsoo Park, and Sudha Ram. 2004.
+   Design science in information systems research. *MIS Quarterly* 28, 1
+   (2004), 75–105. [doi:10.2307/25148625](https://doi.org/10.2307/25148625)
+9. Ken Huang. 2025. *Secure Vibe Coding Guide*. Cloud Security Alliance.
+   <https://cloudsecurityalliance.org/blog/2025/04/09/secure-vibe-coding-guide>
+10. Andrej Karpathy. 2023. The hottest new programming language is English.
+    Post on X (24 January 2023).
+    <https://x.com/karpathy/status/1617979122625712128>
+11. Andrej Karpathy. 2025. Post coining the term "vibe coding". X (February
+    2025). <https://x.com/karpathy/status/1886192184808149383>
+12. Andrej Karpathy. 2026. Post proposing the term "agentic engineering". X
+    (February 2026). <https://x.com/karpathy/status/2019137879310836075>
+13. Amy J. Ko et al. 2011. The state of the art in end-user software
+    engineering. *ACM Computing Surveys* 43, 3 (2011), 21:1–21:44.
+    [doi:10.1145/1922649.1922658](https://doi.org/10.1145/1922649.1922658)
+14. Oliver Kopp, Anita Armbruster, and Olaf Zimmermann. 2018. Markdown
+    architectural decision records: Format and tool support. In *Proceedings
+    of the 10th ZEUS Workshop* (CEUR-WS Vol. 2072).
+    <https://ceur-ws.org/Vol-2072/paper9.pdf>
+15. Alistair Mavin, Philip Wilkinson, Adrian Harwood, and Mark Novak. 2009.
+    Easy approach to requirements syntax (EARS). In *Proceedings of the 17th
+    IEEE International Requirements Engineering Conference (RE '09)*, 317–322.
+    [doi:10.1109/RE.2009.9](https://doi.org/10.1109/RE.2009.9)
+16. Bonnie A. Nardi. 1993. *A Small Matter of Programming: Perspectives on End
+    User Computing*. MIT Press, Cambridge, MA.
+    <https://openlibrary.org/works/OL1923390W>
+17. Peter Naur. 1985. Programming as theory building. *Microprocessing and
+    Microprogramming* 15, 5 (1985), 253–261.
+    [doi:10.1016/0165-6074(85)90032-8](https://doi.org/10.1016/0165-6074%2885%2990032-8)
+18. Michael Nygard. 2011. Documenting architecture decisions. Cognitect blog
+    (15 November 2011).
+    <https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions>
+19. Hammond Pearce, Baleegh Ahmad, Benjamin Tan, Brendan Dolan-Gavitt, and
+    Ramesh Karri. 2022. Asleep at the keyboard? Assessing the security of
+    GitHub Copilot's code contributions. In *Proceedings of the 43rd IEEE
+    Symposium on Security and Privacy (S&P 2022)*, 754–768.
+    [arXiv:2108.09293](https://arxiv.org/abs/2108.09293)
+20. Neil Perry, Megha Srivastava, Deepak Kumar, and Dan Boneh. 2023. Do users
+    write more insecure code with AI assistants? In *Proceedings of the 2023
+    ACM SIGSAC Conference on Computer and Communications Security (CCS '23)*,
+    2785–2799. [doi:10.1145/3576915.3623157](https://doi.org/10.1145/3576915.3623157)
+21. Ranjan Sapkota, Konstantinos I. Roumeliotis, and Manoj Karkee. 2025. Vibe
+    coding vs. agentic coding: Fundamentals and practical implications of
+    agentic AI. [arXiv:2505.19443](https://arxiv.org/abs/2505.19443)
+22. Advait Sarkar, Andrew D. Gordon, Carina Negreanu, Christian Poelitz, Sruti
+    Srinivasa Ragavan, and Ben Zorn. 2022. What is it like to program with
+    artificial intelligence? In *Proceedings of the 33rd Annual Conference of
+    the Psychology of Programming Interest Group (PPIG 2022)*. [arXiv:2208.06213](https://arxiv.org/abs/2208.06213)
+23. Christopher Scaffidi, Mary Shaw, and Brad A. Myers. 2005. Estimating the
+    numbers of end users and end user programmers. In *Proceedings of the 2005
+    IEEE Symposium on Visual Languages and Human-Centric Computing (VL/HCC
+    '05)*, 207–214. [doi:10.1109/VLHCC.2005.34](https://doi.org/10.1109/VLHCC.2005.34)
+24. Donald A. Schön. 1983. *The Reflective Practitioner: How Professionals
+    Think in Action*. Basic Books, New York.
+    <https://openlibrary.org/works/OL3466056W>
+25. Shivani Shukla, Himanshu Joshi, and Romilla Syed. 2025. Security
+    degradation in iterative
+    AI code generation — a systematic analysis of the paradox. In *Proceedings
+    of the 2025 IEEE International Symposium on Technology and Society (ISTAS
+    2025)*. [arXiv:2506.11022](https://arxiv.org/abs/2506.11022)
+26. U.S. Copyright Office. 2025. *Copyright and Artificial Intelligence,
+    Part 2: Copyrightability*. <https://www.copyright.gov/ai/>
+27. Gerald M. Weinberg. 1971. *The Psychology of Computer Programming*. Van
+    Nostrand Reinhold, New York.
+    <https://openlibrary.org/works/OL1958820W>
+28. Songwen Zhao, Danqing Wang, Kexun Zhang, Jiaxuan Luo, Zhuo Li, and Lei Li.
+    2025. Is vibe coding safe? Benchmarking vulnerability of agent-generated
+    code in real-world tasks. [arXiv:2512.03262](https://arxiv.org/abs/2512.03262)

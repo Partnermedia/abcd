@@ -50,6 +50,10 @@ go.work.sum
 # decision-log append lock (runtime artefact)
 .abcd/work/.decisions.lock
 
+# bibliography export for LaTeX toolchains — derived on demand from
+# .abcd/development/research/references.csl.json, never committed
+references.bib
+
 # hooks/bootstrap.sh artefacts, when a checkout is itself the plugin root
 # (CLAUDE_PLUGIN_ROOT pointed here): the provisioned binary, its provenance
 # record, the mkdir lock, and a temp dir orphaned by a SIGKILL (which runs no
