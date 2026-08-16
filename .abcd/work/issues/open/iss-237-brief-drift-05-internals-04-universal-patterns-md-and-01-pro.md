@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-237"
+slug: "brief-drift-05-internals-04-universal-patterns-md-and-01-pro"
+severity: "major"
+category: "drift"
+source: "agent-finding"
+found_during: "intent-planning-prep"
+found_at: ".abcd/development/brief/05-internals/04-universal-patterns.md"
+---
+
+Brief drift: 05-internals/04-universal-patterns.md and 01-product/03-mental-model.md describe internal/core/docfidelity, the spc-74/75 marker grammar, and a .abcd/validation_disciplines/ registry as current state; none exists in the Go tree and those spc ids belong to the pre-adr-21 spec space (live specs are spc-1..spc-22).
