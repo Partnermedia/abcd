@@ -316,3 +316,32 @@ Per hand-run, append:
   cross-refs itd-82 (downstream consumer) and itd-87 (recurrence semantics).
   Filed the same day the bughunt's first validated issue (#250) landed —
   itself the first adoption candidate.
+
+### 2026-08-16 — itd-76 sources corpus (hand-run at planning)
+
+- **Proposal:** the existing itd-76 draft — personal corpus + provenance
+  ledger + guards, team share/ingest, and paper reconstruction in one
+  intent, with three open questions and no acceptance criteria.
+- **Initial routing:** six parts — personal core verbs
+  (capability | itd-76, narrowed); team share/ingest (capability | new
+  draft); paper reconstruction (capability | new draft); "documents and
+  ledgers never travel; citation requires both gates" (trust rule | ADR +
+  brief invariant); consult-freely-cite-deliberately (stance | principle);
+  store formats and folder-as-classification (plumbing | brief/spec).
+  Typed links: the split drafts `refines` itd-76; itd-76 `builds_on`
+  itd-74 (shipped) and itd-77 (draft, non-gating — default path works).
+  No reversal flags.
+- **Confirmed routing:** adopted unchanged, plus three interview rulings the
+  proposal had surfaced as open questions: the share surface is the existing
+  `references.csl.json` research store, not a second `.abcd/work` exchange
+  file (one committed bibliography); the "Dogfood (already running)" claim
+  was stale and is rewritten as target (no corpus exists on the development
+  machine); multi-machine ledger ownership is explicitly deferred. Seven
+  Given-When-Then criteria authored and accepted in full; persona corrected
+  Maya→Alice per the intents discipline.
+- **Verdict:** SPLIT, proposed and confirmed — the initial verdict survived.
+- **Notes:** filed as itd-76/spc-31 (planned), itd-126 and itd-127 (drafts,
+  seeded criteria marked unconfirmed), adr-41 (proposed), brief invariant 9,
+  and the consult-freely-cite-deliberately principle. Both prior share/ingest
+  open questions moved to itd-126 with a third (share vs the store's
+  admission criteria) added at the walk.
