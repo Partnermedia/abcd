@@ -264,13 +264,13 @@ the Decisions above where the two disagree.
 
 ## Prerequisites
 
-- **iss-205 must be fixed first, not alongside.** Every file in `commands/`
-  resolves the binary via `PATH` and then falls back to `go run ./cmd/abcd`.
-  That fallback is the only reason the command surface works at all on a fresh
-  install today — and it works *because* `cmd/` is in the clone. A curated
-  payload has no `cmd/`, no `go.mod`, and no source, so the fallback stops
-  existing and every command hard-fails. Shipping this intent before iss-205
-  turns a slow command surface into a dead one.
+- **iss-205 is resolved; the sequencing constraint it imposed is met.** Every
+  file in `commands/` resolves the binary from `${CLAUDE_PLUGIN_ROOT}` first,
+  `PATH` second, with `go run ./cmd/abcd` only in a source checkout, and a
+  detector test under `internal/core/launch` fails any `commands/` file that
+  regresses the ladder. A curated payload without `cmd/` or source therefore
+  no longer kills the command surface; what this intent still owes is
+  verifying that ladder on a real archive install before the payload slims.
 - **iss-206 gains a second cause.** An archive install's cache directory is not
   named for a commit, so `plugin_sha` stays `unknown` for a reason unrelated to
   the 40-hex gate. Its fix should stop assuming a commit sha rather than widen

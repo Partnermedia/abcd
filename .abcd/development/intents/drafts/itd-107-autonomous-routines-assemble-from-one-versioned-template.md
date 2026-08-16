@@ -48,7 +48,8 @@ operations in a shared checkout (round 8, recovered only by chance from a
 dangling stash); a stop-streak counter that could not tell three rounds of
 convergent diagnosis — each one narrowing the same root cause — from three
 rounds that learned nothing, and declared the loop wedged when it was actually
-converging on a correct fix; and a blocked bug (iss-186/PR #203) that kept
+converging on a correct fix; and a then-blocked bug (iss-186/PR #203, since
+resolved) that kept
 resurfacing at STATE step 3's automatic PR-resumption every round until a human
 happened to intervene by hand, with no way for the loop to set it aside and work
 on something else in the meantime. A hand-assembled prompt fixes the instance in
