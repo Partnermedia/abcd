@@ -6,6 +6,8 @@ severity: "minor"
 category: "observation"
 source: "user-observation"
 found_during: "manual-capture"
+resolution: "Inert-path skip gate landed (PR #244) and the rehearsal PR #246 auto-merged through it: classifier logged inert=true, smoke and zizmor reported skipped and satisfied the ruleset, macOS leg passed in 8s with heavy steps stood down, ubuntu unit lane ran in full"
+impact: internal
 ---
 
 docs-only PRs pay the full two-OS build+test matrix — add a fail-closed inert-path skip gate
