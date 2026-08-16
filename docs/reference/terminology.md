@@ -18,8 +18,9 @@ an official specification, a standards body, a peer-reviewed paper with a DOI,
 or engineering documentation from the vendors where the term originated. No
 single-author coinages, no aggregator write-ups. Identifiers such as `itd-N`,
 `iss-N`, `adr-N`, and `spc-N` refer to entries in abcd's development record,
-which lives in the repository (not in the release artefact); native terms are
-glossed inline rather than deep-linked.
+which travels with every repository checkout and release source archive but
+never with the released binaries; native terms are glossed inline rather than
+deep-linked.
 
 ## Index by theme
 

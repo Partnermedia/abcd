@@ -1,0 +1,255 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "2235cdada974c4f354e6d1be05e31498778d44c8"
+    }
+  },
+  "verifier": {
+    "id": "maintainer@release"
+  },
+  "timeVerified": "2026-08-16T16:51:26Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3250b8ba510180464817cf05ccccf7e5af09a24481820ea234576c657f5c0a7e",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:6b4a388e596e159a04f73417af8c2d08699968dd01031b9c08aeac65596d8064",
+    "briefVersion": "0.4.2"
+  },
+  "categories": {
+    "false-claim": 14,
+    "undocumented-surface": 8,
+    "fictional-layout": 2,
+    "criterion-violation": 2,
+    "stale-count": 2
+  },
+  "failing": [
+    {
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:9-12",
+      "claim": "`abcd version --json` emits `{ \"name\": \"abcd\", \"version\": \"<version>\" }`",
+      "reality": "The freshly built binary emits `{\"name\": \"abcd\", \"version\": \"dev\", \"vintage\": \"b5646b23ccb8\", \"staleness\": \"unknown\"}` — two fields (`vintage`, `staleness`) beyond the documented shape.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:14-15",
+      "claim": "Without --json, bare `abcd version` prints the version string only (e.g. `abcd dev`)",
+      "reality": "Bare `abcd version` prints `abcd dev` followed by `vintage:` and `staleness:` lines — a small status render, not the version string alone. The verb's own help summary is \"Print abcd's version, install mode, and vintage\", not just the version.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:12-14",
+      "claim": "The plugin command (commands/version.md) reads the JSON and tells the user the `name` and `version`",
+      "reality": "commands/version.md instructs reporting `name`, `version`, `install_mode`, `vintage`, and `staleness`, and additionally documents a `version --check --json` mode; the brief's two-field description of the plugin command is stale.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "where": "version verb (.abcd/development/brief/04-surfaces/12-version.md — no mention anywhere in the chapter)",
+      "claim": "The chapter documents no flags beyond --json and frames /abcd:version as only reporting what is installed",
+      "reality": "The shipped binary has `abcd version --check` — per its help text \"fetch the latest release once and compare (the only command that touches the network)\" — and commands/version.md exposes it to plugin users; this shipped surface is absent from the brief chapter.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/16-audit.md",
+      "where": ".abcd/development/brief/04-surfaces/16-audit.md:39 (v1 rule-set table, privacy-hygiene row)",
+      "claim": "privacy-hygiene, severity error, checks: no absolute local paths in committed files, honouring an abcd-audit:allow line waiver",
+      "reality": "The shipped rule (internal/core/audit/rule_privacy.go) additionally scans committed files for network identifiers via scanner.NetworkPatterns(), and those findings are emitted at per-pattern severity — warn for warn/info-class patterns (auditSeverity()) — so the rule's scope is wider than documented and its severity is not uniformly error. The binary's own fix text confirms it: 'replace the absolute local path with a repo-relative one, and any network identifier with a reserved documentation value (RFC 5737/3849/2606/7042, or a persona-derived device name)'.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:37-38 (Flow, Phase 1)",
+      "claim": "$ABCD is \"the abcd checkout, three levels up from the command file\" — echoing the command file's own claim that it lives at <abcd-root>/commands/abcd/prepare-this-repo.md",
+      "reality": "The command ships flat at commands/prepare-this-repo.md; no commands/abcd/ directory exists anywhere in the tree (the only directory named abcd is cmd/abcd). The repo root is the immediate parent of commands/ — two path levels above the file, not three.",
+      "class": "fictional-layout",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:13-14, 45-49, 67-81 (What it does / Flow Phase 3 / Acceptance)",
+      "claim": "Adoption comprises the three tiers, legacy .work/ migration, AGENTS.md merge, commit gates, and opt-in attribution; the only binary invocation described is the read-only `abcd audit --json`",
+      "reality": "The shipped commands/prepare-this-repo.md has a whole additional Phase 3 step 4 \"Identity — detect first, interview only if there is nothing to detect\" that invokes `abcd identity init` (a write: records the block pointer and .abcd/positioning.json) and references `abcd identity render`; the command's Definition of done also requires the identity block registered with every surface `ok`. The brief never mentions the identity step, and its \"invoking the binary's read-only audit\" framing omits that the workflow also performs identity writes via the binary.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "plugin command surface",
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "claim": "\"abcd ships fourteen binary-backed top-level commands, each with both a Go verb and a commands/ file\" — the enumerated list names ahoy, audit, capture, disembark, docs, embark, guard, history, ideate, identity, intent, launch, memory, version and omits banlist",
+      "reality": "The shipped binary exposes a live `banlist` top-level verb (abcd --help) and commands/banlist.md exists, so fifteen top-level commands are binary-backed; the surfaces README itself lists /abcd:banlist as shipped (row 20) and its index region includes banlist",
+      "class": "stale-count",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:12-14",
+      "claim": "\"The /abcd:ahoy slash command dispatches only this bare read-only pass and names the CLI for anything that writes; the sub-verbs below ship on the CLI as abcd ahoy <sub-verb>\" — i.e. the slash surface carries no sub-verbs.",
+      "reality": "commands/ahoy.md dispatches the sub-verbs itself: its argument-hint is \"[status | install | uninstall | doctor | dry-run]\" and its body runs `\"${CLAUDE_PLUGIN_ROOT}/abcd\" ahoy install --json` (plus uninstall/doctor/dry-run sections and the `yes | ... ahoy install` piped-approval flow), so install and uninstall are reachable from the slash command, not only the CLI.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:404-409 (repeated at 470-473)",
+      "claim": "The canonical dry-run DetectionResult JSON envelope shape is exactly {folder_kind, adopted, root_sha, plugin_root_status, repo_identity, signals, guard, gaps}, with guard carrying plugin_root_resolved, hook_installed, binary_reachable, registry_loadable, disabled, entries.",
+      "reality": "`abcd ahoy dry-run` emits {folder_kind, adopted, root_sha, plugin_root_status, repo_identity, signals, guard, banlist, gaps} — a ninth `banlist` key both shape statements omit (step 11 at line 206 even says banlist is in the detection envelope), and guard carries a seventh `detail` field beyond the six listed.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:424-429 (also 32-33, 94)",
+      "claim": "Bare /abcd:ahoy shows folder kind, plugin-root status, root SHA, and gap count; \"a managed-repo prints the four status lines with no next-step line\".",
+      "reality": "The bare text render prints eight-plus lines on this managed repo: plugin root, root sha, vintage, staleness, citations, gaps, guard (arming state), and on repos with banlist findings a multi-line banlist block — the vintage/staleness/citations/guard/banlist lines are absent from every bare-render description in the chapter.",
+      "class": "criterion-violation",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:242-251 (install flag list; § Install flow)",
+      "claim": "The non-interactive install flags are --yes, --adopt/--refuse-adopt, --docs-target, --oracle-backend, --scan-deep, --visibility, --dev (plus --bin-dir in step 9); no staleness gate is mentioned anywhere in the chapter.",
+      "reality": "`abcd ahoy install` also ships `--allow-stale-binary` (\"proceed even when the running binary is stale against its source tip...; the default is to refuse before any write\") — a whole refuse-before-write staleness gate, and `abcd ahoy uninstall` ships an undocumented `--bin-dir` flag (internal/surface/cli/cli.go:1603,1633); neither surface appears in the brief.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17",
+      "claim": "The bare-status-board convention \"holds for ahoy, capture, memory, intent, identity, and spec (and bare abcd)\" — banlist is omitted from the file entirely",
+      "reality": "Bare `abcd banlist` is also a read-only status render (its help: \"bare renders both, read-only\"), so the shipped bare-status surface includes a verb this record never mentions",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17",
+      "claim": "\"version prints only the version string\"",
+      "reality": "`abcd version` prints a three-line block — version (\"abcd dev\"), vintage, and staleness — and its help text describes it as printing \"abcd's version, install mode, and vintage\", not only the version string",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:11 (dry-run sub-verb bullet)",
+      "claim": "The plain-text `--dry-run` render \"prints only version, files bundled, scan hardfails, and would-publish, plus a would-refuse-on line when there is a finding\".",
+      "reality": "The shipped render (bin/abcd-darwin-arm64 launch --dry-run, v0.4.2) also prints a fifth line — \"citations: 51 cited, 51 with receipts\" — between scan hardfails and would-publish, so the 'only' enumeration is false.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:11 (dry-run gate enumeration)",
+      "claim": "The gates dry-run runs today are the secret+PII scan, the installability smoke, and the dev-polarity lockstep check; \"the remaining gates (marker-block, documentation-auditor)\" are itd-65's and report not_implemented — no other gate is mentioned anywhere in the chapter (§1's gate list omits it too).",
+      "reality": "`abcd launch --dry-run --json` returns a fifth gate the record never documents: {\"name\": \"citation-baseline\", \"status\": \"ran\", \"detail\": \"51 cited, 51 with receipts\"} — a shipped, executing gate absent from both the dry-run description and the §1 pre-flight gate list.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "skills surface",
+      "where": ".abcd/development/brief/02-constraints/04-naming.md:10",
+      "claim": "`/abcd:ahoy dry-run` \"Drives the Claude Code skill's two-pass approval protocol\" — presents an ahoy skill as the consumer of the dry-run envelope",
+      "reality": "abcd ships zero skills and no skills/ directory exists; ahoy ships as a command (commands/ahoy.md) per the brief's own 08-skills.md and 04-surfaces/README.md (\"the /abcd: surface is commands only\")",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "skills surface",
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "claim": "Milestone 0 stands up \"the markdown surfaces (`commands/`, `agents/`, `skills/`) that shell to the binary load cleanly\" — skills/ listed as an extant plugin markdown-surface directory, with no staged/later-phase marker",
+      "reality": "No skills/ directory exists in the tree; 08-skills.md § Skill registration states \"skills/ never was\" (it was never in the tree or the release payload), and 04-launch.md confirms \"skills/ ... does not exist in the tree at all\"",
+      "class": "fictional-layout",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "skills surface",
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:55",
+      "claim": "Capture promote (marked LIVE) is \"Skill-orchestrated (lock-acquire → promote-inspect → seed+interview → promote-link → release)\" — echoed by 04-surfaces/README.md:12 (\"skill-orchestrated\") and the code comment internal/surface/cli/cli.go:1844",
+      "reality": "There are no skills to orchestrate it: the promote workflow is host-delegated via the command file commands/capture.md (line 83), and by 08-skills.md's own boundary rule its state mutation (the four-field back-link write) makes it command-shaped — \"any artefact mutation, any state change → command, not skill\"",
+      "class": "criterion-violation",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "plugin agent surface",
+      "where": ".abcd/development/brief/04-surfaces/README.md (20-row surface table; agent surface absent)",
+      "claim": "The brief's surface chapters enumerate the plugin's user-facing surface, but carry no row or chapter for the plugin agent surface — agents are documented only as 'Plumbing internals' via 05-internals/01-agents.md (a host-dispatched reviewer-prompt catalog), and mentioned in 04-surfaces only as implementation detail of disembark/launch (rows 2 and 4, 04-launch.md:22).",
+      "reality": "agents/ is a real, live plugin surface: 10 agent prompt files ship, .claude-plugin/plugin.json declares no agents key, so the harness convention-glob registers agents/*.md as installed plugin agents (including the mis-registered README.md/CHANGELOG.md, iss-110) — the same registration mechanism as commands/, which does get a per-surface chapter row.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "plugin agent surface",
+      "where": ".abcd/development/brief/04-surfaces/README.md:28",
+      "claim": "The surface_coverage record-lint rule asserts, 'in reverse, that every real surface has a row here' — presented as how the brief's surface set stays reconciled with what ships.",
+      "reality": "checkSurfaceCoverage (internal/core/lint/lint.go:361-365) cross-checks only commands/ and skills/ against the registry; agents/ is outside its scope, so the shipped agent surface (which the record's own launch chapter, 04-surfaces/04-launch.md:22, counts in the declared plugin surface) has no row and the gate structurally cannot detect its absence — the 'every real surface' claim is false for the agent surface.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "CLI verb tree",
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:14",
+      "claim": "Bare `abcd version` prints the version string only (e.g. `abcd dev` in a development build) — it does not render a status board.",
+      "reality": "Bare `abcd version` from bin/abcd-darwin-arm64 renders three lines: `abcd dev`, `vintage: <sha>`, `staleness: unknown` — the binary's own short help says \"Print abcd's version, install mode, and vintage\".",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "CLI verb tree",
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:12",
+      "claim": "`abcd version --json` emits `{ \"name\": \"abcd\", \"version\": \"<version>\" }` (two fields).",
+      "reality": "`abcd version --json` emits four fields: name, version, vintage, staleness.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "CLI verb tree",
+      "where": "version (12-version.md, whole chapter)",
+      "claim": "The chapter documents no `--check` flag at all — no grep hit for `--check`, `vintage`, `staleness`, or network anywhere in 12-version.md, and no staged/later-phase marker covers it.",
+      "reality": "The shipped binary carries `abcd version --check`: \"fetch the latest release once and compare (the only command that touches the network); names its source\". It is specified only in specs/open/spc-22 and adr-38, never in the verb's brief surface chapter.",
+      "class": "undocumented-surface",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": "CLI verb tree",
+      "where": ".abcd/development/brief/04-surfaces/README.md:30",
+      "claim": "\"it does not hold everywhere: `version` prints only the version string\".",
+      "reality": "Bare `abcd version` prints a three-line version/vintage/staleness render, not only the version string.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:335",
+      "claim": "The broader press-release prose review (the honoured / diverged / missing buckets) is \"deferred to a later spec\" — not part of the shipped /abcd:intent review.",
+      "reality": "The shipped binary's `abcd intent review ingest` verdict schema defines and fail-closed-validates the gap_audit honoured/diverged/missing buckets (internal/core/intent/review.go:128-131, evidence check at review.go:460-466) and the ingest writer renders a \"Gap audit:\" section with all three buckets into the shipped intent's ## Audit Notes (review.go:669-673). The prose-review buckets are shipped, not deferred.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:335",
+      "claim": "spc-12 (predecessor store) ships \"the itd-37 MG004 boilerplate check, with their writers and receipts\" as part of the delivered /abcd:intent review.",
+      "reality": "No MG004 check exists anywhere in the shipped code — `grep -rn MG004 internal/ cmd/` finds nothing, and the binary's `intent review` surface is emit-request + ingest-verdict only. The same page marks the MG004 pass \"a later phase\" at lines 333 and 435, so line 335's ships-claim contradicts both reality and the page's own markers.",
+      "class": "false-claim",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    },
+    {
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:3",
+      "claim": "\"this repo's spec store holds only spc-2..spc-19, and none of these ids names a spec in it\"",
+      "reality": ".abcd/development/specs/{open,closed} holds spc-2 through spc-27 — spc-20-name-banlist, spc-21, spc-22, spc-23, spc-24, spc-25, spc-26 and spc-27 all exist beyond the claimed range (the spc-38/spc-39-absent half of the sentence is still true)",
+      "class": "stale-count",
+      "disposition": "captured as iss-250 (brief-surface-drift-v050-release-gate) for the next cycle; not release-blocking: design-record drift, no user-facing doc affected"
+    }
+  ],
+  "_reviewProvenance": "Host-run full-tier crosscheck per the pinned manifest: 22 checkers (17 brief docs Direction A, 5 surfaces Direction B), all returned, 28 unique discrepancies after dedup. Run in the release session against the content tree (verified byte-identical to the reviewed content tree d1afd2c for every manifest input before and after the run). Every finding carries the maintainer-ruled disposition; the maintainer PROMOTED with the findings captured as iss-250, the same class and treatment as iss-192 at v0.4.2. The judge is the release session’s pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is withheld from committed artifacts by harness policy and recorded in the session transcript. RE-CUT NOTE: the ruleset requires branch currency, so this content commit is the roll cherry-picked onto the then-current main; it differs from the reviewed tree d1afd2c only by five interleaved record-only files (planned intents itd-122/itd-123, open specs spc-27/spc-28, the decomposition-calibration note), none inside this detector’s pinned scope — verified by `git diff --name-only` between the two content commits, recorded in the session transcript."
+}

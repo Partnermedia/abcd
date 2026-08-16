@@ -1,0 +1,39 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "2235cdada974c4f354e6d1be05e31498778d44c8"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-16T16:51:26Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3250b8ba510180464817cf05ccccf7e5af09a24481820ea234576c657f5c0a7e",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.4.2"
+  },
+  "categories": {
+    "false-claim": 1,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [
+    {
+      "item": "docs/reference/terminology.md",
+      "where": "docs/reference/terminology.md:21",
+      "claim": "record identifiers refer to entries in the development record, \"which lives in the repository (not in the release artefact)\"",
+      "reality": "the record is present in every repository checkout and release source archive (GitHub attaches one to every release) and absent only from the released binaries — the iss-183 posture this very release records; the parenthetical escaped that sweep",
+      "class": "false-claim",
+      "disposition": "fixed in the receipts commit: the sentence now reads \"travels with every repository checkout and release source archive but never with the released binaries\""
+    }
+  ],
+  "_reviewProvenance": "Host-run agent-harness semantic review at the reviewed content tree d1afd2c: built the binary from the cut, read every docs/ page and README.md, verified the generated CLI reference via its parity test, diffed docs since v0.4.2 (README.md and docs/reference/cli/commands.md) and verified those closest, and checked every entry of the new 0.5.0 CHANGELOG section claim-by-claim against the implementing code with the full test suite run. Deterministic docs lint: 0 blockers, 1 advisory (a generated deprecated-alias line documenting present reality). One finding in five categories, fixed in the receipts commit as its disposition records; VERDICT: PROMOTE. The judge is the release session’s pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is withheld from committed artifacts by harness policy and recorded in the session transcript. RE-CUT NOTE: the ruleset requires branch currency, so this content commit is the roll cherry-picked onto the then-current main; it differs from the reviewed tree d1afd2c only by five interleaved record-only files (planned intents itd-122/itd-123, open specs spc-27/spc-28, the decomposition-calibration note), none inside this detector’s pinned scope — verified by `git diff --name-only` between the two content commits, recorded in the session transcript."
+}
