@@ -227,6 +227,25 @@ Per hand-run, append:
   committed `surface.json` snapshot dissolved the expected layering problem
   (core/lint never imports the cobra tree). Filed as itd-122/spc-27.
 
+### 2026-08-16 — itd-123 intent-audit rename (hand-run at planning, process plan intent 5)
+
+- **Proposal:** `abcd intent review` → `abcd intent audit`, breaking, with
+  the agent and task-class token moving (adr-40's first named rename).
+- **Initial routing:** four parts — the rename sweep (capability, breaking |
+  this intent); the vocabulary decision (already adr-40 — cite); the
+  sub-verb table row flip (same change, gated by itd-122); the no-aliases
+  stance (settled — cite, not reopened). No reversal flags — implements a
+  recorded decision.
+- **Confirmed routing:** adopted unchanged. Rulings at the walk: the agent
+  becomes `intent-auditor` (maintainer's counter-proposal over the proposed
+  `intent-fidelity-auditor` — the intent-grain auditor of the three audit
+  grains, mirroring the verb); the sweep boundary excludes historical/dated
+  records, which keep the old name as history.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived; one naming edit at confirmation.
+- **Notes:** the live sweep enumerates to 23 files (the plan's ~37 counted
+  historical records the boundary ruling excludes). Filed as itd-123/spc-28.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
