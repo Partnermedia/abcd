@@ -153,6 +153,20 @@ transport, not vocabulary. `disembark oracle` is correctly named for the seam it
 invokes; what needs correcting is the prose calling its family-1 output an
 "audit".
 
+> **Amendment (2026-08-16).** The keep-the-verb ruling above rested on a claim
+> the planning investigation disproved: the binary verb never invokes the
+> oracle seam. `disembark oracle` is a compute-or-ingest verdict endpoint —
+> its deterministic mode is a mechanical mapping over the manifest seal and
+> coverage summary, and its delegated mode validates a verdict the host's
+> agent produced elsewhere; the model access happens host-side, outside this
+> verb. Naming the verb for the seam claims a seam it does not touch and
+> collides with the `/abcd:oracle ask` design target, which is the seam's
+> real surface. The maintainer therefore reversed this clause: the verb
+> renames to `disembark review` (itd-125), and the seam itself — adr-25, and
+> `oracle` as the seam's name — stands unchanged. The rest of this section
+> (the seam is transport, not vocabulary; lint never reaches a model) is
+> unaffected.
+
 ### 6. Status and bucket are recorded together, per sub-verb
 
 Each surface file under `04-surfaces/` carries a sub-verb table with two facts

@@ -137,6 +137,31 @@ Recorded in full in [adr-40](../decisions/adrs/0040-review-audit-lint-are-three-
    granularity sufficient to retire the ambiguity? Sub-verb rows may make a
    surface-grain third value redundant.
 
+## Ruled at the planning interview (2026-08-16)
+
+All three open questions were settled with the maintainer present, and every
+intent below is planned, specced, and `ready` exit 0:
+
+1. **`abcd audit` → `abcd lint`** — matches the `record-lint` / `docs-lint` /
+   `lint-reviews` family; `abcd docs lint` reads as the same word at a
+   narrower scope.
+2. **`disembark oracle` → `disembark review`** — the investigation found the
+   binary verb never invokes the oracle seam (it is a compute-or-ingest
+   verdict endpoint), so the plan's keep-the-verb recommendation was reversed
+   and adr-40 §5 amended in place. This adds a **seventh intent**. The
+   artefact moves to `review/review-<manifest12>.*` with clean replacement
+   across the rename; the agent becomes `lifeboat-reviewer`.
+3. **No `partial`** — the `Status` enum stays two-valued at both grains; the
+   sub-verb rows carry the granularity.
+
+Id map: itd-119/spc-24 (`capture promote`), itd-120/spc-25 (`resolved_by`),
+itd-121/spc-26 (`abcd <id>`, adr-N included read-only), itd-122/spc-27
+(sub-verb tables, with binding bucket pre-rulings: identity = audit, launch
+changelog guardrail = gate, `guard check` = gate), itd-123/spc-28
+(`intent audit`, agent → `intent-auditor`), itd-124/spc-29 (`abcd lint`,
+package → `internal/core/repolint`; engine merge captured as iss-251),
+itd-125/spc-30 (`disembark review`).
+
 ## Sequencing
 
 1. Intents 1–3 planned and specced (walkability)
