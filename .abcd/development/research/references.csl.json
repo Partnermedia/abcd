@@ -1,0 +1,368 @@
+[
+  {
+    "id": "bainbridge1983ironies",
+    "type": "article-journal",
+    "author": [{"family": "Bainbridge", "given": "Lisanne"}],
+    "title": "Ironies of automation",
+    "container-title": "Automatica",
+    "volume": "19",
+    "issue": "6",
+    "page": "775-779",
+    "issued": {"date-parts": [[1983]]},
+    "DOI": "10.1016/0005-1098(83)90046-8"
+  },
+  {
+    "id": "barke2023grounded",
+    "type": "article-journal",
+    "author": [
+      {"family": "Barke", "given": "Shraddha"},
+      {"family": "James", "given": "Michael B."},
+      {"family": "Polikarpova", "given": "Nadia"}
+    ],
+    "title": "Grounded Copilot: How programmers interact with code-generating models",
+    "container-title": "Proceedings of the ACM on Programming Languages",
+    "volume": "7",
+    "issue": "OOPSLA1",
+    "page": "85-111",
+    "issued": {"date-parts": [[2023]]},
+    "DOI": "10.1145/3586030"
+  },
+  {
+    "id": "becker2025metr",
+    "type": "report",
+    "author": [
+      {"family": "Becker", "given": "Joel"},
+      {"family": "Rush", "given": "Nate"},
+      {"family": "Barnes", "given": "Elizabeth"},
+      {"family": "Rein", "given": "David"}
+    ],
+    "title": "Measuring the impact of early-2025 AI on experienced open-source developer productivity",
+    "publisher": "METR",
+    "issued": {"date-parts": [[2025, 7]]},
+    "URL": "https://arxiv.org/abs/2507.09089"
+  },
+  {
+    "id": "bryar2021workingbackwards",
+    "type": "book",
+    "author": [
+      {"family": "Bryar", "given": "Colin"},
+      {"family": "Carr", "given": "Bill"}
+    ],
+    "title": "Working backwards: Insights, stories, and secrets from inside Amazon",
+    "publisher": "St. Martin's Press",
+    "publisher-place": "New York",
+    "issued": {"date-parts": [[2021]]},
+    "URL": "https://openlibrary.org/works/OL20924654W"
+  },
+  {
+    "id": "chilana2016conversational",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Chilana", "given": "Parmit K."},
+      {"family": "Singh", "given": "Rishabh"},
+      {"family": "Guo", "given": "Philip J."}
+    ],
+    "title": "Understanding conversational programmers: A perspective from the software industry",
+    "container-title": "Proceedings of the 2016 CHI Conference on Human Factors in Computing Systems (CHI '16)",
+    "page": "1462-1472",
+    "issued": {"date-parts": [[2016]]},
+    "DOI": "10.1145/2858036.2858323"
+  },
+  {
+    "id": "evans2003ddd",
+    "type": "book",
+    "author": [{"family": "Evans", "given": "Eric"}],
+    "title": "Domain-driven design: Tackling complexity in the heart of software",
+    "publisher": "Addison-Wesley",
+    "publisher-place": "Boston",
+    "issued": {"date-parts": [[2003]]},
+    "URL": "https://openlibrary.org/works/OL4464385W"
+  },
+  {
+    "id": "fawzy2025vibecoding",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Fawzy", "given": "Ahmed"},
+      {"family": "Tahir", "given": "Amjed"},
+      {"family": "Blincoe", "given": "Kelly"}
+    ],
+    "title": "Vibe coding in practice: Motivations, challenges, and a future outlook — a grey literature review",
+    "container-title": "Proceedings of the 48th International Conference on Software Engineering: Software Engineering in Practice (ICSE-SEIP 2026)",
+    "page": "212-223",
+    "issued": {"date-parts": [[2026]]},
+    "DOI": "10.1145/3786583.3786866",
+    "URL": "https://arxiv.org/abs/2510.00328"
+  },
+  {
+    "id": "hevner2004dsr",
+    "type": "article-journal",
+    "author": [
+      {"family": "Hevner", "given": "Alan R."},
+      {"family": "March", "given": "Salvatore T."},
+      {"family": "Park", "given": "Jinsoo"},
+      {"family": "Ram", "given": "Sudha"}
+    ],
+    "title": "Design science in information systems research",
+    "container-title": "MIS Quarterly",
+    "volume": "28",
+    "issue": "1",
+    "page": "75-105",
+    "issued": {"date-parts": [[2004]]},
+    "DOI": "10.2307/25148625"
+  },
+  {
+    "id": "huang2025securevibe",
+    "type": "report",
+    "author": [{"family": "Huang", "given": "Ken"}],
+    "title": "Secure vibe coding guide",
+    "publisher": "Cloud Security Alliance",
+    "issued": {"date-parts": [[2025, 4]]},
+    "URL": "https://cloudsecurityalliance.org/blog/2025/04/09/secure-vibe-coding-guide"
+  },
+  {
+    "id": "karpathy2023english",
+    "type": "webpage",
+    "author": [{"family": "Karpathy", "given": "Andrej"}],
+    "title": "The hottest new programming language is English",
+    "container-title": "X",
+    "issued": {"date-parts": [[2023, 1, 24]]},
+    "URL": "https://x.com/karpathy/status/1617979122625712128"
+  },
+  {
+    "id": "karpathy2025vibecoding",
+    "type": "webpage",
+    "author": [{"family": "Karpathy", "given": "Andrej"}],
+    "title": "[Post coining the term 'vibe coding']",
+    "container-title": "X",
+    "issued": {"date-parts": [[2025, 2]]},
+    "URL": "https://x.com/karpathy/status/1886192184808149383"
+  },
+  {
+    "id": "karpathy2026agentic",
+    "type": "webpage",
+    "author": [{"family": "Karpathy", "given": "Andrej"}],
+    "title": "[Post proposing the term 'agentic engineering']",
+    "container-title": "X",
+    "issued": {"date-parts": [[2026, 2]]},
+    "URL": "https://x.com/karpathy/status/2019137879310836075"
+  },
+  {
+    "id": "ko2011euse",
+    "type": "article-journal",
+    "author": [
+      {"family": "Ko", "given": "Amy J."},
+      {"family": "Abraham", "given": "Robin"},
+      {"family": "Beckwith", "given": "Laura"},
+      {"family": "Blackwell", "given": "Alan F."},
+      {"family": "Burnett", "given": "Margaret M."},
+      {"family": "Erwig", "given": "Martin"},
+      {"family": "Scaffidi", "given": "Christopher"},
+      {"family": "Lawrance", "given": "Joseph"},
+      {"family": "Lieberman", "given": "Henry"},
+      {"family": "Myers", "given": "Brad A."},
+      {"family": "Rosson", "given": "Mary Beth"},
+      {"family": "Rothermel", "given": "Gregg"},
+      {"family": "Shaw", "given": "Mary"},
+      {"family": "Wiedenbeck", "given": "Susan"}
+    ],
+    "title": "The state of the art in end-user software engineering",
+    "container-title": "ACM Computing Surveys",
+    "volume": "43",
+    "issue": "3",
+    "page": "21:1-21:44",
+    "issued": {"date-parts": [[2011]]},
+    "DOI": "10.1145/1922649.1922658"
+  },
+  {
+    "id": "kopp2018madr",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Kopp", "given": "Oliver"},
+      {"family": "Armbruster", "given": "Anita"},
+      {"family": "Zimmermann", "given": "Olaf"}
+    ],
+    "title": "Markdown architectural decision records: Format and tool support",
+    "container-title": "Proceedings of the 10th ZEUS Workshop (CEUR-WS Vol. 2072)",
+    "issued": {"date-parts": [[2018]]},
+    "URL": "https://ceur-ws.org/Vol-2072/paper9.pdf"
+  },
+  {
+    "id": "mavin2009ears",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Mavin", "given": "Alistair"},
+      {"family": "Wilkinson", "given": "Philip"},
+      {"family": "Harwood", "given": "Adrian"},
+      {"family": "Novak", "given": "Mark"}
+    ],
+    "title": "Easy approach to requirements syntax (EARS)",
+    "container-title": "Proceedings of the 17th IEEE International Requirements Engineering Conference (RE '09)",
+    "page": "317-322",
+    "issued": {"date-parts": [[2009]]},
+    "DOI": "10.1109/RE.2009.9"
+  },
+  {
+    "id": "nardi1993smallmatter",
+    "type": "book",
+    "author": [{"family": "Nardi", "given": "Bonnie A."}],
+    "title": "A small matter of programming: Perspectives on end user computing",
+    "publisher": "MIT Press",
+    "publisher-place": "Cambridge, MA",
+    "issued": {"date-parts": [[1993]]},
+    "URL": "https://openlibrary.org/works/OL1923390W"
+  },
+  {
+    "id": "naur1985theory",
+    "type": "article-journal",
+    "author": [{"family": "Naur", "given": "Peter"}],
+    "title": "Programming as theory building",
+    "container-title": "Microprocessing and Microprogramming",
+    "volume": "15",
+    "issue": "5",
+    "page": "253-261",
+    "issued": {"date-parts": [[1985]]},
+    "DOI": "10.1016/0165-6074(85)90032-8"
+  },
+  {
+    "id": "nygard2011adr",
+    "type": "webpage",
+    "author": [{"family": "Nygard", "given": "Michael"}],
+    "title": "Documenting architecture decisions",
+    "container-title": "Cognitect blog",
+    "issued": {"date-parts": [[2011, 11, 15]]},
+    "URL": "https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions"
+  },
+  {
+    "id": "pearce2022asleep",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Pearce", "given": "Hammond"},
+      {"family": "Ahmad", "given": "Baleegh"},
+      {"family": "Tan", "given": "Benjamin"},
+      {"family": "Dolan-Gavitt", "given": "Brendan"},
+      {"family": "Karri", "given": "Ramesh"}
+    ],
+    "title": "Asleep at the keyboard? Assessing the security of GitHub Copilot's code contributions",
+    "container-title": "Proceedings of the 43rd IEEE Symposium on Security and Privacy (S&P 2022)",
+    "page": "754-768",
+    "issued": {"date-parts": [[2022]]},
+    "URL": "https://arxiv.org/abs/2108.09293"
+  },
+  {
+    "id": "perry2023insecure",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Perry", "given": "Neil"},
+      {"family": "Srivastava", "given": "Megha"},
+      {"family": "Kumar", "given": "Deepak"},
+      {"family": "Boneh", "given": "Dan"}
+    ],
+    "title": "Do users write more insecure code with AI assistants?",
+    "container-title": "Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security (CCS '23)",
+    "page": "2785-2799",
+    "issued": {"date-parts": [[2023]]},
+    "DOI": "10.1145/3576915.3623157"
+  },
+  {
+    "id": "sapkota2025vibeagentic",
+    "type": "article",
+    "author": [
+      {"family": "Sapkota", "given": "Ranjan"},
+      {"family": "Roumeliotis", "given": "Konstantinos I."},
+      {"family": "Karkee", "given": "Manoj"}
+    ],
+    "title": "Vibe coding vs. agentic coding: Fundamentals and practical implications of agentic AI",
+    "issued": {"date-parts": [[2025, 5]]},
+    "DOI": "10.48550/arXiv.2505.19443",
+    "URL": "https://arxiv.org/abs/2505.19443"
+  },
+  {
+    "id": "sarkar2022whatisitlike",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Sarkar", "given": "Advait"},
+      {"family": "Gordon", "given": "Andrew D."},
+      {"family": "Negreanu", "given": "Carina"},
+      {"family": "Poelitz", "given": "Christian"},
+      {"family": "Srinivasa Ragavan", "given": "Sruti"},
+      {"family": "Zorn", "given": "Ben"}
+    ],
+    "title": "What is it like to program with artificial intelligence?",
+    "container-title": "Proceedings of the 33rd Annual Conference of the Psychology of Programming Interest Group (PPIG 2022)",
+    "issued": {"date-parts": [[2022]]},
+    "URL": "https://arxiv.org/abs/2208.06213"
+  },
+  {
+    "id": "scaffidi2005estimating",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Scaffidi", "given": "Christopher"},
+      {"family": "Shaw", "given": "Mary"},
+      {"family": "Myers", "given": "Brad A."}
+    ],
+    "title": "Estimating the numbers of end users and end user programmers",
+    "container-title": "Proceedings of the 2005 IEEE Symposium on Visual Languages and Human-Centric Computing (VL/HCC '05)",
+    "page": "207-214",
+    "issued": {"date-parts": [[2005]]},
+    "DOI": "10.1109/VLHCC.2005.34"
+  },
+  {
+    "id": "schon1983reflective",
+    "type": "book",
+    "author": [{"family": "Schön", "given": "Donald A."}],
+    "title": "The reflective practitioner: How professionals think in action",
+    "publisher": "Basic Books",
+    "publisher-place": "New York",
+    "issued": {"date-parts": [[1983]]},
+    "URL": "https://openlibrary.org/works/OL3466056W"
+  },
+  {
+    "id": "shukla2025degradation",
+    "type": "paper-conference",
+    "author": [
+      {"family": "Shukla", "given": "Shivani"},
+      {"family": "Joshi", "given": "Himanshu"},
+      {"family": "Syed", "given": "Romilla"}
+    ],
+    "title": "Security degradation in iterative AI code generation — a systematic analysis of the paradox",
+    "container-title": "Proceedings of the 2025 IEEE International Symposium on Technology and Society (ISTAS 2025)",
+    "issued": {"date-parts": [[2025]]},
+    "DOI": "10.48550/arXiv.2506.11022",
+    "URL": "https://arxiv.org/abs/2506.11022"
+  },
+  {
+    "id": "uscopyright2025part2",
+    "type": "report",
+    "author": [{"literal": "U.S. Copyright Office"}],
+    "title": "Copyright and artificial intelligence, part 2: Copyrightability",
+    "publisher": "U.S. Copyright Office",
+    "issued": {"date-parts": [[2025]]},
+    "URL": "https://www.copyright.gov/ai/"
+  },
+  {
+    "id": "weinberg1971psychology",
+    "type": "book",
+    "author": [{"family": "Weinberg", "given": "Gerald M."}],
+    "title": "The psychology of computer programming",
+    "publisher": "Van Nostrand Reinhold",
+    "publisher-place": "New York",
+    "issued": {"date-parts": [[1971]]},
+    "URL": "https://openlibrary.org/works/OL1958820W"
+  },
+  {
+    "id": "zhao2025vibesafe",
+    "type": "article",
+    "author": [
+      {"family": "Zhao", "given": "Songwen"},
+      {"family": "Wang", "given": "Danqing"},
+      {"family": "Zhang", "given": "Kexun"},
+      {"family": "Luo", "given": "Jiaxuan"},
+      {"family": "Li", "given": "Zhuo"},
+      {"family": "Li", "given": "Lei"}
+    ],
+    "title": "Is vibe coding safe? Benchmarking vulnerability of agent-generated code in real-world tasks",
+    "issued": {"date-parts": [[2025, 12]]},
+    "DOI": "10.48550/arXiv.2512.03262",
+    "URL": "https://arxiv.org/abs/2512.03262"
+  }
+]

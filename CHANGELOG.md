@@ -10,6 +10,16 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **abcd is citable, and its sources are recorded.** A root `CITATION.cff`
+  (CFF 1.2.0) powers GitHub's "Cite this repository" box, and the References &
+  sources section of `ACKNOWLEDGEMENTS.md` records the academic literature the
+  design record draws on — a curated, alphabetically ordered reference list of
+  primary sources, with canonical CSL-JSON metadata in
+  `.abcd/development/research/references.csl.json` and a documented on-demand
+  `.bib` export for LaTeX toolchains.
+
 ## [0.5.0] - 2026-08-16
 
 ### Breaking
