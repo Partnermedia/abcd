@@ -116,3 +116,26 @@ Per hand-run, append:
   a hash-only scheme ship. Filed while the peer was concurrently minting iss-N
   in a parallel session: a live instance of the collision class the intent
   addresses (no actual collision — different family).
+
+### 2026-08-16 — itd-115 managed-repo merge policy (hand-run at capture)
+
+- **Proposal:** abcd-managed repos merge PRs without the out-of-sync churn —
+  merge queue by default, protocol-level auto-update fallback, strict preserved.
+- **Initial routing:** four parts — the merge policy capability (intent
+  itd-115); the adopt-merge-queue SOTA + merge_group CI trigger + rung-1 fallback
+  (SOTA path-1 declaration | inside the intent); the "strict is the duplicate-id
+  gate, never relaxed until ids are collision-proof" trust rule (already recorded
+  as iss-172's invariant — RESPECT, do not re-declare); the ruleset/CI-trigger
+  wiring (plumbing | itd-92/itd-106 onboarding surface).
+- **Confirmed routing:** adopted. The trust-rule part is the interesting one — it
+  is ALREADY a recorded invariant (iss-172), so the decomposition's job was to
+  route the intent to RESPECT an existing record rather than file a new one. The
+  first-pass design (relax strict) would have reversed that invariant; reading
+  iss-172 before filing caught it and the design was corrected — the value of the
+  decomposition's interdependency pass.
+- **Verdict:** FILE-AS-IS with flags. NO reversal flag (the corrected design
+  respects iss-172; the rejected relax-strict alternative would have reversed it).
+  Initial verdict survived after the correction.
+- **Notes:** typed links refines iss-172 / itd-92 / itd-106 / itd-114 (itd-114
+  unlocks the future relax-strict option). A clean case of the interdependency
+  pass preventing a record-contradicting design.
