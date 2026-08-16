@@ -203,6 +203,30 @@ Per hand-run, append:
   human's edit was toward *less* restriction than proposed. Filed as
   itd-121/spc-26.
 
+### 2026-08-16 — itd-122 sub-verb tables (hand-run at planning, process plan intent 4)
+
+- **Proposal:** sub-verb tables in every `04-surfaces/` file plus an extended
+  `surface_coverage` checking each row against registered sub-commands both
+  ways (the coherence keystone of the process plan; adr-40 decision 6).
+- **Initial routing:** five parts — the tables + extended check (capability |
+  this intent); the population pass (same change, per adr-40's consequence);
+  the four-bucket vocabulary (already adr-40 — cite); the bucket-enum
+  registration in 04-naming.md (rides the sweep, VR001); the no-`partial`
+  ruling (recorded in draft prose). Typed link: `refines` iss-246. No
+  reversal flags — implements a recorded decision.
+- **Confirmed routing:** adopted unchanged. Rulings at the walk/grill:
+  exemptions are explicit config like `bare_command` (host-delegated
+  surfaces, operator-internal verbs); three arguable bucketings pre-ruled
+  binding (identity = audit, launch changelog guardrail = gate, guard check
+  = gate) so the unattended build never faces the ambiguity STOP on a known
+  case.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** the grill's value was schedule-shaped: pre-ruling the arguable
+  buckets moves a predictable overnight STOP into the human session. The
+  committed `surface.json` snapshot dissolved the expected layering problem
+  (core/lint never imports the cobra tree). Filed as itd-122/spc-27.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
