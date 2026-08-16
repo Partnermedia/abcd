@@ -182,6 +182,27 @@ Per hand-run, append:
   grill surfaced and the maintainer scoped out rather than routed. Filed as
   itd-120/spc-25.
 
+### 2026-08-16 — itd-121 record-id dispatch (hand-run at planning, process plan intent 3)
+
+- **Proposal:** `abcd <id>` — dispatch on a record id, report what it is and
+  the next move (the third walkability intent of the process-coherence plan).
+- **Initial routing:** four parts — the dispatch capability (capability |
+  this intent); the next-move mapping (spec detail | spec body, one Go
+  table); the bare-vs-id mental model (already recorded in the plan — cite);
+  docs (root surface page + 04-surfaces | ride the sweep). Duplicate check
+  vs itd-86 (cold reading) and itd-112 (banner): negative. No reversal
+  flags; SD001-safe by construction.
+- **Confirmed routing:** adopted unchanged. Rulings at the walk: `adr-N`
+  joins the dispatch read-only (a scope widening the proposal had left out);
+  the next-move mapping gains an anti-drift test asserting every recommended
+  verb resolves in the cobra tree.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived.
+- **Notes:** the maintainer widened scope (adr-N) where the proposal had
+  narrowed to the plan's three families — the second time this session the
+  human's edit was toward *less* restriction than proposed. Filed as
+  itd-121/spc-26.
+
 ### 2026-08-16 — itd-116 GitHub-issue adoption into the ledger (hand-run at capture)
 
 - **Proposal:** a verb that selects validated GitHub issues (the bughunt's
