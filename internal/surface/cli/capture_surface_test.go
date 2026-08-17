@@ -224,3 +224,41 @@ func TestDocsLintUnreadableConfigNoPathLeak(t *testing.T) {
 		t.Fatalf("--json docs lint error leaked the absolute repo path %q:\n%s", repo, msg)
 	}
 }
+
+// TestCapturePromoteJSONContract is the spc-24 surface AC: `capture promote
+// <iss-N> --json` reports the issue id, the minted intent id, and both
+// repo-relative paths; the minted draft and the stamped issue exist on disk.
+func TestCapturePromoteJSONContract(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	runCLI(t, "capture", "the parser eats trailing newlines", "--json")
+
+	out := runCLI(t, "capture", "promote", "iss-1", "--json")
+	var r struct {
+		IssueID    string `json:"issue_id"`
+		IssuePath  string `json:"issue_path"`
+		IntentID   string `json:"intent_id"`
+		IntentPath string `json:"intent_path"`
+		Linked     bool   `json:"linked"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("promote output not JSON: %v\n%s", err, out)
+	}
+	if r.IssueID != "iss-1" || r.IntentID != "itd-1" || r.Linked {
+		t.Fatalf("unexpected promote result: %+v", r)
+	}
+	for _, p := range []string{r.IssuePath, r.IntentPath} {
+		if p == "" || filepath.IsAbs(p) {
+			t.Fatalf("promote paths must be repo-relative and non-empty: %+v", r)
+		}
+		if _, err := os.Stat(filepath.Join(repo, p)); err != nil {
+			t.Fatalf("promote-reported path %s missing: %v", p, err)
+		}
+	}
+
+	// Second promote refuses (exit non-zero) and names the existing intent.
+	if _, err := runCLIErr(t, "capture", "promote", "iss-1"); err == nil || !strings.Contains(err.Error(), "itd-1") {
+		t.Fatalf("second promote must refuse naming itd-1, got: %v", err)
+	}
+}
