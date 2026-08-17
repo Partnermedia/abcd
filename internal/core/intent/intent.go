@@ -75,6 +75,9 @@ type Intent struct {
 	SpecID string `json:"spec_id"` // spc-N, the derived link (may be null)
 	Bucket string `json:"bucket"`  // lifecycle directory (directory-as-truth)
 	Path   string `json:"path"`    // repo-relative markdown path
+	// PromotedFrom is the iss-N this intent graduated from (spc-24's two-sided
+	// promote edge). Parsed leniently: absent on every non-promoted record.
+	PromotedFrom string `json:"promoted_from,omitempty"`
 }
 
 // Corpus is the in-memory set of intent records discovered across every bucket.

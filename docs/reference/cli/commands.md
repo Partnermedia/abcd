@@ -170,6 +170,18 @@ List issues by state (one of --open/--resolved/--wontfix/--all required)
       --wontfix    issues currently in wontfix/
 ```
 
+#### `abcd capture promote`
+
+Graduate an issue into an intent draft (mints + stamps promoted_to)
+
+**Usage:** `abcd capture promote <iss-N> [flags]`
+
+**Flags:**
+
+```
+      --intent string   stamp-only mode: link this existing itd-N instead of minting a draft
+```
+
 #### `abcd capture resolve`
 
 Mark an open issue resolved (open/ -> resolved/)

@@ -70,12 +70,13 @@ func loadBucket(repoRoot, bucket string) ([]Intent, error) {
 func parseIntent(relPath, content, bucket string) (Intent, error) {
 	fields := frontmatter.Fields(strings.Split(content, "\n"))
 	it := Intent{
-		ID:     fields["id"].Value,
-		Slug:   fields["slug"].Value,
-		Kind:   fields["kind"].Value,
-		SpecID: fields["spec_id"].Value,
-		Bucket: bucket,
-		Path:   relPath,
+		ID:           fields["id"].Value,
+		Slug:         fields["slug"].Value,
+		Kind:         fields["kind"].Value,
+		SpecID:       fields["spec_id"].Value,
+		Bucket:       bucket,
+		Path:         relPath,
+		PromotedFrom: fields["promoted_from"].Value,
 	}
 	if err := Validate(it); err != nil {
 		return Intent{}, fmt.Errorf("intent: malformed %s: %w", relPath, err)

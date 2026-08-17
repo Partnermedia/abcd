@@ -305,6 +305,19 @@
       ]
     },
     {
+      "path": "abcd capture promote",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "intent",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd capture resolve",
       "hidden": false,
       "flags": [

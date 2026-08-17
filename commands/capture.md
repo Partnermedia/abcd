@@ -1,7 +1,7 @@
 ---
 name: capture
-description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> | wontfix <iss-N> <reason>"
+description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/promote/resolve/wontfix act on the ledger.
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> | wontfix <iss-N> <reason>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -80,13 +80,29 @@ default; an absent or misspelled impact is refused rather than guessed, so the
 record always satisfies the `issue_impact_valid` gate. `wontfix` takes no impact
 (a non-action ships nothing).
 
-Promoting an issue to an intent (`/abcd:capture promote <iss-N>`) is
-skill-orchestrated, not a binary sub-verb. It hands the issue body to the intent
-create path — `abcd intent "<issue text>"` — which files a new draft under
-`.abcd/development/intents/drafts/` seeded from that text. It does **not** yet
-write the reciprocal `related_intents` back-link onto the `iss-N` record: no
-engine verb writes that edge today, so the back-link is done by hand or deferred
-until a capture back-link verb lands (tracked in the issue-capture spec).
+## Promote an issue into an intent
+
+When a one-line issue turns out to be a capability, graduate it without
+retyping:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture promote <iss-N> --json
+```
+
+One invocation mints a new intent draft under
+`.abcd/development/intents/drafts/` — slug reused from the issue, body carrying
+a by-id pointer ("Graduated from `iss-N`"), never a copy of the issue body —
+and stamps the issue's `promoted_to` with the minted `itd-N`. The draft's
+frontmatter records `promoted_from: iss-N`, so the edge is two-sided. The issue
+keeps its status folder: promotion is orthogonal to fix-status and is not
+resolution. An issue already carrying `promoted_to` is refused with the
+existing `itd-N`.
+
+`--intent <itd-N>` is the stamp-only mode: it links an *existing* draft instead
+of minting — the repair path when a stamp failed after the mint (the error
+names the orphan draft and this exact remedy), and the path for "I already
+filed the intent by hand; link them". Report the `issue_id`, the minted (or
+linked) `intent_id`, and both paths from the JSON.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

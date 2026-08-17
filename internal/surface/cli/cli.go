@@ -1840,8 +1840,8 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 
 // newCaptureCommand builds the `capture` sub-tree — the write side of the issue
 // ledger. Bare `capture` renders read-only status; a free-text positional
-// appends an issue; list/resolve/wontfix are thin consumers of capture core.
-// (promote is skill-orchestrated, never a CLI sub-verb — brief 04-surfaces/06.)
+// appends an issue; list/resolve/wontfix/promote are thin consumers of capture
+// core.
 func newCaptureCommand(asJSON *bool) *cobra.Command {
 	var severity, category, source, slug, foundDuring, foundAt, blockedBy string
 
@@ -1988,6 +1988,38 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// requirement is enforced semantically in the core, not by a usage annotation.
 	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
 	captureCmd.AddCommand(resolveCmd)
+
+	// promote — graduate an issue into an intent draft (spc-24, step 2 of the
+	// record walk). Default mode mints a draft and stamps the issue's
+	// promoted_to in one invocation; --intent is the stamp-only repair/link
+	// mode. The issue keeps its status folder — promotion is not resolution.
+	var promoteIntent string
+	promoteCmd := &cobra.Command{
+		Use:   "promote <iss-N>",
+		Short: "Graduate an issue into an intent draft (mints + stamps promoted_to)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := capture.Promote(capture.PromoteRequest{RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent})
+			if err != nil {
+				return err
+			}
+			emitMintWarning(cmd, res.MintWarning)
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				verb := "minted"
+				if res.Linked {
+					verb = "linked"
+				}
+				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
+					res.IssueID, res.IssueStatus, res.IssuePath, verb, res.IntentID, res.IntentPath)
+			})
+		},
+	}
+	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
+	captureCmd.AddCommand(promoteCmd)
 
 	// wontfix — open -> wontfix with a reason.
 	captureCmd.AddCommand(&cobra.Command{
