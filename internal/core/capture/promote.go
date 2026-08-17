@@ -85,18 +85,16 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	if linked {
 		// Stamp-only mode: the target intent must exist in the store (any bucket)
 		// BEFORE anything is written — an unknown itd-N is a structural fault.
+		// Existence is probed by filename through the shared record-id probe
+		// (recordref.go), the same probe resolve's provenance flags use.
 		if !reItdID.MatchString(req.LinkIntent) {
 			return PromoteResult{}, fmt.Errorf("invalid itd-N identifier: %q", req.LinkIntent)
 		}
-		corpus, err := intent.Load(repoRoot)
-		if err != nil {
-			return PromoteResult{}, err
-		}
-		it, ok := corpus.Lookup(req.LinkIntent)
+		rel, ok := findRecordFile(repoRoot, intentStoreRelDirs(), req.LinkIntent)
 		if !ok {
 			return PromoteResult{}, fmt.Errorf("%s not found in the intent store; nothing stamped", req.LinkIntent)
 		}
-		itdID, intentPath = it.ID, it.Path
+		itdID, intentPath = req.LinkIntent, rel
 	} else {
 		// Mint mode: reuse the issue's slug and seed a draft that POINTS at the
 		// issue by id — never a copy of its body (the issue record stays the

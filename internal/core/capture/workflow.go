@@ -159,13 +159,77 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 // validated against the shared changelog enum up front (empty or invalid is
 // refused, never defaulted) and stamped bare alongside the note — the tool's own
 // resolve path can never mint a record its own blocker rejects.
+//
+// The optional ByIntent/BySpec/ByCommit members land as the structured
+// resolved_by object (spc-25) in the same atomic transition. Ids are validated
+// for existence in their record store before anything is written; the sha is
+// shape-checked only (its home may be the remote, and shallow or rebased
+// states must not refuse a legitimate resolution). No members → no
+// resolved_by key at all: provenance is optional, never defaulted.
 func Resolve(req ResolveRequest) (TransitionResult, error) {
 	impact, err := changelog.ParseImpact(req.Impact)
 	if err != nil {
 		return TransitionResult{}, fmt.Errorf("resolve: %w", err)
 	}
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
-		[]kv{{"impact", rawScalar(string(impact))}}, StateResolved)
+	rb, err := resolveProvenance(req)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	extras := []kv{{"impact", rawScalar(string(impact))}}
+	if rb != nil {
+		var members nested
+		if rb.Intent != "" {
+			members = append(members, kv{"intent", rb.Intent})
+		}
+		if rb.Spec != "" {
+			members = append(members, kv{"spec", rb.Spec})
+		}
+		if rb.Commit != "" {
+			members = append(members, kv{"commit", rb.Commit})
+		}
+		extras = append(extras, kv{"resolved_by", members})
+	}
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
+		extras, StateResolved)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	res.ResolvedBy = rb
+	return res, nil
+}
+
+// resolveProvenance validates the resolved_by members before any write: id
+// shape and store existence for --intent/--spec (via the shared findRecordFile
+// probe promote's link mode also uses), shape only for --commit. Returns nil
+// when no member was supplied.
+func resolveProvenance(req ResolveRequest) (*ResolvedBy, error) {
+	if req.ByIntent == "" && req.BySpec == "" && req.ByCommit == "" {
+		return nil, nil
+	}
+	repoRoot, _, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	if err != nil {
+		return nil, err
+	}
+	if req.ByIntent != "" {
+		if !reItdID.MatchString(req.ByIntent) {
+			return nil, fmt.Errorf("resolve: --intent %q does not match ^itd-[0-9]+$; nothing written", req.ByIntent)
+		}
+		if _, ok := findRecordFile(repoRoot, intentStoreRelDirs(), req.ByIntent); !ok {
+			return nil, fmt.Errorf("resolve: --intent %s not found in the intent store; nothing written", req.ByIntent)
+		}
+	}
+	if req.BySpec != "" {
+		if !reSpcID.MatchString(req.BySpec) {
+			return nil, fmt.Errorf("resolve: --spec %q does not match ^spc-[0-9]+$; nothing written", req.BySpec)
+		}
+		if _, ok := findRecordFile(repoRoot, specStoreRelDirs(), req.BySpec); !ok {
+			return nil, fmt.Errorf("resolve: --spec %s not found in the spec store; nothing written", req.BySpec)
+		}
+	}
+	if req.ByCommit != "" && !reCommitSha.MatchString(req.ByCommit) {
+		return nil, fmt.Errorf("resolve: --commit %q is not a 7-40 char lowercase hex sha; nothing written", req.ByCommit)
+	}
+	return &ResolvedBy{Intent: req.ByIntent, Spec: req.BySpec, Commit: req.ByCommit}, nil
 }
 
 // Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
@@ -216,7 +280,11 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 			return err
 		}
 		for _, f := range extra {
-			newContent, err = setScalarField(newContent, f.key, f.val)
+			if members, isNested := f.val.(nested); isNested {
+				newContent, err = setMapField(newContent, f.key, members)
+			} else {
+				newContent, err = setScalarField(newContent, f.key, f.val)
+			}
 			if err != nil {
 				return err
 			}
