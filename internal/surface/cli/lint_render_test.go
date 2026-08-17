@@ -26,7 +26,7 @@ func TestRenderAuditHumanSanitizesUntrustedFields(t *testing.T) {
 		Blockers: 1,
 	}
 	var buf bytes.Buffer
-	renderAuditHuman(&buf, res)
+	renderLintHuman(&buf, res)
 	out := buf.String()
 	for _, r := range out {
 		if r == 0x1b || (r >= 0x80 && r <= 0x9f) || (r >= 0x202A && r <= 0x202E) {

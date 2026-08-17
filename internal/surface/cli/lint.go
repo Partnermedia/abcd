@@ -62,7 +62,7 @@ func newLintCommand(asJSON *bool) *cobra.Command {
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
 			} else {
-				renderAuditHuman(cmd.OutOrStdout(), result)
+				renderLintHuman(cmd.OutOrStdout(), result)
 			}
 
 			// Tri-state exit: the output is already rendered, so a non-zero code
@@ -89,11 +89,11 @@ func severityGlyph(sev repolint.Severity) string {
 	}
 }
 
-// renderAuditHuman writes the grouped, doctor-style report: a line per finding
+// renderLintHuman writes the grouped, doctor-style report: a line per finding
 // with a severity glyph, the rule id, the citation, the message, and an indented
 // fix; skipped (not-applicable) rules and a summary tail. A clean repo gets a
 // single green line.
-func renderAuditHuman(w io.Writer, res repolint.Result) {
+func renderLintHuman(w io.Writer, res repolint.Result) {
 	if len(res.Findings) == 0 {
 		fmt.Fprintln(w, "abcd lint — ✓ conforms to the working conventions")
 	}

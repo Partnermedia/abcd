@@ -52,7 +52,7 @@ func runGitT(t *testing.T, repo string, args ...string) {
 }
 
 // A conforming repo: `abcd lint` exits 0, and `--json` emits {"findings": []}.
-func TestAuditConformingExitsZero(t *testing.T) {
+func TestLintConformingExitsZero(t *testing.T) {
 	repo := lintRepo(t, true)
 	t.Chdir(repo)
 
@@ -77,7 +77,7 @@ func TestAuditConformingExitsZero(t *testing.T) {
 
 // A repo missing the committed work tier: exit 2, and the JSON carries the
 // three-tier-layout rule id at error severity.
-func TestAuditMissingWorkTierExitsTwo(t *testing.T) {
+func TestLintMissingWorkTierExitsTwo(t *testing.T) {
 	repo := lintRepo(t, false) // no .abcd/work/DECISIONS.md, so no work/ tier
 	t.Chdir(repo)
 
@@ -111,7 +111,7 @@ func TestAuditMissingWorkTierExitsTwo(t *testing.T) {
 // so a mistyped invocation landing on 1 would let a CI gate record a clean-ish
 // pass for a lint that never ran (B13). These fail before RunE, so they need no
 // repo fixture.
-func TestAuditUsageErrorsExitTwo(t *testing.T) {
+func TestLintUsageErrorsExitTwo(t *testing.T) {
 	cases := [][]string{
 		{"lint", "unexpected-arg"}, // stray positional under cobra.NoArgs
 		{"lint", "--nosuchflag"},   // unknown flag
@@ -129,7 +129,7 @@ func TestAuditUsageErrorsExitTwo(t *testing.T) {
 
 // `abcd lint --root <missing>` must report a usage error, not fabricate
 // convention violations against a directory that is not there (B41).
-func TestAuditNonexistentRootIsUsageError(t *testing.T) {
+func TestLintNonexistentRootIsUsageError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "gone")
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"lint", "--root", missing}, &stdout, &stderr)
@@ -146,7 +146,7 @@ func TestAuditNonexistentRootIsUsageError(t *testing.T) {
 
 // The human render (no --json) is grouped and readable, and stdout stays free of
 // JSON braces.
-func TestAuditHumanRender(t *testing.T) {
+func TestLintHumanRender(t *testing.T) {
 	repo := lintRepo(t, false)
 	t.Chdir(repo)
 

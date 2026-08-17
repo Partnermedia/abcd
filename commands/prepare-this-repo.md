@@ -96,7 +96,7 @@ Then supplement with the judgement the binary does not make:
 - **Privacy beyond absolute paths:** real hostnames/usernames/emails, private
   repo names, or `private-names.txt` matches the `privacy-hygiene` rule's v1
   scope does not yet cover. A finding on a deliberately illustrative line can be
-  waived with `abcd-audit:allow` on that line.
+  waived with `abcd-lint:allow` on that line (the earlier `abcd-audit:allow` spelling is honoured too).
 
 Write the report — the `abcd lint` findings plus these supplements — to the
 target's `.abcd/.work.local/scratch/` (create the directory via

@@ -25,7 +25,8 @@ func MaxScanBytesForTest() int { return maxScanBytes }
 // machine: absolute local home paths (/Users/<name>, /home/<name>, C:\Users\)
 // and network identifiers outside the reserved documentation ranges (addresses,
 // LAN hostnames, device names). A line carrying the waiver escape
-// `abcd-audit:allow` is exempt, so a deliberately illustrative value can be kept.
+// `abcd-lint:allow` (or the legacy `abcd-audit:allow`) is exempt, so a
+// deliberately illustrative value can be kept.
 //
 // The network half is an allowlist inversion and it does NOT live here: the
 // patterns are the scanner's canonical set (internal/adapter/scanner/network.go),
@@ -34,14 +35,17 @@ func MaxScanBytesForTest() int { return maxScanBytes }
 // allowlist and names file and are deferred to a later phase (recorded in the plan).
 type privacyHygiene struct{}
 
-// auditWaiver is the language-agnostic line-scoped escape. Unlike the docs-lint
-// HTML-comment form it works in source files too, where `<!-- -->` is not valid.
-// lintWaiver is the current waiver token; auditWaiver is the pre-spc-29
-// spelling, honoured forever — the token lives in committed content (this
-// repo's own sources and any managed repo's), so retiring it would silently
-// re-flag every existing deliberately-illustrative line.
+// lintWaiver is the current language-agnostic line-scoped escape. Unlike the
+// docs-lint HTML-comment form it works in source files too, where `<!-- -->` is
+// not valid. It is the spelling the rule's own Fix hint teaches, so the corpus
+// converges on one token.
 const lintWaiver = "abcd-lint:allow"
 
+// auditWaiver is the pre-spc-29 spelling, honoured forever: the token lives in
+// committed content (this repo's own sources and any managed repo's), so
+// retiring it would silently re-flag every existing deliberately-illustrative
+// line. Retiring it would fail closed, which is why permanence is a
+// compatibility call rather than a security one.
 const auditWaiver = "abcd-audit:allow"
 
 var (
@@ -58,7 +62,7 @@ func (privacyHygiene) Meta() RuleMeta {
 		ID:       "privacy-hygiene",
 		Severity: SeverityError,
 		Fix: "replace the absolute local path with a repo-relative one, and any network identifier with a reserved documentation value " +
-			"(RFC 5737/3849/2606/7042, or a persona-derived device name); or add `abcd-audit:allow` on the line if it is deliberately illustrative",
+			"(RFC 5737/3849/2606/7042, or a persona-derived device name); or add `abcd-lint:allow` on the line if it is deliberately illustrative",
 		PolicyInfo: "an absolute local path or a real network identifier in a committed file leaks a username, a machine, or a network layout; " +
 			"committed content uses repo-relative paths and reserved documentation identifiers",
 	}
@@ -76,7 +80,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	// so a hostile working tree cannot redirect the scan at a file outside the
 	// audited repo. If the root itself cannot be opened while git has reported
 	// tracked files, the scan cannot run over content that exists — surface the
-	// error rather than reporting a clean pass (audit.go:94: "a check that cannot
+	// error rather than reporting a clean pass (repolint.go:94: "a check that cannot
 	// run must not be silently reported as passing").
 	root, err := os.OpenRoot(ctx.RepoRoot)
 	if err != nil {
@@ -148,17 +152,17 @@ func privacyLeak(line string, networkPatterns []scanner.Pattern) (string, Severi
 			if p.SkipAt != nil && p.SkipAt(line, loc[0], loc[1]) {
 				continue
 			}
-			return "committed file contains a " + p.Label, auditSeverity(p.Severity), true
+			return "committed file contains a " + p.Label, lintSeverity(p.Severity), true
 		}
 	}
 	return "", SeverityError, false
 }
 
-// auditSeverity maps a scanner severity onto the audit surface's two levels. A
+// lintSeverity maps a scanner severity onto the lint surface's two levels. A
 // scanner hard_fail blocks; anything softer is advisory. An unknown value maps
 // to the blocking level, so a new pattern can never be quieter than intended by
 // accident.
-func auditSeverity(s scanner.Severity) Severity {
+func lintSeverity(s scanner.Severity) Severity {
 	if s == scanner.SeverityWarn || s == scanner.SeverityInfo {
 		return SeverityWarn
 	}
