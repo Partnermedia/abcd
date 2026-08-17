@@ -1168,3 +1168,42 @@ parallel-agent merge contention bites.
   still names them design targets and the armed check stops any live claim.
   Rejected: a `partial` surface status (ruled out at planning), and staged
   rows with guessed buckets.
+
+- 2026-08-17 — README bucket-vocabulary alignment (#289), made unattended
+  against adr-40's own table rather than by taste: grading delivered work
+  against acceptance criteria is an *audit* (reality vs a recorded
+  commitment), so four "review" call sites move to audit wording, agreeing
+  with the one call site that already said "intent auditor". Two further
+  calls inside the same passage: (1) "a privacy review" becomes "a
+  privacy-hygiene lint" — a cross-cutting rule every feature must satisfy is
+  adr-40's definition of a lint, and abcd's own `privacy-hygiene` emits a
+  rule id and an exit code, not SHIP/NEEDS_WORK, so the example contradicted
+  the sentence defining it; (2) "owned by the AI-engineering team" becomes
+  "run by the AI-engineering team, read by you" — the role table gives the
+  product thinker the audit bucket, so *owned by* pointed the reader at the
+  wrong end of the handover and made the one bucket they do own read as
+  someone else's property. Also corrected a factual gap: cross-cutting rules
+  do not merely "go straight into the brief", they have a record home in
+  `intents/disciplines/` (`kind: discipline`; itd-1/5/37/79/81/84 live there
+  today). Rejected: leaving the prose loose on the grounds that user-facing
+  writing need not track the code's vocabulary — adr-40 closed the bucket
+  list precisely because an autonomous run given a criterion will interpret
+  it, and the README is the first thing both a contributor and an agent read.
+
+- 2026-08-17 — Command parents owe TWO guarantees, not one (iss-266, #293).
+  A parent refuses a mistyped sub-verb only if it is Runnable AND declares an
+  Args validator; missing either exits 0 silently (no RunE ⇒ cobra returns
+  flag.ErrHelp before ValidateArgs; Args nil ⇒ legacyArgs falls through to
+  ArbitraryArgs). The house convention is therefore `RunE: helpRunE` plus an
+  explicit validator on every parent, asserted structurally over the live
+  command tree rather than a hand-kept list. `capture` and `intent` are a
+  named exemption — their positional is free text, guarded by their own
+  suspected-typo check — and the exemption list is itself tested against
+  reality so a stale name cannot quietly drop a parent from the sweep.
+  Consequence accepted and filed as iss-267: exit 2 is the *blocking* status
+  on the hook plane, so hook sub-verb names are now a compatibility contract
+  and a future rename must carry an alias rather than rely on the old
+  silent-exit-0 cushion. Rejected: fixing only the parents named in the issue
+  (the same hole would return with the next parent added), and asserting the
+  behaviour with a hand-maintained list of parents (it had already drifted —
+  `identity` and `intent audit` were absent yet not exempt).
