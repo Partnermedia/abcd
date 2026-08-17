@@ -63,7 +63,19 @@ NONE_RE='^Assisted-by: [Nn]one$'
 # the very commit that introduced it, and would reject the CHANGELOG entry, the
 # issue records and the docs that describe what is banned. A gate that cannot be
 # written about is a gate people route around.
-GENERATED_RE='^[[:space:]]*(🤖[[:space:]]*)?[Gg]enerated (with|by) \['
+#
+# The optional [_*]{1,2} admits the MARKDOWN-EMPHASIS wrapping the footer is
+# actually appended in — an italic or bold run around the whole line. The first
+# cut matched leading whitespace only, so the precise form that motivated this
+# gate went straight through the body check; it was found live on two pull
+# requests whose failing leg happened to be something else (iss-262).
+#
+# The marker must be ATTACHED to the word, with no space between, because that is
+# how markdown itself reads it: `*text*` is emphasis, `* text` is a list item. A
+# bullet describing the banned footer is documentation — the same writable-about
+# case the anchor already protects for `- Generated with …` — so requiring
+# attachment is what keeps the widening from swallowing list items.
+GENERATED_RE='^[[:space:]]*([_*]{1,2})?(🤖[[:space:]]*)?[Gg]enerated (with|by) \['
 
 # AI co-authorship, matched on the TRAILER KEY rather than on a vendor name: the
 # objection AGENTS.md states — an authorship the tool does not hold, and an
