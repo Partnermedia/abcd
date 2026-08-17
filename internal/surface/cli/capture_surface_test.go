@@ -262,3 +262,46 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 		t.Fatalf("second promote must refuse naming itd-1, got: %v", err)
 	}
 }
+
+// TestCaptureResolveProvenanceJSON is the spc-25 surface AC: resolve with
+// provenance flags reports the written resolved_by members in --json, and an
+// unknown id refuses without writing.
+func TestCaptureResolveProvenanceJSON(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	runCLI(t, "capture", "a provenance-carrying issue", "--json")
+	intentRel := ".abcd/development/intents/shipped/itd-4-the-fixer.md"
+	if err := os.MkdirAll(filepath.Join(repo, filepath.Dir(intentRel)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, intentRel), []byte("---\nid: itd-4\n---\n\nx\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unknown intent refuses; the issue stays open.
+	if _, err := runCLIErr(t, "capture", "resolve", "iss-1", "nope", "--impact", "fix", "--intent", "itd-99"); err == nil {
+		t.Fatalf("resolve with an unknown --intent must refuse")
+	}
+
+	out := runCLI(t, "capture", "resolve", "iss-1", "fixed by the fixer", "--impact", "fix",
+		"--intent", "itd-4", "--commit", "abcdef0123", "--json")
+	var r struct {
+		ID         string `json:"id"`
+		ToStatus   string `json:"to_status"`
+		ResolvedBy *struct {
+			Intent string `json:"intent"`
+			Spec   string `json:"spec"`
+			Commit string `json:"commit"`
+		} `json:"resolved_by"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("resolve output not JSON: %v\n%s", err, out)
+	}
+	if r.ID != "iss-1" || r.ToStatus != "resolved" {
+		t.Fatalf("unexpected resolve result: %+v", r)
+	}
+	if r.ResolvedBy == nil || r.ResolvedBy.Intent != "itd-4" || r.ResolvedBy.Commit != "abcdef0123" || r.ResolvedBy.Spec != "" {
+		t.Fatalf("resolved_by members wrong: %+v", r.ResolvedBy)
+	}
+}

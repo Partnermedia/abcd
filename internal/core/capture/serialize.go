@@ -187,6 +187,96 @@ func setScalarField(content, key string, value any) (string, error) {
 	return strings.Join(lines, ""), nil
 }
 
+// nested marks a kv whose value is an ordered one-level object: transition
+// routes it through setMapField instead of setScalarField.
+type nested []kv
+
+// setMapField inserts `key:` followed by an ordered, two-space-indented member
+// block inside content's frontmatter, just before the closing --- (the
+// deterministic nested-map writer beside setScalarField, spc-25). Members are
+// encoded via yamlScalar — quoted strings, control chars refused — so the
+// writer emits exactly the one-level object shape parseFrontmatterAndBody
+// reads back. A key already present at the top level is refused (fail closed:
+// replacing a nested block in place is not supported), as is an empty member
+// list.
+func setMapField(content, key string, members []kv) (string, error) {
+	if !reScalarKey.MatchString(key) {
+		return "", fmt.Errorf("%w: invalid key %q", ErrMalformedFrontmatter, key)
+	}
+	if len(members) == 0 {
+		return "", fmt.Errorf("%w: setMapField needs at least one member for %q", ErrMalformedFrontmatter, key)
+	}
+
+	lines := splitKeepEnds(content)
+	openIdx := -1
+	for i, ln := range lines {
+		stripped := strings.TrimRight(ln, "\r\n")
+		if stripped == "" {
+			continue
+		}
+		if stripped == "---" {
+			openIdx = i
+			break
+		}
+		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
+	}
+	if openIdx == -1 {
+		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
+	}
+	closeIdx := -1
+	for j := openIdx + 1; j < len(lines); j++ {
+		ln := lines[j]
+		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
+			continue
+		}
+		if strings.TrimRight(ln, "\r\n") == "---" {
+			closeIdx = j
+			break
+		}
+	}
+	if closeIdx == -1 {
+		return "", fmt.Errorf("%w: frontmatter not terminated", ErrMalformedFrontmatter)
+	}
+
+	// Refuse a duplicate top-level key rather than replace: the one caller
+	// (resolve) transitions from open/, where the key is never pre-set.
+	for k := openIdx + 1; k < closeIdx; k++ {
+		ln := lines[k]
+		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
+			continue
+		}
+		bodyLn := strings.TrimRight(ln, "\r\n")
+		if idx := strings.Index(bodyLn, ":"); idx >= 0 && strings.TrimSpace(bodyLn[:idx]) == key {
+			return "", fmt.Errorf("%w: key %q already present", ErrMalformedFrontmatter, key)
+		}
+	}
+
+	eol := "\n"
+	if strings.HasSuffix(lines[openIdx], "\r\n") {
+		eol = "\r\n"
+	}
+	block := []string{key + ":" + eol}
+	for _, m := range members {
+		if !reScalarKey.MatchString(m.key) {
+			return "", fmt.Errorf("%w: invalid nested key %q", ErrMalformedFrontmatter, m.key)
+		}
+		s, ok := m.val.(string)
+		if !ok {
+			return "", fmt.Errorf("%w: nested member %q must be a string", ErrMalformedFrontmatter, m.key)
+		}
+		enc, err := yamlScalar(s)
+		if err != nil {
+			return "", err
+		}
+		block = append(block, "  "+m.key+": "+enc+eol)
+	}
+	out := make([]string, 0, len(lines)+len(block))
+	out = append(out, lines[:closeIdx]...)
+	out = append(out, block...)
+	out = append(out, lines[closeIdx:]...)
+	return strings.Join(out, ""), nil
+}
+
 // splitKeepEnds splits s into lines preserving their trailing newline(s),
 // mirroring Python's str.splitlines(keepends=True) for \n and \r\n.
 func splitKeepEnds(s string) []string {

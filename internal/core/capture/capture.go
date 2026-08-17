@@ -142,6 +142,13 @@ type ResolveRequest struct {
 	// There is no default — an empty or invalid value is refused, never invented,
 	// so a resolved record the tool mints always satisfies its own blocker.
 	Impact string
+	// ByIntent / BySpec / ByCommit are the optional resolved_by provenance
+	// members (spc-25): the intent, spec, or commit that fixed the issue.
+	// Ids must exist in their record store (any bucket); the sha is
+	// shape-checked only. All optional — absent members are never defaulted.
+	ByIntent string // itd-N
+	BySpec   string // spc-N
+	ByCommit string // 7–40 hex chars
 }
 
 // WontfixRequest moves an open issue to wontfix/.
@@ -152,12 +159,15 @@ type WontfixRequest struct {
 	Reason     string
 }
 
-// TransitionResult is the outcome of a Resolve or Wontfix.
+// TransitionResult is the outcome of a Resolve or Wontfix. ResolvedBy echoes
+// the provenance members a Resolve wrote (nil on a flagless resolve and on
+// every Wontfix — a non-action points at nothing).
 type TransitionResult struct {
-	ID         string `json:"id"`
-	Path       string `json:"path"`
-	FromStatus State  `json:"from_status"`
-	ToStatus   State  `json:"to_status"`
+	ID         string      `json:"id"`
+	Path       string      `json:"path"`
+	FromStatus State       `json:"from_status"`
+	ToStatus   State       `json:"to_status"`
+	ResolvedBy *ResolvedBy `json:"resolved_by,omitempty"`
 }
 
 // ListRequest queries one state (or "all").
@@ -225,6 +235,8 @@ var (
 var (
 	reIssID       = regexp.MustCompile(`^iss-[0-9]+$`)
 	reItdID       = regexp.MustCompile(`^itd-[0-9]+$`)
+	reSpcID       = regexp.MustCompile(`^spc-[0-9]+$`)
+	reCommitSha   = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 	reFnID        = regexp.MustCompile(`^fn-[0-9]+$`)
 	reSlug        = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	reFilenameID  = regexp.MustCompile(`^(iss-[0-9]+)(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$`)

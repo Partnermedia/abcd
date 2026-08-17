@@ -12,6 +12,8 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A resolved issue points at what fixed it.** `abcd capture resolve` gains optional provenance flags — `--intent itd-N`, `--spec spc-N`, `--commit <sha>` — that write the structured `resolved_by` pointer the schema has modelled all along, in the same atomic transition as the resolution note and impact. Ids must exist in their record store; the sha is shape-checked only; an unknown or malformed value refuses the whole resolve and writes nothing. Without the flags the record stays byte-identical to a plain resolve. `wontfix` is untouched — a non-action points at nothing. (itd-120, spc-25; the `resolved_by` half of iss-245)
+
 - **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
 
 ## [0.5.1] - 2026-08-16

@@ -125,3 +125,39 @@ func TestSetScalarFieldReplaceAndInsert(t *testing.T) {
 		t.Fatalf("replace got:\n%q\nwant:\n%q", got2, want2)
 	}
 }
+
+// TestSetMapField: the deterministic nested-map writer renders the members in
+// the given order, quoted, indented; refuses a duplicate top-level key and an
+// unsafe value.
+func TestSetMapField(t *testing.T) {
+	base := "---\nid: \"iss-1\"\n---\n\nbody\n"
+	out, err := setMapField(base, "resolved_by", []kv{{"intent", "itd-7"}, {"commit", "abc1234"}})
+	if err != nil {
+		t.Fatalf("setMapField: %v", err)
+	}
+	want := "---\nid: \"iss-1\"\nresolved_by:\n  intent: \"itd-7\"\n  commit: \"abc1234\"\n---\n\nbody\n"
+	if out != want {
+		t.Fatalf("setMapField rendered:\n%q\nwant:\n%q", out, want)
+	}
+	// Round-trips through the parser as a nested object.
+	fm, _, err := parseFrontmatterAndBody(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := fm["resolved_by"].(map[string]any)
+	if !ok || m["intent"] != "itd-7" || m["commit"] != "abc1234" {
+		t.Fatalf("round-trip lost the object: %#v", fm["resolved_by"])
+	}
+	// Duplicate top-level key refused.
+	if _, err := setMapField(out, "resolved_by", []kv{{"spec", "spc-1"}}); err == nil {
+		t.Fatalf("setMapField must refuse a duplicate key")
+	}
+	// Control chars in a member value refused.
+	if _, err := setMapField(base, "resolved_by", []kv{{"intent", "evil\nkey: injected"}}); err == nil {
+		t.Fatalf("setMapField must refuse control chars")
+	}
+	// Non-scalar member refused.
+	if _, err := setMapField(base, "resolved_by", []kv{{"intent", []string{"a"}}}); err == nil {
+		t.Fatalf("setMapField must refuse non-scalar members")
+	}
+}
