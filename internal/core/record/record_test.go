@@ -299,3 +299,36 @@ func TestRecommendedVerbPathsClosed(t *testing.T) {
 		}
 	}
 }
+
+// TestDescribeADRRefusesHostileLeaves is the security regression for the
+// symlink/device DoS: a symlinked ADR entry (a hostile clone ships symlinks)
+// is never followed — the probe skips it and reports not-found instead of
+// hanging on an unbounded read — and an oversized regular ADR is refused by
+// the pre-read size cap.
+func TestDescribeADRRefusesHostileLeaves(t *testing.T) {
+	repo := t.TempDir()
+	dir := filepath.Join(repo, ".abcd/development/decisions/adrs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A symlink where the ADR should be: must be skipped, not followed.
+	if err := os.Symlink("/dev/zero", filepath.Join(dir, "0003-evil.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Describe(repo, "adr-3"); err == nil || !strings.Contains(err.Error(), "adr-3") {
+		t.Fatalf("a symlinked adr entry must be skipped (not-found), got: %v", err)
+	}
+
+	// An oversized regular file: the cap bounds the read; the id confirm then
+	// fails and the record reads as not-found rather than being swallowed.
+	big := make([]byte, maxRecordHeadBytes+2)
+	for i := range big {
+		big[i] = 'a'
+	}
+	if err := os.WriteFile(filepath.Join(dir, "0004-huge.md"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Describe(repo, "adr-4"); err == nil {
+		t.Fatalf("an oversized adr must not resolve")
+	}
+}

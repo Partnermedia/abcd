@@ -8,11 +8,13 @@ package record
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/REPPL/abcd-cli/internal/core/capture"
 	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
@@ -269,7 +271,10 @@ func describeADR(repoRoot, id string) (Description, error) {
 	}
 	prefix := fmt.Sprintf("%04d-", n)
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || filepath.Ext(e.Name()) != ".md" {
+		// Regular files only: a symlinked directory entry in a hostile clone
+		// must never reach the read (readRecordHead refuses it again with
+		// O_NOFOLLOW — two independent layers).
+		if !e.Type().IsRegular() || !strings.HasPrefix(e.Name(), prefix) || filepath.Ext(e.Name()) != ".md" {
 			continue
 		}
 		rel := filepath.Join(adrsRelDir, e.Name())
@@ -300,12 +305,28 @@ func describeADR(repoRoot, id string) (Description, error) {
 const maxRecordHeadBytes = 256 * 1024
 
 // readRecordHead reads a record file leniently: its frontmatter fields and its
-// first H1 as the title (fallback when the file is unreadable or has no H1).
-// Purely best-effort — dispatch renders what it can see.
+// first H1 as the title (fallback when the file is refused or has no H1).
+// Best-effort in what it renders, but never lenient at the trust boundary: it
+// opens with O_NOFOLLOW|O_NONBLOCK (a symlinked or FIFO/device leaf in a
+// hostile clone is refused, never followed or blocked on), validates the same
+// descriptor (regular file, size cap BEFORE the read), and bounds the read —
+// the guarded-read idiom of intent.readRepoFile and spec.readRepoFile, which
+// vet the intent/spec paths before this function ever sees them; the adr path
+// has no store of its own, so this is its only guard.
 func readRecordHead(absPath, fallbackTitle string) (map[string]frontmatter.Field, string) {
-	data, err := os.ReadFile(absPath)
+	none := map[string]frontmatter.Field{}
+	f, err := os.OpenFile(absPath, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return none, fallbackTitle
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxRecordHeadBytes {
+		return none, fallbackTitle
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxRecordHeadBytes+1))
 	if err != nil || len(data) > maxRecordHeadBytes {
-		return map[string]frontmatter.Field{}, fallbackTitle
+		return none, fallbackTitle
 	}
 	lines := strings.Split(string(data), "\n")
 	fields := frontmatter.Fields(lines)
