@@ -5,19 +5,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 )
 
 // TestRenderAuditHumanSanitizesUntrustedFields proves the human audit report
 // neutralises terminal-display attack characters in the repo-derived File,
-// Message, and Fix fields (`abcd audit` runs over any repo, so those are untrusted
+// Message, and Fix fields (`abcd lint` runs over any repo, so those are untrusted
 // terminal output). A raw ESC/CSI/bidi rune in a finding could recolour, move the
 // cursor, or visually reorder the report; none may reach the writer.
 func TestRenderAuditHumanSanitizesUntrustedFields(t *testing.T) {
-	res := audit.Result{
-		Findings: []audit.Finding{{
+	res := repolint.Result{
+		Findings: []repolint.Finding{{
 			RuleID:   "privacy-hygiene",
-			Severity: audit.SeverityError,
+			Severity: repolint.SeverityError,
 			File:     "a\u001b[31m.md", // ESC in a path
 			Line:     3,
 			Message:  "leak \u009b2K spoof",  // C1 CSI (2-byte encoded U+009B, not a raw 0x9b byte)
@@ -26,7 +26,7 @@ func TestRenderAuditHumanSanitizesUntrustedFields(t *testing.T) {
 		Blockers: 1,
 	}
 	var buf bytes.Buffer
-	renderAuditHuman(&buf, res)
+	renderLintHuman(&buf, res)
 	out := buf.String()
 	for _, r := range out {
 		if r == 0x1b || (r >= 0x80 && r <= 0x9f) || (r >= 0x202A && r <= 0x202E) {

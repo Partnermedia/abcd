@@ -9,7 +9,7 @@
 // severity-to-exit-code semantics (0 clean, 1 warnings, 2 any error), and SARIF
 // as a future optional export behind the Serializer seam. Net new dependencies:
 // zero.
-package audit
+package repolint
 
 import (
 	"fmt"

@@ -95,7 +95,7 @@ func TestDeliveryStateSectionsWiden(t *testing.T) {
 		"",
 		"### Shipped",
 		"",
-		"- `abcd audit` — a read-only repo-conformance check (itd-85).",
+		"- `abcd lint` — a read-only repo-conformance check (itd-85).",
 		"",
 		"### Added",
 		"",

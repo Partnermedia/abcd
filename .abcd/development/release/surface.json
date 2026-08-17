@@ -124,19 +124,6 @@
       ]
     },
     {
-      "path": "abcd audit",
-      "hidden": false,
-      "flags": [
-        {
-          "name": "root",
-          "shorthand": "",
-          "type": "string",
-          "required": false,
-          "hidden": false
-        }
-      ]
-    },
-    {
       "path": "abcd banlist",
       "hidden": false,
       "flags": []
@@ -779,6 +766,19 @@
         },
         {
           "name": "payload-dir",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd lint",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "root",
           "shorthand": "",
           "type": "string",
           "required": false,

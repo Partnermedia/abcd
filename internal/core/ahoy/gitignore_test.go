@@ -20,7 +20,7 @@ import (
 // The public entries are ANCHORED (leading slash): the table means the repo-root
 // directories, and an unanchored pattern matches at any depth. No entry may name
 // a path the layout does not have — a phantom entry ignores nothing while
-// leaving the local tier tracked, which `abcd audit` then flags.
+// leaving the local tier tracked, which `abcd lint` then flags.
 func TestVisibilityEntriesMatchBrief(t *testing.T) {
 	want := map[string][]string{
 		"private": {".abcd/.work.local/"},

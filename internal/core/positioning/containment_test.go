@@ -80,7 +80,7 @@ const containmentBlock = `# Identity
 // TestCheckRefusesASurfaceReachedThroughASymlinkedAncestor is the leak this
 // package's containment exists to stop: a cloned repo declares a surface behind
 // a committed symlinked directory, and the check reads a file outside the repo
-// and quotes it verbatim into the Report — which `abcd audit` prints and
+// and quotes it verbatim into the Report — which `abcd lint` prints and
 // `abcd identity --json` emits whole.
 func TestCheckRefusesASurfaceReachedThroughASymlinkedAncestor(t *testing.T) {
 	for _, tc := range []struct {

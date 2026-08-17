@@ -12,6 +12,8 @@ called out in a **Breaking** section.
 
 ### Breaking
 
+- **The conformance check calls itself lint.** `abcd audit` is now `abcd lint` (and `/abcd:audit` is `/abcd:lint`): the verb applies deterministic rules about a repo's form, which the record's vocabulary names a *lint*, and the `audit` name returns to its reserved seat — itd-16's hash-chain fidelity surface (adr-40). The tri-state exit contract (0 clean / 1 warnings only / 2 any error), the rule set, and the JSON envelope are unchanged; the conformance core moves to `internal/core/repolint`. The privacy waiver's current spelling is `abcd-lint:allow`, and every committed `abcd-audit:allow` line stays honoured forever. **Managed repos:** re-download the binary, and re-run `prepare-this-repo`/`launch scaffold` where a repo's own instructions or CI referenced `abcd audit`. (itd-124, spc-29; the lint-engine merge question is iss-251)
+
 - **The intent audit says audit.** `abcd intent review` is now `abcd intent audit`, and `intent review ingest` is `intent audit ingest`: the verb emits family-2 promise-vs-reality verdicts (`MET`/`NOT_MET`/…), which the record's own vocabulary rules an *audit*, not a review (adr-40). The `intent-fidelity-reviewer` agent renames to `intent-auditor` with it. Clean break, no alias: the old spelling is refused (with the successor named) and never swallowed as a free-text intent create. Stored artefacts are format-frozen — the `abcd-review:` audit-note markers, the `abcd/intent-fidelity-verdict/v1` payload type, and every previously ingested verdict remain valid; only the verb, the agent, and the code identifiers move. (itd-123, spc-28)
 
 ### Added

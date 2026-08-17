@@ -1,11 +1,11 @@
-package audit_test
+package repolint_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 )
 
 // Flaggable specimens are assembled at runtime (see the scanner's network
@@ -25,13 +25,13 @@ func TestAC_PrivacyNetworkIdentifierOutsideReservedRanges(t *testing.T) {
 	cases := []struct {
 		name string
 		body string
-		sev  audit.Severity
+		sev  repolint.Severity
 		exit int
 	}{
-		{"cgnat tailnet address", "peer reachable at " + quad(100, 64, 3, 9) + "\n", audit.SeverityError, 2},
-		{"private lan address", "gateway is " + quad(192, 168, 1, 1) + "\n", audit.SeverityError, 2},
-		{"lan hostname", "ssh into " + joinDots("printer", "local") + "\n", audit.SeverityWarn, 1},
-		{"device hostname", "synced from " + strings.Join([]string{"zeta", "laptop"}, "-") + "\n", audit.SeverityWarn, 1},
+		{"cgnat tailnet address", "peer reachable at " + quad(100, 64, 3, 9) + "\n", repolint.SeverityError, 2},
+		{"private lan address", "gateway is " + quad(192, 168, 1, 1) + "\n", repolint.SeverityError, 2},
+		{"lan hostname", "ssh into " + joinDots("printer", "local") + "\n", repolint.SeverityWarn, 1},
+		{"device hostname", "synced from " + strings.Join([]string{"zeta", "laptop"}, "-") + "\n", repolint.SeverityWarn, 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestAC_PrivacyNetworkSeverityFollowsThePatternSet(t *testing.T) {
 		file("reference/a.md", "peer "+quad(100, 64, 3, 9)+"\n").
 		commit().run()
 	f := findingFor(addr, "privacy-hygiene")
-	if f == nil || f.Severity != audit.SeverityError {
+	if f == nil || f.Severity != repolint.SeverityError {
 		t.Fatalf("address finding severity = %+v, want error", f)
 	}
 	if addr.ExitCode != 2 {
@@ -130,7 +130,7 @@ func TestAC_PrivacyNetworkSeverityFollowsThePatternSet(t *testing.T) {
 		file("reference/b.md", "ssh "+joinDots("printer", "local")+"\n").
 		commit().run()
 	h := findingFor(hostFinding, "privacy-hygiene")
-	if h == nil || h.Severity != audit.SeverityWarn {
+	if h == nil || h.Severity != repolint.SeverityWarn {
 		t.Fatalf("hostname finding severity = %+v, want warn", h)
 	}
 	if hostFinding.ExitCode != 1 {
@@ -154,8 +154,8 @@ func TestAC_PrivacyNetworkHonoursRepoSeverityOverride(t *testing.T) {
 	if f == nil {
 		t.Fatal("no privacy-hygiene finding for a LAN hostname")
 	}
-	if f.Severity != audit.SeverityError {
-		t.Errorf("severity = %q, want %q — the repo raised this pattern to hard_fail", f.Severity, audit.SeverityError)
+	if f.Severity != repolint.SeverityError {
+		t.Errorf("severity = %q, want %q — the repo raised this pattern to hard_fail", f.Severity, repolint.SeverityError)
 	}
 	if res.ExitCode != 2 {
 		t.Errorf("exit = %d, want 2 for a raised, blocking finding", res.ExitCode)

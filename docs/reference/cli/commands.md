@@ -78,18 +78,6 @@ Remove the marker block and owned PATH symlink (leaves .abcd/ intact)
       --bin-dir string   directory holding the PATH entry to remove; needed only when it was installed with --bin-dir into a directory that is not on PATH
 ```
 
-### `abcd audit`
-
-Check this repo against the working conventions (read-only)
-
-**Usage:** `abcd audit [flags]`
-
-**Flags:**
-
-```
-      --root string   repo root to audit (default: current working directory)
-```
-
 ### `abcd banlist`
 
 Banned-names layers (bare renders both, read-only); add/remove maintain them
@@ -605,6 +593,18 @@ Cut a release: derive the version and the record set from what shipped (exit 1 w
 ```
       --changelog-json string   path to the host-composed changelog JSON (or - for stdin); absent runs the deterministic emit step
       --payload-dir string      stage the versioned release payload in this directory (must be empty and outside the repository)
+```
+
+### `abcd lint`
+
+Check this repo against the working conventions (read-only)
+
+**Usage:** `abcd lint [flags]`
+
+**Flags:**
+
+```
+      --root string   repo root to lint (default: current working directory)
 ```
 
 ### `abcd memory`

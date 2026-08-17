@@ -1,11 +1,11 @@
-package audit_test
+package repolint_test
 
 import (
 	"strings"
 	"testing"
 	"unicode/utf8"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 )
 
 const positioningBrief = `## Identity (canonical)
@@ -79,7 +79,7 @@ func TestPositioningDriftIsAWarnFindingNamingTheExactLine(t *testing.T) {
 	if f == nil {
 		t.Fatal("drifted strapline produced no finding")
 	}
-	if f.Severity != audit.SeverityWarn {
+	if f.Severity != repolint.SeverityWarn {
 		t.Errorf("severity = %s, want warn (the family highlights, it does not gate)", f.Severity)
 	}
 	if f.File != "README.md" {
@@ -111,7 +111,7 @@ func TestPositioningSeverityUpgradesToBlocker(t *testing.T) {
 	if f == nil {
 		t.Fatal("drifted strapline produced no finding")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Fatalf("severity = %s, want error after the per-repo upgrade", f.Severity)
 	}
 	if res.ExitCode != 2 {

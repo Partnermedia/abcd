@@ -1,4 +1,4 @@
-package audit_test
+package repolint_test
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 	"github.com/REPPL/abcd-cli/internal/gittest"
 )
 
@@ -77,16 +77,16 @@ func (b *repoBuilder) commit() *repoBuilder {
 	return b
 }
 
-func (b *repoBuilder) run() audit.Result {
+func (b *repoBuilder) run() repolint.Result {
 	b.t.Helper()
-	res, err := audit.Evaluate(audit.DefaultRules(), audit.Context{RepoRoot: b.root})
+	res, err := repolint.Evaluate(repolint.DefaultRules(), repolint.Context{RepoRoot: b.root})
 	if err != nil {
 		b.t.Fatalf("Evaluate: %v", err)
 	}
 	return res
 }
 
-func findingFor(res audit.Result, ruleID string) *audit.Finding {
+func findingFor(res repolint.Result, ruleID string) *repolint.Finding {
 	for i := range res.Findings {
 		if res.Findings[i].RuleID == ruleID {
 			return &res.Findings[i]
@@ -123,7 +123,7 @@ func TestAC_MissingWorkTier(t *testing.T) {
 	if f == nil {
 		t.Fatal("no three-tier-layout finding for a repo missing .abcd/work/")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 	if !strings.Contains(f.Message+f.Fix, "work") {
@@ -151,7 +151,7 @@ func TestAC_DecisionsOnlyInGitignoredLayer(t *testing.T) {
 	if f == nil {
 		t.Fatal("no decision-durability finding when decisions are only in the gitignored layer")
 	}
-	if f.Severity != audit.SeverityWarn {
+	if f.Severity != repolint.SeverityWarn {
 		t.Errorf("severity = %q, want warn", f.Severity)
 	}
 	if res.Blockers != 0 {
@@ -176,7 +176,7 @@ func TestRule_ConventionsRouterMissing(t *testing.T) {
 	if f == nil {
 		t.Fatal("no conventions-router finding when AGENTS.md is absent")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
@@ -198,7 +198,7 @@ func TestRule_WorkLocalNotGitignored(t *testing.T) {
 	if f == nil {
 		t.Fatal("no three-tier-layout finding when .work.local is not gitignored")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 	if !strings.Contains(strings.ToLower(f.Message+f.Fix), "ignore") {
@@ -222,7 +222,7 @@ func TestRule_TierPresentButNotADirectory(t *testing.T) {
 	if f == nil {
 		t.Fatal("no three-tier-layout finding when .abcd/development is a file, not a directory")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
@@ -244,7 +244,7 @@ func TestRule_WorkTierIsAFileDoesNotAbort(t *testing.T) {
 	if f == nil {
 		t.Fatal("no three-tier-layout finding when .abcd/work is a file (audit aborted instead of reporting)")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
@@ -262,14 +262,14 @@ func TestRule_LocalArtifactsInCommittedTiers(t *testing.T) {
 	res := b.run()
 
 	total := 0
-	got := map[string]audit.Finding{}
+	got := map[string]repolint.Finding{}
 	for _, f := range res.Findings {
 		if f.RuleID != "three-tier-layout" {
 			continue
 		}
 		total++
 		got[f.File] = f
-		if f.Severity != audit.SeverityError {
+		if f.Severity != repolint.SeverityError {
 			t.Errorf("severity for %s = %q, want error", f.File, f.Severity)
 		}
 	}
@@ -327,7 +327,7 @@ func TestRule_LocalArtifactDanglingSymlinkStillFlagged(t *testing.T) {
 	if f.File != ".abcd/work/NEXT.md" {
 		t.Errorf("finding file = %q, want .abcd/work/NEXT.md", f.File)
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
@@ -365,7 +365,7 @@ func TestRule_ConventionsRouterIsADirectory(t *testing.T) {
 	if f == nil {
 		t.Fatal("no conventions-router finding when AGENTS.md is a directory")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 }
@@ -382,7 +382,7 @@ func TestRule_DocsCurrencyNoConfigWarns(t *testing.T) {
 	if f == nil {
 		t.Fatal("docs-currency silently passed when docs/ exists but the config is missing")
 	}
-	if f.Severity != audit.SeverityWarn {
+	if f.Severity != repolint.SeverityWarn {
 		t.Errorf("severity = %q, want warn", f.Severity)
 	}
 	// It must be a warn, not an error: exit 1, not 2.
@@ -404,7 +404,7 @@ func TestAC_PrivacyAbsolutePath(t *testing.T) {
 	if f == nil {
 		t.Fatal("no privacy-hygiene finding for a committed absolute local path")
 	}
-	if f.Severity != audit.SeverityError {
+	if f.Severity != repolint.SeverityError {
 		t.Errorf("severity = %q, want error", f.Severity)
 	}
 	if f.File != "docs/how-to/thing.md" || f.Line != 1 {
@@ -434,11 +434,15 @@ func TestAC_PrivacyBareHomePathNoTrailingSlash(t *testing.T) {
 }
 
 func TestAC_PrivacyWaiverSuppresses(t *testing.T) {
-	const waived = "example path /Users/alice/x is illustrative  abcd-audit:allow\n"
+	const waived = "example path /Users/alice/x is illustrative  abcd-lint:allow\n"
+	// The pre-spc-29 waiver spelling is honoured forever (it lives in committed
+	// content across managed repos).
+	const waivedLegacy = "example path /Users/bob/x is illustrative  abcd-audit:allow\n"
 	// Kept out of docs/ so docs-currency stays skipped and does not add a warn —
 	// this test isolates the privacy waiver's effect on the exit code.
 	b := newFixtureRepo(t).conforming().
 		file("reference/paths.md", waived).
+		file("reference/legacy.md", waivedLegacy).
 		commit()
 	res := b.run()
 
@@ -498,10 +502,10 @@ func TestRule_PrivacyRejectsIntermediateSymlinkEscape(t *testing.T) {
 }
 
 // A tracked file larger than the scan cap is skipped rather than loaded whole —
-// a large committed binary must not OOM the audit.
+// a large committed binary must not OOM the repolint.
 func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
 	b := newFixtureRepo(t).conforming()
-	big := make([]byte, audit.MaxScanBytesForTest()+1)
+	big := make([]byte, repolint.MaxScanBytesForTest()+1)
 	for i := range big {
 		big[i] = 'a'
 	}
@@ -518,7 +522,7 @@ func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
 
 // When git reports tracked files but the repo root cannot be opened for reading
 // (search-only permission), the privacy scan cannot run over content that exists.
-// It must surface the error rather than silently report a clean pass (audit.go:94).
+// It must surface the error rather than silently report a clean pass (repolint.go:94).
 func TestRule_PrivacyRootUnreadableSurfacesError(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root bypasses permission bits")
@@ -540,8 +544,8 @@ func TestRule_PrivacyRootUnreadableSurfacesError(t *testing.T) {
 		t.Skip("filesystem allows opening a search-only root; precondition not met")
 	}
 
-	var privacy audit.Rule
-	for _, r := range audit.DefaultRules() {
+	var privacy repolint.Rule
+	for _, r := range repolint.DefaultRules() {
 		if r.Meta().ID == "privacy-hygiene" {
 			privacy = r
 			break
@@ -551,7 +555,7 @@ func TestRule_PrivacyRootUnreadableSurfacesError(t *testing.T) {
 		t.Fatal("privacy-hygiene rule not found in DefaultRules")
 	}
 
-	if _, err := audit.Evaluate([]audit.Rule{privacy}, audit.Context{RepoRoot: b.root}); err == nil {
+	if _, err := repolint.Evaluate([]repolint.Rule{privacy}, repolint.Context{RepoRoot: b.root}); err == nil {
 		t.Fatal("privacy-hygiene reported clean when the repo root could not be opened")
 	}
 }

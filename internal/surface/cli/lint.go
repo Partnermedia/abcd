@@ -8,19 +8,21 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 	"github.com/REPPL/abcd-cli/internal/termsafe"
 )
 
-// newAuditCommand wires the read-only `abcd audit` verb: it evaluates the
+// newLintCommand wires the read-only `abcd lint` verb (renamed from `abcd
+// audit` per adr-40/spc-29: it applies rules about form, so it is the lint;
+// `/abcd:audit` returns to itd-16's reserved hash-chain fidelity surface): it evaluates the
 // bundled conformance rules against the working directory and reports them, human
 // text by default or machine JSON with --json. It never writes. The exit code is
-// Conftest's tri-state — 0 clean, 1 warnings only, 2 any error — so `abcd audit`
+// Conftest's tri-state — 0 clean, 1 warnings only, 2 any error — so `abcd lint`
 // can gate a repo's CI.
-func newAuditCommand(asJSON *bool) *cobra.Command {
+func newLintCommand(asJSON *bool) *cobra.Command {
 	var rootDir string
 	cmd := &cobra.Command{
-		Use:   "audit",
+		Use:   "lint",
 		Short: "Check this repo against the working conventions (read-only)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -45,22 +47,22 @@ func newAuditCommand(asJSON *bool) *cobra.Command {
 				if shown == "" {
 					shown = dir
 				}
-				return &exitError{Code: 2, Msg: fmt.Sprintf("audit: %s is not a directory", shown)}
+				return &exitError{Code: 2, Msg: fmt.Sprintf("lint: %s is not a directory", shown)}
 			}
 
-			result, err := audit.Evaluate(audit.DefaultRules(), audit.Context{RepoRoot: dir})
+			result, err := repolint.Evaluate(repolint.DefaultRules(), repolint.Context{RepoRoot: dir})
 			if err != nil {
 				return err
 			}
 
 			if *asJSON {
-				out, err := audit.JSONSerializer{}.Serialize(result)
+				out, err := repolint.JSONSerializer{}.Serialize(result)
 				if err != nil {
 					return err
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), string(out))
 			} else {
-				renderAuditHuman(cmd.OutOrStdout(), result)
+				renderLintHuman(cmd.OutOrStdout(), result)
 			}
 
 			// Tri-state exit: the output is already rendered, so a non-zero code
@@ -71,33 +73,33 @@ func newAuditCommand(asJSON *bool) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&rootDir, "root", "", "repo root to audit (default: current working directory)")
+	cmd.Flags().StringVar(&rootDir, "root", "", "repo root to lint (default: current working directory)")
 	return cmd
 }
 
 // severityGlyph returns the doctor-style marker for a severity.
-func severityGlyph(sev audit.Severity) string {
+func severityGlyph(sev repolint.Severity) string {
 	switch sev {
-	case audit.SeverityError:
+	case repolint.SeverityError:
 		return "✗"
-	case audit.SeverityWarn:
+	case repolint.SeverityWarn:
 		return "⚠"
 	default:
 		return "•"
 	}
 }
 
-// renderAuditHuman writes the grouped, doctor-style report: a line per finding
+// renderLintHuman writes the grouped, doctor-style report: a line per finding
 // with a severity glyph, the rule id, the citation, the message, and an indented
 // fix; skipped (not-applicable) rules and a summary tail. A clean repo gets a
 // single green line.
-func renderAuditHuman(w io.Writer, res audit.Result) {
+func renderLintHuman(w io.Writer, res repolint.Result) {
 	if len(res.Findings) == 0 {
-		fmt.Fprintln(w, "abcd audit — ✓ conforms to the working conventions")
+		fmt.Fprintln(w, "abcd lint — ✓ conforms to the working conventions")
 	}
 	for _, f := range res.Findings {
-		// File, Message and Fix are built from the audited repo's own file paths and
-		// content (`abcd audit` runs over any repo), so they are untrusted terminal
+		// File, Message and Fix are built from the linted repo's own file paths and
+		// content (`abcd lint` runs over any repo), so they are untrusted terminal
 		// output and pass through the canonical sanitiser; RuleID/Severity are enum
 		// constants and need none.
 		loc := termsafe.Sanitize(f.File)
@@ -112,5 +114,5 @@ func renderAuditHuman(w io.Writer, res audit.Result) {
 	for _, id := range res.Skipped {
 		fmt.Fprintf(w, "• [%s] skipped (not applicable)\n", id)
 	}
-	fmt.Fprintf(w, "abcd audit — %d error(s), %d warning(s)\n", res.Blockers, res.Warnings)
+	fmt.Fprintf(w, "abcd lint — %d error(s), %d warning(s)\n", res.Blockers, res.Warnings)
 }

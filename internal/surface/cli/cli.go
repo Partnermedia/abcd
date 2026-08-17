@@ -114,7 +114,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newVersionCommand(&asJSON))
 
 	root.AddCommand(newAhoyCommand(&asJSON))
-	root.AddCommand(newAuditCommand(&asJSON))
+	root.AddCommand(newLintCommand(&asJSON))
 	root.AddCommand(newGuardCommand(&asJSON))
 	root.AddCommand(newIdentityCommand(&asJSON))
 
@@ -186,8 +186,8 @@ func NewRootCommand() *cobra.Command {
 
 	// A cobra usage error (unknown flag, unknown subcommand, stray positional
 	// argument) is a plain error with no ExitCode(), so Run() would map it to
-	// exit 1 — but `abcd audit` documents Conftest's tri-state where exit 1 means
-	// "warnings only" (audit.go). A mistyped invocation must not masquerade as a
+	// exit 1 — but `abcd lint` documents Conftest's tri-state where exit 1 means
+	// "warnings only" (lint.go). A mistyped invocation must not masquerade as a
 	// clean-ish gate pass: usage errors exit 2, like every usage error abcd raises
 	// itself. Flag-parse errors route through FlagErrorFunc; argument errors come
 	// from each command's Args validator — wrap both across the whole tree (B13).

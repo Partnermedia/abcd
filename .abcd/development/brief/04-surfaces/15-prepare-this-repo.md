@@ -10,7 +10,7 @@ later take over, in a shape the CLI can adopt without unpicking.
 It is a **host-delegated command**: no dedicated Go verb backs it and there is
 no bare-status render. The workflow runs in the host agent from the markdown in
 [`commands/prepare-this-repo.md`](../../../../commands/prepare-this-repo.md),
-invoking the binary's read-only `abcd audit --json` for the engine-backed
+invoking the binary's read-only `abcd lint --json` for the engine-backed
 conformance core. It takes no argument — it always operates on the current
 repository.
 
@@ -38,7 +38,7 @@ Four phases, each gated on the one before:
    levels up from the command file): the three-tier README, the brief,
    principles, ADRs, intents, `docs/` Diátaxis rules, and the lint configs as
    patterns.
-2. **Audit** — run `abcd audit --json` for the engine-backed conformance core
+2. **Conformance lint** — run `abcd lint --json` for the engine-backed conformance core
    (the six convention rules), supplement it with the structure/principles
    judgement the binary does not make, write the gap report to the target's
    `.abcd/.work.local/scratch/`, and present it before any change.
