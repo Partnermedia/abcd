@@ -10,6 +10,10 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
+
 ## [0.5.1] - 2026-08-16
 
 ### Added
