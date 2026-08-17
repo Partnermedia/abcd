@@ -9,6 +9,19 @@ It answers a different question from `/abcd:ahoy`: `ahoy` reports whether the
 `audit` reports whether the *repo* conforms to the conventions. Two questions,
 two verbs.
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `chain` | audit | staged |
+| `lifeboat` | audit | staged |
+
+
 ## Behaviour
 
 ```bash

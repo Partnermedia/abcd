@@ -7,6 +7,17 @@ loader injecting the same registry's entries before shell-heavy work.
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `check` | gate | shipped |
+| `hook` | — | shipped |
+
+
 - **`/abcd:guard check`** — evaluate one candidate command line and report the
   decision. The candidate comes from `--command "<line>"` or from stdin. The
   plugin command (`commands/guard.md`) passes it on **stdin**, inside a

@@ -8,6 +8,20 @@ cannot drift apart.
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `doctor` | — | shipped |
+| `dry-run` | — | shipped |
+| `identity-check` | — | shipped |
+| `install` | — | shipped |
+| `uninstall` | — | shipped |
+
+
 Bare `/abcd:ahoy` shows read-only status only — never mutates state. The
 `/abcd:ahoy` slash command dispatches only this bare read-only pass and names
 the CLI for anything that writes; the sub-verbs below ship on the CLI as

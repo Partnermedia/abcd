@@ -9,6 +9,19 @@ repo conforms to the working conventions as a whole, and runs the positioning
 check as one rule among them; `identity` is where a maintainer looks at the canon
 itself and at what a fix would read like.
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `init` | — | shipped |
+| `render` | audit | shipped |
+
+
 ## The identity block
 
 The canonical home is a markdown block in the repo's own record — markdown stays

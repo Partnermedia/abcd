@@ -11,6 +11,20 @@ a confidentiality breach a history rewrite cannot fully undo — merged-PR diffs
 cached views persist server-side. Both are cheap to prevent at authoring time and
 expensive to remediate afterwards.
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `add` | — | shipped |
+| `list` | — | shipped |
+| `remove` | — | shipped |
+
+
 ## Why two layers
 
 A deterministic CI gate is the right tool for a *public* banned name and the wrong

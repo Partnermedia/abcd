@@ -16,6 +16,23 @@ Intents live at `.abcd/development/intents/{drafts,planned,shipped,disciplines,s
 
 There is no `active/` state — "active" is implicit (a planned intent's linked spec is currently in flight in the native spec store; an active discipline is any intent in `disciplines/`).
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `link` | — | shipped |
+| `new` | — | shipped |
+| `plan` | — | shipped |
+| `ready` | gate | shipped |
+| `review` | audit | shipped |
+| `review ingest` | audit | shipped |
+
+
 ## 1. Intent IDs, kinds, and lifecycle
 
 ### Intent IDs

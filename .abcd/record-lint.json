@@ -42,7 +42,7 @@
       "spc": ".abcd/development/specs",
       "iss": ".abcd/work/issues"
     }},
-    "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands", "bare_command": "abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md"},
+    "surface_coverage": {"enabled": true, "severity": "blocker", "commands_dir": "commands", "bare_command": "abcd", "skills_dir": "skills", "registry": ".abcd/development/brief/04-surfaces/README.md", "snapshot": ".abcd/development/release/surface.json", "host_delegated": ["consult", "ingest", "prepare-this-repo"], "operator_internal": ["spec", "rules", "hook", "completion"]},
     "index_drift": {"enabled": true, "severity": "blocker", "indexes": [
       {"id": "commands", "doc": ".abcd/development/brief/04-surfaces/README.md", "dir": "commands", "entry": "^[a-z][a-z-]*$", "suffix": ".md"},
       {"id": "planned-seams", "doc": "internal/README.md", "dir": "internal", "entry": "^[a-z][a-z0-9-]*(/[a-z0-9-]+)*/$", "mode": "absent"},

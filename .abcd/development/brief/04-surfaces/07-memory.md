@@ -6,6 +6,18 @@ For the **substrate spec** (page-class enum, source-class taxonomy, curator beha
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `ask` | — | shipped |
+| `ingest` | — | shipped |
+| `lint` | lint | shipped |
+
+
 Bare `/abcd:memory` shows status + help + render of current memory state — never mutates state. Per the [bare-command-as-render discipline](../02-constraints/04-naming.md). Current sub-verbs (each does something bare cannot):
 
 - **Bare `/abcd:memory`** — render: page count by class (e.g., "23 session_memory + 8 external_pdf + 4 oracle_review + 2 spec_modification_grammar"), last-ingest timestamp, recent contradictions surface, suggested next actions. No mutation. Quotation-budget headroom per source renders READ-ONLY from the spc-39 `.coverage_index.json`: when the index is present AND fingerprint-fresh (a read-only crawl recomputes the current fingerprint and matches the stored one) it shows per-source warn/block headroom; fingerprint drift shows a "stale — run /abcd:memory lint" hint; an absent index an info line; a malformed index or crawl failure a non-fatal "headroom unavailable" line. The bare render never rebuilds or mutates the index.

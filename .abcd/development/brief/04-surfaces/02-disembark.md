@@ -8,6 +8,23 @@
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `coverage` | — | shipped |
+| `graveyard` | — | shipped |
+| `oracle` | review | shipped |
+| `pack` | — | shipped |
+| `plan` | — | shipped |
+| `press-release` | — | shipped |
+| `principles` | — | shipped |
+| `probe` | — | shipped |
+
+
 Bare `/abcd:disembark` prints the sub-verb list and flags only — never mutates state. Current sub-verbs (as the shipped binary exposes them):
 
 - **`/abcd:disembark pack <source-repo> <dest>`** — pack a lifeboat from `<source-repo>` to `<dest>`. Both paths are positional and required, and there is **no `home` shorthand**: the lifeboat lands out-of-tree at an operator-chosen destination and the source repo is never written to (adr-35). Its deterministic flow is described in § 1 below.
