@@ -1,0 +1,356 @@
+package lint
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// subverbFixture builds a minimal repo: a surface registry dir with files, a
+// snapshot, and a config arming the sub-verb pass.
+type subverbFixture struct {
+	repo string
+	cfg  RuleConfig
+}
+
+func newSubverbFixture(t *testing.T, commands []map[string]any) *subverbFixture {
+	t.Helper()
+	repo := t.TempDir()
+	regDir := ".abcd/development/brief/04-surfaces"
+	if err := os.MkdirAll(filepath.Join(repo, regDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The surface-grain registry file exists but carries no table — the
+	// sub-verb pass is what these tests exercise.
+	if err := os.WriteFile(filepath.Join(repo, regDir, "README.md"), []byte("# registry\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	snap := map[string]any{"schema_version": 1, "commands": commands}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapRel := ".abcd/development/release/surface.json"
+	if err := os.MkdirAll(filepath.Join(repo, filepath.Dir(snapRel)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, snapRel), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &subverbFixture{
+		repo: repo,
+		cfg: RuleConfig{
+			Enabled: true, Severity: "blocker",
+			Registry:         regDir + "/README.md",
+			BareCommand:      "abcd",
+			Snapshot:         snapRel,
+			HostDelegated:    []string{"consult"},
+			OperatorInternal: []string{"spec", "rules", "hook", "completion"},
+		},
+	}
+}
+
+func (f *subverbFixture) writeSurface(t *testing.T, name, content string) {
+	t.Helper()
+	p := filepath.Join(f.repo, ".abcd/development/brief/04-surfaces", name)
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func cmd(path string, hidden bool) map[string]any {
+	return map[string]any{"path": path, "hidden": hidden}
+}
+
+func runSubverbCheck(t *testing.T, f *subverbFixture) []Finding {
+	t.Helper()
+	out, err := checkSubVerbCoverage(f.repo, f.cfg)
+	if err != nil {
+		t.Fatalf("checkSubVerbCoverage: %v", err)
+	}
+	return out
+}
+
+func messages(fs []Finding) string {
+	var b strings.Builder
+	for _, f := range fs {
+		b.WriteString(f.File + ": " + f.Message + "\n")
+	}
+	return b.String()
+}
+
+const cleanCaptureTable = `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| ` + "`list`" + ` | — | shipped |
+| ` + "`promote`" + ` | — | shipped |
+`
+
+func TestSubVerbCleanTablePasses(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false),
+		cmd("abcd capture list", false), cmd("abcd capture promote", false),
+	})
+	f.writeSurface(t, "06-capture.md", cleanCaptureTable)
+	if out := runSubverbCheck(t, f); len(out) != 0 {
+		t.Fatalf("clean table must pass, got:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbBothDirections(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false),
+		cmd("abcd capture list", false), cmd("abcd capture resolve", false),
+	})
+	// promote: shipped row, NOT registered. resolve: registered, no row.
+	// wontfix: staged row and not registered (fine).
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`list`"+` | — | shipped |
+| `+"`promote`"+` | — | shipped |
+| `+"`wontfix`"+` | — | staged |
+`)
+	out := runSubverbCheck(t, f)
+	msgs := messages(out)
+	if !strings.Contains(msgs, "promote") || !strings.Contains(msgs, "resolve") {
+		t.Fatalf("want findings for shipped-unregistered promote AND registered-rowless resolve, got:\n%s", msgs)
+	}
+	if strings.Contains(msgs, "wontfix") {
+		t.Fatalf("staged+unregistered wontfix must not be flagged:\n%s", msgs)
+	}
+	if len(out) != 2 {
+		t.Fatalf("want exactly 2 findings, got %d:\n%s", len(out), msgs)
+	}
+}
+
+func TestSubVerbStagedButRegisteredFails(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false), cmd("abcd capture promote", false),
+	})
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`promote`"+` | — | staged |
+`)
+	out := runSubverbCheck(t, f)
+	if len(out) != 1 || !strings.Contains(out[0].Message, "staged") {
+		t.Fatalf("staged-but-registered must fail once, got:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbMissingTableFailsOnlyWithRegisteredSubs(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false),
+		cmd("abcd capture", false), cmd("abcd capture list", false),
+		cmd("abcd version", false),
+	})
+	f.writeSurface(t, "06-capture.md", "# capture — no table here\n")
+	f.writeSurface(t, "12-version.md", "# version — no table, no subs\n")
+	out := runSubverbCheck(t, f)
+	msgs := messages(out)
+	if !strings.Contains(msgs, "06-capture.md") {
+		t.Fatalf("a sub-command-bearing verb without a table must fail:\n%s", msgs)
+	}
+	if strings.Contains(msgs, "12-version.md") {
+		t.Fatalf("a verb with no sub-commands needs no table:\n%s", msgs)
+	}
+}
+
+func TestSubVerbVocabularyEnforced(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false), cmd("abcd capture list", false),
+	})
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`list`"+` | verify | live |
+`)
+	out := runSubverbCheck(t, f)
+	msgs := messages(out)
+	if !strings.Contains(msgs, "verify") || !strings.Contains(msgs, "live") {
+		t.Fatalf("unknown bucket AND unknown status must each be flagged:\n%s", msgs)
+	}
+}
+
+func TestSubVerbHostDelegatedFormatOnly(t *testing.T) {
+	// consult is host-delegated: shipped rows with no cobra backing pass; a
+	// bad bucket is still flagged (format check applies).
+	f := newSubverbFixture(t, []map[string]any{cmd("abcd", false)})
+	f.writeSurface(t, "13-consult.md", `# consult
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`sources`"+` | — | shipped |
+`)
+	if out := runSubverbCheck(t, f); len(out) != 0 {
+		t.Fatalf("host-delegated shipped rows must pass without cobra backing:\n%s", messages(out))
+	}
+	f.writeSurface(t, "13-consult.md", `# consult
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`sources`"+` | vibes | shipped |
+`)
+	if out := runSubverbCheck(t, f); len(out) != 1 {
+		t.Fatalf("host-delegated tables are still format-checked:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbReverseSweepDemandsSurfaceFile(t *testing.T) {
+	// guard has registered sub-commands but no surface file at all.
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd guard", false), cmd("abcd guard check", false),
+	})
+	out := runSubverbCheck(t, f)
+	if len(out) != 1 || !strings.Contains(out[0].Message, "guard") {
+		t.Fatalf("a sub-command-bearing verb with no surface file must fail:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbExclusions(t *testing.T) {
+	// hook is hidden (subtree excluded structurally); spec is operator-internal
+	// (excluded by config); the bare command's own file is exempt from the
+	// cobra comparison.
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false),
+		cmd("abcd hook", true), cmd("abcd hook session-start", false),
+		cmd("abcd spec", false), cmd("abcd spec close", false),
+	})
+	f.writeSurface(t, "08-abcd.md", "# the bare board — no table\n")
+	if out := runSubverbCheck(t, f); len(out) != 0 {
+		t.Fatalf("hidden subtree, operator-internal, and bare must all be excluded:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbNestedPathsMatch(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd intent", false),
+		cmd("abcd intent review", false), cmd("abcd intent review ingest", false),
+	})
+	f.writeSurface(t, "05-intent.md", `# intent
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`review`"+` | audit | shipped |
+| `+"`review ingest`"+` | audit | shipped |
+`)
+	if out := runSubverbCheck(t, f); len(out) != 0 {
+		t.Fatalf("nested sub-verb rows must match snapshot paths:\n%s", messages(out))
+	}
+}
+
+func TestSubVerbMissingSnapshotFailsLoudly(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{cmd("abcd", false)})
+	if err := os.Remove(filepath.Join(f.repo, f.cfg.Snapshot)); err != nil {
+		t.Fatal(err)
+	}
+	out, err := checkSubVerbCoverage(f.repo, f.cfg)
+	if err != nil {
+		t.Fatalf("a missing snapshot must be a finding, not a hard error: %v", err)
+	}
+	if len(out) != 1 || !strings.Contains(out[0].Message, "snapshot") {
+		t.Fatalf("an armed check with no snapshot must fail loudly:\n%s", messages(out))
+	}
+	// The finding must not leak the absolute repo root (iss-29/iss-76): the
+	// PathError is stripped to its bare cause, File carries the relative path.
+	if strings.Contains(out[0].Message, f.repo) || strings.Contains(out[0].Message, "/tmp/") {
+		t.Fatalf("snapshot finding leaks an absolute path: %q", out[0].Message)
+	}
+}
+
+func TestSubVerbUnarmedIsInert(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false), cmd("abcd capture list", false),
+	})
+	f.cfg.Snapshot = "" // not armed: the sub-verb grain is off, no silent partiality
+	out, err := checkSubVerbCoverage(f.repo, f.cfg)
+	if err != nil || len(out) != 0 {
+		t.Fatalf("unarmed sub-verb pass must be inert, got err=%v findings:\n%s", err, messages(out))
+	}
+}
+
+// TestSubVerbDuplicateHeadingIsFlagged: only the first '## Sub-verbs' table is
+// parsed, so a second heading could carry an unchecked lying table — it must
+// be a finding (review regression: a shipped claim for an unregistered verb
+// under a duplicate heading previously passed clean).
+func TestSubVerbDuplicateHeadingIsFlagged(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false), cmd("abcd capture list", false),
+	})
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`list`"+` | — | shipped |
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`bogus`"+` | — | shipped |
+`)
+	out := runSubverbCheck(t, f)
+	if len(out) != 1 || !strings.Contains(out[0].Message, "duplicate") {
+		t.Fatalf("a duplicate Sub-verbs heading must be exactly one finding:\n%s", messages(out))
+	}
+	// A fenced second heading is an example, not a duplicate.
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`list`"+` | — | shipped |
+
+`+"```markdown"+`
+## Sub-verbs
+`+"```"+`
+`)
+	if out := runSubverbCheck(t, f); len(out) != 0 {
+		t.Fatalf("a fenced heading is not a duplicate:\n%s", messages(out))
+	}
+}
+
+// TestSubVerbShortRowIsFlagged: a data row with fewer than three cells may not
+// silently drop its fact (review regression: a two-cell row vanished clean).
+func TestSubVerbShortRowIsFlagged(t *testing.T) {
+	f := newSubverbFixture(t, []map[string]any{
+		cmd("abcd", false), cmd("abcd capture", false), cmd("abcd capture list", false),
+	})
+	f.writeSurface(t, "06-capture.md", `# capture
+
+## Sub-verbs
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `+"`list`"+` | — | shipped |
+| `+"`scan`"+` | — |
+`)
+	out := runSubverbCheck(t, f)
+	if len(out) != 1 || !strings.Contains(out[0].Message, "fewer than three cells") {
+		t.Fatalf("a short row must be exactly one finding:\n%s", messages(out))
+	}
+}
