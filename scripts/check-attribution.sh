@@ -63,7 +63,28 @@ NONE_RE='^Assisted-by: [Nn]one$'
 # the very commit that introduced it, and would reject the CHANGELOG entry, the
 # issue records and the docs that describe what is banned. A gate that cannot be
 # written about is a gate people route around.
-GENERATED_RE='^[[:space:]]*(🤖[[:space:]]*)?[Gg]enerated (with|by) \['
+#
+# The optional [_*]{1,3} admits the MARKDOWN-EMPHASIS run the footer is actually
+# appended inside — italic (1), bold (2) or bold-italic (3). The first cut matched
+# leading whitespace only, so the precise form that motivated this gate went
+# straight through the body check; it was found live on two pull requests whose
+# failing leg happened to be something else (iss-262).
+#
+# The emoji group is repeated on BOTH sides of the emphasis run because a footer
+# may put the robot inside the italics or before them, and neither order is more
+# natural than the other. At most one of the two can match a given line; a single
+# group in one position is exactly the gap that let `🤖 _Generated with [` through.
+#
+# The marker must be ATTACHED to the word, with no space between, because that is
+# how markdown itself reads it: `*text*` is emphasis, `* text` is a list item. A
+# bullet describing the banned footer is documentation — the same writable-about
+# case the anchor already protects for `- Generated with …` — so requiring
+# attachment is what keeps the widening from swallowing list items.
+#
+# The class admits mixed runs (`_*`, `*_`, `__*`) that nobody writes. That is
+# over-REJECTION of text no one produces, which costs nothing; pinning the class
+# to well-formed markdown would buy nothing back.
+GENERATED_RE='^[[:space:]]*(🤖[[:space:]]*)?([_*]{1,3})?(🤖[[:space:]]*)?[Gg]enerated (with|by) \['
 
 # AI co-authorship, matched on the TRAILER KEY rather than on a vendor name: the
 # objection AGENTS.md states — an authorship the tool does not hold, and an
