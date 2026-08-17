@@ -43,13 +43,60 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 	if trimmed == "" {
 		return Intent{}, "", fmt.Errorf("intent: refusing to create from empty text")
 	}
+	slug, err := deriveIntentSlug(trimmed)
+	if err != nil {
+		return Intent{}, "", err
+	}
+	return CreateDraft(repoRoot, DraftOptions{
+		Slug:     slug,
+		Title:    titleLine(trimmed),
+		SeedBody: trimmed,
+		Impact:   impact,
+	})
+}
+
+// DraftOptions parameterises CreateDraft: the explicit slug and title, the Why
+// This Matters seed body, an optional impact judgement, and — on the promote
+// path (spc-24) — the iss-N the draft graduated from, written as the
+// promoted_from back-edge.
+type DraftOptions struct {
+	Slug         string
+	Title        string
+	SeedBody     string
+	Impact       string
+	PromotedFrom string
+}
+
+// promotedFromRe constrains the promote back-edge to an issue id before it is
+// written into frontmatter.
+var promotedFromRe = regexp.MustCompile(`^iss-[0-9]+$`)
+
+// CreateDraft is the one canonical draft-mint primitive: both the quoted-text
+// create (CreateFromText) and the capture-promote path (capture.Promote, which
+// supplies an explicit slug and seed body) route through it, so a draft can
+// never be minted outside the store mint lock. It validates every option at the
+// boundary — the slug becomes a filename — mints the next itd-N, and atomically
+// writes drafts/itd-N-<slug>.md. On any refusal nothing is written.
+func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
+	if !slugRe.MatchString(opts.Slug) {
+		return Intent{}, "", fmt.Errorf("intent: slug %q is not kebab-case", opts.Slug)
+	}
+	if strings.TrimSpace(opts.Title) == "" {
+		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty title")
+	}
+	if strings.TrimSpace(opts.SeedBody) == "" {
+		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty seed body")
+	}
+	if opts.PromotedFrom != "" && !promotedFromRe.MatchString(opts.PromotedFrom) {
+		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^iss-[0-9]+$", opts.PromotedFrom)
+	}
 	// impact is optional on a draft (intent_impact_valid gates the move into
 	// shipped/, not the seed), but when set it must be a legal, non-internal
 	// judgement — the same bar the gate applies at shipped/ — so the value the
 	// tool stamps travels unchanged to shipped/ and passes the blocker there. An
 	// invalid or internal impact is refused up front, never absorbed.
-	if impact != "" {
-		imp, err := changelog.ParseImpact(impact)
+	if opts.Impact != "" {
+		imp, err := changelog.ParseImpact(opts.Impact)
 		if err != nil {
 			return Intent{}, "", fmt.Errorf("intent: %w", err)
 		}
@@ -57,14 +104,10 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 			return Intent{}, "", fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
 		}
 	}
-	slug, err := deriveIntentSlug(trimmed)
-	if err != nil {
-		return Intent{}, "", err
-	}
 
 	var created Intent
 	var mintWarning string
-	err = withIntentMintLock(repoRoot, func() error {
+	err := withIntentMintLock(repoRoot, func() error {
 		id, warn, err := nextIntentID(repoRoot)
 		if err != nil {
 			return err
@@ -74,24 +117,25 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 		if err := ensureRealDir(draftsDirAbs, filepath.Join(IntentsRelDir, BucketDrafts)); err != nil {
 			return err
 		}
-		name := id + "-" + slug + ".md"
+		name := id + "-" + opts.Slug + ".md"
 		rel := filepath.Join(IntentsRelDir, BucketDrafts, name)
 		abs := filepath.Join(draftsDirAbs, name)
 		// Refuse to clobber an existing draft (best-effort guard under the lock).
 		if _, statErr := os.Lstat(abs); statErr == nil {
 			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
 		}
-		content := seedDraft(id, slug, trimmed, impact)
+		content := seedDraft(id, opts)
 		if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("intent: writing %s: %w", rel, err)
 		}
 		created = Intent{
-			ID:     id,
-			Slug:   slug,
-			Kind:   "null",
-			SpecID: "null",
-			Bucket: BucketDrafts,
-			Path:   rel,
+			ID:           id,
+			Slug:         opts.Slug,
+			Kind:         "null",
+			SpecID:       "null",
+			Bucket:       BucketDrafts,
+			Path:         rel,
+			PromotedFrom: opts.PromotedFrom,
 		}
 		return nil
 	})
@@ -173,34 +217,41 @@ func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
 
 // seedDraft renders the canonical draft skeleton: the full draft frontmatter set
 // (id, slug, spec_id: null, kind: null, suggested_kind: null,
-// reclassification_history: [], builds_on: [], severity: minor) and an honest,
+// reclassification_history: [], builds_on: [], severity: minor, plus the
+// promoted_from back-edge when the draft graduated from an issue) and an honest,
 // minimal body carrying the seed text under Why This Matters, with the itd-1
 // discipline's Acceptance Criteria section left as a placeholder for the human to
 // fill before planning.
-func seedDraft(id, slug, text, impact string) string {
+func seedDraft(id string, opts DraftOptions) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("id: " + id + "\n")
-	b.WriteString("slug: " + slug + "\n")
+	b.WriteString("slug: " + opts.Slug + "\n")
 	b.WriteString("spec_id: null\n")
 	b.WriteString("kind: null\n")
 	b.WriteString("suggested_kind: null\n")
 	b.WriteString("reclassification_history: []\n")
 	b.WriteString("builds_on: []\n")
 	b.WriteString("severity: minor\n")
+	// The promote back-edge (spc-24): bare, like every id field in this store.
+	// Absent on a quoted-text draft — the field exists only when the draft
+	// graduated from an issue.
+	if opts.PromotedFrom != "" {
+		b.WriteString("promoted_from: " + opts.PromotedFrom + "\n")
+	}
 	// impact is written only when the caller declared one (validated in
-	// CreateFromText). It is bare — the machine-read enum the shipped-intent gate
+	// CreateDraft). It is bare — the machine-read enum the shipped-intent gate
 	// compares byte-for-byte — and travels unchanged to shipped/. An unset impact
 	// writes no line: a draft is "not judged yet", exactly like the null fields.
-	if impact != "" {
-		b.WriteString("impact: " + impact + "\n")
+	if opts.Impact != "" {
+		b.WriteString("impact: " + opts.Impact + "\n")
 	}
 	b.WriteString("---\n\n")
-	b.WriteString("# " + titleLine(text) + "\n\n")
+	b.WriteString("# " + opts.Title + "\n\n")
 	b.WriteString("## Press Release\n\n")
-	b.WriteString("> _Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._\n\n")
+	b.WriteString("> " + seedNote(opts) + "\n\n")
 	b.WriteString("## Why This Matters\n\n")
-	b.WriteString(text + "\n\n")
+	b.WriteString(opts.SeedBody + "\n\n")
 	b.WriteString("## Acceptance Criteria\n\n")
 	b.WriteString("> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for \"shipped\" before this draft can be planned._\n\n")
 	b.WriteString("## Open Questions\n\n")
@@ -208,6 +259,15 @@ func seedDraft(id, slug, text, impact string) string {
 	b.WriteString("## Audit Notes\n\n")
 	b.WriteString("_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._\n")
 	return b.String()
+}
+
+// seedNote is the standard Press Release placeholder, honest about which create
+// path seeded the draft.
+func seedNote(opts DraftOptions) string {
+	if opts.PromotedFrom != "" {
+		return "_Seeded by promotion from " + opts.PromotedFrom + ". Expand into the full press-release narrative before planning._"
+	}
+	return "_Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._"
 }
 
 // titleLine collapses internal whitespace and trims the seed text into a single

@@ -106,3 +106,61 @@ func TestCreateFromTextPassesRecordLint(t *testing.T) {
 		}
 	}
 }
+
+// TestCreateDraftPromotedFromRoundTrip: a draft minted through the promote
+// path carries the promoted_from back-edge in its frontmatter, and the intent
+// reader parses it back (two-sided edge, spc-24).
+func TestCreateDraftPromotedFromRoundTrip(t *testing.T) {
+	root := t.TempDir()
+
+	it, _, err := CreateDraft(root, DraftOptions{
+		Slug:         "an-issue-that-grew-up",
+		Title:        "An issue that grew up",
+		SeedBody:     "Graduated from `iss-7`: an issue that grew up. Read that issue record for the source observation.",
+		PromotedFrom: "iss-7",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+	if it.PromotedFrom != "iss-7" {
+		t.Fatalf("created intent PromotedFrom = %q, want iss-7", it.PromotedFrom)
+	}
+	c, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got, ok := c.Lookup(it.ID)
+	if !ok {
+		t.Fatalf("minted draft %s not found by Load", it.ID)
+	}
+	if got.PromotedFrom != "iss-7" {
+		t.Fatalf("parsed-back PromotedFrom = %q, want iss-7", got.PromotedFrom)
+	}
+	// Absent on every existing record: a draft minted from text has none.
+	plain, _, err := CreateFromText(root, "a plain quoted-text draft", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.Lookup(plain.ID); got.PromotedFrom != "" {
+		t.Fatalf("text-created draft must carry no promoted_from, got %q", got.PromotedFrom)
+	}
+}
+
+// TestCreateDraftValidatesInputs: a promote-path mint refuses a malformed slug
+// or promoted_from before any path is built.
+func TestCreateDraftValidatesInputs(t *testing.T) {
+	root := t.TempDir()
+	if _, _, err := CreateDraft(root, DraftOptions{Slug: "../evil", Title: "x", SeedBody: "y"}); err == nil {
+		t.Fatalf("CreateDraft must refuse a non-kebab slug")
+	}
+	if _, _, err := CreateDraft(root, DraftOptions{Slug: "ok-slug", Title: "x", SeedBody: "y", PromotedFrom: "itd-3"}); err == nil {
+		t.Fatalf("CreateDraft must refuse a promoted_from that is not an iss-N id")
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts)); err == nil && len(entries) > 0 {
+		t.Fatalf("a refused CreateDraft wrote %d file(s)", len(entries))
+	}
+}
