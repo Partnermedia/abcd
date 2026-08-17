@@ -1960,23 +1960,28 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	listCmd.Flags().BoolVar(&lsAll, "all", false, "issues across all three states")
 	captureCmd.AddCommand(listCmd)
 
-	// resolve — open -> resolved with a note and a required product impact.
-	var resolveImpact string
+	// resolve — open -> resolved with a note, a required product impact, and
+	// optional resolved_by provenance (spc-25): the intent, spec, or commit
+	// that fixed it.
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit string
 	resolveCmd := &cobra.Command{
-		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal>",
-		Short: "Mark an open issue resolved (open/ -> resolved/)",
+		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha]",
+		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			res, err := capture.Resolve(capture.ResolveRequest{RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact})
+			res, err := capture.Resolve(capture.ResolveRequest{
+				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
+				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
+			})
 			if err != nil {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, res.Path)
+				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, res.Path, resolvedByNote(res.ResolvedBy))
 			})
 		},
 	}
@@ -1987,6 +1992,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// tree's no-required-flags invariant (TestLiveTreeMarksNoFlagRequired): the
 	// requirement is enforced semantically in the core, not by a usage annotation.
 	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
+	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
+	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
+	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-40 hex chars, shape-checked only)")
 	captureCmd.AddCommand(resolveCmd)
 
 	// promote — graduate an issue into an intent draft (spc-24, step 2 of the
@@ -2045,6 +2053,26 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	})
 
 	return captureCmd
+}
+
+// resolvedByNote renders the stamped provenance members for the resolve text
+// surface ("" when none were written). Members are regex-validated ids/shas,
+// so no sanitisation is needed.
+func resolvedByNote(rb *capture.ResolvedBy) string {
+	if rb == nil {
+		return ""
+	}
+	var parts []string
+	if rb.Intent != "" {
+		parts = append(parts, "intent="+rb.Intent)
+	}
+	if rb.Spec != "" {
+		parts = append(parts, "spec="+rb.Spec)
+	}
+	if rb.Commit != "" {
+		parts = append(parts, "commit="+rb.Commit)
+	}
+	return " — resolved_by " + strings.Join(parts, " ")
 }
 
 // listState maps the mutually-exclusive filter flags to a capture.State, or

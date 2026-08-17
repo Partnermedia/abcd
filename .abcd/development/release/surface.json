@@ -322,7 +322,28 @@
       "hidden": false,
       "flags": [
         {
+          "name": "commit",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "impact",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "intent",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "spec",
           "shorthand": "",
           "type": "string",
           "required": false,
