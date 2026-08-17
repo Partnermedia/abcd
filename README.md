@@ -18,6 +18,15 @@
 
 </div>
 
+
+# Purpose
+
+AI coding is getting more powerful, yet one important group of people who most need that power — the domain experts, the [product thinkers](https://x.com/signulll/status/2030404483897815089), the people who know *what should be built* — are currently underserved to be able to use AI coding directly. `abcd`'s bet is that a small team of two roles can close that gap: A **product thinker** who holds the *why*, and a **facilitator** who translates the why into work that AI coding agents can act on.
+
+<div align="center">
+  <img src="docs/assets/img/intro.png"/>
+</div>
+
 ---
 
 <div align="center">
@@ -26,24 +35,25 @@
 
 ---
 
-> *"This book has only one major purpose—to trigger the beginning of a new field of study: computer programming as a human activity"*
->
-> —Gerald M. Weinberg, *The Psychology of Computer Programming*, 1971
-
-AI coding is getting more powerful, yes one important group of people who most need that power — the domain experts, the [product thinkers](https://x.com/signulll/status/2030404483897815089), the people who actually know what should be built — are currently underserved to be able to use AI coding directly. `abcd`'s bet is that a small team of two roles can close that gap: A **product thinker** who holds the *why*, and a **facilitator** who translates the why into work that AI coding agents can act on.
-
-<div align="center">
-  <img src="docs/assets/img/intro.png"/>
-</div>
-
 
 # Roles
 
-`abcd` is being shaped by what real two-person teams discover as they use it. In the initial version, both roles — the product thinker and the facilitator — are human. In a later version, `abcd` aims to offer an automated facilitator, so a product thinker can run the framework with an AI translator alongside their agentic team of AI-engineers.
+`abcd` is being developed for a two-person team consisting of a **product thinker** and a **technical facilitator**. While `abcd` is designed for two humans working closely together, the configuration's aim is to automate the role of the facilitator, and thus to allow the product thinker to run the entire process with an AI translator alongside their agentic team of AI-engineers.
 
-As a **product thinker**, you know who the user is. You know what *done* looks like when you see it. You know which trade-offs are acceptable and which would betray the point of the project. `abcd` is built around two moments where that judgement is decisive. First, at the start of a piece of work (when you set the *why* as an intent), and at the end (when you read the verdict on whether the *why* was delivered). What happens in between — turning your why into engineering work AI agents can act on — is the facilitator's job.
+## Product thinker
+
+As a **product thinker**, you know who the user is. You know what *done* looks like when you see it. You know which trade-offs are acceptable and which would betray the point of the project. `abcd` is built around two moments where that judgement is decisive. First, at the start of a piece of work (when you set the *why* as an intent), and at the end (when you read the verdict on whether the *why* was delivered).
+
+What happens in between — turning your why into engineering work AI agents can act on — is the facilitator's job.
+
+## Technical facilitator
 
 The **facilitator** is a *translator*, not an engineer-on-the-team in the traditional sense. Their work is to take what you wrote, shape it into plans an AI coding agent can execute well, run the framework's audit and review machinery, and tell you when the work didn't match the promise *(and what to do about it)*.
+
+
+# Artefacts
+
+The product thinker and facilitator collaborate on artefacts that are jointly owned, with others generated and consumed autonomously by the AI-engineering team. Two of them — an initial *briefing* document and a set of articulated *intents* — are familiar territory for product thinkers; `abcd` builds on them, and adds a third, to *carry intent through to delivered reality*.
 
 | | Product thinker | Facilitator |
 |--|--|--|
@@ -53,16 +63,11 @@ The **facilitator** is a *translator*, not an engineer-on-the-team in the tradit
 | Cross-cutting concerns the brief implies | — | derive and encode |
 | Reading the verdict when work ships | read; decide what to do next | investigate any *not delivered* findings |
 
+The **brief** *(owned jointly by the product thinker and the facilitator)* answers *what is this whole thing about?* — purpose, scope, the vocabulary the project uses, what "good" looks like. It makes one hard promise: **Everything it says reads true right now.** On day one, when the team has agreed a design but built nothing, most of the brief is ambition — and every ambitious passage is visibly marked as not yet real. As work ships, those markings come off one by one: the change that ships a capability also rewrites its passage in the brief to describe what actually exists (which is rarely word-for-word what was planned). The brief is never re-versioned and keeps no history — version control does that — so it earns its role as the project's living canvas one shipped change at a time.
 
-# Artefacts
+**Intents** *(user-facing, and thus the product thinker's domain)* answer *why does each user-facing change matter?* Each is a one-page press release written as if the change had already shipped, with a named user feeling the difference, plus acceptance criteria in plain *Given / When / Then* language. Intents are how ambition travels into the brief: An intent is drafted, planned into engineering work, and built — and the same change that ships it updates the brief. Once its acceptance criteria are verifiably met, the intent is filed as shipped and becomes the permanent record of the *why*; the brief carries the *what is*; the engineering spec carries the *how*. Intents are individually portable: Each stands on its own and can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
 
-The product thinker and facilitator collaborate on artefacts that are jointly owned, with others generated and consumed autonomously by the AI-engineering team. Two of them — an initial *briefing* document and a set of articulated *intents* — are familiar territory for product thinkers; `abcd` builds on them, and adds a third, to *carry intent through to delivered reality*.
-
-1. The **brief** *(owned jointly by the product thinker and the facilitator)* answers *what is this whole thing about?* — purpose, scope, the vocabulary the project uses, what "good" looks like. It makes one hard promise: **Everything it says reads true right now.** On day one, when the team has agreed a design but built nothing, most of the brief is ambition — and every ambitious passage is visibly marked as not yet real. As work ships, those markings come off one by one: the change that ships a capability also rewrites its passage in the brief to describe what actually exists (which is rarely word-for-word what was planned). The brief is never re-versioned and keeps no history — version control does that — so it earns its role as the project's living canvas one shipped change at a time.
-
-2. **Intents** *(user-facing, and thus the product thinker's domain)* answer *why does each user-facing change matter?* Each is a one-page press release written as if the change had already shipped, with a named user feeling the difference, plus acceptance criteria in plain *Given / When / Then* language. Intents are how ambition travels into the brief: An intent is drafted, planned into engineering work, and built — and the same change that ships it updates the brief. Once its acceptance criteria are verifiably met, the intent is filed as shipped and becomes the permanent record of the *why*; the brief carries the *what is*; the engineering spec carries the *how*. Intents are individually portable: Each stands on its own and can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
-
-3. **Automated reviews** *(owned by the AI-engineering team)* grade delivered reality against the original promise. When work lands, a fidelity review reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
+**Automated reviews** *(owned by the AI-engineering team)* grade delivered reality against the original promise. When work lands, a fidelity review reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
 
 Some things the project needs aren't user-facing — cross-cutting rules every feature must satisfy *(e.g., a privacy review, an accessibility checklist)*, or background plumbing that enables other capability. Those skip the press-release treatment and go straight into the brief, under the same promise: Real, or visibly marked as not yet real. As a product thinker you don't have to recognise or label them — that's your facilitator's job.
 
@@ -81,72 +86,7 @@ abcd intent "<one-line idea>"
 
 Your facilitator helps sharpen the press release and its acceptance criteria — the criteria are a hard gate, not a suggestion — then turns the intent into engineering work, surfaces the cross-cutting concerns it implies, and lets AI coding agents do the building. You stay in the seat where your judgement matters most: Setting the *why* at the start, and reading the verdict at the end.
 
-**Shipping closes the loop twice.** When the work lands, the fidelity review grades each acceptance bullet against the actual repository — the code, the configs, the tests, the docs — and writes the verdict onto the intent. And the same change updates the brief: The passage covering this capability loses its not-yet-real marking and is rewritten to describe what actually shipped. That second half is what keeps the brief honest — the true description of your project, one shipped change at a time, instead of a wish list nobody trusts.
-
-```text
-        ╭─────────────────────╮
-        │  Half-formed idea   │ ◄─────────────────────────┐
-        ╰─────────────────────╯                           │
-                  │                                       │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Capture as a       │                           │
-        │  press release —    │                           │
-        │  what does the      │                           │
-        │  user feel after    │                           │
-        │  this ships?        │                           │
-        └─────────────────────┘                           │
-                  │                                       │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Add acceptance     │                           │
-        │  criteria — how     │                           │
-        │  will we tell, on   │                           │
-        │  the day, whether   │                           │
-        │  it was delivered?  │                           │
-        └─────────────────────┘                           │
-                  │                                       │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Refine / grill —   │                           │
-        │  stress-test the    │                           │
-        │  why and the        │ ◄─────────┐               │
-        │  criteria until     │           │               │
-        │  both are clear     │           │ not yet       │
-        └─────────────────────┘           │ clear enough  │
-                  │                       │               │
-                  ▼                       │               │
-            ╱───────────╲                 │               │
-           ╱  Ready to   ╲ ── No ─────────┘               │
-           ╲  build it?  ╱                                │
-            ╲───────────╱                                 │
-                  │ Yes                                   │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Facilitator turns  │                           │
-        │  the intent into    │                           │
-        │  engineering work;  │                           │
-        │  AI agents build it │                           │
-        └─────────────────────┘                           │
-                  │                                       │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Fidelity review    │                           │
-        │  reads each         │                           │
-        │  acceptance bullet  │                           │
-        │  against the actual │                           │
-        │  shipped repo       │                           │
-        └─────────────────────┘                           │
-                  │                                       │
-                  ▼                                       │
-        ┌─────────────────────┐                           │
-        │  Shipped — verdict  │         next idea         │
-        │  on the intent; the │ ─────────────────────────►┘
-        │  brief passage is   │
-        │  rewritten to what  │
-        │  now exists         │
-        └─────────────────────┘
-```
+**Shipping closes the loop twice.** When the work lands, the *intent auditor* grades each acceptance bullet against the actual repository — the code, the configs, the tests, the docs — and writes the verdict onto the intent. And the same change updates the brief: The passage covering this capability loses its not-yet-real marking and is rewritten to describe what actually shipped. That second half is what keeps the brief honest — the true description of your project, one shipped change at a time, instead of a wish list nobody trusts.
 
 Acceptance criteria for each intent use three words to describe a checkable outcome.
 
@@ -174,6 +114,8 @@ That "someone" is your technical facilitator, who triages those captures later: 
 
 
 # Install
+
+You can use `abcd` by installing it as a [plugin](#plugin) *(for a compatible agent harness)*, download a command-line app [binary](#cli), or by [building](#build) it directly.
 
 ## Plugin
 
