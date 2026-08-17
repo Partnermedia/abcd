@@ -484,10 +484,10 @@ func TestReviewResultRender(t *testing.T) {
 		LifeboatDir: "/lb", Mode: ModeDeterministic, Verdict: VerdictNeedsWork,
 		Written: 1, Dropped: 1,
 		Drops:      []ReviewFindingDrop{{ID: "fnd-x", Reason: "no valid evidence refs"}},
-		ReviewPath: "audit/oracle-9f2a1c2d4e5b.json",
+		ReviewPath: "review/review-9f2a1c2d4e5b.json",
 	}
 	out := r.Render()
-	for _, want := range []string{"/lb", "NEEDS_WORK", "audit/oracle-9f2a1c2d4e5b.json", "fnd-x", "no valid evidence refs"} {
+	for _, want := range []string{"/lb", "NEEDS_WORK", "review/review-9f2a1c2d4e5b.json", "fnd-x", "no valid evidence refs"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %q:\n%s", want, out)
 		}
@@ -616,11 +616,19 @@ func TestReviewReplacesPreRenameArtefact(t *testing.T) {
 		}
 	}
 
-	if _, err := ReviewLifeboat(dir, realSourceDir(t), nil); err != nil {
+	res, err := ReviewLifeboat(dir, realSourceDir(t), nil)
+	if err != nil {
 		t.Fatalf("deterministic run: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "review", "review-"+m12+".json")); err != nil {
 		t.Fatalf("expected the review artefact: %v", err)
+	}
+	// The legacy pair is on disk when VerifyManifest runs, so a SHIP verdict
+	// pins audit/ staying in manifestExcludedPrefixes. Without that entry this
+	// migration run would falsely accuse an untampered lifeboat
+	// (MAJOR_RETHINK), which is the one run this feature exists to serve.
+	if res.Verdict != VerdictShip {
+		t.Fatalf("verdict = %q, want SHIP — a retained legacy artefact must stay outside manifest_sha256", res.Verdict)
 	}
 	for _, ext := range []string{".json", ".md"} {
 		if _, err := os.Stat(filepath.Join(legacyDir, "oracle-"+m12+ext)); !os.IsNotExist(err) {
@@ -669,5 +677,67 @@ func TestReviewLeavesOtherManifestsAlone(t *testing.T) {
 		if string(body) != keep[name] {
 			t.Fatalf("%s was modified: %q", name, body)
 		}
+	}
+}
+
+// TestReviewLegacySweepCannotEscapeLifeboat is the containment regression: a
+// lifeboat is untrusted input, so a symlinked audit/ must NOT redirect the
+// legacy sweep's unlink outside the lifeboat. The three tests above all make
+// audit/ a real directory, which is exactly how the escape survived them.
+func TestReviewLegacySweepCannotEscapeLifeboat(t *testing.T) {
+	dir := reviewFixture(t, "abc", &Summary{Grounded: 7, Blank: 3})
+	m12 := shortHex(readProvHash(t, dir))
+
+	// A victim directory OUTSIDE the lifeboat, holding a file whose name is
+	// exactly what the sweep unlinks.
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "oracle-"+m12+".json")
+	if err := os.WriteFile(victim, []byte("must survive\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The hostile topology: audit/ is a symlink pointing at it.
+	if err := os.Symlink(outside, filepath.Join(dir, "audit")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ReviewLifeboat(dir, realSourceDir(t), nil); err != nil {
+		t.Fatalf("deterministic run: %v", err)
+	}
+	body, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatalf("the sweep deleted a file outside the lifeboat: %v", err)
+	}
+	if string(body) != "must survive\n" {
+		t.Fatalf("victim modified: %q", body)
+	}
+}
+
+// TestReviewLegacyArtefactIsNeverCitable pins the second half of the
+// backward-compatibility contract: reviewOwnOutput must keep excluding the
+// pre-rename audit/ home from the citable path set. Without that, a delegated
+// finding citing audit/oracle-<m12>.json is accepted on the first run and
+// dropped on the second — because that run deletes the file it cited — which
+// is exactly the self-referential non-determinism the exclusion prevents.
+func TestReviewLegacyArtefactIsNeverCitable(t *testing.T) {
+	dir := reviewFixture(t, "abc", &Summary{Grounded: 7, Blank: 3})
+	m12 := shortHex(readProvHash(t, dir))
+
+	legacyDir := filepath.Join(dir, "audit")
+	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacyRel := "audit/oracle-" + m12 + ".json"
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(legacyRel)), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := reviewPayloadJSON("NEEDS_WORK",
+		`{"id":"fnd-selfcite","finding":"cites the verb's own legacy output","evidence":["`+legacyRel+`"]}`)
+	res, err := ReviewLifeboat(dir, realSourceDir(t), payload)
+	if err != nil {
+		t.Fatalf("ReviewLifeboat: %v", err)
+	}
+	if res.Written != 0 || res.Dropped != 1 {
+		t.Fatalf("a finding citing the legacy artefact must be dropped: %+v", res)
 	}
 }

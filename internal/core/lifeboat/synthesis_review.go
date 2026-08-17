@@ -1,6 +1,6 @@
 package lifeboat
 
-// synthesis_oracle.go is the LIFEBOAT-REVIEW synthesis seam (Agent A2, M6/itd-88):
+// synthesis_review.go is the LIFEBOAT-REVIEW synthesis seam (Agent A2, M6/itd-88):
 // `disembark review <lifeboat-dir> <source-repo>`. It audits an already-PACKED
 // lifeboat and writes a registered verdict + cited findings to
 // review/review-<manifest12>.json (+ .md), a post-pack mutable artifact kept out of
@@ -54,19 +54,25 @@ const (
 )
 
 // removeLegacyReviewArtefact deletes the pre-spc-30 audit/oracle-<manifest12>
-// pair for exactly this manifest, then removes audit/ if it is left empty. It
-// is scoped by construction: manifest12 is the validated 12-hex prefix, so the
-// two names it builds can never escape audit/ nor match another manifest's
-// files, and os.Remove on the directory refuses a non-empty one — an unrelated
-// file or another manifest's artefact keeps audit/ alive untouched. Errors are
-// deliberately swallowed: the review artefact is already written, and a
-// read-only or absent legacy dir is the normal case.
-func removeLegacyReviewArtefact(lifeboatAbs, manifest12 string) {
-	legacyDir := filepath.Join(lifeboatAbs, legacyReviewDir)
+// pair for exactly this manifest, then removes audit/ if it is left empty.
+//
+// The scoping comes from the ROOT, not from the name construction. manifest12
+// is 12-hex so the two names cannot match another manifest's files, and
+// Root.Remove refuses a non-empty directory so an unrelated file keeps audit/
+// alive — but neither fact contains the DELETE: a lifeboat is untrusted input,
+// and a symlinked audit/ redirects a bare os.Remove anywhere the invoking user
+// can write. Every other mutation in this file already goes through the
+// lifeboat's os.Root; this one must too, or it is the one unlink that escapes
+// the boundary the rest of the package defends.
+//
+// Errors are deliberately swallowed: the review artefact is already written and
+// durable, the removal is hygiene, and a read-only or absent legacy dir is the
+// normal case — failing the run over it would be worse.
+func removeLegacyReviewArtefact(root *os.Root, manifest12 string) {
 	for _, ext := range []string{".json", ".md"} {
-		_ = os.Remove(filepath.Join(legacyDir, "oracle-"+manifest12+ext))
+		_ = root.Remove(path.Join(legacyReviewDir, "oracle-"+manifest12+ext))
 	}
-	_ = os.Remove(legacyDir) // refuses a non-empty directory
+	_ = root.Remove(legacyReviewDir) // refuses a non-empty directory
 }
 
 // ReviewLifeboat audits the packed lifeboat at lifeboatDir against sourceRepo. When
@@ -159,7 +165,7 @@ func ReviewLifeboat(lifeboatDir, sourceRepo string, raw []byte) (ReviewResult, e
 	// pair (never another manifest's, and never an unrelated file), then prune
 	// audit/ if that emptied it. Best-effort by design — the review is written
 	// and valid either way, so a removal failure must not fail the run.
-	removeLegacyReviewArtefact(abs, manifest12)
+	removeLegacyReviewArtefact(root, manifest12)
 
 	res.Verdict = audit.Verdict
 	res.Written = len(audit.Findings)
@@ -242,24 +248,24 @@ type reviewDropReport struct {
 func validateReview(abs string, raw []byte) (ReviewVerdict, []ReviewFinding, reviewDropReport, error) {
 	var rep reviewDropReport
 	if len(raw) > maxSynthesisBytes {
-		return "", nil, rep, fmt.Errorf("oracle payload exceeds the %d-byte cap", maxSynthesisBytes)
+		return "", nil, rep, fmt.Errorf("review payload exceeds the %d-byte cap", maxSynthesisBytes)
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields() // reject smuggled extra fields
 	var in ReviewArtefact
 	if err := dec.Decode(&in); err != nil {
-		return "", nil, rep, fmt.Errorf("malformed oracle JSON: %v", err)
+		return "", nil, rep, fmt.Errorf("malformed review JSON: %v", err)
 	}
 	// Three-branch schema gate (mirrors IngestLessons).
 	if in.SchemaVersion == 0 {
-		return "", nil, rep, errors.New("oracle payload is missing schema_version")
+		return "", nil, rep, errors.New("review payload is missing schema_version")
 	}
 	if in.SchemaVersion > ReviewSchemaVersion {
-		return "", nil, rep, fmt.Errorf("oracle schema v%d; this abcd knows up to v%d — upgrade abcd",
+		return "", nil, rep, fmt.Errorf("review schema v%d; this abcd knows up to v%d — upgrade abcd",
 			in.SchemaVersion, ReviewSchemaVersion)
 	}
 	if in.SchemaVersion != ReviewSchemaVersion {
-		return "", nil, rep, fmt.Errorf("unsupported oracle schema_version %d", in.SchemaVersion)
+		return "", nil, rep, fmt.Errorf("unsupported review schema_version %d", in.SchemaVersion)
 	}
 	// Mode gate: a delegated payload must not claim deterministic. An absent mode is
 	// allowed (the core stamps delegated on write regardless).
@@ -279,7 +285,7 @@ func validateReview(abs string, raw []byte) (ReviewVerdict, []ReviewFinding, rev
 		return "", nil, rep, fmt.Errorf("too many findings (%d > %d)", len(in.Findings), maxReviewFindings)
 	}
 
-	// Build the packed path set once — the live set an oracle finding must cite.
+	// Build the packed path set once — the live set a review finding must cite.
 	root, err := os.OpenRoot(abs)
 	if err != nil {
 		return "", nil, rep, err
@@ -335,13 +341,13 @@ func validateReview(abs string, raw []byte) (ReviewVerdict, []ReviewFinding, rev
 // render; the surface prints it).
 func (r ReviewResult) Render() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "oracle audit for %s\n", sanitize(r.LifeboatDir))
+	fmt.Fprintf(&b, "review of %s\n", sanitize(r.LifeboatDir))
 	fmt.Fprintf(&b, "  verdict:  %s\n", r.Verdict)
 	fmt.Fprintf(&b, "  mode:     %s\n", r.Mode)
 	fmt.Fprintf(&b, "  findings: %d\n", r.Written)
 	fmt.Fprintf(&b, "  dropped:  %d\n", r.Dropped)
 	if r.ReviewPath != "" {
-		fmt.Fprintf(&b, "  audit:    %s\n", sanitize(r.ReviewPath))
+		fmt.Fprintf(&b, "  review:   %s\n", sanitize(r.ReviewPath))
 	}
 	for _, d := range r.Drops {
 		fmt.Fprintf(&b, "    - %s (%s)\n", sanitize(d.ID), sanitize(d.Reason))
@@ -353,7 +359,7 @@ func (r ReviewResult) Render() string {
 // deterministic, sanitised human view of the audit (no wall-clock, fixed order).
 func renderReviewMD(a ReviewArtefact) string {
 	var b strings.Builder
-	b.WriteString("# Lifeboat oracle audit\n\n")
+	b.WriteString("# Lifeboat review\n\n")
 	fmt.Fprintf(&b, "- verdict: %s\n", a.Verdict)
 	fmt.Fprintf(&b, "- mode: %s\n", a.Mode)
 	if a.PromptVersion != "" {

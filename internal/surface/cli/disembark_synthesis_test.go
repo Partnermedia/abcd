@@ -274,9 +274,9 @@ func TestDisembarkPressReleaseUncitedExit2(t *testing.T) {
 // review
 // ---------------------------------------------------------------------------
 
-// TestDisembarkOracleRequiresSourceArg: the source-repo arg is required — a
+// TestDisembarkReviewRequiresSourceArg: the source-repo arg is required — a
 // single-arg invocation is a usage error, exit 2.
-func TestDisembarkOracleRequiresSourceArg(t *testing.T) {
+func TestDisembarkReviewRequiresSourceArg(t *testing.T) {
 	dir := buildSynthLifeboat(t, synthOpts{coverage: &lifeboat.Summary{Grounded: 7, Blank: 3}})
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"disembark", "review", dir}, &stdout, &stderr)
