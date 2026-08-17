@@ -24,7 +24,7 @@ host-delegated (abcd hands a prompt to the host's subagent dispatch)
 abcd's core does the deterministic work and hands a **prompt** to the host's subagent dispatch; the host owns model choice, credentials, and execution, and abcd consumes the structured result. No model plumbing is required by default (adr-25). Concrete oracle backends — native, CLI, API, MCP — are opt-in adapters behind the same seam, selected when an operator wants abcd to reach a model directly.
 
 Examples:
-- **Oracle audit** (lifeboat-oracle, press-release-composer, intent-auditor): host-delegated by default; an operator may wire a native/CLI/API/MCP oracle adapter.
+- **Oracle seam** (lifeboat-reviewer, press-release-composer, intent-auditor): host-delegated by default; an operator may wire a native/CLI/API/MCP oracle adapter.
 - **Code-rescuer**: spec-driven git-window file selection natively; a codemap adapter refines it when one is wired.
 - **Scoped + broad reviewers** (adr-25 adapter guidance): when an operator wires two oracle adapters for a high-stakes review, a **scoped** reviewer (seeing only a selection) and a **broad** reviewer (reasoning over the whole repo) have complementary blind spots and are trusted **asymmetrically** — the scoped verdict gates, the broad reviewer is mined for findings, and the review-fix loop declares its stopping rule up front. Guidance the adapter layer offers, never a cascade the core imposes.
 - Future agents follow the same pattern by default.

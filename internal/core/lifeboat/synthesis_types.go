@@ -2,7 +2,7 @@ package lifeboat
 
 // synthesis_types.go — the SHARED TYPE + CONSTANT surface for M6 ("synthesis over
 // the written record", itd-88). It carries ONLY the vocabulary the M6 verbs agree
-// on — the three artifact schemas, the registered OracleVerdict enum, the
+// on — the three artifact schemas, the registered ReviewVerdict enum, the
 // trust-boundary caps, and the id/semver grammars — so the parallel implementation
 // agents build against one contract and cannot drift. It contains NO logic (the
 // deterministic builders, the guarded readers, the cite-or-be-dropped validators,
@@ -12,14 +12,14 @@ package lifeboat
 //     principles and press-release cores — SynthesizePrinciples / ComposePressRelease,
 //     the deterministic evidence-only fallbacks, the delegated cite-or-be-dropped
 //     validators, the .md renders, and the shared read/clean/filter helpers A2 reuses.
-//   - Agent A2 (synthesis_oracle.go): the oracle core — AuditOracle, the deterministic
+//   - Agent A2 (synthesis_review.go): the review core — ReviewLifeboat, the deterministic
 //     manifest+coverage verdict mapping, the delegated verdict/finding validator, the
 //     .md render. Depends on A1's shared helpers (same package, so a build-order dep).
-//   - Agent B (surface/cli): the `disembark principles|press-release|oracle` verbs and
+//   - Agent B (surface/cli): the `disembark principles|press-release|review` verbs and
 //     the three orchestration sections in commands/disembark.md.
 //   - Agent C (agents/*.md + fixtures): the four host-delegated agent prompt files
 //     (principle-distiller, graveyard-interpreter, press-release-composer,
-//     lifeboat-oracle) with itd-5 frontmatter and injection-canary fixtures.
+//     lifeboat-reviewer) with itd-5 frontmatter and injection-canary fixtures.
 //
 // Every M6 artifact is a POST-PACK MUTABLE LAYER written into an already-sealed
 // lifeboat, deliberately kept OUT of manifest_sha256 (mirroring graveyard/lessons.json,
@@ -27,7 +27,7 @@ package lifeboat
 // registered-verdict gate, NOT the manifest seal. Agent A1 adds these paths to the
 // exclusion + report-only sets in embark_types.go (see the doc's "exclusion-set diff").
 //
-// No wall-clock anywhere: the oracle audit is named oracle-<manifest12>.json, where
+// No wall-clock anywhere: the review artefact is named review-<manifest12>.json, where
 // manifest12 is the first 12 hex of the lifeboat's manifest_sha256 (shortHex over
 // prov.ManifestSHA256) — deterministic and unique per content, a plan amendment to
 // the plan's oracle-<ts>.json (DECISIONS.md entry is the orchestrator's).
@@ -48,8 +48,8 @@ const (
 	PrinciplesSchemaVersion = 1
 	// PressReleaseSchemaVersion stamps press-release.json.
 	PressReleaseSchemaVersion = 1
-	// OracleAuditSchemaVersion stamps audit/oracle-<manifest12>.json.
-	OracleAuditSchemaVersion = 1
+	// ReviewSchemaVersion stamps review/review-<manifest12>.json.
+	ReviewSchemaVersion = 1
 )
 
 // ---------------------------------------------------------------------------
@@ -74,31 +74,31 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// OracleVerdict — the FIRST Go home of abcd's registered review-verdict enum
+// ReviewVerdict — the FIRST Go home of abcd's registered review-verdict enum
 // (brief 02-constraints/04-naming.md:83, 05-internals/01-agents.md § Verdict-tag
 // protocol). Membership-validated exactly like intent.verdictEnum: an out-of-enum
 // verdict in a delegated payload is a structural refusal, never a silent coercion.
 // ---------------------------------------------------------------------------
 
-// OracleVerdict is a lifeboat-oracle review verdict.
-type OracleVerdict string
+// ReviewVerdict is a lifeboat-reviewer review verdict.
+type ReviewVerdict string
 
 const (
 	// VerdictShip: the lifeboat is a faithful, shippable proxy of the record.
-	VerdictShip OracleVerdict = "SHIP"
+	VerdictShip ReviewVerdict = "SHIP"
 	// VerdictNeedsWork: shippable but with named, addressable gaps.
-	VerdictNeedsWork OracleVerdict = "NEEDS_WORK"
+	VerdictNeedsWork ReviewVerdict = "NEEDS_WORK"
 	// VerdictMajorRethink: the lifeboat does not faithfully carry the record.
-	VerdictMajorRethink OracleVerdict = "MAJOR_RETHINK"
+	VerdictMajorRethink ReviewVerdict = "MAJOR_RETHINK"
 )
 
-// oracleVerdictEnum is the closed set of review verdicts.
-var oracleVerdictEnum = map[OracleVerdict]bool{
+// reviewVerdictEnum is the closed set of review verdicts.
+var reviewVerdictEnum = map[ReviewVerdict]bool{
 	VerdictShip: true, VerdictNeedsWork: true, VerdictMajorRethink: true,
 }
 
 // Valid reports whether v is a registered review verdict.
-func (v OracleVerdict) Valid() bool { return oracleVerdictEnum[v] }
+func (v ReviewVerdict) Valid() bool { return reviewVerdictEnum[v] }
 
 // ---------------------------------------------------------------------------
 // principles.json (+ principles.md). One entry per distilled principle; each cites
@@ -183,7 +183,7 @@ type PressReleaseResult struct {
 }
 
 // ---------------------------------------------------------------------------
-// audit/oracle-<manifest12>.json (+ .md). The lifeboat-oracle audit: a registered
+// review/review-<manifest12>.json (+ .md). The lifeboat-reviewer audit: a registered
 // verdict, the manifest attestation, the packed coverage summary, and findings that
 // each cite packed lifeboat paths (cite-or-be-dropped). Coverage reuses the coverage
 // Summary shape. In deterministic mode the verdict is a mechanical mapping over
@@ -191,46 +191,46 @@ type PressReleaseResult struct {
 // verdict is membership-validated and its findings are cite-or-dropped.
 // ---------------------------------------------------------------------------
 
-// OracleFinding is one audit finding. Finding (the prose) is sanitised; Evidence
+// ReviewFinding is one audit finding. Finding (the prose) is sanitised; Evidence
 // must cite packed lifeboat paths. Severity is optional, sanitised free text (no
 // closed enum in M6).
-type OracleFinding struct {
+type ReviewFinding struct {
 	ID       string   `json:"id"`
 	Severity string   `json:"severity,omitempty"`
 	Finding  string   `json:"finding"`
 	Evidence []string `json:"evidence"`
 }
 
-// OracleFindingDrop records one delegated finding the validator refused to write.
-type OracleFindingDrop struct {
+// ReviewFindingDrop records one delegated finding the validator refused to write.
+type ReviewFindingDrop struct {
 	ID     string `json:"id"`
 	Reason string `json:"reason"`
 }
 
-// OracleAudit is the on-disk shape of audit/oracle-<manifest12>.json. PromptVersion
+// ReviewArtefact is the on-disk shape of review/review-<manifest12>.json. PromptVersion
 // is omitted in deterministic mode. ManifestVerified is the VerifyManifest outcome —
 // a false value is a MAJOR_RETHINK verdict input, NOT a fatal error.
-type OracleAudit struct {
+type ReviewArtefact struct {
 	SchemaVersion    int             `json:"schema_version"`
 	Mode             SynthesisMode   `json:"mode"`
 	PromptVersion    string          `json:"prompt_version,omitempty"`
-	Verdict          OracleVerdict   `json:"verdict"`
+	Verdict          ReviewVerdict   `json:"verdict"`
 	SourceName       string          `json:"source_name"`
 	ManifestSHA256   string          `json:"manifest_sha256"`
 	ManifestVerified bool            `json:"manifest_verified"`
 	Coverage         Summary         `json:"coverage"`
-	Findings         []OracleFinding `json:"findings"`
+	Findings         []ReviewFinding `json:"findings"`
 }
 
-// OracleResult is the transport-agnostic outcome of `disembark oracle`.
-type OracleResult struct {
+// ReviewResult is the transport-agnostic outcome of `disembark review`.
+type ReviewResult struct {
 	LifeboatDir string              `json:"lifeboat_dir"`
 	Mode        SynthesisMode       `json:"mode"`
-	Verdict     OracleVerdict       `json:"verdict"`
+	Verdict     ReviewVerdict       `json:"verdict"`
 	Written     int                 `json:"written"`
 	Dropped     int                 `json:"dropped"`
-	Drops       []OracleFindingDrop `json:"drops,omitempty"`
-	AuditPath   string              `json:"audit_path,omitempty"`
+	Drops       []ReviewFindingDrop `json:"drops,omitempty"`
+	ReviewPath  string              `json:"review_path,omitempty"`
 	RenderPath  string              `json:"render_path,omitempty"`
 }
 
@@ -246,8 +246,8 @@ const (
 	maxSynthesisBytes = 1 << 20 // 1 MiB
 	// maxPrinciples caps how many principles one delegated ingest may carry.
 	maxPrinciples = 1000
-	// maxOracleFindings caps how many findings one delegated audit may carry.
-	maxOracleFindings = 1000
+	// maxReviewFindings caps how many findings one delegated audit may carry.
+	maxReviewFindings = 1000
 	// maxPressReleaseQuotes caps the pull-quotes one press release may carry.
 	maxPressReleaseQuotes = 64
 	// maxSynthEvidenceRefs caps the evidence refs read per entry (mirrors
@@ -278,7 +278,7 @@ const MaxSynthesisBytes = maxSynthesisBytes
 var (
 	// prnIDRe constrains a principle id: "prn-" then kebab-case [a-z0-9] segments.
 	prnIDRe = regexp.MustCompile(`^prn-[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	// fndIDRe constrains an oracle finding id: "fnd-" then kebab-case [a-z0-9] segments.
+	// fndIDRe constrains a review finding id: "fnd-" then kebab-case [a-z0-9] segments.
 	fndIDRe = regexp.MustCompile(`^fnd-[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	// synthRecordIDRe classifies a record-id evidence ref (adr-N / itd-N / iss-N).
 	// A ref matching this shape is valid iff it is also a member of the live record-id

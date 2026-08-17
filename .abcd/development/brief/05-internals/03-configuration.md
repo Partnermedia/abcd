@@ -361,7 +361,7 @@ abcd/
 │   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.
 ├── agents/                             # 10 agents — see 01-agents.md (markdown, host-delegated)
 │   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-auditor.md
-│   ├── lifeboat-oracle.md / press-release-composer.md / principle-distiller.md
+│   ├── lifeboat-reviewer.md / press-release-composer.md / principle-distiller.md
 │   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
 └── hooks/                              # Claude Code event hooks — each command shells directly to the binary
