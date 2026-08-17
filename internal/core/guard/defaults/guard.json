@@ -44,7 +44,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "push",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"],
         "flags": ["--force|-f|--force-with-lease|--force-if-includes"]
       },
       "why": "A force push rewrites the shared branch history, so commits other people already have can disappear with no copy left anywhere.",
@@ -81,7 +81,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "push",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"],
         "arg_prefixes": ["+"]
       },
       "why": "A refspec written with a leading `+` is a force push spelled another way: it overwrites the remote branch without the flag anyone reviews for, so commits other people already have can disappear with no copy left anywhere.",
@@ -108,7 +108,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "commit",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"],
         "flags": ["--no-verify|-n"]
       },
       "why": "`--no-verify` skips the checks the repository installed as commit hooks, so a broken or unsafe change is recorded without ever being looked at.",
@@ -131,7 +131,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "push",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"],
         "flags": ["--no-verify"]
       },
       "why": "`--no-verify` skips the pre-push checks, so the branch is published without the tests and scans the repository requires before anything leaves the machine.",
@@ -223,7 +223,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "reset",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"],
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"],
         "flags": ["--hard"]
       },
       "why": "`--hard` throws away every uncommitted change in the working tree, and nothing in git can bring back work that was never committed.",
@@ -248,7 +248,7 @@
       "pattern": {
         "command": "git",
         "subcommand": "clean",
-        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"]
+        "value_flags": ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"]
       },
       "why": "`git clean` deletes untracked files outright — anything never added to git, including local notes and scratch output, is gone with no copy in the repository.",
       "successor": "See what is untracked first (`git status --ignored`), move anything worth keeping aside, and delete only files you created yourself.",
