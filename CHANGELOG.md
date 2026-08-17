@@ -28,6 +28,11 @@ called out in a **Breaking** section.
 
 - **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
 
+### Fixed
+
+- **A skewed plugin install no longer blocks the session it is meant to guard.** On a host hook an exit status is an instruction, not a diagnostic: the host reads 2 as *block this action*. Since every command parent began refusing an unknown sub-verb at cobra's usage status, a renamed hook sub-verb made `abcd guard <old-name>` exit 2 — so the guard claimed a hazard verdict it never reached and blocked **every shell command** in the session, and `abcd hook <old-name>` blocked **every prompt**. The manifest and the binary can genuinely skew, because `hooks/hooks.json` ships with the plugin clone while the binary is fetched from the latest release, and the PreToolUse wrapper could not rescue it: it treats 2 as a recognised code, so its *FAILED TO RUN … UNGUARDED* net never fired. The two parents a hook reaches now refuse at exit 1 — loud, non-blocking, naming the skew and its remedy — restoring the fail-open-loud contract that reserves the blocking status for a real decision to block. A mistyped sub-verb still never reads as success; only the code moves. The tree-wide usage-error mapping no longer overwrites an exit code a validator chose deliberately, which is what had been silently undoing it. A new test pins every invocation in `hooks/hooks.json` against the live command tree, so a rename that would break the hook plane fails the build in the same change rather than in a user's session. (iss-267)
+
+
 ## [0.5.1] - 2026-08-16
 
 ### Added

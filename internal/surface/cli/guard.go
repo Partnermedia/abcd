@@ -33,7 +33,7 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 	guardCmd := &cobra.Command{
 		Use:   "guard",
 		Short: "Check a shell command against the hazard registry before it runs",
-		Args:  cobra.NoArgs,
+		Args:  failOpenNoArgs,
 		RunE:  helpRunE,
 	}
 

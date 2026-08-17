@@ -56,11 +56,18 @@ func TestEveryParentRefusesAnUnknownSubverb(t *testing.T) {
 // is DERIVED from the live tree minus freeTextParents, so a parent added later is
 // exercised without anyone remembering to add it. Runs in a scratch cwd so a
 // regression that does reach a write path cannot dirty the repository under test.
+//
+// hookPlaneParents are excluded and covered by
+// TestHookPlaneParentsFailOpenOnUnknownSubverb instead, under a STRONGER
+// constraint rather than a weaker one: they must refuse (non-zero, loud) AND must
+// not use exit 2, because on the hook plane 2 is the host's blocking status
+// rather than a usage code (iss-267). Both sets refuse; they disagree only on
+// which non-zero code says so.
 func TestParentsRefuseAnUnknownSubverbAtExitTwo(t *testing.T) {
 	t.Chdir(t.TempDir())
 	for _, p := range parents(t, NewRootCommand()) {
 		name := strings.Join(p.path, " ")
-		if slices.Contains(freeTextParents, name) {
+		if slices.Contains(freeTextParents, name) || slices.Contains(hookPlaneParents, name) {
 			continue
 		}
 		t.Run(strings.Join(p.path, "_"), func(t *testing.T) {
