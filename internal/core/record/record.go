@@ -52,13 +52,19 @@ const (
 	verbCapturePromote = "capture promote"
 	verbCaptureResolve = "capture resolve"
 	verbCaptureWontfix = "capture wontfix"
+	// verbIntentLink is never written by this package directly: it reaches
+	// NextMoves through intent.Ready's spec_link remedies, which the
+	// planned-not-ready branch passes through verbatim. It is pinned here so
+	// the anti-drift test covers the pass-through path too.
+	verbIntentLink = "intent link"
 )
 
 // RecommendedVerbPaths enumerates every abcd verb path the next-move table can
-// emit, for the surface-side anti-drift test.
+// emit — including verbs arriving via passed-through intent.Ready remedies —
+// for the surface-side anti-drift test.
 func RecommendedVerbPaths() []string {
 	return []string{
-		verbIntentPlan, verbIntentReady, verbSpecClose,
+		verbIntentPlan, verbIntentReady, verbIntentLink, verbSpecClose,
 		verbCapturePromote, verbCaptureResolve, verbCaptureWontfix,
 	}
 }

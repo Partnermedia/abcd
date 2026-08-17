@@ -222,6 +222,21 @@ func TestDescribeSpecMoves(t *testing.T) {
 		t.Fatalf("open+ready spec must say implement/spec close: %v", d.NextMoves)
 	}
 
+	// open spec whose linked intent is NOT ready (draft bucket): the move
+	// defers to the intent's failing checks via intent ready.
+	intentFixture(t, repo, "drafts", "itd-8", "not-ready",
+		"---\nid: itd-8\nslug: not-ready\nspec_id: null\nkind: null\n---\n\n# N\n")
+	write(t, repo, ".abcd/development/specs/open/spc-6-not-ready.md",
+		"---\nid: spc-6\nslug: not-ready\nintent: itd-8\n---\n# not-ready\n\nBody.\n")
+	d, err = Describe(repo, "spc-6")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deferral := strings.Join(d.NextMoves, " ")
+	if !strings.Contains(deferral, "not ready") || !strings.Contains(deferral, "intent ready itd-8") {
+		t.Fatalf("open spec with a not-ready intent must defer to intent ready: %v", d.NextMoves)
+	}
+
 	write(t, repo, ".abcd/development/specs/closed/spc-5-donework.md",
 		"---\nid: spc-5\nslug: donework\nintent: itd-6\n---\n# donework\n\nDone.\n")
 	d, err = Describe(repo, "spc-5")
@@ -270,8 +285,9 @@ func TestDescribeUnknownIDFaults(t *testing.T) {
 // test iterates: every verb constant the table can emit is enumerated.
 func TestRecommendedVerbPathsClosed(t *testing.T) {
 	want := map[string]bool{
-		"intent plan": true, "intent ready": true, "spec close": true,
-		"capture promote": true, "capture resolve": true, "capture wontfix": true,
+		"intent plan": true, "intent ready": true, "intent link": true,
+		"spec close": true, "capture promote": true, "capture resolve": true,
+		"capture wontfix": true,
 	}
 	got := RecommendedVerbPaths()
 	if len(got) != len(want) {
