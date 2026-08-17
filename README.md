@@ -115,7 +115,7 @@ That "someone" is your technical facilitator, who triages those captures later: 
 
 # Install
 
-You can use `abcd` by installing it as a [plugin](#plugin) *(currently supporting [Claude Code](https://code.claude.com/docs/en/overview)*, download a command-line app [binary](#cli), or by [building](#build) it rectly.
+You can use `abcd` by installing it as a [plugin](#plugin) *(for a compatible agent harness)*, download a command-line app [binary](#cli), or by [building](#build) it directly.
 
 ## Plugin
 
