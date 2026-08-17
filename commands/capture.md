@@ -1,7 +1,7 @@
 ---
 name: capture
 description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/promote/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> | wontfix <iss-N> <reason>"
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -79,6 +79,17 @@ carries the product judgement the version derivation reads (`additive`,
 default; an absent or misspelled impact is refused rather than guessed, so the
 record always satisfies the `issue_impact_valid` gate. `wontfix` takes no impact
 (a non-action ships nothing).
+
+`resolve` also takes optional provenance — the structured `resolved_by` pointer
+to what fixed the issue: `--intent <itd-N>`, `--spec <spc-N>`, `--commit <sha>`,
+in any combination. Supply them whenever the fixing record is known — that is
+what keeps the trail six months later. Ids must exist in their record store
+(any bucket); the sha is shape-checked only (7–40 hex chars — its home may be
+the remote). An unknown id or malformed value refuses the whole resolve and
+writes nothing. With no provenance flags the record is byte-identical to a
+plain resolve: provenance is optional, never guessed. The written members come
+back in the JSON as `resolved_by`. `wontfix` takes no provenance — a non-action
+points at nothing.
 
 ## Promote an issue into an intent
 

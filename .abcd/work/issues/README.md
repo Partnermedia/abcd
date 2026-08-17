@@ -54,7 +54,10 @@ Optional:
 - `promoted_to` — the `itd-N` this issue graduated into.
 - `resolution` — required and non-empty in `resolved/`; forbidden elsewhere.
 - `wontfix_reason` — required and non-empty in `wontfix/`; forbidden elsewhere.
-- `resolved_by` — optional pointer object (`intent`, `spec`, `commit`).
+- `resolved_by` — optional pointer object (`intent`, `spec`, `commit`) naming
+  what fixed the issue; written by `abcd capture resolve`'s `--intent` /
+  `--spec` / `--commit` flags (ids must exist in their store, the sha is
+  shape-checked), with only the supplied members present.
 - `details`, `suggested_fix`, `synthesis_clusters` — free-form provenance.
 
 There is no `created` or `updated` field. Git is the canonical source of an
