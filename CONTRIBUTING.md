@@ -40,6 +40,16 @@ honest:
   rather than being inferred. Never write a vendor trailer for work a model did
   not touch — a false disclosure is worse than none, and the reviewer reading the
   diff is the check on it.
+- **No tool footer, and quote it in a fence when you need to.** A "generated with
+  <tool>" footer names a tool outside the two credit surfaces this project
+  sanctions (the README badge and `ACKNOWLEDGEMENTS.md`), so the gate refuses one
+  in a commit message or a pull-request body — including the italic and bold forms
+  a host appends by default. Writing *about* the rule is expressly allowed: the
+  check reads the document's own voice, so a banned form quoted inside a fenced
+  code block is an example rather than a violation. The same cuts both ways — a
+  trailer that appears only inside a fence is an example too, and does not count
+  as your disclosure. Close your fences: an unbalanced one is checked as ordinary
+  prose, so a stray ``` cannot switch the gate off for everything below it.
 
 ## Acknowledgements
 

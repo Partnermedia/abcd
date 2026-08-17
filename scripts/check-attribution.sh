@@ -116,6 +116,59 @@ AI_IDENT_MAIL_RE='@anthropic\.com$|@openai\.com$'
 fail=0
 note() { echo "  $1" >&2; }
 
+# strip_fenced_blocks removes markdown fenced code blocks from stdin.
+#
+# A fenced block is QUOTED MATERIAL, not the document's own voice, and every rule
+# below is about what the document itself says. So the rule reads in both
+# directions: a banned form inside a fence is an example rather than a violation,
+# and the required trailer inside a fence is an example too — it cannot serve as
+# the disclosure. Stripping before any check gets both at once.
+#
+# This exists because mid-sentence prose was the only way to document the banned
+# shape, and a fenced example — the natural way to show a literal — was refused
+# exactly as a real footer would be. The change that tightened the rule tripped
+# over this in its own pull-request body (iss-268). The line anchor already grants
+# this to `- Generated with …` bullets; a fence is the same concession, made
+# deliberately.
+#
+# Permitting a fenced footer costs nothing against the actual threat. This gate
+# defends against a footer a TOOL APPENDS BY DEFAULT, and no tool wraps its own
+# footer in a code fence. It was never a defence against a determined author, who
+# would simply delete the footer — far easier than fencing it — so there is no
+# bypass here that was not already wide open.
+#
+# UNBALANCED FENCES FAIL CLOSED. Markdown renders an unclosed fence as code to the
+# end of the document, so honouring one would let a single stray ``` line suppress
+# every check beneath it — the cheapest bypass imaginable. When the fence markers
+# do not pair up, nothing is stripped and the whole text is checked.
+#
+# A fence may be indented up to three spaces (markdown's own rule); at four it is
+# an indented code block, and a tab-led line is not a fence either. Both stay
+# unstripped, which is the conservative direction.
+strip_fenced_blocks() {
+	awk '
+		function isfence(l,   t, indent) {
+			t = l
+			sub(/^ +/, "", t)
+			indent = length(l) - length(t)
+			if (indent > 3) return 0
+			return (substr(t, 1, 3) == "```" || substr(t, 1, 3) == "~~~")
+		}
+		{ line[NR] = $0; if (isfence($0)) fences++ }
+		END {
+			if (fences % 2 != 0) {
+				for (i = 1; i <= NR; i++) print line[i]
+				exit
+			}
+			inside = 0
+			for (i = 1; i <= NR; i++) {
+				if (isfence(line[i])) { inside = !inside; continue }
+				if (!inside) print line[i]
+			}
+		}
+	'
+}
+
 usage() {
 	echo "usage: check-attribution.sh commits <base-ref> <head-ref> | body <file>" >&2
 	exit 2
@@ -139,9 +192,11 @@ check_ident() {
 }
 
 # check_text applies both halves to one artefact: the banned footer must be
-# absent, and the trailer must be present.
+# absent, and the trailer must be present. Both read the document's own voice, so
+# fenced quotation is removed first (see strip_fenced_blocks).
 check_text() {
-	local label="$1" text="$2"
+	local label="$1" text
+	text="$(printf '%s' "$2" | strip_fenced_blocks)"
 	if printf '%s' "$text" | grep -Eq "$GENERATED_RE"; then
 		echo "check-attribution: $label carries a tool's default 'generated with' footer" >&2
 		note "A 'Generated with <tool>' footer names a tool outside the two credit surfaces"
