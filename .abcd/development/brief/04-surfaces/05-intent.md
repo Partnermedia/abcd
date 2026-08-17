@@ -10,7 +10,7 @@ Intents live at `.abcd/development/intents/{drafts,planned,shipped,disciplines,s
 
 - **`drafts/`** — press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard.
 - **`planned/`** — a committed capability, scoped into a roadmap phase and awaiting its Go build. Its `spec_id` is `null` (unscheduled) or points at a `spc-N` once the spec layer schedules it (Phase 4). The native spec store ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)) is the scheduling home. Bundle-member intents in `planned/` share a `spec_id` with their bundle-mates.
-- **`shipped/`** — a capability built in Go. Empty until the Go build ships capabilities into it (Phase 1 onward). The intent's "Audit Notes" section holds drift findings (per-criterion verdicts: `MET`, `MET_WITH_CONCERNS`, `NOT_MET`, `INCONCLUSIVE`) once `intent-fidelity-reviewer`'s Role 1 has run on it via `/abcd:intent review <itd-N>`; an intent moves here when its linked spec closes.
+- **`shipped/`** — a capability built in Go. Empty until the Go build ships capabilities into it (Phase 1 onward). The intent's "Audit Notes" section holds drift findings (per-criterion verdicts: `MET`, `MET_WITH_CONCERNS`, `NOT_MET`, `INCONCLUSIVE`) once `intent-auditor`'s Role 1 has run on it via `/abcd:intent audit <itd-N>`; an intent moves here when its linked spec closes.
 - **`disciplines/`** — discipline-kind intents (cross-cutting rules with no user moment). They never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. Disciplines have no `status` frontmatter — presence in this directory IS the active state. Superseded disciplines move to `superseded/`.
 - **`superseded/`** — intents killed by reclassification or absorption (e.g., when a smaller intent is folded into a larger one, or a discipline is replaced by a stricter successor). The file records `superseded_by: <handle>` (the record that formally supersedes this intent — an intent, `itd-N`, or an ADR, `adr-N`, when a decision redecided the question) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired — standalone vs bundle-member vs discipline). Preserved as historical record; never deleted.
 
@@ -29,8 +29,8 @@ There is no `active/` state — "active" is implicit (a planned intent's linked 
 | `new` | — | shipped |
 | `plan` | — | shipped |
 | `ready` | gate | shipped |
-| `review` | audit | shipped |
-| `review ingest` | audit | shipped |
+| `audit` | audit | shipped |
+| `audit ingest` | audit | shipped |
 
 
 ## 1. Intent IDs, kinds, and lifecycle
@@ -103,7 +103,7 @@ the prior art (other projects' versions of this discipline).>
 ## Audit Notes
 
 <Empty until first spec ships under this discipline. The shape-classification
-role of intent-fidelity-reviewer populates findings here.>
+role of intent-auditor populates findings here.>
 
 ## References
 
@@ -114,7 +114,7 @@ role of intent-fidelity-reviewer populates findings here.>
 
 1. **Three or more disciplines exist** with `kind_notes` describing similar shapes.
 2. **A user is confused** about which existing discipline a finding belongs to.
-3. **`intent-fidelity-reviewer`'s shape-classification role cannot describe a proposed discipline** without more constraint than `kind_notes` provides.
+3. **`intent-auditor`'s shape-classification role cannot describe a proposed discipline** without more constraint than `kind_notes` provides.
 4. **Cross-project usage** — once abcd is in three or more projects, comparing disciplines across them needs a shared subtype vocabulary.
 
 Until then, `kind_notes` is the free-text descriptor.
@@ -154,8 +154,8 @@ Until then, `kind_notes` is the free-text descriptor.
    └─ Moves intents/planned/itd-N-*.md → intents/shipped/itd-N-*.md (+ enqueues a review)
        (For bundles, all member intents move together when the shared spec closes.)
 
-   Then, as a separate MANUAL step — run /abcd:intent review <itd-N>:
-   └─ intent-fidelity-reviewer agent (single-document role / Role 1 itd-1 pass)
+   Then, as a separate MANUAL step — run /abcd:intent audit <itd-N>:
+   └─ intent-auditor agent (single-document role / Role 1 itd-1 pass)
        └─ Compares as-shipped reality against original press release + acceptance criteria
            └─ Per-criterion verdicts (MET / MET_WITH_CONCERNS / NOT_MET / INCONCLUSIVE)
                written to the intent file's "Audit Notes" section (verdict of record),
@@ -166,7 +166,7 @@ Until then, `kind_notes` is the free-text descriptor.
     that moves the intent planned → shipped and QUEUES a review on that transition.
     Auto-running the reviewer off that queue is still deferred (no epic currently owns
     it; spc-6 (predecessor store) disowned auto-firing). Until then, the `## Audit Notes` of a freshly
-    shipped intent stays empty until /abcd:intent review is run by hand.)
+    shipped intent stays empty until /abcd:intent audit is run by hand.)
 
 4. /abcd:intent reclassify <itd-N> --kind <new-kind>     (late reclassification — a later phase; no reclassify sub-verb ships yet)
    ├─ Records the change in intent.reclassification_history (date + from-kind + to-kind + reason)
@@ -177,9 +177,9 @@ Until then, `kind_notes` is the free-text descriptor.
    │   kind_at_supersession: <original-kind> (so future readers know what shape the
    │   intent had when it was retired — standalone vs bundle-member vs discipline
    │   change the meaning of "superseded")
-   └─ Triggers intent-fidelity-reviewer (shape-classification role) to verify the new kind fits
+   └─ Triggers intent-auditor (shape-classification role) to verify the new kind fits
 
-Later phase — intent-fidelity-reviewer (shape-classification role) scans the corpus
+Later phase — intent-auditor (shape-classification role) scans the corpus
               when the user runs /abcd:intent shape (spc-29, predecessor store; an on-demand surface, not
               yet a binary sub-verb). The user accepts a suggestion via
               /abcd:intent reclassify; declined suggestions become entries in the
@@ -198,8 +198,8 @@ Later phase — intent-fidelity-reviewer (shape-classification role) scans the c
 | `/abcd:intent grill <itd-N>` | Socratic adversarial interview that stress-tests an intent for vagueness, missing acceptance, hidden assumptions before planning. Glossary-aware once `terminology/` exists. `--brief-section <id>` flag for stress-testing a brief section instead. (per itd-27, `intents/planned/` — a later phase; no `grill` sub-verb ships yet) | (stays in current state) |
 | `/abcd:intent plan <itd-N>` | Plans a draft: mints its native spec, injects the bidirectional link (intent `spec_id` ↔ spec `intent`), and moves the file `drafts/` → `planned/`. Single intent ID. | `drafts/` → `planned/` |
 | `/abcd:intent ready <itd-N>` | **Implement-readiness gate** (read-only): reports whether an intent is ready to implement — planned, with acceptance criteria and a written spec body. Exit 0 ready / 1 not ready / 2 fault. | (no move) |
-| `/abcd:intent review <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). spc-12 (predecessor store) ships this **manual** verb; spc-28 (predecessor store) ships the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; spc-6 (predecessor store) disowned auto-firing). | (stays) |
-| `/abcd:intent review ingest --verdict-json <path>` | Ingests a host-delegated intent-fidelity verdict JSON, validated fail-closed against the schema and the parked review request, and writes its per-criterion verdict into the shipped intent's `## Audit Notes` (or quarantines a bad payload). | (no move; updates `## Audit Notes`) |
+| `/abcd:intent audit <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). spc-12 (predecessor store) ships this **manual** verb; spc-28 (predecessor store) ships the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; spc-6 (predecessor store) disowned auto-firing). | (stays) |
+| `/abcd:intent audit ingest --verdict-json <path>` | Ingests a host-delegated intent-fidelity verdict JSON, validated fail-closed against the schema and the parked review request, and writes its per-criterion verdict into the shipped intent's `## Audit Notes` (or quarantines a bad payload). | (no move; updates `## Audit Notes`) |
 | `/abcd:intent consistency [<itd-N>]` | **Role 2 — cross-document fidelity.** Surfaces five judgement categories (terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts) across briefs + intents. **Bare** scans the whole corpus; **with `<itd-N>`** narrows to one intent's relationship with the rest. Findings land in `.abcd/.work.local/logs/audit/consistency-<ts>/report.{json,md}`. The judgement half + on-demand verb are the predecessor's spc-29 (a later phase); mechanical-half categories and pre-commit hook are deferred follow-ups. | (stays) |
 | `/abcd:intent shape [<itd-N>]` | **Role 3 — kind classification.** Examines whether an intent's declared `kind` (the noun) still fits the corpus. Surfaces *suggested* reclassifications across three live types: `kind_change`, `bundle`, `supersession`. **Bare** scans the corpus; **with `<itd-N>`** checks one intent. Pairs with `reclassify` (action verb that commits a `shape` finding). On-demand only per spc-29 (predecessor store; a later phase); findings land in `.abcd/.work.local/logs/audit/shape-<ts>/report.{json,md}`. Concurrency via `flock(2)` on `.abcd/coordination/shape.lock` (see § 7). Scheduled / continuous invocation is a deferred follow-up. | (stays) |
 | `/abcd:intent reclassify <itd-N> --kind <new-kind> [--reason <text>]` | **A later phase — no `reclassify` sub-verb ships yet.** Late reclassification (e.g., a standalone intent realised to be a bundle-member; a draft realised to be a discipline; a shipped intent superseded by a later one). Records `reclassification_history` entry; moves the file between directories as the new kind dictates. `--kind superseded --by <handle>` is the supersession path: the file moves to `superseded/`, frontmatter records `superseded_by: <handle>` — the record that formally supersedes this intent, either an intent (`itd-M`) or an ADR (`adr-M`) when a decision redecided the question — AND `kind_at_supersession: <original-kind>` so future readers know what shape the intent had when retired. | varies by destination kind |
@@ -248,7 +248,7 @@ severity: minor          # seeded capture-grain severity of the draft
 ## Acceptance Criteria      # Required (per the itd-1 discipline); Given-When-Then bullets
 
 ## Open Questions
-## Audit Notes               # populated by `/abcd:intent review` (manual Role 1 run)
+## Audit Notes               # populated by `/abcd:intent audit` (manual Role 1 run)
 ```
 
 Discipline-kind intents use a different template — see § 1 "Discipline format" above.
@@ -327,19 +327,19 @@ Both the press-release intent and the frozen PRD are immutable input artefacts p
 - **Every intent in `superseded/` has both `superseded_by: <handle>` AND `kind_at_supersession: <original-kind>`.** The first names the record that formally supersedes this intent — either a later intent (`itd-M`) or the ADR (`adr-M`) that redecided the question; the second preserves what shape the intent had when it was retired (standalone vs bundle-member vs discipline change the meaning of "superseded"). Both are required. If `kind_at_supersession: bundle-member`, the intent ALSO carries `bundle_at_supersession: <bundle-id>` — preserving the bundle membership at retirement time even though the active `bundle:` field is `null`.
 - No intent ID collisions; no spec referencing a non-existent intent ID.
 - File location matches `kind` frontmatter (drift between dir and field flagged).
-- For intents promoted from issues (per itd-4): bidirectional `related_issues` ↔ `related_intents` linkage holds. Per spc-23 (predecessor store; intent-fidelity-reviewer's issue-drift role — a later phase).
+- For intents promoted from issues (per itd-4): bidirectional `related_issues` ↔ `related_intents` linkage holds. Per spc-23 (predecessor store; intent-auditor's issue-drift role — a later phase).
 
 Drift triggers a warning, not a block (since spec-store state may legitimately lag intent state during work in progress). Acceptance-criteria absence and kind/directory mismatch are hard blocks (the whole point of the itd-1 discipline is to force the AC discipline; the kind/directory contract makes the lifecycle navigable).
 
-## 7. The `intent-fidelity-reviewer` agent (three roles, three verbs)
+## 7. The `intent-auditor` agent (three roles, three verbs)
 
-`intent-fidelity-reviewer` is a single agent in the catalog (per `05-internals/01-agents.md`) that owns three roles. Roles share the agent's prompt scaffolding, oracle backend resolution, and receipts; they differ in what they review, when they run, where findings land, and **which subverb users invoke them through**. Each role has its own dedicated verb — no role-by-kind dispatch, no hidden-state forking.
+`intent-auditor` is a single agent in the catalog (per `05-internals/01-agents.md`) that owns three roles. Roles share the agent's prompt scaffolding, oracle backend resolution, and receipts; they differ in what they review, when they run, where findings land, and **which subverb users invoke them through**. Each role has its own dedicated verb — no role-by-kind dispatch, no hidden-state forking.
 
 The verb `review` is chosen for Role 1 to align with the spec store's review vocabulary (`plan-review`, `impl-review`, `completion-review`); `audit` names the top-level `/abcd:audit`, which runs the read-only working-conventions conformance check (its later-phase `chain` sub-verb covers hash-chain integrity). Each verb means one thing.
 
-### Role 1 — single-document fidelity → `/abcd:intent review <itd-N>`
+### Role 1 — single-document fidelity → `/abcd:intent audit <itd-N>`
 
-`/abcd:intent review <itd-N>` is the **manual** Role 1 surface for `kind: standalone` and `kind: bundle-member` intents. Compares:
+`/abcd:intent audit <itd-N>` is the **manual** Role 1 surface for `kind: standalone` and `kind: bundle-member` intents. Compares:
 - **Intent press release + acceptance criteria** ("what user-facing capability exists, plus the verifiable bar")
 - **Delivered reality** (current state of the source repo — code, configs, docs, tests)
 
@@ -349,9 +349,9 @@ This is product-tier review. The opponent is the codebase. Distinct from the spe
 - the **itd-1 acceptance pass** (a shipped intent) writes per-criterion verdicts into that intent's `## Audit Notes` (the verdict of record), with the review request staged under `.abcd/.work.local/reviews/`;
 - the **itd-37 `MG004` pass** (a native spec's `## Modification Grammar`) writes its `PASS` / `FAIL` verdict to an `audit/spec-mg-<ts>/` receipt under the local ephemeral logs tier — native specs have no `## Audit Notes` section, so the verdict cannot land in-file (a later phase).
 
-**What the predecessor's spc-12 ships.** The predecessor's spc-12 ships the **discipline-judgement subset** of `/abcd:intent review` — the itd-1 per-criterion acceptance verdicts and the itd-37 `MG004` boilerplate check, with their writers and receipts. The broader **press-release prose review** (the `honoured` / `diverged` / `missing` buckets below) and other prose/terminology/PRD-fidelity outputs are **deferred** to a later spec. It also ships the **manual** review surface; spc-28 (predecessor store) ships the on-close hook (move `planned → shipped` + queue a review on that transition). Auto-running the reviewer off that queue is still deferred — no spec currently owns it; spc-6 (predecessor store) disowned auto-firing.
+**What the predecessor's spc-12 ships.** The predecessor's spc-12 ships the **discipline-judgement subset** of `/abcd:intent audit` — the itd-1 per-criterion acceptance verdicts and the itd-37 `MG004` boilerplate check, with their writers and receipts. The broader **press-release prose review** (the `honoured` / `diverged` / `missing` buckets below) and other prose/terminology/PRD-fidelity outputs are **deferred** to a later spec. It also ships the **manual** review surface; spc-28 (predecessor store) ships the on-close hook (move `planned → shipped` + queue a review on that transition). Auto-running the reviewer off that queue is still deferred — no spec currently owns it; spc-6 (predecessor store) disowned auto-firing.
 
-**The spc-23 (predecessor store) issue-drift role (a later phase).** The predecessor's spc-23 adds an `--issue-drift` role — a corpus-wide bidirectional cross-reference walk between shipped intents and the `iss-N` ledger (per itd-4), with receipts under `.abcd/.work.local/logs/audit/issue-drift-<ts>/`, a default exit 0 with warnings to stderr, and a `--strict` exit-1 mode for CI gates. See the predecessor's `spc-23-intent-fidelity-reviewer-extension`.
+**The spc-23 (predecessor store) issue-drift role (a later phase).** The predecessor's spc-23 adds an `--issue-drift` role — a corpus-wide bidirectional cross-reference walk between shipped intents and the `iss-N` ledger (per itd-4), with receipts under `.abcd/.work.local/logs/audit/issue-drift-<ts>/`, a default exit 0 with warnings to stderr, and a `--strict` exit-1 mode for CI gates. See the predecessor's `spc-23-intent-auditor-extension`.
 
 Outputs findings with two layers:
 
@@ -366,7 +366,7 @@ Outputs findings with two layers:
 - **diverged** — capabilities present but materially different from the press release
 - **missing** — capabilities the press release promised that aren't observable in delivered reality
 
-Findings appended to the intent's `## Audit Notes` section. Manual re-run via `/abcd:intent review <itd-N>` available at any time. **Overall verdict rollup:** any `NOT_MET` → overall `NOT_MET`; any `INCONCLUSIVE` without `NOT_MET` → overall `INCONCLUSIVE`; any `MET_WITH_CONCERNS` without `NOT_MET`/`INCONCLUSIVE` → overall `MET_WITH_CONCERNS`; else `MET`. (Note: the verdict tags read as audit-shaped judgement labels even though the verb is `review` — the two registers are deliberately distinct: `review` is the verb / process; verdict tags are the output shape.)
+Findings appended to the intent's `## Audit Notes` section. Manual re-run via `/abcd:intent audit <itd-N>` available at any time. **Overall verdict rollup:** any `NOT_MET` → overall `NOT_MET`; any `INCONCLUSIVE` without `NOT_MET` → overall `INCONCLUSIVE`; any `MET_WITH_CONCERNS` without `NOT_MET`/`INCONCLUSIVE` → overall `MET_WITH_CONCERNS`; else `MET`. (Note: the verdict tags read as audit-shaped judgement labels even though the verb is `review` — the two registers are deliberately distinct: `review` is the verb / process; verdict tags are the output shape.)
 
 For bundle-member intents, this role runs *per intent* against the same delivered reality (each member's acceptance criteria checked separately).
 
@@ -445,11 +445,11 @@ The three live `suggestion_type` values this role produces:
 
 ### Review and audit trail layout
 
-Shipped `/abcd:intent review` keeps its record in the intent file itself: `review ingest --verdict-json <path>` writes the per-criterion verdict into the shipped intent's `## Audit Notes` section (the verdict of record), and the emit path stages an ephemeral review request under `.abcd/.work.local/reviews/` (gitignored, report-only). Idempotency and review state live in that one committed place — directory/file-as-truth, no side database.
+Shipped `/abcd:intent audit` keeps its record in the intent file itself: `review ingest --verdict-json <path>` writes the per-criterion verdict into the shipped intent's `## Audit Notes` section (the verdict of record), and the emit path stages an ephemeral review request under `.abcd/.work.local/reviews/` (gitignored, report-only). Idempotency and review state live in that one committed place — directory/file-as-truth, no side database.
 
 The later-phase review/audit verbs write their per-run receipts under the local ephemeral logs tier, `.abcd/.work.local/logs/audit/<sub-tier>-<ts>/`, where the `audit/` name reflects "this is the on-disk audit trail" regardless of which verb produced it and the sub-tier prefix names the verb:
 
-- `/abcd:intent review` (MG004 pass) → `audit/spec-mg-<ts>/` (Role 1 itd-37 `MG004` check on a native spec's `## Modification Grammar`; one per-run batch receipt, one `results[]` entry per spec — native specs have no `## Audit Notes` section, so the verdict lands here, per itd-37 — a later phase)
+- `/abcd:intent audit` (MG004 pass) → `audit/spec-mg-<ts>/` (Role 1 itd-37 `MG004` check on a native spec's `## Modification Grammar`; one per-run batch receipt, one `results[]` entry per spec — native specs have no `## Audit Notes` section, so the verdict lands here, per itd-37 — a later phase)
 - `/abcd:intent consistency` → `audit/consistency-<ts>/` (Role 2, cross-document fidelity per itd-48, which superseded itd-31)
 - `/abcd:intent shape` → `audit/shape-<ts>/` (Role 3, shape classification per itd-34)
 - `/abcd:audit chain` → `audit/chain-<ts>/` (conversation/edit-history Merkle, default application per itd-16 — a later phase)

@@ -703,6 +703,24 @@
       ]
     },
     {
+      "path": "abcd intent audit",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd intent audit ingest",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "verdict-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd intent link",
       "hidden": false,
       "flags": []
@@ -721,24 +739,6 @@
       "path": "abcd intent ready",
       "hidden": false,
       "flags": []
-    },
-    {
-      "path": "abcd intent review",
-      "hidden": false,
-      "flags": []
-    },
-    {
-      "path": "abcd intent review ingest",
-      "hidden": false,
-      "flags": [
-        {
-          "name": "verdict-json",
-          "shorthand": "",
-          "type": "string",
-          "required": false,
-          "hidden": false
-        }
-      ]
     },
     {
       "path": "abcd launch",

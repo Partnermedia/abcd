@@ -74,3 +74,14 @@ cite a packed lifeboat path (cite-or-be-dropped over the packed-path set). Carri
 `reads_untrusted_input: true`, `capability_scope.task_classes: [oracle_review,
 audit]`, and an injection-canary fixture. Unmeasured; no self-improvement pre-flight
 run.
+
+
+### intent-auditor 0.1.1 (renamed from intent-fidelity-reviewer)
+
+The intent-fidelity judge is the intent AUDIT (adr-40: it emits family-2
+promise-vs-reality verdicts), so the agent renames to `intent-auditor` and its
+verb moves to `abcd intent audit` / `audit ingest` (spc-28, itd-123). The
+verdict format is frozen: `_type` stays `abcd/intent-fidelity-verdict/v1`,
+stored markers and previously ingested verdicts remain valid, and a stored
+verdict naming the old verifier id still ingests. Prompt body otherwise
+unchanged; no re-measurement.

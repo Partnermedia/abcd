@@ -16,7 +16,7 @@ This directory holds the *plumbing* design for abcd: the agents, adapters, confi
 
 ## Policy: no skeleton enforcement (deferred)
 
-The brief skeleton (numbered-folder layout under `.abcd/development/brief/`) is **not enforced** by `intent-fidelity-reviewer` or `documentation-auditor`. This is a deliberate choice — rigidity on a young template kills iteration; better to let the shape settle through use, then enforce.
+The brief skeleton (numbered-folder layout under `.abcd/development/brief/`) is **not enforced** by `intent-auditor` or `documentation-auditor`. This is a deliberate choice — rigidity on a young template kills iteration; better to let the shape settle through use, then enforce.
 
 **Future enforcement candidates** (deferred, captured in the `.abcd/work/issues/` ledger under "[Brief restructure — future enforcement note]"):
 
@@ -25,7 +25,7 @@ The brief skeleton (numbered-folder layout under `.abcd/development/brief/`) is 
 - Require `02-constraints/01-platform.md` to exist (even if minimal)
 - Warn if `05-internals/` is populated on a fresh `ahoy`-bootstrapped brief (signals over-specification — fresh briefs should let agents design plumbing, not pre-specify it)
 
-When `intent-fidelity-reviewer` matures, brief-skeleton presence checks would land alongside its existing intent-vs-implementation checks.
+When `intent-auditor` matures, brief-skeleton presence checks would land alongside its existing intent-vs-implementation checks.
 
 ## Plumbing has no user moment
 

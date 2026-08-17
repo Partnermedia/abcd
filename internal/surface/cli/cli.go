@@ -1315,7 +1315,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 		},
 	})
 
-	intentCmd.AddCommand(newIntentReviewCommand(asJSON))
+	intentCmd.AddCommand(newIntentAuditCommand(asJSON))
 	return intentCmd
 }
 
@@ -1361,14 +1361,14 @@ func emitMintWarning(cmd *cobra.Command, warning string) {
 	fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+termsafe.Sanitize(warning))
 }
 
-// newIntentReviewCommand builds `abcd intent review`: `ingest --verdict-json`
-// applies a host-produced intent-fidelity verdict to the shipped intent's Audit
-// Notes (fail-closed: ingested | dead_letter | noop); bare `review <itd-N>`
+// newIntentAuditCommand builds `abcd intent audit`: `ingest --verdict-json`
+// applies a host-produced intent-audit verdict to the shipped intent's Audit
+// Notes (fail-closed: ingested | dead_letter | noop); bare `audit <itd-N>`
 // re-emits the OWED stub + ephemeral request for a shipped intent.
-func newIntentReviewCommand(asJSON *bool) *cobra.Command {
-	reviewCmd := &cobra.Command{
-		Use:   "review [<itd-N>]",
-		Short: "Fidelity review: re-emit a shipped intent's request, or ingest a verdict",
+func newIntentAuditCommand(asJSON *bool) *cobra.Command {
+	auditCmd := &cobra.Command{
+		Use:   "audit [<itd-N>]",
+		Short: "Intent audit (promise vs delivered): re-emit a shipped intent's request, or ingest a verdict",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -1378,12 +1378,12 @@ func newIntentReviewCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := intent.ReEmitReview(cwd, args[0])
+			res, err := intent.ReEmitAudit(cwd, args[0])
 			if err != nil {
-				return &exitError{Code: 2, Msg: "abcd intent review: " + err.Error()}
+				return &exitError{Code: 2, Msg: "abcd intent audit: " + err.Error()}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd intent review — %s %s (receipt %s)\n  request: %s\n",
+				fmt.Fprintf(w, "abcd intent audit — %s %s (receipt %s)\n  request: %s\n",
 					res.IntentID, res.Status, res.ReceiptID, res.RequestPath)
 			})
 		},
@@ -1392,7 +1392,7 @@ func newIntentReviewCommand(asJSON *bool) *cobra.Command {
 	var verdictJSON string
 	ingestCmd := &cobra.Command{
 		Use:   "ingest --verdict-json <path>",
-		Short: "Ingest an intent-fidelity verdict JSON into the shipped intent's Audit Notes",
+		Short: "Ingest an intent-audit verdict JSON into the shipped intent's Audit Notes",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
@@ -1400,14 +1400,14 @@ func newIntentReviewCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			if verdictJSON == "" {
-				return &exitError{Code: 2, Msg: "abcd intent review ingest: --verdict-json <path> is required"}
+				return &exitError{Code: 2, Msg: "abcd intent audit ingest: --verdict-json <path> is required"}
 			}
 			res, err := intent.IngestVerdict(cwd, verdictJSON)
 			if err != nil {
-				return &exitError{Code: 2, Msg: "abcd intent review ingest: " + err.Error()}
+				return &exitError{Code: 2, Msg: "abcd intent audit ingest: " + err.Error()}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd intent review ingest — %s (receipt %s, intent %s)\n", res.Status, res.ReceiptID, res.IntentID)
+				fmt.Fprintf(w, "abcd intent audit ingest — %s (receipt %s, intent %s)\n", res.Status, res.ReceiptID, res.IntentID)
 				switch res.Status {
 				case "ingested":
 					fmt.Fprintf(w, "  criteria %d: MET %d · MET_WITH_CONCERNS %d · NOT_MET %d · INCONCLUSIVE %d\n",
@@ -1418,9 +1418,9 @@ func newIntentReviewCommand(asJSON *bool) *cobra.Command {
 			})
 		},
 	}
-	ingestCmd.Flags().StringVar(&verdictJSON, "verdict-json", "", "path to the intent-fidelity verdict JSON")
-	reviewCmd.AddCommand(ingestCmd)
-	return reviewCmd
+	ingestCmd.Flags().StringVar(&verdictJSON, "verdict-json", "", "path to the intent-audit verdict JSON")
+	auditCmd.AddCommand(ingestCmd)
+	return auditCmd
 }
 
 // specStatusView is the machine-readable envelope for bare `abcd spec`: the
@@ -1483,8 +1483,8 @@ func newSpecCommand(asJSON *bool) *cobra.Command {
 			}
 			// The fidelity-review emit is report-only: a failure does NOT fail the
 			// close (the intent already shipped), but it is surfaced loudly on stderr.
-			if res.ReviewEmitError != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: abcd spec close — fidelity-review emit failed for %s (intent shipped anyway): %s\n", res.Intent.ID, res.ReviewEmitError)
+			if res.AuditEmitError != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: abcd spec close — fidelity-review emit failed for %s (intent shipped anyway): %s\n", res.Intent.ID, res.AuditEmitError)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", res.Spec.ID, res.Spec.Path)
@@ -2158,12 +2158,22 @@ var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
 // ids) without loosening iss-id validation elsewhere.
 var recordIDRe = regexp.MustCompile(`^(iss|itd|spc)-[0-9]+$`)
 
+// retiredSubverbs maps a parent command to sub-verb spellings that were
+// renamed in a clean break (no alias): an invocation shaped like a subcommand
+// call using a retired spelling is refused with the successor named, so it can
+// never be swallowed as free text and silently filed (the same
+// unrecognized-input-never-writes contract as the typo guard, iss-29).
+var retiredSubverbs = map[string]map[string]string{
+	"intent": {"review": "audit"}, // spc-28 (adr-40)
+}
+
 // suspectedTypoedSubcommand reports the nearest real subverb when args[0] is a
-// near-miss for one (edit distance 1–2) and the invocation shape resembles a
-// subcommand call rather than free-text prose: a lone token, or a token
-// followed by a record id. It is deliberately high-precision so it never
-// refuses a legitimate free-text create whose first word merely resembles a
-// verb — those carry no trailing record id and are multi-word.
+// near-miss for one (edit distance 1–2) — or a retired spelling of one — and
+// the invocation shape resembles a subcommand call rather than free-text
+// prose: a lone token, or a token followed by a record id. It is deliberately
+// high-precision so it never refuses a legitimate free-text create whose first
+// word merely resembles a verb — those carry no trailing record id and are
+// multi-word.
 func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false
@@ -2171,6 +2181,9 @@ func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bo
 	shapedLikeSubcommand := len(args) == 1 || recordIDRe.MatchString(args[1])
 	if !shapedLikeSubcommand {
 		return "", false
+	}
+	if successor, ok := retiredSubverbs[parent.Name()][args[0]]; ok {
+		return successor, true
 	}
 	best, bestDist := "", 3 // accept edit distances 1 and 2
 	for _, c := range parent.Commands() {

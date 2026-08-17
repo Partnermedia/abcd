@@ -528,6 +528,24 @@ Intent lifecycle; bare invocation is read-only status, quoted text files a draft
       --impact string   stamp the draft's product impact: additive|breaking|fix (optional)
 ```
 
+#### `abcd intent audit`
+
+Intent audit (promise vs delivered): re-emit a shipped intent's request, or ingest a verdict
+
+**Usage:** `abcd intent audit [<itd-N>]`
+
+##### `abcd intent audit ingest`
+
+Ingest an intent-audit verdict JSON into the shipped intent's Audit Notes
+
+**Usage:** `abcd intent audit ingest --verdict-json <path> [flags]`
+
+**Flags:**
+
+```
+      --verdict-json string   path to the intent-audit verdict JSON
+```
+
 #### `abcd intent link`
 
 Link a planned intent to an existing spec (writes the intent's spec_id)
@@ -551,24 +569,6 @@ Plan a draft intent: mint its spec, link both sides, move drafts -> planned
 Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not
 
 **Usage:** `abcd intent ready <itd-N>`
-
-#### `abcd intent review`
-
-Fidelity review: re-emit a shipped intent's request, or ingest a verdict
-
-**Usage:** `abcd intent review [<itd-N>]`
-
-##### `abcd intent review ingest`
-
-Ingest an intent-fidelity verdict JSON into the shipped intent's Audit Notes
-
-**Usage:** `abcd intent review ingest --verdict-json <path> [flags]`
-
-**Flags:**
-
-```
-      --verdict-json string   path to the intent-fidelity verdict JSON
-```
 
 ### `abcd launch`
 

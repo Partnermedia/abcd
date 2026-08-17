@@ -102,7 +102,7 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
   and `issue_workflow` primitives.
 - **Command flow:** delivered by the predecessor's `spc-21-abcdcapture-command-flow-text-ingest` (predecessor store).
 - **Legacy `.abcd/.work.local/` scratch migration:** design target per the predecessor's `spc-22-workissuesmd-migration-promote-legacy` (predecessor store) — a later phase, not yet built (rides the `dev-sync` surface, § 3).
-- **intent-fidelity-reviewer cross-check:** delivered by the predecessor's `spc-23-intent-fidelity-reviewer-extension` (predecessor store); the reviewer surface ships as `agents/intent-fidelity-reviewer.md`.
+- **intent-auditor cross-check:** delivered by the predecessor's `spc-23-intent-auditor-extension` (predecessor store); the reviewer surface ships as `agents/intent-auditor.md`.
 - **`promote <iss-N>` bridge:** the command-orchestrated flow leans on
   `abcd intent "<text>"`, delivered by `spc-7-abcd-intent-quoted-text-create-symmetric`
   (itd-46). The issue body is handed to that create path, which files a new draft;

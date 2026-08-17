@@ -121,3 +121,20 @@ func TestIntentFreeTextTitleStillWrites(t *testing.T) {
 		t.Fatalf("free-text draft wrote %d draft(s), want 1", n)
 	}
 }
+
+// TestIntentAuditRenameCleanBreak (spc-28): the audit spelling is live and the
+// old review spelling is an unknown sub-command — a clean break, no alias.
+func TestIntentAuditRenameCleanBreak(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	if _, err := runCLIErr(t, "intent", "review", "itd-1"); err == nil ||
+		!strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("intent review must be an unknown sub-command after the rename, got: %v", err)
+	}
+	// audit resolves as a registered sub-command (it fails on the missing
+	// intent, not as unknown).
+	if _, err := runCLIErr(t, "intent", "audit", "itd-1"); err == nil ||
+		strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("intent audit must be registered, got: %v", err)
+	}
+}

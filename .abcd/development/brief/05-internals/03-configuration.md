@@ -360,7 +360,7 @@ abcd/
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command
 │   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.
 ├── agents/                             # 10 agents — see 01-agents.md (markdown, host-delegated)
-│   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-fidelity-reviewer.md
+│   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-auditor.md
 │   ├── lifeboat-oracle.md / press-release-composer.md / principle-distiller.md
 │   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
@@ -393,7 +393,7 @@ external plug-in — so this brief does not restate it here.
 │   │   │   ├── README.md               # intent format + lifecycle + index
 │   │   │   ├── drafts/                 # itd-N-<slug>.md (captured intents, no plan yet)
 │   │   │   ├── planned/                # itd-N-<slug>.md (has linked native spec, work pending or in flight)
-│   │   │   └── shipped/                # populated as linked specs close + intent-fidelity-reviewer runs
+│   │   │   └── shipped/                # populated as linked specs close + intent-auditor runs
 │   │   ├── phases/
 │   │   │   ├── README.md               # phase index
 │   │   │   └── phase-N-<slug>.md       # ordered build plan; each ends in a milestone (per adr-9)
