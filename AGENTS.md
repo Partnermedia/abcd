@@ -135,6 +135,12 @@ irreversible; guessing downward costs nothing.**
   inflates the contributor graph). A human-only `Signed-off-by:` (DCO) is deferred
   to the public flip or the first outside contribution. The human is the author of
   record, responsible for all AI-assisted output. See `CONTRIBUTING.md`.
+- **A human-only change declares itself: `Assisted-by: None`.** The convention is
+  disclosure, and work no AI touched has nothing to disclose — but silence cannot
+  say so, because an absent trailer and a forgotten one are the same bytes. The
+  declaration is the positive form, and it is the only accepted non-vendor value:
+  a free-text escape would reopen the omission it closes. Claiming it for assisted
+  work is a false disclosure, which is the thing this convention exists to prevent.
 - **Naming a tool is confined to credit.** User-facing prose (`README.md`,
   `docs/`) stays host-agnostic — the `harness/*` docs-lint rules enforce it. The
   one sanctioned place to name a tool is attribution: the README badge and
