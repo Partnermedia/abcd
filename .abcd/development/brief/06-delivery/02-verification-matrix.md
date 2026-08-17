@@ -17,7 +17,7 @@
 | Agent context budget | Inputs over `disembark.maxAgentTokens` trigger stream + summarise; one-shot under threshold |
 | Host-delegated oracle (default) | Oracle seam with **no adapter wired** → abcd emits the prompt, the host's subagent dispatch runs it, the structured result returns to the caller; never blocks, needs no API keys (adr-25) |
 | Oracle adapter degrade | A wired oracle adapter (native/CLI/API/MCP) that is unreachable → degrades to the host-delegated default rather than failing the run |
-| Oracle audit quality | `audit/oracle-<ts>.json` has specific findings, not vague approval |
+| Review quality | `review/review-<manifest12>.json` has specific findings, not vague approval |
 | Oracle re-review | After a fix, the audit-fix loop re-dispatches the review prompt through the oracle seam; the verdict can downgrade (SHIP→NEEDS_WORK) and is honoured; each dispatch is independent, so the loop re-primes context every iteration |
 | Disembark checkpoint | Ctrl-c mid-`disembark to <path>` writes a checkpoint to `.abcd/logbook/disembark/<ts>/_state.json` (forensic record). No `resume` sub-verb ships initially; re-running `disembark to <path>` starts fresh — checkpoint exists for post-mortem only. |
 | Disembark read-only (adr-35) | `disembark <source-repo> to <dest>` never writes to the source: a test hashes the source tree before and after the run and asserts it is byte-identical. Pointing disembark at a repository abcd has never touched — no `ahoy install`, no `.abcd/` — succeeds |

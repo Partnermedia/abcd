@@ -387,9 +387,11 @@ func pressReleaseOwnOutput(rel string) bool {
 	return rel == "press-release.json" || rel == "press-release.md"
 }
 
-// oracleOwnOutput matches the oracle verb's own post-pack artifacts.
-func oracleOwnOutput(rel string) bool {
-	return strings.HasPrefix(rel, "audit/")
+// reviewOwnOutput matches the review verb's own post-pack artefacts, including
+// the pre-spc-30 audit/ home so an older pack's artefact is still recognised as
+// the verb's own output rather than packed evidence.
+func reviewOwnOutput(rel string) bool {
+	return strings.HasPrefix(rel, reviewArtefactDir+"/") || strings.HasPrefix(rel, legacyReviewDir+"/")
 }
 
 // cleanSynthProse sanitises untrusted synthesis prose (principle, finding,

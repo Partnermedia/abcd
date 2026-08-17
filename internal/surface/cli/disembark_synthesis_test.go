@@ -11,14 +11,15 @@ import (
 	"testing"
 
 	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
+	"github.com/spf13/cobra"
 )
 
 // ---------------------------------------------------------------------------
 // Fixtures — the CLI surface builds its own packed lifeboats by hand (the core
-// package's sealLifeboat/oracleFixture helpers are unexported). sealSynthLifeboat
+// package's sealLifeboat/reviewFixture helpers are unexported). sealSynthLifeboat
 // reproduces the manifest hash the way VerifyManifest reproduces it (hash every
 // file except _provenance.json, which is written LAST), so a synthesis lifeboat
-// actually verifies and the oracle can reach a SHIP verdict.
+// actually verifies and the review can reach a SHIP verdict.
 // ---------------------------------------------------------------------------
 
 type synthOpts struct {
@@ -119,7 +120,7 @@ func synthPayloadFile(t *testing.T, content string) string {
 	return p
 }
 
-// realSrcDir returns a real directory usable as the oracle's <source-repo> arg,
+// realSrcDir returns a real directory usable as the review's <source-repo> arg,
 // its base name set so it can match (or diverge from) the provenance source_name.
 func realSrcDir(t *testing.T, base string) string {
 	t.Helper()
@@ -270,7 +271,7 @@ func TestDisembarkPressReleaseUncitedExit2(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// oracle
+// review
 // ---------------------------------------------------------------------------
 
 // TestDisembarkOracleRequiresSourceArg: the source-repo arg is required — a
@@ -278,39 +279,72 @@ func TestDisembarkPressReleaseUncitedExit2(t *testing.T) {
 func TestDisembarkOracleRequiresSourceArg(t *testing.T) {
 	dir := buildSynthLifeboat(t, synthOpts{coverage: &lifeboat.Summary{Grounded: 7, Blank: 3}})
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"disembark", "oracle", dir}, &stdout, &stderr)
+	code := Run([]string{"disembark", "review", dir}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("exit = %d, want 2 for a missing <source-repo>\nstderr:%s", code, stderr.String())
 	}
 }
 
-// TestDisembarkOracleDeterministicShip: a healthy sealed lifeboat (verified
+// TestDisembarkReviewDeterministicShip: a healthy sealed lifeboat (verified
 // manifest, blank<=grounded coverage) yields SHIP in the rendered text, exit 0.
-func TestDisembarkOracleDeterministicShip(t *testing.T) {
+func TestDisembarkReviewDeterministicShip(t *testing.T) {
 	dir := buildSynthLifeboat(t, synthOpts{sourceName: "src", coverage: &lifeboat.Summary{Grounded: 7, Partial: 4, Blank: 3}})
 	src := realSrcDir(t, "src")
-	out := string(runCLI(t, "disembark", "oracle", dir, src))
+	out := string(runCLI(t, "disembark", "review", dir, src))
 	if !strings.Contains(out, "SHIP") {
-		t.Errorf("rendered oracle audit missing SHIP:\n%s", out)
+		t.Errorf("rendered review missing SHIP:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "audit")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "review")); err != nil {
 		t.Errorf("audit/ directory not written: %v", err)
 	}
 }
 
-// TestDisembarkOracleJSON: --json emits a parseable OracleResult (one verb suffices).
-func TestDisembarkOracleJSON(t *testing.T) {
+// TestDisembarkReviewJSON: --json emits a parseable ReviewResult (one verb suffices).
+func TestDisembarkReviewJSON(t *testing.T) {
 	dir := buildSynthLifeboat(t, synthOpts{sourceName: "src", coverage: &lifeboat.Summary{Grounded: 7, Blank: 3}})
 	src := realSrcDir(t, "src")
-	out := runCLI(t, "disembark", "oracle", dir, src, "--json")
-	var res lifeboat.OracleResult
+	out := runCLI(t, "disembark", "review", dir, src, "--json")
+	var res lifeboat.ReviewResult
 	if err := json.Unmarshal(out, &res); err != nil {
 		t.Fatalf("oracle --json is not a result: %v\n%s", err, out)
 	}
 	if res.Verdict != lifeboat.VerdictShip {
 		t.Errorf("verdict = %q, want SHIP", res.Verdict)
 	}
-	if res.AuditPath == "" {
-		t.Errorf("result missing audit_path: %+v", res)
+	if res.ReviewPath == "" {
+		t.Errorf("result missing review_path: %+v", res)
+	}
+}
+
+// TestDisembarkReviewRenameCleanBreak (spc-30): the review spelling is live and
+// both pre-rename spellings — the `oracle` sub-verb and the `--oracle-json`
+// flag — are refused. The `oracle` SEAM (adr-25) is untouched by this rename.
+func TestDisembarkReviewRenameCleanBreak(t *testing.T) {
+	if _, err := runCLIErr(t, "disembark", "oracle", "a", "b"); err == nil ||
+		!strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("disembark oracle must be an unknown sub-command, got: %v", err)
+	}
+	if _, err := runCLIErr(t, "disembark", "review", "a", "b", "--oracle-json", "x.json"); err == nil ||
+		!strings.Contains(err.Error(), "unknown flag") {
+		t.Fatalf("--oracle-json must be an unknown flag, got: %v", err)
+	}
+	// The seam keeps its name: `ahoy install --oracle-backend` still parses.
+	root := NewRootCommand()
+	var ahoyCmd, installCmd *cobra.Command
+	for _, c := range root.Commands() {
+		if c.Name() == "ahoy" {
+			ahoyCmd = c
+		}
+	}
+	if ahoyCmd == nil {
+		t.Fatal("ahoy command missing")
+	}
+	for _, c := range ahoyCmd.Commands() {
+		if c.Name() == "install" {
+			installCmd = c
+		}
+	}
+	if installCmd == nil || installCmd.Flags().Lookup("oracle-backend") == nil {
+		t.Fatalf("the adr-25 oracle seam must be untouched: --oracle-backend missing")
 	}
 }

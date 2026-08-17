@@ -163,21 +163,21 @@ result: `mode` and `evidence_refs`. It also exits non-zero on a structural fault
 (not a lifeboat, or an unreadable/oversize/malformed payload). The press-release
 files are a mutable synthesis layer and are **not** part of `manifest_sha256`.
 
-## Oracle audit (content fidelity + verdict)
+## Review (content fidelity + verdict)
 
-The **oracle** audits a packed lifeboat against the source repo it was mined from
+The **review** assesses a packed lifeboat against the source repo it was mined from
 and issues a registered verdict — `SHIP`, `NEEDS_WORK`, or `MAJOR_RETHINK` — with
-findings that each cite a lifeboat file. Run the `lifeboat-oracle` agent
-(`agents/lifeboat-oracle.md`) over the whole packed lifeboat versus the source,
-have it emit an audit JSON document (verdict + findings, each **citing** a packed
+findings that each cite a lifeboat file. Run the `lifeboat-reviewer` agent
+(`agents/lifeboat-reviewer.md`) over the whole packed lifeboat versus the source,
+have it emit a verdict JSON document (verdict + findings, each **citing** a packed
 lifeboat path), write it to a file, then:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" disembark oracle <lifeboat-dir> <source-repo> --oracle-json <path>   # or - for stdin
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark review <lifeboat-dir> <source-repo> --review-json <path>   # or - for stdin
 ```
 
 The `<source-repo>` argument is **required**; its content is never read — the
-binary gates it as a real directory only, so the audit stays deterministic and
+binary gates it as a real directory only, so the review stays deterministic and
 safe even when the source is gone. The binary always **stamps the attestation
 fields itself** (source name, manifest hash, manifest-verified flag, coverage
 summary) — they are never taken from the agent's payload.
@@ -186,13 +186,13 @@ summary) — they are never taken from the agent's payload.
 verification plus the packed coverage summary: a lifeboat whose bytes no longer
 match its seal is `MAJOR_RETHINK`; one that cannot attest coverage, or whose blank
 sections outnumber its grounded ones, is `NEEDS_WORK`; otherwise `SHIP`. A manifest
-mismatch is a **verdict input, not a failure** — the audit is still written and the
+mismatch is a **verdict input, not a failure** — the review is still written and the
 verb exits 0.
 
 With the flag, the model's `verdict` is **membership-checked** (an out-of-enum
 verdict is refused, exit non-zero) and its findings are **cite-or-be-dropped**
-against the packed path set. The audit lands at
-`audit/oracle-<manifest12>.json` + `.md`, named from the manifest hash (no
+against the packed path set. The review lands at
+`review/review-<manifest12>.json` + `.md`, named from the manifest hash (no
 timestamp), so a deterministic run and a later delegated run write the **same**
 file — a clean replacement, no stale twin. Report the `verdict`, `written`
 findings, and each `dropped` (with its reason); the verb exits 0 even when every
