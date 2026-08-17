@@ -9,6 +9,18 @@ when it is skipped, and capture friction stays at one line. The routing help in
 the `intent` and `capture` surfaces names it for big, unproven ideas; that is a
 pointer, not a precondition.
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `record` | — | shipped |
+
+
 ## Division of labour
 
 Ideate follows the host-delegated pattern the `disembark` synthesis family

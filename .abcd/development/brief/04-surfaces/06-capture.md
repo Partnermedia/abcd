@@ -4,6 +4,21 @@
 
 See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/core`).
 
+## Sub-verbs
+
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `list` | — | shipped |
+| `promote` | — | shipped |
+| `resolve` | — | shipped |
+| `wontfix` | — | shipped |
+
+
 ## 1. Subcommands
 
 | Subcommand | Purpose | File movement |

@@ -104,6 +104,23 @@ type RuleConfig struct {
 	// SkillsDir is the surface_coverage skills directory (skills); each immediate
 	// subdirectory is a shipped skill surface. Also outside Roots.
 	SkillsDir string `json:"skills_dir"`
+	// Snapshot is the committed command-tree snapshot surface_coverage's
+	// sub-verb pass checks table rows against (spc-27), repo-relative — for
+	// abcd, .abcd/development/release/surface.json, whose bytes the surface
+	// drift test keeps equal to the live cobra tree. Empty leaves the sub-verb
+	// grain unarmed (the pre-spc-27 surface-grain check only).
+	Snapshot string `json:"snapshot"`
+	// HostDelegated lists surfaces whose workflow runs in the host agent with
+	// no Go verb (consult, ingest, prepare-this-repo): their sub-verb tables
+	// are format-checked only, never compared to the cobra tree. Explicit
+	// config, never a hard-coded skip — an unlisted surface gets the full
+	// comparison.
+	HostDelegated []string `json:"host_delegated"`
+	// OperatorInternal lists top-level verbs absent from the surface registry
+	// by design (spec, rules, hook, completion — operator plumbing, not
+	// product surface): the sub-verb reverse sweep does not demand a surface
+	// file for them. Explicit config, same rationale as HostDelegated.
+	OperatorInternal []string `json:"operator_internal"`
 	// Target is the context_status_free single-file target, repo-relative
 	// (.abcd/work/CONTEXT.md). The rule runs even though the target lies outside
 	// Roots; a missing target is not an error.

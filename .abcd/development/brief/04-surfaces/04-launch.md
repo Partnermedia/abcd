@@ -4,6 +4,17 @@
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `scaffold` | — | shipped |
+| `ship` | gate | shipped |
+
+
 The shipped verb surface is the `--dry-run` flag on `abcd launch` — a read-only preview of the bundle and gates — plus the `abcd launch ship` subcommand, which cuts the release (the RELEASE CUT slice only; see the ship bullet below), and the `abcd launch scaffold` subcommand, which writes the release machinery into a managed repo (itd-93; see the scaffold bullet below). Bare `abcd launch` never mutates state: it refuses (exit 1) with a hint to pass `--dry-run`; a bare-as-status render is a design target, unshipped. The sub-verb design:
 
 - **`/abcd:launch ship`** — **partly shipped: the RELEASE CUT only** (itd-73 derived versioning + itd-67's changelog slice). `abcd launch ship` derives the version and the record set from what shipped since the newest tag, runs the surface guardrail, and — with `--changelog-json` — validates the host-composed prose against the record set (the completeness bijection) and writes the dated `CHANGELOG.md` heading `.github/workflows/auto-release.yml` turns into a tag; `commands/launch.md` carries the emit → compose → ingest orchestration and the `release-changelog-composer` agent it dispatches. The `Ship` engine is wired: `abcd launch ship` is a live subcommand, and `--payload-dir <dir>` stages the versioned release payload — the derived version stamped into the payload's `plugin.json`/`marketplace.json` and lockstep-proved before return. Commit, tag, and publish stay a design target (itd-65 gate suite + itd-72 publishing): the verb neither commits, tags, nor publishes. The full-cut design: cut a curated release artefact from the one repo: run pre-flight gates, filter the artefact (default-deny, `.abcd/**` excluded by packaging), stamp the version, and on a `v*` tag publish a GitHub Release ([adr-28](../../decisions/adrs/0028-single-repo-curated-release.md)). The flow described in §§ 1–6 below is this sub-verb's behaviour. Flag-shaped modifiers `--allow-dirty` and `--allow-doc-warnings` belong to this sub-verb's design; the shipped `ship` accepts `--changelog-json` and `--payload-dir` (plus the global `--json`), and bare `abcd launch` accepts only `--dry-run` and the global `--json`. There is no version flag — the version is derived, never authored ([adr-31](../../decisions/adrs/0031-derived-versioning-from-intents.md), see [§ 3](#3-versioning--marketplace)).

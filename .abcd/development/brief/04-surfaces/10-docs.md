@@ -10,6 +10,19 @@ when a maintainer asks.
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `cite` | — | shipped |
+| `cite confirm` | — | shipped |
+| `cite refresh` | — | shipped |
+| `lint` | lint | shipped |
+
+
 - **`/abcd:docs lint`** — lint this repo's documentation for currency and print
   the findings. The plugin command (`commands/docs.md`) invokes
   `abcd docs lint --json` and summarises the result.

@@ -367,6 +367,14 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, sc...)
+		// The sub-verb pass (spc-27): armed by the snapshot config key, it
+		// checks each surface file's `## Sub-verbs` table against the committed
+		// command-tree snapshot in both directions.
+		sv, err := checkSubVerbCoverage(repoRoot, scCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, sv...)
 	}
 
 	// record_schema reasons ACROSS the record's stores (ADRs, intents, specs, and

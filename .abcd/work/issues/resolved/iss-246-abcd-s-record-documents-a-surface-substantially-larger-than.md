@@ -7,6 +7,11 @@ category: "drift"
 source: "user-observation"
 found_during: "intent-planning-interview"
 found_at: ".abcd/development/brief/04-surfaces/README.md"
+resolution: "sub-verb tables landed armed across 04-surfaces with the extended surface_coverage pass checking both directions against the command-tree snapshot; the Status enum stays two-valued, sub-verb rows carry the granularity"
+impact: additive
+resolved_by:
+  intent: "itd-122"
+  spec: "spc-27"
 ---
 
 `surface_coverage` is blind inside a row, so `shipped` means "the top-level verb exists" and every unbuilt sub-verb hides behind it.

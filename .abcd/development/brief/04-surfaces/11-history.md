@@ -12,6 +12,18 @@ secret or absolute home path survives capture.
 
 ## Sub-verbs
 
+> _Machine-checked (`surface_coverage`, spc-27): each row records the verb's
+> adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a
+> non-assessment verb) and its existence (`shipped` / `staged`), verified
+> against the committed command-tree snapshot in both directions._
+
+| Verb | Bucket | Status |
+|---|---|---|
+| `capture` | — | shipped |
+| `list` | — | shipped |
+| `show` | — | shipped |
+
+
 - **`/abcd:history list`** — list stored transcripts for this repo, newest
   first. Each record reports `captured_at`, `session_id`, `source_kind`, and the
   `redacted_secrets` / `redacted_home_paths` counts. An empty list means nothing
