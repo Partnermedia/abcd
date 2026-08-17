@@ -55,10 +55,15 @@ func (e *exitError) ExitCode() int { return e.Code }
 // is not Runnable, so cobra prints help and exits 0 WITHOUT running the command's
 // Args validator: an unknown sub-verb — a typo, or a retired spelling like the
 // pre-spc-30 `disembark oracle` — then reads as SUCCESS to a script (iss-266).
-// Giving the parent a RunE keeps bare invocation showing help while letting the
-// declared Args validator (cobra.NoArgs on every parent) refuse a stray token at
-// the usual exit 2. TestEveryParentIsRunnable holds the property tree-wide, so a
-// parent added later cannot reintroduce the hole silently.
+// Giving the parent a RunE keeps bare invocation showing help while letting its
+// declared Args validator run and refuse a stray token at the usual exit 2. A
+// parent must therefore have BOTH: with Args nil, cobra's legacyArgs falls
+// through to ArbitraryArgs and a Runnable parent still exits 0. Most parents
+// declare cobra.NoArgs; `banlist` declares a custom validator, and `capture` and
+// `intent` are deliberately cobra.ArbitraryArgs because their positional is free
+// text (they guard typos themselves). TestEveryParentRefusesAnUnknownSubverb
+// holds both halves tree-wide, so a parent added later cannot reintroduce the
+// hole by missing either one.
 func helpRunE(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 
 // NewRootCommand builds the abcd command tree. Bare `abcd` renders a read-only

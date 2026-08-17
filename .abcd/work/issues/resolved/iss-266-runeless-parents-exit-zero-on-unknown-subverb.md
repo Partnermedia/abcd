@@ -7,7 +7,7 @@ category: "ux"
 source: "impl-review"
 found_during: "spc-30 build"
 found_at: "internal/surface/cli/cli.go"
-resolution: "Every cobra parent is now runnable, so its declared cobra.NoArgs refuses an unknown sub-verb at exit 2 instead of printing help at exit 0. Six parents fixed (docs, docs cite, guard, embark, ideate, hook); the two existing inline fixes consolidated onto a shared helpRunE. Held tree-wide by TestEveryParentIsRunnable, which walks the live command tree rather than a hand-kept list."
+resolution: "Every cobra parent is now runnable, so its declared Args validator actually runs and refuses an unknown sub-verb at exit 2 instead of printing help at exit 0. Six parents fixed (docs, docs cite, guard, embark, ideate, hook); the two existing inline fixes consolidated onto a shared helpRunE. Refusing needs BOTH halves — a runnable parent with Args nil falls through to cobra's ArbitraryArgs and still exits 0 — so TestEveryParentRefusesAnUnknownSubverb asserts runnability AND a declared validator over the live command tree, rather than a hand-kept list. Most parents are cobra.NoArgs; banlist has a custom validator; capture and intent are deliberately ArbitraryArgs (free-text positional, guarded by their own suspected-typo check)."
 impact: fix
 ---
 
