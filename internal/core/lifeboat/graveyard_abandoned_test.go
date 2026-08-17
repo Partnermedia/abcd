@@ -149,6 +149,41 @@ func TestAbandonedAcceptedADRIsNotReported(t *testing.T) {
 	}
 }
 
+func TestAbandonedAcceptedADRWithUppercaseNullIsNotReported(t *testing.T) {
+	// Regression (iss #290): superseded_by carrying an uppercase YAML null —
+	// NULL or Null — must read as "not superseded", exactly as lowercase null
+	// and ~ do. frontmatter.IsNull previously missed the uppercase spellings, so
+	// a live (status: accepted) ADR packed from a foreign repo via
+	// `disembark pack` was silently emitted as a superseded-adr finding, quoting
+	// `superseded_by: NULL` as its evidence. The status is not-superseded and
+	// case-folded, so only the null literal decides the finding.
+	//
+	// This walks the full iss #290 matrix on the lifeboat path. gvSupersededADRs
+	// calls gvUnquote(superseded_by) BEFORE frontmatter.IsNull, so a *quoted*
+	// null (`"NULL"`, `'Null'`) is unquoted to a bare null literal here and must
+	// also read as absent — the matrix marks quoted "NULL" ❌ "gvUnquote strips
+	// the quotes first". A real record handle (`adr-9`) is the positive control:
+	// widening the null set must not suppress a genuine superseding pointer.
+	nulls := []string{"NULL", "Null", "null", "~", `"NULL"`, `'Null'`}
+	for _, nul := range nulls {
+		dir, write := abandonedWriter(t)
+		write(".abcd/development/decisions/adrs/0035-live.md",
+			"---\nid: adr-35\nstatus: accepted\nsuperseded_by: "+nul+"\n---\n\n# Live decision\n")
+		fs := gvSupersededADRs(abandonedCtx(t, dir))
+		if len(fs) != 0 {
+			t.Fatalf("superseded_by: %s is a YAML null and must not be reported, got %v", nul, fs)
+		}
+	}
+	// Positive control: a real handle still yields a superseded finding.
+	dir, write := abandonedWriter(t)
+	write(".abcd/development/decisions/adrs/0035-live.md",
+		"---\nid: adr-35\nstatus: accepted\nsuperseded_by: adr-9\n---\n\n# Live decision\n")
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if _, ok := gvFindingByID(fs, "adr-35"); !ok {
+		t.Fatalf("superseded_by: adr-9 is a real handle and must still be reported, got %v", fs)
+	}
+}
+
 func TestAbandonedSupersededADRAcrossBothHomesDedupes(t *testing.T) {
 	dir, write := abandonedWriter(t)
 	// Same ADR id present in the native home AND a conventional home.

@@ -59,12 +59,21 @@ func TestFieldsTrimsCarriageReturn(t *testing.T) {
 }
 
 func TestIsNull(t *testing.T) {
-	for _, v := range []string{"", "null", "~"} {
+	// The four YAML nulls (YAML 1.1 !!null / YAML 1.2 core schema §10.2.1.1:
+	// null | Null | NULL | ~) plus the empty scalar all read as null. The
+	// uppercase spellings were previously missed (iss #290) even though the
+	// repo's own YAML scalar parser already holds the full set.
+	for _, v := range []string{"", "null", "Null", "NULL", "~"} {
 		if !IsNull(v) {
 			t.Errorf("IsNull(%q) = false, want true", v)
 		}
 	}
-	for _, v := range []string{"itd-9", "spc-1", "standalone"} {
+	// Only the exact YAML null spellings count: near-misses and record handles
+	// must stay non-null, so a fix can never widen this to a case-fold or a
+	// substring match. Fields does not strip quotes, so a *quoted* null reaches
+	// IsNull with its quote characters intact and must stay a string — an
+	// explicit quoted scalar is not a YAML null.
+	for _, v := range []string{"itd-9", "spc-1", "standalone", "None", "nil", "NUL", "nullish", `"null"`, `"NULL"`, "'~'"} {
 		if IsNull(v) {
 			t.Errorf("IsNull(%q) = true, want false", v)
 		}
