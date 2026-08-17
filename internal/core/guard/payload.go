@@ -130,25 +130,25 @@ const (
 	kindShellWarn
 )
 
-// classifySegment reports whether a raw segment is an execute-a-string family
-// member and, if so, what to do with its payload. env -S is checked FIRST, on the
-// raw token chain: env is a registered wrapper whose value-flag walk would
-// otherwise consume and discard the -S value before any recognizer built on
-// commandOf output could see it (the fix both rev-2 reviews caught). Only when no
-// env in the chain carries a split-string flag does the shell -c family get read
-// off commandOf output. trailing is env's operands after the -S value, which env
-// shellFamily is the set of interpreters whose `-c <string>` runs the string as an
-// ordinary shell command line — the same grammar this package's tokenizer already
-// parses. Membership decides whether the guard DESCENDS into a payload, so a name
-// missing here is a silent allow for every hazard carried inside it.
+// isShellFamily reports whether cmd is an interpreter whose `-c <string>` runs
+// the string as an ordinary shell command line — the same grammar this package's
+// tokenizer already parses. Membership decides whether the guard DESCENDS into a
+// payload, so a name missing here is a silent allow for every hazard carried
+// inside it.
 //
-// It is one list because it was three. The set lived written out at
-// classifySegment, pipesIntoInterpreter and shellCPayload, naming only
-// sh/bash/dash(/eval), so `zsh -c "gh repo delete owner/repo"` — zsh being the
-// default login shell on macOS, one of the two systems this repo's CI runs on —
-// was a confident, silent allow for every bundled blocker. Widening one site and
-// not the others is exactly how a fix reaches N of M locations and leaves the
-// rest latent, so there is now nowhere to widen but here (gh-297).
+// It is one predicate because it was two. The set lived written out at
+// classifySegment and at pipesIntoInterpreter, naming only sh/bash/dash(/eval),
+// so `zsh -c "gh repo delete owner/repo"` — zsh being the default login shell on
+// macOS, one of the two systems this repo's CI runs on — was a confident, silent
+// allow for every bundled blocker. Widening one site and not the other is how a
+// fix reaches some sites and leaves the rest latent, so there is now nowhere to
+// widen but here.
+//
+// SCOPE: this is the INTERPRETER set, not the wrapper set. A command that merely
+// execs another (`nice`, `setsid`, `flock`, `busybox sh`, `su -c`, `script -c`)
+// is handled by `wrappers` in match.go, which this does not touch and which has
+// its own gaps — see iss-272. Do not read "nowhere left to widen" as covering
+// those.
 //
 // These are true siblings of the original set: each runs its `-c` operand with
 // the grammar already parsed, differing only by a name. A different LANGUAGE is
@@ -165,6 +165,13 @@ func isShellFamily(cmd string) bool {
 	return false
 }
 
+// classifySegment reports whether a raw segment is an execute-a-string family
+// member and, if so, what to do with its payload. env -S is checked FIRST, on the
+// raw token chain: env is a registered wrapper whose value-flag walk would
+// otherwise consume and discard the -S value before any recognizer built on
+// commandOf output could see it (the fix both rev-2 reviews caught). Only when no
+// env in the chain carries a split-string flag does the shell -c family get read
+// off commandOf output. trailing is env's operands after the -S value, which env
 // appends to the split argv.
 func classifySegment(s segment) (kind int, family, payload string, trailing []string, ok bool) {
 	if v, rest, found := splitStringValue(s.tokens); found {
