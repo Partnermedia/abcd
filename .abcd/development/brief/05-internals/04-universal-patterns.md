@@ -91,7 +91,7 @@ Every command emits `<command>-report.json` (full structured detail) and `<comma
 │                                 # Directory name (audit/) reflects "this is the on-disk audit trail"
 │                                 # regardless of which verb produced it; sub-tier prefix names the verb.
 │                                 # `chain` and `lifeboat` are sub-verbs of /abcd:audit umbrella;
-│                                 # `review`, `consistency`, `shape` are sub-verbs of /abcd:intent.
+│                                 # `audit`, `consistency`, `shape` are sub-verbs of /abcd:intent.
 │                                 # Bare /abcd:audit and bare /abcd:intent are status+help only.
 ├── sota-audits/<date>.{json,md}  # periodic prompt SOTA audit findings (option D)
 └── phase/<phase-id>/             # validation cadence outputs per phase (Phase 0 study, Phase 1 acceptance, etc.)

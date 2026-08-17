@@ -2178,12 +2178,19 @@ func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bo
 	if len(args) == 0 {
 		return "", false
 	}
+	if successor, ok := retiredSubverbs[parent.Name()][args[0]]; ok {
+		// A retired spelling is refused in every shape a subcommand call takes:
+		// a lone token, a token before a record id, or the retired verb followed
+		// by one of the SUCCESSOR's own registered sub-verbs (`review ingest`
+		// must refuse just as `review itd-N` does — the pre-rename two-word
+		// invocation may never be swallowed as free text and filed).
+		if len(args) == 1 || recordIDRe.MatchString(args[1]) || isSubverbOf(parent, successor, args[1]) {
+			return successor, true
+		}
+	}
 	shapedLikeSubcommand := len(args) == 1 || recordIDRe.MatchString(args[1])
 	if !shapedLikeSubcommand {
 		return "", false
-	}
-	if successor, ok := retiredSubverbs[parent.Name()][args[0]]; ok {
-		return successor, true
 	}
 	best, bestDist := "", 3 // accept edit distances 1 and 2
 	for _, c := range parent.Commands() {
@@ -2196,6 +2203,22 @@ func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bo
 		}
 	}
 	return best, best != ""
+}
+
+// isSubverbOf reports whether token names a registered sub-command of parent's
+// child command named successor (e.g. is "ingest" a sub-verb of "audit").
+func isSubverbOf(parent *cobra.Command, successor, token string) bool {
+	for _, c := range parent.Commands() {
+		if c.Name() != successor {
+			continue
+		}
+		for _, sub := range c.Commands() {
+			if sub.Name() == token {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // levenshtein is the classic edit distance (insert/delete/substitute each cost

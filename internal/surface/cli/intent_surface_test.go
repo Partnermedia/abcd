@@ -131,6 +131,21 @@ func TestIntentAuditRenameCleanBreak(t *testing.T) {
 		!strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("intent review must be an unknown sub-command after the rename, got: %v", err)
 	}
+	// The retired TWO-word spelling refuses too — flagless `intent review
+	// ingest` used to exit 2 asking for --verdict-json; it must never be
+	// swallowed as free text and filed (review regression).
+	if _, err := runCLIErr(t, "intent", "review", "ingest"); err == nil ||
+		!strings.Contains(err.Error(), "audit") {
+		t.Fatalf("intent review ingest must refuse naming the successor, got: %v", err)
+	}
+	if _, err := runCLIErr(t, "intent", "review", "ingest", "v.json"); err == nil {
+		t.Fatalf("intent review ingest <arg> must refuse, got success")
+	}
+	// Genuine free text whose first word is 'review' still files.
+	out := runCLI(t, "intent", "review the loader's retry budget before shipping", "--json")
+	if !strings.Contains(string(out), "itd-") {
+		t.Fatalf("free text starting with 'review' must still file:\n%s", out)
+	}
 	// audit resolves as a registered sub-command (it fails on the missing
 	// intent, not as unknown).
 	if _, err := runCLIErr(t, "intent", "audit", "itd-1"); err == nil ||
