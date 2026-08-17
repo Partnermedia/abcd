@@ -131,47 +131,104 @@ note() { echo "  $1" >&2; }
 # this to `- Generated with …` bullets; a fence is the same concession, made
 # deliberately.
 #
-# Permitting a fenced footer costs nothing against the actual threat. This gate
-# defends against a footer a TOOL APPENDS BY DEFAULT, and no tool wraps its own
-# footer in a code fence. It was never a defence against a determined author, who
-# would simply delete the footer — far easier than fencing it — so there is no
-# bypass here that was not already wide open.
+# APPLIED TO THE PULL-REQUEST BODY ONLY. The whole justification is a RENDERING
+# argument — a fence reads as an example because GitHub draws it as a code block.
+# A commit message is never rendered as markdown: `git log` and the forge's commit
+# view show it verbatim, so a fenced footer there is displayed exactly as a real
+# one and lands in permanent history. There is no reading under which it is
+# quotation, so the commits arm keeps the unstripped text and the mid-sentence
+# convention (which every commit message in this repo's history already uses —
+# not one contains a fence marker at all).
 #
-# UNBALANCED FENCES FAIL CLOSED. Markdown renders an unclosed fence as code to the
-# end of the document, so honouring one would let a single stray ``` line suppress
-# every check beneath it — the cheapest bypass imaginable. When the fence markers
-# do not pair up, nothing is stripped and the whole text is checked.
+# Permitting a fenced footer in a body costs little against the actual threat.
+# This gate defends against a footer a TOOL APPENDS BY DEFAULT, and no tool we
+# have met wraps its own footer in a code fence — a judgement about observed
+# tools, not a law about all of them, and the line to revisit if one appears. It
+# was never a defence against a determined author, who would simply delete the
+# footer rather than fence it.
+#
+# THE STRIPPED REGION MUST BE A SUBSET OF WHAT MARKDOWN RENDERS AS CODE, or the
+# concession stops being safe: a line the gate skips but the forge renders as an
+# ordinary paragraph is a real footer, silently passed. A presence test on the
+# first three characters is NOT that subset — it is blind to marker type, run
+# length and info string, and each blindness is a working bypass:
+#
+#   ~~~ / ``` / ~~~ / footer / ```   — CommonMark closes a tilde block only with
+#                                  tildes, so the footer is a paragraph; a
+#                                  type-blind toggle pairs 1-2 and 3-4 and strips it.
+#   ```` / ``` / ```` / footer / ```  — a closer must be at least as long as its opener.
+#   ```make preflight``` is the gate.
+#   footer
+#   ```make build``` builds it. — no exotic markdown at all: a backtick fence's info
+#                                  string may not contain a backtick, so these are
+#                                  inline code spans in ONE paragraph and the footer
+#                                  renders in full.
+#
+# So the matcher is pairing-aware. An opener records its character and run length;
+# a line closes it only with the SAME character, AT LEAST as many of them, and
+# nothing but whitespace after the run; a backtick opener whose info string
+# carries a backtick is not an opener at all.
+#
+# UNTERMINATED BLOCKS FAIL CLOSED. Markdown renders an unclosed fence as code to
+# the end of the document, so honouring one would let a single stray line suppress
+# every check beneath it — the cheapest bypass imaginable. Ending the scan still
+# inside a block strips nothing. Tracking the opener rather than counting markers
+# also makes NESTED documentation work: a ```` block quoting a ``` example is one
+# block, where a parity count saw three markers and failed closed on the very
+# shape needed to document this rule.
 #
 # A fence may be indented up to three spaces (markdown's own rule); at four it is
 # an indented code block, and a tab-led line is not a fence either. Both stay
-# unstripped, which is the conservative direction.
+# unstripped, which is the conservative direction. A fence nested inside a list
+# item is indented past three and so is NOT stripped — iss-270 carries that.
 strip_fenced_blocks() {
 	awk '
-		function isfence(l,   t, indent) {
+		# fenceparse fills f[] with the marker character, its run length and the
+		# text after the run, or returns 0 when the line cannot open or close a
+		# fence at all.
+		function fenceparse(l, f,   t, indent, c, n) {
 			t = l
 			sub(/^ +/, "", t)
 			indent = length(l) - length(t)
 			if (indent > 3) return 0
-			return (substr(t, 1, 3) == "```" || substr(t, 1, 3) == "~~~")
+			c = substr(t, 1, 1)
+			if (c != "`" && c != "~") return 0
+			n = 0
+			while (substr(t, n + 1, 1) == c) n++
+			if (n < 3) return 0
+			f["char"] = c
+			f["len"] = n
+			f["rest"] = substr(t, n + 1)
+			return 1
 		}
-		{ line[NR] = $0; if (isfence($0)) fences++ }
+		function blank(s) { gsub(/[ \t\r]/, "", s); return s == "" }
+		{ line[NR] = $0 }
 		END {
-			if (fences % 2 != 0) {
+			inside = 0
+			for (i = 1; i <= NR; i++) {
+				if (!inside) {
+					if (!fenceparse(line[i], f)) continue
+					# A backtick opener may not carry a backtick in its info
+					# string; such a line is an inline code span, not a fence.
+					if (f["char"] == "`" && index(f["rest"], "`") > 0) continue
+					inside = 1
+					openchar = f["char"]
+					openlen = f["len"]
+					drop[i] = 1
+					continue
+				}
+				drop[i] = 1
+				if (fenceparse(line[i], f) && f["char"] == openchar &&
+					f["len"] >= openlen && blank(f["rest"])) inside = 0
+			}
+			# Unterminated: strip nothing.
+			if (inside) {
 				for (i = 1; i <= NR; i++) print line[i]
 				exit
 			}
-			inside = 0
-			for (i = 1; i <= NR; i++) {
-				if (isfence(line[i])) { inside = !inside; continue }
-				if (!inside) print line[i]
-			}
+			for (i = 1; i <= NR; i++) if (!drop[i]) print line[i]
 		}
 	'
-}
-
-usage() {
-	echo "usage: check-attribution.sh commits <base-ref> <head-ref> | body <file>" >&2
-	exit 2
 }
 
 # check_ident refuses an AI git identity in one role (author or committer) of
@@ -192,11 +249,11 @@ check_ident() {
 }
 
 # check_text applies both halves to one artefact: the banned footer must be
-# absent, and the trailer must be present. Both read the document's own voice, so
-# fenced quotation is removed first (see strip_fenced_blocks).
+# absent, and the trailer must be present. The caller decides whether fenced
+# quotation was removed first: the body arm strips, the commits arm does not (see
+# strip_fenced_blocks).
 check_text() {
-	local label="$1" text
-	text="$(printf '%s' "$2" | strip_fenced_blocks)"
+	local label="$1" text="$2"
 	if printf '%s' "$text" | grep -Eq "$GENERATED_RE"; then
 		echo "check-attribution: $label carries a tool's default 'generated with' footer" >&2
 		note "A 'Generated with <tool>' footer names a tool outside the two credit surfaces"
@@ -266,7 +323,8 @@ body)
 		echo "check-attribution: no such file: $2" >&2
 		exit 2
 	}
-	check_text "the pull-request body" "$(cat "$2")"
+	# The body is markdown a forge renders, so a fenced block reads as an example.
+	check_text "the pull-request body" "$(strip_fenced_blocks <"$2")"
 	;;
 *)
 	usage
