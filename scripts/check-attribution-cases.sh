@@ -175,5 +175,50 @@ commit_as 'dependabot[bot]' '49699333+dependabot[bot]@users.noreply.github.com' 
 	'GitHub' 'noreply@github.com' 'chore(deps): bump something'
 commits_case accept "bot author without trailer (exemption)"
 
+# --- The human-only declaration -----------------------------------------------
+# A change no AI touched discloses that positively; silence stays refused,
+# because an absent trailer and a forgotten one are indistinguishable.
+case_is accept "human-only declaration" 'A change I wrote by hand.
+
+Assisted-by: None'
+case_is accept "human-only declaration, lower case" 'A change I wrote by hand.
+
+Assisted-by: none'
+case_is reject "still no trailer at all" 'A change with nothing disclosed.'
+# The declaration is a closed value, not a free-text escape: anything else in
+# the slot would reopen the omission it exists to close.
+case_is reject "free-text escape is not a declaration" 'Text.
+
+Assisted-by: n/a'
+case_is reject "free-text escape (human)" 'Text.
+
+Assisted-by: human'
+case_is reject "None with trailing prose is not the declaration" 'Text.
+
+Assisted-by: None really'
+# The declaration never licenses the banned forms.
+case_is reject "declaration alongside a co-authorship trailer" 'Text.
+
+Assisted-by: None
+Co-authored-by: Someone <someone@example.invalid>'
+case_is reject "declaration alongside a generated-with footer" 'Text.
+
+🤖 Generated with [Some Tool](https://example.invalid)
+
+Assisted-by: None'
+
+# A human-only COMMIT passes the commit check on the same terms.
+commit_as REPPL human@example.invalid REPPL human@example.invalid 'docs: a hand-written change
+
+Assisted-by: None'
+commits_case accept "human-only commit declaration"
+
+# An AI identity is still refused even when the message declares human-only —
+# the identity fields are what the contributor graph reads.
+commit_as Claude noreply@anthropic.com REPPL human@example.invalid 'docs: a change
+
+Assisted-by: None'
+commits_case reject "AI identity claiming human-only"
+
 echo "check-attribution-cases: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

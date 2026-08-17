@@ -38,6 +38,19 @@ set -euo pipefail
 # (iss-215).
 TRAILER_RE='^Assisted-by: [A-Za-z][A-Za-z0-9._-]*:[A-Za-z0-9._-]+(\[[A-Za-z0-9._-]+\])?$'
 
+# The human-only declaration. The convention is DISCLOSURE, and a change no AI
+# touched has nothing to disclose — but silence cannot say that: an absent
+# trailer and a forgotten trailer are the same bytes, which is why the gate
+# refuses a bare omission. `Assisted-by: None` is the positive form, so a
+# human-only artefact states its provenance as explicitly as an assisted one
+# and stays auditable. It is deliberately the ONLY accepted non-vendor value —
+# a free-text escape ("n/a", "human") would reopen the omission it closes.
+#
+# It is not a bypass to reach for when a trailer is merely inconvenient:
+# claiming None for assisted work is a false disclosure, the exact failure this
+# gate exists to prevent, and the reviewer reading the diff is the check on it.
+NONE_RE='^Assisted-by: [Nn]one$'
+
 # Footers a tool emits by default. These name a tool outside the two credit
 # surfaces AGENTS.md sanctions (the README badge and ACKNOWLEDGEMENTS.md), which
 # is why they are refused here rather than merely discouraged. Matched on the
@@ -127,13 +140,12 @@ check_text() {
 		fail=1
 		return
 	fi
-	if ! printf '%s' "$text" | grep -Eq "$TRAILER_RE"; then
+	if ! printf '%s' "$text" | grep -Eq "$TRAILER_RE" && ! printf '%s' "$text" | grep -Eq "$NONE_RE"; then
 		echo "check-attribution: $label has no 'Assisted-by:' trailer" >&2
 		note "Add a final line of the form: Assisted-by: <Vendor>:<model-version>"
 		note "for example  Assisted-by: Claude:claude-opus-5  or  Assisted-by: Claude:claude-opus-5[1m]"
-		note "(If this artefact had no AI assistance, say so in the PR and this gate can be"
-		note "revisited — the convention is disclosure, and a human-only change has nothing to"
-		note "disclose. Today the gate asks for the trailer on every non-bot contribution.)"
+		note "If no AI assisted this artefact, disclose that positively instead:"
+		note "  Assisted-by: None"
 		fail=1
 	fi
 }

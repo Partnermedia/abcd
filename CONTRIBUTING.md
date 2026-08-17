@@ -33,6 +33,13 @@ honest:
   authorship the tool does not hold and inflates the contributor graph. A
   human-only `Signed-off-by:` (DCO) is deferred until the repo is public or takes
   its first outside contribution.
+- **Wrote it yourself? Say so.** A change no AI assisted carries
+  `Assisted-by: None` on its commit and in its pull-request body. Disclosure runs
+  both ways: the gate refuses a silent omission because it cannot tell "no AI was
+  involved" from "I forgot the trailer", so the human-only case states itself
+  rather than being inferred. Never write a vendor trailer for work a model did
+  not touch — a false disclosure is worse than none, and the reviewer reading the
+  diff is the check on it.
 
 ## Acknowledgements
 
