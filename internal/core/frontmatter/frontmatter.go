@@ -63,7 +63,10 @@ func Fields(lines []string) map[string]Field {
 	return fields
 }
 
-// IsNull treats an empty value and the YAML nulls ""/"null"/"~" as null.
+// IsNull treats an empty value and the four YAML nulls ""/"null"/"Null"/"NULL"/"~"
+// as null. YAML 1.1 (!!null) and the YAML 1.2 core schema (§10.2.1.1) both resolve
+// the three cased spellings and the tilde; the memory package's own scalar parser
+// holds the same set (internal/core/memory/yaml.go).
 func IsNull(v string) bool {
-	return v == "" || v == "null" || v == "~"
+	return v == "" || v == "null" || v == "Null" || v == "NULL" || v == "~"
 }
