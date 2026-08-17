@@ -1,9 +1,9 @@
 package lifeboat
 
-// synthesis_oracle.go is the LIFEBOAT-ORACLE synthesis seam (Agent A2, M6/itd-88):
-// `disembark oracle <lifeboat-dir> <source-repo>`. It audits an already-PACKED
+// synthesis_review.go is the LIFEBOAT-REVIEW synthesis seam (Agent A2, M6/itd-88):
+// `disembark review <lifeboat-dir> <source-repo>`. It audits an already-PACKED
 // lifeboat and writes a registered verdict + cited findings to
-// audit/oracle-<manifest12>.json (+ .md), a post-pack mutable artifact kept out of
+// review/review-<manifest12>.json (+ .md), a post-pack mutable artifact kept out of
 // manifest_sha256 (mirroring graveyard/lessons.json).
 //
 // Dual-mode single entrypoint (mirroring IngestLessons):
@@ -22,7 +22,7 @@ package lifeboat
 //     manifest_verified, coverage) are always stamped by the core, never taken from
 //     the payload.
 //
-// The audit filename is manifest-derived — oracle-<manifest12>.json where
+// The artefact filename is manifest-derived — review-<manifest12>.json where
 // manifest12 = shortHex(prov.ManifestSHA256) — so a deterministic run then a
 // delegated run write the SAME file (clean replacement, no timestamp twin, no
 // wall-clock anywhere).
@@ -46,27 +46,56 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
-// AuditOracle audits the packed lifeboat at lifeboatDir against sourceRepo. When
+// reviewArtefactDir is where the verdict artefact lives; legacyReviewDir is the
+// pre-spc-30 home, swept on re-run (see removeLegacyReviewArtefact).
+const (
+	reviewArtefactDir = "review"
+	legacyReviewDir   = "audit"
+)
+
+// removeLegacyReviewArtefact deletes the pre-spc-30 audit/oracle-<manifest12>
+// pair for exactly this manifest, then removes audit/ if it is left empty.
+//
+// The scoping comes from the ROOT, not from the name construction. manifest12
+// is 12-hex so the two names cannot match another manifest's files, and
+// Root.Remove refuses a non-empty directory so an unrelated file keeps audit/
+// alive — but neither fact contains the DELETE: a lifeboat is untrusted input,
+// and a symlinked audit/ redirects a bare os.Remove anywhere the invoking user
+// can write. Every other mutation in this file already goes through the
+// lifeboat's os.Root; this one must too, or it is the one unlink that escapes
+// the boundary the rest of the package defends.
+//
+// Errors are deliberately swallowed: the review artefact is already written and
+// durable, the removal is hygiene, and a read-only or absent legacy dir is the
+// normal case — failing the run over it would be worse.
+func removeLegacyReviewArtefact(root *os.Root, manifest12 string) {
+	for _, ext := range []string{".json", ".md"} {
+		_ = root.Remove(path.Join(legacyReviewDir, "oracle-"+manifest12+ext))
+	}
+	_ = root.Remove(legacyReviewDir) // refuses a non-empty directory
+}
+
+// ReviewLifeboat audits the packed lifeboat at lifeboatDir against sourceRepo. When
 // raw is nil it runs the deterministic mapping; when raw carries a payload it
-// validates the delegated audit. It is transport-agnostic (returns an OracleResult,
+// validates the delegated audit. It is transport-agnostic (returns an ReviewResult,
 // never prints) and fails closed on structural problems; a manifest failure is a
 // verdict input, not an error. The audit is ALWAYS written on success.
-func AuditOracle(lifeboatDir, sourceRepo string, raw []byte) (OracleResult, error) {
+func ReviewLifeboat(lifeboatDir, sourceRepo string, raw []byte) (ReviewResult, error) {
 	// 1. Gate the lifeboat (real dir + parseable header + schema) and read the
 	//    immutable provenance header — needed to name the audit file.
 	abs, prov, err := gateSynthLifeboat(lifeboatDir)
 	if err != nil {
-		return OracleResult{}, err
+		return ReviewResult{}, err
 	}
 	// Gate the source repo as a real dir. Its CONTENT is never read — this keeps the
 	// audit deterministic and safe when the source is gone. A symlinked or absent
 	// source is structural (mirrors embark's target gate).
 	srcAbs, err := filepath.Abs(sourceRepo)
 	if err != nil {
-		return OracleResult{}, err
+		return ReviewResult{}, err
 	}
 	if !fsutil.IsRealDir(srcAbs) {
-		return OracleResult{}, fmt.Errorf("source %s is not a directory", filepath.Base(srcAbs))
+		return ReviewResult{}, fmt.Errorf("source %s is not a directory", filepath.Base(srcAbs))
 	}
 	sourceName := sanitize(filepath.Base(srcAbs))
 
@@ -78,15 +107,15 @@ func AuditOracle(lifeboatDir, sourceRepo string, raw []byte) (OracleResult, erro
 	coveragePresent := cov.Present && !cov.Degraded
 
 	manifest12 := shortHex(prov.ManifestSHA256)
-	audit := OracleAudit{
-		SchemaVersion:    OracleAuditSchemaVersion,
+	audit := ReviewArtefact{
+		SchemaVersion:    ReviewSchemaVersion,
 		SourceName:       sourceName,
 		ManifestSHA256:   sanitize(prov.ManifestSHA256),
 		ManifestVerified: manifestVerified,
 		Coverage:         cov.Summary,
 	}
 
-	res := OracleResult{LifeboatDir: abs}
+	res := ReviewResult{LifeboatDir: abs}
 
 	if raw == nil {
 		// --- deterministic mode -------------------------------------------------
@@ -96,9 +125,9 @@ func AuditOracle(lifeboatDir, sourceRepo string, raw []byte) (OracleResult, erro
 		res.Mode = ModeDeterministic
 	} else {
 		// --- delegated mode -----------------------------------------------------
-		verdict, findings, drops, err := validateOracle(abs, raw)
+		verdict, findings, drops, err := validateReview(abs, raw)
 		if err != nil {
-			return OracleResult{}, err
+			return ReviewResult{}, err
 		}
 		audit.Mode = ModeDelegated
 		audit.PromptVersion = drops.promptVersion
@@ -115,26 +144,32 @@ func AuditOracle(lifeboatDir, sourceRepo string, raw []byte) (OracleResult, erro
 	//    replacement, no stale twin.
 	data, err := marshalSynth(audit)
 	if err != nil {
-		return OracleResult{}, err
+		return ReviewResult{}, err
 	}
 	root, err := os.OpenRoot(abs)
 	if err != nil {
-		return OracleResult{}, err
+		return ReviewResult{}, err
 	}
 	defer root.Close()
 
-	jsonRel := path.Join("audit", "oracle-"+manifest12+".json")
-	mdRel := path.Join("audit", "oracle-"+manifest12+".md")
+	jsonRel := path.Join(reviewArtefactDir, "review-"+manifest12+".json")
+	mdRel := path.Join(reviewArtefactDir, "review-"+manifest12+".md")
 	if err := writeIntoLifeboat(root, abs, jsonRel, data); err != nil {
-		return OracleResult{}, err
+		return ReviewResult{}, err
 	}
-	if err := writeIntoLifeboat(root, abs, mdRel, []byte(renderOracleAuditMD(audit))); err != nil {
-		return OracleResult{}, err
+	if err := writeIntoLifeboat(root, abs, mdRel, []byte(renderReviewMD(audit))); err != nil {
+		return ReviewResult{}, err
 	}
+	// Clean replacement across the spc-30 rename: a lifeboat reviewed before it
+	// carries the pre-rename pair under audit/. Remove THIS manifest's stale
+	// pair (never another manifest's, and never an unrelated file), then prune
+	// audit/ if that emptied it. Best-effort by design — the review is written
+	// and valid either way, so a removal failure must not fail the run.
+	removeLegacyReviewArtefact(root, manifest12)
 
 	res.Verdict = audit.Verdict
 	res.Written = len(audit.Findings)
-	res.AuditPath = jsonRel
+	res.ReviewPath = jsonRel
 	res.RenderPath = mdRel
 	return res, nil
 }
@@ -142,7 +177,7 @@ func AuditOracle(lifeboatDir, sourceRepo string, raw []byte) (OracleResult, erro
 // deterministicVerdict is the pinned, pure mapping (design §4.3): a failed manifest
 // dominates (not shippable at all); else absent/unusable coverage cannot be
 // attested; else more blank than grounded sections is too thin to ship; else SHIP.
-func deterministicVerdict(manifestVerified, coveragePresent bool, s Summary) OracleVerdict {
+func deterministicVerdict(manifestVerified, coveragePresent bool, s Summary) ReviewVerdict {
 	switch {
 	case !manifestVerified:
 		return VerdictMajorRethink
@@ -158,79 +193,79 @@ func deterministicVerdict(manifestVerified, coveragePresent bool, s Summary) Ora
 // deterministicFindings emits the fixed-order, evidence-only findings that back the
 // deterministic verdict. Each cites a packed lifeboat path (or the provenance
 // header for the manifest/identity findings); deterministic entries are trusted
-// descriptive pointers and are never dropped. Bounded at maxOracleFindings as
+// descriptive pointers and are never dropped. Bounded at maxReviewFindings as
 // defence in depth shared with the delegated path.
-func deterministicFindings(manifestVerified, coveragePresent bool, s Summary, provName, sourceName string) []OracleFinding {
-	var out []OracleFinding
+func deterministicFindings(manifestVerified, coveragePresent bool, s Summary, provName, sourceName string) []ReviewFinding {
+	var out []ReviewFinding
 	if !manifestVerified {
-		out = append(out, OracleFinding{
+		out = append(out, ReviewFinding{
 			ID: "fnd-manifest", Severity: "blocker",
 			Finding:  "the on-disk tree does not match the sealed manifest; the lifeboat does not faithfully carry the record",
 			Evidence: []string{ProvenanceName},
 		})
 	}
 	if !coveragePresent {
-		out = append(out, OracleFinding{
+		out = append(out, ReviewFinding{
 			ID: "fnd-coverage-missing", Severity: "warning",
 			Finding:  "coverage.json is absent or unreadable; the lifeboat's brief coverage cannot be attested",
 			Evidence: []string{"coverage.json"},
 		})
 	} else if s.Blank > s.Grounded {
-		out = append(out, OracleFinding{
+		out = append(out, ReviewFinding{
 			ID: "fnd-coverage-thin", Severity: "warning",
 			Finding:  fmt.Sprintf("%d sections are blank against %d grounded; the record is thin", s.Blank, s.Grounded),
 			Evidence: []string{"coverage.json"},
 		})
 	}
 	if provName != sourceName {
-		out = append(out, OracleFinding{
+		out = append(out, ReviewFinding{
 			ID: "fnd-source-name", Severity: "info",
 			Finding: fmt.Sprintf("the lifeboat's recorded source name %q differs from the audited source %q",
 				sanitize(provName), sourceName),
 			Evidence: []string{ProvenanceName},
 		})
 	}
-	if len(out) > maxOracleFindings {
-		out = out[:maxOracleFindings]
+	if len(out) > maxReviewFindings {
+		out = out[:maxReviewFindings]
 	}
 	return out
 }
 
-// oracleDropReport carries the delegated validator's per-entry outcome back to the
+// reviewDropReport carries the delegated validator's per-entry outcome back to the
 // result without widening the function signature.
-type oracleDropReport struct {
+type reviewDropReport struct {
 	count         int
-	drops         []OracleFindingDrop
+	drops         []ReviewFindingDrop
 	promptVersion string
 }
 
-// validateOracle parses and fully validates an untrusted delegated audit payload
+// validateReview parses and fully validates an untrusted delegated audit payload
 // (design §6). It fails closed on any structural problem (returns an error, nothing
 // written) and drops — never fatally — a per-finding problem. It returns the
 // membership-checked verdict, the surviving findings (sorted by id), and the drop
 // report. The verdict is the headline of the audit: an out-of-enum verdict is a
 // whole-payload refusal, mirroring intent's out-of-enum criterion.
-func validateOracle(abs string, raw []byte) (OracleVerdict, []OracleFinding, oracleDropReport, error) {
-	var rep oracleDropReport
+func validateReview(abs string, raw []byte) (ReviewVerdict, []ReviewFinding, reviewDropReport, error) {
+	var rep reviewDropReport
 	if len(raw) > maxSynthesisBytes {
-		return "", nil, rep, fmt.Errorf("oracle payload exceeds the %d-byte cap", maxSynthesisBytes)
+		return "", nil, rep, fmt.Errorf("review payload exceeds the %d-byte cap", maxSynthesisBytes)
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields() // reject smuggled extra fields
-	var in OracleAudit
+	var in ReviewArtefact
 	if err := dec.Decode(&in); err != nil {
-		return "", nil, rep, fmt.Errorf("malformed oracle JSON: %v", err)
+		return "", nil, rep, fmt.Errorf("malformed review JSON: %v", err)
 	}
 	// Three-branch schema gate (mirrors IngestLessons).
 	if in.SchemaVersion == 0 {
-		return "", nil, rep, errors.New("oracle payload is missing schema_version")
+		return "", nil, rep, errors.New("review payload is missing schema_version")
 	}
-	if in.SchemaVersion > OracleAuditSchemaVersion {
-		return "", nil, rep, fmt.Errorf("oracle schema v%d; this abcd knows up to v%d — upgrade abcd",
-			in.SchemaVersion, OracleAuditSchemaVersion)
+	if in.SchemaVersion > ReviewSchemaVersion {
+		return "", nil, rep, fmt.Errorf("review schema v%d; this abcd knows up to v%d — upgrade abcd",
+			in.SchemaVersion, ReviewSchemaVersion)
 	}
-	if in.SchemaVersion != OracleAuditSchemaVersion {
-		return "", nil, rep, fmt.Errorf("unsupported oracle schema_version %d", in.SchemaVersion)
+	if in.SchemaVersion != ReviewSchemaVersion {
+		return "", nil, rep, fmt.Errorf("unsupported review schema_version %d", in.SchemaVersion)
 	}
 	// Mode gate: a delegated payload must not claim deterministic. An absent mode is
 	// allowed (the core stamps delegated on write regardless).
@@ -246,28 +281,28 @@ func validateOracle(abs string, raw []byte) (OracleVerdict, []OracleFinding, ora
 	if !in.Verdict.Valid() {
 		return "", nil, rep, fmt.Errorf("out-of-enum verdict %q", in.Verdict)
 	}
-	if len(in.Findings) > maxOracleFindings {
-		return "", nil, rep, fmt.Errorf("too many findings (%d > %d)", len(in.Findings), maxOracleFindings)
+	if len(in.Findings) > maxReviewFindings {
+		return "", nil, rep, fmt.Errorf("too many findings (%d > %d)", len(in.Findings), maxReviewFindings)
 	}
 
-	// Build the packed path set once — the live set an oracle finding must cite.
+	// Build the packed path set once — the live set a review finding must cite.
 	root, err := os.OpenRoot(abs)
 	if err != nil {
 		return "", nil, rep, err
 	}
 	defer root.Close()
-	paths, err := buildLifeboatPathSet(root, oracleOwnOutput)
+	paths, err := buildLifeboatPathSet(root, reviewOwnOutput)
 	if err != nil {
 		return "", nil, rep, err
 	}
 
 	// Per-finding validation, drop-not-fatal.
-	var out []OracleFinding
+	var out []ReviewFinding
 	seen := map[string]bool{}
 	for _, f := range in.Findings {
 		drop := func(reason string) {
 			rep.count++
-			rep.drops = append(rep.drops, OracleFindingDrop{ID: f.ID, Reason: reason})
+			rep.drops = append(rep.drops, ReviewFindingDrop{ID: f.ID, Reason: reason})
 		}
 		if len(f.ID) > maxSynthIDLen || !fndIDRe.MatchString(f.ID) {
 			drop("malformed finding id")
@@ -291,7 +326,7 @@ func validateOracle(abs string, raw []byte) (OracleVerdict, []OracleFinding, ora
 		// check (the IngestLessons note), so a dropped first occurrence cannot poison
 		// a later fully-valid duplicate.
 		seen[f.ID] = true
-		out = append(out, OracleFinding{
+		out = append(out, ReviewFinding{
 			ID:       f.ID,
 			Severity: cleanSynthProse(f.Severity), // optional, never a drop reason
 			Finding:  clean,
@@ -304,15 +339,15 @@ func validateOracle(abs string, raw []byte) (OracleVerdict, []OracleFinding, ora
 
 // Render is the deterministic, sanitised human summary of an audit (the transport
 // render; the surface prints it).
-func (r OracleResult) Render() string {
+func (r ReviewResult) Render() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "oracle audit for %s\n", sanitize(r.LifeboatDir))
+	fmt.Fprintf(&b, "review of %s\n", sanitize(r.LifeboatDir))
 	fmt.Fprintf(&b, "  verdict:  %s\n", r.Verdict)
 	fmt.Fprintf(&b, "  mode:     %s\n", r.Mode)
 	fmt.Fprintf(&b, "  findings: %d\n", r.Written)
 	fmt.Fprintf(&b, "  dropped:  %d\n", r.Dropped)
-	if r.AuditPath != "" {
-		fmt.Fprintf(&b, "  audit:    %s\n", sanitize(r.AuditPath))
+	if r.ReviewPath != "" {
+		fmt.Fprintf(&b, "  review:   %s\n", sanitize(r.ReviewPath))
 	}
 	for _, d := range r.Drops {
 		fmt.Fprintf(&b, "    - %s (%s)\n", sanitize(d.ID), sanitize(d.Reason))
@@ -320,11 +355,11 @@ func (r OracleResult) Render() string {
 	return b.String()
 }
 
-// renderOracleAuditMD renders the on-disk audit/oracle-<manifest12>.md — a
+// renderReviewMD renders the on-disk review/review-<manifest12>.md — a
 // deterministic, sanitised human view of the audit (no wall-clock, fixed order).
-func renderOracleAuditMD(a OracleAudit) string {
+func renderReviewMD(a ReviewArtefact) string {
 	var b strings.Builder
-	b.WriteString("# Lifeboat oracle audit\n\n")
+	b.WriteString("# Lifeboat review\n\n")
 	fmt.Fprintf(&b, "- verdict: %s\n", a.Verdict)
 	fmt.Fprintf(&b, "- mode: %s\n", a.Mode)
 	if a.PromptVersion != "" {

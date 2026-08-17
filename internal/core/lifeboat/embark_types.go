@@ -336,7 +336,8 @@ var reportOnlyPrefixes = []string{
 	"rescue/spine.md",
 	"principles.",
 	"press-release.",
-	"audit/",
+	"review/",
+	"audit/", // pre-spc-30 home; still recognised on an older pack
 	ProvenanceName,
 }
 
@@ -347,11 +348,11 @@ var reportOnlyPrefixes = []string{
 // post-pack, host-delegated layer-3 interpretation that IngestLessons writes into
 // an already-sealed lifeboat and deliberately keeps out of the manifest. The M6
 // synthesis layer (principles.json/.md, press-release.json/.md, and every
-// audit/** oracle audit) is the same kind of post-pack mutable artifact — written
+// review/** verdict artefact) is the same kind of post-pack mutable artifact — written
 // into an already-sealed lifeboat, its integrity the per-entry cite-or-be-dropped
 // rule and the registered-verdict gate, not the manifest seal — so it is excluded
 // here too and VerifyManifest still reproduces the pinned hash after synthesis.
 var (
 	manifestExcludedExact    = []string{ProvenanceName, "graveyard/lessons.json", "principles.json", "principles.md", "press-release.json", "press-release.md"}
-	manifestExcludedPrefixes = []string{"graveyard/low-confidence/", "audit/"}
+	manifestExcludedPrefixes = []string{"graveyard/low-confidence/", "review/", "audit/"}
 )

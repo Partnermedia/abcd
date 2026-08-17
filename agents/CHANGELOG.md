@@ -85,3 +85,17 @@ verdict format is frozen: `_type` stays `abcd/intent-fidelity-verdict/v1`,
 stored markers and previously ingested verdicts remain valid, and a stored
 verdict naming the old verifier id still ingests. Prompt body otherwise
 unchanged; no re-measurement.
+
+### lifeboat-reviewer 0.1.1 (renamed from lifeboat-oracle)
+
+The lifeboat verdict endpoint emits family-1 review verdicts (`SHIP` /
+`NEEDS_WORK` / `MAJOR_RETHINK`), and the planning investigation found the binary
+verb never invokes the oracle seam — so the verb renames to `abcd disembark
+review` (flag `--review-json`), its artefact moves to
+`review/review-<manifest12>.{json,md}`, and this agent becomes
+`lifeboat-reviewer` (spc-30, itd-125; adr-40 §5 amended in place). The `oracle`
+SEAM is untouched: `capability_scope.task_classes` keeps `oracle_review`, which
+honestly names review work reaching a model through the adr-25 seam, and
+`/abcd:oracle ask` remains the seam's reserved surface. Prompt body, verdict
+enum, and cite-or-be-dropped contract unchanged; canary fixture moved with the
+agent. No re-measurement.

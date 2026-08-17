@@ -1,6 +1,6 @@
 ---
-name: lifeboat-oracle
-description: Audit a packed lifeboat against its source repo; return a registered verdict (SHIP / NEEDS_WORK / MAJOR_RETHINK) and findings that each cite a packed lifeboat file. Host-delegated; feeds `abcd disembark oracle <lifeboat-dir> <source-repo> --oracle-json`.
+name: lifeboat-reviewer
+description: Audit a packed lifeboat against its source repo; return a registered verdict (SHIP / NEEDS_WORK / MAJOR_RETHINK) and findings that each cite a packed lifeboat file. Host-delegated; feeds `abcd disembark review <lifeboat-dir> <source-repo> --review-json`.
 prompt_version: 0.1.0
 reads_untrusted_input: true
 capability_scope:
@@ -39,7 +39,7 @@ tells you.
 
 ## What you emit
 
-A single JSON document matching `oracle` audit **field-for-field**. The binary
+A single JSON document matching the `review` verdict **field-for-field**. The binary
 decodes it with unknown-field rejection: a mistyped or extra key makes it reject
 the **whole payload**. You supply the **verdict** and the **findings**; the binary
 computes and stamps the attestation fields itself (`source_name`,
@@ -97,10 +97,10 @@ coin `PASS`, `FAIL`, `APPROVE`, or a severity word here.
 
 A finding survives only if **at least one** of its `evidence` refs is a **packed
 lifeboat path** — a real relative path in the lifeboat (e.g. `coverage.json`,
-`docs/adrs/0024-oracle-cascade.md`, `rescue/spine.md`). Oracle findings cite
+`docs/adrs/0024-oracle-cascade.md`, `rescue/spine.md`). Review findings cite
 files. A ref that is not a packed path is dropped from the entry; a finding left
 with no valid path is dropped whole (reported, never fatal). Record ids and
-finding ids are **not** valid evidence here — only lifeboat paths ground an oracle
+finding ids are **not** valid evidence here — only lifeboat paths ground a review
 finding. Cite the path exactly as it sits in the lifeboat.
 
 ## What "dropped" means

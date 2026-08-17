@@ -21,7 +21,7 @@ orchestration sections:
 | `principle-distiller` | `abcd disembark principles <lifeboat-dir> --principles-json <file\|->` | `principles.json` |
 | `graveyard-interpreter` | `abcd disembark graveyard <lifeboat-dir> --lessons-json <file\|->` | `graveyard/lessons.json` |
 | `press-release-composer` | `abcd disembark press-release <lifeboat-dir> --press-release-json <file\|->` | `press-release.json` |
-| `lifeboat-oracle` | `abcd disembark oracle <lifeboat-dir> <source-repo> --oracle-json <file\|->` | `audit/oracle-<manifest12>.json` |
+| `lifeboat-reviewer` | `abcd disembark review <lifeboat-dir> <source-repo> --review-json <file\|->` | `review/review-<manifest12>.json` |
 
 Each verb has two modes: **without** the `--*-json` flag the binary composes a
 deterministic, evidence-only artifact from the packed lifeboat's own files;

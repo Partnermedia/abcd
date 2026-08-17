@@ -221,18 +221,6 @@ Validate host-produced lesson JSON against a packed lifeboat and write the survi
       --lessons-json string   path to the host-produced lesson JSON (or - for stdin)
 ```
 
-#### `abcd disembark oracle`
-
-Audit a packed lifeboat against its source repo — a registered verdict and cited findings (deterministic, or validate host-produced audit JSON)
-
-**Usage:** `abcd disembark oracle <lifeboat-dir> <source-repo> [--oracle-json <file|->] [flags]`
-
-**Flags:**
-
-```
-      --oracle-json string   path to host-produced audit JSON (or - for stdin); absent runs deterministic mode
-```
-
 #### `abcd disembark pack`
 
 Pack a lifeboat from a repository into a destination directory (writes <dest>, never the source)
@@ -274,6 +262,18 @@ Distil principles from a packed lifeboat (deterministic from the ADRs, or valida
 Report which brief sections a lifeboat could ground from a repository (read-only)
 
 **Usage:** `abcd disembark probe [repo]`
+
+#### `abcd disembark review`
+
+Review a packed lifeboat against its source repo — a registered verdict and cited findings (deterministic, or validate a host-produced verdict JSON)
+
+**Usage:** `abcd disembark review <lifeboat-dir> <source-repo> [--review-json <file|->] [flags]`
+
+**Flags:**
+
+```
+      --review-json string   path to the host-produced review verdict JSON (or - for stdin); absent runs deterministic mode
+```
 
 ### `abcd docs`
 

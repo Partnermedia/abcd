@@ -33,7 +33,7 @@ capability contract. Adding a backend = implement the interface and register it 
 `internal/registry`; consumers are untouched. See
 [`03-configuration.md`](03-configuration.md) for the config schema.
 
-**Oracle consumers.** `lifeboat-oracle`, `press-release-composer`, and
+**Oracle consumers.** `lifeboat-reviewer`, `press-release-composer`, and
 `intent-auditor` all reach a model through the `oracle` seam. Host
 delegation is the default; when an operator wires two oracle adapters for a
 high-stakes review, the adapter layer offers the scoped-vs-broad,

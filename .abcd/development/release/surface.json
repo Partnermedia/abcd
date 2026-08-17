@@ -372,19 +372,6 @@
       ]
     },
     {
-      "path": "abcd disembark oracle",
-      "hidden": false,
-      "flags": [
-        {
-          "name": "oracle-json",
-          "shorthand": "",
-          "type": "string",
-          "required": false,
-          "hidden": false
-        }
-      ]
-    },
-    {
       "path": "abcd disembark pack",
       "hidden": false,
       "flags": []
@@ -424,6 +411,19 @@
       "path": "abcd disembark probe",
       "hidden": false,
       "flags": []
+    },
+    {
+      "path": "abcd disembark review",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "review-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd docs",

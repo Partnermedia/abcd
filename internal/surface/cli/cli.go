@@ -359,6 +359,14 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		Use:   "disembark",
 		Short: "Lifeboat tooling: coverage probe, pack dry-run, and out-of-tree pack",
 		Args:  cobra.NoArgs,
+		// A parent with no RunE is not Runnable, so cobra prints help and exits
+		// 0 WITHOUT validating args — an unknown sub-verb (a typo, or a retired
+		// spelling like the pre-spc-30 `oracle`) then reads as success to a
+		// script. Making the parent runnable restores bare-as-help while letting
+		// cobra.NoArgs refuse a stray token with the usual exit 2.
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
 	}
 
 	probeCmd := &cobra.Command{
@@ -608,13 +616,13 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	}
 	pressReleaseCmd.Flags().StringVar(&pressReleaseJSON, "press-release-json", "", "path to host-produced press-release JSON (or - for stdin); absent runs deterministic mode")
 
-	var oracleJSON string
-	oracleCmd := &cobra.Command{
-		Use:   "oracle <lifeboat-dir> <source-repo> [--oracle-json <file|->]",
-		Short: "Audit a packed lifeboat against its source repo — a registered verdict and cited findings (deterministic, or validate host-produced audit JSON)",
+	var reviewJSON string
+	reviewCmd := &cobra.Command{
+		Use:   "review <lifeboat-dir> <source-repo> [--review-json <file|->]",
+		Short: "Review a packed lifeboat against its source repo — a registered verdict and cited findings (deterministic, or validate a host-produced verdict JSON)",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {
-				return &exitError{Code: 2, Msg: "disembark oracle: <lifeboat-dir> <source-repo> are both required"}
+				return &exitError{Code: 2, Msg: "disembark review: <lifeboat-dir> <source-repo> are both required"}
 			}
 			return nil
 		},
@@ -623,22 +631,22 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := readSynthesisPayload(cmd, oracleJSON)
+			raw, err := readSynthesisPayload(cmd, reviewJSON)
 			if err != nil {
-				return &exitError{Code: 2, Msg: "disembark oracle: " + scrubPaths(err)}
+				return &exitError{Code: 2, Msg: "disembark review: " + scrubPaths(err)}
 			}
 			// The source repo's content is never read (the core gates it as a real dir
 			// only); a manifest failure is a MAJOR_RETHINK verdict input, exit 0.
-			res, err := lifeboat.AuditOracle(dirAbs, args[1], raw)
+			res, err := lifeboat.ReviewLifeboat(dirAbs, args[1], raw)
 			if err != nil {
-				return &exitError{Code: 2, Msg: "disembark oracle: " + scrubPaths(err)}
+				return &exitError{Code: 2, Msg: "disembark review: " + scrubPaths(err)}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprint(w, res.Render())
 			})
 		},
 	}
-	oracleCmd.Flags().StringVar(&oracleJSON, "oracle-json", "", "path to host-produced audit JSON (or - for stdin); absent runs deterministic mode")
+	reviewCmd.Flags().StringVar(&reviewJSON, "review-json", "", "path to the host-produced review verdict JSON (or - for stdin); absent runs deterministic mode")
 
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
@@ -647,7 +655,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 	disembarkCmd.AddCommand(graveyardCmd)
 	disembarkCmd.AddCommand(principlesCmd)
 	disembarkCmd.AddCommand(pressReleaseCmd)
-	disembarkCmd.AddCommand(oracleCmd)
+	disembarkCmd.AddCommand(reviewCmd)
 	return disembarkCmd
 }
 
@@ -759,7 +767,7 @@ func readLessonsPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 }
 
 // readSynthesisPayload reads an untrusted synthesis payload (principles,
-// press-release, or oracle audit JSON) behind the same trust guards as
+// press-release, or review verdict JSON) behind the same trust guards as
 // readLessonsPayload, capped at the exported lifeboat.MaxSynthesisBytes. An EMPTY
 // spec (the flag absent) returns a nil slice — the sentinel the dual-mode cores
 // read as "run deterministic mode", never a delegated payload. A "-" spec reads
