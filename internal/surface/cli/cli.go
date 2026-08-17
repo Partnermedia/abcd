@@ -2013,8 +2013,8 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				if res.Linked {
 					verb = "linked"
 				}
-				fmt.Fprintf(w, "%s (%s) promoted — %s %s — %s\n",
-					res.IssueID, res.IssueStatus, verb, res.IntentID, res.IntentPath)
+				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
+					res.IssueID, res.IssueStatus, res.IssuePath, verb, res.IntentID, res.IntentPath)
 			})
 		},
 	}
