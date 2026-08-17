@@ -32,22 +32,25 @@ for part of its work and handles the rest host-side.
 Bare `/abcd` renders the six-section board. `status` and `help` are
 POSITIONAL ALIAS tokens that route to the SAME render — their output is
 byte-identical to bare `/abcd`. **Design target (itd-20):** no such alias
-routing is on any shipped surface — the plugin command (`commands/abcd.md`)
-documents only `status` as a positional alias, while the CLI itself has no
-alias: `abcd status` is refused as an unknown command and `abcd help` prints
-Cobra usage text, not the render.
+routing is on any shipped surface — `abcd status` is refused as an unknown
+command and `abcd help` prints Cobra usage text, not the render (the plugin
+command page agrees since spc-26 swept its stale alias claim; iss-261).
 
 | Token | Behaviour |
 |-------|-----------|
 | *(bare)* | Render the six-section where-am-i board |
+| `<record-id>` | **Shipped (spc-26, itd-121):** a positional matching `^(iss\|itd\|spc\|adr)-[0-9]+$` dispatches to the record store and renders, read-only, what the record is, its links, and the concrete next move for its lifecycle state — bare answers *what can I do*, `abcd <id>` answers *what is this, and what is my next move*. SD001-safe: a positional on the namespace root is not a `show` sub-verb. |
 | `status` | Alias — byte-identical to bare |
 | `help` | Alias — byte-identical to bare (bare-as-render IS the help) |
 
 Any other token is refused. The shipped CLI exits **2** (Cobra's usage-error
 convention) for an unknown token — e.g. `abcd foobar` and the non-verb
 `abcd status` both exit 2, printing `abcd: unknown command …` to stderr; `abcd
-help` is Cobra's built-in and exits 0. **Design target (itd-20):** a top-level
-`/abcd` dispatcher with an explicit closed alias set of its own.
+help` is Cobra's built-in and exits 0. A shape-matching record id found in no
+store is a structural fault (non-zero, diagnostic naming the stores searched),
+never a silent fall-through to the board. **Design target (itd-20):** the
+`status` / `help` alias rows above — no alias routing is on any shipped
+surface; the record-id positional is the one shipped positional.
 
 ## SD001 alias rationale (investigation-gated)
 
