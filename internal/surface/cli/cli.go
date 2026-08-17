@@ -11,9 +11,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -28,6 +30,7 @@ import (
 	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
 	"github.com/REPPL/abcd-cli/internal/core/lint"
 	"github.com/REPPL/abcd-cli/internal/core/memory"
+	"github.com/REPPL/abcd-cli/internal/core/record"
 	"github.com/REPPL/abcd-cli/internal/core/rules"
 	"github.com/REPPL/abcd-cli/internal/core/spec"
 	"github.com/REPPL/abcd-cli/internal/fsutil"
@@ -59,11 +62,40 @@ func NewRootCommand() *cobra.Command {
 		Short:         "Agent-based configuration for development",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		// Bare answers "what can I do"; `abcd <id>` answers "what is this, and
+		// what is my next move" (spc-26). The positional is accepted iff it
+		// matches the record-id shape — any other positional reproduces
+		// cobra.NoArgs' unknown-command error byte-for-byte, so the id gate
+		// never widens the root's surface.
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 && record.IDRe.MatchString(args[0]) {
+				return nil
+			}
+			return cobra.NoArgs(cmd, args)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			// Record-id dispatch: read-only describe, never a write.
+			if len(args) == 1 {
+				d, err := record.Describe(cwd, args[0])
+				if err != nil {
+					return err
+				}
+				return render(cmd.OutOrStdout(), asJSON, d, func(w io.Writer) {
+					// Title and link values come from record files a hostile
+					// clone can shape — sanitise before the terminal.
+					fmt.Fprintf(w, "%s (%s, %s) — %s\n", d.ID, d.Family, d.Status, termsafe.Sanitize(d.Title))
+					fmt.Fprintf(w, "  path: %s\n", termsafe.Sanitize(d.Path))
+					for _, k := range slices.Sorted(maps.Keys(d.Links)) {
+						fmt.Fprintf(w, "  %s: %s\n", k, termsafe.Sanitize(d.Links[k]))
+					}
+					for _, m := range d.NextMoves {
+						fmt.Fprintf(w, "  next: %s\n", termsafe.Sanitize(m))
+					}
+				})
 			}
 			st, err := core.Status(cwd)
 			if err != nil {
