@@ -84,7 +84,7 @@ func TestCreateFromTextRefusesEmpty(t *testing.T) {
 }
 
 // TestCreateFromTextPassesRecordLint runs the real intent_lifecycle record-lint
-// over a freshly seeded draft — the "abcd audit stays green" guarantee.
+// over a freshly seeded draft — the "abcd lint stays green" guarantee.
 func TestCreateFromTextPassesRecordLint(t *testing.T) {
 	root := t.TempDir()
 	if _, _, err := CreateFromText(root, "seeded from a quoted-text capture", ""); err != nil {

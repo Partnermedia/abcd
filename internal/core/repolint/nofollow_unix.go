@@ -1,6 +1,6 @@
 //go:build unix
 
-package audit
+package repolint
 
 import "syscall"
 

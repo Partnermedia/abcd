@@ -4,7 +4,7 @@
 identity block. The bare and `render` forms are **strictly read-only**; `init` is
 the single write path, and it runs once, at onboarding.
 
-It answers a different question from `/abcd:audit`: `audit` reports whether the
+It answers a different question from `/abcd:lint`: `lint` reports whether the
 repo conforms to the working conventions as a whole, and runs the positioning
 check as one rule among them; `identity` is where a maintainer looks at the canon
 itself and at what a fix would read like.
@@ -84,7 +84,7 @@ and refuses to repoint a registry that is already committed.
 
 ## The check
 
-The drift check runs as the `identity-positioning` rule on every `abcd audit`,
+The drift check runs as the `identity-positioning` rule on every `abcd lint`,
 Where-gated on a committed registry so an un-adopted repo is skipped rather than
 failed. Its acceptance corpus is [`iss-143`](../../../work/issues/resolved/iss-143-tagline-three-variant-drift.md),
 the recorded three-variant tagline drift this check exists to catch.
@@ -95,4 +95,4 @@ the recorded three-variant tagline drift this check exists to catch.
 - Spec: [`spc-19`](../../specs/closed/spc-19-your-repo-says-the-same-thing-about-itself-everywhere-becaus.md)
 - Intent: [`itd-102`](../../intents/shipped/itd-102-your-repo-says-the-same-thing-about-itself-everywhere-becaus.md)
 - Onboarding consumer: [`15-prepare-this-repo.md`](15-prepare-this-repo.md)
-- Conformance surface: [`16-audit.md`](16-audit.md)
+- Conformance surface: [`16-lint.md`](16-lint.md)

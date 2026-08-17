@@ -1,40 +1,40 @@
-package audit_test
+package repolint_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/audit"
+	"github.com/REPPL/abcd-cli/internal/core/repolint"
 )
 
 // fakeRule is a test double: it declares meta and returns canned findings, so
 // the evaluator can be exercised without any real filesystem rule.
 type fakeRule struct {
-	meta     audit.RuleMeta
-	where    func(audit.Context) bool
-	findings []audit.Finding
+	meta     repolint.RuleMeta
+	where    func(repolint.Context) bool
+	findings []repolint.Finding
 	err      error
 }
 
-func (r fakeRule) Meta() audit.RuleMeta { return r.meta }
-func (r fakeRule) Where(ctx audit.Context) bool {
+func (r fakeRule) Meta() repolint.RuleMeta { return r.meta }
+func (r fakeRule) Where(ctx repolint.Context) bool {
 	if r.where == nil {
 		return true
 	}
 	return r.where(ctx)
 }
-func (r fakeRule) Eval(audit.Context) ([]audit.Finding, error) { return r.findings, r.err }
+func (r fakeRule) Eval(repolint.Context) ([]repolint.Finding, error) { return r.findings, r.err }
 
-func meta(id string, sev audit.Severity) audit.RuleMeta {
-	return audit.RuleMeta{ID: id, Severity: sev, Fix: "do the thing", PolicyInfo: "because"}
+func meta(id string, sev repolint.Severity) repolint.RuleMeta {
+	return repolint.RuleMeta{ID: id, Severity: sev, Fix: "do the thing", PolicyInfo: "because"}
 }
 
 // A clean repo (every rule returns no findings) exits 0.
 func TestEvaluateCleanExitsZero(t *testing.T) {
-	res, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("a", audit.SeverityError)},
-		fakeRule{meta: meta("b", audit.SeverityWarn)},
-	}, audit.Context{})
+	res, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("a", repolint.SeverityError)},
+		fakeRule{meta: meta("b", repolint.SeverityWarn)},
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +48,11 @@ func TestEvaluateCleanExitsZero(t *testing.T) {
 
 // Warnings but no errors exits 1 (Conftest tri-state).
 func TestEvaluateWarningsExitsOne(t *testing.T) {
-	res, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("w", audit.SeverityWarn), findings: []audit.Finding{
-			{RuleID: "w", Severity: audit.SeverityWarn, Message: "m"},
+	res, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("w", repolint.SeverityWarn), findings: []repolint.Finding{
+			{RuleID: "w", Severity: repolint.SeverityWarn, Message: "m"},
 		}},
-	}, audit.Context{})
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,14 +66,14 @@ func TestEvaluateWarningsExitsOne(t *testing.T) {
 
 // Any error exits 2, even when warnings are also present.
 func TestEvaluateErrorExitsTwo(t *testing.T) {
-	res, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("e", audit.SeverityError), findings: []audit.Finding{
-			{RuleID: "e", Severity: audit.SeverityError, Message: "boom"},
+	res, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("e", repolint.SeverityError), findings: []repolint.Finding{
+			{RuleID: "e", Severity: repolint.SeverityError, Message: "boom"},
 		}},
-		fakeRule{meta: meta("w", audit.SeverityWarn), findings: []audit.Finding{
-			{RuleID: "w", Severity: audit.SeverityWarn, Message: "meh"},
+		fakeRule{meta: meta("w", repolint.SeverityWarn), findings: []repolint.Finding{
+			{RuleID: "w", Severity: repolint.SeverityWarn, Message: "meh"},
 		}},
-	}, audit.Context{})
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,11 +88,11 @@ func TestEvaluateErrorExitsTwo(t *testing.T) {
 // A rule whose severity is Off is skipped entirely — never evaluated.
 func TestEvaluateOffRuleSkipped(t *testing.T) {
 	evaluated := false
-	res, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("x", audit.SeverityOff), findings: []audit.Finding{
-			{RuleID: "x", Severity: audit.SeverityError, Message: "should never appear"},
-		}, where: func(audit.Context) bool { evaluated = true; return true }},
-	}, audit.Context{})
+	res, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("x", repolint.SeverityOff), findings: []repolint.Finding{
+			{RuleID: "x", Severity: repolint.SeverityError, Message: "should never appear"},
+		}, where: func(repolint.Context) bool { evaluated = true; return true }},
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,13 +107,13 @@ func TestEvaluateOffRuleSkipped(t *testing.T) {
 // A rule whose Where predicate is false is skipped, not failed — the "docs/
 // absent => docs-currency skipped" acceptance shape.
 func TestEvaluateWhereFalseSkips(t *testing.T) {
-	res, err := audit.Evaluate([]audit.Rule{
+	res, err := repolint.Evaluate([]repolint.Rule{
 		fakeRule{
-			meta:     meta("cond", audit.SeverityError),
-			where:    func(audit.Context) bool { return false },
-			findings: []audit.Finding{{RuleID: "cond", Severity: audit.SeverityError, Message: "unreached"}},
+			meta:     meta("cond", repolint.SeverityError),
+			where:    func(repolint.Context) bool { return false },
+			findings: []repolint.Finding{{RuleID: "cond", Severity: repolint.SeverityError, Message: "unreached"}},
 		},
-	}, audit.Context{})
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,15 +127,15 @@ func TestEvaluateWhereFalseSkips(t *testing.T) {
 
 // Findings are sorted deterministically (rule id, then file, then line).
 func TestEvaluateSortsFindings(t *testing.T) {
-	res, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("z", audit.SeverityWarn), findings: []audit.Finding{
-			{RuleID: "z", Severity: audit.SeverityWarn, File: "b.md", Line: 2},
-			{RuleID: "z", Severity: audit.SeverityWarn, File: "a.md", Line: 9},
+	res, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("z", repolint.SeverityWarn), findings: []repolint.Finding{
+			{RuleID: "z", Severity: repolint.SeverityWarn, File: "b.md", Line: 2},
+			{RuleID: "z", Severity: repolint.SeverityWarn, File: "a.md", Line: 9},
 		}},
-		fakeRule{meta: meta("a", audit.SeverityWarn), findings: []audit.Finding{
-			{RuleID: "a", Severity: audit.SeverityWarn, File: "z.md", Line: 1},
+		fakeRule{meta: meta("a", repolint.SeverityWarn), findings: []repolint.Finding{
+			{RuleID: "a", Severity: repolint.SeverityWarn, File: "z.md", Line: 1},
 		}},
-	}, audit.Context{})
+	}, repolint.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,11 +157,11 @@ func TestEvaluateSortsFindings(t *testing.T) {
 // yielding a clean exit alongside a non-empty findings list. Evaluate fails
 // closed on it rather than emit that contradiction.
 func TestEvaluateRejectsUnknownFindingSeverity(t *testing.T) {
-	_, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("x", audit.SeverityWarn), findings: []audit.Finding{
-			{RuleID: "x", Severity: audit.Severity("nonsense"), Message: "m"},
+	_, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("x", repolint.SeverityWarn), findings: []repolint.Finding{
+			{RuleID: "x", Severity: repolint.Severity("nonsense"), Message: "m"},
 		}},
-	}, audit.Context{})
+	}, repolint.Context{})
 	if err == nil {
 		t.Fatal("expected Evaluate to reject a finding with an unknown severity, got nil")
 	}
@@ -170,9 +170,9 @@ func TestEvaluateRejectsUnknownFindingSeverity(t *testing.T) {
 // A rule that errors aborts the audit with that error — a broken check must not
 // silently read as "clean".
 func TestEvaluateRuleErrorPropagates(t *testing.T) {
-	_, err := audit.Evaluate([]audit.Rule{
-		fakeRule{meta: meta("bad", audit.SeverityError), err: errSentinel},
-	}, audit.Context{})
+	_, err := repolint.Evaluate([]repolint.Rule{
+		fakeRule{meta: meta("bad", repolint.SeverityError), err: errSentinel},
+	}, repolint.Context{})
 	if err == nil {
 		t.Fatal("expected the rule error to propagate, got nil")
 	}
@@ -181,8 +181,8 @@ func TestEvaluateRuleErrorPropagates(t *testing.T) {
 // The JSON serializer emits {"findings": []} for a clean repo (acceptance
 // criterion) and stable rule ids for a dirty one.
 func TestJSONSerializerCleanRepo(t *testing.T) {
-	res := audit.Result{} // no findings
-	out, err := audit.JSONSerializer{}.Serialize(res)
+	res := repolint.Result{} // no findings
+	out, err := repolint.JSONSerializer{}.Serialize(res)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestJSONSerializerCleanRepo(t *testing.T) {
 // skipped — the command doc promises { findings, skipped }, so neither key may
 // vanish.
 func TestJSONSerializerSkippedAlwaysPresent(t *testing.T) {
-	out, err := audit.JSONSerializer{}.Serialize(audit.Result{})
+	out, err := repolint.JSONSerializer{}.Serialize(repolint.Result{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,10 +222,10 @@ func TestJSONSerializerSkippedAlwaysPresent(t *testing.T) {
 }
 
 func TestJSONSerializerCarriesRuleID(t *testing.T) {
-	res := audit.Result{Findings: []audit.Finding{
-		{RuleID: "three-tier-layout", Severity: audit.SeverityError, File: ".abcd", Line: 0, Message: "missing work/"},
+	res := repolint.Result{Findings: []repolint.Finding{
+		{RuleID: "three-tier-layout", Severity: repolint.SeverityError, File: ".abcd", Line: 0, Message: "missing work/"},
 	}}
-	out, err := audit.JSONSerializer{}.Serialize(res)
+	out, err := repolint.JSONSerializer{}.Serialize(res)
 	if err != nil {
 		t.Fatal(err)
 	}

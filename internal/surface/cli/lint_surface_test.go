@@ -14,7 +14,7 @@ import (
 
 // auditRepo builds a git repo at t.TempDir with the given layout knobs and
 // returns its path. A conforming repo satisfies every v1 rule.
-func auditRepo(t *testing.T, conforming bool) string {
+func lintRepo(t *testing.T, conforming bool) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
@@ -51,13 +51,13 @@ func runGitT(t *testing.T, repo string, args ...string) {
 	}
 }
 
-// A conforming repo: `abcd audit` exits 0, and `--json` emits {"findings": []}.
+// A conforming repo: `abcd lint` exits 0, and `--json` emits {"findings": []}.
 func TestAuditConformingExitsZero(t *testing.T) {
-	repo := auditRepo(t, true)
+	repo := lintRepo(t, true)
 	t.Chdir(repo)
 
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"audit", "--json"}, &stdout, &stderr)
+	code := Run([]string{"lint", "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0\nstdout:%s\nstderr:%s", code, stdout.String(), stderr.String())
 	}
@@ -78,11 +78,11 @@ func TestAuditConformingExitsZero(t *testing.T) {
 // A repo missing the committed work tier: exit 2, and the JSON carries the
 // three-tier-layout rule id at error severity.
 func TestAuditMissingWorkTierExitsTwo(t *testing.T) {
-	repo := auditRepo(t, false) // no .abcd/work/DECISIONS.md, so no work/ tier
+	repo := lintRepo(t, false) // no .abcd/work/DECISIONS.md, so no work/ tier
 	t.Chdir(repo)
 
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"audit", "--json"}, &stdout, &stderr)
+	code := Run([]string{"lint", "--json"}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("exit = %d, want 2\nstdout:%s", code, stdout.String())
 	}
@@ -107,32 +107,32 @@ func TestAuditMissingWorkTierExitsTwo(t *testing.T) {
 }
 
 // A cobra usage error (a stray positional argument, an unknown flag) must exit 2,
-// not 1: audit documents Conftest's tri-state where exit 1 means "warnings only",
+// not 1: lint documents Conftest's tri-state where exit 1 means "warnings only",
 // so a mistyped invocation landing on 1 would let a CI gate record a clean-ish
-// pass for an audit that never ran (B13). These fail before RunE, so they need no
+// pass for a lint that never ran (B13). These fail before RunE, so they need no
 // repo fixture.
 func TestAuditUsageErrorsExitTwo(t *testing.T) {
 	cases := [][]string{
-		{"audit", "unexpected-arg"}, // stray positional under cobra.NoArgs
-		{"audit", "--nosuchflag"},   // unknown flag
+		{"lint", "unexpected-arg"}, // stray positional under cobra.NoArgs
+		{"lint", "--nosuchflag"},   // unknown flag
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			code := Run(args, &stdout, &stderr)
 			if code != 2 {
-				t.Fatalf("usage error exit = %d, want 2 (must not collide with the audit tri-state's exit-1 'warnings only')\nstderr:%s", code, stderr.String())
+				t.Fatalf("usage error exit = %d, want 2 (must not collide with the lint tri-state's exit-1 'warnings only')\nstderr:%s", code, stderr.String())
 			}
 		})
 	}
 }
 
-// `abcd audit --root <missing>` must report a usage error, not fabricate
+// `abcd lint --root <missing>` must report a usage error, not fabricate
 // convention violations against a directory that is not there (B41).
 func TestAuditNonexistentRootIsUsageError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "gone")
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"audit", "--root", missing}, &stdout, &stderr)
+	code := Run([]string{"lint", "--root", missing}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("exit = %d, want 2\nstderr:%s", code, stderr.String())
 	}
@@ -140,18 +140,18 @@ func TestAuditNonexistentRootIsUsageError(t *testing.T) {
 		t.Errorf("want an 'is not a directory' diagnostic, got stderr:\n%s", stderr.String())
 	}
 	if strings.Contains(stdout.String(), "conventions-router") || strings.Contains(stdout.String(), "three-tier-layout") {
-		t.Errorf("audit fabricated convention findings against a missing dir:\n%s", stdout.String())
+		t.Errorf("lint fabricated convention findings against a missing dir:\n%s", stdout.String())
 	}
 }
 
 // The human render (no --json) is grouped and readable, and stdout stays free of
 // JSON braces.
 func TestAuditHumanRender(t *testing.T) {
-	repo := auditRepo(t, false)
+	repo := lintRepo(t, false)
 	t.Chdir(repo)
 
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"audit"}, &stdout, &stderr)
+	code := Run([]string{"lint"}, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("exit = %d, want 2", code)
 	}
@@ -161,5 +161,15 @@ func TestAuditHumanRender(t *testing.T) {
 	}
 	if !strings.Contains(out, "three-tier-layout") {
 		t.Errorf("human render omits the failing rule id:\n%s", out)
+	}
+}
+
+// TestAuditRenameCleanBreak (spc-29): `abcd lint` is the conformance verb and
+// `abcd audit` is an unknown command — the /abcd:audit seat returns to itd-16.
+func TestAuditRenameCleanBreak(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"audit"}, &stdout, &stderr)
+	if code != 2 || !strings.Contains(stderr.String(), "unknown command") {
+		t.Fatalf("abcd audit must be unknown (exit 2), got exit %d stderr %q", code, stderr.String())
 	}
 }

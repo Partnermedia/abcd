@@ -48,7 +48,7 @@ package launch
 //
 // The detector judges EXECUTABLE instruction — lines inside fenced code blocks,
 // which is what an agent copies and runs — plus every `go run ./cmd/abcd`
-// mention anywhere in the file. Descriptive inline prose ("`abcd audit` can also
+// mention anywhere in the file. Descriptive inline prose ("`abcd lint` can also
 // gate a repo's CI") is deliberately out of scope: it names a capability rather
 // than handing over a command line, and policing it would buy nothing while
 // making the prose unreadable.

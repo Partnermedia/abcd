@@ -1,19 +1,19 @@
 ---
-name: audit
+name: lint
 description: Check whether the current repo conforms to the working conventions — the three-tier .abcd/ layout, an AGENTS.md router, durable decisions, current docs, privacy hygiene — by invoking the abcd binary. Strictly read-only; performs zero writes.
 argument-hint: ""
 ---
 
-# `/abcd:audit` repo-conformance check
+# `/abcd:lint` repo-conformance check
 
-Run the abcd binary's read-only conformance audit for the current repo and
+Run the abcd binary's read-only conformance lint for the current repo and
 present the result. This command performs **zero writes** — it reports gaps, it
 never fixes them (remediation stays with `/abcd:prepare-this-repo`).
 
 Run:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" audit --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" lint --json
 ```
 
 Then summarise the JSON for the user. Its shape is `{ "findings": [ … ],
@@ -30,10 +30,10 @@ Then summarise the JSON for the user. Its shape is `{ "findings": [ … ],
 State the outcome plainly: if there are no findings the repo conforms; otherwise
 lead with how many errors and warnings there are. The process exit code is the
 Conftest tri-state — `0` clean, `1` warnings only, `2` any error — so
-`abcd audit` can also gate a repo's CI.
+`abcd lint` can also gate a repo's CI.
 
 A finding on a deliberately illustrative line can be waived by adding
-`abcd-audit:allow` on that line.
+`abcd-lint:allow` on that line (the earlier `abcd-audit:allow` spelling is honoured too).
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

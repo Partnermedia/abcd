@@ -335,7 +335,7 @@ Drift triggers a warning, not a block (since spec-store state may legitimately l
 
 `intent-auditor` is a single agent in the catalog (per `05-internals/01-agents.md`) that owns three roles. Roles share the agent's prompt scaffolding, oracle backend resolution, and receipts; they differ in what they review, when they run, where findings land, and **which subverb users invoke them through**. Each role has its own dedicated verb — no role-by-kind dispatch, no hidden-state forking.
 
-The verb `audit` names Role 1, per adr-40: it emits family-2 promise-vs-reality verdicts, and the four-bucket vocabulary reserves *review* for family-1 change-judgement (`plan-review`, `impl-review` stay family-1 nouns). The top-level conformance check's own name is owned by itd-124's rename, with `/abcd:audit` reserved for itd-16's hash-chain fidelity checks. Each verb means one thing.
+The verb `audit` names Role 1, per adr-40: it emits family-2 promise-vs-reality verdicts, and the four-bucket vocabulary reserves *review* for family-1 change-judgement (`plan-review`, `impl-review` stay family-1 nouns). The top-level conformance check is `abcd lint`, with `/abcd:audit` reserved for itd-16's hash-chain fidelity checks. Each verb means one thing.
 
 ### Role 1 — single-document fidelity → `/abcd:intent audit <itd-N>`
 
@@ -455,4 +455,4 @@ The later-phase review/audit verbs write their per-run receipts under the local 
 - `/abcd:audit chain` → `audit/chain-<ts>/` (conversation/edit-history Merkle, default application per itd-16 — a later phase)
 - `/abcd:audit lifeboat <path>` → `audit/lifeboat-<ts>/` (lifeboat-artefact integrity per itd-35 — a later phase)
 
-`chain` and `lifeboat` are later-phase sub-verbs of `/abcd:audit` (their backing intents itd-16 and itd-35 sit in `intents/drafts/`); `abcd audit` itself runs the read-only working-conventions conformance check, and bare invocation executes that check. `audit` is a shipped sub-verb of `/abcd:intent`; `consistency` and `shape` are later phases. Bare `/abcd:intent` is status+help per the universal bare-command-as-help convention.
+`chain` and `lifeboat` are later-phase sub-verbs of the reserved `/abcd:audit` (their backing intents itd-16 and itd-35 sit in `intents/drafts/`); the read-only working-conventions conformance check is `abcd lint`. `audit` is a shipped sub-verb of `/abcd:intent`; `consistency` and `shape` are later phases. Bare `/abcd:intent` is status+help per the universal bare-command-as-help convention.

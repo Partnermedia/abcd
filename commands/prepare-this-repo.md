@@ -66,7 +66,7 @@ The conformance core is **engine-backed**: run the binary's read-only audit and
 build the gap report on its result, rather than hand-producing the whole thing.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" audit --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" lint --json
 ```
 
 Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
@@ -98,7 +98,7 @@ Then supplement with the judgement the binary does not make:
   scope does not yet cover. A finding on a deliberately illustrative line can be
   waived with `abcd-audit:allow` on that line.
 
-Write the report — the `abcd audit` findings plus these supplements — to the
+Write the report — the `abcd lint` findings plus these supplements — to the
 target's `.abcd/.work.local/scratch/` (create the directory via
 `.git/info/exclude` if needed) and present it before touching anything.
 
@@ -160,7 +160,7 @@ target's `.abcd/.work.local/scratch/` (create the directory via
 
    This writes the markdown block (markdown stays the source of truth) and
    `.abcd/positioning.json`, which records where the block lives and which
-   surfaces render from it. From then on `abcd audit` reports any surface that
+   surfaces render from it. From then on `abcd lint` reports any surface that
    drifts from it, and `abcd identity render` proposes the correction as a
    diff. abcd never rewrites a surface itself — adopting a proposal is always
    the maintainer's move.

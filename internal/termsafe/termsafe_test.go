@@ -49,7 +49,7 @@ func TestSanitizeNeutralisesDisplayAttacks(t *testing.T) {
 		{"esc-ansi", withRune("red", 0x1b, "[31mtext"), "red?[31mtext"},
 		{"c1-csi", withRune("x", 0x9b, "31mspoof"), "x?31mspoof"},
 		{"del", withRune("a", 0x7f, "b"), "a?b"},
-		{"newline-forges-lines", withRune("clean", '\n', "abcd audit — 0 errors"), "clean?abcd audit — 0 errors"},
+		{"newline-forges-lines", withRune("clean", '\n', "abcd lint — 0 errors"), "clean?abcd lint — 0 errors"},
 		{"bidi-rlo", withRune("user", 0x202e, "esc"), "user?esc"},
 		{"bidi-lri", withRune("a", 0x2066, "b"), "a?b"},
 		{"bidi-lrm", withRune("a", 0x200e, "b"), "a?b"},

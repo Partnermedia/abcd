@@ -24,7 +24,7 @@ Cobra CLI is the front door today; an MCP server follows later, per
 [adr-23](../../decisions/adrs/0023-transport-agnostic-core.md)). Not every verb
 does: `consult` and `ingest` run entirely as host-side markdown over the
 operator-level sources corpus (`~/.abcd/sources/`) and never invoke the binary,
-and `prepare-this-repo` is an interim bridge that shells out to `abcd audit`
+and `prepare-this-repo` is an interim bridge that shells out to `abcd lint`
 for part of its work and handles the rest host-side.
 
 ## Sub-verbs and aliases

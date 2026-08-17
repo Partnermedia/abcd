@@ -32,7 +32,7 @@ emits `{ "block": …, "severity": …, "surfaces": [ … ] }`:
 
 Report the block first, then any surface that is not `ok`, naming the file, the
 line, what it says, and what the block says. It exits `0` even when it reports
-drift: this form is a status render, and the gate is `abcd audit`.
+drift: this form is a status render, and the gate is `abcd lint`.
 
 ## `render` — the proposed correction
 

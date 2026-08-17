@@ -294,7 +294,7 @@ func TestIdentityInitScaffoldsTheBlockAndThePointer(t *testing.T) {
 	// The check the init just enabled must now run, and find no drift: the
 	// repo's README already carries the tagline it was interviewed for.
 	var auditOut, auditErr bytes.Buffer
-	Run([]string{"audit", "--json"}, &auditOut, &auditErr)
+	Run([]string{"lint", "--json"}, &auditOut, &auditErr)
 	var res struct {
 		Findings []struct {
 			RuleID  string `json:"ruleId"`
@@ -302,7 +302,7 @@ func TestIdentityInitScaffoldsTheBlockAndThePointer(t *testing.T) {
 		} `json:"findings"`
 	}
 	if err := json.Unmarshal(auditOut.Bytes(), &res); err != nil {
-		t.Fatalf("audit --json: %v\n%s", err, auditOut.String())
+		t.Fatalf("lint --json: %v\n%s", err, auditOut.String())
 	}
 	for _, f := range res.Findings {
 		if f.RuleID == "identity-positioning" {

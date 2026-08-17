@@ -1,4 +1,4 @@
-package audit
+package repolint
 
 import (
 	"bytes"
@@ -36,6 +36,12 @@ type privacyHygiene struct{}
 
 // auditWaiver is the language-agnostic line-scoped escape. Unlike the docs-lint
 // HTML-comment form it works in source files too, where `<!-- -->` is not valid.
+// lintWaiver is the current waiver token; auditWaiver is the pre-spc-29
+// spelling, honoured forever — the token lives in committed content (this
+// repo's own sources and any managed repo's), so retiring it would silently
+// re-flag every existing deliberately-illustrative line.
+const lintWaiver = "abcd-lint:allow"
+
 const auditWaiver = "abcd-audit:allow"
 
 var (
@@ -99,7 +105,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 		}
 		lines := strings.Split(string(data), "\n")
 		for i, line := range lines {
-			if strings.Contains(line, auditWaiver) {
+			if strings.Contains(line, lintWaiver) || strings.Contains(line, auditWaiver) {
 				continue
 			}
 			msg, sev, leaked := privacyLeak(line, patterns)

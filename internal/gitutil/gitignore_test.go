@@ -53,7 +53,7 @@ func TestIsIgnored(t *testing.T) {
 		{"ignored directory", ".abcd/.work.local/", true},
 		{"ignored by glob", "debug.log", true},
 		{"tracked path", ".abcd/work/DECISIONS.md", false},
-		{"tracked source", "internal/core/audit.go", false},
+		{"tracked source", "internal/core/repolint.go", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

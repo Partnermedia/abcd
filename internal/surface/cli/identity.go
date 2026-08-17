@@ -22,7 +22,7 @@ import (
 //   - init — the write path: scaffold the block and the pointer that records
 //     where it lives. It adopts an existing block rather than re-interviewing.
 //
-// The drift check itself runs on every `abcd audit`; this family is where a
+// The drift check itself runs on every `abcd lint`; this family is where a
 // maintainer looks at the canon and at what a fix would look like.
 func newIdentityCommand(asJSON *bool) *cobra.Command {
 	identityCmd := &cobra.Command{
@@ -39,7 +39,7 @@ func newIdentityCommand(asJSON *bool) *cobra.Command {
 				return &exitError{Code: 2, Msg: "abcd identity: " + scrubPaths(err)}
 			}
 			// A status render, not a gate: drift here exits 0 and says so. The
-			// gate is `abcd audit`, which carries the tri-state exit code.
+			// gate is `abcd lint`, which carries the tri-state exit code.
 			return render(cmd.OutOrStdout(), *asJSON, rep, func(w io.Writer) {
 				renderIdentity(w, rep)
 			})
@@ -192,5 +192,5 @@ func renderIdentityInit(w io.Writer, res positioning.InitResult) {
 	for _, p := range res.Wrote {
 		fmt.Fprintf(w, "  wrote:   %s\n", p)
 	}
-	fmt.Fprintln(w, "  `abcd audit` now holds every registered surface to this block.")
+	fmt.Fprintln(w, "  `abcd lint` now holds every registered surface to this block.")
 }
