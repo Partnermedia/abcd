@@ -66,6 +66,49 @@ func (e *exitError) ExitCode() int { return e.Code }
 // hole by missing either one.
 func helpRunE(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 
+// failOpenNoArgs is cobra.NoArgs for the two parents a HOST HOOK reaches: `guard`
+// (PreToolUse runs `guard hook` before every shell command) and `hook`
+// (UserPromptSubmit runs `hook prompt-router` before every prompt).
+//
+// On the hook plane an exit status is not a diagnostic, it is an INSTRUCTION: the
+// host reads 2 as "block this action". Cobra's usage error exits 2, which is
+// right in a terminal and wrong here — it makes abcd answer a question it did not
+// evaluate. `guard hook`'s contract (spc-16, itd-103 AC 1) is fail-open-loud:
+// exit 2 means "the guard decided to block", and every path that is NOT a
+// decision exits 1 so the command still runs and the warning is still seen. An
+// unknown sub-verb is not a decision.
+//
+// This is reachable because the manifest and the binary can skew — hooks/hooks.json
+// ships with the plugin git clone while hooks/bootstrap.sh fetches the binary from
+// the latest release — so a renamed hook sub-verb would otherwise block every
+// shell command in the session, and the PreToolUse wrapper cannot rescue it: that
+// wrapper treats 2 as a recognised code, so its "FAILED TO RUN … UNGUARDED" net
+// never fires (iss-267).
+//
+// The refusal stays loud and non-zero, so iss-266's guarantee is intact: a
+// mistyped sub-verb never reads as success. Only the code moves, from the host's
+// blocking status to its non-blocking one.
+//
+// SCOPE, stated plainly because the gap matters more than the fix: this covers
+// the unknown-SUB-VERB path under these two parents, and nothing else. Three
+// neighbouring paths still exit 2, deliberately — an unknown TOP-LEVEL token hits
+// the root's validator (root's exit-2 contract is pinned by three other tests and
+// inverting it is a larger change than this), a stray positional on a LEAF such
+// as `guard hook` exits 2, and any unknown FLAG exits 2 through FlagErrorFunc.
+// None is reachable from today's manifest. What keeps them unreachable is not
+// this function but the doctrine the manifest test enforces: hooks.json's
+// spellings are frozen, and a rename is absorbed by an alias in the binary. That
+// is iss-269.
+func failOpenNoArgs(cmd *cobra.Command, args []string) error {
+	if err := cobra.NoArgs(cmd, args); err != nil {
+		return &exitError{Code: 1, Msg: err.Error() +
+			"\nabcd: refusing at exit 1, not the host's blocking status — an unrecognised sub-verb is not a" +
+			" decision to block. If a hook invoked this, the plugin manifest and the binary have skewed;" +
+			" re-run hooks/bootstrap.sh or reinstall the plugin."}
+	}
+	return nil
+}
+
 // NewRootCommand builds the abcd command tree. Bare `abcd` renders a read-only
 // status board (abcd's convention: bare invocation never mutates); subcommands
 // carry the actions.
@@ -222,6 +265,12 @@ func NewRootCommand() *cobra.Command {
 // are routed through FlagErrorFunc (inherited by children, but set on each for
 // clarity); argument-validation errors (cobra.NoArgs violations, unknown
 // subcommands) surface from each command's Args validator, which is wrapped.
+//
+// A validator that ALREADY chose an exit code keeps it. Exit 2 is the right
+// default for a usage error, but it is not universal: on the hook plane 2 is the
+// host's blocking status, so the `guard` and `hook` parents refuse at 1 instead
+// (failOpenNoArgs, iss-267). Re-stamping every validator error here would silently
+// undo that — which it did, until this branch.
 func markUsageErrorsExitTwo(c *cobra.Command) {
 	c.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return &exitError{Code: 2, Msg: err.Error()}
@@ -229,6 +278,10 @@ func markUsageErrorsExitTwo(c *cobra.Command) {
 	if validate := c.Args; validate != nil {
 		c.Args = func(cmd *cobra.Command, args []string) error {
 			if err := validate(cmd, args); err != nil {
+				var coded *exitError
+				if errors.As(err, &coded) {
+					return err
+				}
 				return &exitError{Code: 2, Msg: err.Error()}
 			}
 			return nil
@@ -864,7 +917,7 @@ func newHookCommand() *cobra.Command {
 		Use:    "hook",
 		Short:  "Claude Code hook entrypoints (operator-internal)",
 		Hidden: true,
-		Args:   cobra.NoArgs,
+		Args:   failOpenNoArgs,
 		RunE:   helpRunE,
 	}
 
