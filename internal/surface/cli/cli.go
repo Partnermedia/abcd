@@ -2013,8 +2013,11 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				if res.Linked {
 					verb = "linked"
 				}
+				// Paths echo ledger/corpus filenames (attacker-shapeable in a
+				// hostile clone), so sanitise before the terminal.
 				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
-					res.IssueID, res.IssueStatus, res.IssuePath, verb, res.IntentID, res.IntentPath)
+					res.IssueID, res.IssueStatus, termsafe.Sanitize(res.IssuePath),
+					verb, res.IntentID, termsafe.Sanitize(res.IntentPath))
 			})
 		},
 	}
