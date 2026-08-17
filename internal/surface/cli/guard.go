@@ -34,6 +34,7 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 		Use:   "guard",
 		Short: "Check a shell command against the hazard registry before it runs",
 		Args:  cobra.NoArgs,
+		RunE:  helpRunE,
 	}
 
 	var command string

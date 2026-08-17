@@ -30,6 +30,7 @@ func newCiteCommand(asJSON *bool) *cobra.Command {
 		Use:   "cite",
 		Short: "Maintain the citation baseline the docs lint enforces offline",
 		Args:  cobra.NoArgs,
+		RunE:  helpRunE,
 	}
 	citeCmd.AddCommand(newCiteRefreshCommand(asJSON))
 	citeCmd.AddCommand(newCiteConfirmCommand(asJSON))

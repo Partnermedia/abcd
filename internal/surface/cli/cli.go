@@ -51,6 +51,21 @@ type exitError struct {
 func (e *exitError) Error() string { return e.Msg }
 func (e *exitError) ExitCode() int { return e.Code }
 
+// helpRunE is the RunE every sub-verb parent carries. A cobra parent with no RunE
+// is not Runnable, so cobra prints help and exits 0 WITHOUT running the command's
+// Args validator: an unknown sub-verb — a typo, or a retired spelling like the
+// pre-spc-30 `disembark oracle` — then reads as SUCCESS to a script (iss-266).
+// Giving the parent a RunE keeps bare invocation showing help while letting its
+// declared Args validator run and refuse a stray token at the usual exit 2. A
+// parent must therefore have BOTH: with Args nil, cobra's legacyArgs falls
+// through to ArbitraryArgs and a Runnable parent still exits 0. Most parents
+// declare cobra.NoArgs; `banlist` declares a custom validator, and `capture` and
+// `intent` are deliberately cobra.ArbitraryArgs because their positional is free
+// text (they guard typos themselves). TestEveryParentRefusesAnUnknownSubverb
+// holds both halves tree-wide, so a parent added later cannot reintroduce the
+// hole by missing either one.
+func helpRunE(cmd *cobra.Command, _ []string) error { return cmd.Help() }
+
 // NewRootCommand builds the abcd command tree. Bare `abcd` renders a read-only
 // status board (abcd's convention: bare invocation never mutates); subcommands
 // carry the actions.
@@ -240,6 +255,7 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 		Use:   "docs",
 		Short: "Documentation-currency checks for this repo",
 		Args:  cobra.NoArgs,
+		RunE:  helpRunE,
 	}
 
 	var configPath string
@@ -359,14 +375,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		Use:   "disembark",
 		Short: "Lifeboat tooling: coverage probe, pack dry-run, and out-of-tree pack",
 		Args:  cobra.NoArgs,
-		// A parent with no RunE is not Runnable, so cobra prints help and exits
-		// 0 WITHOUT validating args — an unknown sub-verb (a typo, or a retired
-		// spelling like the pre-spc-30 `oracle`) then reads as success to a
-		// script. Making the parent runnable restores bare-as-help while letting
-		// cobra.NoArgs refuse a stray token with the usual exit 2.
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmd.Help()
-		},
+		RunE:  helpRunE,
 	}
 
 	probeCmd := &cobra.Command{
@@ -681,6 +690,7 @@ func newEmbarkCommand(asJSON *bool) *cobra.Command {
 		Use:   "embark",
 		Short: "Unpack a lifeboat's record families back into a target repo (probe read-only; from writes)",
 		Args:  cobra.NoArgs,
+		RunE:  helpRunE,
 	}
 
 	// resolveDirs turns the args into absolute lifeboat + target dirs; the target
@@ -855,6 +865,7 @@ func newHookCommand() *cobra.Command {
 		Short:  "Claude Code hook entrypoints (operator-internal)",
 		Hidden: true,
 		Args:   cobra.NoArgs,
+		RunE:   helpRunE,
 	}
 
 	// prompt-router — UserPromptSubmit: recall-match, dedup, inject.
@@ -2521,9 +2532,7 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 		Use:   "history",
 		Short: "Manage the native session-transcript store",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmd.Help()
-		},
+		RunE:  helpRunE,
 	}
 
 	// capture — the redacting write path: read a raw transcript from a file
