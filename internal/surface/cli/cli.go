@@ -88,6 +88,17 @@ func helpRunE(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 // The refusal stays loud and non-zero, so iss-266's guarantee is intact: a
 // mistyped sub-verb never reads as success. Only the code moves, from the host's
 // blocking status to its non-blocking one.
+//
+// SCOPE, stated plainly because the gap matters more than the fix: this covers
+// the unknown-SUB-VERB path under these two parents, and nothing else. Three
+// neighbouring paths still exit 2, deliberately — an unknown TOP-LEVEL token hits
+// the root's validator (root's exit-2 contract is pinned by three other tests and
+// inverting it is a larger change than this), a stray positional on a LEAF such
+// as `guard hook` exits 2, and any unknown FLAG exits 2 through FlagErrorFunc.
+// None is reachable from today's manifest. What keeps them unreachable is not
+// this function but the doctrine the manifest test enforces: hooks.json's
+// spellings are frozen, and a rename is absorbed by an alias in the binary. That
+// is iss-269.
 func failOpenNoArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.NoArgs(cmd, args); err != nil {
 		return &exitError{Code: 1, Msg: err.Error() +

@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
 )
 
 // hookPlaneParents are the parents a host hook reaches. On the hook plane an exit
@@ -57,16 +55,26 @@ func TestHookPlaneParentsFailOpenOnUnknownSubverb(t *testing.T) {
 
 // binaryInvocationRe finds each place hooks.json runs the abcd binary and
 // captures the sub-verb path that follows, stopping at the first shell
-// metacharacter. The two spellings are the resolved-binary variable the wrapper
-// builds and the plugin-root path SessionStart uses directly.
-var binaryInvocationRe = regexp.MustCompile(`(?:"\$g"|"\$CLAUDE_PLUGIN_ROOT/abcd")((?:[[:space:]]+[a-z][a-z0-9-]*)+)`)
+// metacharacter. The alternatives are the three spellings the wrappers use: the
+// resolved-binary variable, the plugin-root variable, and the full plugin-root
+// path SessionStart uses directly.
+var binaryInvocationRe = regexp.MustCompile(`(?:"\$g"|"\$r/abcd"|"\$CLAUDE_PLUGIN_ROOT/abcd")((?:[[:space:]]+[a-z][a-z0-9-]*)+)`)
 
 // TestHooksManifestNamesLiveSubverbs pins hooks/hooks.json against the live
-// command tree. hooks.json ships with the plugin git clone while the binary is
-// fetched from the latest release, so the two can skew and a rename is only
-// visible once a user's session breaks. This turns that into a build failure in
-// the same change that renames the verb — which is what makes "a hook sub-verb
-// rename must carry an alias" enforceable rather than a note in a record.
+// command tree.
+//
+// The skew this defends runs in ONE direction: a user's plugin clone updates by
+// `git pull` while the binary updates by release download, so the manifest is the
+// half that runs AHEAD. That decides the doctrine. An alias added to a new binary
+// does nothing for a user whose binary is old, so the remedy is not "rename and
+// alias the manifest across" — it is the reverse: **the manifest's spellings are
+// frozen, and a rename is absorbed by an alias in the binary**. Editing
+// hooks.json to a new spelling is the move that breaks every older binary.
+//
+// So this test asks only that every spelling the manifest names still resolves in
+// this binary — through an alias just as happily as through a primary name. It
+// fails the build in the same change that would strand a skewed pair, instead of
+// in a user's session.
 func TestHooksManifestNamesLiveSubverbs(t *testing.T) {
 	raw, err := os.ReadFile("../../../hooks/hooks.json")
 	if err != nil {
@@ -85,10 +93,12 @@ func TestHooksManifestNamesLiveSubverbs(t *testing.T) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("the hooks manifest is not valid JSON: %v", err)
 	}
+	var events []string
 	var commands []string
-	for _, entries := range manifest.Hooks {
+	for event, entries := range manifest.Hooks {
 		for _, entry := range entries {
 			for _, h := range entry.Hooks {
+				events = append(events, event)
 				commands = append(commands, h.Command)
 			}
 		}
@@ -97,38 +107,44 @@ func TestHooksManifestNamesLiveSubverbs(t *testing.T) {
 		t.Fatal("the hooks manifest decoded to zero commands — the struct no longer matches its shape")
 	}
 
-	matches := binaryInvocationRe.FindAllStringSubmatch(strings.Join(commands, "\n"), -1)
-	if len(matches) == 0 {
-		t.Fatal("found no abcd invocations in hooks/hooks.json — the scan is broken, " +
-			"not the manifest (it would silently pass forever)")
-	}
-
 	root := NewRootCommand()
 	var seen []string
-	for _, m := range matches {
-		path := strings.Fields(m[1])
-		joined := strings.Join(path, " ")
-		if slices.Contains(seen, joined) {
+	// Scan EACH command separately and require every one to yield an invocation.
+	// Joining them and checking the total only catches a scan that fails
+	// completely; a quoting drift in one command would hide that one invocation
+	// while the others kept the test green, leaving it unpinned forever — which is
+	// the silent-pass this test exists to rule out.
+	for i, command := range commands {
+		matches := binaryInvocationRe.FindAllStringSubmatch(command, -1)
+		if len(matches) == 0 {
+			t.Errorf("the %s hook command contains no recognisable abcd invocation — "+
+				"the scan is broken, not the manifest. Every hook command runs the binary; if this one "+
+				"spells the invocation a new way, teach binaryInvocationRe that spelling rather than "+
+				"leaving the command unchecked.", events[i])
 			continue
 		}
-		seen = append(seen, joined)
-		if cmd, _, err := root.Find(path); err != nil || cmd == nil || !slices.Equal(commandPath(cmd), path) {
-			t.Errorf("hooks/hooks.json invokes `abcd %s`, which is not a command in this binary.\n"+
-				"A hook sub-verb is a compatibility contract: the manifest ships with the plugin clone "+
-				"while the binary comes from the latest release, so a rename without an alias breaks "+
-				"live sessions against any skewed pair (iss-267).", joined)
+		for _, m := range matches {
+			path := strings.Fields(m[1])
+			joined := strings.Join(path, " ")
+			if slices.Contains(seen, joined) {
+				continue
+			}
+			seen = append(seen, joined)
+			// Fully-consumed path, NOT a name comparison. Find resolves aliases but
+			// Name() returns the primary, so comparing names would reject a rename
+			// that carries a compatibility alias — the one remedy that survives the
+			// skew — and the only way back to green would be editing the manifest,
+			// the very change that stranding depends on. Leftover args mean Find
+			// stopped at a parent, which is the prefix case this must still catch.
+			cmd, rest, err := root.Find(path)
+			if err != nil || cmd == nil || cmd == root || len(rest) > 0 {
+				t.Errorf("hooks/hooks.json (%s) invokes `abcd %s`, which this binary does not answer.\n"+
+					"The manifest runs ahead of the binary on a user's machine (clone pulls, binary lags), "+
+					"so its spellings are frozen: absorb the rename with an Aliases entry on the renamed "+
+					"command and leave hooks.json alone — editing it to the new spelling is what strands "+
+					"every older binary (iss-267).", events[i], joined)
+			}
 		}
 	}
 	t.Logf("hook invocations checked: %v", seen)
-}
-
-// commandPath returns cmd's argv path below the root, so a Find that merely
-// resolved a PREFIX (returning the parent, with the rest left as args) is not
-// mistaken for a hit.
-func commandPath(cmd *cobra.Command) []string {
-	var path []string
-	for c := cmd; c != nil && c.HasParent(); c = c.Parent() {
-		path = append([]string{c.Name()}, path...)
-	}
-	return path
 }
