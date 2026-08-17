@@ -361,7 +361,9 @@ Assisted-by: Claude:claude-opus-5'
 # KNOWN RESIDUAL, pinned so a future fix is visible rather than silent. A
 # first-level `- ` item's content sits at column 2, under the three-space limit,
 # so its fence is read as document-level and the footer between the markers is
-# stripped although the forge renders it as a paragraph. iss-270. This is an
+# stripped although the forge renders it as a paragraph. ACCEPTED by decision in
+# iss-270 rather than outstanding, so this case exists to make a change to that
+# behaviour visible, not to mark a defect awaiting a fix. This is an
 # instance of "a body constructed around the footer", which the design already
 # declines to defend against — not a new class — and the footer-last cases above
 # are what stands between this gate and the accident it was built for.
