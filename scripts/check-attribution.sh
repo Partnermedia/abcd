@@ -121,6 +121,163 @@ usage() {
 	exit 2
 }
 
+# strip_fenced_blocks removes markdown fenced code blocks from stdin.
+#
+# A fenced block is QUOTED MATERIAL, not the document's own voice, and every rule
+# below is about what the document itself says. So the rule reads in both
+# directions: a banned form inside a fence is an example rather than a violation,
+# and the required trailer inside a fence is an example too — it cannot serve as
+# the disclosure. Stripping before any check gets both at once.
+#
+# This exists because mid-sentence prose was the only way to document the banned
+# shape, and a fenced example — the natural way to show a literal — was refused
+# exactly as a real footer would be. The change that tightened the rule tripped
+# over this in its own pull-request body (iss-268). The line anchor already grants
+# this to `- Generated with …` bullets; a fence is the same concession, made
+# deliberately.
+#
+# APPLIED TO THE PULL-REQUEST BODY ONLY. The whole justification is a RENDERING
+# argument — a fence reads as an example because GitHub draws it as a code block.
+# A commit message is never rendered as markdown: `git log` and the forge's commit
+# view show it verbatim, so a fenced footer there is displayed exactly as a real
+# one and lands in permanent history. There is no reading under which it is
+# quotation, so the commits arm keeps the unstripped text and the mid-sentence
+# convention (which every commit message in this repo's history already uses —
+# not one contains a fence marker at all).
+#
+# Permitting a fenced footer in a body costs little against the actual threat.
+# This gate defends against a footer a TOOL APPENDS BY DEFAULT, and no tool we
+# have met wraps its own footer in a code fence — a judgement about observed
+# tools, not a law about all of them, and the line to revisit if one appears. It
+# was never a defence against a determined author, who would simply delete the
+# footer rather than fence it.
+#
+# WHAT THIS ACTUALLY DEFENDS, stated as narrowly as it can be defended. This gate
+# exists because pull-request bodies picked up a tool's default footer across 78
+# pull requests (itd-91) — an ACCIDENT at scale, not an adversary. A tool appends
+# its footer LAST, and that is the property under test: a footer appended after
+# the content is caught whatever precedes it, because no fence opened earlier can
+# still be open at the end without the unterminated rule refusing the whole
+# strip. That is fuzz-verified and pinned by the corpus.
+#
+# What it does NOT defend is a body CONSTRUCTED AROUND the footer. That was
+# already true and said plainly below — a plainly fenced footer passes by design.
+# The container cases are instances of the same thing rather than a new class: the
+# matcher is line-based and has no model of markdown's block containers, so a
+# fence opened inside a LIST ITEM is read as a document-level fence, and the span
+# it closes over is removed from the text the rules see while the forge renders
+# part of that span as an ordinary paragraph. iss-270 carries it. An HTML block
+# would do the same, so a document containing one strips nothing at all — that
+# guard costs almost nothing here and is safe by construction, since striking less
+# can only over-reject.
+#
+# The earlier draft of this comment claimed the stripped region is a SUBSET of
+# what markdown renders as code. That claim is false, and it mattered: it is the
+# sentence that made the list-container hole look impossible, and it pointed the
+# residual in the wrong direction. It is replaced rather than softened.
+#
+# The matcher still pairs fences the way CommonMark does WITHIN a document-level
+# context, because the alternative — a presence test on the first three characters
+# — was blind to marker type, run length and info string, and each blindness was a
+# working bypass with no container trickery at all:
+#
+#   ~~~ / ``` / ~~~ / footer / ```   — CommonMark closes a tilde block only with
+#                                  tildes, so the footer is a paragraph.
+#   ```` / ``` / ```` / footer / ```  — a closer must be at least as long as its opener.
+#   ```make preflight``` is the gate.
+#   footer
+#   ```make build``` builds it. — no exotic markdown at all: a backtick fence's info
+#                                  string may not contain a backtick, so these are
+#                                  inline code spans in ONE paragraph.
+#
+# So an opener records its character and run length; a line closes it only with the
+# SAME character, AT LEAST as many of them, and nothing but whitespace after the
+# run; a backtick opener whose info string carries a backtick is not an opener.
+#
+# UNTERMINATED BLOCKS FAIL CLOSED. Markdown renders an unclosed fence as code to
+# the end of the document, so honouring one would let a single stray line suppress
+# every check beneath it. Ending the scan still inside a block strips nothing.
+# Tracking the opener rather than counting markers also makes NESTED documentation
+# work: a ```` block quoting a ``` example is one block, where a parity count saw
+# three markers and failed closed on the very shape needed to document this rule.
+#
+# A fence may be indented up to three spaces (markdown's own rule); at four it is
+# an indented code block, and a tab-led line is not a fence either. Both stay
+# unstripped, which is the conservative direction at DOCUMENT level. Inside a list
+# item it is not conservative at all and runs BOTH ways: a first-level `- ` item's
+# content sits at column 2, so a fence there is under the limit and IS stripped
+# (the hole above); nested deeper it is over the limit and is NOT stripped (the
+# usability complaint). iss-270 carries both directions, and notes that relaxing
+# the limit would widen the hole while appearing to fix the complaint.
+strip_fenced_blocks() {
+	awk '
+		# fenceparse fills f[] with the marker character, its run length and the
+		# text after the run, or returns 0 when the line cannot open or close a
+		# fence at all.
+		function fenceparse(l, f,   t, indent, c, n) {
+			t = l
+			sub(/^ +/, "", t)
+			indent = length(l) - length(t)
+			if (indent > 3) return 0
+			c = substr(t, 1, 1)
+			# Load-bearing for TERMINATION, not only for correctness: on an
+			# empty line c is "", and substr() past the end also returns "", so
+			# the run counter below would never stop. Removing this line hangs
+			# the gate rather than failing a case, which is a mode no corpus can
+			# express — found the hard way.
+			if (c != "`" && c != "~") return 0
+			n = 0
+			while (substr(t, n + 1, 1) == c) n++
+			if (n < 3) return 0
+			f["char"] = c
+			f["len"] = n
+			f["rest"] = substr(t, n + 1)
+			return 1
+		}
+		function blank(s) { gsub(/[ \t\r]/, "", s); return s == "" }
+		{
+			line[NR] = $0
+			# An HTML block changes what the lines after it mean, and this
+			# matcher has no model of one. Rather than guess, refuse to strip
+			# anything from a document containing one. Striking LESS can only
+			# over-reject, never hide a footer, so this guard is safe by
+			# construction.
+			t = $0
+			sub(/^ +/, "", t)
+			if (length($0) - length(t) <= 3 && substr(t, 1, 1) == "<") html = 1
+		}
+		END {
+			if (html) {
+				for (i = 1; i <= NR; i++) print line[i]
+				exit
+			}
+			inside = 0
+			for (i = 1; i <= NR; i++) {
+				if (!inside) {
+					if (!fenceparse(line[i], f)) continue
+					# A backtick opener may not carry a backtick in its info
+					# string; such a line is an inline code span, not a fence.
+					if (f["char"] == "`" && index(f["rest"], "`") > 0) continue
+					inside = 1
+					openchar = f["char"]
+					openlen = f["len"]
+					drop[i] = 1
+					continue
+				}
+				drop[i] = 1
+				if (fenceparse(line[i], f) && f["char"] == openchar &&
+					f["len"] >= openlen && blank(f["rest"])) inside = 0
+			}
+			# Unterminated: strip nothing.
+			if (inside) {
+				for (i = 1; i <= NR; i++) print line[i]
+				exit
+			}
+			for (i = 1; i <= NR; i++) if (!drop[i]) print line[i]
+		}
+	'
+}
+
 # check_ident refuses an AI git identity in one role (author or committer) of
 # one commit; a human is the author of record, and the tool's disclosure lives
 # in the trailer, never in the identity fields the contributor graph reads.
@@ -139,7 +296,9 @@ check_ident() {
 }
 
 # check_text applies both halves to one artefact: the banned footer must be
-# absent, and the trailer must be present.
+# absent, and the trailer must be present. The caller decides whether fenced
+# quotation was removed first: the body arm strips, the commits arm does not (see
+# strip_fenced_blocks).
 check_text() {
 	local label="$1" text="$2"
 	if printf '%s' "$text" | grep -Eq "$GENERATED_RE"; then
@@ -211,7 +370,8 @@ body)
 		echo "check-attribution: no such file: $2" >&2
 		exit 2
 	}
-	check_text "the pull-request body" "$(cat "$2")"
+	# The body is markdown a forge renders, so a fenced block reads as an example.
+	check_text "the pull-request body" "$(strip_fenced_blocks <"$2")"
 	;;
 *)
 	usage
