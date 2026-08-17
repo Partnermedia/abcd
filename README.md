@@ -67,9 +67,9 @@ The **brief** *(owned jointly by the product thinker and the facilitator)* answe
 
 **Intents** *(user-facing, and thus the product thinker's domain)* answer *why does each user-facing change matter?* Each is a one-page press release written as if the change had already shipped, with a named user feeling the difference, plus acceptance criteria in plain *Given / When / Then* language. Intents are how ambition travels into the brief: An intent is drafted, planned into engineering work, and built — and the same change that ships it updates the brief. Once its acceptance criteria are verifiably met, the intent is filed as shipped and becomes the permanent record of the *why*; the brief carries the *what is*; the engineering spec carries the *how*. Intents are individually portable: Each stands on its own and can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
 
-**Automated reviews** *(owned by the AI-engineering team)* grade delivered reality against the original promise. When work lands, a fidelity review reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
+**Automated audits** *(run by the AI-engineering team, read by you)* grade delivered reality against the original promise. When work lands, the intent audit reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
 
-Some things the project needs aren't user-facing — cross-cutting rules every feature must satisfy *(e.g., a privacy review, an accessibility checklist)*, or background plumbing that enables other capability. Those skip the press-release treatment and go straight into the brief, under the same promise: Real, or visibly marked as not yet real. As a product thinker you don't have to recognise or label them — that's your facilitator's job.
+Some things the project needs aren't user-facing — cross-cutting rules every feature must satisfy *(e.g., a privacy-hygiene lint, an accessibility checklist)*, or background plumbing that enables other capability. Those skip the press-release treatment — a cross-cutting rule is filed as a *discipline* rather than a press release, and plumbing goes straight into the brief — under the same promise: Real, or visibly marked as not yet real. As a product thinker you don't have to recognise or label them — that's your facilitator's job.
 
 
 # Process
@@ -94,9 +94,9 @@ Acceptance criteria for each intent use three words to describe a checkable outc
 |------|-------------------|
 | **Given** | The starting state — what's already true before anything happens. |
 | **When** | The trigger — a single user or system action. |
-| **Then** | The observable outcome — something a human (or the fidelity reviewer) can check by *looking at the result*, not by reading the author's intent. |
+| **Then** | The observable outcome — something a human (or the intent auditor) can check by *looking at the result*, not by reading the author's intent. |
 
-The reviewer is allowed to fail honestly. If a promise wasn't kept, it says so. If something was delivered but with a wrinkle worth your attention, it flags the wrinkle rather than glossing it. And if it genuinely couldn't tell from the repo, it says *that* — which is different from saying the promise wasn't met, and `abcd` insists on the distinction.
+The auditor is allowed to fail honestly. If a promise wasn't kept, it says so. If something was delivered but with a wrinkle worth your attention, it flags the wrinkle rather than glossing it. And if it genuinely couldn't tell from the repo, it says *that* — which is different from saying the promise wasn't met, and `abcd` insists on the distinction.
 
 ## Capturing issues & thoughts
 
