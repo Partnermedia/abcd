@@ -50,7 +50,7 @@ remain an itd-5 deliverable.) The frontmatter fields:
   `task_classes` is a **YAML inline list** (a block list of `- token` items would
   trip the future PQ005) of tokens drawn from the closed enum in
   [`02-constraints/04-naming.md`](../.abcd/development/brief/02-constraints/04-naming.md)
-  (`oracle_review`, `intent_review`, `spec_planning`, `code_rescue`,
+  (`oracle_review`, `intent_audit`, `spec_planning`, `code_rescue`,
   `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`,
   `cross_document_audit`). `designed_for` is a free-text one-liner for human readers
   — it never participates in scope inference.

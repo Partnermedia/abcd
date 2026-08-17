@@ -13,7 +13,8 @@ import (
 	"github.com/REPPL/abcd-cli/internal/fsutil"
 )
 
-// review.go — the intent-fidelity review outbox+inbox (itd-80 phase 4).
+// audit.go — the intent-audit outbox+inbox (itd-80 phase 4; renamed from
+// review per adr-40/spc-28: it emits family-2 verdicts, so it is the audit).
 //
 // The intent file IS the record: its `## Audit Notes` section holds one machine
 // marker per review receipt, so idempotency and review state live in one
@@ -21,12 +22,12 @@ import (
 //
 // Two flows meet here:
 //
-//   - EMIT (emitReviewForIntent, called by Reconcile after a ship move): parks an
+//   - EMIT (emitAuditForIntent, called by Reconcile after a ship move): parks an
 //     OWED stub in the shipped intent's Audit Notes and writes an ephemeral review
 //     request under .abcd/.work.local/reviews/. Report-only — the caller treats a
 //     failure as non-fatal (the intent still ships).
 //   - INGEST (IngestVerdict): reads an untrusted verdict JSON emitted by the
-//     host-delegated intent-fidelity-reviewer, validates it FAIL-CLOSED against the
+//     host-delegated intent-auditor agent, validates it FAIL-CLOSED against the
 //     schema and against the parked OWED receipt, then either replaces the OWED
 //     stub with the rendered verdict (INGESTED) or quarantines a bad payload
 //     (DEAD_LETTER) — never a partial application.
@@ -134,8 +135,8 @@ type verdictGapAudit struct {
 // Results
 // ---------------------------------------------------------------------------
 
-// ReviewEmitResult reports one emit (OWED stub + request file).
-type ReviewEmitResult struct {
+// AuditEmitResult reports one emit (OWED stub + request file).
+type AuditEmitResult struct {
 	ReceiptID   string `json:"receipt_id"`
 	IntentID    string `json:"intent_id"`
 	Status      string `json:"status"` // owed | already_owed | already_ingested | already_dead_letter
@@ -169,21 +170,21 @@ func receiptFor(intentID, specID, content string) string {
 	return "rcp-" + hex.EncodeToString(h[:])[:12]
 }
 
-// emitReviewForIntent parks an OWED stub in the intent's Audit Notes and writes
+// emitAuditForIntent parks an OWED stub in the intent's Audit Notes and writes
 // the ephemeral review request. It is idempotent: if a marker for the computed
 // receipt already exists (OWED/INGESTED/DEAD_LETTER) the Audit Notes are left
 // untouched. All ids are validated before any path is built.
-func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error) {
+func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 	if !intentIDRe.MatchString(it.ID) {
-		return ReviewEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", it.ID)
+		return AuditEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", it.ID)
 	}
 	if !specIDRe.MatchString(it.SpecID) {
-		return ReviewEmitResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", it.SpecID)
+		return AuditEmitResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", it.SpecID)
 	}
 	abs := filepath.Join(repoRoot, it.Path)
 	data, err := readRepoFile(abs, it.Path)
 	if err != nil {
-		return ReviewEmitResult{}, err
+		return AuditEmitResult{}, err
 	}
 	content := string(data)
 
@@ -194,7 +195,7 @@ func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error) {
 	// freshly recomputed receipt may disagree with the parked marker and append a
 	// second stub. The parked marker is the authority the ingest resolves against.
 	if rcp, state, ok := existingMarker(content); ok {
-		res := ReviewEmitResult{ReceiptID: rcp, IntentID: it.ID}
+		res := AuditEmitResult{ReceiptID: rcp, IntentID: it.ID}
 		res.RequestPath = filepath.Join(reviewsRelDir, rcp+".request.md")
 		switch state {
 		case "INGESTED":
@@ -206,7 +207,7 @@ func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error) {
 			// Only an OWED receipt still awaits a verdict: ensure its ephemeral
 			// request still exists (it is gitignored and may have been swept). A
 			// terminal INGESTED/DEAD_LETTER receipt needs no request rewrite.
-			if err := writeReviewRequest(repoRoot, it, rcp, content); err != nil {
+			if err := writeAuditRequest(repoRoot, it, rcp, content); err != nil {
 				return res, err
 			}
 		}
@@ -214,53 +215,53 @@ func emitReviewForIntent(repoRoot string, it Intent) (ReviewEmitResult, error) {
 	}
 
 	rcp := receiptFor(it.ID, it.SpecID, content)
-	res := ReviewEmitResult{ReceiptID: rcp, IntentID: it.ID}
+	res := AuditEmitResult{ReceiptID: rcp, IntentID: it.ID}
 	block := owedBlock(rcp)
 	updated := upsertReviewBlock(content, rcp, block)
 	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return ReviewEmitResult{}, fmt.Errorf("intent: writing OWED stub to %s: %w", it.Path, err)
+		return AuditEmitResult{}, fmt.Errorf("intent: writing OWED stub to %s: %w", it.Path, err)
 	}
-	if err := writeReviewRequest(repoRoot, it, rcp, updated); err != nil {
-		return ReviewEmitResult{}, err
+	if err := writeAuditRequest(repoRoot, it, rcp, updated); err != nil {
+		return AuditEmitResult{}, err
 	}
 	res.Status = "owed"
 	res.RequestPath = filepath.Join(reviewsRelDir, rcp+".request.md")
 	return res, nil
 }
 
-// ReEmitReview handles the manual `abcd intent review <itd-N>` verb for a shipped
+// ReEmitAudit handles the manual `abcd intent audit <itd-N>` verb for a shipped
 // intent. It resolves the intent, refuses one not in shipped/, and delegates to
-// emitReviewForIntent. Behaviour depends on the intent's current review state: an
+// emitAuditForIntent. Behaviour depends on the intent's current review state: an
 // OWED receipt (or none) (re-)parks the OWED stub and rewrites its ephemeral
 // request; a TERMINAL receipt is not re-reviewed — an already-INGESTED or
 // already-DEAD_LETTER receipt returns that status unchanged (re-reviewing would
 // discard the recorded audit), so the caller learns the review is already
 // resolved rather than silently receiving a fresh stub.
-func ReEmitReview(repoRoot, intentID string) (ReviewEmitResult, error) {
+func ReEmitAudit(repoRoot, intentID string) (AuditEmitResult, error) {
 	if !intentIDRe.MatchString(intentID) {
-		return ReviewEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
+		return AuditEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
 	corpus, err := Load(repoRoot)
 	if err != nil {
-		return ReviewEmitResult{}, err
+		return AuditEmitResult{}, err
 	}
 	it, ok := corpus.Lookup(intentID)
 	if !ok {
-		return ReviewEmitResult{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
+		return AuditEmitResult{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
 	}
 	if it.Bucket != BucketShipped {
-		return ReviewEmitResult{}, fmt.Errorf("intent: %s is in %s, not shipped; only a shipped intent owes a fidelity review", intentID, it.Bucket)
+		return AuditEmitResult{}, fmt.Errorf("intent: %s is in %s, not shipped; only a shipped intent owes a fidelity audit", intentID, it.Bucket)
 	}
 	if !specIDRe.MatchString(it.SpecID) {
-		return ReviewEmitResult{}, fmt.Errorf("intent: %s has no well-formed spec_id (%q); refusing to emit a review", intentID, it.SpecID)
+		return AuditEmitResult{}, fmt.Errorf("intent: %s has no well-formed spec_id (%q); refusing to emit a review", intentID, it.SpecID)
 	}
-	return emitReviewForIntent(repoRoot, it)
+	return emitAuditForIntent(repoRoot, it)
 }
 
-// writeReviewRequest writes the ephemeral review request markdown. The request is
+// writeAuditRequest writes the ephemeral review request markdown. The request is
 // a prompt over the intent's Acceptance Criteria plus the receipt metadata; the
 // host reads it, runs the reviewer, and produces the verdict JSON.
-func writeReviewRequest(repoRoot string, it Intent, rcp, content string) error {
+func writeAuditRequest(repoRoot string, it Intent, rcp, content string) error {
 	if !rcpIDRe.MatchString(rcp) {
 		return fmt.Errorf("intent: receipt id %q is malformed; refusing to build a request path", rcp)
 	}
@@ -281,9 +282,9 @@ func writeReviewRequest(repoRoot string, it Intent, rcp, content string) error {
 	} else {
 		b.WriteString(ac + "\n")
 	}
-	b.WriteString("\nRun the intent-fidelity-reviewer agent over the criteria and the delivered\n")
+	b.WriteString("\nRun the intent-auditor agent over the criteria and the delivered\n")
 	b.WriteString("diff, then ingest its verdict JSON:\n\n")
-	fmt.Fprintf(&b, "    abcd intent review ingest --verdict-json <path>   # receipt %s\n", rcp)
+	fmt.Fprintf(&b, "    abcd intent audit ingest --verdict-json <path>   # receipt %s\n", rcp)
 
 	path := filepath.Join(dir, rcp+".request.md")
 	if err := fsutil.WriteFileAtomic(path, []byte(b.String()), 0o644); err != nil {
@@ -521,7 +522,7 @@ func findIntentByReceipt(repoRoot, rcp string) (Intent, string, string, bool, er
 
 // existingMarker returns the receipt id and state of the FIRST parked review
 // marker in content, if any. Emit reuses this parked receipt rather than
-// recomputing one (see emitReviewForIntent's receipt-shift note).
+// recomputing one (see emitAuditForIntent's receipt-shift note).
 func existingMarker(content string) (string, string, bool) {
 	if m := markerRe.FindStringSubmatch(content); m != nil {
 		return m[2], m[1], true

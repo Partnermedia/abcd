@@ -15,7 +15,7 @@
 
 `/abcd:reflect <phase-id>` composes a structured retrospective for a **completed
 phase** of the voyage (itd-24). It is **phase-only grain**: the per-intent form
-was dropped (per-intent reflection is the `intent-fidelity-reviewer`'s Role 1).
+was dropped (per-intent reflection is the `intent-auditor`'s Role 1).
 The command markdown performs ZERO writes — every write goes through the
 deterministic reflect-writer capability, which renders
 `.abcd/retrospectives/<phase-id>/README.md`.

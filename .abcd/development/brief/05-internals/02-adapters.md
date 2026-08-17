@@ -34,7 +34,7 @@ capability contract. Adding a backend = implement the interface and register it 
 [`03-configuration.md`](03-configuration.md) for the config schema.
 
 **Oracle consumers.** `lifeboat-oracle`, `press-release-composer`, and
-`intent-fidelity-reviewer` all reach a model through the `oracle` seam. Host
+`intent-auditor` all reach a model through the `oracle` seam. Host
 delegation is the default; when an operator wires two oracle adapters for a
 high-stakes review, the adapter layer offers the scoped-vs-broad,
 asymmetric-trust guidance of adr-25 — advice, never a cascade the core imposes.

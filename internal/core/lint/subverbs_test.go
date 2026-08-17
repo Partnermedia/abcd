@@ -244,7 +244,7 @@ func TestSubVerbExclusions(t *testing.T) {
 func TestSubVerbNestedPathsMatch(t *testing.T) {
 	f := newSubverbFixture(t, []map[string]any{
 		cmd("abcd", false), cmd("abcd intent", false),
-		cmd("abcd intent review", false), cmd("abcd intent review ingest", false),
+		cmd("abcd intent audit", false), cmd("abcd intent audit ingest", false),
 	})
 	f.writeSurface(t, "05-intent.md", `# intent
 
@@ -252,8 +252,8 @@ func TestSubVerbNestedPathsMatch(t *testing.T) {
 
 | Verb | Bucket | Status |
 |---|---|---|
-| `+"`review`"+` | audit | shipped |
-| `+"`review ingest`"+` | audit | shipped |
+| `+"`audit`"+` | audit | shipped |
+| `+"`audit ingest`"+` | audit | shipped |
 `)
 	if out := runSubverbCheck(t, f); len(out) != 0 {
 		t.Fatalf("nested sub-verb rows must match snapshot paths:\n%s", messages(out))

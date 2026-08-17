@@ -1,7 +1,7 @@
 ---
 name: intent
 description: Press-release intent lifecycle — status, quoted-text create, the implement-readiness gate, and the human planning interview that turns a draft into a planned, specced intent.
-argument-hint: "[text] | ready <itd-N> | plan <itd-N> | link <itd-N> <spc-N> | review [<itd-N>]"
+argument-hint: "[text] | ready <itd-N> | plan <itd-N> | link <itd-N> <spc-N> | audit [<itd-N>]"
 ---
 
 # `/abcd:intent` — intent lifecycle
@@ -156,8 +156,8 @@ it (the one-sided-link remedy `ready` reports). Report the linked pair.
 ## Review / ingest
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" intent review <itd-N> --json                       # re-emit a shipped intent's review request
-"${CLAUDE_PLUGIN_ROOT}/abcd" intent review ingest --verdict-json <file> --json  # apply a host-produced verdict
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent audit <itd-N> --json                       # re-emit a shipped intent's review request
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent audit ingest --verdict-json <file> --json  # apply a host-produced verdict
 ```
 
 Ingest is fail-closed: report the returned status (`ingested`, `dead_letter`,

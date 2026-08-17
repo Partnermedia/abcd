@@ -18,8 +18,11 @@ func validVerdict(receiptID string) string {
 	v := map[string]any{
 		"_type":      "abcd/intent-fidelity-verdict/v1",
 		"receipt_id": receiptID,
-		"verifier":   map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":     map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		// The verifier id deliberately keeps the PRE-rename agent name: stored
+		// verdicts and their markers are format-frozen across the spc-28 rename,
+		// so this fixture doubles as the stays-valid assertion.
+		"verifier": map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
+		"policy":   map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
 		"input_attestations": []any{
 			map[string]any{"kind": "diff", "ref": "main..auto/x", "digest": "sha256:cc"},
 		},
@@ -29,7 +32,7 @@ func validVerdict(receiptID string) string {
 				"verdict":      "MET",
 				"rationale":    "the ship-move writes the OWED stub and request file",
 				"evidence": []any{
-					map[string]any{"ref": "internal/core/intent/review.go:42", "quote": "func emitReviewForIntent("},
+					map[string]any{"ref": "internal/core/intent/review.go:42", "quote": "func emitAuditForIntent("},
 				},
 			},
 		},
@@ -379,7 +382,7 @@ func TestReconcileEmitIdempotent(t *testing.T) {
 	if !ok {
 		t.Fatal("shipped intent not loaded")
 	}
-	r1, err := emitReviewForIntent(root, it)
+	r1, err := emitAuditForIntent(root, it)
 	if err != nil {
 		t.Fatalf("first emit: %v", err)
 	}
@@ -390,7 +393,7 @@ func TestReconcileEmitIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	it2, _ := c2.Lookup("itd-10")
-	r2, err := emitReviewForIntent(root, it2)
+	r2, err := emitAuditForIntent(root, it2)
 	if err != nil {
 		t.Fatalf("second emit: %v", err)
 	}

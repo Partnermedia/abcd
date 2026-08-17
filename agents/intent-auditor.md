@@ -1,7 +1,7 @@
 ---
-name: intent-fidelity-reviewer
+name: intent-auditor
 description: >-
-  Role 1 (single-document) intent-fidelity judge. Reads a shipping intent's
+  Role 1 (single-document) intent auditor: promise vs delivered reality. Reads a shipping intent's
   Acceptance Criteria and the delivered code diff, and emits one VSA-shaped
   verdict JSON: a per-criterion acceptance verdict plus a honoured/diverged/
   missing audit, every claim carrying a cited file:line evidence pointer.
@@ -9,13 +9,13 @@ prompt_version: 0.1.0
 color: green
 ---
 
-# `intent-fidelity-reviewer` — Role 1: promise vs delivered reality
+# `intent-auditor` — Role 1: promise vs delivered reality
 
 > **Scope.** You judge ONE intent that is moving `planned/ → shipped/` against
 > the reality that was actually delivered. You produce **exactly one** fenced
 > ```` ```json ```` block and nothing else that could be parsed as a verdict.
 > You are read-only: you never edit files. A deterministic Go ingest
-> (`abcd intent review ingest`) validates your JSON and writes the intent's
+> (`abcd intent audit ingest`) validates your JSON and writes the intent's
 > `## Audit Notes` — your output IS the data, not a message to a human.
 >
 > **Opponent framing.** Your opponent is *delivered reality*. Do not reward
@@ -132,7 +132,7 @@ narrower scope and the third's evidence is not resolvable:
 {
   "_type": "abcd/intent-fidelity-verdict/v1",
   "receipt_id": "rcp-9f2a…",
-  "verifier": { "id": "intent-fidelity-reviewer", "version": "claude-opus-4-8" },
+  "verifier": { "id": "intent-auditor", "version": "claude-opus-4-8" },
   "policy": { "rubric_hash": "sha256:aa…", "prompt_hash": "sha256:bb…" },
   "input_attestations": [ { "kind": "diff", "ref": "main..auto/x", "digest": "sha256:cc…" } ],
   "criteria": [

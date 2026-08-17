@@ -10,6 +10,10 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Breaking
+
+- **The intent audit says audit.** `abcd intent review` is now `abcd intent audit`, and `intent review ingest` is `intent audit ingest`: the verb emits family-2 promise-vs-reality verdicts (`MET`/`NOT_MET`/…), which the record's own vocabulary rules an *audit*, not a review (adr-40). The `intent-fidelity-reviewer` agent renames to `intent-auditor` with it. Clean break, no alias: the old spelling is refused (with the successor named) and never swallowed as a free-text intent create. Stored artefacts are format-frozen — the `abcd-review:` audit-note markers, the `abcd/intent-fidelity-verdict/v1` payload type, and every previously ingested verdict remain valid; only the verb, the agent, and the code identifiers move. (itd-123, spc-28)
+
 ### Added
 
 - **The surface registry can no longer wave its hands.** Every surface file under the brief's `04-surfaces/` carries a machine-checked `## Sub-verbs` table recording two facts per verb — its adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a non-assessment verb) and whether it exists (`shipped` / `staged`) — and the `surface_coverage` record-lint rule gains a sub-verb pass that checks every row against the committed command-tree snapshot in both directions: a `shipped` row must be registered, a `staged` row must not be, a registered sub-command must have a row, and a sub-command-bearing verb cannot hide without a table. Exemptions (host-delegated surfaces, operator-internal verbs, the bare command) are explicit config, never silent skips; a duplicate table heading and a malformed row are findings too. The bucket enum is registered as reserved vocabulary, closed and PR-to-extend, and every sub-verb now has one machine-checked home that a stale prose claim can be corrected against. (itd-122, spc-27; closes iss-246)

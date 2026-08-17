@@ -257,7 +257,7 @@ func seedDraft(id string, opts DraftOptions) string {
 	b.WriteString("## Open Questions\n\n")
 	b.WriteString("_None recorded yet._\n\n")
 	b.WriteString("## Audit Notes\n\n")
-	b.WriteString("_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._\n")
+	b.WriteString("_Empty. Populated by intent-auditor when intent moves to shipped/._\n")
 	return b.String()
 }
 

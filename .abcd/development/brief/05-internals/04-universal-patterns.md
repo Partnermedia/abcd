@@ -24,7 +24,7 @@ host-delegated (abcd hands a prompt to the host's subagent dispatch)
 abcd's core does the deterministic work and hands a **prompt** to the host's subagent dispatch; the host owns model choice, credentials, and execution, and abcd consumes the structured result. No model plumbing is required by default (adr-25). Concrete oracle backends — native, CLI, API, MCP — are opt-in adapters behind the same seam, selected when an operator wants abcd to reach a model directly.
 
 Examples:
-- **Oracle audit** (lifeboat-oracle, press-release-composer, intent-fidelity-reviewer): host-delegated by default; an operator may wire a native/CLI/API/MCP oracle adapter.
+- **Oracle audit** (lifeboat-oracle, press-release-composer, intent-auditor): host-delegated by default; an operator may wire a native/CLI/API/MCP oracle adapter.
 - **Code-rescuer**: spec-driven git-window file selection natively; a codemap adapter refines it when one is wired.
 - **Scoped + broad reviewers** (adr-25 adapter guidance): when an operator wires two oracle adapters for a high-stakes review, a **scoped** reviewer (seeing only a selection) and a **broad** reviewer (reasoning over the whole repo) have complementary blind spots and are trusted **asymmetrically** — the scoped verdict gates, the broad reviewer is mined for findings, and the review-fix loop declares its stopping rule up front. Guidance the adapter layer offers, never a cascade the core imposes.
 - Future agents follow the same pattern by default.
@@ -82,7 +82,7 @@ Every command emits `<command>-report.json` (full structured detail) and `<comma
 │   └── grill-report.{json,md}    # glossary terms are written inline to terminology/, not batched here
 ├── audit/<sub-tier>-<ts>/        # review/audit reports across six sub-tiers land here
 │   └── report.{json,md}          # sub-tier ∈ {review, spec-mg, consistency, shape, chain, lifeboat}:
-│                                 #   audit/review-<ts>/      (Role 1 itd-1 pass / /abcd:intent review,        itd-1)
+│                                 #   audit/review-<ts>/      (Role 1 itd-1 pass / /abcd:intent audit,        itd-1)
 │                                 #   audit/spec-mg-<ts>/     (Role 1 MG004 pass / itd-37 boilerplate receipt, itd-37)
 │                                 #   audit/consistency-<ts>/ (Role 2 / /abcd:intent consistency,   itd-48 — superseded itd-31; live as of spc-29)
 │                                 #   audit/shape-<ts>/       (Role 3 / /abcd:intent shape,         itd-34)
@@ -91,7 +91,7 @@ Every command emits `<command>-report.json` (full structured detail) and `<comma
 │                                 # Directory name (audit/) reflects "this is the on-disk audit trail"
 │                                 # regardless of which verb produced it; sub-tier prefix names the verb.
 │                                 # `chain` and `lifeboat` are sub-verbs of /abcd:audit umbrella;
-│                                 # `review`, `consistency`, `shape` are sub-verbs of /abcd:intent.
+│                                 # `audit`, `consistency`, `shape` are sub-verbs of /abcd:intent.
 │                                 # Bare /abcd:audit and bare /abcd:intent are status+help only.
 ├── sota-audits/<date>.{json,md}  # periodic prompt SOTA audit findings (option D)
 └── phase/<phase-id>/             # validation cadence outputs per phase (Phase 0 study, Phase 1 acceptance, etc.)
