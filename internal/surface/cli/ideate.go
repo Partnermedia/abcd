@@ -38,6 +38,7 @@ func newIdeateCommand(asJSON *bool) *cobra.Command {
 			"produced and writes the durable verdict. Ideate is OPTIONAL and never a gate: no other\n" +
 			"verb requires it, and skipping it is never warned about.",
 		Args: cobra.NoArgs,
+		RunE: helpRunE,
 	}
 
 	var verdictJSON string
