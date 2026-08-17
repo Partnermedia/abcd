@@ -2394,8 +2394,11 @@ func contentExempt(rel string, fields map[string]fmField, cfg Config) bool {
 	return false
 }
 
+// isNull is lint's copy of frontmatter.IsNull; the two must recognise the same
+// four YAML nulls (null | Null | NULL | ~) plus the empty scalar so the gates
+// they back (record-lint and capture/validate.go) can never disagree on a value.
 func isNull(v string) bool {
-	return v == "" || v == "null" || v == "~"
+	return v == "" || v == "null" || v == "Null" || v == "NULL" || v == "~"
 }
 
 // fenceMask marks lines that are inside (or are a marker for) a triple-backtick

@@ -28,6 +28,10 @@ called out in a **Breaking** section.
 
 - **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
 
+### Fixed
+
+- **An uppercase YAML null no longer reads as a superseding handle.** `frontmatter.IsNull` — and its byte-identical lint-side copy `isNull` — now resolve all four YAML nulls (`null` | `Null` | `NULL` | `~`) plus the empty scalar, the same set the memory package's own scalar parser already held. The two uppercase spellings were previously missed, so `disembark pack` over a foreign target repo emitted a live (`status: accepted`) ADR carrying `superseded_by: NULL` as a `superseded-adr` finding into `graveyard/abandoned.json`, quoting the null literal as its evidence; the narrowing also sat behind record-lint's null gate. Both copies are widened together so the two-gate agreement `capture/validate.go` depends on cannot drift. (#290)
+
 ## [0.5.1] - 2026-08-16
 
 ### Added
