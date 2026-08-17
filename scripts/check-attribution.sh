@@ -116,6 +116,11 @@ AI_IDENT_MAIL_RE='@anthropic\.com$|@openai\.com$'
 fail=0
 note() { echo "  $1" >&2; }
 
+usage() {
+	echo "usage: check-attribution.sh commits <base-ref> <head-ref> | body <file>" >&2
+	exit 2
+}
+
 # strip_fenced_blocks removes markdown fenced code blocks from stdin.
 #
 # A fenced block is QUOTED MATERIAL, not the document's own voice, and every rule
@@ -147,40 +152,63 @@ note() { echo "  $1" >&2; }
 # was never a defence against a determined author, who would simply delete the
 # footer rather than fence it.
 #
-# THE STRIPPED REGION MUST BE A SUBSET OF WHAT MARKDOWN RENDERS AS CODE, or the
-# concession stops being safe: a line the gate skips but the forge renders as an
-# ordinary paragraph is a real footer, silently passed. A presence test on the
-# first three characters is NOT that subset — it is blind to marker type, run
-# length and info string, and each blindness is a working bypass:
+# WHAT THIS ACTUALLY DEFENDS, stated as narrowly as it can be defended. This gate
+# exists because pull-request bodies picked up a tool's default footer across 78
+# pull requests (itd-91) — an ACCIDENT at scale, not an adversary. A tool appends
+# its footer LAST, and that is the property under test: a footer appended after
+# the content is caught whatever precedes it, because no fence opened earlier can
+# still be open at the end without the unterminated rule refusing the whole
+# strip. That is fuzz-verified and pinned by the corpus.
+#
+# What it does NOT defend is a body CONSTRUCTED AROUND the footer. That was
+# already true and said plainly below — a plainly fenced footer passes by design.
+# The container cases are instances of the same thing rather than a new class: the
+# matcher is line-based and has no model of markdown's block containers, so a
+# fence opened inside a LIST ITEM is read as a document-level fence, and the span
+# it closes over is removed from the text the rules see while the forge renders
+# part of that span as an ordinary paragraph. iss-270 carries it. An HTML block
+# would do the same, so a document containing one strips nothing at all — that
+# guard costs almost nothing here and is safe by construction, since striking less
+# can only over-reject.
+#
+# The earlier draft of this comment claimed the stripped region is a SUBSET of
+# what markdown renders as code. That claim is false, and it mattered: it is the
+# sentence that made the list-container hole look impossible, and it pointed the
+# residual in the wrong direction. It is replaced rather than softened.
+#
+# The matcher still pairs fences the way CommonMark does WITHIN a document-level
+# context, because the alternative — a presence test on the first three characters
+# — was blind to marker type, run length and info string, and each blindness was a
+# working bypass with no container trickery at all:
 #
 #   ~~~ / ``` / ~~~ / footer / ```   — CommonMark closes a tilde block only with
-#                                  tildes, so the footer is a paragraph; a
-#                                  type-blind toggle pairs 1-2 and 3-4 and strips it.
+#                                  tildes, so the footer is a paragraph.
 #   ```` / ``` / ```` / footer / ```  — a closer must be at least as long as its opener.
 #   ```make preflight``` is the gate.
 #   footer
 #   ```make build``` builds it. — no exotic markdown at all: a backtick fence's info
 #                                  string may not contain a backtick, so these are
-#                                  inline code spans in ONE paragraph and the footer
-#                                  renders in full.
+#                                  inline code spans in ONE paragraph.
 #
-# So the matcher is pairing-aware. An opener records its character and run length;
-# a line closes it only with the SAME character, AT LEAST as many of them, and
-# nothing but whitespace after the run; a backtick opener whose info string
-# carries a backtick is not an opener at all.
+# So an opener records its character and run length; a line closes it only with the
+# SAME character, AT LEAST as many of them, and nothing but whitespace after the
+# run; a backtick opener whose info string carries a backtick is not an opener.
 #
 # UNTERMINATED BLOCKS FAIL CLOSED. Markdown renders an unclosed fence as code to
 # the end of the document, so honouring one would let a single stray line suppress
-# every check beneath it — the cheapest bypass imaginable. Ending the scan still
-# inside a block strips nothing. Tracking the opener rather than counting markers
-# also makes NESTED documentation work: a ```` block quoting a ``` example is one
-# block, where a parity count saw three markers and failed closed on the very
-# shape needed to document this rule.
+# every check beneath it. Ending the scan still inside a block strips nothing.
+# Tracking the opener rather than counting markers also makes NESTED documentation
+# work: a ```` block quoting a ``` example is one block, where a parity count saw
+# three markers and failed closed on the very shape needed to document this rule.
 #
 # A fence may be indented up to three spaces (markdown's own rule); at four it is
 # an indented code block, and a tab-led line is not a fence either. Both stay
-# unstripped, which is the conservative direction. A fence nested inside a list
-# item is indented past three and so is NOT stripped — iss-270 carries that.
+# unstripped, which is the conservative direction at DOCUMENT level. Inside a list
+# item it is not conservative at all and runs BOTH ways: a first-level `- ` item's
+# content sits at column 2, so a fence there is under the limit and IS stripped
+# (the hole above); nested deeper it is over the limit and is NOT stripped (the
+# usability complaint). iss-270 carries both directions, and notes that relaxing
+# the limit would widen the hole while appearing to fix the complaint.
 strip_fenced_blocks() {
 	awk '
 		# fenceparse fills f[] with the marker character, its run length and the
@@ -192,6 +220,11 @@ strip_fenced_blocks() {
 			indent = length(l) - length(t)
 			if (indent > 3) return 0
 			c = substr(t, 1, 1)
+			# Load-bearing for TERMINATION, not only for correctness: on an
+			# empty line c is "", and substr() past the end also returns "", so
+			# the run counter below would never stop. Removing this line hangs
+			# the gate rather than failing a case, which is a mode no corpus can
+			# express — found the hard way.
 			if (c != "`" && c != "~") return 0
 			n = 0
 			while (substr(t, n + 1, 1) == c) n++
@@ -202,8 +235,22 @@ strip_fenced_blocks() {
 			return 1
 		}
 		function blank(s) { gsub(/[ \t\r]/, "", s); return s == "" }
-		{ line[NR] = $0 }
+		{
+			line[NR] = $0
+			# An HTML block changes what the lines after it mean, and this
+			# matcher has no model of one. Rather than guess, refuse to strip
+			# anything from a document containing one. Striking LESS can only
+			# over-reject, never hide a footer, so this guard is safe by
+			# construction.
+			t = $0
+			sub(/^ +/, "", t)
+			if (length($0) - length(t) <= 3 && substr(t, 1, 1) == "<") html = 1
+		}
 		END {
+			if (html) {
+				for (i = 1; i <= NR; i++) print line[i]
+				exit
+			}
 			inside = 0
 			for (i = 1; i <= NR; i++) {
 				if (!inside) {
