@@ -99,12 +99,73 @@ func helpRunE(cmd *cobra.Command, _ []string) error { return cmd.Help() }
 // this function but the doctrine the manifest test enforces: hooks.json's
 // spellings are frozen, and a rename is absorbed by an alias in the binary. That
 // is iss-269.
+// failOpenFlagError is FlagErrorFunc for the hook plane, for the same reason as
+// failOpenNoArgs: an unknown flag is a usage error abcd cannot answer, and on this
+// plane cobra's exit 2 is the host's instruction to BLOCK. This is the half
+// iss-267 left behind, and it is the one a future manifest change makes
+// reachable — add a flag to a hooks.json invocation and it skews against every
+// older binary that has never heard of it (iss-269).
+func failOpenFlagError(_ *cobra.Command, err error) error {
+	return &exitError{Code: 1, Msg: err.Error() + hookPlaneSkewNote}
+}
+
+// hookPlaneSkewNote is the second line both hook-plane refusals carry: what the
+// exit code means here, and the one thing that actually fixes it.
+const hookPlaneSkewNote = "\nabcd: refusing at exit 1, not the host's blocking status — a usage error abcd" +
+	" cannot answer is not a decision to block. If a hook invoked this, the plugin manifest and the" +
+	" binary have skewed; re-run hooks/bootstrap.sh or reinstall the plugin."
+
+// applyHookPlaneFailOpen installs the fail-open usage handling on every command a
+// host hook can reach — the paths named in hooks/hooks.json, plus the parents on
+// the way to them. It runs AFTER markUsageErrorsExitTwo, which sets a
+// FlagErrorFunc on every command and would otherwise replace this one; the same
+// ordering applyBanlistFlagErrors needs, and for the same reason.
+//
+// The set is spelled out rather than "everything under guard and hook" because
+// `guard check` sits under the same parent and its contract is the OPPOSITE: it
+// is the human/scriptable verb, where a fault exits 2 so a caller never reads
+// silence as clearance (spc-16). Sweeping the subtree would quietly invert it.
+// TestHookPlaneFailsOpenOnEveryUsageError derives the same set from the manifest
+// and would fail if this list drifted from it.
+func applyHookPlaneFailOpen(root *cobra.Command) {
+	for _, path := range [][]string{
+		{"guard"}, {"guard", "hook"},
+		{"hook"}, {"hook", "prompt-router"}, {"hook", "prompt-router-reset"},
+		{"hook", "session-start"}, {"hook", "session-end"},
+	} {
+		if cmd := findByPath(root, path); cmd != nil {
+			cmd.SetFlagErrorFunc(failOpenFlagError)
+			cmd.Args = failOpenNoArgs
+		}
+	}
+}
+
+// findByPath walks the tree by name. Deliberately NOT cobra's Find: that calls
+// stripFlags, which calls mergePersistentFlags, which makes HasAvailableFlags()
+// true — so merely LOOKING UP a command at construction time appends " [flags]"
+// to its UseLine and silently rewrites the generated CLI reference. The drift
+// gate caught it; this walk has no side effect at all.
+func findByPath(root *cobra.Command, path []string) *cobra.Command {
+	cur := root
+	for _, name := range path {
+		var next *cobra.Command
+		for _, sub := range cur.Commands() {
+			if sub.Name() == name {
+				next = sub
+				break
+			}
+		}
+		if next == nil {
+			return nil
+		}
+		cur = next
+	}
+	return cur
+}
+
 func failOpenNoArgs(cmd *cobra.Command, args []string) error {
 	if err := cobra.NoArgs(cmd, args); err != nil {
-		return &exitError{Code: 1, Msg: err.Error() +
-			"\nabcd: refusing at exit 1, not the host's blocking status — an unrecognised sub-verb is not a" +
-			" decision to block. If a hook invoked this, the plugin manifest and the binary have skewed;" +
-			" re-run hooks/bootstrap.sh or reinstall the plugin."}
+		return &exitError{Code: 1, Msg: err.Error() + hookPlaneSkewNote}
 	}
 	return nil
 }
@@ -255,6 +316,10 @@ func NewRootCommand() *cobra.Command {
 	// them the token may be a private pattern. Applied here rather than in the verb
 	// so the ordering is explicit — the generic pass would otherwise overwrite it.
 	applyBanlistFlagErrors(root)
+	// Also after the generic tagging, and last: on the hook plane exit 2 is the
+	// host's instruction to BLOCK, so every usage error a hook can provoke refuses
+	// at exit 1 instead (iss-269).
+	applyHookPlaneFailOpen(root)
 
 	return root
 }
