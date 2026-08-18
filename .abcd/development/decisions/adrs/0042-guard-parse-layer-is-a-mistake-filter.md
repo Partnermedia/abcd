@@ -132,10 +132,18 @@ Tier 2 converts the unbounded *wrapper* class — a command that execs its own
 arguments — from *silent allow* to *loud warn* without enumerating anything, and
 gives the wrapper path the fail-safe the interpreter path already had. It does
 **not** reach the *exec-string* class: `su -c`, `runuser -c` and `script -c` keep
-their payload as one opaque token that `isShellFamily` will not open, so they stay
-silent until part C lands. Six of the ten verified bypasses are covered by
-speculation, seven once each speculative suffix is run through `expandPayloads`;
-the remaining three are part C's whole reason for existing.
+their payload as one opaque token that `isShellFamily` will not open. Six of the
+ten verified bypasses are covered by speculation, seven once each speculative
+suffix is run through `expandPayloads`; the remaining three are part C's whole
+reason for existing.
+
+**Shipped state.** All four parts are built. Of the ten bypasses, part B turned
+seven into precise Tier 1 blocks and part C reached the other three, so none is
+an allow and the fail-safe now stands underneath the enumeration rather than
+behind it. The gate condition acquired a third clause in the building: a segment
+whose payload the guard successfully READ is not an unrecognised launcher either,
+or `busybox sh -c "<hazard>"` reports the same hazard twice — once as the entry
+its payload matched and once as a guess about the parent.
 
 **3. Tier 2 is bounded against the denial of service it would otherwise
 reintroduce.** The obvious form of speculation is N starts × E entries — exactly
