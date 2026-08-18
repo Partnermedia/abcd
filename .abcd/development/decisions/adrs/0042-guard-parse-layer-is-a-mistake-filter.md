@@ -28,7 +28,8 @@ spc-16). Three separate defects have now been filed against the same shape:
 Each was fixed by extending a list. A third instance of one defect predicts a
 fourth, so iss-272 was investigated design-first rather than patched: a plan
 drafted from the issue text went to adversarial review before any code and came
-back with three blockers and four factual errors. The evidence is in
+back with three blockers and four factual errors — a count the note revises
+upward as it verifies the rest of the table. The evidence is in
 [`2026-08-18-guard-wrapper-family-and-parse-layer-limits.md`](../../research/notes/2026-08-18-guard-wrapper-family-and-parse-layer-limits.md);
 this record holds the decision it informed.
 
@@ -48,8 +49,13 @@ renders `-S/--setuid` as optional-argument and `unshare --help` renders the same
 letter in the same package at the same version as required-argument — yet both
 binaries consume the following token, so nsenter's help contradicts its own
 parser. A per-wrapper flag table can therefore only be derived by probing the
-installed binary, which is the lesson gh-299 cost a live force-push bypass to
-learn, and the grammar differs again on macOS.
+installed binary. gh-299 is the in-repo proof that a table derived any other way
+drifts: it enumerated git's own `handle_options` and declared the resulting
+nine-flag sweep "bounded and complete for git", and the shipped registry today
+carries **ten** — `--shallow-file` was a live force-push bypass beyond that
+complete enumeration, which is why the test guarding it now re-derives the
+classification by probing the installed git rather than asserting a list. The
+grammar differs again on macOS.
 
 **Every vendor shipping this control documents it as steering, not enforcement.**
 [Claude Code][cc-permissions] calls argument-constraining patterns "fragile" and
@@ -111,10 +117,27 @@ shape is therefore binding: command-position starts computed once in an O(N)
 pass, a hard cap of ~64 starts past which the warn is emitted unconditionally
 rather than skipped, short-circuit on first hit, pinned by a benchmark test.
 
-**4. The Tier 2 gate is "no entry matched", never "argv[0] is unknown."** An
-argv[0] gate switches speculation off for `git`, and git launches things —
-`git bisect run`, `git submodule foreach`, `git rebase --exec` are silent allows
-today and would stay silent under it.
+**4. The Tier 2 gate is "no entry matched *this segment*" — never "argv[0] is
+unknown", and never "no entry matched the command line".** Two separate
+corrections, each with a counterexample:
+
+- *Not argv[0].* An argv[0] gate switches speculation off for `git`, and git
+  launches things — `git bisect run`, `git submodule foreach`,
+  `git rebase --exec` are silent allows today and would stay silent under it.
+- *Per segment, not per `Check`.* `Registry.Check` collects matches across every
+  segment of the command line and merges them, so a whole-command gate hands an
+  author a one-token suppression: `git clean -fd ; nice git push --force origin
+  main` matches `git-clean`, which would switch speculation off for the *whole
+  line* and leave the wrapped force-push silent. Prefixing any warn-tier command
+  would disarm Tier 2 entirely. The gate is therefore evaluated per segment, and
+  a segment that matched nothing is speculated on regardless of what any other
+  segment did.
+
+Per-segment is also what makes the false-positive figures below a floor: an
+unknown argv[0] implies no entry matched that segment (entries key on the command
+name), so every fire of the argv[0]-gated prototype is also a fire under the
+adopted gate. The reverse does not hold, which is exactly why the margin is
+unmeasured.
 
 **5. Enumeration continues, demoted to an upgrade.** Adding wrapper names lifts a
 case from "loud warn" to "precise block" — better UX and a stronger verdict —
@@ -137,6 +160,9 @@ shape and leaves that contract untouched.
 | **A** | the bounded Tier 2 fail-safe | 2, 3, 4 |
 | **B** | wrapper names added to `wrappers` / `wrapperOperands` | 5 |
 | **C** | the exec-string command → payload-flag table | 6 |
+
+Decisions 7 and 8 are not parts: 7 is this table, and 8 is a gate that binds all
+four.
 
 D leads because shipping enumeration without it manufactures exactly the false
 confidence that makes the next gap dangerous. C is last but not optional: until
@@ -197,9 +223,12 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   floor rather than an estimate.** The corpora — 0 fires across 1,144 repo-mined
   lines, 21 of 79 on an adversarial corpus, 2 of those true positives — were run
   against a prototype gated on argv[0], which is the gate decision 4 **rejects**.
-  The adopted gate is strictly noisier by an unmeasured margin: `git grep git push
-  --force` matches no entry today, so the argv[0] gate silenced it while the
-  adopted gate speculates and warns. The shape is unquoted hazard-shaped text in a
+  Because decision 4 evaluates the gate per segment, every prototype fire is also
+  an adopted-gate fire — the figures are a floor and not merely a different
+  measurement — and the margin above it is unmeasured: `git grep git push --force`
+  matches no entry today, so the argv[0] gate silenced it while the adopted gate
+  speculates and warns. A whole-command gate would *not* have this property, and
+  is rejected in decision 4 for a worse reason than noise. The shape is unquoted hazard-shaped text in a
   command line where nothing matched; quoting silences it. This repo's subject
   *is* the hazard registry, so expect interactive hits here specifically.
 - **Re-measuring both corpora under the adopted gate is a merge precondition**,
@@ -230,9 +259,16 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   consulted only inside a payload — separate defect, found while testing), and
   `echo <b64> | base64 -d | sh`, `make push-force`, `npm run deploy`, shell
   functions, aliases and variables are permanently invisible to any parser.
-- **The next enumeration gap is no longer an incident.** A missing wrapper name
-  degrades a block to a warn instead of to silence, which is the whole point of
-  spending the false positives.
+- **The next gap in the *wrapper* enumeration is no longer an incident — the
+  other two enumerations are untouched.** A missing wrapper name degrades a block
+  to a warn instead of to silence, which is the whole point of spending the false
+  positives. The fail-safe does not extend to the sibling enumerations this ADR's
+  own Context table names: a missing *interpreter* name (`fish -c "git push
+  --force …"`) and a missing *git value flag* (`git --newglobal X push --force …`)
+  are both still silent allows under Tier 2, because in each the hazard sits
+  inside an opaque token or behind a displaced operand where no speculative start
+  lands on it. The thesis is that a third instance predicts a fourth; this record
+  covers the fourth only if it lands in the wrapper set.
 - **Two labels are now wrong and are corrected with part D.** gh-297 and gh-299
   still carry `severity:critical` for a class decision 1 rules out of that
   category. Relabelling them is part of the scope statement's landing, not an

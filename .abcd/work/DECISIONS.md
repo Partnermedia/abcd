@@ -1244,12 +1244,18 @@ parallel-agent merge contention bites.
   tractable part cannot be read off the documentation (nsenter's --help renders -S as
   optional-arg and unshare's renders the same letter, same package, same version, as
   required-arg, while BOTH binaries consume the next token — so only probing the installed
-  binary is sound, the lesson gh-299 cost a live force-push bypass to learn), and every
-  vendor shipping this control documents it as steering, not enforcement.
+  binary is sound; gh-299 is the in-repo proof, having called its nine-flag git sweep
+  "bounded and complete" while the shipped registry now carries ten, --shallow-file having
+  been a live bypass beyond it), and every vendor shipping this control documents it as
+  steering, not enforcement.
   Tier 2 is BOUNDED against a measured quadratic DoS — the drafted form ran 14.9s at 6000
   tokens, ~8h of CPU at the 1 MiB stdin cap, inside the PreToolUse hook — so O(N) starts, a
-  ~64 cap, short-circuit, pinned by a benchmark. The gate is "no entry matched", never
-  "argv[0] unknown", which would switch speculation off for git. Enumeration continues,
+  ~64 cap, short-circuit, pinned by a benchmark. The gate is "no entry matched THIS SEGMENT" — never "argv[0]
+  unknown", which would switch speculation off for git, and never per-Check, which would
+  hand an author a one-token suppression (`git clean -fd ; nice git push --force` matches
+  git-clean, so a whole-command gate disarms the fail-safe for the whole line).
+  Per-segment is also what makes the false-positive figures a floor: an unknown argv[0]
+  implies no entry matched that segment, so every prototype fire is an adopted-gate fire. Enumeration continues,
   demoted to an upgrade (warn → precise block) and safe to be incomplete. The exec-string
   family (su/runuser/script/flock -c) gets a small table, NOT a generalisation of
   shellCPayload, which would ship six new SILENT allows on the long spellings. Sequencing
@@ -1260,5 +1266,9 @@ parallel-agent merge contention bites.
   work). Accepted cost: false positives on unquoted hazard-shaped text wherever no entry matched —
   0/1144 repo-mined lines, 21/79 adversarial, but BOTH corpora were run against an
   argv[0]-gated prototype, i.e. the gate this decision rejects, so the figures are a FLOOR
-  and re-measuring under the adopted gate is a merge precondition. The warn-storm STOP from the
+  (per the nesting above) with an unmeasured margin, and re-measuring under the adopted
+  gate is a merge precondition. The fail-safe covers the WRAPPER enumeration only: a
+  missing interpreter name (fish -c) and a missing git value flag are still silent allows
+  under Tier 2, so this record covers the predicted fourth instance only if it lands in the
+  wrapper set. The warn-storm STOP from the
   2026-08-15 note binds: measure on real agent commands before merge.

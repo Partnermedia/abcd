@@ -161,14 +161,32 @@ reaches them, because their payload stays one opaque token and `isShellFamily`
 lands, "every unrecognised wrapper warns" is false for exactly those three** —
 the fail-safe covers the wrapper class, not the exec-string class.
 
-### The gate must be "no entry matched", not "argv[0] is unknown"
+### The gate must be "no entry matched *this segment*"
 
-Gating on argv[0] switches speculation off for `git` — and git launches things.
+Two wrong gates, each with a live counterexample.
+
+**Not argv[0].** Gating on argv[0] switches speculation off for `git` — and git
+launches things.
 Silent allows today, and still silent under the argv[0] gate:
 
     git bisect run git push --force origin main
     git submodule foreach git push --force origin main
     git rebase --exec "git push --force …" main
+
+**Not per `Check`, either.** `Registry.Check` (`guard.go`) tokenizes into
+segments, matches every entry against all of them, and merges the results, so a
+gate reading "no entry matched the command line" hands an author a one-token
+suppression:
+
+    git clean -fd ; nice git push --force origin main
+
+`git-clean` matches (verified: `abcd guard — warn`, entry `git-clean`), so a
+whole-command gate would switch speculation off for the entire line and leave the
+wrapped force-push silent. Prefixing any warn-tier command would disarm the
+fail-safe completely — a fail-safe with a documented off switch is worse than
+none, because the record would claim coverage it does not have. **The gate is
+evaluated per segment**: a segment that matched nothing is speculated on
+regardless of what any other segment did.
 
 ### False positives — measured under the *rejected* gate
 
@@ -181,10 +199,20 @@ Silent allows today, and still silent under the argv[0] gate:
 **These numbers do not characterise the design this note recommends.** The
 prototype was gated on argv[0] — the gate the section above rejects — so every
 line whose argv[0] the registry knows was silenced before it could fire. Under
-the correct "no entry matched" gate the figures are a **floor, not an estimate**:
-strictly more fires, by an unmeasured margin. `git grep git push --force` is the
-worked example — it matches no entry today (verified `allow`), so the argv[0]
+the recommended **per-segment** "no entry matched" gate the figures are a
+**floor**: an unknown argv[0] implies no entry matched that segment, because
+entries key on the command name, so every prototype fire is also an adopted-gate
+fire. The margin above the floor is unmeasured. `git grep git push --force` is
+the worked example — it matches no entry today (verified `allow`), so the argv[0]
 gate silenced it while the adopted gate speculates on it and warns.
+
+The floor property depends on the per-segment granularity and **fails for a
+whole-command gate**, where the two firing sets are not nested at all:
+`rg gh repo delete docs/ ; git clean -fd` fires a pure false positive under the
+argv[0] prototype (argv[0] `rg` is unknown, so it speculates on rg's search
+pattern) and would fire *nothing* under a whole-command gate, because `git-clean`
+matched. That non-nesting is a symptom; the reason to reject a whole-command gate
+is the suppression bypass recorded with it.
 
 The honest characterisation is a *shape*, not a rate: it fires on **unquoted
 hazard-shaped text in a command line where no entry matched** — `rg git push
@@ -226,10 +254,10 @@ the true positives.
 ## Wrapper grammars, verified on util-linux 2.39.3 / coreutils (Ubuntu 24.04)
 
 The plan's first draft was wrong about six of these grammars. Recorded with the
-verification so the next reader does not re-derive them. (The headline count of
-**four** factual errors in the review counts the four the reviewer raised; two
-more surfaced while verifying the rest of the table, and the false 9-of-9
-coverage claim above is a fifth.)
+verification so the next reader does not re-derive them. (The review raised **four** factual
+errors, which is the count the header quotes; verifying the rest of the table
+surfaced **two** more, and the plan's coverage claim — it asserted speculation
+caught every bypass, where the table above measures 6 of 10 — is a **seventh**.)
 
 | name | correction | evidence |
 |---|---|---|
@@ -252,8 +280,21 @@ the following token** (`nsenter -S /bin/echo hi` and `unshare -S /bin/echo hi`
 each answer `failed to parse uid: '/bin/echo'`). The behaviours agree; the two
 help texts do not, and nsenter's contradicts its own binary. **A flag's
 documentation is therefore not a source for this table — only probing the
-installed binary is**, which is the same lesson gh-299 cost a live force-push
-bypass to learn. That is the strongest argument that a
+installed binary is**. gh-299 is the in-repo proof that any other derivation drifts:
+it enumerated git's own `handle_options` and called the resulting nine-flag sweep
+"bounded and complete for git", and the shipped registry carries **ten** —
+`--shallow-file` was a live force-push bypass beyond that complete enumeration,
+and the test guarding it now re-derives the classification by probing the
+installed git (`TestGitGlobalValueFlagsMatchThisGit`) instead of asserting a list.
+
+**That rule condemns rows of this very table.** The evidence column shows a probe
+for `nsenter -S`, `nsenter -m`, `unshare -S`, `unshare -m`, `unshare -w`, `chrt
+-f`, `taskset -c`, `chroot --userspec` and `runuser -u`; the remaining letters in
+the `unshare` and `nsenter` lists are read from `--help`, which is exactly the
+source the rule rules out. They are recorded as **unprobed** and must be probed
+when part B lands, not carried across as verified.
+
+That is the strongest argument that a
 per-wrapper flag table is a standing maintenance liability.
 
 ## The exec-string family: a table, not a generalisation
@@ -310,12 +351,17 @@ interactive hits. **Measure before merge.**
 
 Egress from this environment blocked `gtfobins.github.io`, `cwe.mitre.org`,
 `sudo.ws`, `cursor.com`, `ndss-symposium.org`, `ranum.com`, `man7.org` and
-others; claims sourced through those are second-hand and are marked as such in
-the working record. Read as primary: the Claude Code permissions and sandboxing
-docs (both quoted phrases above are on the permissions page, re-verified when this
-note was written), the GTFOBins README and `_data/functions.yml`, the Cursor
-security advisory, sudoers(5) via Ubuntu manpages, the OWASP OS Command Injection
-Defense Cheat Sheet, and the openai/codex `execpolicy` README.
+`cheatsheetseries.owasp.org`; claims sourced through those are second-hand and are
+marked as such in the working record. `_references.md` carries the same list.
+
+Read as primary, on hosts that were reachable: the Claude Code permissions and
+sandboxing docs (all three quoted phrases and the prompt-injection sentence are on
+the permissions page, re-verified when this note was written); the GTFOBins README
+and `_data/functions.yml`, and the openai/codex `execpolicy` README — both read
+from `github.com`, not from the projects' own blocked domains; sudoers(5) via
+Ubuntu manpages. The **Cursor advisory** and the **OWASP cheat sheet** were read
+earlier in the investigation, before their hosts were found blocked, and could not
+be re-verified when this note was written: treat those two as second-hand.
 
 **Nothing measured in this note is reproducible from the repository.** The
 speculation prototype, the 1,144-line repo-mined corpus, the 79-line adversarial

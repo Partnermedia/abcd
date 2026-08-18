@@ -53,8 +53,10 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Cursor's terminal command controls** — the decisive negative precedent
   behind adr-42: a shipped command denylist bypassed via `bash -c`, subshells
   and base64, replaced by an allowlist, which was then bypassed by poisoning an
-  allowed command's environment (GHSA-82wg-qcm4-fp2w / CVE-2026-22708). abcd
-  takes the lesson, not the mechanism.
+  allowed command's environment, published as GHSA-82wg-qcm4-fp2w /
+  CVE-2026-22708 (identifiers as recorded during the iss-272 investigation; the
+  advisory host was unreachable when this entry was written). abcd takes the
+  lesson, not the mechanism.
   <https://cursor.com/security>
 - **DITA subject scheme maps** — the controlled-vocabulary pattern behind the
   persona registry: a field's legal values live in a dedicated registry file
