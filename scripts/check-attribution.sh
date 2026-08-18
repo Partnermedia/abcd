@@ -166,7 +166,8 @@ usage() {
 # matcher is line-based and has no model of markdown's block containers, so a
 # fence opened inside a LIST ITEM is read as a document-level fence, and the span
 # it closes over is removed from the text the rules see while the forge renders
-# part of that span as an ordinary paragraph. iss-270 carries it. An HTML block
+# part of that span as an ordinary paragraph. That is ACCEPTED, not outstanding:
+# iss-270 records the decision and why the alternatives were worse. An HTML block
 # would do the same, so a document containing one strips nothing at all — that
 # guard costs almost nothing here and is safe by construction, since striking less
 # can only over-reject.
@@ -207,8 +208,12 @@ usage() {
 # item it is not conservative at all and runs BOTH ways: a first-level `- ` item's
 # content sits at column 2, so a fence there is under the limit and IS stripped
 # (the hole above); nested deeper it is over the limit and is NOT stripped (the
-# usability complaint). iss-270 carries both directions, and notes that relaxing
-# the limit would widen the hole while appearing to fix the complaint.
+# usability complaint). iss-270 records both directions and the decision to accept
+# them. Do NOT "fix" this by relaxing the indent limit: that widens the
+# under-rejection hole while appearing to fix the complaint. Forcing openers to
+# column 0 was tested and leaks too — under-recognising an opener is not
+# conservative, because markdown then closes its block at a line this matcher
+# treats as the opener, shifting the whole span.
 strip_fenced_blocks() {
 	awk '
 		# fenceparse fills f[] with the marker character, its run length and the
