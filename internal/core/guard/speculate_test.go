@@ -16,20 +16,20 @@ func verdictOf(t *testing.T, command string) Decision {
 	return d
 }
 
-// wrapperBypasses are the ten silent allows iss-272 recorded on the merged tree.
-// Six are ordinary wrappers whose speculative suffix reaches the hazard directly;
-// busybox reaches it through the interpreter path once the suffix is expanded.
-// The remaining three are the exec-string family, which Tier 2 cannot reach at
-// all — pinned separately below so part C's arrival is visible rather than
-// assumed.
-var wrapperBypasses = []string{
-	"nice git push --force origin main",
-	"nice -n 5 git push --force origin main",
-	"setsid git push --force origin main",
-	"flock /tmp/l git push --force origin main",
-	"stdbuf -o0 git push --force origin main",
-	"chroot / git push --force origin main",
-	`busybox sh -c "gh repo delete owner/repo"`,
+// unenumeratedLaunchers are the case Tier 2 exists for: a program that runs
+// another one and is not, and could not be, in the wrappers table. The names
+// iss-272 listed (nice, setsid, flock, …) are deliberately NOT here — part B
+// enumerated them, so they resolve as precise Tier 1 blocks and are pinned in the
+// adversarial corpus instead. What is left is the open-ended remainder, which is
+// the whole point: the fail-safe has to hold for launchers nobody listed.
+var unenumeratedLaunchers = []string{
+	"myrunner git push --force origin main",
+	"parallel git push --force ::: a b",
+	"watch -n1 git push --force origin main",
+	"./deploy.sh git push --force origin main",
+	// git launches things, which is why the gate is not "argv[0] is unknown".
+	"git bisect run git push --force origin main",
+	"git submodule foreach git push --force origin main",
 }
 
 // execStringBypasses take a command STRING run by a shell they are not. Their
@@ -47,7 +47,7 @@ var execStringBypasses = []string{
 // stops being a confident allow. It never becomes a block — an unknown command is
 // not proof that it execs its arguments.
 func TestUnrecognisedLauncherWarnsInsteadOfAllowing(t *testing.T) {
-	for _, cmd := range wrapperBypasses {
+	for _, cmd := range unenumeratedLaunchers {
 		t.Run(cmd, func(t *testing.T) {
 			d := verdictOf(t, cmd)
 			if d.Verdict != VerdictWarn {
@@ -64,7 +64,7 @@ func TestUnrecognisedLauncherWarnsInsteadOfAllowing(t *testing.T) {
 // successor and the why come from the entry the speculative suffix matched, so a
 // Tier 2 warn teaches the same safe form a Tier 1 block would.
 func TestSpeculationCarriesTheHazardsLesson(t *testing.T) {
-	d := verdictOf(t, "nice git push --force origin main")
+	d := verdictOf(t, "myrunner git push --force origin main")
 	if d.Successor == "" {
 		t.Error("a speculative warn carries no successor: the refusal teaches nothing")
 	}
@@ -78,7 +78,7 @@ func TestSpeculationCarriesTheHazardsLesson(t *testing.T) {
 // proof it execs its arguments — a reader who cannot tell a speculative warn from
 // a literal one has not been given that.
 func TestTier2IsDistinguishableFromTier1(t *testing.T) {
-	spec := verdictOf(t, "nice git clean -fd")
+	spec := verdictOf(t, "myrunner git clean -fd")
 	lit := verdictOf(t, "git clean -fd")
 	if lit.Verdict != VerdictWarn || spec.Verdict != VerdictWarn {
 		t.Fatalf("both should warn; literal=%q speculative=%q", lit.Verdict, spec.Verdict)
@@ -99,7 +99,7 @@ func TestTier2IsDistinguishableFromTier1(t *testing.T) {
 // "did anything match the command line" would let one warn-tier command disarm
 // the fail-safe for everything after it.
 func TestSpeculationIsGatedPerSegment(t *testing.T) {
-	d := verdictOf(t, "git clean -fd ; nice git push --force origin main")
+	d := verdictOf(t, "git clean -fd ; myrunner git push --force origin main")
 	if d.Verdict != VerdictWarn {
 		t.Fatalf("verdict = %q, want %q", d.Verdict, VerdictWarn)
 	}

@@ -43,16 +43,25 @@ quiet	kubectl get pods -A
 quiet	terraform plan -out=tf.plan
 quiet	rsync -av src/ dest/
 
-# --- warn: the wrapper class iss-272 recorded as silent allows ---------------
-warn	nice git push --force origin main
-warn	nice -n 5 git push --force origin main
-warn	setsid git push --force origin main
-warn	flock /tmp/lock git push --force origin main
-warn	stdbuf -o0 git push --force origin main
-warn	chroot / git push --force origin main
-warn	ionice -c3 git push --force origin main
-warn	eatmydata git push --force origin main
-warn	busybox sh -c "gh repo delete owner/repo"
+# --- block: the wrapper class iss-272 recorded as silent allows --------------
+# Every one of these exited 0 with no output before adr-42. Part A made them loud
+# warns without naming anything; part B named them, which upgrades the warn to a
+# precise block. Both steps matter, and in that order: the warn is the safety
+# property, the block is the precision, and the enumeration is only safe to be
+# incomplete because the warn is underneath it.
+block	nice git push --force origin main
+block	nice -n 5 git push --force origin main
+block	setsid git push --force origin main
+block	flock /tmp/lock git push --force origin main
+block	stdbuf -o0 git push --force origin main
+block	chroot / git push --force origin main
+block	ionice -c3 git push --force origin main
+block	eatmydata git push --force origin main
+block	busybox sh -c "gh repo delete owner/repo"
+block	chrt -f 99 git push --force origin main
+block	taskset -c 0 git push --force origin main
+block	unshare -r git push --force origin main
+block	nice -n 5 -- git push --force origin main
 
 # --- warn: launchers no list would ever contain -----------------------------
 warn	myrunner git push --force origin main
@@ -66,10 +75,13 @@ warn	./deploy.sh git push --force origin main
 warn	git bisect run git push --force origin main
 warn	git submodule foreach git push --force origin main
 
-# --- warn: the per-segment gate, not a per-line one -------------------------
+# --- the per-segment gate, not a per-line one -------------------------------
 # A per-line gate would let the matched git-clean disarm the fail-safe for
-# everything after it — a one-token off switch.
-warn	git clean -fd ; nice git push --force origin main
+# everything after it — a one-token off switch. `nice` is enumerated now, so this
+# resolves as a Tier 1 block; the same shape behind an UNENUMERATED launcher is
+# the warn line below, and that is the case the gate actually protects.
+block	git clean -fd ; nice git push --force origin main
+warn	git clean -fd ; myrunner git push --force origin main
 
 # --- block: Tier 1 still owns what it can see -------------------------------
 block	git push --force origin main

@@ -85,6 +85,14 @@ func (r Registry) speculate(segs []segment, matched []bool, ids []string) []payl
 		if matched[i] {
 			continue
 		}
+		// A segment whose payload the guard READ is not an unrecognised launcher,
+		// even when nothing in it matched. `busybox sh -c "<hazard>"` classifies as
+		// the shell family, its payload becomes segments of its own, and those carry
+		// the verdict — speculating on the parent as well would report the same
+		// hazard twice, once as a precise entry and once as a guess about it.
+		if _, _, _, _, carriesPayload := classifySegment(s); carriesPayload {
+			continue
+		}
 		if sig, ok := r.speculateSegment(segs[:i], s, ids); ok {
 			out = append(out, sig)
 		}
