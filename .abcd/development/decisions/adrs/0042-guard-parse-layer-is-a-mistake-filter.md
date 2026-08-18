@@ -104,8 +104,8 @@ replaced by two tiers:**
   never dropped.** `expandPayloads` does not only match — it raises its own
   signals, and two of them are blockers (`envSpecialBlockSignal` for an `env -S`
   value it cannot prove plain, `depthBlockSignal` past `maxPayloadDepth`). Tier 2
-  reaches them: `env -S git push --force origin main` blocks today while
-  `myrunner env -S git push --force origin main` is allowed, because
+  reaches them: `env -S 'git push --force $X'` raises the synthetic blocker today
+  while `myrunner env -S 'git push --force $X'` is allowed, because
   `splitStringValue` walks only the leading wrapper chain. Honouring such a signal
   at its own tier would make Tier 2 block on two layers of uncertainty at once —
   an unknown command that may not exec its arguments, carrying a payload the
@@ -113,12 +113,10 @@ replaced by two tiers:**
   path inside the fail-safe. Demotion is the only option that keeps both
   invariants.
 
-  The demonstrating pair needs the `$` **inside** the quoted `-S` value, where
-  `isPlainCommand` tests it: `env -S 'git push --force $X'` raises the synthetic
-  blocker, and `myrunner env -S 'git push --force $X'` is allowed today. The
-  unquoted `env -S git push --force origin main` is *not* the example — it blocks
-  on the ordinary `git-push-force` entry, because `envInspect` decodes the value
-  and rebuilds the command.
+  The `$` has to sit **inside** the quoted `-S` value, where `isPlainCommand`
+  tests it. The unquoted `env -S git push --force origin main` also blocks, but on
+  the ordinary `git-push-force` entry — `envInspect` decodes the value and
+  rebuilds the command — so it looks like this phenomenon and is not it.
 
   "Never dropped" binds the **verdict**, which is all the safety argument needs:
   a demoted signal keeps the line at warn. It cannot bind the reported *message*
@@ -147,15 +145,17 @@ inside a `PreToolUse` hook** extrapolated to the 1 MiB stdin cap. The required
 shape is therefore binding: command-position starts computed once per segment in
 an O(N) pass, a hard cap of ~64 starts **per segment** past which the warn is
 emitted unconditionally rather than skipped, short-circuit on first hit, pinned by
-a benchmark test. Both granularities bound the cost — per segment gives
-Σ 64·len(seg)·E for entry matching, plus the `expandPayloads` call each
-speculative suffix now makes, itself O(line × `maxPayloadDepth`) including a
-re-tokenize; the total stays linear in line length at a constant of 64·2, but the
-benchmark must exercise the payload path or it pins only the cheaper half — but they differ in *warn* behaviour, and
-that is why the cap is specified rather than left to the implementation: a
-per-line cap spent early would fire the unconditional warn on every remaining
-segment of a long line, which is a warn-rate decision, and decision 8 makes warn
-rate the STOP.
+a benchmark test.
+
+Both granularities bound the cost: per segment gives Σ 64·len(seg)·E for entry
+matching, plus the `expandPayloads` call each speculative suffix now makes, itself
+O(line × `maxPayloadDepth`) and including a re-tokenize — so the total stays
+linear in line length at a constant of 64·2. The benchmark must exercise the
+payload path, or it pins only the cheaper half. What the two granularities do
+*not* share is warn behaviour, which is why the cap is specified here rather than
+left to the implementation: a per-line cap spent early would fire the
+unconditional warn on every remaining segment of a long line, and decision 8
+makes warn rate the STOP.
 
 **4. The Tier 2 gate is "no entry matched *this segment*" — never "argv[0] is
 unknown", and never "no entry matched the command line".** Two separate
