@@ -376,6 +376,16 @@ registry) exits 2, so a caller never reads silence as clearance.
 Matching is shell-token-aware and applies in command position only, so a
 hazard named inside a quoted argument never fires.
 
+The guard is a MISTAKE FILTER, not a security boundary. It catches a hazard
+typed by accident or reached through an ordinary wrapper — the cases that
+actually cost people work. It does not withstand an author trying to get a
+command past it, and it does not claim to: the set of programs that launch
+another program is open-ended, so no list inside this binary can enumerate
+it, and a repository extends that set with one line in a Makefile. Anything
+that needs an enforced boundary needs a control at the execution layer — a
+sandbox, a permission system, a restricted shell — with this guard in front
+of it to teach, never in place of it.
+
 An allow means no registry entry matched — it is never a statement that a
 command is safe. The guard reads command names it can see in command
 position, so a hazard reached any other way is not seen: one launched

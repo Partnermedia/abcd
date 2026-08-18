@@ -88,6 +88,31 @@ lets through carry an UNGUARDED warning naming the file, and `abcd ahoy` reports
 `OFF`. Closing the gap properly (refusing a `disabled: true` that is not in
 `HEAD`) is a core-side change to `guard.Load`, tracked as an issue.
 
+## What this guard is
+
+The guard is a **mistake filter, not a security boundary** ([adr-42](../../decisions/adrs/0042-guard-parse-layer-is-a-mistake-filter.md)).
+It catches a hazard typed by accident or reached through an ordinary wrapper —
+the cases that actually cost people work. It does not withstand an author trying
+to get a command past it.
+
+That is a property of the layer, not a gap in this implementation. The set of
+programs that launch another program is open-ended: any binary that execs its
+arguments is a wrapper, GTFOBins catalogues hundreds for privilege escalation
+alone and has no reason to list the ones that matter here (`nice`, `setsid`,
+`stdbuf` grant no privilege and hide a hazard perfectly), and a repository
+extends the set with one line — `make deploy`, `npm run release`, a git alias.
+Three defects of exactly this shape have been filed against three different
+enumerations in this package (gh-297 the interpreter set, gh-299 git's global
+value flags, iss-272 the wrapper set), which is the evidence, not a coincidence.
+
+So the guard is built to **fail loud rather than to be complete**: a hazard it
+cannot resolve is warned about, not waved through. Anything that needs an
+enforced boundary needs a control at the **execution layer** — a sandbox, a
+permission system, a restricted shell, sudo's `NOEXEC` — with this guard in
+front of it to teach, never in place of it. A missing wrapper name is a real
+defect in a mistake filter; it is not a silent failure of a trust boundary,
+because there is no trust boundary here to fail.
+
 ## What an allow means
 
 An allow means **no registry entry matched** — never that a command is safe. The

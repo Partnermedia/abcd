@@ -49,6 +49,15 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"registry) exits 2, so a caller never reads silence as clearance.\n\n" +
 			"Matching is shell-token-aware and applies in command position only, so a\n" +
 			"hazard named inside a quoted argument never fires.\n\n" +
+			"The guard is a MISTAKE FILTER, not a security boundary. It catches a hazard\n" +
+			"typed by accident or reached through an ordinary wrapper — the cases that\n" +
+			"actually cost people work. It does not withstand an author trying to get a\n" +
+			"command past it, and it does not claim to: the set of programs that launch\n" +
+			"another program is open-ended, so no list inside this binary can enumerate\n" +
+			"it, and a repository extends that set with one line in a Makefile. Anything\n" +
+			"that needs an enforced boundary needs a control at the execution layer — a\n" +
+			"sandbox, a permission system, a restricted shell — with this guard in front\n" +
+			"of it to teach, never in place of it.\n\n" +
 			"An allow means no registry entry matched — it is never a statement that a\n" +
 			"command is safe. The guard reads command names it can see in command\n" +
 			"position, so a hazard reached any other way is not seen: one launched\n" +
