@@ -138,3 +138,8 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-35](0035-lifeboat-as-coverage-experiment.md) | The lifeboat is a coverage experiment — read-only, out-of-tree, and proven before it is packed (supersedes adr-4) | accepted | 2026-07-14 |
 | [adr-36](0036-coverage-blanks-are-a-fillable-lifecycle.md) | Coverage blanks are a fillable lifecycle — authored is not extracted, and the interview is its own step | accepted | 2026-07-15 |
 | [adr-37](0037-changelog-driven-releases.md) | Releases are changelog-driven — rolling `[Unreleased]` is the release decision, and automation tags exactly that commit | accepted | 2026-07-17 |
+| [adr-38](0038-implicit-checks-are-disk-only.md) | Implicit checks are disk-only — the network answers only an explicit ask | accepted | 2026-08-15 |
+| [adr-39](0039-host-tier-policy.md) | Host-tier policy — MCP floor, reference host, open-source default | accepted | 2026-08-16 |
+| [adr-40](0040-review-audit-lint-are-three-verbs.md) | Review, audit, lint, and gate are four buckets, separated by what each compares | accepted | 2026-08-16 |
+| [adr-41](0041-corpus-trust-boundary.md) | Documents and ledgers never leave the user tier; a public citation requires both gates | proposed | 2026-08-16 |
+| [adr-42](0042-guard-parse-layer-is-a-mistake-filter.md) | The guard's parse layer is a mistake filter, not a security boundary — matching is two-tier, and completeness is abandoned as a goal | accepted | 2026-08-18 |

@@ -1230,3 +1230,27 @@ parallel-agent merge contention bites.
   is visible. Rejected: all three remedies above; and leaving the record open,
   which would invite the indent-relaxing "fix" that widens the hole. Reopen only
   if the gate is asked to defend against a deliberate author — a different design.
+- 2026-08-18 — The guard's parse layer is a MISTAKE FILTER, not a security boundary
+  (adr-42, iss-272). Enumeration-completeness is abandoned as the matching strategy:
+  Tier 1 (position-anchored, blocks) keeps the registry match; Tier 2 (position-agnostic,
+  warns) speculatively re-matches from each later command-position token when NO ENTRY
+  MATCHED, each suffix run through expandPayloads, converting the unbounded wrapper class
+  from silent allow to loud warn without enumerating anything. Forced by three facts: the
+  defect is the wrapper path's missing fail-safe (the interpreter path has shellUnresolved,
+  the wrapper path has nothing), the wrapper set is unbounded in principle (any program that
+  execs another; -S is required-arg in unshare and optional-arg in nsenter, same package and
+  version), and every vendor shipping this control documents it as steering, not enforcement.
+  Tier 2 is BOUNDED against a measured quadratic DoS — the drafted form ran 14.9s at 6000
+  tokens, ~8h of CPU at the 1 MiB stdin cap, inside the PreToolUse hook — so O(N) starts, a
+  ~64 cap, short-circuit, pinned by a benchmark. The gate is "no entry matched", never
+  "argv[0] unknown", which would switch speculation off for git. Enumeration continues,
+  demoted to an upgrade (warn → precise block) and safe to be incomplete. The exec-string
+  family (su/runuser/script/flock -c) gets a small table, NOT a generalisation of
+  shellCPayload, which would ship six new SILENT allows on the long spellings. Sequencing
+  D → A → B → C. Rejected with evidence: add-the-missing-names as the primary fix (third
+  instance of one defect); descend-into-any-spaced-token (breaks the 100% known-good floor —
+  the spc-16 incident-capture fixture fires); flag-shaped-prefix-only (silences most true
+  positives); allowlist (recorded for a future fail-closed mode, wrong for arbitrary developer
+  work). Accepted cost: false positives on unquoted hazard-shaped text under an unrecognised
+  argv[0] — 0/1144 repo-mined lines, 21/79 adversarial. The warn-storm STOP from the
+  2026-08-15 note binds: measure on real agent commands before merge.
