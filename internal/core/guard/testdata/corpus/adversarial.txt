@@ -90,6 +90,33 @@ block	xargs -I{} git push --force origin {}
 block	gh repo delete owner/repo
 block	sh -c "git push --force origin main"
 
+# --- block: the exec-string family, which speculation cannot reach ----------
+# A command string run by a shell the carrying program is NOT. The payload is one
+# opaque token, so no speculative start can see inside it; only the verb table
+# reaches these. The long spellings are listed because a generalisation of the
+# shell path would have resolved the short ones for free and silently allowed
+# every one of these.
+block	su -c "gh repo delete owner/repo"
+block	su bob -c "gh repo delete owner/repo"
+block	su --command "gh repo delete owner/repo"
+block	su --command="gh repo delete owner/repo"
+block	su --session-command "gh repo delete owner/repo"
+block	runuser -c "git push --force origin main"
+block	runuser --command "git push --force origin main"
+block	script -c "git push --force origin main" /dev/null
+block	script --command "git push --force origin main" /dev/null
+block	flock /tmp/lock -c "git push --force origin main"
+block	flock /tmp/lock --command "git push --force origin main"
+block	su -s /bin/sh -c "gh repo delete owner/repo"
+block	runuser -u bob -- git push --force origin main
+
+# --- quiet: the same verbs doing ordinary work ------------------------------
+quiet	su - bob
+quiet	script /tmp/typescript
+quiet	script -q /dev/null
+quiet	flock /tmp/lock true
+quiet	echo "su -c 'gh repo delete owner/repo'"
+
 # --- fp: accepted false positives, and the exact shape they take ------------
 fp	rg git push --force docs/
 fp	grep -rn gh repo delete .

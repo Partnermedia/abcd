@@ -32,11 +32,20 @@ var unenumeratedLaunchers = []string{
 	"git submodule foreach git push --force origin main",
 }
 
-// execStringBypasses take a command STRING run by a shell they are not. Their
-// payload stays one opaque token that isShellFamily will not open, so no
-// speculative start can see the hazard inside it. Part C's table is the only
-// thing that reaches them (adr-42 decision 6).
-var execStringBypasses = []string{
+// tenVerifiedBypasses is the list iss-272 opened with: ten command lines that
+// exited 0 with no output on the merged tree. Every one of them now produces a
+// verdict, and the three routes are worth keeping distinct in one place —
+// speculation alone reached six, the wrapper names took those to precise blocks,
+// and the exec-string table reached the last three, which no amount of
+// speculation could (their payload is one opaque token).
+var tenVerifiedBypasses = []string{
+	"nice git push --force origin main",
+	"nice -n 5 git push --force origin main",
+	"setsid git push --force origin main",
+	"flock /tmp/l git push --force origin main",
+	"stdbuf -o0 git push --force origin main",
+	"chroot / git push --force origin main",
+	`busybox sh -c "gh repo delete owner/repo"`,
 	`su -c "gh repo delete owner/repo"`,
 	`runuser -c "git push --force origin main"`,
 	`script -c "git push --force origin main" /dev/null`,
@@ -139,14 +148,19 @@ func TestSpeculationNeverBlocks(t *testing.T) {
 	}
 }
 
-// TestSpeculationDoesNotReachTheExecStringFamily pins a documented limit rather
-// than a hope. These three stay silent until part C lands; if one starts warning,
-// the record saying "still silent until part C" is what needs updating.
-func TestSpeculationDoesNotReachTheExecStringFamily(t *testing.T) {
-	for _, cmd := range execStringBypasses {
+// TestNoneOfTheTenBypassesIsSilent is the issue's own acceptance test. iss-272
+// listed ten command lines that exited 0 with no output; not one of them may do
+// that again, and this is the assertion that says so in the issue's own terms
+// rather than in the implementation's.
+func TestNoneOfTheTenBypassesIsSilent(t *testing.T) {
+	for _, cmd := range tenVerifiedBypasses {
 		t.Run(cmd, func(t *testing.T) {
-			if d := verdictOf(t, cmd); d.Verdict != VerdictAllow {
-				t.Fatalf("verdict = %q, want %q — part C has landed, so update adr-42's coverage claim", d.Verdict, VerdictAllow)
+			d := verdictOf(t, cmd)
+			if d.Verdict == VerdictAllow {
+				t.Fatalf("SILENT ALLOW, exactly as iss-272 recorded it: %s", cmd)
+			}
+			if d.Message == "" {
+				t.Errorf("a non-allow verdict with no message tells the user nothing")
 			}
 		})
 	}
