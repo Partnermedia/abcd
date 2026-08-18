@@ -26,6 +26,19 @@ called out in a **Breaking** section.
 
 - **A resolved issue points at what fixed it.** `abcd capture resolve` gains optional provenance flags — `--intent itd-N`, `--spec spc-N`, `--commit <sha>` — that write the structured `resolved_by` pointer the schema has modelled all along, in the same atomic transition as the resolution note and impact. Ids must exist in their record store; the sha is shape-checked only; an unknown or malformed value refuses the whole resolve and writes nothing. Without the flags the record stays byte-identical to a plain resolve. `wontfix` is untouched — a non-action points at nothing. (itd-120, spc-25; the `resolved_by` half of iss-245)
 
+- **The guard's own limits are on the record, and so are the sources that
+  settled them.** ADR-42 rules the hazard guard's parse layer a *mistake filter*
+  rather than a security boundary — it catches accidents and casual evasion by a
+  cooperating agent, and anything needing a real boundary needs an
+  execution-layer control behind it. **Nothing in the guard's behaviour or its
+  own documentation changes yet** — what lands here is the decision, the evidence
+  behind it, and credit; saying it on the guard's own surfaces is the first thing
+  the implementation builds. `ACKNOWLEDGEMENTS.md` gains five § Inspirations
+  entries for the precedents that shaped it — one agent harness's permission and
+  sandboxing model, another's command-denylist failure, a third's
+  sandbox/approval split, GTFOBins' shell/command taxonomy, and sudo's `NOEXEC` —
+  with the full source list registered in the design record. (adr-42, iss-272)
+
 - **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
 
 ### Fixed

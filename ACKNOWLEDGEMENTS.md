@@ -38,12 +38,26 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **Citation Style Language (CSL-JSON)** — the bibliography format of the
   confidential-sources design (itd-76), whose reserved `custom` field carries
   the confidentiality metadata.
+- **Claude Code's permission and sandboxing model** — the posture adr-42 adopts
+  for `abcd guard`: an argument-constraining command pattern is documented as
+  fragile agent steering rather than a boundary, an unsound pattern is refused
+  outright instead of shipped, and the enforcing control sits at the execution
+  layer.
+  <https://code.claude.com/docs/en/permissions>
 - **Conftest (Open Policy Agent)** — the severity→exit-code convention (`0`
   clean / `1` warnings / `2` any error) the `abcd lint` verb adopts for its
   tri-state exit, taken as vocabulary without adopting the Rego engine (itd-85).
 - **CriticGPT (OpenAI)** — the injected-bug construction behind itd-81's
   calibration corpus: natural defects are unlabelled, so ground truth is
   manufactured by reintroducing defects whose class is already known.
+- **Cursor's terminal command controls** — the decisive negative precedent
+  behind adr-42: a shipped command denylist bypassed via `bash -c`, subshells
+  and base64, replaced by an allowlist, which was then bypassed by poisoning an
+  allowed command's environment, published as GHSA-82wg-qcm4-fp2w /
+  CVE-2026-22708 (identifiers as recorded during the iss-272 investigation; the
+  advisory host was unreachable when this entry was written). abcd takes the
+  lesson, not the mechanism.
+  <https://cursor.com/security>
 - **DITA subject scheme maps** — the controlled-vocabulary pattern behind the
   persona registry: a field's legal values live in a dedicated registry file
   and a processor flags unbound values (the `persona_registry` lint rule).
@@ -60,6 +74,11 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   source of the running binary's vintage that itd-111's staleness detection
   reads (build revision and the `vcs.modified` dirty flag), with its documented
   stamping holes driving the first-class *unknown* outcome.
+- **GTFOBins** — the `shell` / `command` function taxonomy, which names the
+  class `abcd guard` is exposed to (a binary that spawns a shell or runs a
+  command) and, by its privilege-escalation inclusion criterion, demonstrates
+  that no curated list covers abcd's threat: `nice`, `setsid`, `stdbuf` grant no
+  privilege and are perfect bypasses (adr-42). <https://gtfobins.github.io>
 - **Homebrew's auto-update-on-use and the `update-notifier` pattern (npm)** — the
   UX grammar itd-111 keeps (cached comparison, a gentle nudge, a one-command
   fix) while rejecting their implicit background network check: abcd implements
@@ -70,6 +89,11 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   never a background poll.
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
+- **OpenAI Codex's sandbox/approval split** — the vocabulary adr-42 borrows for
+  naming what a parse layer is: the OS-enforced sandbox is the boundary, the
+  approval policy is "a workflow choice layered on top of" it, and the pattern
+  engine carries no threat model.
+  <https://github.com/openai/codex>
 - **Priority inheritance (real-time scheduling)** — the derived-priority rule
   of the intent dependency graph (itd-78): a minor blocker of a major intent
   computes to major.
@@ -78,6 +102,12 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   separate from the evaluator (itd-85). The tool itself is archived and is not a
   dependency.
 - **The Rust RFC process** — the required "Prior Art" section on intents.
+- **sudo's `NOEXEC` tag and the sudoers(5) shell-escape statement** — thirty
+  years of the same job, and the normative form of adr-42's conclusion:
+  restricting users to programs that offer no shell escape "is often
+  unworkable", so the answer is an execution-layer control that revokes the
+  capability, not a list of the programs that hold it.
+  <https://manpages.ubuntu.com/manpages/noble/en/man5/sudoers.5.html>
 
 ## References & sources
 
