@@ -73,21 +73,23 @@ Canonical bibliography for `.abcd/development/` documents. When citing prior art
 [cwe-184]: https://cwe.mitre.org/data/definitions/184.html "CWE-184: Incomplete List of Disallowed Inputs (under CWE-693 Protection Mechanism Failure)"
 [owasp-cmdi]: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html "OWASP — OS Command Injection Defense Cheat Sheet"
 [ranum-dumbest]: https://www.ranum.com/security/computer_security/editorials/dumb/ "The Six Dumbest Ideas in Computer Security (Ranum, 2005) — 'Enumerating Badness'"
-[garfinkel-traps]: https://www.ndss-symposium.org/ndss2003/ "Traps and Pitfalls: Practical Problems in System Call Interposition Based Security Tools (Garfinkel, NDSS 2003)"
+[garfinkel-traps]: https://www.ndss-symposium.org/ndss2003/ "NDSS 2003 proceedings index — Garfinkel, Traps and Pitfalls: Practical Problems in System Call Interposition Based Security Tools (link is the proceedings, not the paper)"
 [gtfobins]: https://gtfobins.github.io "GTFOBins — Unix binaries that bypass local security restrictions; shell/command function taxonomy"
 [sudoers]: https://manpages.ubuntu.com/manpages/noble/en/man5/sudoers.5.html "sudoers(5) — shell escapes and the NOEXEC tag"
-[cc-permissions]: https://code.claude.com/docs/en/iam "Claude Code — permissions and command-pattern matching (Anthropic docs)"
+[cc-permissions]: https://code.claude.com/docs/en/permissions "Claude Code — permissions and Bash command-pattern matching (Anthropic docs)"
 [cc-sandboxing]: https://code.claude.com/docs/en/sandboxing "Claude Code — sandboxing (Anthropic docs)"
-[cursor-security]: https://cursor.com/security "Cursor — run modes, terminal allowlisting, and security advisories (GHSA-82wg-qcm4-fp2w / CVE-2026-22708)"
+[cursor-security]: https://cursor.com/security "Cursor security overview — run modes and terminal allowlisting; the GHSA-82wg-qcm4-fp2w / CVE-2026-22708 advisory is published separately"
 [codex-cli]: https://github.com/openai/codex "OpenAI Codex CLI — sandbox_mode vs approval_policy, and the execpolicy engine"
 [copilot-agent]: https://docs.github.com/en/copilot/concepts/agents/coding-agent "GitHub Copilot coding agent — ephemeral firewalled environment, scope limits not pattern limits"
 ```
 
-> Metadata for these entries was recorded from material read during the iss-272
-> investigation; egress from that environment blocked several of the hosts, so
-> the resolver links are canonical forms rather than freshly verified ones (see
-> the note's Sources section). They are registry entries, not admissions to the
-> academic reference list, whose verification bar they have not yet cleared.
+> Recorded from material read during the iss-272 investigation. Egress blocked
+> `cwe.mitre.org`, `ranum.com`, `cheatsheetseries.owasp.org`,
+> `ndss-symposium.org`, `gtfobins.github.io` and `cursor.com`, so those six
+> resolver links are canonical forms rather than freshly verified ones;
+> `code.claude.com` and the Ubuntu manpages were reachable and are verified. They
+> are registry entries, not admissions to the academic reference list, whose
+> verification bar they have not yet cleared.
 
 ### Citation, provenance, and publishing
 

@@ -1234,12 +1234,18 @@ parallel-agent merge contention bites.
   (adr-42, iss-272). Enumeration-completeness is abandoned as the matching strategy:
   Tier 1 (position-anchored, blocks) keeps the registry match; Tier 2 (position-agnostic,
   warns) speculatively re-matches from each later command-position token when NO ENTRY
-  MATCHED, each suffix run through expandPayloads, converting the unbounded wrapper class
-  from silent allow to loud warn without enumerating anything. Forced by three facts: the
+  MATCHED, each suffix run through expandPayloads, converting the unbounded WRAPPER class
+  from silent allow to loud warn without enumerating anything — 6 of the 10 verified
+  bypasses, 7 once each speculative suffix runs through expandPayloads. It does NOT reach
+  the exec-string class (su/runuser/script -c keep an opaque payload isShellFamily will not
+  open), which stays silent until part C lands. Forced by three facts: the
   defect is the wrapper path's missing fail-safe (the interpreter path has shellUnresolved,
-  the wrapper path has nothing), the wrapper set is unbounded in principle (any program that
-  execs another; -S is required-arg in unshare and optional-arg in nsenter, same package and
-  version), and every vendor shipping this control documents it as steering, not enforcement.
+  the wrapper path has nothing), the wrapper set is unbounded in principle and its
+  tractable part cannot be read off the documentation (nsenter's --help renders -S as
+  optional-arg and unshare's renders the same letter, same package, same version, as
+  required-arg, while BOTH binaries consume the next token — so only probing the installed
+  binary is sound, the lesson gh-299 cost a live force-push bypass to learn), and every
+  vendor shipping this control documents it as steering, not enforcement.
   Tier 2 is BOUNDED against a measured quadratic DoS — the drafted form ran 14.9s at 6000
   tokens, ~8h of CPU at the 1 MiB stdin cap, inside the PreToolUse hook — so O(N) starts, a
   ~64 cap, short-circuit, pinned by a benchmark. The gate is "no entry matched", never
@@ -1251,6 +1257,8 @@ parallel-agent merge contention bites.
   instance of one defect); descend-into-any-spaced-token (breaks the 100% known-good floor —
   the spc-16 incident-capture fixture fires); flag-shaped-prefix-only (silences most true
   positives); allowlist (recorded for a future fail-closed mode, wrong for arbitrary developer
-  work). Accepted cost: false positives on unquoted hazard-shaped text under an unrecognised
-  argv[0] — 0/1144 repo-mined lines, 21/79 adversarial. The warn-storm STOP from the
+  work). Accepted cost: false positives on unquoted hazard-shaped text wherever no entry matched —
+  0/1144 repo-mined lines, 21/79 adversarial, but BOTH corpora were run against an
+  argv[0]-gated prototype, i.e. the gate this decision rejects, so the figures are a FLOOR
+  and re-measuring under the adopted gate is a merge precondition. The warn-storm STOP from the
   2026-08-15 note binds: measure on real agent commands before merge.

@@ -42,17 +42,22 @@ matches, and the verdict is a confident `allow`. Ten wrapper bypasses were
 verified live on the merged tree, `nice git push --force` among them, each
 exiting 0.
 
-**The set is unbounded in principle.** Any program that execs another is a
-wrapper. `-S` is a required-argument flag in `unshare` and an optional-argument
-flag in `nsenter` — same package, same version, same letter — so even the
-*tractable* subset carries a standing per-flag maintenance liability, on a
-grammar that differs again on macOS.
+**The set is unbounded in principle, and the tractable part cannot be read off
+the documentation.** Any program that execs another is a wrapper. `nsenter --help`
+renders `-S/--setuid` as optional-argument and `unshare --help` renders the same
+letter in the same package at the same version as required-argument — yet both
+binaries consume the following token, so nsenter's help contradicts its own
+parser. A per-wrapper flag table can therefore only be derived by probing the
+installed binary, which is the lesson gh-299 cost a live force-push bypass to
+learn, and the grammar differs again on macOS.
 
 **Every vendor shipping this control documents it as steering, not enforcement.**
 [Claude Code][cc-permissions] calls argument-constraining patterns "fragile" and
 refuses to implement `Bash(command:rm *)` because a compound command would bypass
-it; [Cursor][cursor-security] shipped a command denylist and it was bypassed
-(CVE-2026-22708). The posture is [CWE-184 (Incomplete List of Disallowed
+it; [Cursor][cursor-security] shipped a command denylist, watched it fall to `bash
+-c`, subshells and base64 — the gh-297 gap verbatim — replaced it with an
+allowlist, and then had *that* bypassed by poisoning an allowed command's
+environment (GHSA-82wg-qcm4-fp2w / CVE-2026-22708). The posture is [CWE-184 (Incomplete List of Disallowed
 Inputs)][cwe-184] and the literature behind it is settled —
 [Ranum's "Enumerating Badness"][ranum-dumbest],
 [Garfinkel (NDSS 2003)][garfinkel-traps].
@@ -66,13 +71,16 @@ cannot be right, and the critical framing is a claim no denylist can honour.
 ## Decision
 
 **1. The guard's parse layer is a mistake filter.** It catches accidents and
-casual evasion by a cooperating agent. It does not withstand a determined author,
-and the guard's own documentation says so in those terms. Anything needing an
-actual boundary needs an execution-layer control behind it; the parse layer never
-claims to be one. The guard's own documentation states this scope (part D below),
-and the split rating is resolved with it: a missing wrapper or interpreter name is
-a real defect in a mistake filter, not a silent failure of a trust boundary, so
-`severity:critical` is the wrong label for the class.
+casual evasion by a cooperating agent. It does not withstand a determined author.
+Anything needing an actual boundary needs an execution-layer control behind it;
+the parse layer never claims to be one. **The guard does not say this today** —
+its help text gets as far as "an allow means no registry entry matched — it is
+never a statement that a command is safe", and the surface brief says "coverage is
+what the registry names", but neither states the scope in these terms. Saying it
+is part D, the first thing built. The split rating is resolved with it: a missing
+wrapper or interpreter name is a real defect in a mistake filter, not a silent
+failure of a trust boundary, so `severity:critical` is the wrong label for the
+class.
 
 **2. Enumeration-completeness is abandoned as the matching strategy, and
 replaced by two tiers:**
@@ -85,9 +93,14 @@ replaced by two tiers:**
   never a block, because an unknown argv[0] is not proof that it execs its
   arguments.
 
-Tier 2 converts the entire unbounded wrapper class from *silent allow* to *loud
-warn* without enumerating anything, and gives the wrapper path the fail-safe the
-interpreter path already had.
+Tier 2 converts the unbounded *wrapper* class — a command that execs its own
+arguments — from *silent allow* to *loud warn* without enumerating anything, and
+gives the wrapper path the fail-safe the interpreter path already had. It does
+**not** reach the *exec-string* class: `su -c`, `runuser -c` and `script -c` keep
+their payload as one opaque token that `isShellFamily` will not open, so they stay
+silent until part C lands. Six of the ten verified bypasses are covered by
+speculation, seven once each speculative suffix is run through `expandPayloads`;
+the remaining three are part C's whole reason for existing.
 
 **3. Tier 2 is bounded against the denial of service it would otherwise
 reintroduce.** The obvious form of speculation is N starts × E entries — exactly
@@ -116,10 +129,18 @@ resolves every *short* spelling free and returns `shellNone` for every long one
 the `shellUnresolved` fail-safe. A command → payload-flag table is the correct
 shape and leaves that contract untouched.
 
-**7. Sequencing is D → A → B → C:** scope statement first, then the Tier 2
-fail-safe, then wrapper names, then the exec-string table. The scope statement
-leads because shipping enumeration without it manufactures exactly the false
-confidence that makes the next gap dangerous.
+**7. Sequencing is D → A → B → C**, the four parts being:
+
+| part | what it is | decisions above |
+|---|---|---|
+| **D** | the scope statement in the guard's own documentation | 1 |
+| **A** | the bounded Tier 2 fail-safe | 2, 3, 4 |
+| **B** | wrapper names added to `wrappers` / `wrapperOperands` | 5 |
+| **C** | the exec-string command → payload-flag table | 6 |
+
+D leads because shipping enumeration without it manufactures exactly the false
+confidence that makes the next gap dangerous. C is last but not optional: until
+it lands, three of the ten verified bypasses are still silent.
 
 **8. The warn-storm STOP binds this work.** Per
 [`2026-08-15-guard-execute-string-family-design.md`](../../research/notes/2026-08-15-guard-execute-string-family-design.md):
@@ -136,8 +157,8 @@ below the fail-safe.
 
 **Speculative re-match in its drafted form.** Rejected as drafted for the
 quadratic DoS above, and because the coverage claim behind it was wrong —
-speculation alone catches 5 of the 9 bypasses in the note's coverage table, not
-all of them, since `matchSegment` never descends into a payload. Adopted only in the bounded,
+speculation alone catches 6 of the 10 verified bypasses, not all of them, since
+`matchSegment` never descends into a payload. Adopted only in the bounded,
 `expandPayloads`-composed form of decisions 2–4, which recovers `busybox sh -c`
 at zero additional false positives.
 
@@ -167,20 +188,35 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
 
 ## Consequences
 
-- **The guard stops lying about the cases it cannot see.** Every unrecognised
-  wrapper becomes a loud warn instead of a confident allow, and the fix is not
-  hostage to a list staying complete.
-- **False positives become the accepted cost, with a known shape.** Tier 2 fires
-  on unquoted hazard-shaped text under an unrecognised argv[0]: 0 fires across
-  1,144 repo-mined lines, 21 of 79 on an adversarial corpus (2 of them true
-  positives). Quoting silences it; a `git`/`gh`/`rm` argv[0] silences it — so
-  `git grep git push --force` is quiet while `rg …` warns, an arbitrary asymmetry
-  that must be documented rather than explained away. This repo's subject *is*
-  the hazard registry, so expect interactive hits here specifically.
+- **The guard stops lying about the wrapper cases it cannot see.** An
+  unrecognised *wrapper* becomes a loud warn instead of a confident allow, and
+  that is not hostage to a list staying complete. The *exec-string* family is not
+  covered by the fail-safe — part C covers it by enumeration, and until part C
+  lands `su -c`, `runuser -c` and `script -c` are still silent.
+- **False positives become the accepted cost, and the measured figures are a
+  floor rather than an estimate.** The corpora — 0 fires across 1,144 repo-mined
+  lines, 21 of 79 on an adversarial corpus, 2 of those true positives — were run
+  against a prototype gated on argv[0], which is the gate decision 4 **rejects**.
+  The adopted gate is strictly noisier by an unmeasured margin: `git grep git push
+  --force` matches no entry today, so the argv[0] gate silenced it while the
+  adopted gate speculates and warns. The shape is unquoted hazard-shaped text in a
+  command line where nothing matched; quoting silences it. This repo's subject
+  *is* the hazard registry, so expect interactive hits here specifically.
+- **Re-measuring both corpora under the adopted gate is a merge precondition**,
+  not a follow-up. Decision 8's warn-storm STOP is not discharged by the
+  argv[0]-gated run, and the ~64-start cap is its own unmeasured warn source —
+  past the cap the warn fires unconditionally, and nothing yet measures how many
+  real command lines carry more than 64 command-position tokens.
 - **A new standing obligation: the DoS bound is load-bearing, not an
   optimisation.** The start cap and the O(N) pass carry a benchmark test, and any
   future change to matching re-runs it. The guard gates the hook; a slow guard is
   an outage.
+- **The evidence behind this record must be re-landed as committed artefacts.**
+  The prototype, the two corpora and the timing runs lived in the local ephemeral
+  tier and are not in the repository, so nothing here is reproducible from the
+  record alone. The implementation lands the benchmark and the corpora as
+  committed test data; until it does, every measured figure above is a claim
+  backed by a run the next reader cannot repeat.
 - **Wrapper and payload-flag tables are documented as one platform's grammar.**
   `nsenter unshare chrt taskset ionice setsid flock stdbuf runuser` do not exist
   on macOS, and `su`, `script`, `chroot`, `nice` carry BSD grammars there. CI runs
@@ -197,11 +233,16 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
 - **The next enumeration gap is no longer an incident.** A missing wrapper name
   degrades a block to a warn instead of to silence, which is the whole point of
   spending the false positives.
+- **Two labels are now wrong and are corrected with part D.** gh-297 and gh-299
+  still carry `severity:critical` for a class decision 1 rules out of that
+  category. Relabelling them is part of the scope statement's landing, not an
+  optional tidy-up: leaving them is the same false-confidence signal from the
+  other direction.
 
 ## References
 
-[cc-permissions]: https://code.claude.com/docs/en/iam "Claude Code — permissions and command-pattern matching (Anthropic docs)"
-[cursor-security]: https://cursor.com/security "Cursor — run modes, terminal allowlisting, and security advisories (GHSA-82wg-qcm4-fp2w / CVE-2026-22708)"
+[cc-permissions]: https://code.claude.com/docs/en/permissions "Claude Code — permissions and Bash command-pattern matching (Anthropic docs)"
+[cursor-security]: https://cursor.com/security "Cursor security overview — run modes and terminal allowlisting; the GHSA-82wg-qcm4-fp2w / CVE-2026-22708 advisory is published separately"
 [cwe-184]: https://cwe.mitre.org/data/definitions/184.html "CWE-184: Incomplete List of Disallowed Inputs (under CWE-693 Protection Mechanism Failure)"
 [ranum-dumbest]: https://www.ranum.com/security/computer_security/editorials/dumb/ "The Six Dumbest Ideas in Computer Security (Ranum, 2005) — 'Enumerating Badness'"
-[garfinkel-traps]: https://www.ndss-symposium.org/ndss2003/ "Traps and Pitfalls: Practical Problems in System Call Interposition Based Security Tools (Garfinkel, NDSS 2003)"
+[garfinkel-traps]: https://www.ndss-symposium.org/ndss2003/ "NDSS 2003 proceedings index — Garfinkel, Traps and Pitfalls: Practical Problems in System Call Interposition Based Security Tools (link is the proceedings, not the paper)"

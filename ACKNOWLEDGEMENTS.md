@@ -43,7 +43,7 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   fragile agent steering rather than a boundary, an unsound pattern is refused
   outright instead of shipped, and the enforcing control sits at the execution
   layer.
-  <https://code.claude.com/docs/en/iam>
+  <https://code.claude.com/docs/en/permissions>
 - **Conftest (Open Policy Agent)** — the severity→exit-code convention (`0`
   clean / `1` warnings / `2` any error) the `abcd lint` verb adopts for its
   tri-state exit, taken as vocabulary without adopting the Rego engine (itd-85).
