@@ -1244,9 +1244,10 @@ parallel-agent merge contention bites.
   tractable part cannot be read off the documentation (nsenter's --help renders -S as
   optional-arg and unshare's renders the same letter, same package, same version, as
   required-arg, while BOTH binaries consume the next token — so only probing the installed
-  binary is sound; gh-299 is the in-repo proof, having called its nine-flag git sweep
-  "bounded and complete" while the shipped registry now carries ten, --shallow-file having
-  been a live bypass beyond it), and every vendor shipping this control documents it as
+  binary is sound; gh-299 is the in-repo proof — its first list was taken from the bug
+  report and was wrong three ways, omitting --shallow-file (a live force-push bypass in git
+  since 1.9) and counting --exec-path/--super-prefix as value-taking when neither is, and
+  it TOTALLED NINE EITHER WAY, so a size assertion certified the wrong list as complete), and every vendor shipping this control documents it as
   steering, not enforcement.
   Tier 2 is BOUNDED against a measured quadratic DoS — the drafted form ran 14.9s at 6000
   tokens, ~8h of CPU at the 1 MiB stdin cap, inside the PreToolUse hook — so O(N) starts, a
@@ -1254,8 +1255,18 @@ parallel-agent merge contention bites.
   unknown", which would switch speculation off for git, and never per-Check, which would
   hand an author a one-token suppression (`git clean -fd ; nice git push --force` matches
   git-clean, so a whole-command gate disarms the fail-safe for the whole line).
-  Per-segment is also what makes the false-positive figures a floor: an unknown argv[0]
-  implies no entry matched that segment, so every prototype fire is an adopted-gate fire. Enumeration continues,
+  Per-segment is also what makes the false-positive figures a floor, but only with
+  "unknown command" pinned to commandOf's OUTPUT (wrappers, assignments and reserved words
+  stepped, basename taken) rather than the literal first token: matchSegment keys on exactly
+  that value, so a segment commandOf resolves to something no entry names cannot match any
+  entry, and the nesting is by construction. Under the literal reading it is false —
+  `env git clean -fd gh repo delete .` resolves to git and matches git-clean, while a
+  literal-token gate would see env and fire on git clean's own pathspecs.
+  Also decided: a synthetic verdict raised from a speculative suffix (expandPayloads emits
+  two blockers, envSpecialBlockSignal and depthBlockSignal) is DEMOTED to warn, never
+  honoured at its own tier and never dropped — honouring blocks on two layers of
+  uncertainty, dropping invents a second silent suppression path inside the fail-safe.
+  The ~64-start cap is PER SEGMENT for the same warn-rate reason. Enumeration continues,
   demoted to an upgrade (warn → precise block) and safe to be incomplete. The exec-string
   family (su/runuser/script/flock -c) gets a small table, NOT a generalisation of
   shellCPayload, which would ship six new SILENT allows on the long spellings. Sequencing

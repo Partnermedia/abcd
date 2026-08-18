@@ -154,7 +154,14 @@ whole execute-a-string family silent:
 
 That is all ten verified bypasses from the Problem section, six caught and four
 missed. Running each speculative suffix through `expandPayloads` recovers
-`busybox sh -c` — 7 of 10 — at **zero** additional false positives. The other
+`busybox sh -c` — 7 of 10 — at **zero** additional false positives, but it also
+pulls in that function's own signals, two of which are blockers
+(`envSpecialBlockSignal`, `depthBlockSignal`). Tier 2 reaches them: `env -S git
+push --force origin main` blocks today, while `myrunner env -S git push --force
+origin main` is allowed because `splitStringValue` walks only the leading wrapper
+chain. A speculative suffix must therefore **demote** a synthetic verdict to warn
+rather than honour it (Tier 2 would otherwise block on two layers of uncertainty)
+or drop it (a second silent suppression path inside the fail-safe). The other
 three are the exec-string family and need the table below; nothing short of it
 reaches them, because their payload stays one opaque token and `isShellFamily`
 (`payload.go`) does not contain `su`, `runuser` or `script`. **Until that table
@@ -200,9 +207,20 @@ regardless of what any other segment did.
 prototype was gated on argv[0] — the gate the section above rejects — so every
 line whose argv[0] the registry knows was silenced before it could fire. Under
 the recommended **per-segment** "no entry matched" gate the figures are a
-**floor**: an unknown argv[0] implies no entry matched that segment, because
-entries key on the command name, so every prototype fire is also an adopted-gate
-fire. The margin above the floor is unmeasured. `git grep git push --force` is
+**floor** — but only once "unknown command" is pinned down.
+
+`matchSegment` does not compare against the literal first token. It compares
+`p.Command` against `commandOf`'s output, which steps wrappers, assignment
+prefixes and reserved words and then takes the basename, so `sudo git push
+--force`, `FOO=bar git push --force` and `/usr/bin/git push --force` all match
+entries whose `Command` is `git`. The prototype gated on that same resolved
+command, and under that reading the nesting is **by construction**: a segment
+whose `commandOf` output no entry names cannot be matched by any entry, so every
+prototype fire is also an adopted-gate fire. Under the literal-first-token
+reading the nesting is false, and the counterexample is a fire that would be
+*lost*: `env git clean -fd gh repo delete .` resolves to `git`, matches
+`git-clean`, and a literal-token gate would instead see `env`, speculate, and
+fire on `git clean`'s own pathspecs. The margin above the floor is unmeasured. `git grep git push --force` is
 the worked example — it matches no entry today (verified `allow`), so the argv[0]
 gate silenced it while the adopted gate speculates on it and warns.
 
@@ -225,6 +243,10 @@ Two consequences, both binding on the implementation:
 
 1. **Re-measure both corpora under the adopted gate before merge.** This is the
    Decision 8 / warn-storm STOP, and the argv[0]-gated run does not discharge it.
+   Report the **unit**: the existing figures count lines (1,144 and 79), while a
+   per-segment gate runs once per non-matching segment, so a line's chance of
+   firing compounds with its segment count. A successor reported per segment is
+   not comparable to "21 of 79" unless it says so.
 2. **The ~64-start cap is itself an unmeasured warn source.** Past the cap the
    warn is emitted unconditionally rather than skipped — fail-loud, deliberately
    — but nothing here measures how many real command lines carry more than 64
@@ -280,19 +302,24 @@ the following token** (`nsenter -S /bin/echo hi` and `unshare -S /bin/echo hi`
 each answer `failed to parse uid: '/bin/echo'`). The behaviours agree; the two
 help texts do not, and nsenter's contradicts its own binary. **A flag's
 documentation is therefore not a source for this table — only probing the
-installed binary is**. gh-299 is the in-repo proof that any other derivation drifts:
-it enumerated git's own `handle_options` and called the resulting nine-flag sweep
-"bounded and complete for git", and the shipped registry carries **ten** —
-`--shallow-file` was a live force-push bypass beyond that complete enumeration,
-and the test guarding it now re-derives the classification by probing the
-installed git (`TestGitGlobalValueFlagsMatchThisGit`) instead of asserting a list.
+installed binary is**. gh-299 is the in-repo proof, recorded in `gitglobals_test.go`:
+the first cut of git's value-flag list was taken from the bug report and "was
+wrong three ways" — it omitted `--shallow-file`, a live force-push bypass present
+in git since 1.9, and counted `--exec-path` and `--super-prefix` as value-taking
+when neither is. **It totalled nine either way, so a size assertion certified the
+wrong list as complete.** The test guarding it now re-derives the classification
+by probing the installed git (`TestGitGlobalValueFlagsMatchThisGit`).
 
-**That rule condemns rows of this very table.** The evidence column shows a probe
-for `nsenter -S`, `nsenter -m`, `unshare -S`, `unshare -m`, `unshare -w`, `chrt
--f`, `taskset -c`, `chroot --userspec` and `runuser -u`; the remaining letters in
-the `unshare` and `nsenter` lists are read from `--help`, which is exactly the
-source the rule rules out. They are recorded as **unprobed** and must be probed
-when part B lands, not carried across as verified.
+**That rule condemns rows of this very table.** Probed, with the run shown:
+`nsenter -S` and `nsenter -m`, `unshare -m`, `unshare -r`, `unshare -w`, `chrt
+-f`, `taskset -c`, `chroot --userspec` (the `unshare -S` probe is in the prose
+below the table rather than in its evidence column). **Not probed**: every other
+letter in the `unshare` and `nsenter` lists, which is read from `--help` — the
+source this rule rules out — and `runuser -u`, whose evidence line records an
+`abcd guard` verdict (`runuser -u bob -- git push --force` is a silent allow),
+which establishes abcd's behaviour and says nothing about whether `-u` consumes
+its value. All of those must be probed when part B lands, not carried across as
+verified.
 
 That is the strongest argument that a
 per-wrapper flag table is a standing maintenance liability.

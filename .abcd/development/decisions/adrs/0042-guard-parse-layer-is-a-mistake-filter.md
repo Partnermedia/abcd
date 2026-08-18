@@ -49,13 +49,15 @@ renders `-S/--setuid` as optional-argument and `unshare --help` renders the same
 letter in the same package at the same version as required-argument — yet both
 binaries consume the following token, so nsenter's help contradicts its own
 parser. A per-wrapper flag table can therefore only be derived by probing the
-installed binary. gh-299 is the in-repo proof that a table derived any other way
-drifts: it enumerated git's own `handle_options` and declared the resulting
-nine-flag sweep "bounded and complete for git", and the shipped registry today
-carries **ten** — `--shallow-file` was a live force-push bypass beyond that
-complete enumeration, which is why the test guarding it now re-derives the
-classification by probing the installed git rather than asserting a list. The
-grammar differs again on macOS.
+installed binary, and gh-299 is the in-repo proof, recorded in
+`gitglobals_test.go`: the first cut of git's value-flag list was taken from the
+bug report and "was wrong three ways" — it omitted `--shallow-file`, a live
+force-push bypass present in git since 1.9, and counted `--exec-path` and
+`--super-prefix` as value-taking when neither is. **It totalled nine either way,
+so a size assertion certified the wrong list as complete.** A completeness check
+that passes on a list wrong in both directions is the strongest available
+argument that only probing the installed binary settles this. The grammar differs
+again on macOS.
 
 **Every vendor shipping this control documents it as steering, not enforcement.**
 [Claude Code][cc-permissions] calls argument-constraining patterns "fragile" and
@@ -93,11 +95,23 @@ replaced by two tiers:**
 
 - **Tier 1 — position-anchored, blocks.** A registry entry matched at command
   position after stepping known wrappers. Precise, and the only tier that blocks.
-- **Tier 2 — position-agnostic, warns.** When *no entry matched at all*, the
+- **Tier 2 — position-agnostic, warns.** When no entry matched the segment, the
   matcher re-runs speculatively from each later command-position token, and each
   speculative suffix is run through `expandPayloads`. A hit is a loud **warn**,
-  never a block, because an unknown argv[0] is not proof that it execs its
+  never a block, because an unknown command is not proof that it execs its
   arguments.
+- **A synthetic verdict raised from a speculative suffix is demoted to warn, and
+  never dropped.** `expandPayloads` does not only match — it raises its own
+  signals, and two of them are blockers (`envSpecialBlockSignal` for an `env -S`
+  value it cannot prove plain, `depthBlockSignal` past `maxPayloadDepth`). Tier 2
+  reaches them: `env -S git push --force origin main` blocks today while
+  `myrunner env -S git push --force origin main` is allowed, because
+  `splitStringValue` walks only the leading wrapper chain. Honouring such a signal
+  at its own tier would make Tier 2 block on two layers of uncertainty at once —
+  an unknown command that may not exec its arguments, carrying a payload the
+  guard could not read. Discarding it would invent a second silent suppression
+  path inside the fail-safe. Demotion is the only option that keeps both
+  invariants.
 
 Tier 2 converts the unbounded *wrapper* class — a command that execs its own
 arguments — from *silent allow* to *loud warn* without enumerating anything, and
@@ -113,9 +127,15 @@ reintroduce.** The obvious form of speculation is N starts × E entries — exac
 the per-entry splice-and-restart `payload.go` forbids by name. Prototyped, it
 is strictly quadratic: 14.9 s at 6,000 tokens, and roughly **eight hours of CPU
 inside a `PreToolUse` hook** extrapolated to the 1 MiB stdin cap. The required
-shape is therefore binding: command-position starts computed once in an O(N)
-pass, a hard cap of ~64 starts past which the warn is emitted unconditionally
-rather than skipped, short-circuit on first hit, pinned by a benchmark test.
+shape is therefore binding: command-position starts computed once per segment in
+an O(N) pass, a hard cap of ~64 starts **per segment** past which the warn is
+emitted unconditionally rather than skipped, short-circuit on first hit, pinned by
+a benchmark test. Both granularities bound the cost — per segment gives
+Σ 64·len(seg)·E, linear in line length — but they differ in *warn* behaviour, and
+that is why the cap is specified rather than left to the implementation: a
+per-line cap spent early would fire the unconditional warn on every remaining
+segment of a long line, which is a warn-rate decision, and decision 8 makes warn
+rate the STOP.
 
 **4. The Tier 2 gate is "no entry matched *this segment*" — never "argv[0] is
 unknown", and never "no entry matched the command line".** Two separate
@@ -133,11 +153,19 @@ corrections, each with a counterexample:
   a segment that matched nothing is speculated on regardless of what any other
   segment did.
 
-Per-segment is also what makes the false-positive figures below a floor: an
-unknown argv[0] implies no entry matched that segment (entries key on the command
-name), so every fire of the argv[0]-gated prototype is also a fire under the
-adopted gate. The reverse does not hold, which is exactly why the margin is
-unmeasured.
+**"Unknown command" means `commandOf`'s output, never the literal first token.**
+`commandOf` steps wrappers, environment-assignment prefixes and reserved words,
+then takes the basename, and `matchSegment`'s first test is `cmd != p.Command`
+against exactly that value — so `sudo git push --force`, `FOO=bar git push
+--force` and `/usr/bin/git push --force` all match entries despite a first token
+no entry names. The prototype gated on `commandOf`'s output, and with the term
+defined that way the nesting the floor claim rests on is **by construction**: if
+`commandOf` resolves to something no entry names, no entry can match that
+segment, so every prototype fire is also an adopted-gate fire. Under the literal
+reading the nesting is simply false — `env git clean -fd gh repo delete .`
+resolves to `git` and matches `git-clean`, while a literal-token gate would see
+`env`, speculate, and fire on `git clean`'s own pathspecs. The term is defined
+here because that ambiguity makes the difference between a floor and no floor.
 
 **5. Enumeration continues, demoted to an upgrade.** Adding wrapper names lifts a
 case from "loud warn" to "precise block" — better UX and a stronger verdict —
@@ -265,10 +293,15 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   positives. The fail-safe does not extend to the sibling enumerations this ADR's
   own Context table names: a missing *interpreter* name (`fish -c "git push
   --force …"`) and a missing *git value flag* (`git --newglobal X push --force …`)
-  are both still silent allows under Tier 2, because in each the hazard sits
-  inside an opaque token or behind a displaced operand where no speculative start
-  lands on it. The thesis is that a third instance predicts a fourth; this record
-  covers the fourth only if it lands in the wrapper set.
+  are both still silent allows under Tier 2, for two *different* reasons. The
+  interpreter case hides the hazard inside one opaque token that `isShellFamily`
+  will not open, so no start sees it. The git case is worse: a start *does* land
+  on `push --force origin main`, and it resolves to the command `push`, which no
+  entry names — the gh-299 class displaces the operand **after** the
+  command-position boundary, and speculation only ever moves that boundary, so no
+  number of extra starts can reach it. Stating it as "no start lands on it" would
+  invite the repair that cannot work. The thesis is that a third instance predicts
+  a fourth; this record covers the fourth only if it lands in the wrapper set.
 - **Two labels are now wrong and are corrected with part D.** gh-297 and gh-299
   still carry `severity:critical` for a class decision 1 rules out of that
   category. Relabelling them is part of the scope statement's landing, not an
