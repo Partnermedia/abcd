@@ -43,10 +43,23 @@ const (
 // and the later host-delegated interpretation adds the field when it adds a
 // reader (wired-or-it-isn't-done).
 type payloadSignal struct {
+	// id is the reserved entry id the verdict is reported under. Empty means
+	// syntheticEntryID — the execute-a-string family's own voice. Tier 2 sets it to
+	// speculativeEntryID, because adr-42 decision 2 requires a reader to be able to
+	// tell a speculative verdict from a literal one.
+	id        string
 	verdict   Verdict
 	family    string
 	reason    string
 	successor string
+}
+
+// entryID is the id this signal is reported under.
+func (s payloadSignal) entryID() string {
+	if s.id == "" {
+		return syntheticEntryID
+	}
+	return s.id
 }
 
 // expandPayloads expands every execute-a-string payload in segs once, appending

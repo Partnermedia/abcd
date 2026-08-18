@@ -1,0 +1,83 @@
+# The adversarial corpus for the guard's Tier 2 fail-safe (adr-42, iss-272).
+#
+# Every line is `<expectation>\t<command line>`. The expectations are:
+#
+#   quiet  the fail-safe must NOT fire. A hazard named inside a quoted argument,
+#          inside a path, or as data is not a hazard.
+#   warn   the fail-safe SHOULD fire. A hazard reached through a launcher the
+#          wrapper table does not name — the class iss-272 recorded as silent.
+#   block  Tier 1 matches at command position; Tier 2 never runs.
+#   fp     the fail-safe fires and should not. These are ACCEPTED false
+#          positives, pinned so the shape stays visible and a change in either
+#          direction shows up in a diff rather than in the field.
+#
+# The `fp` lines are the whole cost of this design: unquoted hazard-shaped text
+# in a command line where no entry matched. Quoting silences it. A reader who
+# thinks that cost is too high should read the `warn` block first — that is what
+# the cost buys.
+
+# --- quiet: the hazard is data, not a command -------------------------------
+quiet	echo 'do not run git push --force'
+quiet	rg 'git push --force' docs/
+quiet	git commit -m "ban git push --force"
+quiet	gh issue create --title 'git push --force'
+quiet	grep -rn "gh repo delete" .
+quiet	printf '%s\n' "rm -rf /"
+quiet	sed -i 's/git push --force/git push/' README.md
+quiet	awk '/git push --force/ {print}' log.txt
+quiet	python3 -c "print('git push --force')"
+quiet	perl -e 'print "git push --force"'
+quiet	cat notes/git-push-force.md
+quiet	ls -la gh-repo-delete/
+quiet	git log --grep 'git push --force'
+quiet	echo "rm -rf is dangerous"
+quiet	test -f scripts/gh-repo-delete.sh
+
+# --- quiet: ordinary work, no hazard anywhere -------------------------------
+quiet	make preflight
+quiet	go test ./...
+quiet	npm run build
+quiet	docker ps -a
+quiet	git status --short
+quiet	kubectl get pods -A
+quiet	terraform plan -out=tf.plan
+quiet	rsync -av src/ dest/
+
+# --- warn: the wrapper class iss-272 recorded as silent allows ---------------
+warn	nice git push --force origin main
+warn	nice -n 5 git push --force origin main
+warn	setsid git push --force origin main
+warn	flock /tmp/lock git push --force origin main
+warn	stdbuf -o0 git push --force origin main
+warn	chroot / git push --force origin main
+warn	ionice -c3 git push --force origin main
+warn	eatmydata git push --force origin main
+warn	busybox sh -c "gh repo delete owner/repo"
+
+# --- warn: launchers no list would ever contain -----------------------------
+warn	myrunner git push --force origin main
+warn	parallel git push --force ::: a b
+warn	watch -n1 git push --force origin main
+warn	ssh host git push --force origin main
+warn	docker run img git push --force origin main
+warn	./deploy.sh git push --force origin main
+
+# --- warn: git launches things too, which is why the gate is not argv[0] -----
+warn	git bisect run git push --force origin main
+warn	git submodule foreach git push --force origin main
+
+# --- warn: the per-segment gate, not a per-line one -------------------------
+# A per-line gate would let the matched git-clean disarm the fail-safe for
+# everything after it — a one-token off switch.
+warn	git clean -fd ; nice git push --force origin main
+
+# --- block: Tier 1 still owns what it can see -------------------------------
+block	git push --force origin main
+block	sudo git push --force origin main
+block	xargs -I{} git push --force origin {}
+block	gh repo delete owner/repo
+block	sh -c "git push --force origin main"
+
+# --- fp: accepted false positives, and the exact shape they take ------------
+fp	rg git push --force docs/
+fp	grep -rn gh repo delete .
