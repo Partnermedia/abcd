@@ -130,6 +130,41 @@ const (
 	kindShellWarn
 )
 
+// isShellFamily reports whether cmd is an interpreter whose `-c <string>` runs
+// the string as an ordinary shell command line — the same grammar this package's
+// tokenizer already parses. Membership decides whether the guard DESCENDS into a
+// payload, so a name missing here is a silent allow for every hazard carried
+// inside it.
+//
+// It is one predicate because it was two. The set lived written out at
+// classifySegment and at pipesIntoInterpreter, naming only sh/bash/dash(/eval),
+// so `zsh -c "gh repo delete owner/repo"` — zsh being the default login shell on
+// macOS, one of the two systems this repo's CI runs on — was a confident, silent
+// allow for every bundled blocker. Widening one site and not the other is how a
+// fix reaches some sites and leaves the rest latent, so there is now nowhere to
+// widen but here.
+//
+// SCOPE: this is the INTERPRETER set, not the wrapper set. A command that merely
+// execs another (`nice`, `setsid`, `flock`, `busybox sh`, `su -c`, `script -c`)
+// is handled by `wrappers` in match.go, which this does not touch and which has
+// its own gaps — see iss-272. Do not read "nowhere left to widen" as covering
+// those.
+//
+// These are true siblings of the original set: each runs its `-c` operand with
+// the grammar already parsed, differing only by a name. A different LANGUAGE is
+// not a sibling — `python -c` and `perl -e` carry source this tokenizer cannot
+// read, and their recorded posture is a loud warn rather than a guess.
+//
+// `eval` is not a member: it is a builtin, not an interpreter binary, and carries
+// its own end-of-options rule, so it keeps its own branch.
+func isShellFamily(cmd string) bool {
+	switch cmd {
+	case "sh", "bash", "dash", "zsh", "ksh", "mksh", "ash":
+		return true
+	}
+	return false
+}
+
 // classifySegment reports whether a raw segment is an execute-a-string family
 // member and, if so, what to do with its payload. env -S is checked FIRST, on the
 // raw token chain: env is a registered wrapper whose value-flag walk would
@@ -143,8 +178,8 @@ func classifySegment(s segment) (kind int, family, payload string, trailing []st
 		return kindEnvS, familyEnvS, v, rest, true
 	}
 	cmd, args := commandOf(s)
-	switch cmd {
-	case "sh", "bash", "dash", "eval":
+	switch {
+	case isShellFamily(cmd) || cmd == "eval":
 		switch p, state := shellCPayload(cmd, args); state {
 		case shellFound:
 			return kindShell, familyShell, p, nil, true
@@ -505,8 +540,7 @@ func shellRawUninspectable(payload string) bool {
 func pipesIntoInterpreter(psegs []segment) bool {
 	for _, s := range psegs {
 		cmd, args := commandOf(s)
-		switch cmd {
-		case "sh", "bash", "dash":
+		if isShellFamily(cmd) {
 			if _, state := shellCPayload(cmd, args); state == shellNone {
 				return true
 			}
