@@ -113,6 +113,23 @@ replaced by two tiers:**
   path inside the fail-safe. Demotion is the only option that keeps both
   invariants.
 
+  The demonstrating pair needs the `$` **inside** the quoted `-S` value, where
+  `isPlainCommand` tests it: `env -S 'git push --force $X'` raises the synthetic
+  blocker, and `myrunner env -S 'git push --force $X'` is allowed today. The
+  unquoted `env -S git push --force origin main` is *not* the example — it blocks
+  on the ordinary `git-push-force` entry, because `envInspect` decodes the value
+  and rebuilds the command.
+
+  "Never dropped" binds the **verdict**, which is all the safety argument needs:
+  a demoted signal keeps the line at warn. It cannot bind the reported *message*
+  as `Check` is shaped — the merge keeps only the first synthetic per pool, so a
+  demoted signal either loses the message to an existing `shellUnresolved` or
+  displaces one. Settling that precedence is the implementation's, with one
+  requirement this ADR does set: **a Tier 2 verdict must be distinguishable from
+  a Tier 1 one in what the user is told.** Decision 2's whole rationale is that an
+  unknown command is not proof it execs its arguments, and a reader who cannot
+  tell a speculative warn from a literal one has not been given that.
+
 Tier 2 converts the unbounded *wrapper* class — a command that execs its own
 arguments — from *silent allow* to *loud warn* without enumerating anything, and
 gives the wrapper path the fail-safe the interpreter path already had. It does
@@ -131,7 +148,10 @@ shape is therefore binding: command-position starts computed once per segment in
 an O(N) pass, a hard cap of ~64 starts **per segment** past which the warn is
 emitted unconditionally rather than skipped, short-circuit on first hit, pinned by
 a benchmark test. Both granularities bound the cost — per segment gives
-Σ 64·len(seg)·E, linear in line length — but they differ in *warn* behaviour, and
+Σ 64·len(seg)·E for entry matching, plus the `expandPayloads` call each
+speculative suffix now makes, itself O(line × `maxPayloadDepth`) including a
+re-tokenize; the total stays linear in line length at a constant of 64·2, but the
+benchmark must exercise the payload path or it pins only the cheaper half — but they differ in *warn* behaviour, and
 that is why the cap is specified rather than left to the implementation: a
 per-line cap spent early would fire the unconditional warn on every remaining
 segment of a long line, which is a warn-rate decision, and decision 8 makes warn
@@ -158,10 +178,14 @@ corrections, each with a counterexample:
 then takes the basename, and `matchSegment`'s first test is `cmd != p.Command`
 against exactly that value — so `sudo git push --force`, `FOO=bar git push
 --force` and `/usr/bin/git push --force` all match entries despite a first token
-no entry names. The prototype gated on `commandOf`'s output, and with the term
-defined that way the nesting the floor claim rests on is **by construction**: if
-`commandOf` resolves to something no entry names, no entry can match that
-segment, so every prototype fire is also an adopted-gate fire. Under the literal
+no entry names. With the term defined that way the nesting the floor claim rests on is **by
+construction**: if `commandOf` resolves to something no entry names, no entry can
+match that segment — `matchSegment` tests that first, before every other pattern
+field — so every fire of a gate so defined is also an adopted-gate fire. One half
+of the claim is therefore checkable from `match.go`; the other half, that the
+prototype gated on `commandOf`'s output rather than the first token, is
+**testimony**, since the prototype lived in the gitignored local tier. It becomes
+checkable when the corpora land as committed test data, and not before. Under the literal
 reading the nesting is simply false — `env git clean -fd gh repo delete .`
 resolves to `git` and matches `git-clean`, while a literal-token gate would see
 `env`, speculate, and fire on `git clean`'s own pathspecs. The term is defined
@@ -294,8 +318,10 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   own Context table names: a missing *interpreter* name (`fish -c "git push
   --force …"`) and a missing *git value flag* (`git --newglobal X push --force …`)
   are both still silent allows under Tier 2, for two *different* reasons. The
-  interpreter case hides the hazard inside one opaque token that `isShellFamily`
-  will not open, so no start sees it. The git case is worse: a start *does* land
+  interpreter case hides the hazard inside one opaque token: a start does land on
+  that token, but it resolves to a command name no entry knows and
+  `expandPayloads` will not open it, because `fish` is not in `isShellFamily`.
+  That one *is* repairable by enumeration — it is gh-297's shape. The git case is worse: a start *does* land
   on `push --force origin main`, and it resolves to the command `push`, which no
   entry names — the gh-299 class displaces the operand **after** the
   command-position boundary, and speculation only ever moves that boundary, so no

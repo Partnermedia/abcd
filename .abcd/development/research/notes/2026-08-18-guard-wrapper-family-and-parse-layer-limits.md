@@ -156,12 +156,25 @@ That is all ten verified bypasses from the Problem section, six caught and four
 missed. Running each speculative suffix through `expandPayloads` recovers
 `busybox sh -c` — 7 of 10 — at **zero** additional false positives, but it also
 pulls in that function's own signals, two of which are blockers
-(`envSpecialBlockSignal`, `depthBlockSignal`). Tier 2 reaches them: `env -S git
-push --force origin main` blocks today, while `myrunner env -S git push --force
-origin main` is allowed because `splitStringValue` walks only the leading wrapper
-chain. A speculative suffix must therefore **demote** a synthetic verdict to warn
-rather than honour it (Tier 2 would otherwise block on two layers of uncertainty)
-or drop it (a second silent suppression path inside the fail-safe). The other
+(`envSpecialBlockSignal`, `depthBlockSignal`). Tier 2 reaches them, and the pair
+that shows it needs the `$` **inside** the quoted `-S` value, where
+`isPlainCommand` tests it:
+
+    env -S 'git push --force $X'            → block, execute-string-uninspectable
+    myrunner env -S 'git push --force $X'   → allow
+
+`splitStringValue` walks only the leading wrapper chain, which is why the
+unrecognised argv[0] hides it today. (The unquoted `env -S git push --force
+origin main` is *not* this case — it blocks on the ordinary `git-push-force`
+entry, because `envInspect` decodes the value and rebuilds the command. Easy to
+mistake for the phenomenon.)
+
+A speculative suffix must therefore **demote** a synthetic verdict to warn rather
+than honour it (Tier 2 would otherwise block on two layers of uncertainty) or drop
+it (a second silent suppression path inside the fail-safe). Demotion binds the
+verdict; it cannot bind the reported message, because `Check` keeps only the first
+synthetic signal per pool — see ADR-42 decision 2 for the requirement that falls
+out of that. The other
 three are the exec-string family and need the table below; nothing short of it
 reaches them, because their payload stays one opaque token and `isShellFamily`
 (`payload.go`) does not contain `su`, `runuser` or `script`. **Until that table
@@ -213,10 +226,14 @@ the recommended **per-segment** "no entry matched" gate the figures are a
 `p.Command` against `commandOf`'s output, which steps wrappers, assignment
 prefixes and reserved words and then takes the basename, so `sudo git push
 --force`, `FOO=bar git push --force` and `/usr/bin/git push --force` all match
-entries whose `Command` is `git`. The prototype gated on that same resolved
-command, and under that reading the nesting is **by construction**: a segment
-whose `commandOf` output no entry names cannot be matched by any entry, so every
-prototype fire is also an adopted-gate fire. Under the literal-first-token
+entries whose `Command` is `git`. Under that reading the nesting is **by
+construction** — a segment whose `commandOf` output no entry names cannot be
+matched by any entry, since `matchSegment` tests that before any other pattern
+field — so every fire of a gate so defined is also an adopted-gate fire. That the
+prototype gated on the resolved command rather than the first token is
+**testimony**, not something this record can demonstrate: the prototype lived in
+the gitignored local tier. It becomes checkable when the corpora land as committed
+test data. Under the literal-first-token
 reading the nesting is false, and the counterexample is a fire that would be
 *lost*: `env git clean -fd gh repo delete .` resolves to `git`, matches
 `git-clean`, and a literal-token gate would instead see `env`, speculate, and
@@ -315,7 +332,8 @@ by probing the installed git (`TestGitGlobalValueFlagsMatchThisGit`).
 -f`, `taskset -c`, `chroot --userspec` (the `unshare -S` probe is in the prose
 below the table rather than in its evidence column). **Not probed**: every other
 letter in the `unshare` and `nsenter` lists, which is read from `--help` — the
-source this rule rules out — and `runuser -u`, whose evidence line records an
+source this rule rules out — `chroot --groups`, named in that row's correction but
+absent from its evidence column — and `runuser -u`, whose evidence line records an
 `abcd guard` verdict (`runuser -u bob -- git push --force` is a silent allow),
 which establishes abcd's behaviour and says nothing about whether `-u` consumes
 its value. All of those must be probed when part B lands, not carried across as
