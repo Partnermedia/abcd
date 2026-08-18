@@ -115,17 +115,28 @@ because there is no trust boundary here to fail.
 
 ## What an allow means
 
-An allow means **no registry entry matched** — never that a command is safe. The
-guard reads command names it can see in command position, so a hazard reached any
-other way is not seen:
+An allow means **no registry entry matched** — never that a command is safe.
 
-- a command string handed to an interpreter (`eval`, `sh -c`);
-- one launched through a wrapper outside the known set (`sudo`, `doas`,
-  `command`, `env`, `nohup`, `time`, `xargs`, `timeout`, `exec`);
+Since [adr-42](../../decisions/adrs/0042-guard-parse-layer-is-a-mistake-filter.md)
+a hazard behind a launcher the wrapper table does not name is **not** an allow:
+when no entry matches a segment, the matcher re-runs from each later
+command-position token, and a hazard found there is a loud warn naming the entry
+it matched. Never a block — the guard cannot tell whether an unrecognised program
+runs the rest of the line, and `rg git push --force docs/` is a search. That is
+the fail-safe; the wrapper names below are what upgrade a warn to a precise
+refusal.
+
+What an allow still does not see is a hazard that never reaches command position
+at all:
+
+- a command string handed to an interpreter (`eval`, `sh -c`) — read, in fact,
+  along with the `su -c` / `runuser -c` / `script -c` / `flock -c` family; what
+  is not read is a payload the tokenizer cannot resolve, which warns;
 - one launched through a known wrapper carrying a value-taking flag the matcher's
   per-wrapper table does not name: `sudo -u bob <hazard>` is seen, the bundled
-  short form `sudo -Hu bob <hazard>` is not (`bob` is read as the command). The
-  miss is a non-match, never a false block;
+  short form `sudo -Hu bob <hazard>` reaches only the fail-safe's warn, not the
+  entry that names it (`bob` is read as the command). The miss is a non-match,
+  never a false block;
 - an API path an entry names by its ROOT segment when the host serves that API
   under a prefix: a GitHub Enterprise Server install mounts the same endpoints
   under `/api/v3/`, so `gh api -X DELETE https://ghe.example/api/v3/repos/o/r`
@@ -138,7 +149,13 @@ other way is not seen:
 - a dangerous form no entry describes.
 
 A wrapper's own arguments are stepped over with it, including the mandatory
-operand in `timeout DURATION COMMAND` (iss-148).
+operand in `timeout DURATION COMMAND` (iss-148) and in `chrt PRIORITY`,
+`taskset MASK`, `flock FILE`, `chroot DIR`. The set is `sudo doas command env
+nohup time xargs timeout exec nice setsid stdbuf ionice eatmydata proxychains
+chrt taskset unshare nsenter flock chroot runuser busybox` — and it is an
+upgrade, not the safety property: every per-wrapper flag list is derived by
+probing the installed binary rather than by reading its `--help`, which
+contradicts its own parser often enough to have cost a live bypass (gh-299).
 
 Coverage is what the registry names. The registry grows from reality: a
 facilitator who sees something scary captures it, and recurring captures are

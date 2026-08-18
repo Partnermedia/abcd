@@ -432,13 +432,16 @@ func (r Registry) Check(command string) (Decision, error) {
 	if !blockPool && !warnPool {
 		return Decision{Verdict: VerdictAllow}, nil
 	}
+	// Every entry-less id that CONTRIBUTED is listed, not just the two that won
+	// their pools. The merge keeps one signal per pool for the message, which is
+	// right — the first is as good a lesson as the fifth — but Matches is the
+	// record of what fired, and a Tier 2 hit that loses the slot to an unrelated
+	// payload warn would vanish from it entirely. That is exactly what the warn
+	// rate is measured from, so the blind spot would have hidden itself.
 	matches := append(append([]string(nil), blockers...), warns...)
-	for _, sig := range []*payloadSignal{synBlock, synWarn} {
-		if sig == nil {
-			continue
-		}
-		if !containsString(matches, sig.entryID()) {
-			matches = append(matches, sig.entryID())
+	for i := range signals {
+		if id := signals[i].entryID(); !containsString(matches, id) {
+			matches = append(matches, id)
 		}
 	}
 

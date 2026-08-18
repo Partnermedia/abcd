@@ -117,6 +117,15 @@ quiet	script -q /dev/null
 quiet	flock /tmp/lock true
 quiet	echo "su -c 'gh repo delete owner/repo'"
 
+# --- quiet: a `-c` that belongs to the LAUNCHED command, not to the verb ------
+# Verified against util-linux 2.39.3: `flock /tmp/lock /bin/echo -c "..."` prints
+# its arguments, so nothing runs the string. Reading it as a payload was both a
+# false block and — because the segment then looked understood — a one-token off
+# switch for the fail-safe.
+quiet	flock /tmp/lock /bin/echo -c "git push --force origin main"
+quiet	flock -w 5 /tmp/lock /bin/echo --command "git push --force origin main"
+warn	flock /tmp/lock kubectl exec -c app pod -- gh repo delete owner/repo
+
 # --- fp: accepted false positives, and the exact shape they take ------------
 fp	rg git push --force docs/
 fp	grep -rn gh repo delete .

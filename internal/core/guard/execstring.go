@@ -50,6 +50,28 @@ var execStringVerbs = map[string][]string{
 	"flock":   {"-c", "--command"},
 }
 
+// execStringCommandOperand names, per verb, how many leading non-flag operands
+// the verb owns before the tokens start belonging to the COMMAND it launches.
+// Past that point a `-c` is the launched command's flag, not this verb's.
+//
+// Only flock has one, and getting it wrong is not academic:
+// `flock /tmp/lock /bin/echo -c "git push --force origin main"` hands `-c` and
+// the string to /bin/echo as ordinary arguments — verified, it prints them — so
+// reading that string as a payload is a FALSE BLOCK on a command that pushes
+// nothing. Worse, classifying the segment as payload-carrying also switched the
+// Tier 2 fail-safe off for it, which made a `flock` prefix a one-token off switch
+// for anything behind it.
+//
+// The others genuinely permute and are left unbounded on purpose:
+// `su root /bin/echo -c 'echo SEVEN'` prints SEVEN, so su parsed the `-c` after
+// its operand and ran the string. su's trailing operands are positional
+// parameters handed to that shell, not a command line of their own.
+var execStringCommandOperand = map[string]int{
+	// `flock [options] FILE -c CMD` or `flock [options] FILE CMD [args...]`.
+	// After FILE, the next non-flag token opens the launched command.
+	"flock": 1,
+}
+
 // execStringOtherValueFlags names each verb's OWN flags that consume the
 // following token, so the scan steps over a value instead of reading it as the
 // payload: `su -s /bin/sh -c <hazard>` carries the shell in -s, not the command.
@@ -84,7 +106,8 @@ func execStringPayload(tokens []string) (verb, value string, resolved, found boo
 		}
 		name := path.Base(tok)
 		if flags, ok := execStringVerbs[name]; ok {
-			if v, resolved, found := scanExecString(tokens[i+1:], flags, execStringOtherValueFlags[name]); found {
+			if v, resolved, found := scanExecString(tokens[i+1:], flags,
+				execStringOtherValueFlags[name], execStringCommandOperand[name]); found {
 				return name, v, resolved, true
 			}
 			// This verb carries no command string: `su - bob` is a login shell, not
@@ -105,19 +128,31 @@ func execStringPayload(tokens []string) (verb, value string, resolved, found boo
 
 // scanExecString looks through ONE verb's tokens for its payload flag.
 //
-// It does not stop at the first non-flag token, because these grammars put the
+// It does not stop at the FIRST non-flag token, because these grammars put the
 // flag after an operand (`flock FILE -c CMD`, `su USER -c CMD`) and getopt
-// permutes. It DOES stop at `--`: after end-of-options the tokens belong to the
-// command being launched, which is the wrapper walk's business — `runuser -u bob
-// -- git push --force` is a git, not a payload.
-func scanExecString(tokens, payloadFlags, valueFlags []string) (value string, resolved, found bool) {
+// permutes. It stops in two places instead:
+//
+//   - at `--`, after which the tokens belong to the command being launched —
+//     `runuser -u bob -- git push --force` is a git, not a payload, and the
+//     wrapper walk already owns it;
+//   - past commandOperandAfter operands, when the verb declares one, because the
+//     launched command's own flags are none of this scan's business.
+func scanExecString(tokens, payloadFlags, valueFlags []string, commandOperandAfter int) (value string, resolved, found bool) {
+	operands := 0
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
 		if tok == "--" {
 			return "", false, false
 		}
 		if !strings.HasPrefix(tok, "-") || tok == "-" {
-			continue // an operand: the user, the lock file, the typescript
+			// An operand: the user, the lock file, the typescript — or, past this
+			// verb's own operands, the command it launches, whose flags are none of
+			// this scan's business.
+			operands++
+			if commandOperandAfter > 0 && operands > commandOperandAfter {
+				return "", false, false
+			}
+			continue
 		}
 
 		// Glued long form: --command=<value>.

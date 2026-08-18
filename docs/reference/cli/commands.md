@@ -387,11 +387,14 @@ sandbox, a permission system, a restricted shell — with this guard in front
 of it to teach, never in place of it.
 
 An allow means no registry entry matched — it is never a statement that a
-command is safe. The guard reads command names it can see in command
-position, so a hazard reached any other way is not seen: one launched
-through a wrapper outside the known set, one launched through a known
+command is safe. A hazard behind a launcher the guard does not recognise is
+a WARN naming the entry it matched, rather than an allow, because the guard
+cannot tell whether that program runs the rest of the line. What an
+allow still does not see is a hazard that never reaches command position at
+all: one launched through a known
 wrapper carrying a value-taking flag the guard does not name (`sudo -u bob
-<hazard>` is seen, the bundled short form `sudo -Hu bob <hazard>` is not),
+<hazard>` is seen; the bundled short form `sudo -Hu bob <hazard>` reaches
+only the warn, not the entry that names it),
 one whose API path an entry names by its ROOT segment but the host serves
 under a prefix (a GitHub Enterprise Server install mounts the same endpoints
 under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside

@@ -306,8 +306,10 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   implementation and now live in `internal/core/guard/testdata/corpus/`: 961
   command lines mined from this repository's prose, Makefile, scripts and
   workflows, on which Tier 2 fires **zero** times, and a labelled adversarial
-  corpus carrying all four directions (23 quiet, 18 the fail-safe must catch, 5
-  Tier 1 blocks, 2 accepted false positives). The real implementation is
+  corpus carrying all four directions. The counts move as parts B and C upgrade
+  warns to precise blocks, so the corpus file and its test's own log line are the
+  figure — not a number copied into this record, which is how the first version of
+  this paragraph came to disagree with the data it was discharging. The real implementation is
   substantially quieter than the argv[0]-gated prototype predicted, because a
   hazard inside a quoted argument or a path never reaches command position at
   all. The ceiling is enforced by a test, and raising it is the visible cost of

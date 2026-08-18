@@ -19,17 +19,21 @@ import (
 // message. A rate measured once and written down is a claim; a corpus in the
 // repository is a claim the next change has to keep true.
 
-// maxRepoCorpusWarnRate is the ceiling on Tier 2 fires across command lines mined
-// from this repository's own prose, Makefile, scripts and workflows. It is
-// deliberately just above the measured rate: this corpus is the closest available
-// stand-in for "commands people actually write here", and the fail-safe is only
-// affordable while it stays silent on them.
+// maxRepoCorpusFires is the ceiling on Tier 2 fires across command lines mined
+// from this repository's own prose, Makefile, scripts and workflows. This corpus
+// is the closest available stand-in for "commands people actually write here",
+// and the fail-safe is only affordable while it stays silent on them.
 //
-// It is not zero because a doc line that legitimately demonstrates a hazard
-// SHOULD fire, and a headroom of a few lines is not worth failing a build over.
-// If this ceiling is ever raised to accommodate a change, that change is making
-// the guard noisier and needs to say so.
-const maxRepoCorpusWarnRate = 0.01
+// An absolute count, not a rate: a 1% rate over ~960 lines permits NINE fires
+// against a measured zero, which is not "just above the measured rate" however
+// the comment describes it, and it would let a change take the guard from silent
+// to noticeably noisy without failing anything. Two is headroom for a doc line
+// that legitimately demonstrates a hazard.
+//
+// Raising this is always allowed and never quiet: it is the visible price of a
+// noisier guard, and the test logs every fire so the diff shows what started
+// firing.
+const maxRepoCorpusFires = 2
 
 // TestSpeculationWarnRateOnRepoCorpus measures Tier 2 against real command lines
 // from this repository. Every fire is logged, so raising the ceiling is never the
@@ -61,14 +65,13 @@ func TestSpeculationWarnRateOnRepoCorpus(t *testing.T) {
 	if checked == 0 {
 		t.Fatal("no corpus line was checked: the corpus or the tokenizer is broken")
 	}
-	rate := float64(speculative) / float64(checked)
 	t.Logf("repo corpus: %d lines, %d checked, %d unparsable, %d Tier 2 fires (%.3f%%)",
-		len(lines), checked, unparsable, speculative, rate*100)
+		len(lines), checked, unparsable, speculative, float64(speculative)/float64(checked)*100)
 
-	if rate > maxRepoCorpusWarnRate {
-		t.Fatalf("Tier 2 fires on %.2f%% of real command lines, over the %.2f%% ceiling.\n"+
+	if speculative > maxRepoCorpusFires {
+		t.Fatalf("Tier 2 fires on %d of %d real command lines, over the ceiling of %d.\n"+
 			"This is the warn-storm STOP, not a threshold to raise: a fail-safe people learn to ignore is not a fail-safe.",
-			rate*100, maxRepoCorpusWarnRate*100)
+			speculative, checked, maxRepoCorpusFires)
 	}
 }
 

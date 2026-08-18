@@ -89,7 +89,7 @@ var wrapperValueFlags = map[string][]string{
 	//     would make the walk step over the COMMAND and create a miss that does
 	//     not exist today.
 	//   - `setsid -c` is `--ctty`, not a payload flag, and takes nothing.
-	"nice":   {"-n"},
+	"nice":   {"-n", "--adjustment"},
 	"stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
 	"ionice": {"-c", "-n", "--class", "--classdata"},
 	"chrt":   {"-T", "-P", "-D", "--sched-runtime", "--sched-period", "--sched-deadline"},
@@ -104,7 +104,7 @@ var wrapperValueFlags = map[string][]string{
 	"nsenter": {"-t", "-S", "-G", "--target", "--setuid", "--setgid"},
 	"chroot":  {"--userspec", "--groups"},
 	"flock":   {"-w", "-E", "--timeout", "--wait", "--conflict-exit-code"},
-	"runuser": {"-u", "-g", "-G", "--user", "--group", "--supp-group"},
+	"runuser": {"-u", "-g", "-G", "-s", "-w", "--user", "--group", "--supp-group", "--shell", "--whitelist-environment"},
 	// `setsid`, `eatmydata`, `proxychains` and `taskset` take no value flags.
 }
 
@@ -138,16 +138,6 @@ var reserved = map[string]bool{
 	"until": true,
 	"{":     true,
 	"!":     true,
-}
-
-// matchesAny reports whether the pattern fires on any segment of the candidate.
-func matchesAny(p Pattern, segs []segment) bool {
-	for i, s := range segs {
-		if matchSegment(p, s) && (p.AfterCD == nil || !*p.AfterCD || precededByCD(segs[:i], s.chain)) {
-			return true
-		}
-	}
-	return false
 }
 
 // precededByCD reports whether an earlier command in the SAME chain is a `cd`.

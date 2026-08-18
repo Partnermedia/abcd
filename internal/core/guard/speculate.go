@@ -62,7 +62,44 @@ const (
 	// the registry has. When a window truncates, the segment warns anyway (see
 	// speculativeCapSignal), so the coverage limit is never a silent one.
 	maxSpeculativeWindow = 512
+
+	// maxSpeculativeExpansionBytes bounds the payload text one segment's
+	// speculation will re-read, and it is the third bound because the first two
+	// were not enough.
+	//
+	// maxSpeculativeWindow caps the NUMBER of tokens a start looks at; it says
+	// nothing about their SIZE, and an execute-a-string payload is a single token
+	// of unbounded length. Wrappers are deliberately not skipped as starts, so
+	// `myrunner env env … (x64) sh -c '<1 MiB>'` gives 64 starts that all resolve
+	// to the same `sh`, and each one re-tokenized the whole payload: 23.6s
+	// measured at the stdin cap, against 31ms before the change.
+	//
+	// adr-42 decision 3 said this in advance — "the benchmark must exercise the
+	// payload path, or it pins only the cheaper half" — and the first bound test
+	// pinned the cheaper half.
+	//
+	// The budget is per CHECK, not per segment, which is the second thing measuring
+	// corrected: a per-segment budget left 1,200 short segments each paying it in
+	// full, and 8.4s at 620 KB. Exhausting it warns through the same fail-loud path
+	// as the other two bounds, so a truncated search is never a quiet one.
+	maxSpeculativeExpansionBytes = 64 << 10
+
+	// maxSpeculativeStartsPerCheck bounds the starts across the WHOLE command line,
+	// because maxSpeculativeStarts is per segment and the number of segments is not
+	// bounded at all. 1,200 short segments, each entitled to its own 64 starts,
+	// measured 1.8s at 620 KB with the byte budget already in place — the same
+	// mistake as the token-count window, one level up: every per-item bound needs a
+	// whole-input bound behind it.
+	maxSpeculativeStartsPerCheck = 1024
 )
+
+// speculationBudget is the work one Check may spend on Tier 2. Both quantities
+// are whole-line, and running either down makes the remaining segments warn
+// rather than fall quiet.
+type speculationBudget struct {
+	starts int
+	bytes  int
+}
 
 // reservedEntryIDs are ids the guard speaks in its own voice. A registry entry
 // claiming one would be indexed out of Registry.Entries by a synthetic winner
@@ -81,6 +118,12 @@ var reservedEntryIDs = []string{syntheticEntryID, speculativeEntryID}
 // wrapped force-push silent.
 func (r Registry) speculate(segs []segment, matched []bool, ids []string) []payloadSignal {
 	var out []payloadSignal
+	// One budget for the whole command line: a segment cannot buy itself more work
+	// by being one of many.
+	budget := speculationBudget{
+		starts: maxSpeculativeStartsPerCheck,
+		bytes:  maxSpeculativeExpansionBytes,
+	}
 	for i, s := range segs {
 		if matched[i] {
 			continue
@@ -93,7 +136,7 @@ func (r Registry) speculate(segs []segment, matched []bool, ids []string) []payl
 		if _, _, _, _, carriesPayload := classifySegment(s); carriesPayload {
 			continue
 		}
-		if sig, ok := r.speculateSegment(segs[:i], s, ids); ok {
+		if sig, ok := r.speculateSegment(segs[:i], s, ids, &budget); ok {
 			out = append(out, sig)
 		}
 	}
@@ -102,8 +145,12 @@ func (r Registry) speculate(segs []segment, matched []bool, ids []string) []payl
 
 // speculateSegment re-matches one segment from each of its later command
 // positions, short-circuiting on the first hit.
-func (r Registry) speculateSegment(before []segment, s segment, ids []string) (payloadSignal, bool) {
+func (r Registry) speculateSegment(before []segment, s segment, ids []string, budget *speculationBudget) (payloadSignal, bool) {
 	starts, capped := speculativeStarts(s.tokens)
+	if len(starts) > budget.starts {
+		starts, capped = starts[:budget.starts], true
+	}
+	budget.starts -= len(starts)
 	truncated := false
 	for _, start := range starts {
 		tokens := s.tokens[start:]
@@ -117,7 +164,17 @@ func (r Registry) speculateSegment(before []segment, s segment, ids []string) (p
 		// reached: stepping busybox leaves `sh -c …` in command position, and the
 		// interpreter path takes it from there. This also imports expandPayloads'
 		// own signals, which is why they are demoted below rather than honoured.
-		expanded, sigs := expandPayloads([]segment{cand})
+		//
+		// Charged against the byte budget, because this is the expensive half: the
+		// expansion re-tokenizes every payload it finds, and the same payload is
+		// reachable from many starts.
+		expanded, sigs := []segment{cand}, []payloadSignal(nil)
+		if size := segmentBytes(cand); size <= budget.bytes {
+			budget.bytes -= size
+			expanded, sigs = expandPayloads([]segment{cand})
+		} else {
+			truncated = true
+		}
 
 		for _, id := range ids {
 			e := r.Entries[id]
@@ -169,20 +226,45 @@ func (r Registry) speculateSegment(before []segment, s segment, ids []string) (p
 func speculativeStarts(tokens []string) ([]int, bool) {
 	var starts []int
 	for i := 1; i < len(tokens); i++ {
-		tok := tokens[i]
-		if tok == "" || tok == "-" {
-			continue
-		}
-		if strings.HasPrefix(tok, "-") || isAssignment(tok) || reserved[tok] {
+		if !eligibleStart(tokens[i]) {
 			continue
 		}
 		starts = append(starts, i)
 		if len(starts) == maxSpeculativeStarts {
-			// Truncated: report it so the caller can warn instead of falling quiet.
-			return starts, i+1 < len(tokens)
+			// Report the cap only when an ELIGIBLE start was actually dropped. "Some
+			// tokens remain" is the wrong test: the tokens this loop skips are skipped
+			// losslessly, so trailing flags would otherwise fire the unconditional
+			// "too long to inspect" warn on a line where nothing was missed — and warn
+			// rate is the declared STOP, so a spurious cap warn is the direction that
+			// costs.
+			for j := i + 1; j < len(tokens); j++ {
+				if eligibleStart(tokens[j]) {
+					return starts, true
+				}
+			}
+			return starts, false
 		}
 	}
 	return starts, false
+}
+
+// eligibleStart reports whether a token is worth re-matching from.
+func eligibleStart(tok string) bool {
+	if tok == "" || tok == "-" {
+		return false
+	}
+	return !strings.HasPrefix(tok, "-") && !isAssignment(tok) && !reserved[tok]
+}
+
+// segmentBytes is the segment's total token size, the quantity the expansion
+// budget is spent in. Token COUNT is the wrong unit here: one token can carry a
+// megabyte of payload.
+func segmentBytes(s segment) int {
+	n := 0
+	for _, tok := range s.tokens {
+		n += len(tok)
+	}
+	return n
 }
 
 // speculativeSignal is the Tier 2 warn for a hazard found behind an unrecognised

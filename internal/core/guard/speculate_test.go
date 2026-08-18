@@ -92,6 +92,16 @@ func TestTier2IsDistinguishableFromTier1(t *testing.T) {
 	if lit.Verdict != VerdictWarn || spec.Verdict != VerdictWarn {
 		t.Fatalf("both should warn; literal=%q speculative=%q", lit.Verdict, spec.Verdict)
 	}
+	// Against the SYNTHETIC id, not the registry one. Comparing a synthetic id to
+	// `git-clean` can never be equal, so that version of this assertion held
+	// whatever the code did — it passed with the Tier 2 id removed entirely.
+	if spec.EntryID != speculativeEntryID {
+		t.Fatalf("EntryID = %q, want %q: a speculative verdict must not be reported as an ordinary payload one",
+			spec.EntryID, speculativeEntryID)
+	}
+	if spec.EntryID == syntheticEntryID {
+		t.Fatal("a speculative warn is reported under the generic execute-a-string id, so a reader cannot tell it is a guess")
+	}
 	if spec.EntryID == lit.EntryID {
 		t.Fatal("a speculative warn is reported identically to a literal one")
 	}
@@ -127,6 +137,34 @@ func TestSpeculationIsGatedPerSegment(t *testing.T) {
 	if !sawSpeculative {
 		t.Errorf("prefixing a warn-tier command disarmed the fail-safe: %v\n"+
 			"the gate must be per segment, not per command line", d.Matches)
+	}
+}
+
+// TestSpeculationSurvivesAnUnrelatedPayloadWarn keeps the fail-safe's fire in the
+// report. The merge keeps only the FIRST synthetic signal per severity pool for
+// the message, so a Tier 2 hit that arrives after an unrelated payload warn used
+// to vanish from Matches entirely — and Matches is what the warn-rate gate counts,
+// so the blind spot hid itself.
+func TestSpeculationSurvivesAnUnrelatedPayloadWarn(t *testing.T) {
+	d := verdictOf(t, `sh -c "$(echo hi)" ; myrunner git push --force origin main`)
+	if d.Verdict != VerdictWarn {
+		t.Fatalf("verdict = %q, want %q", d.Verdict, VerdictWarn)
+	}
+	var sawPayloadWarn, sawSpeculative bool
+	for _, id := range d.Matches {
+		switch id {
+		case syntheticEntryID:
+			sawPayloadWarn = true
+		case speculativeEntryID:
+			sawSpeculative = true
+		}
+	}
+	if !sawPayloadWarn {
+		t.Errorf("the payload warn is missing from %v", d.Matches)
+	}
+	if !sawSpeculative {
+		t.Errorf("the fail-safe fired and is absent from %v:\n"+
+			"an unrelated warn took its slot, so the user is never told about the force-push", d.Matches)
 	}
 }
 
@@ -200,6 +238,42 @@ func TestSpeculationCapWarnsRatherThanSkipping(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(d.Message), "too long") {
 		t.Errorf("the cap warn does not say why it fired: %q", d.Message)
+	}
+}
+
+// TestSpeculationTruncationWarnsRatherThanSkipping pins the OTHER fail-loud
+// path, which the cap test does not reach. A single start whose suffix is longer
+// than the window is truncated without the start cap ever being hit: the guard
+// stopped looking, and stopping quietly is the silent allow this file removes.
+func TestSpeculationTruncationWarnsRatherThanSkipping(t *testing.T) {
+	// One eligible start (`alpha`), then a long tail of flags — flags are skipped
+	// losslessly as starts, so the start cap is never reached, but the window
+	// truncates the suffix.
+	long := "myrunner alpha " + strings.Repeat("-x ", maxSpeculativeWindow+64)
+	d := verdictOf(t, long)
+	if d.Verdict != VerdictWarn {
+		t.Fatalf("verdict = %q, want %q: a suffix the guard stopped reading was waved through", d.Verdict, VerdictWarn)
+	}
+	if !strings.Contains(strings.ToLower(d.Message), "too long") {
+		t.Errorf("the truncation warn does not say why it fired: %q", d.Message)
+	}
+}
+
+// TestSpeculationRespectsAfterCD keeps the fail-safe from inventing a hazard that
+// the registry only names in context. `rm -rf *` is a blocker only after a `cd`,
+// because that is the shape that eats a working tree when the cd fails; without
+// the guard clause a speculative match would fire on every `rm -rf *`.
+func TestSpeculationRespectsAfterCD(t *testing.T) {
+	if d := verdictOf(t, "myrunner rm -rf *"); d.Verdict != VerdictAllow {
+		t.Errorf("verdict = %q, want %q: the after_cd condition was dropped, so an ordinary rm now warns",
+			d.Verdict, VerdictAllow)
+	}
+	d := verdictOf(t, "cd scratch && myrunner rm -rf *")
+	if d.Verdict == VerdictAllow {
+		t.Fatalf("the cd-then-rm shape behind an unrecognised launcher is silent")
+	}
+	if !firedTier2(d) {
+		t.Errorf("the fail-safe did not fire on %v; after_cd context is lost across the speculative boundary", d.Matches)
 	}
 }
 

@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+// flatten collapses whitespace and markdown emphasis so a claim can be found in
+// prose that wraps it across a line or bolds half of it. The surfaces are written
+// for their readers, not for this test.
+func flatten(s string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("**", "", "*", "", "`", "").Replace(strings.ToLower(s))), " ")
+}
+
 // guardScopeClaim is the scope statement adr-42 requires the guard to make about
 // itself. The guard is a MISTAKE FILTER: it catches accidents and casual evasion
 // by a cooperating agent, and it does not withstand an author trying to get a
@@ -48,7 +55,7 @@ func TestGuardCheckHelpStatesItsScope(t *testing.T) {
 		t.Fatalf("resolved %q, not the guard check verb", check.Name())
 	}
 	for _, want := range []string{guardScopeClaim, guardScopeSuccessor} {
-		if !strings.Contains(strings.ToLower(check.Long), want) {
+		if !strings.Contains(flatten(check.Long), want) {
 			t.Errorf("guard check --help does not state its scope: missing %q\n"+
 				"adr-42 decision 1: the parse layer says what it is, on its own surfaces", want)
 		}
@@ -64,9 +71,14 @@ func TestEveryGuardSurfaceStatesItsScope(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cannot read guard surface %s: %v", path, err)
 		}
-		if !strings.Contains(strings.ToLower(string(body)), guardScopeClaim) {
-			t.Errorf("%s does not state the guard's scope: missing %q\n"+
-				"adr-42 decision 1 and part D: every guard surface carries it", path, guardScopeClaim)
+		lower := flatten(string(body))
+		for _, want := range []string{guardScopeClaim, guardScopeSuccessor} {
+			if !strings.Contains(lower, want) {
+				t.Errorf("%s does not state the guard's scope: missing %q\n"+
+					"adr-42 decision 1 and part D: every surface carries the claim AND where the "+
+					"enforcing control lives — naming a limit without a successor is half a statement",
+					path, want)
+			}
 		}
 	}
 }

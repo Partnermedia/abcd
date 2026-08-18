@@ -59,11 +59,14 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"sandbox, a permission system, a restricted shell — with this guard in front\n" +
 			"of it to teach, never in place of it.\n\n" +
 			"An allow means no registry entry matched — it is never a statement that a\n" +
-			"command is safe. The guard reads command names it can see in command\n" +
-			"position, so a hazard reached any other way is not seen: one launched\n" +
-			"through a wrapper outside the known set, one launched through a known\n" +
+			"command is safe. A hazard behind a launcher the guard does not recognise is\n" +
+			"a WARN naming the entry it matched, rather than an allow, because the guard\n" +
+			"cannot tell whether that program runs the rest of the line. What an\n" +
+			"allow still does not see is a hazard that never reaches command position at\n" +
+			"all: one launched through a known\n" +
 			"wrapper carrying a value-taking flag the guard does not name (`sudo -u bob\n" +
-			"<hazard>` is seen, the bundled short form `sudo -Hu bob <hazard>` is not),\n" +
+			"<hazard>` is seen; the bundled short form `sudo -Hu bob <hazard>` reaches\n" +
+			"only the warn, not the entry that names it),\n" +
 			"one whose API path an entry names by its ROOT segment but the host serves\n" +
 			"under a prefix (a GitHub Enterprise Server install mounts the same endpoints\n" +
 			"under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside\n" +

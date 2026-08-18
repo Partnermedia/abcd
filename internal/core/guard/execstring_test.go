@@ -117,6 +117,111 @@ func TestExecStringEndOfOptionsIsRespected(t *testing.T) {
 	if d.EntryID != "git-push-force" {
 		t.Errorf("EntryID = %q, want the entry that names the hazard", d.EntryID)
 	}
+
+	// The discriminating shape: after `--`, a `-c` belongs to the launched
+	// program. Without the stop the scan keeps looking, finds it, and blocks on a
+	// string runuser never runs — so the verdict, not just the reasoning, changes.
+	foreign := verdictOf(t, `runuser -u bob -- myprog -c "gh repo delete owner/repo"`)
+	if foreign.Verdict == VerdictBlock {
+		t.Errorf("FALSE BLOCK: the `-c` after `--` is myprog's, not runuser's:\n  %s", foreign.Message)
+	}
+}
+
+// TestExecStringStopsAtTheLaunchedCommand is the false-block finding, verified
+// against the real binary before it was fixed:
+//
+//	$ flock /tmp/lock /bin/echo -c 'git push --force origin main'
+//	-c git push --force origin main
+//
+// flock handed `-c` and the string to /bin/echo as ordinary arguments. Nothing
+// ran the string, and the guard blocked on it — falsifying, in the same change
+// that wrote it, the claim that "a mis-parse yields a non-match, never a false
+// block".
+func TestExecStringStopsAtTheLaunchedCommand(t *testing.T) {
+	for _, cmd := range []string{
+		`flock /tmp/lock /bin/echo -c "git push --force origin main"`,
+		`flock /tmp/lock myrunner -c cfg true`,
+		`flock -w 5 /tmp/lock /bin/echo --command "git push --force origin main"`,
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			if d := verdictOf(t, cmd); d.Verdict == VerdictBlock {
+				t.Fatalf("FALSE BLOCK: the `-c` belongs to the launched command, not to flock.\n  %s", d.Message)
+			}
+		})
+	}
+}
+
+// TestForeignFlagDoesNotDisarmTheFailSafe is the same defect's other half, and
+// the more dangerous one. Mis-reading a foreign `-c` as a payload also made the
+// segment look understood, which switched Tier 2 off for it — so appending a
+// `-c` token anywhere behind an exec-string verb was a one-token off switch for
+// the fail-safe, the payload-level twin of the per-line suppression adr-42
+// decision 4 rejects.
+func TestForeignFlagDoesNotDisarmTheFailSafe(t *testing.T) {
+	bare := verdictOf(t, "kubectl exec -c app pod -- gh repo delete owner/repo")
+	if bare.Verdict != VerdictWarn {
+		t.Fatalf("precondition: the unprefixed line should warn, got %q", bare.Verdict)
+	}
+	prefixed := verdictOf(t, "flock /tmp/lock kubectl exec -c app pod -- gh repo delete owner/repo")
+	if prefixed.Verdict == VerdictAllow {
+		t.Fatalf("SILENT ALLOW: a flock prefix disarmed the fail-safe for the whole segment")
+	}
+}
+
+// TestExecStringIsReachedThroughTheWrapperChain pins the walk. Without it the
+// two shapes execstring.go's own comment names degrade from a precise block to a
+// Tier 2 warn — a downgrade quiet enough that every other test stays green.
+func TestExecStringIsReachedThroughTheWrapperChain(t *testing.T) {
+	for _, cmd := range []string{
+		`sudo su -c "gh repo delete owner/repo"`,
+		`nice runuser -c "git push --force origin main"`,
+		`env -i su -c "gh repo delete owner/repo"`,
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			d := verdictOf(t, cmd)
+			if d.Verdict != VerdictBlock {
+				t.Fatalf("verdict = %q, want %q: the walk did not reach the verb behind its wrapper", d.Verdict, VerdictBlock)
+			}
+			if d.EntryID == speculativeEntryID {
+				t.Errorf("the payload was found by the fail-safe guessing, not by reading the verb")
+			}
+		})
+	}
+}
+
+// TestExecStringReadsAShortCluster pins clusteredPayload, which nothing else
+// exercises: `su -lc CMD` is how getopt reads `-l -c CMD`, and `-c<value>` is the
+// glued spelling of the same flag.
+func TestExecStringReadsAShortCluster(t *testing.T) {
+	for _, cmd := range []string{
+		`su -lc "gh repo delete owner/repo"`,
+		`su -c"gh repo delete owner/repo"`,
+		`runuser -lc "git push --force origin main"`,
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			if d := verdictOf(t, cmd); d.Verdict != VerdictBlock {
+				t.Errorf("verdict = %q, want %q: the clustered or glued payload was not read", d.Verdict, VerdictBlock)
+			}
+		})
+	}
+}
+
+// TestExecStringSkipsAFlagShapedValue is the half of the value-flag skip that
+// bites. A value that is not flag-shaped (`/bin/sh`, `bob`) is stepped as an
+// operand whether or not the table names its flag, so only a FLAG-SHAPED value
+// can show the skip working.
+func TestExecStringSkipsAFlagShapedValue(t *testing.T) {
+	// `-w --all` : --whitelist-environment consumes `--all`. Without the skip the
+	// scan reads `--all` as a flag, keeps going, and the result is the same block —
+	// so the case that discriminates is one where the skipped value would ITSELF
+	// have been read as the payload flag.
+	d := verdictOf(t, `su -w --command -c "gh repo delete owner/repo"`)
+	if d.Verdict != VerdictBlock {
+		t.Fatalf("verdict = %q, want %q", d.Verdict, VerdictBlock)
+	}
+	if !strings.Contains(d.Message, "repository") {
+		t.Errorf("the payload read was not the -c string: %q", d.Message)
+	}
 }
 
 // TestExecStringLeavesOrdinaryUseAlone is the false-positive side. These verbs
