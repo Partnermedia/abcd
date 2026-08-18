@@ -69,9 +69,71 @@ func checkGuard(t *testing.T, candidate string) Decision {
 	return d
 }
 
-// registryGitValueFlags is every flag the bundled git entries step over.
-func registryGitValueFlags() []string {
-	return append(append([]string{}, gitGlobalValueFlags...), gitNonConsumingButListed...)
+// gitEntryValueFlags decodes defaults/guard.json and returns each git entry's
+// value_flags, keyed by entry id.
+//
+// `entries` is an OBJECT keyed by entry id, and the command and its value-flag
+// list live under `pattern`, not at entry level. An earlier draft used the wrong
+// shape, decoded nothing, and passed — which is why callers guard on an empty
+// result.
+func gitEntryValueFlags(t *testing.T) map[string][]string {
+	t.Helper()
+	raw, err := os.ReadFile("defaults/guard.json")
+	if err != nil {
+		t.Fatalf("reading the bundled registry: %v", err)
+	}
+	var reg struct {
+		Entries map[string]struct {
+			Pattern struct {
+				Command    string   `json:"command"`
+				ValueFlags []string `json:"value_flags"`
+			} `json:"pattern"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(raw, &reg); err != nil {
+		t.Fatalf("the bundled registry is not valid JSON: %v", err)
+	}
+	out := map[string][]string{}
+	for id, e := range reg.Entries {
+		if e.Pattern.Command == "git" {
+			out[id] = e.Pattern.ValueFlags
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("found no git entries in the bundled registry — the scan is broken, not the registry")
+	}
+	return out
+}
+
+// registryGitValueFlags is every flag the SHIPPED git entries step over, read
+// from the registry rather than restated here.
+//
+// Reading the file is the whole point. An earlier version returned this test's
+// own constants, so the "wrongly listed" direction could never fire against
+// defaults/guard.json: adding one non-consuming global to the six entries left
+// the suite green while producing a live force-push bypass, because the walk then
+// steps over the real subcommand. The registry is the thing under test, so it has
+// to be the thing read.
+func registryGitValueFlags(t *testing.T) []string {
+	t.Helper()
+	byEntry := gitEntryValueFlags(t)
+	// The six lists are hand-duplicated in the JSON, which is how gh-299 happened
+	// in the first place. Assert they agree, so a partial edit is a failure rather
+	// than a silent divergence between entries.
+	var ids []string
+	for id := range byEntry {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	first := byEntry[ids[0]]
+	for _, id := range ids[1:] {
+		if !slices.Equal(byEntry[id], first) {
+			t.Errorf("git entries %q and %q carry different value_flags:\n  %v\n  %v\n"+
+				"The six lists are duplicated by hand, so a partial edit leaves the others "+
+				"bypassable — the exact shape of gh-299.", ids[0], id, first, byEntry[id])
+		}
+	}
+	return append([]string{}, first...)
 }
 
 // TestGitEntriesKnowEveryGlobalValueFlag is the structural half. The bypass is an
@@ -184,7 +246,7 @@ func TestGitGlobalValueFlagsMatchThisGit(t *testing.T) {
 		}
 	}
 
-	listed := registryGitValueFlags()
+	listed := registryGitValueFlags(t)
 	var sawConsuming, sawDispatching bool
 	for _, opt := range gitProbeCandidates {
 		kind, text := classify(opt)
@@ -282,7 +344,7 @@ func TestGitGlobalValueFlagsStillAllowBenignCommands(t *testing.T) {
 // — it read as authoritative while being superset-tolerant, so it could never
 // notice the member that was missing.
 func TestGitGlobalValueFlagsAreDocumented(t *testing.T) {
-	for _, f := range append(registryGitValueFlags(), gitProbeCandidates...) {
+	for _, f := range append(registryGitValueFlags(t), gitProbeCandidates...) {
 		if !strings.HasPrefix(f, "-") {
 			t.Errorf("%q is not a flag spelling", f)
 		}
