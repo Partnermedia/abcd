@@ -7,6 +7,12 @@
   // The name matches the host's existing project for this repository.
   "name": "abcd",
   "compatibility_date": "2026-08-19",
+  // The site's domain is committed config, not dashboard state: the deploy
+  // asserts it, so a drifted or lost attachment is re-claimed on the next
+  // deploy instead of silently staying wherever the dashboard last left it.
+  "routes": [
+    { "pattern": "abcdev.app", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./site",
     "not_found_handling": "404-page"
