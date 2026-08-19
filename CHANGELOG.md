@@ -64,6 +64,15 @@ called out in a **Breaking** section.
 
 - **An issue graduates into an intent without retyping.** `abcd capture promote <iss-N>` is the native verb for step 2 of the record walk: one invocation mints an intent draft — slug reused from the issue, body carrying a by-id pointer to the issue rather than a copy, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`. Promotion works from any status folder and never moves the issue, a second promote is refused with the existing `itd-N`, and a stamp failure after the mint names the orphan draft and its repair: `capture promote <iss-N> --intent <itd-N>`, the stamp-only mode that links an existing draft instead of minting. (itd-119, spc-24; the `promoted_to` half of iss-245)
 
+### Changed
+
+- **The repository lives at `Partnermedia/abcd`.** The repo transferred from
+  `REPPL/abcd-cli` to the Partnermedia organisation and dropped the `-cli`
+  suffix; the Go module path, install one-liner, marketplace add command, and
+  plugin metadata all follow (`github.com/Partnermedia/abcd`). Every old URL —
+  clones, plugin installs, release downloads — keeps working through GitHub's
+  redirect, but new work should reference the new path.
+
 ### Fixed
 
 - **`abcd guard` no longer misses a force-push behind an unlisted git global option.** The six git entries listed the global options that consume the following token so the matcher could step over them and find the subcommand — but the list named seven and was wrong about which — two take no value at all, while three genuinely value-taking globals were missing. `--attr-source <tree>` (git 2.40+) and `--config-env <name>=<var>` were absent, so their value was read as the subcommand: `git --attr-source HEAD push --force origin main` performs the identical forced update and was silently **allowed**, as were `--no-verify` commits and `reset --hard`. Every git blocker was bypassable by the same prefix, and only the separate-token spelling evaded — the glued `--opt=value` form was already skipped as an ordinary flag. A third, `--shallow-file`, was missing from the fix's own first cut and is a live force-push bypass in its own right — it has been in git since 1.9 and is absent from `git --help`, as are the other two. All three are now listed on all six entries. The test no longer *asserts* the list is complete: it **re-derives the classification from the git on the machine**, probing whether git reads the next token as the subcommand, and treats an unrecognised flag as value-taking so an unclassifiable option demands listing rather than being ignored. The earlier shape — a hard-coded size plus a superset-tolerant membership check — read as authoritative while being unable to notice a missing member, and duly certified a list containing a live bypass. (gh-299)

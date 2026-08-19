@@ -21,7 +21,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // DenyNamespaces are first-path-segment names that never ship. Structural deny

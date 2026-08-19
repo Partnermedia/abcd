@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/REPPL/abcd-cli/internal/core/positioning"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/positioning"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // identityPositioning holds every registered surface — the README strapline, the

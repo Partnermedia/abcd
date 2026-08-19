@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
 )
 
 const testRootSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

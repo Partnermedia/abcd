@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // writer.go — the atomic single-writer for .abcd/memory/ (ADR-13 §1–3). EVERY

@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/REPPL/abcd-cli/internal/core"
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/vintage"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // newReleaseFetcher is the seam through which `version --check` reaches the
@@ -22,7 +22,7 @@ var newReleaseFetcher = vintage.NewGitHubReleaseFetcher
 
 // checkSource names the network source `version --check` consulted, so the
 // report says where "latest" came from (AC5).
-const checkSource = "github.com/REPPL/abcd-cli releases"
+const checkSource = "github.com/Partnermedia/abcd releases"
 
 // versionOutput is `abcd version`'s structured result: identity, install mode,
 // vintage, and staleness relative to the on-disk reference. The vintage fields

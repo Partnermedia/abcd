@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // RetentionPlan is the newest-per-line prune preview for a release cut.

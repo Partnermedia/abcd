@@ -1,4 +1,4 @@
-module github.com/REPPL/abcd-cli
+module github.com/Partnermedia/abcd
 
 go 1.25.6
 

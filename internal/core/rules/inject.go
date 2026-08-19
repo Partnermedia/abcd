@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // StateTTL bounds how long a per-session ledger lives before the reset hook

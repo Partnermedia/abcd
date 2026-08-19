@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/REPPL/abcd-cli/internal/core/repolint"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/repolint"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // newLintCommand wires the read-only `abcd lint` verb (renamed from `abcd

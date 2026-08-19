@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // SecretScan inspects the fully-planned bytes and returns a non-nil error if any

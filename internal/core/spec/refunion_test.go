@@ -3,7 +3,7 @@ package spec
 import (
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // TestCreateMintsPastACommittedBranch reproduces the parallel-branch id-minting

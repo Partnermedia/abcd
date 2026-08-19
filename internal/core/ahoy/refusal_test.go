@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/vintage"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // noWrites asserts the install left none of its evidence artefacts — a refusal

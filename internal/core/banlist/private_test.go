@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // grepMatch is the agreement test's matcher, and it is the REAL enforcement

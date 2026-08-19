@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // recordSchemaVersion is the frontmatter schema stamped into every record.

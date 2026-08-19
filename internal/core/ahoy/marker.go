@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"os"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 	"regexp"
 )
 

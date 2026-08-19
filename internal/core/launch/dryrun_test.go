@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
 )
 
 const fakeSecret = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab"

@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/recordid"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/recordid"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // mintLockTimeout bounds how long CreateFromText waits for the intent-store mint

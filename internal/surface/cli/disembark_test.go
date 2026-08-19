@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/lifeboat"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // probeRepo builds an isolated one-commit git repo for the disembark verbs to

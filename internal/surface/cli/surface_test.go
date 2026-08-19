@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/core/surface"
 	"github.com/spf13/cobra"
 )
 

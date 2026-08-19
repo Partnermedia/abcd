@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
 )
 
 const (

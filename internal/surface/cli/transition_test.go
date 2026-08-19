@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core"
+	"github.com/Partnermedia/abcd/internal/core"
 )
 
 // TestSessionStartReportsVersionTransition proves AC6: when the running binary's

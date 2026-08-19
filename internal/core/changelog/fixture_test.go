@@ -3,7 +3,7 @@ package changelog
 import (
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // fixtureRepo is this package's name for the shared hermetic git fixture,

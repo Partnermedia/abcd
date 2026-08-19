@@ -27,8 +27,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // maxProvenanceBytes caps the _provenance.json read (its own manifest header).

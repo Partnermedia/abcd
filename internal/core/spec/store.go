@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
-	"github.com/REPPL/abcd-cli/internal/core/recordid"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/recordid"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // mintLockTimeout bounds how long Create waits for the spec-store mint lock. A

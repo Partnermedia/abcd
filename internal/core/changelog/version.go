@@ -1,6 +1,6 @@
 package changelog
 
-import "github.com/REPPL/abcd-cli/internal/core/launch"
+import "github.com/Partnermedia/abcd/internal/core/launch"
 
 // DeriveNext is the whole version policy in one pure function: given the
 // previous release and the strongest impact in the cut, it returns the next

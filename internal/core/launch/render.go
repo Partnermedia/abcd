@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // bumpTiers are the tiers adr-20's marketplace changelog entry admits. The

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // TestRunGitIgnoresInheritedGitDir proves an inherited GIT_DIR cannot redirect

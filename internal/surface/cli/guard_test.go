@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/surface"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/gittest"
 	"github.com/spf13/cobra"
 )
 

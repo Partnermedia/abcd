@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 const lockFilename = ".iss-alloc.lock"

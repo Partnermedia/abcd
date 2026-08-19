@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/REPPL/abcd-cli/internal/core/launch/scaffold"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/launch/scaffold"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

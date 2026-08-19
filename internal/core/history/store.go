@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // rootSHARe is the immutable repo key: a lowercase hex commit SHA, 40 chars for

@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/core/lint"
 )
 
 // RefreshError is a refused refresh — a distinct type so a caller can tell a

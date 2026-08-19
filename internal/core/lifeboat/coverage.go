@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // Coverage is one repository's probe result: which brief sections a lifeboat

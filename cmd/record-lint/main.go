@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/core/lint"
 )
 
 func main() {

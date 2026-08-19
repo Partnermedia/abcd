@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // citationPageSizeLimit caps one page read. Containment answers "does this path

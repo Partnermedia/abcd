@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // BaselineSchemaVersion is the only baseline schema this build understands. A

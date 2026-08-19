@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/guard"
+	"github.com/Partnermedia/abcd/internal/core/guard"
 )
 
 // runGuard drives the guard verbs through the real exit-code mapping with stdin

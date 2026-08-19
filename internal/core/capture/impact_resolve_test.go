@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/core/lint"
 )
 
 // lintIssueImpact runs only the issue_impact_valid record-lint blocker over the

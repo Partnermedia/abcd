@@ -16,10 +16,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/REPPL/abcd-cli/internal/core/cite"
-	"github.com/REPPL/abcd-cli/internal/core/launch"
-	"github.com/REPPL/abcd-cli/internal/core/lint"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/cite"
+	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // newCiteCommand builds the `docs cite` sub-tree. configPath and rootDir are the

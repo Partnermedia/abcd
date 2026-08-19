@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/recordid"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/recordid"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // mutationPreamble runs the idempotent pre-mutation steps: sweep orphan

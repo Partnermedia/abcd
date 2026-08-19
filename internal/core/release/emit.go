@@ -20,9 +20,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/lint"
-	"github.com/REPPL/abcd-cli/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/core/surface"
 )
 
 // The record trees a cut reasons about, repo-relative. The terminal folders the
