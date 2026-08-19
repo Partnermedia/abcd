@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: "internal/surface/cli/version.go"
+resolution: "version --check help rescoped to 'this command's only network touch; abcd never fetches implicitly — adr-38'; reference page regenerated."
+impact: fix
 ---
 
 The 'abcd version --check' flag help calls it 'the only command that touches the network', but the same generated reference page also calls 'docs cite refresh' the only network verb and 'memory ingest <url>' does its own HTTP GET — three real fetch paths, contradicting adr-38's own two-verb model

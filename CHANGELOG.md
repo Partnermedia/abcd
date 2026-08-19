@@ -10,6 +10,30 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`abcd guard` no longer allows a blocker hidden behind a value-taking
+  short-flag cluster.** An exec-string verb whose payload flag sat in a cluster
+  after a value-taking flag (`script -Tc out.txt -c '<blocker>'`, where `-T`
+  takes `c` as its value) was mis-read as `-T -c`, resolved a bogus payload, and
+  switched the Tier-2 fail-safe off for the segment — so the real `-c` command
+  reached neither tier and was silently allowed. The cluster reader now consults
+  the verb's value flags and declines such a cluster, letting the scan find the
+  genuine payload flag. (iss-291)
+
+- **Release-tag and changelog version parsing rejects an out-of-range
+  component.** `ParseSemver` discarded `strconv.Atoi`'s range error, so a version
+  component wider than `int` clamped to `MaxInt64` — colliding distinct versions
+  and wrapping negative on the next bump. It now returns the error, matching the
+  guard already shipped for spec ids. (iss-293)
+
+- **Wording corrected in two user-facing surfaces.** The `abcd version --check`
+  flag help no longer claims to be "the only command that touches the network"
+  (three verbs can fetch; adr-38 names the model) (iss-294), and the README
+  onboarding section now describes the shipped facilitator flow with its
+  discovery-ingest and Socratic-interview automation marked as a not-yet-shipped
+  design target rather than a present capability (iss-295).
+
 ## [0.6.0] - 2026-08-19
 
 ### Breaking

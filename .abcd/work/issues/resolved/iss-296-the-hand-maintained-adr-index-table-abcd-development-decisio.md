@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: ".abcd/development/decisions/adrs/README.md"
+resolution: "Added adr-43/adr-44 rows to the ADR index; corrected the ruleset README count seven -> eight."
+impact: fix
 ---
 
 The hand-maintained ADR index table (.abcd/development/decisions/adrs/README.md) ends at adr-42 and omits committed records adr-43 and adr-44; the record-lint index_drift rule registers four indexes but not the ADR index, so this largest hand index is ungated. Same file: .abcd/work/rulesets/README.md says 'seven required status checks' where main-protection.json now lists eight (external-review added)

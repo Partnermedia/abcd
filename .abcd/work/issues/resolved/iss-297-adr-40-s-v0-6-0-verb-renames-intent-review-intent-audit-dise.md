@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: ".abcd/development/roadmap/phases/README.md"
+resolution: "Swept intent review -> intent audit and disembark oracle -> review (and intent-fidelity-reviewer -> intent-auditor) across the roadmap phases and brief pages."
+impact: fix
 ---
 
 adr-40's v0.6.0 verb renames (intent review -> intent audit, disembark oracle -> disembark review) left stale residue in durable present-tense docs: roadmap/phases/{README.md,phase-0-substrate.md,phase-6-lifeboat.md} still say 'intent review', and brief/05-internals/08-skills.md plus brief/04-surfaces/README.md still list 'oracle' as a disembark sub-verb the binary now refuses

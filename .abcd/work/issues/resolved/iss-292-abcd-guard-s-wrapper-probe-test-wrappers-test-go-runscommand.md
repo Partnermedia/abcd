@@ -7,6 +7,8 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: "internal/core/guard/wrappers_test.go"
+resolution: "runsCommand runs probes in a temp dir; removed the four committed junk files (0,1,PATH,root)."
+impact: internal
 ---
 
 abcd guard's wrapper-probe test (wrappers_test.go runsCommand) runs wrapper binaries with no cmd.Dir, inheriting the package source directory as cwd; flock opens its probe values (0 1 PATH root) as lock files, so go test writes four zero-byte files into the tracked tree — and they are already committed under internal/core/guard/

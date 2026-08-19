@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: "README.md"
+resolution: "README brief-onboarding rewritten to describe the shipped facilitator flow, with the ingest/Socratic automation marked as a not-yet-shipped design target."
+impact: fix
 ---
 
 README.md's 'It starts with the brief' section claims in present tense that abcd 'has a skill that ingests that material and produces a plain-language draft of your project's brief' and that you sharpen it with 'a Socratic interview the framework provides' — but abcd ships zero skills (surface is commands-only) and the grill/Socratic interview is an unshipped planned intent (itd-27), an unmarked not-yet-real claim the README's own honesty rule forbids

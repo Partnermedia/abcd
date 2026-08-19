@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: ".abcd/development/brief/README.md"
+resolution: "Removed the nonexistent 'in-session dispatch' chapter from brief/README.md's 05-internals tree."
+impact: fix
 ---
 
 brief/README.md's 05-internals directory-tree comment enumerates ten chapters including a nonexistent 'in-session dispatch' (that is planned intent itd-2, not a chapter); the directory holds nine files and its own index has nine rows

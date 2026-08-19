@@ -7,6 +7,8 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: "internal/core/launch/semver.go"
+resolution: "ParseSemver now returns strconv.Atoi's range error; watched-fail test added."
+impact: fix
 ---
 
 launch.ParseSemver discards strconv.Atoi's range error (major,_ := ...), and semverRe's numID is unbounded, so a >int64 version component clamps to MaxInt64: distinct oversized versions collide to one String() and the next Patch++ wraps negative — reachable via GitExistingTags (git tag list) and changelog.DeriveNext; the identical defect was already guarded in spec/spec.go

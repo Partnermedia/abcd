@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: ".abcd/development/brief"
+resolution: "Repointed all 18 broken/stale brief heading anchors and section citations, and the three live-README legacy brief-section-number citations."
+impact: fix
 ---
 
 The brief carries broken and stale intra-record cross-references invisible to links_resolve (which strips the #fragment before resolving): six deep links name headings that were renamed or renumbered (04-launch.md, 04-universal-patterns.md, 01-ahoy.md, 05-intent.md sections 5/6/7), ten anchors mis-encode an em dash, 00-meta.md cites a deleted disembark section-3 budget rule, and three live README lines cite the pre-split monolithic brief by section number

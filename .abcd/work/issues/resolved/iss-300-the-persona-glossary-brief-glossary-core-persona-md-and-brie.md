@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: ".abcd/development/brief/glossary/core/persona.md"
+resolution: "Rewrote persona.md to the role-first selection rule and re-roled its worked examples (Iris for product lead; Alice as product engineer)."
+impact: fix
 ---
 
 The persona glossary (brief/glossary/core/persona.md) and brief/01-product/05-personas.md say the persona picker 'chooses at random', contradicting personas.json and itd-79 whose rule is 'selection is by role, never by name'; the glossary's worked examples also assign off-role names (Carol as product lead, Alice as developer)

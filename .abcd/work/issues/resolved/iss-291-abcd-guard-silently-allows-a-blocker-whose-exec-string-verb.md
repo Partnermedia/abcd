@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-1"
 found_at: "internal/core/guard/execstring.go"
+resolution: "Thread value flags into clusteredPayload; a value-taking short flag before the payload letter aborts the cluster read, so script -Tc out.txt -c blocks. Watched-fail test added."
+impact: fix
 ---
 
 abcd guard silently allows a blocker whose exec-string verb carries a value-taking short-flag cluster before the payload flag (script -Tc out.txt -c '<blocker>'): clusteredPayload accepts the cluster without consulting the verb's value flags, mis-reads -Tc as -T -c, resolves a bogus payload and switches the Tier-2 fail-safe off for the segment
