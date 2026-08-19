@@ -21,9 +21,17 @@ name: attribution
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
+  # Merge-queue entries re-run the required checks on the would-be merge result,
+  # so this workflow must trigger there for the check to report at all. The
+  # PR-data steps exempt themselves loudly below: entry to the queue already
+  # required the pull_request-level run green, and a merge_group event carries
+  # no PR body or head/base pair to validate.
+  merge_group:
 
 concurrency:
-  group: attribution-${{ github.event.pull_request.number }}
+  # A merge_group event has no PR number; run_id keeps each queue entry in its
+  # own group rather than all of them sharing (and cancelling) one empty key.
+  group: attribution-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -62,8 +70,13 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "attribution: merge-queue run — body check exempt (validated on the pull request before queueing), nothing was checked."
+            exit 0
+          fi
           if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
             echo "attribution: pull request authored by a bot — body check exempt, nothing was checked."
             exit 0
@@ -83,8 +96,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "attribution: merge-queue run — commit check exempt (validated on the pull request before queueing; the queue's own merge commit carries no trailer to check), nothing was checked."
+            exit 0
+          fi
           if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
             echo "attribution: pull request authored by a bot — commit check exempt, nothing was checked."
             exit 0

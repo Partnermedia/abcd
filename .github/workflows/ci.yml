@@ -38,6 +38,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Merge-queue entries run the full gate on the would-be merge result. The
+  # changes classifier below already treats any non-pull_request event as never
+  # inert, so a merge_group run executes everything.
+  merge_group:
 
 # One group per ref, so a new push to a PR supersedes the run still in flight for
 # it. Default-branch pushes all share a single group, so the cancel expression —
