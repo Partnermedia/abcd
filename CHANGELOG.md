@@ -20,6 +20,13 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **An external pull request needs two invited reviewers.** A required check
+  (`external-review`) holds any pull request whose author is not an invited
+  collaborator until at least two collaborators of role triage or above have
+  approved it; a collaborator's own pull request passes trivially, and the
+  check runs the base repository's own logic so a fork cannot edit it green.
+  Ledger issue captures land through pull requests and inherit the rule.
+
 - **The contribution surface tells the truth about its gates.** `CONTRIBUTING.md`
   reflects the public repository: inbound = outbound MIT with no CLA and no DCO,
   issue-first intake with a per-author volume cap, the merge queue, the

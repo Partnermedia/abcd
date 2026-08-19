@@ -1,0 +1,110 @@
+name: external-review
+
+# Enforces the two-reviewer rule for external contributions (iss-281, adr-43's
+# ladder): a pull request whose author is not an invited collaborator goes
+# green only once at least TWO invited collaborators (role triage or above)
+# have approved it. A collaborator's own pull request passes trivially — the
+# rule prices outside submissions, not the maintainers' flow.
+#
+# pull_request_target, DELIBERATELY, and with no checkout of any code: this
+# check must run the BASE repository's version of itself, because on a plain
+# pull_request event a fork runs the workflow from its own tree and can neuter
+# the logic while keeping the required check's name green. The job reads only
+# the GitHub API (reviews, collaborator roles) — the PR's code is never
+# checked out, never built, never executed, which is what makes the trigger
+# safe to use here.
+on:
+  # No checkout, and no PR-controlled input reaches a shell unquoted; the
+  # trigger is the point (see the header comment).
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  # Merge-queue entries re-run required checks; queue entry already required
+  # this check green on the pull request, and a merge_group event carries no
+  # PR to evaluate, so it reports success there (same shape as attribution).
+  merge_group:
+
+concurrency:
+  group: external-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  external-review:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      # Event data reaches the shell only through the environment, never
+      # spliced into the script body (the repo's template-injection rule).
+      - name: Count invited-collaborator approvals
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "external-review: merge-queue run — evaluated on the pull request before queueing, nothing to evaluate here."
+            exit 0
+          fi
+
+          # role_name is the granular role (admin/maintain/write/triage/read/none).
+          role_of() {
+            gh api "repos/$REPO/collaborators/$1/permission" --jq .role_name 2>/dev/null || echo none
+          }
+          is_invited() {
+            case "$1" in admin|maintain|write|triage) return 0 ;; *) return 1 ;; esac
+          }
+
+          # The same exemption shape as the attribution gate: a bot cannot be
+          # an invited collaborator, and holding dependabot's version bumps to
+          # a two-human quorum would train maintainers to rubber-stamp. Loud,
+          # never silent.
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "external-review: pull request authored by a bot — exempt from the external two-reviewer rule, nothing was counted."
+            exit 0
+          fi
+
+          author_role="$(role_of "$PR_AUTHOR")"
+          if is_invited "$author_role"; then
+            echo "external-review: author is an invited collaborator (role: $author_role) — the external rule does not apply."
+            exit 0
+          fi
+
+          echo "external-review: author is external (role: $author_role) — two invited-collaborator approvals required."
+
+          # Latest review state per reviewer decides; an approval superseded by
+          # CHANGES_REQUESTED does not count. COMMENTED reviews do not change
+          # the reviewer's standing verdict either way.
+          approvers="$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+            --jq '[.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+                  | group_by(.user.login) | map(max_by(.submitted_at))
+                  | map(select(.state == "APPROVED") | .user.login) | .[]')"
+
+          count=0
+          for reviewer in $approvers; do
+            r="$(role_of "$reviewer")"
+            if is_invited "$r"; then
+              echo "  counted: $reviewer (role: $r)"
+              count=$((count + 1))
+            else
+              echo "  not counted: $reviewer (role: $r — not an invited collaborator)"
+            fi
+          done
+
+          if [ "$count" -ge 2 ]; then
+            echo "external-review: $count invited-collaborator approvals — rule satisfied."
+            exit 0
+          fi
+          echo "external-review: $count of 2 required invited-collaborator approvals." >&2
+          echo "  An externally submitted pull request needs approvals from at least two" >&2
+          echo "  invited collaborators (role triage or above) before it can merge." >&2
+          exit 1
