@@ -24,3 +24,4 @@ own tests pin both sides of the contradiction
 `internal/core/lifeboat/graveyard_abandoned_test.go:167`). The fix is to
 normalise quoting on one side, not to widen literal sets. Evidence:
 `.abcd/work/reviews/2026-08-19-pr-294-null-predicate/` (F1, F2).
+Forge mirror: #372
