@@ -37,7 +37,7 @@ brief/
 ├── 02-constraints/              # platform, dependencies, invariants, naming
 ├── 03-evidence/                 # what worked / what didn't / open questions / tradeoffs
 ├── 04-surfaces/                 # one file per user-facing command surface (see 04-surfaces/README.md)
-├── 05-internals/                # agents, adapters, configuration, universal patterns, prompt quality, lint, memory, skills, provenance, in-session dispatch (see 05-internals/README.md)
+├── 05-internals/                # agents, adapters, configuration, universal patterns, prompt quality, lint, memory, skills, provenance (see 05-internals/README.md)
 ├── 06-delivery/                 # build sequence, verification matrix, out-of-scope
 └── glossary/                    # the canonical terminology glossary, by bounded context (see glossary/README.md)
 ```
