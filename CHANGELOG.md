@@ -10,6 +10,12 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-19
+
+### Fixed
+
+- **Releases build on the patched Go toolchain.** The release workflow's Go version floated at the minor (resolving to a toolchain carrying four standard-library vulnerabilities fixed upstream) while ci scanned green on the patched one; the scaffold substitutions and the committed workflow now pin the patched toolchain in lockstep, held identical by the self-scaffold parity test. (iss-289)
+
 ## [0.6.0] - 2026-08-19
 
 ### Breaking
