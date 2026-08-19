@@ -20,6 +20,18 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The contribution surface tells the truth about its gates.** `CONTRIBUTING.md`
+  reflects the public repository: inbound = outbound MIT with no CLA and no DCO,
+  issue-first intake with a per-author volume cap, the merge queue, the
+  code-owner-reviewed publish surface, and the fact that the shipped hooks are
+  per-machine opt-in (`git config core.hooksPath .githooks`) rather than
+  self-installing. The attribution rules now state that the `Assisted-by:`
+  trailer stands on its own line, and cite the kernel's
+  `coding-assistants.rst` as the convention's shared design. `SECURITY.md`
+  routes vulnerability reports to private reporting (with an issue-template
+  contact link doing the same), and a pull-request template carries the
+  disclosure line every PR body needs.
+
 - **The documentation renders as a site.** `mkdocs.yml` builds `docs/` — the
   single source of truth — into a disposable HTML site (Material theme, pinned
   in `docs/requirements.txt`): any static-site host runs

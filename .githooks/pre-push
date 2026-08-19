@@ -2,13 +2,12 @@
 # Pre-push gate, run on every clone via the global ~/.githooks dispatcher
 # (core.hooksPath). Two jobs:
 #
-#   1. Local branch protection — a stopgap for server-side rulesets, which
-#      GitHub blocks on a free-tier private repo (403: Upgrade to Pro / make
-#      public). Enforced only for pushes that go through these hooks, not the
-#      web UI or an unhooked clone; the full ruleset lands at the public flip
-#      (see the public-flip checklist). It refuses: a direct push to the
-#      protected branch, a deletion of it, and any non-fast-forward (force)
-#      push to any branch.
+#   1. Local branch protection — a fast local echo of the server-side rulesets
+#      (applied and mirrored under .abcd/work/rulesets/), so a bad push fails
+#      here before it costs a round-trip. The rulesets are the authority;
+#      this layer only covers pushes that go through these hooks. It refuses:
+#      a direct push to the protected branch, a deletion of it, and any
+#      non-fast-forward (force) push to any branch.
 #   2. `make preflight` must pass natively before a push leaves this machine —
 #      the three lint gates (lint-reviews, record-lint, docs-lint), then build,
 #      vet, test and the race-enabled internal tests. CI's check job adds a
