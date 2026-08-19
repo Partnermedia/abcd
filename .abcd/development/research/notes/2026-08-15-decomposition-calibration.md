@@ -345,3 +345,27 @@ Per hand-run, append:
   and the consult-freely-cite-deliberately principle. Both prior share/ingest
   open questions moved to itd-126 with a third (share vs the store's
   admission criteria) added at the walk.
+
+## 2026-08-19 — the itd-92 capability-ladder extension
+
+- **Proposal:** bring the collaborator fence (built by hand on this repo,
+  2026-08-19) to abcd-managed repos gracefully for users without GitHub or
+  an organisation — tiers, per-piece verdicts, loud degradation.
+- **Initial routing:** four parts — tiered fence doctor + apply-on-request +
+  launch gate (capability | itd-92, extended in place, no new record);
+  never-mutate-a-remote-uninvited and never-fake-a-green (stance | already
+  carried by `principles/loud-staging.md` and itd-92's own rung 2 text — no
+  new principle); probe tables and verdict vocabulary mechanics (plumbing |
+  intent body now, spec at planning); the day's evidence (research |
+  `2026-08-19-collaborator-fence-field-research.md`, new). Typed links: the
+  extension refines itd-92's own earlier text; the individual gaps stay in
+  iss-277, iss-281, iss-282, iss-283. No reversal flags.
+- **Confirmed routing:** the human directed the home before the table was
+  run ("draft the extension to itd-92, use evidence from our field
+  research"), and the table confirmed it rather than choosing it — recorded
+  as a calibration caveat, not a clean blind trial.
+- **Verdict:** FILE-AS-IS (extend in place), proposed and confirmed.
+- **Notes:** acceptance criteria seeded from the field evidence (six
+  Given-When-Then bullets, Alice/Bob/Carol per the discipline) but the draft
+  stays in `drafts/` — the gate policy per tier is an open question the
+  planning interview owns.
