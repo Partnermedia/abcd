@@ -7,8 +7,8 @@
   <p>A host-agnostic configuration layer for intent-driven development.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
-  <a href="https://github.com/REPPL/abcd-cli/releases"><img src="https://img.shields.io/github/v/release/REPPL/abcd-cli?cacheSeconds=300" alt="Release"></a>
-  <img src="https://img.shields.io/github/last-commit/REPPL/abcd-cli?cacheSeconds=300" alt="Last commit">
+  <a href="https://github.com/Partnermedia/abcd/releases"><img src="https://img.shields.io/github/v/release/Partnermedia/abcd?cacheSeconds=300" alt="Release"></a>
+  <img src="https://img.shields.io/github/last-commit/Partnermedia/abcd?cacheSeconds=300" alt="Last commit">
   <br />
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow -->
@@ -126,7 +126,7 @@ wiring in [`hooks/`](hooks/) — straight from it. Add the marketplace, then
 install the plugin:
 
 ```text
-/plugin marketplace add REPPL/abcd-cli
+/plugin marketplace add Partnermedia/abcd
 /plugin install abcd@abcd-marketplace
 ```
 
@@ -193,7 +193,7 @@ to install on any mismatch — or if the manifest doesn't list the binary at all
 then installs to `~/.local/bin`, the single-user location:
 
 ```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
 If `abcd` isn't found by name afterwards, `~/.local/bin` isn't on your `PATH`.
@@ -215,7 +215,7 @@ names it in a gap rather than removing it: abcd does not touch a binary it does
 not own.
 
 Prefer to inspect before running? The command is exactly what it says: two
-downloads from [the latest release](https://github.com/REPPL/abcd-cli/releases/latest),
+downloads from [the latest release](https://github.com/Partnermedia/abcd/releases/latest),
 a checksum verification, and a copy into a directory you own. You can do the
 same by hand — grab the binary for your platform plus `checksums.txt` from the
 releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching

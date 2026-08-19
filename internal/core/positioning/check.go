@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // maxSurfaceBytes caps a guarded surface read. A README or manifest is small;

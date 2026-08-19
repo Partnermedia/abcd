@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
 )
 
 // knownFields is the additionalProperties:false allow-list from

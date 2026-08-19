@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/lifeboat"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // embarkSourceRepo builds a one-commit git repo carrying an embarkable record (an

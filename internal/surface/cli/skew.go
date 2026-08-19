@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // binaryMetaFile is the provenance record hooks/bootstrap.sh writes into the

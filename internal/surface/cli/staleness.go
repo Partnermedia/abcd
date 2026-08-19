@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/vintage"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // stalenessNotice is the session-start notice for a dogfood binary that trails

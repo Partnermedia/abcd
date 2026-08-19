@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/capture"
+	"github.com/Partnermedia/abcd/internal/core/capture"
 )
 
 // write writes a file under repo, creating parents.

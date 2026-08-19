@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // helperImportPath is the import a test file must carry once it spawns git, so
 // that its git commands run under gittest.Env's hermetic environment.
-const helperImportPath = "github.com/REPPL/abcd-cli/internal/gittest"
+const helperImportPath = "github.com/Partnermedia/abcd/internal/gittest"
 
 // allowlist maps a repo-relative directory prefix to the reason its *_test.go
 // files are exempt from the hermetic-git rule. Keep this SMALL and every entry

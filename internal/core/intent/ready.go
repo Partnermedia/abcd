@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
-	"github.com/REPPL/abcd-cli/internal/core/spec"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/spec"
 )
 
 // Check names, in the fixed order Ready always reports them.

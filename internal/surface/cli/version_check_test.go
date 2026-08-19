@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/vintage"
+	"github.com/Partnermedia/abcd/internal/core/vintage"
 )
 
 // recordingFetcher counts every LatestTag call, so a test can assert exactly

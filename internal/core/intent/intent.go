@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/spec"
+	"github.com/Partnermedia/abcd/internal/core/spec"
 )
 
 // IntentsRelDir is the intent-store root, relative to the repo worktree.

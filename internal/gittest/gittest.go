@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // isolatedSentinel marks, for the duration of a test, that Env has already

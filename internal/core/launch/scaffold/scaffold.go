@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // maxWorkflowBytes caps a guarded read of an existing scaffolded file. A

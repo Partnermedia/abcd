@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/identity"
+	"github.com/Partnermedia/abcd/internal/core/identity"
 )
 
 // stubPrompter answers Prompt from a fixed map (falling back to def) and Confirm

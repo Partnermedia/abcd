@@ -5,10 +5,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 	"sort"
 
-	"github.com/REPPL/abcd-cli/internal/core/identity"
+	"github.com/Partnermedia/abcd/internal/core/identity"
 )
 
 // Enumerations for config-value validation.

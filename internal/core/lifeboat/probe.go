@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // SchemaVersion is the coverage-report schema version. It is stamped into every

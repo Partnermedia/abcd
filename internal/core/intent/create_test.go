@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
-	"github.com/REPPL/abcd-cli/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/lint"
 )
 
 // TestCreateFromTextSeedsDraft is the itd-46 AC1 core: a quoted-text create files

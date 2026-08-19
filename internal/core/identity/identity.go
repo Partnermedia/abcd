@@ -17,8 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // PinRelPath is the committed identity pin, relative to the repo root.

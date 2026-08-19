@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // maxScanBytes caps how much of a tracked file privacy-hygiene will read. A

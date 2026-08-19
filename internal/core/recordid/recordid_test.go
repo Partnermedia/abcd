@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // TestMaxAcrossRefsSeesOtherBranches proves the ref scan finds an id committed on

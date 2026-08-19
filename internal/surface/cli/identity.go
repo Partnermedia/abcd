@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/REPPL/abcd-cli/internal/core/positioning"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/positioning"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // newIdentityCommand wires the `abcd identity` family: the repo's canonical

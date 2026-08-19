@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 func mustGitIdentity(t *testing.T, dir string, args ...string) {

@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/launch"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // MaxChangelogBytes caps the guarded CHANGELOG read. The file is a few hundred

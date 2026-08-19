@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/core/surface"
 )
 
 // The fixture constructors keep the taxonomy table readable.

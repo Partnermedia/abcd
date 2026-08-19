@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gittest"
 	"slices"
 	"strings"
 	"testing"

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/history"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/history"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // sessionEndRepo builds an isolated git repo with one commit (so it has a

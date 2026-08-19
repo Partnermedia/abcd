@@ -3,7 +3,7 @@ package launch
 import (
 	"path/filepath"
 
-	"github.com/REPPL/abcd-cli/internal/adapter/scanner"
+	"github.com/Partnermedia/abcd/internal/adapter/scanner"
 )
 
 // versionLocationRelPath is the committed version-location decision artefact.

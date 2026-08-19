@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/guard"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/guard"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

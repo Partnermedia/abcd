@@ -27,8 +27,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/lint"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // ReceiptSchemaVersion is the only receipt schema this build understands.

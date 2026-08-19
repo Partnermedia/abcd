@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/banlist"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/banlist"
+	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
 )
 
 // maxSummaryRunes bounds the prose a record contributes to a cut. The cut is

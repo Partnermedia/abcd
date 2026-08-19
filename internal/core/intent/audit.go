@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // audit.go — the intent-audit outbox+inbox (itd-80 phase 4; renamed from

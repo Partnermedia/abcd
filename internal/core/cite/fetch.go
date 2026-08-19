@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/urlguard"
+	"github.com/Partnermedia/abcd/internal/urlguard"
 )
 
 // maxRedirects bounds the hops one citation may take before the chain is called

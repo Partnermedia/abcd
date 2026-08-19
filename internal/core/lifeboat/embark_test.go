@@ -13,10 +13,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/capture"
-	"github.com/REPPL/abcd-cli/internal/core/intent"
-	"github.com/REPPL/abcd-cli/internal/core/spec"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/capture"
+	"github.com/Partnermedia/abcd/internal/core/intent"
+	"github.com/Partnermedia/abcd/internal/core/spec"
 )
 
 // ---------------------------------------------------------------------------

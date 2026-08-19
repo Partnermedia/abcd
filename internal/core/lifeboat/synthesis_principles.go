@@ -32,9 +32,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // SynthesizePrinciples builds or ingests principles.json (+ principles.md) for a

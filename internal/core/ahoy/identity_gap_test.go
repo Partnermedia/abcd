@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/identity"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/identity"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 func idGitRepo(t *testing.T, name, email string) string {

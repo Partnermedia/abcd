@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // resolveRoots resolves (repoRoot, issuesRoot) from the request fields plus git

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/surface"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // shipFixture is a repository the ship verb can actually cut from: a tagged

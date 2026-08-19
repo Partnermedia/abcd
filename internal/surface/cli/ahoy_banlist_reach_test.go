@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/ahoy"
-	"github.com/REPPL/abcd-cli/internal/core/banlist"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/Partnermedia/abcd/internal/core/banlist"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // TestAhoyStatusStatesThePrivateBanlistReach is spc-20 AC7 on the status board.

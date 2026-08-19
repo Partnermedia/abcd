@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/surface"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // SurfaceGuardStatus is the guardrail's verdict on a cut. Three states, kept

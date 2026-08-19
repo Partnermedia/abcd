@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/REPPL/abcd-cli/internal/surface/cli"
+	"github.com/Partnermedia/abcd/internal/surface/cli"
 )
 
 func main() {

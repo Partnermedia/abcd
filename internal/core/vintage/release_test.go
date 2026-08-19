@@ -15,7 +15,7 @@ func allowLoopback(ip net.IP) bool { return false }
 
 func TestGitHubReleaseFetcherReadsTagFromRedirect(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "https://example.invalid/REPPL/abcd-cli/releases/tag/v2.0.0", http.StatusFound)
+		http.Redirect(w, r, "https://example.invalid/Partnermedia/abcd/releases/tag/v2.0.0", http.StatusFound)
 	}))
 	defer srv.Close()
 

@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/guard"
+	"github.com/Partnermedia/abcd/internal/core/guard"
 )
 
 // guardHookCommand is the substring the PreToolUse manifest entry must contain

@@ -8,14 +8,14 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/urlguard"
+	"github.com/Partnermedia/abcd/internal/urlguard"
 )
 
 // latestReleaseURL is GitHub's stable "latest release" redirector: it answers a
 // 302 to /releases/tag/<tag>. Reading the tag off that redirect is exactly how
 // hooks/bootstrap.sh discovers the release to pin, so `version --check` and the
 // provisioner agree on what "latest" means.
-const latestReleaseURL = "https://github.com/REPPL/abcd-cli/releases/latest"
+const latestReleaseURL = "https://github.com/Partnermedia/abcd/releases/latest"
 
 // releaseCheckTimeout bounds the one attempt version --check makes.
 const releaseCheckTimeout = 15 * time.Second

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/launch"
-	"github.com/REPPL/abcd-cli/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/Partnermedia/abcd/internal/gittest"
 )
 
 // shipRenderableRepo is shipReadyRepo plus the two config artefacts a payload

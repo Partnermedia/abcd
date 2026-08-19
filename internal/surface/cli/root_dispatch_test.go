@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/record"
+	"github.com/Partnermedia/abcd/internal/core/record"
 )
 
 // TestRootDispatchJSONContract is the spc-26 surface AC: `abcd <id> --json`

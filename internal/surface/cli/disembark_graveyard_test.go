@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/core/lifeboat"
+	"github.com/Partnermedia/abcd/internal/core/lifeboat"
 )
 
 // buildGraveyardLifeboat hand-builds a packed lifeboat directory carrying a

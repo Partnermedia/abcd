@@ -16,10 +16,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/REPPL/abcd-cli/internal/core/capture"
-	"github.com/REPPL/abcd-cli/internal/core/frontmatter"
-	"github.com/REPPL/abcd-cli/internal/core/intent"
-	"github.com/REPPL/abcd-cli/internal/core/spec"
+	"github.com/Partnermedia/abcd/internal/core/capture"
+	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/Partnermedia/abcd/internal/core/intent"
+	"github.com/Partnermedia/abcd/internal/core/spec"
 )
 
 // IDRe is the family gate: the only positional shapes the root command routes

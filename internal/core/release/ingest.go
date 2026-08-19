@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/surface"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // changelogFile is the one release record this writes to. It is a constant

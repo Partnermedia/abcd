@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/launch/scaffold"
+	"github.com/Partnermedia/abcd/internal/core/launch/scaffold"
 )
 
 func main() {

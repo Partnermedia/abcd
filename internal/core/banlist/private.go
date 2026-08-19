@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // privateFormatDecl is the store's self-description, and it must be the file's

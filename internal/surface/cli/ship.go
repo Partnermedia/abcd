@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/REPPL/abcd-cli/internal/core/changelog"
-	"github.com/REPPL/abcd-cli/internal/core/launch"
-	"github.com/REPPL/abcd-cli/internal/core/release"
-	"github.com/REPPL/abcd-cli/internal/fsutil"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
-	"github.com/REPPL/abcd-cli/internal/termsafe"
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/Partnermedia/abcd/internal/core/release"
+	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

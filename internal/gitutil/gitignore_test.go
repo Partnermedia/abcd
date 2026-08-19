@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/REPPL/abcd-cli/internal/gittest"
-	"github.com/REPPL/abcd-cli/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 // runGit runs an isolated git command in repo and returns its combined output.

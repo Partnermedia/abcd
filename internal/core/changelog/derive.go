@@ -3,7 +3,7 @@ package changelog
 import (
 	"strings"
 
-	"github.com/REPPL/abcd-cli/internal/core/launch"
+	"github.com/Partnermedia/abcd/internal/core/launch"
 )
 
 // Derivation is the deterministic outcome of a release cut: what the next
