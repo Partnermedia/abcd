@@ -8,12 +8,16 @@ extension. Every lesson cites the record or change that carries it.
 ## What the day proved
 
 1. **The tiers are real, and the boundaries are sharp.** On a personal
-   repository there is no rung between "no access" and "can publish" — two
-   write invitations were accepted before the gap closed, and only the org
+   repository there is no rung between "no access" and "can publish" — write
+   invitations were already out before the gap closed, and only the org
    transfer created the Triage rung (adr-43). On the earlier free-tier private
-   repo, rulesets were structurally unavailable (the retired deferral in
-   `.githooks/pre-push`). Plan, visibility, and ownership each change which
-   fence pieces *exist*, not merely which are convenient.
+   repo, rulesets were structurally unavailable — the deferral that fact
+   forced lived in `.githooks/pre-push` until commit `3b17b6a` retired it.
+   Plan, visibility, and ownership each change which fence pieces *exist*,
+   not merely which are convenient. Note the epistemics: the free-tier limit
+   was discovered by *trying to apply* — a read-only probe sees the same
+   absence whether a piece is off or unavailable, which any verdict
+   vocabulary must say rather than guess.
 
 2. **Every server-side lever lives in a web console until it is mirrored.**
    The applied rulesets are mirrored under `.abcd/work/rulesets/` so gate
@@ -34,7 +38,7 @@ extension. Every lesson cites the record or change that carries it.
    settings call (PR 340) — but the scaffold-parity test forced it behind the
    `.Abcd` conditional, because a scaffolded repo without the environment
    would run ungated while *looking* gated. Looking-protected-while-open is
-   the false green `principles/loud-staging.md` forbids.
+   the false green [`loud-staging`](../../principles/loud-staging.md) forbids.
 
 5. **Identity assumptions break on org-owned remotes.** The launch scanner's
    `real_name` suppression keyed the caller's public handle to the remote
@@ -50,15 +54,17 @@ extension. Every lesson cites the record or change that carries it.
    check's name green.
 
 7. **The loud-degradation idiom already ships and works.** The private banlist
-   prints its `reach:` lines; a scaffolded store with zero entries warned on
-   every commit until populated, and the first staged match was blocked naming
-   only the key. "Armed but empty, and saying so" is the exact posture the
-   doctor needs per fence piece.
+   prints its `reach:` lines (`internal/surface/cli/banlist.go`), and the
+   committed pre-commit hook (`internal/core/ahoy/defaults/pre-commit`) warned
+   loudly on every commit while the scaffolded store held zero entries, then
+   blocked the first staged match naming only the key. "Armed but empty, and
+   saying so" is the exact posture the doctor needs per fence piece.
 
 8. **Cost advice is tier-dependent too.** Actions minutes are free on public
-   repositories (macOS included); the same fence on a private repo bills at a
-   10× macOS multiplier. What the doctor recommends should say what the
-   user's tier makes free.
+   repositories — including the macOS leg this repo runs on every PR
+   (`.github/workflows/ci.yml`, the `check` matrix) — while the same fence on
+   a private repo bills at a 10× macOS multiplier. Feeds itd-92's open
+   question on whether the doctor carries a cost column.
 
 9. **A rule without an executor needs saying.** Release retention is fully
    specified and computed every cut, but nothing prunes (iss-282). "The rule
