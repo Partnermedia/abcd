@@ -63,3 +63,6 @@ references.bib
 /.bootstrap.lock
 /.bootstrap.tmp.*
 /.bootstrap.attempt
+
+# Generated docs site output (mkdocs build) — disposable, never committed.
+/site/

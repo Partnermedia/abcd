@@ -1,0 +1,32 @@
+# Renders docs/ (the single source of truth) into the disposable HTML site.
+# The site builder runs `mkdocs build` (theme: mkdocs-material); the output in
+# site/ is generated and never committed.
+site_name: abcd
+site_description: Agent-Based Configuration for Development — a host-agnostic configuration layer for intent-driven development.
+site_url: https://abcdev.app
+repo_url: https://github.com/Partnermedia/abcd
+repo_name: Partnermedia/abcd
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - tables
