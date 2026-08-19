@@ -214,7 +214,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.25.13'
 
       # Enforce the format gate AGENTS.md documents (`gofmt -l .`). Formatting is
       # platform-independent, so run it once on the ubuntu leg to avoid duplicate
@@ -352,6 +352,41 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.25.13'
       - name: Smoke every command
         run: make smoke
+
+  # The one supply-chain vector unreadable by eye: a dependency swap. Diffs the
+  # PR's dependency changes against the advisory databases and fails on a known
+  # vulnerability. pull_request only — the action reads the PR's diff, which a
+  # merge_group or push event does not carry — and NOT a required check, so it
+  # can never wedge the queue.
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+
+  # Known-vulnerability scan over the module's own dependency graph, on every
+  # event (unlike dependency-review it needs no PR diff). Pinned like every
+  # other tool this workflow runs.
+  govulncheck:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.13'
+      - name: Scan for known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
