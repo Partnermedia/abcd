@@ -62,6 +62,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-77` — Relocatable user-level home
 - `itd-126` — Team bibliography share/ingest: citation data travels the repo, corpora never do
 - `itd-127` — Paper reconstruction from the provenance ledger
+- `itd-128` — One canonical YAML scalar resolver: every decoder delegates to one exported frontmatter helper
 - `itd-78` — Intent-dependency graph: what to build first, even when it is something small
 - `itd-82` — Ledger drain: one verb triages the open ledger into work that ships itself and work a human must think about
 - `itd-83` — The review bar fires by itself, in every repo abcd manages
