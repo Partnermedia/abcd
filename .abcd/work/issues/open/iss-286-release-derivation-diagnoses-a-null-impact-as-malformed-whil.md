@@ -19,3 +19,4 @@ line. Verdicts never diverge (both paths reject), so this is operator-facing
 message inconsistency only; an `IsNull` gate at the call site restores
 parity. Evidence: `.abcd/work/reviews/2026-08-19-pr-294-null-predicate/`
 (F8).
+Forge mirror: #373
