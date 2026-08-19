@@ -22,16 +22,19 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
+            "context": "attribution"
+          },
+          {
             "context": "check (macos-latest)"
           },
           {
             "context": "check (ubuntu-latest)"
           },
           {
-            "context": "gitleaks"
+            "context": "external-review"
           },
           {
-            "context": "zizmor"
+            "context": "gitleaks"
           },
           {
             "context": "record-lint"
@@ -40,7 +43,7 @@
             "context": "smoke"
           },
           {
-            "context": "attribution"
+            "context": "zizmor"
           }
         ],
         "strict_required_status_checks_policy": true
