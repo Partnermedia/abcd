@@ -143,3 +143,5 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-40](0040-review-audit-lint-are-three-verbs.md) | Review, audit, lint, and gate are four buckets, separated by what each compares | accepted | 2026-08-16 |
 | [adr-41](0041-corpus-trust-boundary.md) | Documents and ledgers never leave the user tier; a public citation requires both gates | proposed | 2026-08-16 |
 | [adr-42](0042-guard-parse-layer-is-a-mistake-filter.md) | The guard's parse layer is a mistake filter, not a security boundary — matching is two-tier, and completeness is abandoned as a goal | accepted | 2026-08-18 |
+| [adr-43](0043-inbound-equals-outbound-and-the-org-role-ladder.md) | Contributions are inbound = outbound MIT, and the trust boundary is the organisation's role ladder | accepted | 2026-08-19 |
+| [adr-44](0044-remote-mutation-and-caller-identity-trust-rules.md) | abcd never mutates a remote uninvited, and identity derives from caller-local facts | proposed | 2026-08-19 |
