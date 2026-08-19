@@ -142,7 +142,7 @@ principles/compose/audit — plus the embark unpack half of the round-trip.
   committed markdown under `.abcd/work/reviews/`; backgrounding is a host
   affordance and abcd ships no `resume` verb by its own design. The
   host-delegation seam itd-2 was said to block on already ships **twice** —
-  `memory.Distiller` fed by `--pages-json`, and `intent review ingest
+  `memory.Distiller` fed by `--pages-json`, and `intent audit ingest
   --verdict-json` with a dead-letter path.
 - **The one real dependency is data, not code.** Phase 2's history and memory
   *packages* are built; their **stores are empty**. Pass B — mining chat for the
