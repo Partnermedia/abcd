@@ -59,11 +59,22 @@ func fakePluginRoot(t *testing.T, script string) string {
 }
 
 // runShim executes the manifest's command string the way the host does: a POSIX
-// shell, with CLAUDE_PLUGIN_ROOT pointing at the plugin root.
-func runShim(t *testing.T, command, pluginRoot string) (stderr string, code int) {
+// shell, with CLAUDE_PLUGIN_ROOT pointing at the plugin root. PATH is
+// controlled — system utilities plus one caller-supplied directory — because
+// the shim's last resolution rung is a PATH lookup and the developer machine
+// running these tests may itself carry a real `abcd` there.
+func runShim(t *testing.T, command, pluginRoot, pathDir string) (stderr string, code int) {
 	t.Helper()
+	pathEnv := "/usr/bin:/bin"
+	if pathDir != "" {
+		pathEnv = pathDir + ":" + pathEnv
+	}
 	cmd := exec.Command("/bin/sh", "-c", command)
-	cmd.Env = append(os.Environ(), "CLAUDE_PLUGIN_ROOT="+pluginRoot)
+	cmd.Env = []string{
+		"PATH=" + pathEnv,
+		"HOME=" + t.TempDir(),
+		"CLAUDE_PLUGIN_ROOT=" + pluginRoot,
+	}
 	cmd.Stdin = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"ls"}}`)
 	var se strings.Builder
 	cmd.Stderr = &se
@@ -118,7 +129,7 @@ func TestGuardShimFailsOpenLoud(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stderr, code := runShim(t, command, fakePluginRoot(t, tc.script))
+			stderr, code := runShim(t, command, fakePluginRoot(t, tc.script), "")
 			if code == 2 {
 				t.Errorf("a broken guard must never block the session (exit 2); stderr = %q", stderr)
 			}
@@ -135,24 +146,45 @@ func TestGuardShimFailsOpenLoud(t *testing.T) {
 func TestGuardShimPropagatesRealDecisions(t *testing.T) {
 	_, command := preToolUseGuardCommand(t)
 
-	if stderr, code := runShim(t, command, fakePluginRoot(t, `echo "blocked" >&2; exit 2`)); code != 2 {
+	if stderr, code := runShim(t, command, fakePluginRoot(t, `echo "blocked" >&2; exit 2`), ""); code != 2 {
 		t.Errorf("a real block must reach the host as exit 2; got %d (stderr %q)", code, stderr)
 	}
-	if stderr, code := runShim(t, command, fakePluginRoot(t, "exit 0")); code != 0 {
+	if stderr, code := runShim(t, command, fakePluginRoot(t, "exit 0"), ""); code != 0 {
 		t.Errorf("a real allow must reach the host as exit 0; got %d (stderr %q)", code, stderr)
 	}
-	if stderr, _ := runShim(t, command, fakePluginRoot(t, "exit 0")); strings.Contains(stderr, "UNGUARDED") {
+	if stderr, _ := runShim(t, command, fakePluginRoot(t, "exit 0"), ""); strings.Contains(stderr, "UNGUARDED") {
 		t.Errorf("a working guard must not cry wolf; stderr = %q", stderr)
 	}
 	// Exit 1 is the adapter's own fail-open-loud status: it RAN, it could not
 	// decide, and it allowed. The shim must pass that through untouched — adding
 	// its own "FAILED TO RUN" on top would tell the reader a lie about which part
 	// broke.
-	stderr, code := runShim(t, command, fakePluginRoot(t, `echo "abcd guard: NOT CHECKED" >&2; exit 1`))
+	stderr, code := runShim(t, command, fakePluginRoot(t, `echo "abcd guard: NOT CHECKED" >&2; exit 1`), "")
 	if code == 2 {
 		t.Errorf("the adapter's fail-open status must never become a block; got %d", code)
 	}
 	if strings.Contains(stderr, "FAILED TO RUN") {
 		t.Errorf("a binary that ran and reported must not be described as failing to run; stderr = %q", stderr)
+	}
+}
+
+// TestGuardShimFallsBackToPATH pins the resolution ladder's second rung: an empty
+// plugin root with an abcd on PATH still guards the session — a block stays a
+// block and no UNGUARDED warning prints. (iss-275: without a controlled PATH the
+// binary-absent case above exercised this rung by accident on any machine that
+// dogfoods the install, instead of proving the shim fails open.)
+func TestGuardShimFallsBackToPATH(t *testing.T) {
+	_, command := preToolUseGuardCommand(t)
+	pathDir := t.TempDir()
+	stub := filepath.Join(pathDir, "abcd")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho \"blocked\" >&2\nexit 2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stderr, code := runShim(t, command, t.TempDir(), pathDir)
+	if code != 2 {
+		t.Errorf("the PATH rung must guard the session; exit = %d (stderr %q)", code, stderr)
+	}
+	if strings.Contains(stderr, "UNGUARDED") {
+		t.Errorf("a session guarded via PATH must not warn UNGUARDED; stderr = %q", stderr)
 	}
 }
