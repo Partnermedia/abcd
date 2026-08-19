@@ -11,7 +11,8 @@
   // asserts it, so a drifted or lost attachment is re-claimed on the next
   // deploy instead of silently staying wherever the dashboard last left it.
   "routes": [
-    { "pattern": "abcdev.app", "custom_domain": true }
+    { "pattern": "abcdev.app", "custom_domain": true },
+    { "pattern": "www.abcdev.app", "custom_domain": true }
   ],
   "assets": {
     "directory": "./site",
