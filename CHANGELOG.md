@@ -20,6 +20,14 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The documentation renders as a site.** `mkdocs.yml` builds `docs/` — the
+  single source of truth — into a disposable HTML site (Material theme, pinned
+  in `docs/requirements.txt`): any static-site host runs
+  `pip install -r docs/requirements.txt && mkdocs build` and serves `site/`.
+  Directory-style links in the docs pages became explicit file links so every
+  page resolves both on the repository host and on the rendered site; the
+  generated `site/` output is gitignored, never committed.
+
 - **The surface registry can no longer wave its hands.** Every surface file under the brief's `04-surfaces/` carries a machine-checked `## Sub-verbs` table recording two facts per verb — its adr-40 bucket (`lint` / `review` / `audit` / `gate`, or `—` for a non-assessment verb) and whether it exists (`shipped` / `staged`) — and the `surface_coverage` record-lint rule gains a sub-verb pass that checks every row against the committed command-tree snapshot in both directions: a `shipped` row must be registered, a `staged` row must not be, a registered sub-command must have a row, and a sub-command-bearing verb cannot hide without a table. Exemptions (host-delegated surfaces, operator-internal verbs, the bare command) are explicit config, never silent skips; a duplicate table heading and a malformed row are findings too. The bucket enum is registered as reserved vocabulary, closed and PR-to-extend, and every sub-verb now has one machine-checked home that a stale prose claim can be corrected against. (itd-122, spc-27; closes iss-246)
 
 - **Type the id, get your next move.** `abcd <id>` dispatches on any record id — `iss-N`, `itd-N`, `spc-N`, `adr-N` — and reports, strictly read-only, what the record is, its links, and the concrete next move for its lifecycle state: a draft intent points at the planning interview, a planned one at its spec body or at implementation (the `intent ready` checks decide), an open issue at `capture promote`/`resolve`/`wontfix`, a promoted one at the intent it graduated into, and decisions are read. Bare `abcd` answers *what can I do*; `abcd <id>` answers *what is this*. Any other positional stays on the unknown-command path unchanged, and every recommended verb is pinned to the live command tree by a test, so a future rename breaks the build instead of shipping stale advice. (itd-121, spc-26)
