@@ -81,6 +81,12 @@ called out in a **Breaking** section.
   clones, plugin installs, release downloads — keeps working through GitHub's
   redirect, but new work should reference the new path.
 
+- **A human stands between merge and publish.** The release job runs in the
+  `release` environment, which carries a required reviewer: a push to `main`
+  that cuts a release now pauses as a pending deployment until a maintainer
+  approves it, instead of publishing on the merge alone. Rehearsals
+  (`workflow_dispatch`) are unaffected — they publish nothing and gain no gate.
+
 ### Fixed
 
 - **`abcd guard` no longer misses a force-push behind an unlisted git global option.** The six git entries listed the global options that consume the following token so the matcher could step over them and find the subcommand — but the list named seven and was wrong about which — two take no value at all, while three genuinely value-taking globals were missing. `--attr-source <tree>` (git 2.40+) and `--config-env <name>=<var>` were absent, so their value was read as the subcommand: `git --attr-source HEAD push --force origin main` performs the identical forced update and was silently **allowed**, as were `--no-verify` commits and `reset --hard`. Every git blocker was bypassable by the same prefix, and only the separate-token spelling evaded — the glued `--opt=value` form was already skipped as an ordinary flag. A third, `--shallow-file`, was missing from the fix's own first cut and is a live force-push bypass in its own right — it has been in git since 1.9 and is absent from `git --help`, as are the other two. All three are now listed on all six entries. The test no longer *asserts* the list is complete: it **re-derives the classification from the git on the machine**, probing whether git reads the next token as the subcommand, and treats an unrecognised flag as value-taking so an unclassifiable option demands listing rather than being ignored. The earlier shape — a hard-coded size plus a superset-tolerant membership check — read as authoritative while being unable to notice a missing member, and duly certified a list containing a live bypass. (gh-299)
