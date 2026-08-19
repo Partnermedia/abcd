@@ -92,7 +92,7 @@ func newVersionCommand(asJSON *bool) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&check, "check", false, "fetch the latest release once and compare (the only command that touches the network); names its source")
+	cmd.Flags().BoolVar(&check, "check", false, "fetch the latest release once and compare (this command's only network touch; abcd never fetches implicitly — adr-38); names its source")
 	return cmd
 }
 
