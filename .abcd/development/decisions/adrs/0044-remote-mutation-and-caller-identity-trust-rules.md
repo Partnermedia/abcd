@@ -1,7 +1,7 @@
 ---
 id: adr-44
 slug: remote-mutation-and-caller-identity-trust-rules
-status: proposed
+status: accepted
 date: 2026-08-19
 supersedes: null
 superseded_by: null
@@ -57,6 +57,8 @@ precedents. One of them already binds shipped code.
 
 - itd-92's doctor is read-only by construction; the apply capability is a
   separate intent bound by rule 1.
-- The corresponding brief invariant lands when this record moves to accepted.
+- The corresponding brief invariant is invariant 10 in
+  [`02-constraints/03-invariants.md`](../../brief/02-constraints/03-invariants.md),
+  landed with this record's acceptance.
 - Rule 2 is already enforced in the launch scanner; any new probe (the doctor)
   inherits it as a requirement, not a suggestion.
