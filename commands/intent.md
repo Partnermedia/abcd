@@ -97,6 +97,14 @@ The interview turns a draft into an intent the maintainer has signed off. Run
 it only in a live session with the human; deferral of any question is a valid
 answer, but silence is not consent.
 
+**Prerequisite — two adversarial reviews.** Before the interview, the draft
+has been through two independent adversarial reviewers with different lenses
+(design/feasibility and record-discipline are the proven pair), and their
+surviving findings are applied or explicitly rejected — per
+`adversarial-review-scales-with-blast-radius` in the development record's
+principles. An unreviewed draft does not reach the interview; the readiness
+gate that will refuse the move mechanically is a recorded seed until built.
+
 1. Read the draft record; summarise it back: the press release, why it
    matters, the current Acceptance Criteria (say explicitly when they are
    facilitator- or agent-seeded and unconfirmed), and any open questions.
