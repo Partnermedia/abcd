@@ -18,13 +18,13 @@ versions: null
 A **persona** is a named, role-typed placeholder character from `.abcd/development/personas.json`.
 Personas (Alice, Bob, Carol, etc.) represent real user archetypes in press releases and design
 documents without embedding real names or PII. Each persona has a role hint (e.g., "product lead",
-"developer") and is selected by matching the role the document needs.
+"solo founder") and is selected by matching the role the document needs.
 
 ## When to use
 
 Use a persona whenever a press release, intent document, or design fiction needs a human voice or
-quote. Always pick from the registry — never invent names. Match the role hint when the role
-matters; pick randomly otherwise.
+quote. Always pick from the registry — never invent names. Selection is by role, never by
+name: the document's audience determines the role, and the role's registered name is used.
 
 ## When NOT to use
 
@@ -33,8 +33,8 @@ Do not call a persona a "user" (too generic and erases the named-character frami
 
 ## Examples
 
-- "Said Carol, product lead: 'Grill caught the ambiguity in three minutes.'"
-- "Alice (developer) would use `/abcd:intent grill` before every plan submission."
+- "Said Iris, product lead: 'Grill caught the ambiguity in three minutes.'"
+- "Alice (product engineer) would use `/abcd:intent grill` before every plan submission."
 
 ## Related terms
 
