@@ -7,5 +7,5 @@ configuration keys, environment variables, file schemas, and the command referen
 - [`terminology.md`](terminology.md) — the terminology crosswalk: established
   agentic-AI terms mapped to abcd's position on each (uses / adapts / rejects /
   watching), every definition cited to a primary source.
-- [`cli/`](cli/) is the auto-generated command reference (from the Cobra command
+- [`cli/`](cli/README.md) is the auto-generated command reference (from the Cobra command
   tree), gated against drift by a build test.

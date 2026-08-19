@@ -1,0 +1,14 @@
+{
+  // Assets-only worker serving the generated docs site: no script, just the
+  // static output of `mkdocs build` (see mkdocs.yml). The site builder runs
+  //   pip install -r docs/requirements.txt && mkdocs build
+  // and deploys with
+  //   npx wrangler deploy
+  // The name matches the host's existing project for this repository.
+  "name": "abcd",
+  "compatibility_date": "2026-08-19",
+  "assets": {
+    "directory": "./site",
+    "not_found_handling": "404-page"
+  }
+}

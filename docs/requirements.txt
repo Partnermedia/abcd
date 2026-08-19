@@ -1,0 +1,2 @@
+# Pinned so every site build renders docs/ identically; mkdocs-material pins mkdocs<2.
+mkdocs-material==9.7.7
