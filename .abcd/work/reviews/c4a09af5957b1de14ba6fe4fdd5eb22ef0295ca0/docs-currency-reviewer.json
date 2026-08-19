@@ -1,0 +1,55 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "c4a09af5957b1de14ba6fe4fdd5eb22ef0295ca0"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-19T20:24:49Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3a9258674c585fcad636d912a94b8cd0e0cb2a33f8725c95ebbfcbd53f0c0bce",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.0"
+  },
+  "categories": {
+    "false-claim": 1,
+    "undocumented-surface": 0,
+    "fictional-layout": 1,
+    "criterion-violation": 1,
+    "stale-count": 0
+  },
+  "failing": [
+    {
+      "item": "CHANGELOG.md",
+      "where": "CHANGELOG.md:130,136,137",
+      "claim": "[0.6.0] lists the iss-268 attribution-gate fence fix as three separate near-duplicate entries",
+      "reality": "One fix, one change — three drafts of the same entry shipped in the release record; two are superseded and should be deleted",
+      "class": "criterion-violation",
+      "disposition": "fixed in the receipts commit: the two superseded drafts are deleted; the correct footer-last entry stands alone"
+    },
+    {
+      "item": "CHANGELOG.md",
+      "where": "CHANGELOG.md:136",
+      "claim": "a fence 'nested inside a list item is indented past the limit and is not stripped either'",
+      "reality": "scripts/check-attribution.sh strips a first-level list-item fence (content at column 2 is under the 3-space indent limit) — the accepted residual iss-270 records; only deeper-nested fences are unstripped. The sibling drafts state it correctly; this stale duplicate contradicts the code",
+      "class": "false-claim",
+      "disposition": "fixed in the receipts commit: the contradicting draft is one of the two deleted"
+    },
+    {
+      "item": "docs/reference/README.md",
+      "where": "docs/reference/README.md:6",
+      "claim": "Hand-written reference pages (config, schemas) live directly here",
+      "reality": "docs/reference/ contains only terminology.md and the generated cli/ directory; no config or schema reference page exists",
+      "class": "fictional-layout",
+      "disposition": "fixed in the receipts commit: the sentence now names the terminology crosswalk instead of pages that do not exist"
+    }
+  ],
+  "_reviewProvenance": "Reviewed the pristine worktree at commit c4a09af (v0.6.1 cut): every page under docs/ (8 files), README.md, and CHANGELOG [0.6.1]+[0.6.0] claim-by-claim. Ran the deterministic gate (abcd docs lint via the built binary: 0 blockers, 1 advisory), the CLI-reference parity test (TestReferenceMatchesCommittedPage) and the self-scaffold pin tests (all green). Exercised the built darwin-arm64 binary directly for every 0.6.0 breaking rename (audit->lint, disembark oracle->review, intent review->audit: new verbs present, old spellings refused with successors named) and the guard fixes (nice / zsh -c / git --attr-source all block, unrecognised launcher warns at exit 0, hook-plane usage errors exit 1, guard check keeps exit 2). Located implementing code for each remaining claim: capture ledger path, review artefact paths and review_path key, lint waivers and tri-state exits, bootstrap checksum/platform/throttle logic, ahoy install --bin-dir, external-review and release-environment workflows, the 1.25.13 toolchain pin, and the attribution fence matcher. Swept docs/ and README for pre-0.6.0 spellings: none found. Review ran in a pristine worktree of the content commit; the three findings are fixed in the receipts commit per their dispositions, so the released tree differs from the reviewed tree only by those fixes and the two receipts themselves. VERDICT: PROMOTE. The judge is the release session's pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is recorded in the session transcript, withheld from committed artifacts by harness policy."
+}
