@@ -206,6 +206,25 @@ func TestExecStringReadsAShortCluster(t *testing.T) {
 	}
 }
 
+// TestExecStringValueFlagClusterDoesNotHidePayload pins the value-flag cluster
+// case: a value-taking short flag before the payload letter (`script -Tc out.txt
+// -c CMD`, where getopt reads `-T` with value `c`) must not be mis-read as
+// `-T -c`. Reading it as a payload cluster resolves a bogus value and — because
+// the segment then looks payload-carrying — switches the Tier-2 fail-safe off,
+// so the real later `-c CMD` reaches no tier. It must block on the genuine `-c`.
+func TestExecStringValueFlagClusterDoesNotHidePayload(t *testing.T) {
+	for _, cmd := range []string{
+		`script -Tc out.txt -c 'git push --force origin main'`,
+		`script -Oc log -c 'git push --force origin main'`,
+	} {
+		t.Run(cmd, func(t *testing.T) {
+			if d := verdictOf(t, cmd); d.Verdict != VerdictBlock {
+				t.Errorf("verdict = %q, want %q: the value-flag cluster hid the -c payload", d.Verdict, VerdictBlock)
+			}
+		})
+	}
+}
+
 // TestExecStringSkipsAFlagShapedValue is the half of the value-flag skip that
 // bites. A value that is not flag-shaped (`/bin/sh`, `bob`) is stepped as an
 // operand whether or not the table names its flag, so only a FLAG-SHAPED value

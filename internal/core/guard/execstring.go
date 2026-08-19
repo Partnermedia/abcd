@@ -174,7 +174,7 @@ func scanExecString(tokens, payloadFlags, valueFlags []string, commandOperandAft
 
 		// A short cluster carrying the payload flag last: `su -lc <value>`, which
 		// getopt reads as -l -c <value>.
-		if v, ok := clusteredPayload(tok, payloadFlags); ok {
+		if v, ok := clusteredPayload(tok, payloadFlags, valueFlags); ok {
 			if v != "" {
 				return v, true, true // glued value: -c<value>
 			}
@@ -196,7 +196,16 @@ func scanExecString(tokens, payloadFlags, valueFlags []string, commandOperandAft
 // it at all. A cluster is only read when every letter before the payload letter
 // is a plausible boolean short option — anything else is a flag this table does
 // not model, and guessing at it would invent a payload.
-func clusteredPayload(tok string, payloadFlags []string) (value string, ok bool) {
+//
+// A value-taking short flag (valueFlags) before the payload letter is the case
+// that guessing gets WRONG: getopt hands it the rest of the token as its value,
+// so `script -Tc out.txt -c <hazard>` is `-T` with value `c`, not `-T -c`, and
+// the real `-c` is later on the line. Reading `-Tc` as a payload cluster there
+// resolves a bogus value and — because the segment then looks payload-carrying —
+// switches the Tier-2 fail-safe off, letting the real hazard through both tiers.
+// So a value-flag letter aborts the cluster read; the scan falls through to the
+// operand and finds the genuine later payload flag.
+func clusteredPayload(tok string, payloadFlags, valueFlags []string) (value string, ok bool) {
 	if len(tok) < 3 || strings.HasPrefix(tok, "--") {
 		return "", false
 	}
@@ -212,6 +221,9 @@ func clusteredPayload(tok string, payloadFlags []string) (value string, ok bool)
 		for _, c := range tok[1 : idx+1] {
 			if !isShortOptionLetter(c) {
 				return "", false
+			}
+			if containsString(valueFlags, "-"+string(c)) {
+				return "", false // a value flag swallows the rest as its argument
 			}
 		}
 		return tok[idx+2:], true
