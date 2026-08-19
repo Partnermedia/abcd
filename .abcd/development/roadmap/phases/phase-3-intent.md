@@ -98,7 +98,7 @@ Phase 1 is joined here by the real `grill` sub-verb.
 ## Maps against
 
 - **Brief:** `04-surfaces/05-intent.md` (the intent surface, grill, the
-  intent-fidelity-reviewer's roles); `05-internals/06-lint.md` (the GL/GR lint
+  intent-auditor's roles); `05-internals/06-lint.md` (the GL/GR lint
   families); `05-internals/08-skills.md` (the abcdGrill skill).
 - **Intents deliver the expectation:** itd-27 delivers the grill sub-verb and
   glossary; itd-42 delivers the coherence-aware tiers; itd-28 delivers the
