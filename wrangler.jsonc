@@ -1,10 +1,16 @@
 {
   // Assets-only worker serving the generated docs site: no script, just the
-  // static output of `mkdocs build` (see mkdocs.yml). The site builder runs
-  //   pip install -r docs/requirements.txt && mkdocs build
-  // and deploys with
-  //   npx wrangler deploy
-  // The name matches the host's existing project for this repository.
+  // static output of `mkdocs build` (see mkdocs.yml). The name matches the
+  // host's existing project for this repository. The build commands live in
+  // the host project's settings (dashboard state, recorded here because the
+  // tree is the only durable record):
+  //   build command:   pip install -r docs/requirements.txt && mkdocs build
+  //   deploy command:  npx wrangler deploy
+  //   version command: pip install -r docs/requirements.txt && mkdocs build && npx wrangler versions upload
+  // The version command repeats the build DELIBERATELY: non-production branch
+  // builds run the version command without the build command (observed
+  // 2026-08-19 across four builds), so it must be self-contained or every
+  // branch preview fails on a missing ./site.
   "name": "abcd",
   "compatibility_date": "2026-08-19",
   // The site's domain is committed config, not dashboard state: the deploy

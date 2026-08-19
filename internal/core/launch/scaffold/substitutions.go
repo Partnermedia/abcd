@@ -24,7 +24,7 @@ var abcdExtraGates = []Gate{
 func AbcdSubstitutions() Substitutions {
 	return Substitutions{
 		DefaultBranch: "main",
-		GoVersion:     "1.25",
+		GoVersion:     "1.25.13",
 		Abcd:          true,
 		ExtraGates:    abcdExtraGates,
 		SemanticGates: abcdSemanticGates,
