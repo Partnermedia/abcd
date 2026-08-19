@@ -104,6 +104,9 @@ var (
 	urlSpanRe = regexp.MustCompile(`(?:https?://|git@|ftp://|ssh://)[^\s"'` + "`" + `)>\]<]+`)
 	// A git noreply email is not a leak.
 	noreplyRe = regexp.MustCompile(`(?i)@users\.noreply\.github\.com$`)
+	// The GitHub login embedded in a users.noreply.github.com address, in both
+	// its forms ("id+login@..." and the legacy "login@...").
+	noreplyLoginRe = regexp.MustCompile(`(?i)^(?:[0-9]+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$`)
 )
 
 // homeBoundary is the trailing-boundary set for a home-path match (ported from
@@ -164,6 +167,17 @@ func newIdentityMatchers(id Identity) identityMatchers {
 	}
 	m.nameEqGithub = id.GitUserName != "" && id.GitRemoteUsername != "" &&
 		strings.EqualFold(id.GitUserName, id.GitRemoteUsername)
+	// The remote-owner comparison alone breaks on an org-owned remote (iss-283):
+	// the owner stops being the caller the moment the repo transfers, and the
+	// caller's public handle would start scanning as a real name. The noreply
+	// address carries the caller's own GitHub login locally, so a user.name equal
+	// to that login is the same public handle, whatever the remote's owner is.
+	if !m.nameEqGithub && id.GitUserName != "" {
+		if lm := noreplyLoginRe.FindStringSubmatch(id.GitUserEmail); lm != nil &&
+			strings.EqualFold(id.GitUserName, lm[1]) {
+			m.nameEqGithub = true
+		}
+	}
 	return m
 }
 

@@ -213,6 +213,31 @@ func TestIdentityNonASCIIName(t *testing.T) {
 	}
 }
 
+// TestIdentityNameEqualsNoreplyLogin proves the real_name suppression survives
+// an org-owned remote (iss-283): when user.name equals the GitHub login embedded
+// in the caller's users.noreply.github.com address, the name is a public handle,
+// not a real name — even though the remote's owner (an organisation) no longer
+// matches it.
+func TestIdentityNameEqualsNoreplyLogin(t *testing.T) {
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+	for _, email := range []string{
+		"77722411+octopat@users.noreply.github.com",
+		"octopat@users.noreply.github.com",
+		"77722411+OctoPat@users.noreply.github.com",
+	} {
+		id := Identity{GitUserName: "octopat", GitUserEmail: email, GitRemoteUsername: "some-org"}
+		if got := ScanText(`"name": "octopat",`, id, pats, sev, "f"); hasKind(got, kindRealName) {
+			t.Errorf("public noreply login flagged as real_name (email %q): %+v", email, got)
+		}
+	}
+	// A user.name that does NOT match the noreply login stays a real name.
+	id := Identity{GitUserName: "Octo Pat", GitUserEmail: "77722411+octopat@users.noreply.github.com", GitRemoteUsername: "some-org"}
+	if got := ScanText("Reviewed-by: Octo Pat", id, pats, sev, "f"); !hasKind(got, kindRealName) {
+		t.Errorf("real name unlike the noreply login not flagged: %+v", got)
+	}
+}
+
 // TestIdentityEmailCaseInsensitive proves a case variant of the caller's own
 // email still trips the hard_fail real_email gate.
 func TestIdentityEmailCaseInsensitive(t *testing.T) {
