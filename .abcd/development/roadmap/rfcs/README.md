@@ -132,7 +132,7 @@ frontmatter links).
 | `rfcs/rfc-N-<slug>.md` | `spawned_intents: [itd-N, ...]` (if the RFC's resolution produced new intents) |
 | `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `related_rfcs: [rfc-N, ...]` (when an intent references an RFC) |
 
-A Go lint (per itd-4 + brief § 11) extends to verify these reciprocally.
+A Go lint (per itd-4 + [`brief/05-internals/06-lint.md`](../../brief/05-internals/06-lint.md)) extends to verify these reciprocally.
 
 ---
 
@@ -140,4 +140,4 @@ A Go lint (per itd-4 + brief § 11) extends to verify these reciprocally.
 
 - [Intents](../../intents) — the press-release-format roadmap surface
 - [Phases](../phases) — the ordered build plan
-- [Brief § 5](../../brief/README.md) — command and naming conventions (RFC-1 is referenced from `/abcd:loot`'s licence-check non-circumventability rule)
+- [Brief — naming conventions](../../brief/02-constraints/04-naming.md) — command and naming conventions (RFC-1 is referenced from `/abcd:loot`'s licence-check non-circumventability rule)

@@ -8,7 +8,7 @@ The brief is split across numbered folders rather than a single `README.md`. Rea
 
 1. **Concurrent editing** — multiple agents can work on different sections without serialising on one file.
 2. **Diff legibility** — `git log brief/04-surfaces/02-disembark.md` tracks the evolution of one command's design, not a whole-brief blob.
-3. **Agent context budget** — agents that need only one section can pull just that file (relevant to the [`04-surfaces/02-disembark.md § 3`](04-surfaces/02-disembark.md#3-agent-context-budget) budget rule).
+3. **Agent context budget** — agents that need only one section can pull just that file (relevant to the [`05-internals/03-configuration.md`](05-internals/03-configuration.md) `maxAgentTokens` budget).
 4. **Reusable shape** — the same numbered-folder layout serves as a template for future projects (the lifeboat output shape mirrors this skeleton, see [`04-surfaces/02-disembark.md § 5`](04-surfaces/02-disembark.md#5-output-shape)).
 
 ## Naming convention

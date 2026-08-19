@@ -21,7 +21,7 @@ adapters the later stores plug into, the disciplines the later specs are
 measured against, and the vocabulary every later doc is written in. Numbering it
 0 rather than 1 states honestly that no *product capability* lands here; the
 first such moment is `/abcd:ahoy` and `/abcd:launch` in Phase 1. The qualifier
-is "product capability", not "user-typed surface": the `/abcd:intent review`
+is "product capability", not "user-typed surface": the `/abcd:intent audit`
 discipline-audit *sub-verb* is a substrate/maintenance surface — the substrate
 inspecting itself, not a product capability. So Phase 0 does carry a user-typed
 verb; what it does not carry is a product-capability user moment.
@@ -65,7 +65,7 @@ verb; what it does not carry is a product-capability user moment.
   the Modification Grammar boilerplate?), **when** Phase 0 closes, **then** the
   mechanical half is hard-enforced by the Go lints (the `IL`/`MG`/`VR` lint
   families, `prompt_version`/`capability_scope` checks) and the judgement half
-  is formalised by the dedicated `intent-fidelity-reviewer`, run through the
+  is formalised by the dedicated `intent-auditor`, run through the
   host-delegated oracle. Before the reviewer lands, the judgement half is
   covered by the oracle's plan-review and impl-review passes; once it ships,
   "the disciplines are in force" is true at full strength — **lint-enforced AND
@@ -93,9 +93,9 @@ the disciplines are registered under), itd-43 (spec-terminology).
 surface scaffolding. This is the arch-neutral floor the disciplines are enforced
 on and the later stores plug into.
 
-The `intent-fidelity-reviewer` ships as the last Phase 0 spec (see the
+The `intent-auditor` ships as the last Phase 0 spec (see the
 discipline-gate Phase Acceptance bullet above). It runs through the
-host-delegated oracle and also exposes the manual `/abcd:intent review` surface.
+host-delegated oracle and also exposes the manual `/abcd:intent audit` surface.
 
 ## Maps against
 
