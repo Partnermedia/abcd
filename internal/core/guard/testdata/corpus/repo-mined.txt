@@ -1,0 +1,972 @@
+# Command lines mined from this repository — the false-positive corpus for the
+# guard's Tier 2 fail-safe (adr-42, iss-272).
+#
+# Sources are the places a command line is WRITTEN DOWN rather than typed: fenced
+# shell blocks in prose, Makefile recipes, scripts/, and workflow `run:` steps.
+# That biases the corpus toward documented commands, which is the point — they
+# are the commands an agent is most likely to propose, and this repository's
+# subject IS the hazard registry, so it is a hostile sample by construction.
+#
+# Regenerate after a large docs change; the ceiling the test enforces lives in
+# corpus_test.go, not here. Lines are deduplicated and order is not meaningful.
+make preflight      # the pre-push gate: lint-reviews + record-lint + docs-lint,
+make build          # cross-compiles bin/abcd-<goos>-<arch> (there is no plain bin/abcd)
+gofmt -l .          # format gate: any output names a file needing `gofmt -w`
+go vet ./...        # static checks
+go test ./...       # unit tests
+go test ./internal/core/                 # a single package
+go test -run TestStatus ./internal/core/ # a single test
+mkdir -p $(BINDIR)
+go test ./...
+go test -tags smoke ./evals/...
+go vet ./...
+bash scripts/check-reviews.sh
+bash scripts/check-attribution.sh commits origin/main HEAD
+bash scripts/check-attribution-cases.sh
+go run ./cmd/record-lint
+go run ./cmd/abcd docs lint
+go run ./cmd/scaffold-sync
+go run ./cmd/scaffold-sync -check
+go build ./...
+go test -race ./internal/...
+rm -rf $(BINDIR)
+abcd intent "<one-line idea>"
+abcd capture "<whatever crossed your mind>"
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/$b"; curl -fsSLO "https://github.com/REPPL/abcd-cli/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+export PATH="$HOME/.local/bin:$PATH"
+make preflight   # the pre-push gate: lint-reviews, record-lint and docs-lint,
+go run ./cmd/abcd            # bare status board for the current directory
+go run ./cmd/abcd version    # print the version
+make build                   # cross-compile bin/abcd-<goos>-<arch>
+required = (added ∪ removed) where in_changelog == true
+abcd plugin bootstrap: provision $CLAUDE_PLUGIN_ROOT/abcd from the latest
+release whenever it is missing (itd-105 / spc-21).
+POSIX sh and the base system only: the abcd binary is exactly what is missing
+on a fresh plugin install and after every plugin update (the harness re-clones
+into a fresh commit-stamped cache directory), so nothing here may depend on it.
+set -u
+The fetch origins are constants of this script, and there is deliberately no
+way to redirect them from the environment. An override here is not a
+checksums.txt that verifies it are fetched from the same base, so whoever
+names the origin supplies both the payload and the manifest that "verifies"
+it — verification becomes vacuous — and the binary installed below is then run
+unattended as the Bash shell guard on every tool call. Two successive attempts
+to keep the seam behind a loopback allowlist were both defeated in adversarial
+review (URL userinfo of the form http://127.0.0.1:1@example.invalid slipped
+through the glob, and clearing the transport pin on the override path reopened
+redirect downgrade), so the seam is REMOVED rather than narrowed a third time.
+The tests rewrite these two literals in a throwaway COPY of this file; nothing
+Every fetch below is HTTPS-only, redirects included, unconditionally: there is
+no toggle and no code path that clears it. Without the pin a redirect could
+downgrade the transport (or point at file://) and hand both the payload and the
+manifest that verifies it to whoever can rewrite a response.
+The pin is not enough on its own, because curl reads a configuration surface
+loads $CURL_HOME/.curlrc (falling back to $HOME/.curlrc), and one `connect-to`
+or `resolve` line there re-points the connection while the URL above still
+literally reads https://github.com/… — the transport pin still holds, and the
+checksum check becomes vacuous, because the same config supplies the binary AND
+the checksums.txt that "verifies" it. Independent review reproduced exactly
+that. So: -q first on every call below, and the other names curl reads without
+being told to — the proxy variables, which can route both fetches through a
+a route succeed on TLS — are removed here, before any fetch happens. The cost
+is deliberate and accepted: a machine that can only reach the network through a
+proxy no longer bootstraps automatically, and refuse() already names the
+manual install and build-from-source ways out.
+unset HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy CURL_HOME
+unset CURL_CA_BUNDLE SSL_CERT_FILE SSL_CERT_DIR
+rm -rf "$lock"
+return 0
+safe strips the control characters a message must never carry to a terminal.
+sequence in one of them can recolour, reposition, or visually rewrite what the
+reader is shown. Tab and newline survive; the report is made of them.
+printf '%s' "$1" | tr -d '\000-\010\013-\037\177'
+refuse is the single failure message every failing path shares: what is
+exit 1
+notice is a reported condition rather than a fault: the install succeeded, or
+stdout becomes model context while only a NON-ZERO exit puts its stderr in
+front of the human (the same reason `abcd hook session-start` returns 2 for its
+own notices), and because SessionStart treats a non-zero exit as non-blocking:
+the later hooks in this event still run.
+printf '%s\n' "$(safe "$1")" >&2
+exit 2
+1. Fast path: a steady-state session pays one file test and no network. A
+regular file, not merely something with an execute bit — a directory is
+replacing it, so a stray directory at $binary would otherwise "succeed"
+every session while the hooks stay broken and .binary-meta lies about it.
+if [ -e "$binary" ] && [ ! -f "$binary" ]; then
+refuse "$binary exists and is not a regular file, so the release binary cannot be installed there"
+2. Platform gate. An unsupported platform is a reported condition, not a hook
+case "$arch" in
+x86_64 | amd64) arch=amd64 ;;
+aarch64 | arm64) arch=arm64 ;;
+case "$os" in
+darwin | linux) ;;
+if [ -z "$os" ] || [ -z "$arch" ]; then
+3. Concurrency lock. mkdir is atomic on POSIX, so the loser of the race is the
+process whose mkdir fails; it exits quietly rather than racing the winner
+into the same temp dir. A lock older than ten minutes belongs to a run that
+was killed — without breaking it the plugin root stays unprovisionable.
+if ! mkdir "$lock" 2>/dev/null; then
+if [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+A lock DIRECTORY that exists is the race: another run holds it, and
+staying quiet is right. mkdir failing with no lock directory there is
+something else — a read-only or unwritable plugin root, or a
+non-directory squatting the lock path — and that is a permanent,
+every-session failure the two cases must not share a silent exit with.
+refuse "the bootstrap lock ($lock) cannot be created and no lock directory is there, so this is not a concurrent run — the plugin root ($plugin_root) is not writable, or something that is not a directory occupies the lock path"
+A signal trap that RETURNS resumes the script (POSIX), which would carry on
+against directories cleanup just deleted and report a checksum mismatch that
+never happened. Terminate explicitly; cleanup is idempotent, so the EXIT trap
+firing again after it is a no-op.
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
+SIGKILL runs no trap, so a killed run leaves its PID-stamped temp directory
+behind holding a partially downloaded, UNVERIFIED binary. The lock is held from
+rm -rf "$plugin_root"/.bootstrap.tmp.* 2>/dev/null
+command -v curl >/dev/null 2>&1 ||
+refuse 'curl is not available, so the release binary cannot be downloaded'
+4. Resolve the release TAG before fetching anything from that release, so the
+binary and the manifest that verifies it are pinned to ONE release: a
+release cut between the two downloads would otherwise check a new
+checksums.txt against an old binary and refuse a perfectly good artefact.
+/releases/latest answers 302 -> /releases/tag/<tag>, and %{redirect_url} on
+an UNFOLLOWED request is the only URL shape that survives: %{url_effective}
+after -L lands on the asset CDN (release-assets.githubusercontent.com/...),
+which carries no tag segment at all.
+refuse 'the latest release tag could not be resolved, so the download cannot be pinned to a single release — there may be no network'
+5. Download into a temp dir under the plugin root — same filesystem, so the
+install below is a rename and never a half-written binary.
+rm -rf "$tmp"
+fails on that, turning a same-name race into a refusal instead of a curl
+write through a planted symlink.
+mkdir "$tmp" 2>/dev/null ||
+refuse "a temporary directory cannot be created in the plugin root ($plugin_root)"
+curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 120 -o "$tmp/$asset" "$download_url/$asset" 2>/dev/null ||
+refuse "downloading $asset from release $release_tag failed — there may be no network, or that release may carry no asset for this platform"
+curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 30 -o "$tmp/checksums.txt" "$download_url/checksums.txt" 2>/dev/null ||
+refuse "downloading checksums.txt from release $release_tag failed, so the download cannot be verified and is not installed"
+6. Verification against the same-origin manifest.
+refuse "the release checksums.txt lists no entry for $asset, so the download cannot be verified and is not installed"
+printf '%s\n' "$line" > "$tmp/manifest.txt"
+if command -v shasum >/dev/null 2>&1; then
+refuse 'neither shasum nor sha256sum is available, so the download cannot be verified and is not installed'
+refuse "the downloaded $asset does not match its SHA-256 checksum in the release checksums.txt — the artefact is corrupted or is not the published one, so nothing was installed"
+The hash just verified is RECORDED below, not re-checked anywhere: nothing in
+this repository reads binary_sha256 today. It is provenance for a human (or a
+recompute it, because its whole contract is that a steady-state session pays
+one file test and no more. Do not read this line as an automatic check.
+The release commit is read from the API when it answers, and left unknown
+records a value it did not resolve.
+sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' | head -n 1)
+7. Install, then record provenance.
+chmod 0755 "$tmp/$asset" 2>/dev/null ||
+refuse "the downloaded $asset cannot be made executable"
+mv -f "$tmp/$asset" "$binary" 2>/dev/null ||
+refuse "the verified $asset cannot be installed at $binary"
+for the source commit it was cloned from. Anything else is not a commit and is
+recorded as such.
+That naming is a WARRANT this repository takes from itd-105 and cannot verify
+against the real harness. If it ever stops holding, every basename fails the
+40-hex gate, plugin_sha is permanently `unknown`, and the version-skew notice
+goes silent forever with nothing anywhere to look at. So the RAW basename is
+recorded beside the gated value: it is never compared and never rendered, it
+exists so that "why has the skew notice never fired" has an answer in the file
+rather than only in this comment. Control characters are stripped (a directory
+name may contain a newline, which would forge a key=value line) and the value
+is capped, so a pathological name cannot push .binary-meta past the guarded
+read size and silence the notice by a different route.
+case "$plugin_sha" in
+Written into the temp dir and renamed in, on the same filesystem, for the same
+reason the binary is: a crash mid-write would otherwise leave a truncated value
+that still parses, and a skew notice rendered off a truncated commit is a lie.
+if [ -e "$meta_path" ] && [ ! -f "$meta_path" ]; then
+The same `mv -f` hazard the binary path refuses above, and quieter here: a
+DIRECTORY at this path swallows the record as .binary-meta/binary-meta,
+where nothing reads it, while the notice below would claim provenance was
+recorded. The install itself is genuine and is not undone for this — it is
+reported instead, in the words the other write failure uses.
+printf 'release_tag=%s\n' "$release_tag"
+printf 'release_sha=%s\n' "$release_sha"
+printf 'binary_sha256=%s\n' "$binary_sha256"
+printf 'fetched_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+printf 'plugin_sha=%s\n' "$plugin_sha"
+printf 'plugin_root_basename=%s\n' "$plugin_root_basename"
+mv -f "$tmp/binary-meta" "$meta_path" 2>/dev/null ||
+The one place PATH setup is suggested; the symlink itself stays owned by ahoy.
+This prints once per plugin root, because every later session takes the fast
+path above.
+The instruction names the binary by the ABSOLUTE path this script already
+reader for whom `abcd` is not a name the shell can resolve — that is the whole
+condition it exists to fix — so an instruction reading `abcd ahoy install`
+fails with "command not found" for everyone who needs it. On the first manual
+install the agent that read it invented a `go run` incantation into the
+shSingleQuote produces, because this string is printed to be pasted into a
+shell and the plugin root is not a path this script chose. Double quotes carry
+path holding one of those would expand, substitute, or terminate the string on
+is the one form that survives every byte a path can contain.
+set -euo pipefail
+if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+echo "attribution: pull request authored by a bot — body check exempt, nothing was checked."
+exit 0
+printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+bash scripts/check-attribution.sh body "$RUNNER_TEMP/pr-body.md"
+echo "attribution: pull request authored by a bot — commit check exempt, nothing was checked."
+bash scripts/check-attribution.sh commits "$BASE_SHA" "$HEAD_SHA"
+The first heading of the form "## [X.Y.Z] - <date>" (or the historical
+dated release. Requiring the " - " date separator skips the
+if [ -z "$version" ]; then
+echo "No dated CHANGELOG version found; nothing to release."
+echo "need_tag=false" >> "$GITHUB_OUTPUT"
+echo "need_release=false" >> "$GITHUB_OUTPUT"
+echo "version=$version" >> "$GITHUB_OUTPUT"
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+The tag already exists, so it is NEVER moved (immutable). Re-release
+ONLY when its GitHub Release is missing: a transient publish failure
+must not permanently wedge the version. Build the re-release FROM the
+tagged commit, not the current (moved-on) main HEAD — resolve the tag
+to its immutable commit SHA and hand it to release.yml as `ref`.
+Deliberate fail-open: ANY non-zero from `gh release view` (a true 404
+or a transient rate-limit/auth blip) counts as "Release missing" and
+re-releases. Safe — `gh release create` (release.yml) has no --clobber,
+so a false positive just errors on the existing release and nothing is
+misclassify a genuine missing-Release, re-wedging the very failure
+this heals.
+if gh release view "$tag" >/dev/null 2>&1; then
+echo "$tag is tagged and released; nothing to do."
+echo "$tag is tagged but has NO GitHub Release; re-releasing from $commit."
+echo "need_release=true" >> "$GITHUB_OUTPUT"
+echo "release_ref=$commit" >> "$GITHUB_OUTPUT"
+echo "$tag has no git tag; will tag and release at github.sha."
+echo "need_tag=true" >> "$GITHUB_OUTPUT"
+git config user.name 'github-actions[bot]'
+git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+Annotated tag at github.sha — the exact commit this push built and the
+commit release.yml will check out (github.sha) and ship.
+git tag -a "$TAG" -m "abcd $TAG" "$COMMIT"
+git push origin "refs/tags/$TAG"
+Errexit cannot be the safety net here: a failed step would fail the
+job and skip the matrix, the one outcome worse than running it. The
+trap converts every abort into the full matrix, loudly.
+if [ "$written" = false ]; then
+echo "::error::the inert-path classifier aborted (exit ${status}); running the full matrix"
+Recording the verdict is itself a step that can fail, and it must
+not take the job down with it: an output nobody set reads as
+if ! printf 'inert=false\n' >>"$GITHUB_OUTPUT"; then
+echo "::error::the verdict could not be recorded either"
+trap finish EXIT
+The inert allowlist: user-facing documentation, the durable record,
+and the shared working tier, plus the root files that are prose or
+licence text. The harness routers (AGENTS.md, CLAUDE.md, GEMINI.md)
+are deliberately absent — they configure agent behaviour.
+case "$1" in
+Errexit is suspended inside an `if` condition, so every command below
+tests its own status. Returning non-zero means "not proven inert".
+if [ "$EVENT_NAME" != pull_request ]; then
+return 1
+if [ -z "$BASE_SHA" ]; then
+if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+base branch has moved on, the merge base is still the recorded base
+commit and the diff widens to include what landed meanwhile — which
+errs towards the full matrix.
+file into docs/ reports the destination alone, and the vanished
+source path never reaches the allowlist. Reported as a delete plus
+an add, both paths are judged.
+if ! git diff --no-renames --name-only -z "${BASE_SHA}...HEAD" -- >"$changed"; then
+if [ ! -s "$changed" ]; then
+echo 'changed paths:'
+Indented so no byte of a hostile filename lands in column 1,
+workflow commands.
+tr '\0' '\n' <"$changed" | sed 's/^/  /'
+character or a leading dash stays one record and is only ever
+matched as a pattern subject, never expanded or executed.
+while IFS= read -r -d '' path; do
+if ! is_inert_path "$path"; then
+if classify; then
+printf 'inert=%s\n' "$inert" >>"$GITHUB_OUTPUT"
+The reason can embed a hostile filename, newlines included; indent
+every line of it off column 1 for the same non-injection guarantee
+as the path list.
+echo "verdict: inert=${inert}"
+printf '%s\n' "$reason" | sed 's/^/  /'
+if [ -n "$unformatted" ]; then
+echo "gofmt: these files are not formatted (run gofmt -w .):" >&2
+echo "$unformatted" >&2
+cd "$RUNNER_TEMP"
+curl -sSLf -o "$base" "$url/$base"
+curl -sSLf -o checksums.txt "$url/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+grep " $base\$" checksums.txt | sha256sum -c -
+tar -xzf "$base" gitleaks
+sudo install gitleaks /usr/local/bin/gitleaks
+gitleaks version
+gitleaks git --redact --no-banner .
+zizmor v1.26.1, pinned by digest (the registry publishes version
+releases under :latest; a raw vX.Y.Z tag does not exist).
+make smoke
+test -n "$sha"
+echo "DEFAULT_BRANCH_START_SHA=$sha" >> "$GITHUB_ENV"
+echo "default-branch tip at job start: $sha"
+Resolve against HEAD — the exact commit this job checked out
+from GITHUB_SHA would diverge from the checked-out tree on the heal
+path (GITHUB_SHA is then the moved-on main tip) and arm the gate with
+a commit whose receipts are not in the released tree.
+if git rev-parse -q --verify "HEAD^2" >/dev/null 2>&1; then
+test -n "$content"
+The named content commit must be an ancestor of the released commit —
+a receipt for anything off the release lineage is refused.
+git merge-base --is-ancestor "$content" "$released"
+echo "CONTENT_SHA=$content" >> "$GITHUB_ENV"
+echo "reviewed content commit: $content"
+test -n "${CONTENT_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
+for r in .abcd/work/reviews/"$CONTENT_SHA"/*.json; do
+make build VERSION="${TAG}"
+cd bin
+sha256sum abcd-* > checksums.txt
+cat checksums.txt
+gh release create "${TAG}" bin/abcd-* bin/checksums.txt --verify-tag --title "${TAG}" --generate-notes
+mkdir -p "$DL"
+if [ "$end" = "${DEFAULT_BRANCH_START_SHA}" ]; then
+echo "default branch unchanged across the release job (${end}); the job pushed nothing."
+echo "default branch moved during the release job: ${DEFAULT_BRANCH_START_SHA} -> ${end} (committers: ${committers})"
+case " ${committers} " in
+echo "a github-actions[bot] commit landed on the default branch during this job — the release workflow must never push to a branch" >&2
+echo "movement attributed to commits outside this job; the release job itself pushed nothing."
+git config user.name 'rehearsal[bot]'
+git config user.email 'rehearsal@localhost'
+Content commit on a scratch branch: simulate rolling [Unreleased] into a
+dated heading — the reviewed content commit a real release names.
+git switch -q -c rehearsal-sim
+if grep -q '^## \[Unreleased\]' CHANGELOG.md 2>/dev/null; then
+awk -v d="$date" '1; /^## \[Unreleased\]/ && !done {print ""; print "## [0.0.0-rehearsal] - " d; done=1}' CHANGELOG.md > CHANGELOG.rehearsal
+mv CHANGELOG.rehearsal CHANGELOG.md
+printf '\n## [0.0.0-rehearsal] - %s\n' "$date" >> CHANGELOG.md
+git add -A
+git commit -q -m 'rehearsal: simulated changelog roll (content commit)'
+Receipts commit: names the content commit and sits one commit later —
+the two-commit shape that keeps the receipt-vs-tag self-reference from
+ever blocking the release.
+mkdir -p ".abcd/work/reviews/$content"
+printf '{"rehearsal":true,"content":"%s"}\n' "$content" > ".abcd/work/reviews/$content/rehearsal.json"
+git commit -q -m 'rehearsal: simulated receipts commit'
+Merge into the base, reproducing the auto-release merge whose second
+parent is the receipts commit (so HEAD^2^ resolves the content commit).
+git switch -q -c rehearsal-merge "$base"
+git merge -q --no-ff -m 'rehearsal: merge simulated release' rehearsal-sim
+echo "REHEARSAL_CONTENT_SHA=$content" >> "$GITHUB_ENV"
+test "$content" = "${REHEARSAL_CONTENT_SHA}"
+echo "rehearsal: the gate would arm against content commit $content (present in the released tree)"
+Build the simulated tree — the deterministic leg the gate requires.
+echo "rehearsal: full gate armed against the simulated roll; the gate admits."
+echo "rehearsal: nothing published — no tag, Release, or attestation was created (contents: read)."
+iss-214 asked for this specifically: the regex must be proven against the
+the happy path it was written from. `git log` over the record at the time of
+writing shows claude-fable-5 (256), claude-opus-4-8 (225), claude-opus-5 (123),
+bracketed context-window forms are ordinary history, and the first cut of the
+gate rejected every one of them.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+trap 'rm -rf "$tmp"' EXIT
+case <want:accept|reject> <label> <body-text>
+local want="$1" label="$2" body="$3" got
+printf '%s\n' "$body" >"$tmp/body.md"
+if bash "$SCRIPT" body "$tmp/body.md" >/dev/null 2>&1; then got=accept; else got=reject; fi
+if [ "$got" = "$want" ]; then
+echo "FAIL: $label — wanted $want, got $got" >&2
+The positive check is deliberately vendor-agnostic (iss-215): the convention is
+Correct per iss-214, recorded so it is not re-raised as a defect: the
+convention requires a model VERSION, so a bare vendor is non-conformant.
+case_is reject "no trailer at all" 'Just prose, nothing else.'
+Generated with [Some Tool](https://example.invalid)
+Generated by [Some Tool](https://example.invalid)
+MARKDOWN EMPHASIS. The first cut anchored on optional whitespace only, so the
+exact form that motivated this gate — a leading underscore — sailed through the
+body check. Found live on two pull requests whose failing leg was something else
+_Generated by [Some Tool](https://example.invalid)_
+The emoji may sit OUTSIDE the emphasis run as readily as inside it, and
+bold-italic is three markers, not two. Both forms are ordinary markdown and both
+evaded the first cut of this widening — each is one character class away from
+the forms above, so pin them rather than wait to meet them in the wild.
+___Generated by [Some Tool](https://example.invalid)___
+The emphasis marker must be attached to the word, exactly as markdown reads it:
+footer is documentation, the same as the `-` bullet form the anchor already
+admits — widening to emphasis must not quietly start rejecting list items.
+The gate must be writable-about. A footer occupies its own line; prose quoting
+the banned form mid-sentence is documentation, not a footer. Unanchored, the
+rule rejected the very commit that introduced it (and would reject this file,
+the CHANGELOG entry and the issue records).
+fenced example — the natural way to show a literal — was refused exactly as a
+is quotation, so the rule reads both directions: a banned form inside one is an
+as the declaration).
+The trailer must be the document speaking. One that exists only as an example
+inside a fence is not a disclosure, so the body still has none.
+Stripping the quotation must not hide anything outside it.
+some code
+An UNCLOSED fence fails closed. Markdown renders the rest of the document as
+it — the cheapest possible bypass. An unbalanced document is quoted nowhere.
+The trailer sits BEFORE the stray fence and the footer after it, so honouring an
+unclosed fence would strip the footer and leave a compliant-looking body — the
+case had to be shaped this way to discriminate. Rejecting for a missing trailer
+would pass whether the fence was honoured or not, and prove nothing.
+The stripped region must be a SUBSET of what markdown renders as code. A line the
+gate skips but the forge renders as an ordinary paragraph IS a real footer,
+silently passed — which is exactly what a marker-presence test allowed. Each case
+below renders the footer as visible text on the forge; each was confirmed to pass
+the gate before the matcher became pairing-aware.
+ONE paragraph with the footer rendered in full.
+Isolating the info-string guard. The case above rejects for TWO reasons at once
+the guard apart from the fail-closed path. Here a later bare marker WOULD close
+the block, so dropping the guard alone strips the footer and passes.
+is content, not a closer, so the block runs on and the footer inside it is
+quotation. Treating it as a closer would end the block early and expose the
+footer — the opposite direction, but the same drift away from what markdown does.
+A run shorter than three is not a fence in markdown — it is ordinary text, and
+the lines between two such runs render in full.
+The marker-character test restricts a fence delimiter to backtick or tilde.
+Substituting a bare emptiness check keeps the matcher terminating and leaves the
+rest of this corpus green, yet --- *** ___ === runs then become fence
+delimiters — a setext heading or a thematic break would start stripping. That is
+the one unpinned clause with a bypass direction.
+___
+The opener indent is measured in SPACES only. A tab-led line is an indented code
+block in markdown, not a fence, so it must not open one.
+A closer may carry trailing whitespace — spaces, tabs, and the \r of a CRLF
+line ending — and still close. Narrowing that set would leave the block open,
+and the unterminated rule would then refuse the whole strip.
+also under the limit, so it is the same class and needs the same pin.
+Nothing placed a checkable line immediately after a closer, so a one-line
+over-strip at the boundary passed the whole corpus.
+x
+requests (itd-91) — an accident at scale, not an adversary. A tool appends its
+footer LAST, so "a footer after the content is caught whatever precedes it" is
+the invariant worth pinning. It holds because no fence opened earlier can still
+be open at the end without the unterminated rule refusing the whole strip.
+example
+Two.
+opened inside one is read as document-level and the span it closes over is
+removed while the forge renders part of that span as an ordinary paragraph.
+An HTML block would do this, so a document containing one strips NOTHING —
+striking less can only over-reject, so the guard is safe by construction.
+KNOWN RESIDUAL, pinned so a future fix is visible rather than silent. A
+so its fence is read as document-level and the footer between the markers is
+stripped although the forge renders it as a paragraph. ACCEPTED by decision in
+iss-270 rather than outstanding, so this case exists to make a change to that
+behaviour visible, not to mark a defect awaiting a fix. This is an
+instance of "a body constructed around the footer", which the design already
+declines to defend against — not a new class — and the footer-last cases above
+are what stands between this gate and the accident it was built for.
+An info string is what essentially every real fence carries; a matcher that
+demanded a bare marker would strip nothing in practice and reinstate iss-268.
+Documenting the fence rule itself needs a longer outer fence around a shorter
+inner one. Counting markers saw three and failed closed on the very shape this
+change exists to enable; tracking the opener reads it as one block.
+A tab-indented or deeply-indented line is not a fence in markdown, so it is not
+quotation and the gate still applies — the conservative reading.
+The body is attacker-controlled text; it must never be evaluated.
+if [ -e "$tmp/PWNED" ]; then
+echo "FAIL: body containing shell metacharacters — the body was EXECUTED" >&2
+The contributor graph is built from commit AUTHORSHIP plus Co-authored-by
+the message-only gate, put an AI at #2 in the contributor graph, and — because
+a squash merge auto-appends a Co-authored-by for any branch author who is not
+the PR author — inflated it again on every squash of that branch. These cases
+prove the commits half reads the identity, not only the message.
+git init -q "$repo"
+commit -q --allow-empty -m 'base'
+commits_case <want> <label> — checks base..HEAD in the scratch repo, then resets.
+local want="$1" label="$2" got
+if (cd "$repo" && bash "$SCRIPT_ABS" commits "$base" HEAD >/dev/null 2>&1); then
+git -C "$repo" reset -q --hard "$base"
+commit_as <author-name> <author-email> <committer-name> <committer-email> <msg>
+git -C "$repo" commit -q --allow-empty -m "$5"
+commit_as REPPL human@example.invalid REPPL human@example.invalid "$MSG_OK"
+commits_case accept "human identity, compliant message"
+The bf68242 case: identity is the AI, message is fully compliant.
+commit_as Claude noreply@anthropic.com Claude noreply@anthropic.com "$MSG_OK"
+commits_case reject "AI author and committer, compliant message"
+commit_as REPPL human@example.invalid Claude noreply@anthropic.com "$MSG_OK"
+commits_case reject "AI committer only, compliant message"
+commit_as Claude claude@example.invalid REPPL human@example.invalid "$MSG_OK"
+commits_case reject "AI author by name alone, compliant message"
+commit_as ChatGPT bot@openai.com REPPL human@example.invalid "$MSG_OK"
+commits_case reject "another vendor's AI author, compliant message"
+A human whose name merely CONTAINS an AI name is not an AI identity.
+commit_as 'Claudette Martin' claudette@example.invalid 'Claudette Martin' claudette@example.invalid "$MSG_OK"
+commits_case accept "human name containing an AI name"
+The bot exemption still holds: dependabot writes no trailer and stays exempt.
+commits_case accept "bot author without trailer (exemption)"
+A change no AI touched discloses that positively; silence stays refused,
+because an absent trailer and a forgotten one are indistinguishable.
+case_is reject "still no trailer at all" 'A change with nothing disclosed.'
+The declaration is a closed value, not a free-text escape: anything else in
+the slot would reopen the omission it exists to close.
+The declaration never licenses the banned forms.
+A human-only COMMIT passes the commit check on the same terms.
+commits_case accept "human-only commit declaration"
+Fenced quotation is a BODY concession only. The justification is that a forge
+renders a fence as a code block, so it reads as an example — and a commit message
+is never rendered as markdown. `git log` shows it verbatim, so a fenced footer
+there is displayed exactly as a real one and lands in permanent history.
+commits_case reject "a fenced footer in a COMMIT MESSAGE is still refused (iss-268)"
+An AI identity is still refused even when the message declares human-only —
+the identity fields are what the contributor graph reads.
+commits_case reject "AI identity claiming human-only"
+echo "check-attribution-cases: $pass passed, $fail failed"
+body each carry the kernel-format trailer
+since the beginning and drifted anyway — itd-91 records a reconciliation sweep
+is not the missing piece; a check that fails closed is. itd-91 owns the general
+version (a per-repo declared preference every surface reads); this enforces
+check-attribution.sh commits <base-ref> <head-ref>   # every non-merge commit in the range
+check-attribution.sh body <file>                     # a pull-request body on stdin-file
+Exit 0 clean, 1 a violation, 2 a usage/environment fault.
+The sanctioned trailer. Kernel format: a `Key: value` line, value naming the
+assisting model as <Vendor>:<model-version>. Anchored to line start so a mention
+inside prose is not a pass.
+The optional bracketed suffix admits a context-window variant such as
+own history carries 33 commits using it and 5 using claude-opus-4-8[1m] — and
+the first cut of this gate rejected every one of them, so an agent reporting its
+precise model followed the prose and failed the check (iss-214). A bare vendor
+with no version stays refused: the convention asks for the version.
+The vendor half is deliberately NOT pinned to one name. The convention is
+The human-only declaration. The convention is DISCLOSURE, and a change no AI
+touched has nothing to disclose — but silence cannot say that: an absent
+trailer and a forgotten trailer are the same bytes, which is why the gate
+refuses a bare omission. `Assisted-by: None` is the positive form, so a
+human-only artefact states its provenance as explicitly as an assisted one
+and stays auditable. It is deliberately the ONLY accepted non-vendor value —
+a free-text escape ("n/a", "human") would reopen the omission it closes.
+It is not a bypass to reach for when a trailer is merely inconvenient:
+claiming None for assisted work is a false disclosure, the exact failure this
+gate exists to prevent, and the reviewer reading the diff is the check on it.
+Footers a tool emits by default. These name a tool outside the two credit
+surfaces AGENTS.md sanctions (the README badge and ACKNOWLEDGEMENTS.md), which
+is why they are refused here rather than merely discouraged. Matched on the
+SHAPE — "generated with/by" followed by a markdown link, or the robot-emoji
+prompted this (iss-215).
+ANCHORED TO LINE START, and that is load-bearing: a real footer occupies its own
+the very commit that introduced it, and would reject the CHANGELOG entry, the
+issue records and the docs that describe what is banned. A gate that cannot be
+written about is a gate people route around.
+The optional [_*]{1,3} admits the MARKDOWN-EMPHASIS run the footer is actually
+appended inside — italic (1), bold (2) or bold-italic (3). The first cut matched
+leading whitespace only, so the precise form that motivated this gate went
+straight through the body check; it was found live on two pull requests whose
+failing leg happened to be something else (iss-262).
+The emoji group is repeated on BOTH sides of the emphasis run because a footer
+may put the robot inside the italics or before them, and neither order is more
+natural than the other. At most one of the two can match a given line; a single
+group in one position is exactly the gap that let `🤖 _Generated with [` through.
+The marker must be ATTACHED to the word, with no space between, because that is
+how markdown itself reads it: `*text*` is emphasis, `* text` is a list item. A
+bullet describing the banned footer is documentation — the same writable-about
+case the anchor already protects for `- Generated with …` — so requiring
+attachment is what keeps the widening from swallowing list items.
+The class admits mixed runs (`_*`, `*_`, `__*`) that nobody writes. That is
+over-REJECTION of text no one produces, which costs nothing; pinning the class
+to well-formed markdown would buy nothing back.
+AI co-authorship, matched on the TRAILER KEY rather than on a vendor name: the
+objection AGENTS.md states — an authorship the tool does not hold, and an
+inflated contributor graph — is not specific to one provider, and a ban naming
+only Claude let `Co-authored-by: ChatGPT` through (iss-215).
+This refuses EVERY co-authorship trailer, including a genuinely human one. That
+over-reach is deliberate and worth stating: abcd defers DCO/Signed-off-by until
+the repo is public or takes its first outside contribution, so there is no human
+co-authorship case in flight today, and refusing is the fail-safe direction. If
+a real human co-author arrives, this is the line to revisit.
+The git IDENTITY itself, not only the message. A commit authored AND committed
+as `Claude <noreply@anthropic.com>` carried a fully compliant message and
+sailed through the message-only gate — but the contributor graph is built from
+commit authorship plus Co-authored-by trailers, so it put an AI at #2 in the
+graph. Worse, a squash merge auto-appends a Co-authored-by for any branch
+author who is not the PR author, so one mis-identified branch commit inflates
+the graph again on every squash. Refusing the identity here closes both routes.
+Names are matched whole (a human named Claudette is not an AI identity) and
+by default. As with COAUTHOR_RE the intent is vendor-agnostic, but an identity
+ban can only enumerate — extend both lists as new defaults are met in the wild.
+echo "usage: check-attribution.sh commits <base-ref> <head-ref> | body <file>" >&2
+strip_fenced_blocks removes markdown fenced code blocks from stdin.
+below is about what the document itself says. So the rule reads in both
+and the required trailer inside a fence is an example too — it cannot serve as
+the disclosure. Stripping before any check gets both at once.
+This exists because mid-sentence prose was the only way to document the banned
+exactly as a real footer would be. The change that tightened the rule tripped
+over this in its own pull-request body (iss-268). The line anchor already grants
+this to `- Generated with …` bullets; a fence is the same concession, made
+deliberately.
+APPLIED TO THE PULL-REQUEST BODY ONLY. The whole justification is a RENDERING
+argument — a fence reads as an example because GitHub draws it as a code block.
+view show it verbatim, so a fenced footer there is displayed exactly as a real
+one and lands in permanent history. There is no reading under which it is
+not one contains a fence marker at all).
+Permitting a fenced footer in a body costs little against the actual threat.
+This gate defends against a footer a TOOL APPENDS BY DEFAULT, and no tool we
+have met wraps its own footer in a code fence — a judgement about observed
+was never a defence against a determined author, who would simply delete the
+footer rather than fence it.
+WHAT THIS ACTUALLY DEFENDS, stated as narrowly as it can be defended. This gate
+pull requests (itd-91) — an ACCIDENT at scale, not an adversary. A tool appends
+its footer LAST, and that is the property under test: a footer appended after
+the content is caught whatever precedes it, because no fence opened earlier can
+still be open at the end without the unterminated rule refusing the whole
+strip. That is fuzz-verified and pinned by the corpus.
+What it does NOT defend is a body CONSTRUCTED AROUND the footer. That was
+already true and said plainly below — a plainly fenced footer passes by design.
+The container cases are instances of the same thing rather than a new class: the
+fence opened inside a LIST ITEM is read as a document-level fence, and the span
+it closes over is removed from the text the rules see while the forge renders
+part of that span as an ordinary paragraph. That is ACCEPTED, not outstanding:
+iss-270 records the decision and why the alternatives were worse. An HTML block
+would do the same, so a document containing one strips nothing at all — that
+guard costs almost nothing here and is safe by construction, since striking less
+can only over-reject.
+The earlier draft of this comment claimed the stripped region is a SUBSET of
+what markdown renders as code. That claim is false, and it mattered: it is the
+sentence that made the list-container hole look impossible, and it pointed the
+residual in the wrong direction. It is replaced rather than softened.
+The matcher still pairs fences the way CommonMark does WITHIN a document-level
+working bypass with no container trickery at all:
+footer
+string may not contain a backtick, so these are
+inline code spans in ONE paragraph.
+So an opener records its character and run length; a line closes it only with the
+SAME character, AT LEAST as many of them, and nothing but whitespace after the
+UNTERMINATED BLOCKS FAIL CLOSED. Markdown renders an unclosed fence as code to
+the end of the document, so honouring one would let a single stray line suppress
+every check beneath it. Ending the scan still inside a block strips nothing.
+Tracking the opener rather than counting markers also makes NESTED documentation
+three markers and failed closed on the very shape needed to document this rule.
+an indented code block, and a tab-led line is not a fence either. Both stay
+content sits at column 2, so a fence there is under the limit and IS stripped
+usability complaint). iss-270 records both directions and the decision to accept
+them. Do NOT "fix" this by relaxing the indent limit: that widens the
+under-rejection hole while appearing to fix the complaint. Forcing openers to
+column 0 was tested and leaks too — under-recognising an opener is not
+treats as the opener, shifting the whole span.
+fenceparse fills f[] with the marker character, its run length and the
+text after the run, or returns 0 when the line cannot open or close a
+fence at all.
+function fenceparse(l, f,   t, indent, c, n) {
+t = l
+indent = length(l) - length(t)
+if (indent > 3) return 0
+c = substr(t, 1, 1)
+Load-bearing for TERMINATION, not only for correctness: on an
+empty line c is "", and substr() past the end also returns "", so
+the run counter below would never stop. Removing this line hangs
+the gate rather than failing a case, which is a mode no corpus can
+express — found the hard way.
+if (c != "`" && c != "~") return 0
+n = 0
+while (substr(t, n + 1, 1) == c) n++
+if (n < 3) return 0
+function blank(s) { gsub(/[ \t\r]/, "", s); return s == "" }
+An HTML block changes what the lines after it mean, and this
+matcher has no model of one. Rather than guess, refuse to strip
+anything from a document containing one. Striking LESS can only
+construction.
+t = $0
+if (length($0) - length(t) <= 3 && substr(t, 1, 1) == "<") html = 1
+END {
+if (html) {
+for (i = 1; i <= NR; i++) print line[i]
+exit
+inside = 0
+for (i = 1; i <= NR; i++) {
+if (!inside) {
+if (!fenceparse(line[i], f)) continue
+A backtick opener may not carry a backtick in its info
+if (f["char"] == "`" && index(f["rest"], "`") > 0) continue
+inside = 1
+openchar = f["char"]
+openlen = f["len"]
+continue
+if (fenceparse(line[i], f) && f["char"] == openchar &&
+if (inside) {
+for (i = 1; i <= NR; i++) if (!drop[i]) print line[i]
+check_ident refuses an AI git identity in one role (author or committer) of
+local label="$1" role="$2" name="$3" mail="$4"
+if printf '%s' "$name" | grep -Eiq "$AI_IDENT_NAME_RE" ||
+printf '%s' "$mail" | grep -Eiq "$AI_IDENT_MAIL_RE"; then
+echo "check-attribution: $label has an AI $role identity: $name <$mail>" >&2
+note "The human is the author of record (AGENTS.md); the contributor graph is built"
+note "from these identity fields, so an AI here asserts an authorship the tool does"
+note "not hold. Fix the commit identity (git commit --amend --reset-author with"
+note "user.name/user.email set to the human) and disclose the tool in the trailer:"
+note "Assisted-by: <Vendor>:<model-version>"
+check_text applies both halves to one artefact: the banned footer must be
+quotation was removed first: the body arm strips, the commits arm does not (see
+local label="$1" text="$2"
+if printf '%s' "$text" | grep -Eq "$GENERATED_RE"; then
+echo "check-attribution: $label carries a tool's default 'generated with' footer" >&2
+note "A 'Generated with <tool>' footer names a tool outside the two credit surfaces"
+note "AGENTS.md sanctions (the README badge and ACKNOWLEDGEMENTS.md). Replace it with"
+note "the trailer: Assisted-by: <Vendor>:<model-version>"
+return
+if printf '%s' "$text" | grep -Eq "$COAUTHOR_RE"; then
+echo "check-attribution: $label carries a 'Co-authored-by:' trailer" >&2
+note "abcd never uses Co-Authored-By: for AI — it asserts an authorship the tool does"
+note "not hold and inflates the contributor graph. Disclosure goes in the kernel"
+note "trailer instead: Assisted-by: <Vendor>:<model-version>"
+note "(This refuses human co-authorship too. abcd defers DCO until the repo is public"
+note "or takes its first outside contribution, so there is no such case today; if one"
+note "arrives, COAUTHOR_RE in this script is the line to revisit.)"
+if ! printf '%s' "$text" | grep -Eq "$TRAILER_RE" && ! printf '%s' "$text" | grep -Eq "$NONE_RE"; then
+echo "check-attribution: $label has no 'Assisted-by:' trailer" >&2
+note "Add a final line of the form: Assisted-by: <Vendor>:<model-version>"
+note "for example  Assisted-by: Claude:claude-opus-5  or  Assisted-by: Claude:claude-opus-5[1m]"
+note "If no AI assisted this artefact, disclose that positively instead:"
+note "  Assisted-by: None"
+case "${1:-}" in
+carries no trailer of its own.
+if [ -z "$range" ]; then
+echo "check-attribution: no non-merge commits in $base..$head — nothing to check"
+while IFS= read -r sha; do
+PRs would train the maintainer to discount a red gate on exactly the PRs where
+a red gate most needs to be trusted.
+case "$author_email" in
+check_ident "$label" author "$author_name" "$author_email"
+check_ident "$label" committer "$committer_name" "$committer_email"
+check_text "$label" "$(git show -s --format='%B' "$sha")"
+echo "check-attribution: no such file: $2" >&2
+The body is markdown a forge renders, so a fenced block reads as an example.
+check_text "the pull-request body" "$(strip_fenced_blocks <"$2")"
+usage
+if [ "$fail" -ne 0 ]; then
+echo "check-attribution: FAILED — see AGENTS.md § Attribution and acknowledgements" >&2
+echo "check-attribution: clean"
+Deterministic gate for the .abcd/work/reviews/ charter (RD001-RD003).
+until these codes are implemented in `internal/core/lint` (Go). The semantic
+half (provenance discriminator, "not a shadow backlog") is not mechanisable
+and stays a convention. See:
+RD001 — review directory shape: each directory under reviews/ is named
+the charter itself, sits at the root and is exempt.)
+for d in "$ROOT"/*/; do
+Semantic-gate receipt directories are sha-keyed (.abcd/work/reviews/<40-hex>/
+dirs this charter governs, with their own integrity check (the receipt_gate
+printf '%s' "$base" | grep -Eq '^[0-9a-f]{40}$' && continue
+Review files live inside dated dirs (depth >=2); the root README is mutable.
+while IFS= read -r line; do files+=("$line"); done < <(find "$ROOT" -mindepth 2 -type f -name '*.md' | sort)
+for f in "${files[@]:-}"; do
+RD002 — append-only: no post-creation modify/rename in committed history.
+RD003 — path hygiene: repo-relative only, no absolute personal paths.
+if grep -nE '/Users/|/home/[a-z]|C:\\Users' "$f" >/dev/null 2>&1; then
+note "RD003 $f — contains an absolute personal path (use repo-relative)"; fail=1
+echo "check-reviews: FAILED — reviews-charter discipline (RD001-RD003)" >&2
+echo "check-reviews: OK — $ROOT (${#files[@]} review files), RD001-RD003 clean"
+or
+go generate ./internal/surface/cli
+internal/core ───┼── plugin surface (markdown)  → auto-loaded by Claude Code and the companion harness; shells to `abcd <verb> --json`
+internal/core/                # transport-agnostic engine; one package per capability
+ahoy/  launch/  capture/  memory/  intent/  brief/  review/
+spec/  run/  lifeboat/  history/
+internal/adapter/             # pluggable seams (interface + native impl + external plug-in)
+oracle/     # HostDelegated (default) | ClaudeCLI | AnthropicAPI | MCPOracle
+history/    # native store (default) | hosted transcript adapter
+spec/       # native store (default) | the companion harness ccpm (primary deeper backend)
+run/        # native thin loop (fallback) | ClaudeWorkflows (CC) | the companion harness's loop
+scanner/    # native secret/PII (default) | gitleaks | trufflehog
+internal/surface/cli/         # Cobra tree → core
+internal/surface/mcp/         # MCP server → core (added once a surface is worth exposing)
+internal/config/  internal/registry/   # declarative adapter registry
+Plugin surface (shipped in the CC plugin, auto-loaded by the companion harness too):
+hooks/                        # prompt-router + guard hooks (Go binaries or thin shims)
+.abcd/development/
+brief/         # the living canvas: what this IS + glossary + invariants
+intents/       # the WHY — press-release intents, dir-as-status
+principles/    # distilled cross-cutting design principles
+decisions/     # ADRs — MADR, NNNN-title.md, one canonical home
+roadmap/       # sequencing — phases/ + rfcs/
+plans/         # dated design/impl plans (YYYY-MM-DD-*)
+research/      # investigations — notes/ (dated) + spikes/
+docs/
+reference/          # hand-written reference (config, schemas)
+cli/              # GENERATED from Cobra (doc.GenMarkdownTree) — never hand-edit; CI freshness-checked
+assets/
+bin/add-source           register + convert + commit (class set at ingestion)
+untracked private-names banlist (itd-74 layer)
+bin/cite-guard           scan text; reports offending entries by key only
+/loop 90m /abcd:auto-loop .abcd/development/plans/<dated-run-plan>.md
+/loop 30m Follow the protocol in .abcd/development/plans/2026-07-12-abcd-run-protocol.md
+for the run plan at .abcd/development/plans/2026-07-12-abcd-cli-drain-2.md.
+named detector against its stated acceptance corpus, watch it flag, then drain the
+Fold `abcd capture resolve <iss-N>` into the fix branch.
+never commit to main; delete branch after merge (via gh api, not a gate-tripping push)
+NOT an open-ledger sweep — do NOT auto-continue into other open issues (the older
+cluster iss-33/34/37-49 is un-triaged; the vetted set is iss-76/79 plus iss-73, whose
+maintainer adjudication has landed). When all three are done (or STOP), end the loop
+and report.
+a CI-config change not already in scope.
+as irreversible (human checkpoint + rollback), even though not named here.
+/loop 90m Follow the protocol in .abcd/development/plans/2026-07-12-abcd-run-protocol.md
+for the run plan at .abcd/development/plans/2026-07-12-abcd-cli-ledger-drain-run.md.
+green gate is only the floor. Fold `abcd capture resolve <iss-N>` into the fix branch.
+SKIP it (do not autonomously decide it). iss-35 is exactly this: its body records
+a design-STOP held for maintainer sign-off (record-lint-graduation adjudication
+items 5 & 6). Never "reconcile" or "fix" iss-35 in this run.
+schema_version of ledger/spec/memory records, treat as irreversible (human
+checkpoint + rollback), even though named here.
+for the run plan at <PLAN_PATH>.
+/loop Follow the protocol in .abcd/development/plans/2026-07-12-abcd-run-protocol.md
+for the run plan at .abcd/development/plans/2026-07-13-abcd-audit-verb-run.md.
+PASS after, for every new behaviour; each of the five v1 rules gets its own. A green
+is learned, never reconstructed at burst end:
+what was ruled out, so a later burst never retries it. Never repeat a recorded-failed
+approach.
+time (a workaround is fine; a silent one is not).
+prepare-this-repo wiring). P3 (SARIF `--format sarif`) is OUT — the serializer seam is
+ahoy/detection concern, per locked decision 2). Do NOT open repo-level rule
+override/config (explicitly deferred in itd-85). When M7 is pushed, end the loop.
+is the load-bearing constraint of the whole SOTA verdict.
+trips the sota-per-intent hard stop).
+anything. If a milestone would introduce a write path, that is a scope error, not a
+feature.
+for the run plan at .abcd/development/plans/2026-07-16-planned-intent-drain-run.md.
+verified AGAINST THE BINARY (CONTEXT.md: where record and binary disagree, the
+binary is checked first). Every AC gets an executable test or a recorded
+adjudication note; a green gate is only the floor. TDD watched-fail for any new
+behaviour. Record work (spec body, links, DECISIONS.md) lands in the same PR.
+never commit to main; delete branch after merge (via gh api)
+with the same Assisted-by trailer and states any overlap with hunter-touched files
+account/app — out of scope by construction.
+irreversible class, human checkpoint.
+same function this item must edit — skip the item this burst, journal it.
+close a spec ONLY after every AC is verified green or explicitly adjudicated
+prev  := parse newest dated CHANGELOG heading (== newest git tag)   // e.g. 0.3.2
+bump  := max impact over {shipped intents ∪ resolved issues} since prev
+next  := deriveNext(prev, bump)
+pandoc references.csl.json -f csljson -t biblatex -o references.bib
+abcdDev/
+set -e
+go build -C "$REPO" -o "$BIN" ./cmd/abcd
+exec "$BIN" "$@"
+chmod +x ~/.local/bin/abcd
+abcd            # from the checkout → the status board; git repo: true
+abcd version    # from any dir → builds latest, runs it
+/plugin marketplace add <path-to-your-abcd-cli-checkout>
+/plugin install abcd@abcd-marketplace
+/plugin list
+/plugin details abcd
+/plugin marketplace update abcd-marketplace
+/reload-plugins
+activity/issues
+Brief (always-current canvas)
+Phase = sequencing layer wrapping all three
+specstory/                live transcripts (SpecStory output_dir points here)
+prompt-exports/           RepoPrompt oracle reviews
+AppState/  Engine/  Ingestion/  Keychain/  Models/  Navigation/
+Providers/  Report/  Storage/  Store/  Views/{Dashboard,ExpertLibrary,
+Analytics/  Config/  DesignSystem/  Engine/  Models/Study/
+Providers/MLX/  Report/  Resources/  Services/  State/  Views/
+scripts/
+python3 scripts/publish.py
+Explicit version (overrides auto-increment)
+python3 scripts/publish.py --version v0.1.0-beta.1
+python3 scripts/publish.py --dry-run
+Skip post-copy scan (NOT RECOMMENDED)
+python3 scripts/publish.py --no-post-scan
+Auto-push (NOT RECOMMENDED — bypasses human review gate)
+python3 scripts/publish.py --auto-push
+Custom config
+python3 scripts/publish.py --config path/to/custom-publish.json
+JSON report to specific path
+python3 scripts/publish.py --json-out .abcd/logbook/publish/20260504.json
+git show 045a766:scripts/sync-to-public.sh
+git show 045a766:scripts/public-manifest.txt
+1. /abcd:intent "<free-text>"                                        [shipped]
+performed by the binary
+3. Implementation                                                    [manual]
+4. /abcd:spec close <spc-N>                                          [shipped]
+plus an ephemeral request under .abcd/.work.local/reviews/
+5. Fidelity verdict — three deliberate steps                         [shipped]
+The receipt digest is sha256 over the `## Acceptance Criteria` body
+idempotent. Editing the criteria after shipping invalidates the
+receipt — a stale verdict is detectable, by design.
+6. /abcd:intent reclassify <itd-N> --kind <new-kind>          [design target]
+The intents in superseded/ were moved by hand.
+go generate ./internal/surface/cli   # or: go run ./cmd/abcd-gen-surface
+brief/
+operations log (never in either repo): ~/.abcd/voyage/<source-root-sha>/
+Live later-phase (uncommitted bench) IDs = the drafts/ corpus, no exclusions.
+transcripts/              native local redacted transcript store (root-SHA-keyed, adr-29)
+prompt-exports/           oracle-adapter ad-hoc review exports
+disembark/
+history.jsonl           append-only manifest log of every disembark run
+embark/
+abcd/
+payload (siblings would run in parallel and share one stdin);
+PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end
+.abcd/
+destination (`abcd disembark <source-repo> to <dest>`) — still the latest snapshot rather than an
+accumulating archive, but the source repo is never written to (adr-35, ../04-surfaces/03-embark.md).
+.abcd/logbook/
+...the drafted delta lines...
+.abcd/memory/
+/ (total tokens in source)
+glossary/
+history/                       shared history store + index.json (identity/lineage,
+keyed on root-commit SHA — adr-29)
+memory/                        user-scope memory (personal, cross-project — a later
+.abcd/                         repo-scope record + config.json + rules.json
+INVENTORY (read-only)
+walk the source and its record families → the planned lifeboat file set,
+each brief section grounded from the source per internal/core/lifeboat/mapping.go,
+plus a per-section coverage report (grounded | partial | blank)
+DESTINATION SAFETY GATE
+refuse unless <dest> is absent, empty, or carries a parseable _provenance.json
+SECRET SCAN (before any write)
+scan the planned bytes; a hard-fail secret refuses the whole pack — never redact
+WRITE
+write to a staging directory, then swap it into <dest>; _provenance.json is
+written last — the commit marker and the gate key for a later re-pack
+VOYAGE LINE (operator-local)
+append one line to ~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl;
+a failed append never fails the pack — the written _provenance.json is authoritative
+2 conflict(s) (nothing was written):
+nothing was written — resolve the conflicts and re-run
+1. /abcd:intent "<free-text>"   (canonical bare quoted create)
+2. /abcd:intent plan <itd-N>    (when ready to commit to work; single intent ID)
+Later phase — plan grows a PRD-freeze front end and multi-kind dispatch:
+a prd_path read + provenance freeze sequence (§ 5); a suggested_kind-driven
+kind proposal the user confirms or overrides (binding); a plan-review of the
+spec across members); and a discipline branch (no spec — registers the rule
+ship today; plan schedules a single standalone intent.
+3. Spec marked done in the native spec store   (standalone + bundle: work complete)
+with the review request staged under .abcd/.work.local/reviews/.
+checked separately against the same delivered reality).
+that moves the intent planned → shipped and QUEUES a review on that transition.
+Auto-running the reviewer off that queue is still deferred (no epic currently owns
+shipped intent stays empty until /abcd:intent audit is run by hand.)
+4. /abcd:intent reclassify <itd-N> --kind <new-kind>     (late reclassification — a later phase; no reclassify sub-verb ships yet)
+Later phase — intent-auditor (shape-classification role) scans the corpus
+when the user runs /abcd:intent shape (spc-29, predecessor store; an on-demand surface, not
+yet a binary sub-verb). The user accepts a suggestion via
+parameter is a preserved seam that no hook invokes.)
+.abcd/coordination/shape.lock  (file lock via flock(2))
+PROBE
+ahoy history store that keys session transcripts on the root-commit SHA)
+LICENCE DETECT (per 05-internals/09-provenance-substrate.md § 1)
+ingest passes no source root, so the LICENSE-file and package-manifest steps
+are inert on this surface)
+but never rejects): reject if licence is restrictive AND project is public
+DISTIL (host-delegated: the host agent is the distiller, supplying the
+DistilledPage array via --pages-json; the binary validates every page.
+The principle-distiller curator role is a Phase 6 design target per
+never at ingest)
+DISCARD ORIGINAL (default behaviour)
+line only (`## [YYYY-MM-DD HH:MM] <class> | <slug> — <summary>`)
+.abcd/.work.local/logs/memory/
+abcd version --json
+abcd lint --json
+abcd ideate record <idea-slug> --verdict-json <file|-> --json
+abcd identity --json        # the block and every surface's verdict; exit 0
+abcd identity render        # a unified diff per drifted surface; writes nothing
+abcd identity init …        # record the block and the pointer to it
+Live count per lifecycle bucket.
+for b in drafts planned shipped disciplines superseded; do
+itd-N (proposed work) ──► rfc-N (community discussion) ──► itd-N (refined or new) ──► native spec (native store / ccpm) ──► ship
+adr-N (retrospective record,
+when the decision was hard
+to reverse + the trade-off
+was real)
+grep -rq "terminology_exceptions" scripts/abcd/   # → ABSENT (historical)
+for f in itd-27-grill-skill-and-glossary itd-28-rp-reviews-into-flow; do
+grep ^3377980 .abcd/work/attribution-rewrite-2026-08-06/sha-map-old-to-new.tsv
+yes | "${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install
+printf %s '<pattern>' | "${CLAUDE_PLUGIN_ROOT}/abcd" banlist add --private <key> - --json

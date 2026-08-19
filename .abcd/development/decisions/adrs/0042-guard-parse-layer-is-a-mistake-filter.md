@@ -132,10 +132,18 @@ Tier 2 converts the unbounded *wrapper* class — a command that execs its own
 arguments — from *silent allow* to *loud warn* without enumerating anything, and
 gives the wrapper path the fail-safe the interpreter path already had. It does
 **not** reach the *exec-string* class: `su -c`, `runuser -c` and `script -c` keep
-their payload as one opaque token that `isShellFamily` will not open, so they stay
-silent until part C lands. Six of the ten verified bypasses are covered by
-speculation, seven once each speculative suffix is run through `expandPayloads`;
-the remaining three are part C's whole reason for existing.
+their payload as one opaque token that `isShellFamily` will not open. Six of the
+ten verified bypasses are covered by speculation, seven once each speculative
+suffix is run through `expandPayloads`; the remaining three are part C's whole
+reason for existing.
+
+**Shipped state.** All four parts are built. Of the ten bypasses, part B turned
+seven into precise Tier 1 blocks and part C reached the other three, so none is
+an allow and the fail-safe now stands underneath the enumeration rather than
+behind it. The gate condition acquired a third clause in the building: a segment
+whose payload the guard successfully READ is not an unrecognised launcher either,
+or `busybox sh -c "<hazard>"` reports the same hazard twice — once as the entry
+its payload matched and once as a guess about the parent.
 
 **3. Tier 2 is bounded against the denial of service it would otherwise
 reintroduce.** The obvious form of speculation is N starts × E entries — exactly
@@ -146,6 +154,17 @@ shape is therefore binding: command-position starts computed once per segment in
 an O(N) pass, a hard cap of ~64 starts **per segment** past which the warn is
 emitted unconditionally rather than skipped, short-circuit on first hit, pinned by
 a benchmark test.
+
+**Amended when built: the start cap alone does not bound the cost.** Every start
+pays `commandOf`, which walks the whole leading wrapper chain, so 64 starts on a
+1 MiB line of `env env env …` measured **14.2 s** — linear in line length, and
+still a hang inside the hook. A second bound was added: the tokens one start
+reads are capped (`maxSpeculativeWindow`, 512), taking the same input to ~120 ms.
+That is a coverage trade, and a small one — every pattern reads its command, the
+operand at position 0, and flags, all of which sit near the command in any hazard
+the Pattern language can express — but it is a trade, so a truncated window warns
+through the same fail-loud path as an exhausted start cap rather than falling
+quiet.
 
 Both granularities bound the cost: per segment gives Σ 64·len(seg)·E for entry
 matching, plus the `expandPayloads` call each speculative suffix now makes, itself
@@ -283,21 +302,26 @@ registry does match, and abcd is host-delegated by default ([adr-25](0025-host-d
   is rejected in decision 4 for a worse reason than noise. The shape is unquoted hazard-shaped text in a
   command line where nothing matched; quoting silences it. This repo's subject
   *is* the hazard registry, so expect interactive hits here specifically.
-- **Re-measuring both corpora under the adopted gate is a merge precondition**,
-  not a follow-up. Decision 8's warn-storm STOP is not discharged by the
-  argv[0]-gated run, and the ~64-start cap is its own unmeasured warn source —
-  past the cap the warn fires unconditionally, and nothing yet measures how many
-  real command lines carry more than 64 command-position tokens.
+- **Discharged when built.** Both corpora were re-measured against the shipped
+  implementation and now live in `internal/core/guard/testdata/corpus/`: 961
+  command lines mined from this repository's prose, Makefile, scripts and
+  workflows, on which Tier 2 fires **zero** times, and a labelled adversarial
+  corpus carrying all four directions. The counts move as parts B and C upgrade
+  warns to precise blocks, so the corpus file and its test's own log line are the
+  figure — not a number copied into this record, which is how the first version of
+  this paragraph came to disagree with the data it was discharging. The real implementation is
+  substantially quieter than the argv[0]-gated prototype predicted, because a
+  hazard inside a quoted argument or a path never reaches command position at
+  all. The ceiling is enforced by a test, and raising it is the visible cost of
+  making the guard noisier.
 - **A new standing obligation: the DoS bound is load-bearing, not an
   optimisation.** The start cap and the O(N) pass carry a benchmark test, and any
   future change to matching re-runs it. The guard gates the hook; a slow guard is
   an outage.
-- **The evidence behind this record must be re-landed as committed artefacts.**
-  The prototype, the two corpora and the timing runs lived in the local ephemeral
-  tier and are not in the repository, so nothing here is reproducible from the
-  record alone. The implementation lands the benchmark and the corpora as
-  committed test data; until it does, every measured figure above is a claim
-  backed by a run the next reader cannot repeat.
+- **The evidence is committed, not recounted.** Both corpora and the DoS bound
+  ship as test data and tests (`corpus_test.go`, `speculate_bound_test.go`,
+  `BenchmarkCheck`), so every figure above is now a claim the next change has to
+  keep true rather than a run the reader has to take on trust.
 - **Wrapper and payload-flag tables are documented as one platform's grammar.**
   `nsenter unshare chrt taskset ionice setsid flock stdbuf runuser` do not exist
   on macOS, and `su`, `script`, `chroot`, `nice` carry BSD grammars there. CI runs

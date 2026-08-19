@@ -10,6 +10,17 @@ import (
 // OWN arguments are stepped over with it (wrapperValueFlags, wrapperOperands),
 // because a wrapper that defangs an entry as soon as it carries a flag is worse
 // than one the set never knew — the registry looks armed and is not.
+// The set is an UPGRADE, not the safety property. Since adr-42 a hazard behind a
+// launcher this map does not name is a loud Tier 2 warn rather than a silent
+// allow, so being incomplete here costs precision, not coverage — which is what
+// makes it safe to add names without pretending the list is finished. It never
+// can be: any binary that execs its arguments belongs here, and a repository adds
+// one with a line in a Makefile.
+//
+// Every entry below is Linux/util-linux/coreutils, and every flag list is derived
+// by PROBING the installed binary (wrappers_test.go), never by reading --help —
+// nsenter's help contradicts its own parser on `-S`, and gh-299 shipped a list
+// that a size assertion certified as complete while it was wrong three ways.
 var wrappers = map[string]bool{
 	"sudo":    true,
 	"doas":    true,
@@ -20,6 +31,28 @@ var wrappers = map[string]bool{
 	"xargs":   true,
 	"timeout": true,
 	"exec":    true,
+
+	// Scheduling, buffering and namespace shims: each runs the command that
+	// follows it, and each was a silent allow for every bundled blocker (iss-272).
+	"nice":        true,
+	"setsid":      true,
+	"stdbuf":      true,
+	"ionice":      true,
+	"eatmydata":   true,
+	"proxychains": true,
+	"chrt":        true,
+	"taskset":     true,
+	"unshare":     true,
+	"nsenter":     true,
+	"flock":       true,
+	"chroot":      true,
+	// `runuser -u <user> [--] <cmd>` is a direct-exec grammar. Its OTHER grammar,
+	// `runuser -c <string>`, hands the string to a shell and belongs to the
+	// execute-a-string family, not here.
+	"runuser": true,
+	// A multiplexer: its first operand is the applet, so stepping it leaves
+	// `sh -c …` in command position and the interpreter path takes over.
+	"busybox": true,
 }
 
 // wrapperValueFlags names, per wrapper, that wrapper's OWN flags which consume
@@ -49,6 +82,30 @@ var wrapperValueFlags = map[string][]string{
 	"timeout": {"-k", "--kill-after", "-s", "--signal"},
 	"exec":    {"-a"},
 	// `command` and `nohup` take no value flags at all.
+
+	// Probed on util-linux 2.39.3 / coreutils 9.4 (wrappers_test.go). Two of these
+	// are traps a document would have got wrong:
+	//   - `taskset -c` is a BOOLEAN format switch, not a value flag. Listing it
+	//     would make the walk step over the COMMAND and create a miss that does
+	//     not exist today.
+	//   - `setsid -c` is `--ctty`, not a payload flag, and takes nothing.
+	"nice":   {"-n", "--adjustment"},
+	"stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+	"ionice": {"-c", "-n", "--class", "--classdata"},
+	"chrt":   {"-T", "-P", "-D", "--sched-runtime", "--sched-period", "--sched-deadline"},
+	"unshare": {
+		"-S", "-G", "-w", "-R", "--setuid", "--setgid", "--wd", "--root",
+		"--map-user", "--map-group", "--map-users", "--map-groups",
+		"--propagation", "--setgroups", "--monotonic", "--boottime",
+	},
+	// NOT -W/--wd: nsenter's is optional-argument and consumes nothing, unlike
+	// unshare's -w/--wd, which is required-argument. Same package, same version,
+	// same letter, opposite grammar — verified by probe, not by --help.
+	"nsenter": {"-t", "-S", "-G", "--target", "--setuid", "--setgid"},
+	"chroot":  {"--userspec", "--groups"},
+	"flock":   {"-w", "-E", "--timeout", "--wait", "--conflict-exit-code"},
+	"runuser": {"-u", "-g", "-G", "-s", "-w", "--user", "--group", "--supp-group", "--shell", "--whitelist-environment"},
+	// `setsid`, `eatmydata`, `proxychains` and `taskset` take no value flags.
 }
 
 // wrapperOperands names wrappers whose grammar puts a mandatory OPERAND between
@@ -57,6 +114,14 @@ var wrapperValueFlags = map[string][]string{
 // as command position, `timeout 30 rm -rf /` is a command called `30`.
 var wrapperOperands = map[string]int{
 	"timeout": 1,
+	// `chrt [OPTIONS] PRIORITY COMMAND`, `taskset [OPTIONS] MASK COMMAND`,
+	// `flock [OPTIONS] FILE COMMAND`, `chroot [OPTIONS] DIR COMMAND`. Each was
+	// verified by running it: `chrt -f /bin/echo hi` answers
+	// "invalid priority argument: '/bin/echo'".
+	"chrt":    1,
+	"taskset": 1,
+	"flock":   1,
+	"chroot":  1,
 }
 
 // reserved are shell keywords and grouping tokens that PRECEDE a command rather
@@ -73,16 +138,6 @@ var reserved = map[string]bool{
 	"until": true,
 	"{":     true,
 	"!":     true,
-}
-
-// matchesAny reports whether the pattern fires on any segment of the candidate.
-func matchesAny(p Pattern, segs []segment) bool {
-	for i, s := range segs {
-		if matchSegment(p, s) && (p.AfterCD == nil || !*p.AfterCD || precededByCD(segs[:i], s.chain)) {
-			return true
-		}
-	}
-	return false
 }
 
 // precededByCD reports whether an earlier command in the SAME chain is a `cd`.

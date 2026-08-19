@@ -78,15 +78,35 @@ naming the file, so the state cannot pass unnoticed.
 **Never write `.abcd/guard.json` on your own initiative.** Disabling or
 retiering a hazard is the user's decision to make and to review.
 
+### What this guard is
+
+The guard is a **mistake filter, not a security boundary**. It catches a hazard
+typed by accident or reached through an ordinary wrapper — the cases that
+actually cost people work. It does not withstand an author trying to get a
+command past it, and it does not claim to: the set of programs that launch
+another program is open-ended, so no list shipped inside the binary can
+enumerate it, and a repository extends that set with one line in a Makefile.
+
+Say this plainly if a user asks whether the guard makes a session safe. It does
+not. Anything that needs an enforced boundary needs a control at the **execution
+layer** — a sandbox, a permission system, a restricted shell — with this guard
+in front of it to teach, never in place of it.
+
 ### What an allow does and does not mean
 
 An allow means **no registry entry matched**. It is never a statement that a
-command is safe. The guard reads command names it can see in command position, so
-a hazard reached any other way is not seen: a command string handed to an
-interpreter (`eval`, `sh -c`), one launched through a wrapper outside the known
-set, one launched through a known wrapper carrying a value-taking flag the guard
-does not name (`sudo -u bob <hazard>` is seen; the bundled short form
-`sudo -Hu bob <hazard>` is not), one whose API path an entry names by its ROOT
+command is safe.
+
+A hazard behind a launcher the guard does not recognise is no longer silent: it
+is a **warn** naming the entry it matched, because the guard cannot tell whether
+that program runs the rest of the line. Report it like any other warn — the
+command may run, and the user decides.
+
+What an allow still does not see is a hazard that never reaches command position
+at all: one launched through a known wrapper carrying a value-taking flag the
+guard does not name (`sudo -u bob <hazard>` is seen; the bundled short form
+`sudo -Hu bob <hazard>` reaches only the warn, not the entry that names it), one
+whose API path an entry names by its ROOT
 segment but the host serves under a prefix (a GitHub Enterprise Server install
 mounts the same endpoints under `/api/v3/`; the `https://api.github.com/…` URL
 form **is** read), one inside a backtick substitution, or a dangerous form no

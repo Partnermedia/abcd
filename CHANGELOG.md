@@ -26,6 +26,29 @@ called out in a **Breaking** section.
 
 - **A resolved issue points at what fixed it.** `abcd capture resolve` gains optional provenance flags — `--intent itd-N`, `--spec spc-N`, `--commit <sha>` — that write the structured `resolved_by` pointer the schema has modelled all along, in the same atomic transition as the resolution note and impact. Ids must exist in their record store; the sha is shape-checked only; an unknown or malformed value refuses the whole resolve and writes nothing. Without the flags the record stays byte-identical to a plain resolve. `wontfix` is untouched — a non-action points at nothing. (itd-120, spc-25; the `resolved_by` half of iss-245)
 
+- **`abcd guard` no longer waves through a hazard reached by a launcher it does
+  not recognise.** `nice git push --force origin main` exited 0 with no output,
+  and so did nine other spellings — `setsid`, `flock`, `stdbuf`, `chroot`,
+  `busybox sh -c`, `su -c`, `runuser -c`, `script -c` — because the matcher
+  stepped a hand-maintained list of programs that launch other programs, and
+  anything not on that list simply *became* the command. Nothing matches a
+  command called `nice`, so the verdict was a confident allow. **That list can
+  never be complete**: any binary that execs its arguments belongs on it, the
+  ones that matter grant no privilege so no security catalogue lists them, and a
+  repository adds one with a line in a Makefile. So it stops being what stands
+  between a hazard and a silent allow. When nothing matches a segment, the
+  matcher now re-runs from each later command position, and a hazard found there
+  is a **loud warning** — never a refusal, because an unknown program is not
+  proof that it runs the rest of the line, and `rg git push --force docs/` is a
+  search. Naming the launchers is still worth doing and fourteen are now named,
+  which turns each warning into a precise refusal that teaches the safe form; the
+  point is that being incomplete no longer costs silence. Four verbs that carry a
+  command *string* — `su`, `runuser`, `script`, `flock` — are read too, in every
+  documented spelling including the long ones. **What this does not change:** a
+  hazard quoted as text is still not a hazard, ordinary commands are unaffected,
+  and the guard is still a mistake filter rather than a boundary — see below.
+  (adr-42, iss-272)
+
 - **The guard's own limits are on the record, and so are the sources that
   settled them.** ADR-42 rules the hazard guard's parse layer a *mistake filter*
   rather than a security boundary — it catches accidents and casual evasion by a

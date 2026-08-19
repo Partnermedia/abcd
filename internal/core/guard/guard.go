@@ -226,6 +226,13 @@ func Validate(r Registry) error {
 		if !validEntryID(id) {
 			return fmt.Errorf("%w: entry id %q must match [a-z0-9][a-z0-9-]*", ErrInvalidEntry, id)
 		}
+		// The guard speaks under reserved ids of its own for verdicts that have no
+		// entry behind them. An entry claiming one would be indexed out of r.Entries
+		// by a synthetic winner — a blank message — and would let a repo dress an
+		// ordinary hazard up as the guard's own voice.
+		if containsString(reservedEntryIDs, id) {
+			return fmt.Errorf("%w: entry id %q is reserved for the guard's own entry-less verdicts", ErrInvalidEntry, id)
+		}
 		e := r.Entries[id]
 		switch e.Tier {
 		case TierBlocker, TierWarn:
@@ -373,9 +380,26 @@ func (r Registry) Check(command string) (Decision, error) {
 	}
 	sort.Strings(ids)
 
+	// Tier 1: the registry match at command position. matchedSeg records WHICH
+	// segments fired, because Tier 2's gate is per segment — a line-wide gate would
+	// let one warn-tier command disarm the fail-safe for everything after it
+	// (adr-42 decision 4).
 	var blockers, warns []string
+	matchedSeg := make([]bool, len(segs))
 	for _, id := range ids {
-		if matchesAny(r.Entries[id].Pattern, segs) {
+		p := r.Entries[id].Pattern
+		hit := false
+		for i, s := range segs {
+			if !matchSegment(p, s) {
+				continue
+			}
+			if p.AfterCD != nil && *p.AfterCD && !precededByCD(segs[:i], s.chain) {
+				continue
+			}
+			matchedSeg[i] = true
+			hit = true
+		}
+		if hit {
 			if r.Entries[id].Tier == TierBlocker {
 				blockers = append(blockers, id)
 			} else {
@@ -383,6 +407,10 @@ func (r Registry) Check(command string) (Decision, error) {
 			}
 		}
 	}
+
+	// Tier 2: the position-agnostic fail-safe over the segments Tier 1 left
+	// unmatched. Warns only, and folded into the same severity pools below.
+	signals = append(signals, r.speculate(segs, matchedSeg, ids)...)
 
 	// The first synthetic block and warn (id order is not meaningful for the
 	// entry-less verdicts, so the first encountered wins its pool).
@@ -404,9 +432,17 @@ func (r Registry) Check(command string) (Decision, error) {
 	if !blockPool && !warnPool {
 		return Decision{Verdict: VerdictAllow}, nil
 	}
+	// Every entry-less id that CONTRIBUTED is listed, not just the two that won
+	// their pools. The merge keeps one signal per pool for the message, which is
+	// right — the first is as good a lesson as the fifth — but Matches is the
+	// record of what fired, and a Tier 2 hit that loses the slot to an unrelated
+	// payload warn would vanish from it entirely. That is exactly what the warn
+	// rate is measured from, so the blind spot would have hidden itself.
 	matches := append(append([]string(nil), blockers...), warns...)
-	if synBlock != nil || synWarn != nil {
-		matches = append(matches, syntheticEntryID)
+	for i := range signals {
+		if id := signals[i].entryID(); !containsString(matches, id) {
+			matches = append(matches, id)
+		}
 	}
 
 	// Within the winning pool a concrete registry entry supplies the message and
@@ -450,7 +486,7 @@ func syntheticDecision(v Verdict, sig payloadSignal, matches []string) Decision 
 	}
 	return Decision{
 		Verdict:   v,
-		EntryID:   syntheticEntryID,
+		EntryID:   sig.entryID(),
 		Tier:      tier,
 		Successor: sig.successor,
 		Why:       sig.reason,
@@ -468,7 +504,7 @@ func syntheticMessage(v Verdict, sig payloadSignal) string {
 	if v == VerdictWarn {
 		lead = "Warning"
 	}
-	return fmt.Sprintf("%s by the abcd guard (%s): %s Run instead: %s", lead, syntheticEntryID, sig.reason, sig.successor)
+	return fmt.Sprintf("%s by the abcd guard (%s): %s Run instead: %s", lead, sig.entryID(), sig.reason, sig.successor)
 }
 
 // message renders the sentence a front door surfaces: what happened, why in

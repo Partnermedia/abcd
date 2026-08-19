@@ -1283,3 +1283,72 @@ parallel-agent merge contention bites.
   under Tier 2, so this record covers the predicted fourth instance only if it lands in the
   wrapper set. The warn-storm STOP from the
   2026-08-15 note binds: measure on real agent commands before merge.
+- 2026-08-18 — adr-42 parts D and A built. TWO amendments the build forced, both recorded
+  in the ADR. (1) The ~64-start cap does NOT bound the cost on its own: every speculative
+  start pays commandOf, which walks the whole leading wrapper chain, so 64 starts on a 1 MiB
+  line of `env env env ...` measured 14.2s inside the PreToolUse hook — linear in line
+  length and still an outage. A second bound (maxSpeculativeWindow = 512 tokens read per
+  start) takes it to ~120ms; a truncated window warns through the same fail-loud path as an
+  exhausted start cap, so the coverage trade is never silent. Pinned by a test at the real
+  1 MiB stdin cap, watched failing at 14s with the window removed. (2) A speculative start
+  must NOT skip known wrappers, though commandOf would step them: the wrapper is exactly
+  where a payload lives, and `myrunner env -S '<hazard>'` needs `env` in command position for
+  expandPayloads to read the -S value at all. Skipping wrappers is lossless for MATCHING and
+  lossy for EXPANSION — caught by the demotion test, which failed as an allow.
+  The warn-storm STOP is DISCHARGED with committed evidence: 961 mined command lines with
+  zero Tier 2 fires, plus a labelled adversarial corpus (23 quiet / 18 caught / 5 Tier 1
+  blocks / 2 accepted false positives), both under internal/core/guard/testdata/corpus/ with
+  the ceiling enforced by a test. The shipped fail-safe is much quieter than the
+  argv[0]-gated prototype predicted, because a hazard inside a quoted argument or a path
+  never reaches command position. `git bisect run` and `git submodule foreach` now warn,
+  exactly as the not-argv[0] gate predicted.
+- 2026-08-18 — adr-42 parts B and C built; iss-272 closed. Part B named fourteen wrappers
+  (nice setsid stdbuf ionice eatmydata proxychains chrt taskset unshare nsenter flock chroot
+  runuser busybox), which upgrades each from part A's loud warn to a precise Tier 1 block.
+  Every flag list is DERIVED BY PROBING the installed binary in a test, never from --help,
+  and the probe caught two errors before they shipped: `nsenter -W/--wd` consumes NOTHING
+  while `unshare -w/--wd` — same letter, same package, same version — is required-argument
+  (listing nsenter's would have made the walk step over the COMMAND, a miss the table would
+  have INVENTED); and `taskset -c` is a format switch for the MASK operand, not a value flag.
+  A flag this environment cannot classify is listed as unprobed WITH ITS REASON (setsid --ctty
+  needs a controlling terminal, chrt --sched-runtime needs SCHED_DEADLINE, nsenter/chroot/
+  runuser need privileges) — silence is what gh-299 shipped. Part C added an exec-string TABLE
+  for su/runuser/script/flock, not a shellCPayload generalisation, which would have resolved
+  the short spellings free and silently allowed six long ones (su --command, --command=,
+  --session-command, runuser --command, script --command, flock --command); each has a test.
+  Classification runs on the raw token chain before commandOf because runuser and flock are
+  also wrappers. Recorded limit kept honest: `su -c` runs the TARGET user's login shell,
+  overridable with -s, so the payload is not guaranteed POSIX grammar — a false-negative cost
+  only. All ten of iss-272's bypasses now produce a verdict; the acceptance test asserts that
+  in the issue's own terms.
+- 2026-08-18 — Two adversarial reviews of the adr-42 implementation; three findings that
+  changed the code, all reproduced against the binary first. (1) DoS, 23.6s at the 1 MiB cap:
+  maxSpeculativeWindow bounds the token COUNT and an execute-a-string payload is ONE token of
+  unbounded length, so 64 starts each re-tokenized a 1 MiB payload. Two more bounds added — a
+  payload-BYTES budget and a whole-line START budget, both per Check, after a per-segment byte
+  budget still left 1,200 short segments at 8.4s. The lesson generalises: every per-item bound
+  needs a whole-input bound behind it, and the ADR had said in advance that the benchmark must
+  exercise the payload path — the first bound test pinned the cheaper half anyway. The bound
+  test is now four adversarial shapes, each verified by mutation to fail on the bound it names.
+  (2) FALSE BLOCK, and a suppression behind it: scanExecString ran to the end of the segment, so
+  `flock /tmp/lock /bin/echo -c "<hazard>"` read a `-c` that real flock passes to /bin/echo as an
+  argument (verified: it prints them). That both blocked a harmless command AND made the segment
+  look understood, switching Tier 2 off for it — a `flock` prefix was a one-token off switch,
+  the payload-level twin of the per-line suppression decision 4 rejects. Fixed with a per-verb
+  count of the operands the verb owns before the launched command begins; only flock has one,
+  because su genuinely permutes (`su root /bin/echo -c 'echo SEVEN'` prints SEVEN). This
+  falsified the code's own claim that a mis-parse "never yields a false block".
+  (3) The wrapper probe would have FAILED ON CI: `chrt -f 1` needs CAP_SYS_NICE and a GitHub
+  runner is unprivileged, and the per-wrapper needsRoot blanket also hid the nsenter -W
+  counterexample the file exists for. Replaced with a DERIVED control probe (if the wrapper
+  cannot run its own baseline here, nothing it says is evidence) plus per-flag reasons. The
+  candidate list — itself a hand-maintained enumeration, i.e. the CWE-184 shape inside the test
+  written to defeat it — now comes from the binary's own --help, which is trusted to ENUMERATE
+  and never to CLASSIFY. That immediately found three real misses: nice --adjustment, runuser -w
+  and runuser -s, each degrading a precise block to a warn. 44 classifications became 121.
+  Also: every synthetic id that contributed is now listed in Matches (a Tier 2 fire used to lose
+  the slot to any earlier payload warn and vanish — which the warn-rate gate counts, so the blind
+  spot hid itself); the cap warn no longer fires when only losslessly-skipped tokens remain; the
+  warn ceiling is an absolute 2 rather than a 1% rate that permitted 9; matchesAny deleted as
+  dead; and the three surfaces no longer list "launched through a wrapper outside the known set"
+  as something an allow does not see, which is the case this change converts to a warn.

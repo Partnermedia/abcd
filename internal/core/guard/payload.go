@@ -43,10 +43,23 @@ const (
 // and the later host-delegated interpretation adds the field when it adds a
 // reader (wired-or-it-isn't-done).
 type payloadSignal struct {
+	// id is the reserved entry id the verdict is reported under. Empty means
+	// syntheticEntryID — the execute-a-string family's own voice. Tier 2 sets it to
+	// speculativeEntryID, because adr-42 decision 2 requires a reader to be able to
+	// tell a speculative verdict from a literal one.
+	id        string
 	verdict   Verdict
 	family    string
 	reason    string
 	successor string
+}
+
+// entryID is the id this signal is reported under.
+func (s payloadSignal) entryID() string {
+	if s.id == "" {
+		return syntheticEntryID
+	}
+	return s.id
 }
 
 // expandPayloads expands every execute-a-string payload in segs once, appending
@@ -107,6 +120,19 @@ func expandPayloads(segs []segment) ([]segment, []payloadSignal) {
 			case kindShellWarn:
 				signals = append(signals, shellUnresolvedSignal())
 				continue
+			case kindExecString:
+				// The payload is shell grammar (see execstring.go on how large a
+				// claim that is), so it is inspected exactly as a shell payload is —
+				// the same substitution and pipe-into-interpreter fail-safes apply.
+				sig, pseg, inspectable := shellInspect(payload)
+				if !inspectable {
+					signals = append(signals, sig)
+					continue
+				}
+				psegs = pseg
+			case kindExecStringWarn:
+				signals = append(signals, execStringWarnSignal(fam))
+				continue
 			}
 
 			// Offset the payload's chains into a fresh disjoint range and append.
@@ -128,6 +154,11 @@ const (
 	kindEnvS = iota + 1
 	kindShell
 	kindShellWarn
+	// kindExecString is a command string carried by a verb that is NOT a shell
+	// (`su -c`, `runuser -c`, `script -c`, `flock -c`); kindExecStringWarn is one
+	// whose value the guard could not locate.
+	kindExecString
+	kindExecStringWarn
 )
 
 // isShellFamily reports whether cmd is an interpreter whose `-c <string>` runs
@@ -176,6 +207,16 @@ func isShellFamily(cmd string) bool {
 func classifySegment(s segment) (kind int, family, payload string, trailing []string, ok bool) {
 	if v, rest, found := splitStringValue(s.tokens); found {
 		return kindEnvS, familyEnvS, v, rest, true
+	}
+	// The exec-string family is read from the RAW token chain, before commandOf,
+	// for the same reason env -S is: two of these verbs (runuser, flock) are also
+	// wrappers, so the wrapper walk would step past the verb and read its payload
+	// string as the command.
+	if verb, v, resolved, found := execStringPayload(s.tokens); found {
+		if !resolved {
+			return kindExecStringWarn, verb, "", nil, true
+		}
+		return kindExecString, verb, v, nil, true
 	}
 	cmd, args := commandOf(s)
 	switch {

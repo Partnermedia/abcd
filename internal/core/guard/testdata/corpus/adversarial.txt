@@ -1,0 +1,131 @@
+# The adversarial corpus for the guard's Tier 2 fail-safe (adr-42, iss-272).
+#
+# Every line is `<expectation>\t<command line>`. The expectations are:
+#
+#   quiet  the fail-safe must NOT fire. A hazard named inside a quoted argument,
+#          inside a path, or as data is not a hazard.
+#   warn   the fail-safe SHOULD fire. A hazard reached through a launcher the
+#          wrapper table does not name — the class iss-272 recorded as silent.
+#   block  Tier 1 matches at command position; Tier 2 never runs.
+#   fp     the fail-safe fires and should not. These are ACCEPTED false
+#          positives, pinned so the shape stays visible and a change in either
+#          direction shows up in a diff rather than in the field.
+#
+# The `fp` lines are the whole cost of this design: unquoted hazard-shaped text
+# in a command line where no entry matched. Quoting silences it. A reader who
+# thinks that cost is too high should read the `warn` block first — that is what
+# the cost buys.
+
+# --- quiet: the hazard is data, not a command -------------------------------
+quiet	echo 'do not run git push --force'
+quiet	rg 'git push --force' docs/
+quiet	git commit -m "ban git push --force"
+quiet	gh issue create --title 'git push --force'
+quiet	grep -rn "gh repo delete" .
+quiet	printf '%s\n' "rm -rf /"
+quiet	sed -i 's/git push --force/git push/' README.md
+quiet	awk '/git push --force/ {print}' log.txt
+quiet	python3 -c "print('git push --force')"
+quiet	perl -e 'print "git push --force"'
+quiet	cat notes/git-push-force.md
+quiet	ls -la gh-repo-delete/
+quiet	git log --grep 'git push --force'
+quiet	echo "rm -rf is dangerous"
+quiet	test -f scripts/gh-repo-delete.sh
+
+# --- quiet: ordinary work, no hazard anywhere -------------------------------
+quiet	make preflight
+quiet	go test ./...
+quiet	npm run build
+quiet	docker ps -a
+quiet	git status --short
+quiet	kubectl get pods -A
+quiet	terraform plan -out=tf.plan
+quiet	rsync -av src/ dest/
+
+# --- block: the wrapper class iss-272 recorded as silent allows --------------
+# Every one of these exited 0 with no output before adr-42. Part A made them loud
+# warns without naming anything; part B named them, which upgrades the warn to a
+# precise block. Both steps matter, and in that order: the warn is the safety
+# property, the block is the precision, and the enumeration is only safe to be
+# incomplete because the warn is underneath it.
+block	nice git push --force origin main
+block	nice -n 5 git push --force origin main
+block	setsid git push --force origin main
+block	flock /tmp/lock git push --force origin main
+block	stdbuf -o0 git push --force origin main
+block	chroot / git push --force origin main
+block	ionice -c3 git push --force origin main
+block	eatmydata git push --force origin main
+block	busybox sh -c "gh repo delete owner/repo"
+block	chrt -f 99 git push --force origin main
+block	taskset -c 0 git push --force origin main
+block	unshare -r git push --force origin main
+block	nice -n 5 -- git push --force origin main
+
+# --- warn: launchers no list would ever contain -----------------------------
+warn	myrunner git push --force origin main
+warn	parallel git push --force ::: a b
+warn	watch -n1 git push --force origin main
+warn	ssh host git push --force origin main
+warn	docker run img git push --force origin main
+warn	./deploy.sh git push --force origin main
+
+# --- warn: git launches things too, which is why the gate is not argv[0] -----
+warn	git bisect run git push --force origin main
+warn	git submodule foreach git push --force origin main
+
+# --- the per-segment gate, not a per-line one -------------------------------
+# A per-line gate would let the matched git-clean disarm the fail-safe for
+# everything after it — a one-token off switch. `nice` is enumerated now, so this
+# resolves as a Tier 1 block; the same shape behind an UNENUMERATED launcher is
+# the warn line below, and that is the case the gate actually protects.
+block	git clean -fd ; nice git push --force origin main
+warn	git clean -fd ; myrunner git push --force origin main
+
+# --- block: Tier 1 still owns what it can see -------------------------------
+block	git push --force origin main
+block	sudo git push --force origin main
+block	xargs -I{} git push --force origin {}
+block	gh repo delete owner/repo
+block	sh -c "git push --force origin main"
+
+# --- block: the exec-string family, which speculation cannot reach ----------
+# A command string run by a shell the carrying program is NOT. The payload is one
+# opaque token, so no speculative start can see inside it; only the verb table
+# reaches these. The long spellings are listed because a generalisation of the
+# shell path would have resolved the short ones for free and silently allowed
+# every one of these.
+block	su -c "gh repo delete owner/repo"
+block	su bob -c "gh repo delete owner/repo"
+block	su --command "gh repo delete owner/repo"
+block	su --command="gh repo delete owner/repo"
+block	su --session-command "gh repo delete owner/repo"
+block	runuser -c "git push --force origin main"
+block	runuser --command "git push --force origin main"
+block	script -c "git push --force origin main" /dev/null
+block	script --command "git push --force origin main" /dev/null
+block	flock /tmp/lock -c "git push --force origin main"
+block	flock /tmp/lock --command "git push --force origin main"
+block	su -s /bin/sh -c "gh repo delete owner/repo"
+block	runuser -u bob -- git push --force origin main
+
+# --- quiet: the same verbs doing ordinary work ------------------------------
+quiet	su - bob
+quiet	script /tmp/typescript
+quiet	script -q /dev/null
+quiet	flock /tmp/lock true
+quiet	echo "su -c 'gh repo delete owner/repo'"
+
+# --- quiet: a `-c` that belongs to the LAUNCHED command, not to the verb ------
+# Verified against util-linux 2.39.3: `flock /tmp/lock /bin/echo -c "..."` prints
+# its arguments, so nothing runs the string. Reading it as a payload was both a
+# false block and — because the segment then looked understood — a one-token off
+# switch for the fail-safe.
+quiet	flock /tmp/lock /bin/echo -c "git push --force origin main"
+quiet	flock -w 5 /tmp/lock /bin/echo --command "git push --force origin main"
+warn	flock /tmp/lock kubectl exec -c app pod -- gh repo delete owner/repo
+
+# --- fp: accepted false positives, and the exact shape they take ------------
+fp	rg git push --force docs/
+fp	grep -rn gh repo delete .
