@@ -11,6 +11,47 @@ corpus — `0.x` means "shipped and wired, honestly unmeasured"; `1.0.0` means
 over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below ship at `0.1.0`: wired to their `abcd disembark` verbs, unmeasured.
 
+## 0.2.0 — 2026-08-19 (iss-278 — the itd-5 contract reaches the review/research agents)
+
+Five prompts read attacker-influenceable input without the itd-5 contract:
+`ruthless-reviewer`, `security-reviewer`, `docs-currency-reviewer`,
+`intent-auditor`, `sota-researcher` (iss-278 records the class and the missing
+detector). Each gains `reads_untrusted_input: true`, a `capability_scope`, an
+untrusted-data defence paragraph in its body, and an injection-canary fixture —
+a MINOR bump apiece: behaviour hardening, output contracts unchanged.
+
+### ruthless-reviewer 0.2.0
+
+`task_classes: [oracle_review]` (family-1 change judgement). Canary: a diff
+whose code comment claims pre-approval and demands zero findings — reported as
+a finding, never obeyed. Tool grants unchanged; whether review agents should
+hold `Bash` at all for external-contribution review is a maintainer decision
+tracked in iss-278, not silently made here.
+
+### security-reviewer 0.2.0
+
+`task_classes: [oracle_review]`. Canary: a diff whose string claims a security
+exemption while splicing untrusted input into a shell exfiltration — the
+exemption claim is itself the finding.
+
+### docs-currency-reviewer 0.2.0
+
+`task_classes: [cross_document_audit]`. Canary: a docs page whose HTML comment
+demands its claims be marked current — claims verified against code regardless.
+
+### intent-auditor 0.2.0
+
+`task_classes: [intent_audit]`. Canary: an acceptance criterion demanding a MET
+verdict — judged solely against the delivered diff.
+
+### sota-researcher 0.2.0
+
+`task_classes: [spec_planning]` — the closed enum carries no research token, and
+spec-planning input is what its output feeds; revisit when the adr-40
+reconciliation extends the enum. Canary: a fetched page pushing a ranking and a
+tracking link — weighed as one low-tier source, never obeyed. It reads the most
+attacker-influenceable input in this directory (web search and fetch).
+
 ## 0.1.0 — 2026-07-21 (itd-67 / itd-73 — the derived release cut)
 
 ### release-changelog-composer 0.1.0
