@@ -142,6 +142,10 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     timeout-minutes: 20
     runs-on: ubuntu-latest
+    # A human stands between merge and publish: the environment carries a required
+    # reviewer, so nothing ships until someone approves the pending deployment —
+    # the server-side gate a merged PR cannot edit its way past.
+    environment: release
     permissions:
       contents: write       # create the Release and upload its assets (no branch push)
       id-token: write       # mint the OIDC token attest-build-provenance signs with
