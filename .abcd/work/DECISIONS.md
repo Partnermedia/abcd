@@ -1352,3 +1352,8 @@ parallel-agent merge contention bites.
   warn ceiling is an absolute 2 rather than a 1% rate that permitted 9; matchesAny deleted as
   dead; and the three surfaces no longer list "launched through a wrapper outside the known set"
   as something an allow does not see, which is the case this change converts to a warn.
+- 2026-08-19 — Review agents keep their Bash grant: running the project's tests is
+  part of what makes their reviews evidence, and the exposure that motivated the
+  question is closed by the intake rule that external-contribution review runs
+  only in CI or a network-less container (.abcd/work/intake.md S4). iss-278
+  narrows to the unbuilt PQ linter. Maintainer decision.
