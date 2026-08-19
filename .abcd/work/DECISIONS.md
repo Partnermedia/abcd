@@ -1368,3 +1368,8 @@ parallel-agent merge contention bites.
   records-via-reviewed-PR is 2025-26 practice (GitHub advisory-database, ClusterFuzz
   fingerprint dedup); ungated agent filing degrades the whole record (curl, 2025).
   Architecture-shaping: graduate to an ADR.
+- 2026-08-19 — Review agents keep their Bash grant: running the project's tests is
+  part of what makes their reviews evidence, and the exposure that motivated the
+  question is closed by the intake rule that external-contribution review runs
+  only in CI or a network-less container (.abcd/work/intake.md S4). iss-278
+  narrows to the unbuilt PQ linter. Maintainer decision.

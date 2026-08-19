@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-19
+
 ### Breaking
 
 - **The lifeboat verdict says what it is.** `abcd disembark oracle` is now `abcd disembark review`, its flag `--oracle-json` is `--review-json`, and the verdict artefact moves from `audit/oracle-<manifest12>.{json,md}` to `review/review-<manifest12>.{json,md}` (the `audit_path` key in the JSON envelope is now `review_path`). The `lifeboat-oracle` agent becomes `lifeboat-reviewer`. The verb emits family-1 change-judgement verdicts (`SHIP`/`NEEDS_WORK`/`MAJOR_RETHINK`) — a *review* in adr-40's vocabulary — and the planning investigation found it never invokes the oracle seam at all, so naming it for that seam claimed something untrue and collided with the reserved `/abcd:oracle ask`. **The seam itself is untouched**: adr-25 stands, `oracle` remains the model-access seam's name, `ahoy install --oracle-backend` is unchanged, and the `oracle_review` task-class token stays. A re-run over a lifeboat reviewed before this release replaces cleanly — it writes the new artefact, removes that manifest's stale pair, and prunes `audit/` if empty, never touching another manifest's files. Verdict logic, the enum gate, cite-or-be-dropped, and attestation stamping are behaviour-frozen. (itd-125, spc-30; adr-40 §5 amended in place)

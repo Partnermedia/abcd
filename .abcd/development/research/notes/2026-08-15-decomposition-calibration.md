@@ -345,3 +345,38 @@ Per hand-run, append:
   and the consult-freely-cite-deliberately principle. Both prior share/ingest
   open questions moved to itd-126 with a third (share vs the store's
   admission criteria) added at the walk.
+
+### 2026-08-19 — the itd-92 capability-ladder extension — EXCLUDED from the corpus
+
+- **Excluded from the calibration count:** the human directed the home before
+  any table ran ("draft the extension to itd-92"), so there is no blind
+  prediction to grade — the label preceded the prediction. Recorded for the
+  protocol's history, not as a sample toward the ~50-capture threshold.
+- **Proposal:** bring the collaborator fence (built by hand on this repo,
+  2026-08-19) to abcd-managed repos gracefully for users without GitHub or
+  an organisation — tiers, per-piece verdicts, loud degradation.
+- **Initial routing (as first filed):** four parts — doctor + apply + gate
+  (capability | itd-92 in place); never-mutate-a-remote-uninvited (stance |
+  claimed as carried by loud-staging); verdict mechanics (plumbing | intent
+  body); evidence (research | the field note). Two adversarial reviews the
+  same day refuted the routing: loud-staging does not carry the
+  remote-mutation rule (it is a trust rule, homeless as filed), and a second
+  trust rule — identity from caller-local facts, already binding the shipped
+  launch scanner (iss-283) — was never routed at all.
+- **Corrected routing:** read-only doctor + drift + tier report (capability |
+  itd-92, extended in place); apply-on-request (capability | future intent,
+  named in itd-92's out-of-scope); both trust rules (ADR |
+  [adr-44](../../decisions/adrs/0044-remote-mutation-and-caller-identity-trust-rules.md),
+  proposed, brief invariant at adoption); gate refusal policy (deferred to
+  its own decision record after doctor field experience — out of itd-92's
+  press release entirely); verdict mechanics (plumbing | spec at planning);
+  evidence (research | the field note). Record relations: itd-92 will close
+  iss-277 when shipped; iss-281 and iss-282 remain open gaps the fence
+  tracks; iss-283 is resolved and serves as evidence only. No reversal flags.
+- **Verdict:** SPLIT (capability kept in itd-92; trust rules to adr-44; apply
+  and gate descoped) — reached only after adversarial review overturned the
+  initial FILE-AS-IS. Not a graded sample (see exclusion above), but the
+  overturn itself is calibration signal: a pre-directed routing survived
+  neither reviewer.
+- **Notes:** acceptance criteria rebuilt against what a read-only probe can
+  decide per caller; the draft stays in `drafts/` for the planning interview.
