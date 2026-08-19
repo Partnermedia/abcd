@@ -3,6 +3,7 @@ package guard
 import (
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -133,6 +134,8 @@ var wrapperProbes = []wrapperProbe{
 			"-R":            "--root needs a chroot this process cannot perform; consumes its value.",
 			"--root":        "same as -R.",
 			"--setgroups":   "needs a user namespace this process cannot create; documented required-argument and listed on that basis.",
+			"--map-user":    "classifiable only where user namespaces are unrestricted (this container as root: CONSUMES its value); an AppArmor-restricted runner cannot run either probe form.",
+			"--map-group":   "same as --map-user.",
 			"--map-users":   "needs a user namespace; consumes its value.",
 			"--map-groups":  "needs a user namespace; consumes its value.",
 			"--monotonic":   "needs a time namespace; consumes its value.",
@@ -306,6 +309,14 @@ func consumesNextToken(p wrapperProbe, flag string) (consumes, learned bool) {
 // value must actually consume one, and — the direction gh-299's first fix left
 // inert — every flag the probe finds value-taking must be in the table.
 func TestWrapperValueFlagsMatchTheInstalledBinaries(t *testing.T) {
+	// The table encodes the LINUX grammar, and a same-named binary elsewhere is
+	// not evidence about it: macOS ships `nice` and `chroot` with BSD grammars
+	// (no --adjustment, no --userspec), so probing them there reports the Linux
+	// table wrong for being the Linux table. LookPath alone cannot draw this
+	// line, because the trap is precisely the binaries that DO exist.
+	if runtime.GOOS != "linux" {
+		t.Skipf("the wrapper table encodes the Linux grammar; %s binaries that share a name carry different grammars", runtime.GOOS)
+	}
 	for _, p := range wrapperProbes {
 		p := p
 		t.Run(p.name, func(t *testing.T) {
@@ -350,12 +361,27 @@ func TestWrapperValueFlagsMatchTheInstalledBinaries(t *testing.T) {
 				switch {
 				case !learned:
 					why, ok := p.unprobeable[flag]
-					if !ok {
-						t.Errorf("%s %s: the probe could not classify it, and an unclassified flag is exactly what gh-299 shipped.\n"+
+					switch {
+					case ok:
+						t.Logf("%s %s: not probed here — %s (table claims value-taking=%v)", p.name, flag, why, inTable)
+					case inTable:
+						// The table asserts this flag consumes a value and nothing can
+						// verify or excuse that here: a claim with no evidence is the
+						// gh-299 shape, so it fails.
+						t.Errorf("%s %s: LISTED as value-taking but the probe could not classify it and no reason is recorded.\n"+
 							"Give it a known-good value, or record WHY it cannot be probed here.", p.name, flag)
-						continue
+					default:
+						// An unlisted flag this environment cannot classify. Not a
+						// failure, deliberately: --help's flag set varies by version
+						// (the Ubuntu runner's unshare documents --map-current-user;
+						// this container's does not), so erroring here couples CI to
+						// one util-linux release. The exposure is bounded by adr-42's
+						// own design — an unlisted value flag displaces the command,
+						// no entry matches, and Tier 2 warns instead of allowing — and
+						// the probe still fails loudly whenever it CAN classify an
+						// unlisted flag as value-taking.
+						t.Logf("%s %s: unclassifiable here and unlisted — a miss degrades to a Tier 2 warn, not a silent allow; classify or excuse it when adding it to the table", p.name, flag)
 					}
-					t.Logf("%s %s: not probed here — %s (table claims value-taking=%v)", p.name, flag, why, inTable)
 				case consumes && !inTable:
 					probed++
 					t.Errorf("%s %s consumes the following token but is NOT in wrapperValueFlags.\n"+
