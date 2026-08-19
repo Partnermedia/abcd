@@ -23,7 +23,7 @@
 
 > **Phase ownership** ([adr-33](../../decisions/adrs/0033-launch-phase-ownership-tiered.md)): the lifeboat round-trip — disembark packing and embark unpacking — ships in [Phase 6](../../roadmap/phases/phase-6-lifeboat.md).
 
-> **Recovery humility.** Embark unpacks the lifeboat into a working repo. The lifeboat is the highest-fidelity floor the originating session could leave behind; it is not the activity that produced it. **When something here doesn't make sense, hunt the originating session before trusting the lifeboat blindly** — ask the prior author, surface the chat where the decision happened, look at the rejected alternatives. The lifeboat is a starting point, not an oracle. See [`01-product/03-mental-model.md § The Naurian gap`](../01-product/03-mental-model.md#the-naurian-gap) for the framing.
+> **Recovery humility.** Embark unpacks the lifeboat into a working repo. The lifeboat is the highest-fidelity floor the originating session could leave behind; it is not the activity that produced it. **When something here doesn't make sense, hunt the originating session before trusting the lifeboat blindly** — ask the prior author, surface the chat where the decision happened, look at the rejected alternatives. The lifeboat is a starting point, not an oracle. See [`01-product/03-mental-model.md § The Naurian gap`](../01-product/03-mental-model.md#the-naurian-gap--modification-axis) for the framing.
 
 ## Sub-verbs
 
@@ -59,7 +59,7 @@ Path resolution under `from <path>`:
 1. `<path>` → validate, use. There is no `home` shorthand (adr-35). The round-trip / self-test case is not special-cased either: it is `disembark pack <repo> <dest>` followed by `embark from <dest>`, the same explicit path as any other source.
 2. To *find* candidate lifeboats before running `from <path>`, use `embark scan` (or `embark scan --deep`) — that's a separate sub-verb, not a flag on `from`.
 
-**Provenance and `--archive`** *(design target, not yet shipped)*: `embark from <path>` records `source_path` and `source_manifest_sha256` in `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` (see [§ 7](#7-voyage-layout-embarkdisembark-provenance-and-history)). Opt-in `embark from <path> --archive` additionally copies the input lifeboat verbatim into `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` for the case where the source repo will disappear. Off by default; `source_path` + hash is enough when the source repo persists.
+**Provenance and `--archive`** *(design target, not yet shipped)*: `embark from <path>` records `source_path` and `source_manifest_sha256` in `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` (see [§ 7](#7-voyage-layout--embarkdisembark-provenance-and-history)). Opt-in `embark from <path> --archive` additionally copies the input lifeboat verbatim into `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` for the case where the source repo will disappear. Off by default; `source_path` + hash is enough when the source repo persists.
 
 No global `~/.abcd/archive/`.
 
@@ -77,7 +77,7 @@ Embark is a deterministic Go run: it reads the lifeboat, plans, refuses on any c
 3. **Re-inject the current abcd marker block** into the target `CLAUDE.md` between BEGIN/END markers (idempotent) — never AGENTS.md, and never a verbatim copy of lifeboat prose. The block is the modular-rules-loader block (per itd-3); principles surface through the rules loader's domain rules on demand by prompt-keyword recall.
 4. **Report** the outcome to the surface: the `written`/`unchanged` counts, the per-family counts, the marker action, the coverage blanks a human must answer, and the report-only files that informed the run but were not written.
 
-*(Design target, not yet shipped: write voyage provenance to `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` — see [§ 7](#7-voyage-layout-embarkdisembark-provenance-and-history).)*
+*(Design target, not yet shipped: write voyage provenance to `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` — see [§ 7](#7-voyage-layout--embarkdisembark-provenance-and-history).)*
 
 ## 4. Conflict UX
 
@@ -117,7 +117,7 @@ The conflict list is a value core hands back; if the operator wants it on disk, 
 - *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP installed on the embarker, **when** `embark from <path>` runs, **then** the user is asked whether to register the workspace with RP and the choice is applied.
 - *(Design target, not yet shipped.)* **Given** a lifeboat containing `.abcd/rp/workspace.json` and RP *not* installed, **when** `embark from <path>` runs, **then** the command warns gracefully and continues without failing.
 - **Given** the user passes `--refresh-audit`, **when** `embark from <path> --refresh-audit` runs, **then** the oracle product audit re-runs against the current lifeboat content and the drift vs the disembark-time audit is reported.
-- *(Design target, not yet shipped.)* **Given** an `embark from <path>` run completes, **then** `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` exists with `source_path`, `source_manifest_sha256`, `timestamp`, and `files_written` populated (per [§ 7](#7-voyage-layout-embarkdisembark-provenance-and-history)); `embark/from/<timestamp>/` is absent unless `--archive` was passed.
+- *(Design target, not yet shipped.)* **Given** an `embark from <path>` run completes, **then** `~/.abcd/voyage/<source-root-sha>/embark/provenance.json` exists with `source_path`, `source_manifest_sha256`, `timestamp`, and `files_written` populated (per [§ 7](#7-voyage-layout--embarkdisembark-provenance-and-history)); `embark/from/<timestamp>/` is absent unless `--archive` was passed.
 - **Given** an `embark from <path> --archive` run completes, **then** the input lifeboat is copied verbatim to `~/.abcd/voyage/<source-root-sha>/embark/from/<timestamp>/` and the path is referenced from `provenance.json`.
 
 ## 7. Voyage layout — embark/disembark provenance and history
