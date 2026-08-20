@@ -42,7 +42,7 @@ provenance — the first entry in the ledger to carry the trail.
   exactly the supplied members, alongside `resolution` and `impact`, in the
   same atomic transition to `resolved/`.
 - **Given** `--intent` or `--spec`, **then** the id must *exist* in its record
-  store (any bucket, open or closed); `--commit` is shape-checked only (7–40
+  store (any bucket, open or closed); `--commit` is shape-checked only (7–64
   hex characters). An unknown id or malformed value refuses the whole
   transition — nothing written, the issue stays open.
 - **Given** no provenance flags, **then** resolve behaves exactly as today: no
