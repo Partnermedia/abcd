@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "commands/lint.md"
+resolution: "Added identity positioning to the lint-convention enumerations in commands/lint.md and commands/prepare-this-repo.md, with the conditional-skip note."
+impact: fix
 ---
 
 commands/lint.md and prepare-this-repo.md enumerate the conventions abcd lint checks as five, presented as exhaustive, but DefaultRules ships six including identity-positioning; prepare-this-repo.md itself arms that rule

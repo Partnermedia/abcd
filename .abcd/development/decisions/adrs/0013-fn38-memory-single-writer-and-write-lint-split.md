@@ -75,5 +75,3 @@ rather than owning a fixed multi-backend review pipeline.
 - [adr-25](0025-host-delegated-llm-default.md) — the LLM is host-delegated by
   default; review runs through the host's subagent dispatch.
 - Intent: `.abcd/development/intents/drafts/itd-36-memory-unification.md`
-</content>
-</invoke>

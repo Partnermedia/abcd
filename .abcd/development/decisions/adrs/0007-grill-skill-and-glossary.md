@@ -1,6 +1,16 @@
-# ADR-7: `/abcd:intent grill` — One Sub-verb with Two Inseparable Phases
+---
+id: adr-7
+slug: grill-skill-and-glossary
+status: accepted
+date: 2026-05-11
+supersedes: null
+superseded_by: null
+related_intents: [itd-27]
+related_rfcs: []
+related_adrs: []
+---
 
-**Status:** Accepted
+# ADR-7: `/abcd:intent grill` — One Sub-verb with Two Inseparable Phases
 
 ## Context
 

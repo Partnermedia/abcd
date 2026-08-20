@@ -35,8 +35,10 @@ blank is a first-class result, not a failure. `dry-run` likewise inspects withou
 ## When to use
 
 Use "disembark" when describing the act of packing a lifeboat — the outbound half of the
-lifeboat lifecycle. It is the counterpart to [embark](../interview/embark.md)'s inbound
-opening; together they bracket the portability boundary.
+lifeboat lifecycle. It is the counterpart to the [`/abcd:embark`](../../04-surfaces/03-embark.md)
+unpack surface's inbound opening; together they bracket the portability boundary. (Do not
+confuse this with the interview-context [embark](../interview/embark.md), the opening move of
+a grill session — a distinct term in a different bounded context.)
 
 ## When NOT to use
 
