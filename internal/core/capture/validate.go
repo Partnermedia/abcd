@@ -129,7 +129,7 @@ func validateStrict(fm map[string]any) error {
 		desc  string
 	}{
 		{"related_intents", reItdID, "itd-N"},
-		{"related_specs", reFnID, "fn-N"},
+		{"related_specs", reSpcID, "spc-N"},
 		{"related_issues", reIssID, "iss-N"},
 		{"blocked_by", reIssID, "iss-N"},
 	}
