@@ -304,6 +304,13 @@ jobs:
         # all in sync.
         run: make build VERSION="${TAG}"
 
+      - name: Assert every shipped binary carries a VCS stamp (iss-232)
+        # The ahoy install staleness gate reads vcs.revision from BuildInfo; a
+        # release built with -buildvcs=false or from a .git-less archive would
+        # make `ahoy install` refuse for every pinned user. Abort the release
+        # before anything is checksummed, attested, or published.
+        run: ./scripts/check-vcs-stamp.sh
+
       - name: Generate checksums.txt over the four binaries
         # Hash the exact binaries built above into a sha256sum-format manifest,
         # uploaded as a release asset. No rebuild — the bytes hashed here are the
