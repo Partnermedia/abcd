@@ -93,7 +93,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
           # cache: false — this workflow is tag-triggered; module caching in a
           # release-triggering workflow is a cache-poisoning vector (zizmor).
           cache: false
@@ -185,7 +185,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
           cache: false
 
       # --- Semantic release gate (iss-35; dormant until the public flip) --------
@@ -394,7 +394,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
           cache: false
 
       - name: Simulate a changelog roll and the two-commit release branch
