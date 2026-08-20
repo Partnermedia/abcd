@@ -84,7 +84,7 @@ record always satisfies the `issue_impact_valid` gate. `wontfix` takes no impact
 to what fixed the issue: `--intent <itd-N>`, `--spec <spc-N>`, `--commit <sha>`,
 in any combination. Supply them whenever the fixing record is known — that is
 what keeps the trail six months later. Ids must exist in their record store
-(any bucket); the sha is shape-checked only (7–40 hex chars — its home may be
+(any bucket); the sha is shape-checked only (7–64 hex chars — its home may be
 the remote). An unknown id or malformed value refuses the whole resolve and
 writes nothing. With no provenance flags the record is byte-identical to a
 plain resolve: provenance is optional, never guessed. The written members come

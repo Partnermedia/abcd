@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-358"
+id: "iss-373"
 slug: "three-adrs-end-with-leaked-agent-tool-call-closing-tags-comm"
 severity: "minor"
 category: "inconsistency"

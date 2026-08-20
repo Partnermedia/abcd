@@ -227,7 +227,7 @@ func resolveProvenance(req ResolveRequest) (*ResolvedBy, error) {
 		}
 	}
 	if req.ByCommit != "" && !reCommitSha.MatchString(req.ByCommit) {
-		return nil, fmt.Errorf("resolve: --commit %q is not a 7-40 char lowercase hex sha; nothing written", req.ByCommit)
+		return nil, fmt.Errorf("resolve: --commit %q is not a 7-64 char lowercase hex sha; nothing written", req.ByCommit)
 	}
 	return &ResolvedBy{Intent: req.ByIntent, Spec: req.BySpec, Commit: req.ByCommit}, nil
 }

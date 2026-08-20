@@ -145,8 +145,9 @@ func tiersOrNone(t []string) string {
 // sanitize strips terminal-display attack characters from repository-derived text
 // (evidence, searched entries, questions, the repo name — all commit-subject/path/
 // ref content a hostile or archived repo controls) before it reaches the human
-// report. It is the canonical termsafe primitive; the JSON output is unaffected
-// (encoding/json escapes control characters itself).
+// report. It is the canonical termsafe primitive. The JSON output is NOT
+// covered by encoding/json's own escaping (only C0 and U+2028/9 are escaped;
+// DEL, C1, bidi and zero-width runes pass raw — see termsafe.Sanitize's note).
 func sanitize(s string) string { return termsafe.Sanitize(s) }
 
 // sanitizeAll sanitizes every member of a slice.

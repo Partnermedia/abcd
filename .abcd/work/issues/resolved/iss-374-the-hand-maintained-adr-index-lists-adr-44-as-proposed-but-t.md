@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-359"
+id: "iss-374"
 slug: "the-hand-maintained-adr-index-lists-adr-44-as-proposed-but-t"
 severity: "minor"
 category: "drift"

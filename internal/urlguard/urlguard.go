@@ -23,16 +23,50 @@ import (
 	"syscall"
 )
 
+// reservedV4 lists the not-globally-routable IPv4 ranges (RFC 6890) that none
+// of Go's net.IP predicates cover: IsPrivate is RFC 1918 + ULA only and
+// IsUnspecified is the single zero address. CGNAT 100.64/10 is the one with
+// live internal services behind it (Tailscale tailnets, carrier and cloud
+// provider internal addressing); the rest close the not-globally-routable
+// class in one pass. The RFC 5737 documentation blocks stay reachable on
+// purpose: they are guaranteed non-routable and are the fixture vocabulary
+// the repo's own tests and docs use.
+var reservedV4 = func() []net.IPNet {
+	var nets []net.IPNet
+	for _, cidr := range []string{
+		"0.0.0.0/8",     // "this network" (RFC 791)
+		"100.64.0.0/10", // shared address space / CGNAT (RFC 6598)
+		"192.0.0.0/24",  // IETF protocol assignments (RFC 6890)
+		"198.18.0.0/15", // benchmarking (RFC 2544)
+		"240.0.0.0/4",   // reserved (RFC 1112), incl. limited broadcast
+	} {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic("urlguard: bad reserved range " + cidr)
+		}
+		nets = append(nets, *n)
+	}
+	return nets
+}()
+
 // BlockedIP reports whether ip is in a range that must never be fetched:
 // loopback (127/8, ::1), link-local (169.254/16, fe80::/10 unicast and
 // multicast), private (10/8, 172.16/12, 192.168/16, fc00::/7 via
-// net.IP.IsPrivate), the unspecified address, and any multicast address. This is
+// net.IP.IsPrivate), the unspecified address, any multicast address, and the
+// reserved non-private IPv4 ranges above — notably CGNAT 100.64/10. This is
 // what keeps cloud metadata endpoints (e.g. 169.254.169.254) and internal
 // services out of reach.
 func BlockedIP(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
 		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		for _, n := range reservedV4 {
+			if n.Contains(v4) {
+				return true
+			}
+		}
 	}
 	// NAT64 (64:ff9b::/96) and 6to4 (2002::/16) embed an IPv4 destination in an
 	// IPv6 address the checks above do not flag; a metadata/loopback/private IPv4
