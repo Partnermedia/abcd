@@ -27,7 +27,7 @@ Run:
 Then summarise the JSON for the user:
 
 - `version` — the version the release would carry.
-- `files` — how many files the bundle would include.
+- `bundle.files` — the files the bundle would include (an array; report its length as the count).
 - `scan.hard_fails` — secret/PII findings that would block the release.
 - `smoke.ok` — whether the payload would install: both plugin manifests parse,
   the marketplace source resolves, and every declared command, agent, skill and

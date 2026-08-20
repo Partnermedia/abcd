@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/brief/glossary/core/disembark.md"
+resolution: "Repointed the core/disembark glossary counterpart link to the /abcd:embark unpack surface chapter and added a not-to-be-confused-with note for the interview-context embark term."
+impact: internal
 ---
 
 The core/disembark glossary term links its counterpart to interview/embark (the grill-session opening, a different bounded context) rather than the /abcd:embark unpack surface, misdirecting the reader

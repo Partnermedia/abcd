@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/decisions/adrs/0007-grill-skill-and-glossary.md"
+resolution: "Prepended contract-conforming YAML frontmatter to adr-7 (id/slug/status/date/supersedes/superseded_by/related_intents/related_rfcs/related_adrs) and dropped the redundant prose status line; date 2026-05-11 from the index."
+impact: internal
 ---
 
 adr-7 carries no YAML frontmatter (uses a prose Status line) while the ADR format contract requires machine-readable frontmatter on every ADR; it is the sole outlier of 36 and passes record-lint ungated

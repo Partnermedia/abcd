@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "commands/launch.md"
+resolution: "Reworded commands/launch.md to reference bundle.files (an array to count) instead of a nonexistent top-level files key."
+impact: fix
 ---
 
 commands/launch.md documents a top-level files count in launch --dry-run --json, but DryRunReport has no such key; the file list is bundle.files, an array; the bullet violates the file's own dotted-path convention

@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/decisions/adrs/README.md"
+resolution: "Corrected the ADR index (adrs/README.md) adr-44 status column from proposed to accepted, matching the record frontmatter."
+impact: internal
 ---
 
 The hand-maintained ADR index lists adr-44 as proposed but the record frontmatter is accepted; the index drifted after status was flipped without updating the index

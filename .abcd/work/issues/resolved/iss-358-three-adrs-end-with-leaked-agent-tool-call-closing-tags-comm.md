@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/decisions/adrs/0011-spec-terminology-rename.md"
+resolution: "Deleted the two trailing tool-call scaffolding lines (</content>, </invoke>) from adr-11, adr-13, adr-20; tree-wide sweep now clean."
+impact: internal
 ---
 
 Three ADRs end with leaked agent tool-call closing tags committed into the durable record: a literal </content> line then </invoke>
