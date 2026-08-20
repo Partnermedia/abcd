@@ -109,8 +109,10 @@ guard does not name (`sudo -u bob <hazard>` is seen; the bundled short form
 whose API path an entry names by its ROOT
 segment but the host serves under a prefix (a GitHub Enterprise Server install
 mounts the same endpoints under `/api/v3/`; the `https://api.github.com/…` URL
-form **is** read), one inside a backtick substitution, or a dangerous form no
-entry describes.
+form **is** read), a hazard inside a non-shell interpreter's payload (`python -c`,
+`perl -e`) — one opaque token the tokenizer cannot read, today a silent allow, not
+a warn (a warn for it is a recorded design target, not yet implemented), one
+inside a backtick substitution, or a dangerous form no entry describes.
 Coverage is what the registry names. Say exactly this if a user asks about
 coverage — never that the guard cleared the command.
 
