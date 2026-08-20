@@ -383,32 +383,36 @@ external plug-in — so this brief does not restate it here.
 ├── config.json                         # config + the `meta` setup block (schema_version, setup_version, ...)
 ├── corpus.json
 ├── rules.json                          # per-repo override of plugin-bundled rule defaults (per itd-3)
-├── development/
-│   ├── personas.json                   # alphabetical placeholder personas (Alice, Bob, Carol, ...)
+├── development/                        # durable design record — flat by artefact type (per adr-30)
+│   ├── personas.json                   # placeholder personas (Alice, Bob, Carol, ...)
 │   ├── brief/
 │   │   └── README.md                   # canonical, current-state (no archive — per adr-5)
+│   ├── intents/                        # press-release intents — directory-as-status (adr-30)
+│   │   ├── README.md                   # intent format + lifecycle + index
+│   │   ├── disciplines/                # itd-N-<slug>.md (active cross-cutting rules)
+│   │   ├── drafts/                     # captured intents, no plan yet
+│   │   ├── planned/                    # has linked native spec, work pending or in flight
+│   │   ├── shipped/                    # populated as linked specs close + intent-auditor runs
+│   │   └── superseded/                 # retired intents (moved by hand)
+│   ├── principles/                     # distilled cross-cutting design principles (the lifeboat packs these)
+│   ├── decisions/                      # ratified architecture decisions (MADR)
+│   │   ├── adrs/                        # NNNN-<slug>.md (e.g. 0001-harness-interface.md)
+│   │   └── notes/
 │   ├── roadmap/
 │   │   ├── README.md                   # status dashboard
-│   │   ├── intents/
-│   │   │   ├── README.md               # intent format + lifecycle + index
-│   │   │   ├── drafts/                 # itd-N-<slug>.md (captured intents, no plan yet)
-│   │   │   ├── planned/                # itd-N-<slug>.md (has linked native spec, work pending or in flight)
-│   │   │   └── shipped/                # populated as linked specs close + intent-auditor runs
 │   │   ├── phases/
 │   │   │   ├── README.md               # phase index
 │   │   │   └── phase-N-<slug>.md       # ordered build plan; each ends in a milestone (per adr-9)
 │   │   └── rfcs/
 │   │       ├── README.md
-│   │       └── rfc-N-<slug>.md         # community discussion artefacts (open / resolved-yes / resolved-no / ...)
+│   │       └── rfc-N-<slug>.md         # community discussion artefacts (an accepted RFC produces an ADR)
+│   ├── plans/                          # dated design / implementation plans (YYYY-MM-DD-*)
+│   ├── specs/                          # native minimal spec store — directory-as-truth (adr-26): open/ + closed/
 │   └── research/
-│       ├── prompting/
-│       │   ├── 01-general-best-practices.md   # SOTA baseline (early spec)
-│       │   └── agents/<name>.md (×15)         # per-agent SOTA research (task #1 of each agent spec)
-│       ├── phase/                             # per-phase study artefacts (design inputs that future phases consume)
-│       │   ├── 0/                             # Phase 0: predecessor-notes, transcript-sampling, idelphi-rescue-study
-│       │   ├── 1/                             # Phase 1+: as needed
-│       │   └── ...
-│       └── adr/                               # architecture decision records (e.g., 01-harness-interface.md)
+│       ├── notes/                      # dated investigation write-ups
+│       └── prompting/                  # prompt R&D
+│           ├── README.md
+│           └── agents/<name>.md        # per-agent SOTA research (task #1 of each agent spec)
 │   # NOTE: there is NO `development/voyage/` here. Voyage is user-scope and never committed —
 │   #       ~/.abcd/voyage/<source-root-sha>/{disembark/history.jsonl, embark/provenance.json,
 │   #       embark/from/<timestamp>/} (adr-35; see § The voyage store above).
@@ -416,7 +420,6 @@ external plug-in — so this brief does not restate it here.
 │   ├── reviews/                        # captured by the oracle adapter (RepoPrompt / codex / future) per 04-universal-patterns.md § 7
 │   ├── issues/{open,resolved,wontfix}/ # iss-N-<slug>.md ledger entries (per itd-4)
 │   └── notes/                          # distilled from .abcd/.work.local/notes/
-├── specs/                              # native minimal spec store — directory-as-truth (adr-26): <state>/ dirs + dependency graph
 ├── memory/                             # curated memory artefact (memory harvest → .abcd/memory/, per 04-universal-patterns.md § 7)
 ├── logbook/                            # per-command / per-phase run logs (design target — no automatic session-log hook ships)
 └── rp/                                 # RP workspace pull (per itd-7; opt-in RP adapter); workspace.json only for now

@@ -40,8 +40,8 @@ Required:
   `inconsistency`, `tech-debt`, `security`, `ux`, `process`,
   `architectural-insight`, `future-work-seed`, `observation`).
 - `source` — the surfacing channel (`plan-review`, `impl-review`,
-  `manual-test`, `review-followup`, `agent-finding`, `user-observation`,
-  `drift-detection`, `memory-curation`).
+  `manual-test`, `review-followup`, `agent-finding`, `agent-observation`,
+  `user-observation`, `drift-detection`, `memory-curation`).
 - `found_during` — non-empty session or command context.
 
 Optional:
@@ -52,6 +52,11 @@ Optional:
 - `related_issues` — list of `iss-N` ids.
 - `blocked_by` — list of `iss-N` ids this issue depends on (see below).
 - `promoted_to` — the `itd-N` this issue graduated into.
+- `impact` — one of `additive`, `breaking`, `fix`, `internal`. Required and valid
+  in `resolved/`, where the record-lint blocker `issue_impact_valid` gates it;
+  absent (or `null`, meaning "not judged yet") in `open/`; not written in
+  `wontfix/`. It is the product judgement the derived version and the generated
+  changelog are computed from. Written bare, never YAML-quoted.
 - `resolution` — required and non-empty in `resolved/`; forbidden elsewhere.
 - `wontfix_reason` — required and non-empty in `wontfix/`; forbidden elsewhere.
 - `resolved_by` — optional pointer object (`intent`, `spec`, `commit`) naming
@@ -69,8 +74,10 @@ issue's timeline; the ledger does not duplicate it.
 `iss-N`. Flags refine the frontmatter — `--severity`, `--category`, `--source`,
 `--slug`, `--found-during`, `--found-at`, and `--blocked-by` (a comma-separated
 list of `iss-N` ids). Bare `abcd capture` renders a read-only status board;
-`abcd capture list` filters by state; `abcd capture resolve` and
-`abcd capture wontfix` move an open issue to its closed folder with a note.
+`abcd capture list` filters by state; `abcd capture resolve` moves an open issue
+to `resolved/` with a note and a required
+`--impact <additive|breaking|fix|internal>` (resolving without it exits 1); and
+`abcd capture wontfix` moves it to `wontfix/` with a reason.
 
 ## Derived priority
 

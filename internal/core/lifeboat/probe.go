@@ -278,12 +278,14 @@ func (c *SourceContext) FindFirst(candidates ...string) string {
 }
 
 // ListDir returns the names (not paths) of entries directly under a repo-relative
-// directory, sorted. It never recurses and never escapes the root.
+// directory, sorted. It never recurses and never escapes the root. The open is
+// non-blocking (matching ReadFile): a probed tree is untrusted, so a FIFO planted
+// where a directory is expected must return promptly instead of blocking open().
 func (c *SourceContext) ListDir(rel string) []string {
 	if c.root == nil {
 		return nil
 	}
-	f, err := c.root.Open(filepath.FromSlash(rel))
+	f, err := c.root.OpenFile(filepath.FromSlash(rel), os.O_RDONLY|nonBlock, 0)
 	if err != nil {
 		return nil
 	}

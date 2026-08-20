@@ -2729,7 +2729,7 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 				}
 				for _, r := range records {
 					fmt.Fprintf(w, "%s  %s  %s  redacted secrets=%d home=%d\n",
-						r.CapturedAt.Format("2006-01-02T15:04:05Z"), r.SessionID, r.SourceKind, r.Secrets, r.HomePaths)
+						r.CapturedAt.Format("2006-01-02T15:04:05Z"), termsafe.Sanitize(r.SessionID), termsafe.Sanitize(r.SourceKind), r.Secrets, r.HomePaths)
 				}
 			})
 		},
@@ -2754,13 +2754,20 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 				Body string `json:"body"`
 			}{Record: rec, Body: string(body)}
 			return render(cmd.OutOrStdout(), *asJSON, out, func(w io.Writer) {
-				fmt.Fprintf(w, "session:    %s\n", rec.SessionID)
+				// The stored transcript body is untrusted (it may have ingested
+				// hostile fetched pages or target-repo files); capture redacts
+				// only secrets/home paths, so neutralise terminal-control bytes
+				// here before they reach the terminal. SanitizeBlock keeps the
+				// transcript's line structure. The metadata fields are validated
+				// at write time but not re-validated on the read path, so pass
+				// them through too.
+				fmt.Fprintf(w, "session:    %s\n", termsafe.Sanitize(rec.SessionID))
 				fmt.Fprintf(w, "captured:   %s\n", rec.CapturedAt.Format("2006-01-02T15:04:05Z"))
-				fmt.Fprintf(w, "source:     %s\n", rec.SourceKind)
-				fmt.Fprintf(w, "path:       %s\n", rec.Path)
+				fmt.Fprintf(w, "source:     %s\n", termsafe.Sanitize(rec.SourceKind))
+				fmt.Fprintf(w, "path:       %s\n", termsafe.Sanitize(rec.Path))
 				fmt.Fprintf(w, "redacted:   secrets=%d home=%d\n", rec.Secrets, rec.HomePaths)
 				fmt.Fprintln(w, "---")
-				fmt.Fprint(w, string(body))
+				fmt.Fprint(w, termsafe.SanitizeBlock(string(body)))
 			})
 		},
 	})

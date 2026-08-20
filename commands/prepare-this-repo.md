@@ -12,8 +12,9 @@ older `scaffold-repo` layout (`.work/` at the repo root); Phase 3 migrates that
 layout when found.
 
 **Locate the record first.** This command file lives at
-`<abcd-root>/commands/abcd/prepare-this-repo.md` — the abcd repository root is
-three levels up from it. Call that `$ABCD` below. Never assume any other
+`<abcd-root>/commands/prepare-this-repo.md` — the abcd repository root is two
+levels up from it, the same root `${CLAUDE_PLUGIN_ROOT}` names (Phase 2 onward
+uses it for the binary). Call that `$ABCD` below. Never assume any other
 checkout location.
 
 ## Phase 0 — Refuse unless the user owns this repo

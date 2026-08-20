@@ -45,3 +45,28 @@ func TestProbeIdentityIgnoresInjectedConfig(t *testing.T) {
 		t.Errorf("ProbeIdentity honoured an injected GIT_CONFIG_* identity: got %q, want real@example.com", id.GitUserEmail)
 	}
 }
+
+// TestProbeIdentityRemoteHostCaseInsensitive proves the GitHub handle is derived
+// from the remote URL regardless of the host's letter case. git stores the remote
+// verbatim, so a hand-typed mixed-case host (GitHub.com) must still yield the
+// username — otherwise GitRemoteUsername stays empty, the github_username matcher
+// is never compiled, and the caller's handle escapes the redaction gate.
+func TestProbeIdentityRemoteHostCaseInsensitive(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	for _, remote := range []string{
+		"git@GitHub.com:alice/repo.git",
+		"https://GITHUB.COM/alice/repo.git",
+		"ssh://git@GitHub.com/alice/repo.git",
+	} {
+		dir := t.TempDir()
+		mustGitIdentity(t, dir, "init")
+		mustGitIdentity(t, dir, "remote", "add", "origin", remote)
+		if id := ProbeIdentity(dir); id.GitRemoteUsername != "alice" {
+			t.Errorf("remote %q: GitRemoteUsername = %q, want alice", remote, id.GitRemoteUsername)
+		}
+	}
+}

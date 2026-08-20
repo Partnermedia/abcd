@@ -421,6 +421,60 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 	}
 }
 
+// TestHistoryShowSanitisesTranscriptBody proves `abcd history show` neutralises
+// terminal-control sequences carried in a stored transcript. The body is
+// untrusted input (it may have ingested hostile fetched pages or target-repo
+// files), and capture redacts only secrets/home paths — nothing masks control
+// bytes — so the human render must pass the body through termsafe before it
+// reaches the terminal. Line structure must survive (the transcript is the
+// artefact). The C1 fixture uses the two-byte-encoded U+009B, not a raw 0x9b
+// byte (which would decode to U+FFFD and make the test vacuous).
+func TestHistoryShowSanitisesTranscriptBody(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := t.TempDir()
+	gitCmd(t, repo, "init")
+	gitCmd(t, repo, "config", "user.email", "test@example.com")
+	gitCmd(t, repo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, repo, "add", ".")
+	gitCmd(t, repo, "commit", "-m", "init")
+	t.Chdir(repo)
+
+	rootSHA := gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
+	tdir := filepath.Join(home, ".abcd", "history", rootSHA, "transcripts")
+	if err := os.MkdirAll(tdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// A benign three-line transcript laced with an ESC/CSI colour code, a
+	// two-byte C1 CSI (U+009B), a bidi override (U+202E), and a bare CR.
+	transcript := "user: line one [31mred[0m\n" +
+		"assistant: 2Kcleared and ‮overridden\n" +
+		"end\rof line\n"
+	runCLIStdin(t, transcript, "history", "capture", "--session", "sess-esc", "--json")
+
+	out := string(runCLI(t, "history", "show", "sess-esc"))
+
+	for _, bad := range []string{"", "", "‮"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("history show leaked control rune %q into terminal output:\n%q", bad, out)
+		}
+	}
+	// A bare CR (not part of a CRLF) is an overprint vector and must be masked.
+	if strings.Contains(out, "end\rof line") {
+		t.Errorf("history show left a bare CR unmasked:\n%q", out)
+	}
+	// The body's three lines must survive sanitisation.
+	body := out[strings.Index(out, "---\n")+len("---\n"):]
+	if got := strings.Count(body, "\n"); got != 3 {
+		t.Errorf("body line count = %d, want 3 (line structure not preserved):\n%q", got, body)
+	}
+}
+
 // TestCaptureBlockedByWiredAndAnnotated proves the --blocked-by flag reaches
 // capture.Capture from the CLI (writing the dependency edge), that an invalid
 // token is rejected at the boundary, and that the derived-priority view renders
