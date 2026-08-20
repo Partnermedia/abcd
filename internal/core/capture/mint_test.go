@@ -3,6 +3,8 @@ package capture
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"testing"
@@ -99,7 +101,9 @@ func TestCaptureSameInstantSameLedgerRedraws(t *testing.T) {
 // TestCaptureConcurrentSameInstantAllDistinct races many concurrent captures
 // against one ledger with their clocks pinned to a single instant (go test
 // -race covers the memory side): every mint must succeed and every id must be
-// unique — the flock + O_EXCL + redraw discipline resolves all clashes.
+// unique. With real entropy a same-suffix clash is rare, so this is a
+// smoke/race check of the concurrent path — the redraw itself is pinned
+// deterministically by TestCaptureSameInstantSameLedgerRedraws.
 func TestCaptureConcurrentSameInstantAllDistinct(t *testing.T) {
 	repo, ir := ledger(t)
 	instant := time.Date(2026, 8, 20, 11, 42, 7, 0, time.UTC)
@@ -193,7 +197,13 @@ func TestCaptureMintEntropyFailureIsLoud(t *testing.T) {
 	if lerr != nil {
 		t.Fatal(lerr)
 	}
-	if len(res.Issues) != 0 {
-		t.Fatalf("a failed mint must leave no ledger entry, found %d", len(res.Issues))
+	if len(res.Issues) != 0 || len(res.Skipped) != 0 {
+		t.Fatalf("a failed mint must leave no ledger entry, found %d issues, %d skipped", len(res.Issues), len(res.Skipped))
+	}
+	// Skipped covers unparseable files, but a zero-byte placeholder is the exact
+	// artefact a mis-ordered failure would leak — read open/ directly.
+	entries, derr := os.ReadDir(filepath.Join(ir, "open"))
+	if derr == nil && len(entries) != 0 {
+		t.Fatalf("a failed mint left %d file(s) in open/", len(entries))
 	}
 }

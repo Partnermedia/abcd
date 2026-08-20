@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
@@ -19,7 +20,15 @@ import (
 // alone separates them.
 func TestCaptureBranchesSameInstantNeverCollide(t *testing.T) {
 	instant := time.Date(2026, 8, 20, 11, 42, 7, 0, time.UTC)
-	setMinter(t, recordid.Minter{Now: func() time.Time { return instant }})
+	// The entropy is scripted with two distinct draws (42, then 4369): the test's
+	// subject is that the mint consults no refs and no maximum, and only the
+	// suffix separates the two branches — asserting that on live crypto/rand
+	// would fail on the spec's own accepted ~10^-4 same-suffix residue, blaming
+	// a correct implementation. Determinism costs one field.
+	setMinter(t, recordid.Minter{
+		Now:     func() time.Time { return instant },
+		Entropy: bytes.NewReader([]byte{0x00, 0x2A, 0x11, 0x11}),
+	})
 
 	r := gittest.NewRepo(t)
 	r.Write("README.md", "# base\n")
