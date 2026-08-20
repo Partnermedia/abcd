@@ -83,8 +83,8 @@ own receipt from its own detector.
 
 The cross-check runs against a **committed input manifest**,
 [`manifest.json`](manifest.json), which pins the reproducibility inputs: the
-21-document brief-doc list, the two directions (A: brief→surface, B:
-surface→brief), the checker count (26 = 21 brief docs + 5 surfaces), and the
+22-document brief-doc list, the two directions (A: brief→surface, B:
+surface→brief), the checker count (27 = 22 brief docs + 5 surfaces), and the
 prompt (context plus both direction templates, with the prompt's own
 `sha256`). Two honest runs of the same tier therefore mean the same thing —
 the maintainer no longer chooses the scope per run. The

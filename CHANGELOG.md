@@ -50,6 +50,10 @@ called out in a **Breaking** section.
 - **`/abcd:version` names every network-touching verb.** Its guidance claimed
   only `version --check` and `update` reach the network; `docs cite refresh`
   and `memory ingest <url>` do too. The enumeration is corrected. (iss-385)
+- **`record-lint` catches a zero-padded record-id collision.** The
+  id-uniqueness backstop keyed on the raw filename, so a hand-added
+  `iss-0100-*.md` beside `iss-100-*.md` read as two distinct ids and slipped
+  through. It now keys on the canonical id, matching the resolver. (iss-392)
 - **`ahoy install` heals the PATH entry a plugin update strands.** The entry
   pointing into a deleted previous plugin cache dir classified as a foreign
   occupant — never healed, refused by `ahoy uninstall` against the dangling
