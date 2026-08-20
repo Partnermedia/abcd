@@ -100,19 +100,25 @@ func TestShellFamilyDoesNotInventHazards(t *testing.T) {
 	}
 }
 
-// TestNonShellInterpretersStayOutOfTheFamily pins the boundary. A different
-// LANGUAGE is not a sibling: this tokenizer cannot parse Python or Perl, so
-// treating them as shells would mean guessing. The recorded posture for them is a
-// loud warn, never a silent allow, and that is not what this change is about.
+// TestNonShellInterpretersStayOutOfTheFamily pins the boundary AND the shipped
+// posture. A different LANGUAGE is not a sibling: this tokenizer cannot parse
+// Python or Perl. Their recorded posture is a loud warn, but that is a design
+// target and is NOT YET IMPLEMENTED — today they are a SILENT ALLOW (iss-315), so
+// this asserts VerdictAllow, not merely "not block". The third fixture is the
+// discriminator: `python -c "git push --force …"` is a shell-tokenizable hazard,
+// so if python were wrongly folded into isShellFamily its payload would be read
+// and blocked — asserting allow makes this test fail on that mistake, which the
+// prior `!= VerdictBlock` assertion (vacuous — it passed for allow AND warn) did not.
 func TestNonShellInterpretersStayOutOfTheFamily(t *testing.T) {
 	for _, cmd := range []string{
 		`python -c "import os; os.system('git push --force')"`,
 		`perl -e "system('git push --force')"`,
+		`python -c "git push --force origin main"`,
 	} {
 		got := guardVerdict(t, cmd)
-		if got.Verdict == VerdictBlock {
-			t.Errorf("%q got block — a non-shell interpreter's payload is not parsed by this "+
-				"tokenizer, so claiming a verdict on it would be a guess", cmd)
+		if got.Verdict != VerdictAllow {
+			t.Errorf("%q got verdict %q, want allow — a non-shell interpreter's payload is one "+
+				"opaque token this tokenizer does not read; the recorded warn is unimplemented (iss-315)", cmd, got.Verdict)
 		}
 	}
 }

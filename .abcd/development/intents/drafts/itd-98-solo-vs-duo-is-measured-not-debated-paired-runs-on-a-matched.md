@@ -25,7 +25,7 @@ severity: major
 > a PR, a gate log, a verdict file — and every blank is loud.
 >
 > "We stopped arguing about whether solo was ready," said Carol, a product
-> thinker evaluating abcd for her team. "The report showed solo landed nine of
+> thinker evaluating abcd for their team. "The report showed solo landed nine of
 > eleven items clean and escalated exactly the two it should have. That's not
 > a vibe — it's a table I can take to Bob."
 

@@ -45,7 +45,7 @@ warrants_assumed:
 > Bob, who maintains abcd, had the mirror-image complaint: "Cutting a release
 > published binaries, and then the plugin surface just… didn't move. I'd tag,
 > and nothing reached anyone until I remembered the second step." Carol, who
-> reviews what her team installs, put it plainest: "I could not tell you which
+> reviews what their team installs, put it plainest: "I could not tell you which
 > of those 11 megabytes in the plugin cache the harness actually executes."
 
 ## Why This Matters

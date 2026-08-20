@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 func main() {
@@ -96,8 +97,15 @@ func (m *multiFlag) Set(v string) error {
 }
 
 // resolveRoot returns the git toplevel, falling back to the working directory.
+// The env is scrubbed (gitutil.IsolatedEnv) so an inherited GIT_DIR/GIT_WORK_TREE
+// cannot redirect discovery onto another tree — the same guard capture's
+// discoverRepoRoot carries; without it, record-lint (and --release-gate) could
+// lint the wrong repository. The os.Getwd fallback is the correct root under the
+// Makefile/CI contract, so scrubbing global config introduces no regression.
 func resolveRoot() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Env = gitutil.IsolatedEnv()
+	out, err := cmd.Output()
 	if err == nil {
 		if top := strings.TrimSpace(string(out)); top != "" {
 			return top

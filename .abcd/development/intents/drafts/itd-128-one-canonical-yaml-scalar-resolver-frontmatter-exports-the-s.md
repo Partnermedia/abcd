@@ -20,7 +20,7 @@ the memory dumper writes. There is exactly one place in the codebase that
 knows what a YAML scalar means — an exported resolution helper in
 `internal/core/frontmatter` covering nulls, booleans, and quoting — and the
 capture, lint, lifeboat, and memory decoders all delegate to it. When Bob
-extends the scalar rules (a new spelling, whitespace trimming), he edits one
+extends the scalar rules (a new spelling, whitespace trimming), they edit one
 function and every consumer moves together; the class of bug where two
 hand-synced copies drift apart is no longer expressible.
 

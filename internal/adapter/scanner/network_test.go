@@ -428,3 +428,46 @@ func TestRedactMasksNetworkIdentifiersWhole(t *testing.T) {
 		t.Errorf("identifiers survived redaction: %+v", residual)
 	}
 }
+
+// TestNetworkAddressCaughtWithWordSuffix is the attack-input test for the
+// trailing-\b dead corner on the hard_fail address patterns (iss-307). ipv4Re
+// and macRe were fixed-length/word-char + trailing \b, so an address followed by
+// a word char ('_' or an alnum) had no ASCII boundary and RE2 dropped the whole
+// match — a silent hard_fail miss on a redaction path. Each suffixed address
+// must be caught; the version/digest controls that the compensating guards keep
+// silent must stay silent.
+func TestNetworkAddressCaughtWithWordSuffix(t *testing.T) {
+	colonMAC := mac(0xa4, 0x83, 0xe7, 0x11, 0x22, 0x33)
+	dashMAC := strings.ReplaceAll(colonMAC, ":", "-")
+	caught := []struct {
+		name, kind, line string
+	}{
+		{"ipv4 underscore suffix", "net:ipv4", "logs/" + v4(192, 168, 1, 44) + "_2026.pcap"},
+		{"ipv4 json key", "net:ipv4", `{"` + v4(192, 168, 1, 44) + `_gw": 1}`},
+		{"ipv4 alnum suffix", "net:ipv4", "host " + v4(10, 1, 2, 3) + "gw"},
+		{"mac colon underscore suffix", "net:mac", "iface " + colonMAC + "_eth0 up"},
+		{"mac dash underscore suffix", "net:mac", "hw " + dashMAC + "_eth0"},
+	}
+	for _, c := range caught {
+		if !hasKind(scanNet(c.line), c.kind) {
+			t.Errorf("%s: %q not caught, want %s", c.name, c.line, c.kind)
+		}
+	}
+
+	// Controls the compensating guards must keep silent: a truncated-number
+	// fragment (a 4-digit tail) is not an address, and a dotted version string
+	// stays exempt.
+	silent := []struct {
+		name, line string
+	}{
+		{"four-digit tail truncation", "addr [::ffff:192.168.0.1000] noted"},
+		{"dotted version string", "bumped to 1.2.3.1234 today"},
+	}
+	for _, c := range silent {
+		for _, f := range scanNet(c.line) {
+			if f.Kind == "net:ipv4" {
+				t.Errorf("%s: %q flagged %s, want silent", c.name, c.line, f.Kind)
+			}
+		}
+	}
+}
