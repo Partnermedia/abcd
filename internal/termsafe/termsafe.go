@@ -19,8 +19,12 @@ import "strings"
 //     zero-width characters, which reorder or hide text so the rendered line
 //     differs from the bytes — the reader sees something the file does not say.
 //
-// JSON output needs no sanitising — encoding/json escapes control characters
-// itself — so this is applied only on the human/terminal path.
+// JSON output is NOT covered by encoding/json's own escaping: it escapes only
+// C0 (below 0x20) and U+2028/9 — DEL, the C1 range, bidi overrides and
+// zero-width runes pass through raw (pinned by TestJSONLeavesC1AndBidiRaw).
+// A JSON surface whose strings reach a terminal or a committed record needs
+// its values shape-checked or encoded at the boundary that produced them
+// (iss-345); this function is the mask for the human/terminal render path.
 func Sanitize(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {

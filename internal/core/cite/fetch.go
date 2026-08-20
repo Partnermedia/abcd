@@ -23,13 +23,17 @@ package cite
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Partnermedia/abcd/internal/urlguard"
+
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // maxRedirects bounds the hops one citation may take before the chain is called
@@ -201,7 +205,13 @@ func (c *HTTPChecker) Check(rawURL string) CheckOutcome {
 	out.Answered = true
 	out.FinalURL = rawURL
 	if resp.Request != nil && resp.Request.URL != nil {
-		out.FinalURL = resp.Request.URL.String()
+		// The final address is redirect-controlled: net/url preserves raw
+		// non-ASCII in the query, and encoding/json escapes neither C1 nor
+		// bidi/zero-width runes, so an unencoded value would reach the --json
+		// surface and the committed baseline verbatim (iss-345).
+		// Percent-encoding is lossless where the terminal sanitizer's masking
+		// would corrupt a record that must round-trip.
+		out.FinalURL = encodeHiddenRunes(resp.Request.URL.String())
 	}
 	out.Status, out.Detail = classify(resp.StatusCode)
 	return out
@@ -247,4 +257,29 @@ func transportDetail(err error) string {
 		return ue.Err.Error()
 	}
 	return err.Error()
+}
+
+// encodeHiddenRunes percent-encodes every rune the terminal sanitizer would
+// mask — C0/DEL, the 2-byte-encoded C1 range, bidi overrides and zero-width
+// runes — so a redirect-supplied address is recorded losslessly but can no
+// longer smuggle terminal escapes or Trojan-Source reordering into a JSON
+// surface or the committed baseline. A canonical address never carries these
+// runes (net/url rejects C0 outright and percent-encodes the path itself), so
+// encoding them cannot break a legitimate final URL.
+func encodeHiddenRunes(s string) string {
+	if termsafe.Sanitize(s) == s {
+		return s
+	}
+	var b strings.Builder
+	for _, r := range s {
+		rs := string(r)
+		if termsafe.Sanitize(rs) != rs {
+			for i := 0; i < len(rs); i++ {
+				fmt.Fprintf(&b, "%%%02X", rs[i])
+			}
+			continue
+		}
+		b.WriteString(rs)
+	}
+	return b.String()
 }

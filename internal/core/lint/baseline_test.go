@@ -222,3 +222,27 @@ func TestLoadBaselineMissingFile(t *testing.T) {
 		t.Fatalf("LoadBaseline on a missing file = %v, want an os.ErrNotExist", err)
 	}
 }
+
+// TestBaselineRefusesControlRunesInFinalURL pins the defence-in-depth rung
+// behind the fetch boundary (iss-345): whatever produced the entry, a
+// final_url carrying a bidi override or C1 escape must not round-trip through
+// the committed record. The rune is assembled numerically — a raw byte in a
+// fixture decodes to U+FFFD and tests nothing.
+func TestBaselineRefusesControlRunesInFinalURL(t *testing.T) {
+	b := Baseline{Entries: map[string]BaselineEntry{
+		"https://example.com/a": {
+			FinalURL:     "https://example.com/a?x=" + string(rune(0x202E)),
+			LastChecked:  "2026-08-20",
+			Outcome:      OutcomeAlive,
+			Verification: VerificationAutomatic,
+		},
+	}}
+	err := SaveBaseline(filepath.Join(t.TempDir(), "citations-baseline.json"), b)
+	var be *BaselineError
+	if !errors.As(err, &be) {
+		t.Fatalf("SaveBaseline accepted a final_url with U+202E: err = %v", err)
+	}
+	if !strings.Contains(err.Error(), "control or invisible") {
+		t.Errorf("refusal should name the rune class, got: %v", err)
+	}
+}
