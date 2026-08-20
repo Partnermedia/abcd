@@ -177,8 +177,14 @@ func NewRootCommand() *cobra.Command {
 	var asJSON bool
 
 	root := &cobra.Command{
-		Use:           "abcd",
-		Short:         "Agent-based configuration for development",
+		Use:   "abcd [<record-id>]",
+		Short: "Agent-based configuration for development",
+		Long: "Agent-based configuration for development.\n\n" +
+			"Bare `abcd` renders the read-only status board — what can I do. A single\n" +
+			"positional matching a record id (`iss-N`, `itd-N`, `spc-N`, `adr-N`) instead\n" +
+			"reports what that record is, where it lives, and the next move for its\n" +
+			"lifecycle state — what is this. Both forms are strictly read-only; any other\n" +
+			"positional is refused as an unknown command.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Bare answers "what can I do"; `abcd <id>` answers "what is this, and
@@ -241,7 +247,7 @@ func NewRootCommand() *cobra.Command {
 	var launchDryRun bool
 	launchCmd := &cobra.Command{
 		Use:   "launch",
-		Short: "Preview the public launch bundle and release gates (read-only)",
+		Short: "Preview the public launch bundle and release gates (--dry-run required; read-only)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
@@ -946,11 +952,17 @@ type hookInput struct {
 	TranscriptPath string `json:"transcript_path"`
 }
 
-// readHookInput reads and size-caps the hook stdin payload.
+// readHookInput reads and size-caps the hook stdin payload. It reads one byte
+// past the cap so an over-cap payload is reported as such rather than
+// truncated into a severed prefix that json.Unmarshal misblames as malformed
+// host JSON (iss-201's class; guardCandidate is the pattern).
 func readHookInput(cmd *cobra.Command) (hookInput, error) {
-	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
+	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes+1))
 	if err != nil {
 		return hookInput{}, err
+	}
+	if len(raw) > maxHookStdinBytes {
+		return hookInput{}, fmt.Errorf("payload is over the %d-byte cap; it was discarded unparsed", maxHookStdinBytes)
 	}
 	var in hookInput
 	if err := json.Unmarshal(raw, &in); err != nil {
@@ -1204,31 +1216,23 @@ const maxTranscriptBytes = 64 << 20 // 64 MiB
 
 // readTranscript reads the file named by the Stop payload's transcript_path.
 //
-// The path is external input, so the open is defensive on the two failure modes
-// that would actually hurt: O_NONBLOCK so a FIFO or device node cannot hang the
-// hook (a hung Stop hook wedges the user's session), and a regular-file check so
-// only a real file is ever read. The size cap bounds the redaction pass.
+// The path is external input, so the read goes through fsutil.ReadGuarded —
+// O_NOFOLLOW so a planted symlink is refused rather than followed, O_NONBLOCK
+// so a FIFO or device node cannot hang the hook (a hung Stop hook wedges the
+// user's session), a regular-file check on the opened descriptor, and a cap+1
+// probe so a file that grows past the cap between stat and read is refused
+// whole instead of stored silently truncated (iss-347).
 func readTranscript(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	raw, err := fsutil.ReadGuarded(path, maxTranscriptBytes)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open transcript %q (%v)", path, err)
-	}
-	defer f.Close()
-
-	st, err := f.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("cannot stat transcript %q (%v)", path, err)
-	}
-	if !st.Mode().IsRegular() {
-		return nil, fmt.Errorf("transcript %q is not a regular file", path)
-	}
-	if st.Size() > maxTranscriptBytes {
-		return nil, fmt.Errorf("transcript %q is %d bytes, over the %d-byte cap", path, st.Size(), maxTranscriptBytes)
-	}
-
-	raw, err := io.ReadAll(io.LimitReader(f, maxTranscriptBytes))
-	if err != nil {
-		return nil, fmt.Errorf("cannot read transcript %q (%v)", path, err)
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+			return nil, fmt.Errorf("transcript %q is not a readable regular file (a symlink or non-regular transcript is refused)", path)
+		case errors.Is(err, fsutil.ErrTooBig):
+			return nil, fmt.Errorf("transcript %q is over the %d-byte cap", path, maxTranscriptBytes)
+		default:
+			return nil, fmt.Errorf("cannot read transcript %q (%v)", path, err)
+		}
 	}
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("transcript %q is empty", path)
@@ -2164,7 +2168,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
 	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
-	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-40 hex chars, shape-checked only)")
+	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)")
 	captureCmd.AddCommand(resolveCmd)
 
 	// promote — graduate an issue into an intent draft (spc-24, step 2 of the

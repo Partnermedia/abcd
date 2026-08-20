@@ -66,4 +66,4 @@ For each entry:
 
 ## Why this is separate from ADRs
 
-Architecture Decision Records (`.abcd/development/research/adr/`) are full multi-page records of architectural decisions, with stakeholders, alternatives evaluated, and consequences. This file is the **lightweight rolodex** of tradeoff one-liners — a quick reference for "did we already think about this?". ADRs are the deep dive; this file is the index.
+Architecture Decision Records ([`.abcd/development/decisions/adrs/`](../../decisions/adrs/)) are full multi-page records of architectural decisions, with stakeholders, alternatives evaluated, and consequences. This file is the **lightweight rolodex** of tradeoff one-liners — a quick reference for "did we already think about this?". ADRs are the deep dive; this file is the index.

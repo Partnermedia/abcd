@@ -28,11 +28,15 @@ themselves.
 
 ## Naming convention
 
-`<topic>-<kind>.md` — kebab-case topic, then a kind suffix that says what the
-note *is*: `-sota` (state-of-the-art survey), `-audit` (review/divergence
-finding), `-study` / `-notes` (investigation), or a spec/fn tag when the note is
-spec-scoped (`spc-34-...`). Notes are not a numbered record-type; they are
-folder-convention artefacts promoted into ADRs/intents by hand.
+`<YYYY-MM-DD>-<topic>[-<kind>].md` — date prefix per [adr-30](../../decisions/adrs/0030-record-information-architecture.md)
+(research notes are chronological artefacts), kebab-case topic, then an
+optional kind suffix that says what the note *is*: `-sota` (state-of-the-art
+survey), `-audit` (review/divergence finding), `-study` / `-notes`
+(investigation). A spec-scoped note carries the spec tag instead
+(`spc-34-...`). Undated notes that predate adr-30 stay as they are — inbound
+citations matter more than a uniform listing, and history lives in git. Notes
+are not a numbered record-type; they are folder-convention artefacts promoted
+into ADRs/intents by hand.
 
 > A subdirectory groups a cluster of notes produced for
 > one piece of work.

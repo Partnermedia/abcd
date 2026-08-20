@@ -52,6 +52,6 @@ The directory is **flat**, and that is load-bearing rather than tidiness. A harn
 
 ## Where to find related design
 
-- **Plumbing internals** (agents, adapters, configuration, universal patterns, prompt quality): [`05-internals/`](../05-internals)
+- **Plumbing internals**: [`05-internals/`](../05-internals)
 - **Build sequence** (which surfaces ship in what order): [`06-delivery/01-build-sequence.md`](../06-delivery/01-build-sequence.md)
 - **Verification matrix** (test coverage across surfaces): [`06-delivery/02-verification-matrix.md`](../06-delivery/02-verification-matrix.md)
