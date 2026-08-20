@@ -364,11 +364,15 @@ abcd/
 │   ├── lifeboat-reviewer.md / press-release-composer.md / principle-distiller.md
 │   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
-└── hooks/                              # Claude Code event hooks — each command shells directly to the binary
+└── hooks/                              # Claude Code event hooks — every event command runs through a self-provisioning shim
+    ├── bootstrap.sh                    # builds/refreshes the plugin-root binary; referenced by every event command
     └── hooks.json                      # UserPromptSubmit → hook prompt-router; SessionStart → ONE chained command:
                                         #   bootstrap.sh, then session-start + prompt-router-reset, each fed a copy of the
                                         #   payload (siblings would run in parallel and share one stdin);
-                                        # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end
+                                        # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end.
+                                        # The four non-SessionStart event shims also self-provision: when $CLAUDE_PLUGIN_ROOT/abcd
+                                        # is missing they attempt hooks/bootstrap.sh (throttled by a .bootstrap.attempt marker
+                                        # within a 10-minute window), then fall back to a PATH-resolved abcd before failing loudly
 ```
 
 The core is organised one package per capability under `internal/core/`, and the

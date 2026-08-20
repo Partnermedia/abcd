@@ -49,13 +49,17 @@ error — so `abcd lint` gates a repo's CI as well as backing onboarding.
 | `conventions-router` | error | `AGENTS.md` present at the repo root |
 | `decision-durability` | warn | a committed `.abcd/work/DECISIONS.md`; decisions not living only in the gitignored layer |
 | `docs-currency` | warn | reuses the docs-lint engine where `docs/` exists |
-| `privacy-hygiene` | error | no absolute local paths in committed files, honouring an `abcd-lint:allow` line waiver (the `abcd-audit:allow` spelling is honoured too) |
+| `privacy-hygiene` | error (network-identifier findings mapped from a scanner `warn`/`info` land as `warn`) | no absolute local paths in committed files, and no real network identifiers on any tracked text line — the scanner's canonical merged pattern set (per-repo severities from `.abcd/config/pii.json` honoured), the fix naming reserved documentation values (RFC 5737/3849/2606/7042, or a persona-derived device name) — honouring an `abcd-lint:allow` line waiver (the `abcd-audit:allow` spelling is honoured too) |
 | `identity-positioning` | warn | every registered surface still carries the canonical identity block's tagline (and pitch, where required); Where-gated on a committed `.abcd/positioning.json`, and per-repo upgradeable to `error` — see [`19-identity.md`](19-identity.md) |
 
 ## How it is built
 
-The engine reuses `internal/core/lint`'s severity/fix/waiver vocabulary and adds
-path-presence and gitignore primitives. Rules are declarative data behind a
+The engine (`internal/core/repolint`) adapts its id/severity/where/fix/policy
+vocabulary from repolinter's rule-object schema — severities `error|warn|off`,
+chosen over the record-lint engine's (`internal/core/lint`) `blocker|warn` and
+mapped only at the docs-currency rule's boundary — defines the
+`abcd-lint:allow` / `abcd-audit:allow` line waiver natively in its privacy
+rule, and adds path-presence and gitignore primitives. Rules are declarative data behind a
 rule-loader seam, and output is serialised behind a seam that makes a later SARIF
 export additive. No new dependency.
 
