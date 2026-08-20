@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -615,8 +616,21 @@ func materialFromLocal(repoRoot, source string, pdf PDFExtractor) (sourceMateria
 	if st.Size() > maxFetchBytes {
 		return sourceMaterial{}, newIngestError("source file exceeds the %d-byte cap: %s", maxFetchBytes, rel)
 	}
-	raw, err := os.ReadFile(resolved)
-	if err != nil {
+	// Read through the shared guarded primitive, not os.ReadFile: the os.Stat
+	// above and a bare ReadFile leave a swap window (a type/symlink swap between
+	// stat and read) and an uncapped read (a regular file that GROWS past the cap
+	// after the size check is read whole). ReadGuarded validates on the same fd it
+	// reads and caps the bytes actually read. resolved is EvalSymlinks output, so
+	// the leaf is the real file and O_NOFOLLOW does not break a legitimate
+	// symlink source. The Stat pre-check stays as belt-and-suspenders (iss-109)
+	// and keeps the distinct "source path is invalid" message for a missing path.
+	raw, err := fsutil.ReadGuarded(resolved, maxFetchBytes)
+	switch {
+	case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+		return sourceMaterial{}, newIngestError("source path is not a regular file (directories, devices and symlinks-to-special are rejected): %s", rel)
+	case errors.Is(err, fsutil.ErrTooBig):
+		return sourceMaterial{}, newIngestError("source file exceeds the %d-byte cap: %s", maxFetchBytes, rel)
+	case err != nil:
 		return sourceMaterial{}, newIngestError("cannot read source: %s (%v)", rel, bareErr(err))
 	}
 	isPDF := strings.ToLower(filepath.Ext(resolved)) == ".pdf" || strings.HasPrefix(string(raw), "%PDF-")
