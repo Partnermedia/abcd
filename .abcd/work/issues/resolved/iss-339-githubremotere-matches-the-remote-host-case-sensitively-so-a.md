@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-326"
+id: "iss-339"
 slug: "githubremotere-matches-the-remote-host-case-sensitively-so-a"
 severity: "minor"
 category: "security"

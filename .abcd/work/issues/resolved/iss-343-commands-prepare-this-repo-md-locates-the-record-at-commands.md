@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-330"
+id: "iss-343"
 slug: "commands-prepare-this-repo-md-locates-the-record-at-commands"
 severity: "minor"
 category: "documentation"

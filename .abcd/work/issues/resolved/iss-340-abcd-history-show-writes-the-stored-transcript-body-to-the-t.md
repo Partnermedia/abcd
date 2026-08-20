@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-327"
+id: "iss-340"
 slug: "abcd-history-show-writes-the-stored-transcript-body-to-the-t"
 severity: "minor"
 category: "security"

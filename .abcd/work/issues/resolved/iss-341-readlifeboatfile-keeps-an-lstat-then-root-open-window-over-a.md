@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-328"
+id: "iss-341"
 slug: "readlifeboatfile-keeps-an-lstat-then-root-open-window-over-a"
 severity: "minor"
 category: "security"

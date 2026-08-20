@@ -17,4 +17,4 @@ probe.go's inner directory descent (dirRoot.OpenRoot(name)) is guarded only by t
 
 ## Verifier verdict -- CONFIRMED, recorded not fixed
 
-Real TOCTOU, same shape as iss-328, but race-only (needs an active writer in the probed tree) and unfixable with the nonBlock const because os.Root.OpenRoot takes no flags -- a fix means a raw openat(O_DIRECTORY|O_NOFOLLOW|O_NONBLOCK) or an OpenInRoot-style restructure. Filed separately from the iss-329/iss-328 same-sweep fixes by the verifier's own recommendation; larger than this round should bundle.
+Real TOCTOU, same shape as iss-341, but race-only (needs an active writer in the probed tree) and unfixable with the nonBlock const because os.Root.OpenRoot takes no flags -- a fix means a raw openat(O_DIRECTORY|O_NOFOLLOW|O_NONBLOCK) or an OpenInRoot-style restructure. Filed separately from the iss-342/iss-341 same-sweep fixes by the verifier's own recommendation; larger than this round should bundle.

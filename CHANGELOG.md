@@ -10,6 +10,41 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **GitHub-handle redaction fires regardless of the remote's letter case.** The
+  remote-URL parser matched the `github.com` host case-sensitively, so a
+  hand-typed mixed-case remote (`git@GitHub.com:…`) left the derived username
+  empty and the `github_username` redaction kind was never armed — the caller's
+  handle survived `abcd history capture` redaction and the launch/pack PII scan.
+  The host match is now case-insensitive, matching its sibling patterns. (iss-339)
+
+- **`abcd history show` neutralises terminal-control sequences in a stored
+  transcript.** The transcript body is untrusted input, and capture redacts only
+  secrets and home paths, so an ESC/CSI/C1/bidi sequence in ingested content
+  replayed raw on the reader's terminal. The human render now passes the body,
+  and the metadata fields the read path does not re-validate, through `termsafe`
+  while preserving the transcript's line structure. (iss-340)
+
+- **The lifeboat read no longer hangs on, or trusts, a swapped file.** `embark`
+  vetted a file with `Lstat` then opened it separately, so an entry in an
+  untrusted lifeboat swapped for a FIFO blocked the open indefinitely, and an
+  in-root symlink was read in place of the vetted file. The read now routes
+  through the guarded primitive (`O_NONBLOCK`, fstat-on-descriptor, `os.SameFile`).
+  (iss-341)
+
+- **`abcd disembark probe`/`plan`/`pack` no longer hangs on a planted FIFO.** The
+  probe listed a directory's entries with a blocking open, so a FIFO named where
+  an adapter expects a directory (for example `docs`) hung the command over an
+  untrusted target repository, with no race required. The listing open is now
+  non-blocking, matching the probe's file reads. (iss-342)
+
+- **Two user-facing command docs corrected.** `/abcd:prepare-this-repo` located
+  the record at a path and level count that predate the command-file flattening,
+  sending an agent one directory above the repository root (iss-343); and
+  `/abcd:lint` presented the `abcd-lint:allow` line waiver as applying to any
+  finding when only `privacy-hygiene` honours it (iss-331).
+
 ## [0.6.1] - 2026-08-20
 
 ### Fixed
@@ -19,39 +54,6 @@ called out in a **Breaking** section.
 - **Release-tag and changelog version parsing rejects an out-of-range component.** `ParseSemver` discarded the integer parser's range error, so a version component wider than the platform int clamped to its maximum — colliding distinct versions and wrapping negative on the next bump. It now returns the error, matching the guard already shipped for spec ids. (iss-293)
 - **Wording corrected in two user-facing surfaces.** The `abcd version --check` flag help no longer claims to be "the only command that touches the network" (three verbs can fetch; the network model is recorded), and the README onboarding section describes the shipped facilitator flow with its discovery-ingest and Socratic-interview automation marked as a design target rather than a present capability. (iss-294, iss-295)
 - **The development record catches up with its own releases.** The hand-maintained ADR index gains the records it omitted and the rulesets README counts all eight required checks; the v0.6.0 verb renames are swept out of their last present-tense stragglers in the roadmap and brief; the brief's broken and stale intra-record deep links, its phantom internals chapter, and the persona glossary's contradiction of the by-role selection rule are all corrected. (iss-296, iss-297, iss-298, iss-299, iss-300)
-
-- **GitHub-handle redaction fires regardless of the remote's letter case.** The
-  remote-URL parser matched the `github.com` host case-sensitively, so a
-  hand-typed mixed-case remote (`git@GitHub.com:…`) left the derived username
-  empty and the `github_username` redaction kind was never armed — the caller's
-  handle survived `abcd history capture` redaction and the launch/pack PII scan.
-  The host match is now case-insensitive, matching its sibling patterns. (iss-326)
-
-- **`abcd history show` neutralises terminal-control sequences in a stored
-  transcript.** The transcript body is untrusted input, and capture redacts only
-  secrets and home paths, so an ESC/CSI/C1/bidi sequence in ingested content
-  replayed raw on the reader's terminal. The human render now passes the body,
-  and the metadata fields the read path does not re-validate, through `termsafe`
-  while preserving the transcript's line structure. (iss-327)
-
-- **The lifeboat read no longer hangs on, or trusts, a swapped file.** `embark`
-  vetted a file with `Lstat` then opened it separately, so an entry in an
-  untrusted lifeboat swapped for a FIFO blocked the open indefinitely, and an
-  in-root symlink was read in place of the vetted file. The read now routes
-  through the guarded primitive (`O_NONBLOCK`, fstat-on-descriptor, `os.SameFile`).
-  (iss-328)
-
-- **`abcd disembark probe`/`plan`/`pack` no longer hangs on a planted FIFO.** The
-  probe listed a directory's entries with a blocking open, so a FIFO named where
-  an adapter expects a directory (for example `docs`) hung the command over an
-  untrusted target repository, with no race required. The listing open is now
-  non-blocking, matching the probe's file reads. (iss-329)
-
-- **Two user-facing command docs corrected.** `/abcd:prepare-this-repo` located
-  the record at a path and level count that predate the command-file flattening,
-  sending an agent one directory above the repository root (iss-330); and
-  `/abcd:lint` presented the `abcd-lint:allow` line waiver as applying to any
-  finding when only `privacy-hygiene` honours it (iss-331).
 
 ## [0.6.0] - 2026-08-19
 

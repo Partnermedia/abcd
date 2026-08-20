@@ -1393,18 +1393,18 @@ parallel-agent merge contention bites.
   payload over-inclusion (knowingly-deferred open dependency, iss-34), the attribution/reviews gates
   running from the PR tree (CODEOWNERS contains it), AGENTS.md's CI-job list (ci.yml-scoped, iss-182),
   the release Go-version float (deliberate), and the 05-personas.md random-picker line (prior art iss-49).
-- 2026-08-20 — bughunt round 2 (branch bughunt-a/round-2): captured iss-326..iss-338 and fixed
-  ten (six fix-impact, four internal). Code/security: iss-326 the scanner's githubRemoteRe matched
+- 2026-08-20 — bughunt round 2 (branch bughunt-a/round-2): captured iss-331..iss-343 and fixed (ids 339-343 re-minted from an initial 326-330 after main concurrently took those numbers in the v0.6.1 cut)
+  ten (six fix-impact, four internal). Code/security: iss-339 the scanner's githubRemoteRe matched
   the github.com host case-sensitively, so a mixed-case remote (git@GitHub.com:…) left
   GitRemoteUsername empty and the github_username redaction kind never armed — the caller's handle
-  survived history-capture redaction and the PII scan (added (?i)); iss-327 `abcd history show`/`list`
+  survived history-capture redaction and the PII scan (added (?i)); iss-340 `abcd history show`/`list`
   printed the untrusted transcript body and metadata fields with no termsafe, replaying ESC/CSI/C1/bidi
-  sequences raw (now SanitizeBlock on the body, Sanitize on the fields); iss-328 readLifeboatFile kept
+  sequences raw (now SanitizeBlock on the body, Sanitize on the fields); iss-341 readLifeboatFile kept
   an Lstat→root.Open window over an untrusted lifeboat (FIFO hang / symlink-follow) — routed through
-  fsutil.ReadGuardedInRoot, dropping the unused abs param; iss-329 SourceContext.ListDir opened
+  fsutil.ReadGuardedInRoot, dropping the unused abs param; iss-342 SourceContext.ListDir opened
   directory entries with a blocking open, so a statically-planted FIFO named `docs` hung
   disembark probe/plan/pack over an untrusted target repo with no race (now O_RDONLY|nonBlock, matching
-  ReadFile). Docs (fix): iss-330 prepare-this-repo.md named the pre-flattening commands/abcd/ path and
+  ReadFile). Docs (fix): iss-343 prepare-this-repo.md named the pre-flattening commands/abcd/ path and
   "three levels up" (now flat commands/ and "two levels up", tied to CLAUDE_PLUGIN_ROOT); iss-331
   lint.md presented the abcd-lint:allow waiver as global when only privacy-hygiene honours it. Record
   (internal): iss-332 development/README.md denied the issue ledger adr-32 created; iss-333 the brief's

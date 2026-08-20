@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-329"
+id: "iss-342"
 slug: "sourcecontext-listdir-opens-directory-entries-with-root-open"
 severity: "major"
 category: "security"
