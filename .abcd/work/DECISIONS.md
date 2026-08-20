@@ -1421,3 +1421,9 @@ parallel-agent merge contention bites.
   never CHANGELOG.md; the residual is the already-open iss-256). Model routing: orchestration on
   Claude Fable 5; hunters, per-finding refuters, and one of the two pre-merge reviewers on Claude
   Opus 5; the second pre-merge reviewer on Claude Fable 5 (dual-model merge gate).
+- 2026-08-20 — itd-114 (collision-proof record ids) is pulled forward: two live
+  parallel-mint collisions in one day (iss-330; the round-2 renumber), with a
+  third structurally predicted whenever two minters start from the same max.
+  The 2026-08-20 multi-minter morning is pre-registered as its field test
+  (research/notes/2026-08-20-itd-114-collision-field-test.md); the planning
+  interview opens with that note's graded results.
