@@ -203,7 +203,7 @@ Add this line to your shell profile:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-`abcd ahoy` reports the same thing as a named gap with the same one-line fix,
+`abcd ahoy install` prints the same one-line fix when it notices the gap,
 and the installer writes its own `PATH` entry to `~/.local/bin` unless you
 point it elsewhere with `--bin-dir`. abcd never escalates privileges: a
 directory it can't write to is an error, not a prompt for your password.
