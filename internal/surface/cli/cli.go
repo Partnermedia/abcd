@@ -945,11 +945,17 @@ type hookInput struct {
 	TranscriptPath string `json:"transcript_path"`
 }
 
-// readHookInput reads and size-caps the hook stdin payload.
+// readHookInput reads and size-caps the hook stdin payload. It reads one byte
+// past the cap so an over-cap payload is reported as such rather than
+// truncated into a severed prefix that json.Unmarshal misblames as malformed
+// host JSON (iss-201's class; guardCandidate is the pattern).
 func readHookInput(cmd *cobra.Command) (hookInput, error) {
-	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
+	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes+1))
 	if err != nil {
 		return hookInput{}, err
+	}
+	if len(raw) > maxHookStdinBytes {
+		return hookInput{}, fmt.Errorf("payload is over the %d-byte cap; nothing was read", maxHookStdinBytes)
 	}
 	var in hookInput
 	if err := json.Unmarshal(raw, &in); err != nil {

@@ -166,9 +166,15 @@ func newGuardHookCommand() *cobra.Command {
 				return &exitError{Code: 1}
 			}
 
-			raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
+			// One byte past the cap, so an over-cap payload names the cap
+			// instead of being truncated and misreported as unreadable JSON
+			// (iss-201; guardCandidate is the same probe on the check verb).
+			raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes+1))
 			if err != nil {
 				return failOpen("the hook payload could not be read (%v)", err)
+			}
+			if len(raw) > maxHookStdinBytes {
+				return failOpen("the hook payload is over the %d-byte cap; nothing was read", maxHookStdinBytes)
 			}
 			var in guardHookInput
 			if err := json.Unmarshal(raw, &in); err != nil {
