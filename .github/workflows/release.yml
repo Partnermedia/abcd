@@ -33,11 +33,11 @@ on:
         required: false
         type: string
         default: ''
-  # Manual rehearsal. A workflow_dispatch runs ONLY the `rehearsal` job below and
-  # nothing that publishes: the publish job (`release`) is gated off this event,
-  # and the rehearsal arms the full gate against a simulated changelog roll and
-  # reviewed-content commit, proves the gate admits it, and creates no tag,
-  # Release, or attestation. Run it green once before the first real release (see
+  # Manual rehearsal. A workflow_dispatch runs the `rehearsal` job below alongside
+  # `verify`, and nothing that publishes: the publish job (`release`) is gated off
+  # this event, and the rehearsal arms the gate's resolution path against a
+  # simulated changelog roll and reviewed-content commit, proves the deterministic
+  # gates admit it, and creates no tag, Release, or attestation. Run it green once before the first real release (see
   # the release-gate runbook) — it closes the private->public activation gap that
   # otherwise surfaces only when the gate first meets a real tag.
   workflow_dispatch:
@@ -304,9 +304,10 @@ jobs:
             bin/checksums.txt
 
       - name: Create the GitHub Release and upload the binaries + checksums.txt
-        # --verify-tag: the tag must already exist (it triggered this run) and point
-        # at the checked-out commit. --generate-notes lists the merged PRs since the
-        # previous tag; CHANGELOG.md remains the durable, hand-curated record.
+        # --verify-tag: refuse to publish unless the tag already exists remotely —
+        # existence only; it does not check what the tag points at (see the contract
+        # note at the top of this file). --generate-notes lists the merged PRs since
+        # the previous tag; CHANGELOG.md remains the durable, hand-curated record.
         run: gh release create "${TAG}" bin/abcd-* bin/checksums.txt --verify-tag --title "${TAG}" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -450,5 +451,5 @@ jobs:
           set -euo pipefail
           # Build the simulated tree — the deterministic leg the gate requires.
           go build ./...
-          echo "rehearsal: full gate armed against the simulated roll; the gate admits."
+          echo "rehearsal: gate arming resolved; the deterministic gates admit the simulated roll."
           echo "rehearsal: nothing published — no tag, Release, or attestation was created (contents: read)."
