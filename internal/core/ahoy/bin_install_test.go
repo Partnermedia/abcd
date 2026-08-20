@@ -122,7 +122,7 @@ func TestDetectDanglingOwnedSymlinkIsItsOwnGap(t *testing.T) {
 // linkStranded plants the entry a plugin update leaves behind: an abcd symlink
 // into a SIBLING plugin cache dir that no longer exists. Every plugin update
 // produces this state — the harness provisions a fresh cache dir and deletes
-// the old one, and the PATH entry keeps pointing into the old one (iss-344).
+// the old one, and the PATH entry keeps pointing into the old one (iss-345).
 func linkStranded(t *testing.T, path, pluginRoot string) {
 	t.Helper()
 	oldRoot := filepath.Join(filepath.Dir(pluginRoot), "0badc0ffee12")
@@ -134,7 +134,7 @@ func linkStranded(t *testing.T, path, pluginRoot string) {
 	}
 }
 
-// TestDetectStrandedEntryIsDanglingNotForeign is iss-344: the entry a plugin
+// TestDetectStrandedEntryIsDanglingNotForeign is iss-345: the entry a plugin
 // update strands must classify as OURS (dangling), not as a foreign occupant
 // the user is told to resolve by hand.
 func TestDetectStrandedEntryIsDanglingNotForeign(t *testing.T) {
@@ -155,7 +155,7 @@ func TestDetectStrandedEntryIsDanglingNotForeign(t *testing.T) {
 	}
 }
 
-// TestInstallRepointsEntryStrandedByPluginUpdate is iss-344's repair half: with
+// TestInstallRepointsEntryStrandedByPluginUpdate is iss-345's repair half: with
 // the fresh plugin root holding a binary, install repoints the stranded entry
 // in place — no refusal, and no second entry planted at the default location.
 // The entry deliberately lives OFF ~/.local/bin so adopt-in-place and
@@ -187,7 +187,7 @@ func TestInstallRepointsEntryStrandedByPluginUpdate(t *testing.T) {
 	}
 }
 
-// TestUninstallRemovesStrandedEntry is iss-344's uninstall half: the
+// TestUninstallRemovesStrandedEntry is iss-345's uninstall half: the
 // symlink.dangling fix hint names `ahoy uninstall` as the remedy, so uninstall
 // must recognise the stranded entry as ours — not report it foreign and leave
 // the dead link shadowing PATH with no remedy anywhere.
@@ -212,7 +212,7 @@ func TestUninstallRemovesStrandedEntry(t *testing.T) {
 
 // TestDevInstallOnStrandedEntryStillNeedsApproval: a stranded entry now
 // classifies as owned, which made modeWouldChange force the --dev shim write
-// PAST a declined ConfigChange approval (iss-344 security review). The entry
+// PAST a declined ConfigChange approval (iss-345 security review). The entry
 // must flow through the symlink.dangling gap instead, so consent still gates
 // the write.
 func TestDevInstallOnStrandedEntryStillNeedsApproval(t *testing.T) {

@@ -443,7 +443,7 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 		case strandedSiblingDest(target, dest, pluginRoot):
 			// Ours, stranded by a plugin update: the symlink.dangling gap above
 			// already carries it, and a foreign-worded gap here would tell the
-			// user to hand-resolve a link abcd itself wrote (iss-344).
+			// user to hand-resolve a link abcd itself wrote (iss-345).
 		default:
 			gaps = append(gaps, Gap{
 				ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",

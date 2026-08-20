@@ -448,7 +448,7 @@ func classifyBinTarget(target, pluginRoot string) binTargetKind {
 
 // strandedSiblingDest reports whether a symlink's destination is the binary of
 // a sibling plugin root that no longer exists — the entry every plugin update
-// strands (iss-344): the harness provisions each update into a fresh cache dir
+// strands (iss-345): the harness provisions each update into a fresh cache dir
 // and deletes the old one, so the pinned link points at <old-cache-dir>/abcd
 // while the current root is <new-cache-dir>. Ownership extends to exactly that
 // shape and no further: the leaf must be the binary name, the destination must
