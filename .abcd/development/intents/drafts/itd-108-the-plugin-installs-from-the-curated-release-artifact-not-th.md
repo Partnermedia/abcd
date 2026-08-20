@@ -45,7 +45,7 @@ warrants_assumed:
 > Bob, who maintains abcd, had the mirror-image complaint: "Cutting a release
 > published binaries, and then the plugin surface just… didn't move. I'd tag,
 > and nothing reached anyone until I remembered the second step." Carol, who
-> reviews what her team installs, put it plainest: "I could not tell you which
+> reviews what their team installs, put it plainest: "I could not tell you which
 > of those 11 megabytes in the plugin cache the harness actually executes."
 
 ## Why This Matters
@@ -193,6 +193,12 @@ the Decisions above where the two disagree.
   (same-origin checksums, build-from-source as the full-trust escape hatch)
   and this intent does not reopen it.
 - Windows support, which remains its own future intent.
+- The binary's user-invoked update verb — [[itd-130]] (builds on this intent
+  and [[itd-105]]). Its commitment that matters HERE: `abcd update` never
+  replaces a plugin-root binary — in that context it refuses and names the
+  host's plugin-update path — so the one-cut surface/binary coherence this
+  intent establishes stays structural rather than depending on updater
+  discipline.
 - Restructuring `docs/` itself, or where its images live in the repository. The
   manifest is amended to stop shipping `docs/assets/**` in the payload; how the
   repository organises those assets is untouched.
@@ -240,6 +246,41 @@ the Decisions above where the two disagree.
   the experiment reports "no update" whatever the harness does — a false negative
   that would wrongly void the unpinned decision. The no-users-yet decision makes
   a throwaway full release free.
+  **Narrowed by local experiments, 2026-08-20** (agent-run, recorded here for
+  the Cut B decision): against harness v2.1.237, an archive-source plugin at
+  a stable URL with no `sha256` pin was installed from a local rig, the
+  served bytes were swapped in place, and `plugin update` was run — in BOTH
+  version shapes, since the shipped artifact declares a version (adr-19)
+  while a bare zip does not. Observed, no-version shape: the harness
+  re-downloaded on every update invocation (server access log), installed
+  new bytes into a fresh cache dir named by the digest's first 12 hex chars,
+  and determined "already at the latest version" on a no-change run by
+  re-downloading too. Observed, declared-version shape (the one abcd ships):
+  the re-download still happens on every update — there is no pre-download
+  version skip — but the INSTALL decision is version-keyed: same declared
+  version with new bytes is fetched, compared, and DISCARDED ("already at
+  the latest version", old content retained); a version bump installs.
+  Corroborating basis for the mechanism claim: the update-engine code
+  embedded in the harness binary was read directly, and its archive branch
+  fetches before any version comparison — implementation-observed on one
+  harness version, not a documented contract. Three consequences for this
+  intent: (1) the unpinned decision holds — cutting a release propagates,
+  because every cut bumps the declared version; (2) an operational
+  invariant, recorded here so it is never discovered in production: **a
+  re-published plugin asset under an unchanged version never reaches
+  already-installed users** — fixing a botched zip requires a version bump,
+  i.e. a new cut; (3) a bare `marketplace update` refreshes the CATALOG only
+  and never touches the archive — the re-fetch is a plugin-update act
+  (explicit, or the session auto-update pass). Accepted risk, stated rather
+  than implied: the whole publication story rests on harness behaviour that
+  is observed but not contractual, and adr-38 forbids any ambient canary
+  that would detect a future harness regression — the only detector is a
+  user running `version --check`. Residue still owed at Cut B: the GitHub
+  `releases/latest/download/` redirect chain and the background auto-update
+  pass were not in the local loop, so the real-cut check below stands, now
+  as confirmation rather than as the open question. The next sentence's
+  cache-forever branch is therefore believed dead; it remains recorded
+  because the real-cut check is what retires it.
   If it turns out the harness caches by URL and never re-fetches, the unpinned
   decision above is void — and note the fallback is foreclosed TWICE, not once: a
   per-release version write into the committed catalog trips `release.yml`'s

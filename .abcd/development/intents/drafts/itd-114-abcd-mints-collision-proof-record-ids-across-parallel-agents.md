@@ -113,6 +113,16 @@ forge number is a genuine design fork for the grill, not settled here.
 
 ## Open Questions
 
+- **The semantic sibling: same defect, two mints (iss-344).** The two hunts
+  captured the identical scanner bug independently (iss-306 and iss-339),
+  because parallel minters cannot see each other's unmerged mints — the same
+  root cause as the id collision, surfacing as a duplicate record instead of
+  a duplicate id. Deduplication is OUT of this intent's scope (a similarity
+  check belongs to the capture-time validator rung, itd-84), but the mint
+  decision should weigh it: the forge-backed option incidentally creates the
+  shared registry that gives minters visibility of each other, and the grill
+  should count that as a benefit the purely-local schemes lack.
+
 - **Readability vs collision-safety — the central fork.** Candidate
   reconciliations: (a) a time-ordered id (ULID-shaped) that sorts by recency;
   (b) a git-style dual id — a collision-proof stable id plus a short

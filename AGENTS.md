@@ -76,8 +76,8 @@ CI (`.github/workflows/ci.yml`) runs its `check` job on macOS + Linux — build,
 vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
 format gate and the record-lint and docs-lint steps on the Linux leg alone.
 Separate jobs run the reviews-charter check (`scripts/check-reviews.sh`),
-full-history secret scanning (`gitleaks`), a workflow audit (`zizmor`), and the
-smoke harness (`make smoke`).
+full-history secret scanning (`gitleaks`), a workflow audit (`zizmor`),
+dependency review, `govulncheck`, and the smoke harness (`make smoke`).
 
 ## Working-tree layout (three tiers under `.abcd/`)
 

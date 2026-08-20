@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/Partnermedia/abcd/internal/core/launch/scaffold"
+	"github.com/Partnermedia/abcd/internal/gitutil"
 )
 
 func main() {
@@ -60,8 +61,15 @@ func main() {
 	}
 }
 
+// resolveRoot returns the git toplevel, falling back to the working directory.
+// The env is scrubbed (gitutil.IsolatedEnv) so an inherited GIT_DIR/GIT_WORK_TREE
+// cannot redirect discovery onto another tree; the os.Getwd fallback is the
+// correct root under the Makefile/CI contract, so scrubbing introduces no
+// regression.
 func resolveRoot() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd.Env = gitutil.IsolatedEnv()
+	out, err := cmd.Output()
 	if err == nil {
 		if top := strings.TrimSpace(string(out)); top != "" {
 			return top

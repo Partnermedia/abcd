@@ -74,6 +74,9 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"`env -S`; one the guard cannot read is warned or, for `env -S`, blocked),\n" +
 			"a hazard inside a top-level backtick substitution (`$(…)` is followed,\n" +
 			"backticks are not — a disclosed v1 limit, iss-148),\n" +
+			"a hazard inside a NON-shell interpreter's payload (`python -c`, `perl -e`) —\n" +
+			"one opaque token the tokenizer cannot read, today a silent allow (a warn for\n" +
+			"it is a recorded design target, not yet raised),\n" +
 			"or a dangerous form no entry describes. Coverage is what the registry\n" +
 			"names.\n\n" +
 			"The candidate comes from --command, or from stdin when the flag is absent.\n" +

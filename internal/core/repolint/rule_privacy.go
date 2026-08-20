@@ -54,8 +54,11 @@ var (
 	// required (so a bare "/Users" mention in prose is not flagged), but a trailing
 	// separator is NOT: the username itself is the leak, so "/Users/name" and abcd-audit:allow
 	// "/home/name" at end-of-line (e.g. `HOME=/home/name`) must be caught. This abcd-audit:allow
-	// mirrors the Windows branch, which never required a trailing separator.
-	absPathRe = regexp.MustCompile(`(?:/Users/|/home/)[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\[A-Za-z0-9._-]+`)
+	// mirrors the Windows branch, which never required a trailing separator. Only
+	// the Windows arm is case-folded: NTFS is case-insensitive and `c:\users\bob`
+	// is a common spelling (Python os.path.normcase lowercases the whole path),
+	// while folding the POSIX arm would flag ordinary API-route text ("/users/me").
+	absPathRe = regexp.MustCompile(`(?:/Users/|/home/)[A-Za-z0-9._-]+|(?i:[A-Za-z]:\\Users\\[A-Za-z0-9._-]+)`)
 )
 
 func (privacyHygiene) Meta() RuleMeta {
@@ -192,6 +195,14 @@ func lintSeverity(s scanner.Severity) Severity {
 // user, and the allowlist is a macOS convention.
 func hasAbsHomePath(line string) bool {
 	for _, loc := range absPathRe.FindAllStringIndex(line, -1) {
+		if !leadingBoundaryOK(line, loc[0]) {
+			// The match continues a longer path segment rather than beginning
+			// one — an ordinary relative directory ("src/pages/home/x") or a URL
+			// path ("https://host/home/x"), not a leaked absolute local path. The
+			// scanner twin (genericHomeRe) gates on the same boundary; without it
+			// this rule hard-fails at Error on ubiquitous committed content.
+			continue
+		}
 		m := line[loc[0]:loc[1]]
 		seg := m
 		if i := strings.LastIndexAny(m, `/\`); i >= 0 {
@@ -253,6 +264,19 @@ func hasFurtherSegment(line string, pos int, windows bool) bool {
 // (`C:\Users\<name>`) rather than a POSIX one.
 func isWindowsPath(m string) bool {
 	return strings.Contains(strings.ToLower(m), `:\users\`)
+}
+
+// leadingBoundaryOK reports whether the match at start BEGINS a path rather than
+// continuing a longer segment. A path-segment char immediately before the match
+// (the 's' of "pages/home/x", the 'm' of "example.com/home/x") means the
+// "/home/" or "/Users/" is interior to a relative path or a URL, not an absolute
+// local leak. '/' is NOT a segment char here, so "file:///home/alice" stays
+// flagged — deliberately narrower than the scanner's predicate.
+func leadingBoundaryOK(line string, start int) bool {
+	if start == 0 {
+		return true
+	}
+	return !isPathSegmentChar(line[start-1])
 }
 
 // isPathSegmentChar matches the character class absPathRe uses for a segment.

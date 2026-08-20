@@ -6,7 +6,8 @@ name: ci
 # builds, vets and tests on macOS and Linux, with race-enabled internal tests on
 # both and the `gofmt -l .` format gate, record-lint and docs-lint on the ubuntu
 # leg alone. Separate jobs run full-history secret scanning, a workflow audit,
-# the reviews-charter discipline, and the smoke harness.
+# the reviews-charter discipline, dependency review, govulncheck, and the smoke
+# harness.
 #
 # The `changes` job classifies the diff, and the duplicated lanes stand down on a
 # change confined to the record and the user-facing docs. Two properties make

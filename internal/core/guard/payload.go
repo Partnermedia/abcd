@@ -184,7 +184,11 @@ const (
 // These are true siblings of the original set: each runs its `-c` operand with
 // the grammar already parsed, differing only by a name. A different LANGUAGE is
 // not a sibling — `python -c` and `perl -e` carry source this tokenizer cannot
-// read, and their recorded posture is a loud warn rather than a guess.
+// read. Their recorded posture is a loud warn (see 04-surfaces/17-guard.md), but
+// that posture is NOT YET IMPLEMENTED: today the payload is one opaque token that
+// Tier 2's position-agnostic fail-safe never lands on, so a non-shell interpreter
+// carrying a hazard is a SILENT ALLOW. Do not read the comment as describing
+// shipped behaviour — it describes the target (iss-315).
 //
 // `eval` is not a member: it is a builtin, not an interpreter binary, and carries
 // its own end-of-options rule, so it keeps its own branch.

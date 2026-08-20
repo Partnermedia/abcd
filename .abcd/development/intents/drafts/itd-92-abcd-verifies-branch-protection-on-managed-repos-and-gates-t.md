@@ -17,7 +17,7 @@ severity: minor
 > — and what it cannot — one honest verdict per fence piece, for every user
 > from a bare local checkout to an organisation.**
 >
-> Alice, a hobbyist keeping her project in a plain local git repository — no
+> Alice, a hobbyist keeping their project in a plain local git repository — no
 > forge, no CI — runs the same `abcd ahoy` doctor as Bob, a solo developer on
 > a personal GitHub account, and Carol, the maintainer of an org-hosted
 > project with outside collaborators. None of them is told to become someone
