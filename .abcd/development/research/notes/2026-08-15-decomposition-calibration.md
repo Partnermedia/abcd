@@ -434,3 +434,29 @@ Per hand-run, append:
   (a bug found while investigating a capability) is a fifth part-type the
   table absorbs under plumbing-adjacent routing but the protocol page does
   not name; second data point for the enum revisit.
+
+### 2026-08-20 — itd-114 planning interview (re-run after two adversarial reviews)
+
+- **Proposal:** itd-114 (collision-proof record ids) at its planning
+  interview, after the two-reviewer prerequisite.
+- **Initial routing (the 2026-08-16 table):** FILE-AS-IS with flags — one
+  capability, format change deferred to "a future ADR at adoption", stance
+  claimed as carried by existing principles.
+- **Confirmed routing:** the initial verdict did **not** survive. Both
+  reviewers overturned it on the adr-44 precedent: the id format and the
+  forge network posture are trust rules extracted to adr-45 + brief
+  invariant 11 AT planning; the stance citation was corrected (the claimed
+  principle did not exist — it reduces to brief invariant 2 + prefer-sota);
+  the forge option was reframed from store to allocator with a typed
+  builds_on edge to itd-129, whose ledger-canonical decision the original
+  draft had silently reversed. Maintainer confirmed the corrected routing at
+  the interview and ruled the four open forks (timestamp-numeric; captures
+  first then all families; loud native fallback; detectors kept).
+- **Verdict:** SPLIT (capability in itd-114/spc-33; trust rules in
+  adr-45 + invariant 11), reviewer-proposed and maintainer-confirmed — the
+  initial FILE-AS-IS was overturned. Counts as a graded sample: the 08-16
+  table was the blind prediction, the interview the label.
+- **Notes:** second consecutive FILE-AS-IS overturned by the two-reviewer
+  prerequisite (itd-92 was the first) — the prerequisite is earning its
+  cost; the calibration question for the eventual automated pre-pass is
+  whether "trust rule parked in intent prose" is mechanically detectable.
