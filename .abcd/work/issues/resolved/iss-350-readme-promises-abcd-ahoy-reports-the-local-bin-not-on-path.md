@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "README.md"
+resolution: "README promises the PATH hint from ahoy install's reachability note, the verb that prints it"
+impact: fix
 ---
 
 README promises abcd ahoy reports the local-bin-not-on-PATH state as a named gap after the copy one-liner install, but detectBinDirOnPath is suppressed for a copy install: no plugin root yields no PATH gap at all and a resolvable root yields symlink.foreign with resolve-manually

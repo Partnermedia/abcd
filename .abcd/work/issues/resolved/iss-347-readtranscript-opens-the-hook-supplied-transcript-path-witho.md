@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/surface/cli/cli.go"
+resolution: "readTranscript routed through fsutil.ReadGuarded; symlink refused, over-cap refused whole"
+impact: fix
 ---
 
 readTranscript opens the hook-supplied transcript path without O_NOFOLLOW or an over-cap probe, the one guarded read left off fsutil.ReadGuarded, so a symlinked transcript_path is followed and an over-cap file is stored silently truncated

@@ -7,6 +7,8 @@ category: "tech-debt"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".github/workflows/ci.yml"
+resolution: "TestWorkflowGoVersionsMatchSubstitutions couples every workflow go-version pin to the scaffold substitutions; verified by mutation"
+impact: internal
 ---
 
 ci.yml's three go-version pins are coupled to nothing: TestSelfScaffoldParity gates release.yml and auto-release.yml against scaffold substitutions but no test reads ci.yml, so the d594511 drift where CI scanned green on a newer toolchain than the release build recurs silently on the next bump

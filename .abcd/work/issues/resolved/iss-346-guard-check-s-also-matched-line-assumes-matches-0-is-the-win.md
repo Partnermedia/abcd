@@ -7,6 +7,8 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/surface/cli/guard.go"
+resolution: "also-matched line selects non-winners by id instead of Matches[1:]"
+impact: fix
 ---
 
 guard check's also-matched line assumes Matches[0] is the winner, so a synthetic block over registry warns silently drops the matched warn entry and echoes the winner twice

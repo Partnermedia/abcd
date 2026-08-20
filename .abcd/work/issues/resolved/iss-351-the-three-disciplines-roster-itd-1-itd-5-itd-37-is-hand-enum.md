@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/development/brief/01-product/03-mental-model.md"
+resolution: "roster sites point at intents/disciplines/; phase-scoped mentions say so"
+impact: internal
 ---
 
 the three-disciplines roster itd-1 itd-5 itd-37 is hand-enumerated at six sites while intents/disciplines/ holds six active disciplines, dropping itd-79 itd-81 itd-84 from the mental model, scope, roadmap dashboard and phase-0 acceptance

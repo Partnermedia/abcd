@@ -7,6 +7,8 @@ category: "observation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/surface/cli/guard.go"
+resolution: "all thirteen batch items fixed: guard help backtick disclosure, urlguard reserved ranges, hook cap probe, repolint not-scanned warn, 64-hex commit sha, launch Short, release.yml wording plus templates, dependabot pip, chapter rosters, narration blocks, phantom ledger cite, activity-record noun"
+impact: fix
 ---
 
 round-2 fixed nitpick batch: guard check help omits the disclosed backtick limit; urlguard misses CGNAT 100.64/10 and other RFC 6890 ranges; readHookInput misreports an over-cap payload as malformed (iss-201's class at the shared helper); repolint privacy-hygiene silently skips textual files over the 4 MiB cap; capture reCommitSha refuses 64-hex commits; launch Short hides that --dry-run is required; release.yml verify-tag comment overstates what gh verifies; release.yml header says dispatch runs only the rehearsal job; dependabot covers no pip ecosystem for docs; brief pointer lines enumerate five of nine internals chapters; phase-6 and 06-lint carry change-narration blocks; 05-internals cites a ledger entry that does not exist; 03-evidence names the retired activity record nitpick documentation

@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/adapter/scanner/network.go"
+resolution: "dropped the trailing word boundary from lanHostRe/deviceHostRe; truncatedLabel SkipAt preserves the longer-label suppression"
+impact: fix
 ---
 
 scanner lanHostRe and deviceHostRe keep the trailing ASCII word boundary the iss-307 sweep dropped from ipv4Re and macRe, so a LAN or device hostname abutting an underscore or alnum suffix is silently missed

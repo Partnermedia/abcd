@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "docs/reference/terminology.md"
+resolution: "terminology Guardrails row states the guard is fail-open-loud per adr-42"
+impact: fix
 ---
 
 terminology.md lists the pre-tool-use shell-hazard guard among deterministic fail-closed gates, asserting the opposite safety property from adr-42's fail-open-loud mistake filter on the one page written for an evaluator

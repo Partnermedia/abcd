@@ -76,7 +76,7 @@ once. Human-paired (the §4 gate is manual by design).
 3. **[iss-203](../../work/issues/open/iss-203-audit-privacy-degraded-scanner-silent.md)**
    (major) — audit silently degrades when `scanner.New` fails. Same seam as
    iss-202; land with or immediately after it, never in parallel.
-4. **[iss-201](../../work/issues/open/iss-201-guard-hook-stdin-overflow-fail-open.md)**
+4. **[iss-201](../../work/issues/resolved/iss-201-guard-hook-stdin-overflow-fail-open.md)**
    (major) — guard hook fails open past 1 MiB of stdin. Autonomous-eligible.
 5. **[iss-210](../../work/issues/open/iss-210-lone-token-subverb-guess-writes-a-record.md)**
    (major) — a lone mistyped token writes a ledger record. Autonomous-eligible.

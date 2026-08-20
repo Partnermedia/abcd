@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/core/cite/fetch.go"
+resolution: "fetch boundary percent-encodes hidden runes in FinalURL; baseline validate refuses them; termsafe and coverage doc claims corrected and pinned"
+impact: fix
 ---
 
 cite fetch records a redirect-controlled FinalURL verbatim, so C1, bidi and zero-width runes in a hostile Location query reach abcd docs lint --json and the committed citations baseline raw; the termsafe doc claim that encoding/json escapes control characters is false for those classes

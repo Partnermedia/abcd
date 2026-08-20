@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/development/brief/03-evidence/03-open-questions.md"
+resolution: "three citations repointed at decisions/adrs/ as markdown links the blocker rule gates"
+impact: internal
 ---
 
 three current-state records cite ADRs at development/research/adr/, a path that does not exist and a layout adr-30 explicitly rejected; all three are backticked code spans links_resolve never checks

@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/surface/cli/cli.go"
+resolution: "root Use declares the record-id positional and a Long explains bare-vs-id dispatch; reference regenerated"
+impact: fix
 ---
 
 the root command's Use and help omit the shipped record-id dispatch, so the generated CLI reference states Usage: abcd with no positional and abcd --help never mentions that abcd iss-N describes a record

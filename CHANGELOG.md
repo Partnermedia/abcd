@@ -12,6 +12,68 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Network redaction catches a hostname abutting an underscore.** `lanHostRe`
+  and `deviceHostRe` kept the trailing ASCII word boundary the secret-token and
+  address patterns had already retired, so `printer.local_backup` in a
+  snake_case filename scanned to nothing. The boundary is dropped and a
+  positional skip keeps a truncated longer label quiet. (iss-344)
+
+- **A redirect cannot smuggle hidden runes into the citation record.** The
+  final URL a fetch ends at is redirect-controlled, and `encoding/json`
+  escapes neither C1 nor bidi/zero-width runes, so a hostile Location query
+  could land a terminal escape or Trojan-Source override raw in
+  `docs cite refresh --json` and the committed baseline. The fetch boundary now
+  percent-encodes them losslessly and the baseline validator refuses them from
+  any producer. (iss-345)
+
+- **`guard check` reports every matched entry.** The human report assumed the
+  winner led the match list, so a synthetic block over registry warns dropped
+  the matched warn entry and echoed the winner twice; non-winners are now
+  selected by id. (iss-346)
+
+- **Session end refuses a symlinked or growing transcript.** The hook-supplied
+  transcript path was the one guarded read left off `fsutil.ReadGuarded`: a
+  planted symlink was followed into the history store, and a file crossing the
+  cap mid-read stored a silently truncated prefix. Both are refused whole now.
+  (iss-347)
+
+- **An over-cap hook payload names the cap.** The hook readers truncated at the
+  limit and blamed the host for the resulting severed JSON; they now read one
+  byte past the cap and say what actually happened, on the prompt router and
+  the guard hook alike. (iss-201)
+
+- **The URL guard blocks CGNAT and the other reserved IPv4 ranges.** Go's
+  `IsPrivate` covers RFC 1918 + ULA only, so 100.64/10 — live internal
+  addressing on Tailscale tailnets and carrier networks — passed every
+  predicate; the RFC 6890 table closes the class and the NAT64/6to4 unwrap
+  re-checks it. (iss-356)
+
+- **`abcd lint` says when the privacy scan skips a file.** A tracked textual
+  file over the 4 MiB cap was skipped silently and the repo reported
+  conforming; the skip is now a warn naming the file, while oversize binary
+  assets stay quiet. (iss-356)
+
+- **`capture resolve --commit` accepts a SHA-256 repo's 64-hex sha.** The shape
+  check stopped at 40 chars, refusing a legitimate resolution the receipt gate
+  already accepts. (iss-356)
+
+- **The CLI help states what ships.** Bare `abcd`'s help now declares the
+  record-id positional (`abcd iss-N` describes a record) that shipped in
+  v0.6.0 but appeared on no CLI discovery surface (iss-348); `launch`'s
+  summary says `--dry-run` is required rather than reading as optional, and
+  `guard check`'s gap list discloses the backtick-substitution limit the
+  package map says it states. (iss-356)
+
+- **The terminology crosswalk states the shell guard's real safety property.**
+  The Guardrails row listed the pre-tool-use guard among fail-closed gates —
+  the opposite of its deliberate fail-open-loud design — on the page written
+  for an evaluator. (iss-349)
+
+- **The README promises the PATH hint from the verb that prints it.** After
+  the copy one-liner install, bare `abcd ahoy` never reports the off-PATH gap
+  the README claimed; `ahoy install`'s reachability note is what prints the
+  one-line fix. (iss-350)
+
 - **GitHub-handle redaction fires regardless of the remote's letter case.** The
   remote-URL parser matched the `github.com` host case-sensitively, so a
   hand-typed mixed-case remote (`git@GitHub.com:…`) left the derived username
