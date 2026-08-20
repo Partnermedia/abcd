@@ -60,7 +60,7 @@ found_at: <path-or-conceptual>
 details: "<text>"          # optional structured detail
 suggested_fix: "<text>"    # optional proposed remedy
 related_intents: [itd-N, ...]
-related_specs: [fn-N, ...]
+related_specs: [spc-N, ...]
 related_issues: [iss-N, ...]
 synthesis_clusters: [<label>, ...]  # optional dredge/synthesis grouping
 blocked_by: [iss-N, ...]   # dependency edges; blocked/priority is derived, never stored
