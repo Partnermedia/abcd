@@ -119,6 +119,172 @@ func TestDetectDanglingOwnedSymlinkIsItsOwnGap(t *testing.T) {
 	}
 }
 
+// linkStranded plants the entry a plugin update leaves behind: an abcd symlink
+// into a SIBLING plugin cache dir that no longer exists. Every plugin update
+// produces this state — the harness provisions a fresh cache dir and deletes
+// the old one, and the PATH entry keeps pointing into the old one (iss-345).
+func linkStranded(t *testing.T, path, pluginRoot string) {
+	t.Helper()
+	oldRoot := filepath.Join(filepath.Dir(pluginRoot), "0badc0ffee12")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(oldRoot, "abcd"), path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDetectStrandedEntryIsDanglingNotForeign is iss-345: the entry a plugin
+// update strands must classify as OURS (dangling), not as a foreign occupant
+// the user is told to resolve by hand.
+func TestDetectStrandedEntryIsDanglingNotForeign(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	linkStranded(t, filepath.Join(binDir, "abcd"), pluginRoot)
+
+	det, err := Detect(managedRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := gapByID(det.Gaps, "symlink.dangling"); g == nil {
+		t.Fatalf("a stranded plugin-update entry produced no symlink.dangling gap: %+v", det.Gaps)
+	}
+	if hasGap(det.Gaps, "symlink.foreign") {
+		t.Errorf("a stranded entry of our own was described as foreign: %+v", det.Gaps)
+	}
+}
+
+// TestInstallRepointsEntryStrandedByPluginUpdate is iss-345's repair half: with
+// the fresh plugin root holding a binary, install repoints the stranded entry
+// in place — no refusal, and no second entry planted at the default location.
+// The entry deliberately lives OFF ~/.local/bin so adopt-in-place and
+// write-the-default cannot land on the same path and mask each other.
+func TestInstallRepointsEntryStrandedByPluginUpdate(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	other := filepath.Join(t.TempDir(), "opt", "bin")
+	t.Setenv("PATH", other)
+	link := filepath.Join(other, "abcd")
+	linkStranded(t, link, pluginRoot)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest, rerr := os.Readlink(link)
+	if rerr != nil {
+		t.Fatalf("the stranded entry is no longer a symlink: %v", rerr)
+	}
+	if resolveSymlinkDest(link, dest) != resolvePath(pluginBinaryPath(pluginRoot)) {
+		t.Errorf("entry was not repointed at the fresh plugin binary: %s -> %s (notes: %v)", link, dest, res.Notes)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".local", "bin", "abcd")); !os.IsNotExist(err) {
+		t.Errorf("install planted a second entry at ~/.local/bin beside the repointed one: %v", err)
+	}
+}
+
+// TestUninstallRemovesStrandedEntry is iss-345's uninstall half: the
+// symlink.dangling fix hint names `ahoy uninstall` as the remedy, so uninstall
+// must recognise the stranded entry as ours — not report it foreign and leave
+// the dead link shadowing PATH with no remedy anywhere.
+func TestUninstallRemovesStrandedEntry(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	link := filepath.Join(binDir, "abcd")
+	linkStranded(t, link, pluginRoot)
+
+	receipt, err := Uninstall(managedRepo(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.Symlink.Removed {
+		t.Fatalf("uninstall left the stranded entry in place: %+v", receipt.Symlink)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Errorf("the stranded entry survived uninstall: %v", err)
+	}
+}
+
+// TestDevInstallOnStrandedEntryStillNeedsApproval: a stranded entry now
+// classifies as owned, which made modeWouldChange force the --dev shim write
+// PAST a declined ConfigChange approval (iss-345 security review). The entry
+// must flow through the symlink.dangling gap instead, so consent still gates
+// the write.
+func TestDevInstallOnStrandedEntryStillNeedsApproval(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	link := filepath.Join(binDir, "abcd")
+	linkStranded(t, link, pluginRoot)
+	before, err := os.Readlink(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	adopt := true
+	opts := InstallOptions{
+		Adopt: &adopt,
+		Dev:   true,
+		ApprovedCategories: map[GapCategory]bool{
+			SafeAutocreate: true,
+			PluginOwned:    true,
+			UserState:      true,
+			Dependency:     true,
+		},
+	}
+
+	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	after, rerr := os.Readlink(link)
+	if rerr != nil || after != before {
+		t.Errorf("--dev rewrote the stranded entry despite a declined ConfigChange approval: %q -> %q (%v)", before, after, rerr)
+	}
+}
+
+// TestStrandedOwnershipScope pins both halves of strandedSiblingDest's "and no
+// further" contract: a RELATIVE dest into a dead sibling root is ours, and a
+// dangling dest anywhere else stays foreign — so a later widening of the
+// predicate fails here, not in the field.
+func TestStrandedOwnershipScope(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	link := filepath.Join(binDir, "abcd")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	rel, err := filepath.Rel(binDir, filepath.Join(filepath.Dir(pluginRoot), "0badc0ffee12", "abcd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(rel, link); err != nil {
+		t.Fatal(err)
+	}
+	if kind := classifyBinTarget(link, pluginRoot); kind != binTargetOwnedSymlink {
+		t.Errorf("relative stranded dest classified %v, want owned", kind)
+	}
+
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "gone", "abcd"), link); err != nil {
+		t.Fatal(err)
+	}
+	if kind := classifyBinTarget(link, pluginRoot); kind != binTargetForeign {
+		t.Errorf("dangling non-sibling dest classified %v, want foreign", kind)
+	}
+}
+
 // TestDetectBinDirNotOnPathIsALoudGap pins the script-first remedy: an install
 // directory that is not on PATH is its own loud gap carrying the one-line export
 // fix, and abcd never offers to patch a shell profile (the gap is not resolvable

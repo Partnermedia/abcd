@@ -96,11 +96,13 @@ the parent.
 
 ## Provenance and attribution
 
-The cold reading was developed by abcd's co-author in support of abcd. The
-`ACKNOWLEDGEMENTS.md` entry is **deliberately deferred, not forgotten** — it is
-held pending confirmation of how they wish to be credited, and must land before
-itd-86 ships. Recording this openly rather than silently, per
-[`loud-staging`](../../principles/loud-staging.md).
+The cold reading was developed by abcd's co-author in support of abcd. No
+`ACKNOWLEDGEMENTS.md` entry is owed, and none gates itd-86: its originator is a
+co-author and now co-maintainer of abcd — an author of record, and
+`ACKNOWLEDGEMENTS.md` credits outside contributions, not maintainers. Settled
+2026-08-19 by maintainer decision; this paragraph previously held the entry
+open pending their crediting preference, and that hold is recorded as lifted
+rather than deleted, per [`loud-staging`](../../principles/loud-staging.md).
 
 Its sibling skills (`socratic-grill`, `first-principles-analysis`) were evaluated
 separately in

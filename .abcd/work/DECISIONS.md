@@ -1393,6 +1393,41 @@ parallel-agent merge contention bites.
   payload over-inclusion (knowingly-deferred open dependency, iss-34), the attribution/reviews gates
   running from the PR tree (CODEOWNERS contains it), AGENTS.md's CI-job list (ci.yml-scoped, iss-182),
   the release Go-version float (deliberate), and the 05-personas.md random-picker line (prior art iss-49).
+- 2026-08-19 — The cold reading's `ACKNOWLEDGEMENTS.md` entry is not owed and no
+  longer gates itd-86. The 2026-07-13 sensemaking-method note had deferred the
+  entry pending the originator's crediting preference; the originator is a
+  co-author and now co-maintainer of abcd — an author of record, not a third
+  party the acknowledgements file exists to credit. The note's provenance
+  paragraph is amended accordingly.
+- 2026-08-19 — Design review of the candidate record extensions (scope
+  conditions on intents, selection grounds at plan time and capture triage,
+  per-record provenance of contributed material, a knowledge record, a framing
+  passage in the brief) and of the cold-reading build path: one independent
+  adversarial pass over the plan plus two SOTA surveys, written up as the two
+  dated research notes 2026-08-19-*-sota.md. Six decisions. (1) No never-bluffs
+  principle is minted — the brief's marking discipline is loud-staging applied
+  to prose, and a framing passage cites loud-staging directly; the sensemaking
+  entry's one-principle precedent (no near-copies) applies. (2) itd-60 is not a
+  prerequisite for brief rewrites — the rewrite is existing human practice at
+  ship time; itd-60 stays an unplanned ambition. (3) Nothing in itd-87 must be
+  settled before itd-86 builds: capture carries no semantic dedup (id-collision
+  guards only), so there is no store for a re-raising detector to fight;
+  recurrence handling stays deferred to itd-87. (4) Promise-questioning —
+  "delivered as promised, but the promise itself is in question" — if ever
+  built, is its own surface with its own ADR extending adr-40's closed bucket
+  list; it is never a slot inside the intent-fidelity verdict, whose one act is
+  reality-vs-commitment. Nearest published vocabulary is Lean's
+  hypothesis-invalidated / pivot; no surveyed practice has a machine-readable
+  verdict separating built-wrong from wrongly-specified. (5) itd-86 is not
+  plannable until its isolation mechanism is named in scope: no allowlist
+  invocation surface exists, installed agents read the whole tree, and host
+  subagents inherit project-context files by default — the blindness contract's
+  mechanical half is a build item, and whatever remains disciplinary is
+  reported as such per loud-staging. (6) The record extensions land as
+  hand-run conventions before any automation, per script-first-mvp; the ideate
+  rejected-alternatives shape and the wontfix_reason invariants are the two
+  in-repo patterns they extend (one-canonical-primitive). Grounds and sources
+  in the two SOTA notes.
 - 2026-08-20 — bughunt round 2 (branch bughunt-a/round-2): captured iss-331..iss-343 and fixed (ids 339-343 re-minted from an initial 326-330 after main concurrently took those numbers in the v0.6.1 cut)
   ten (six fix-impact, four internal). Code/security: iss-339 the scanner's githubRemoteRe matched
   the github.com host case-sensitively, so a mixed-case remote (git@GitHub.com:…) left
@@ -1473,3 +1508,18 @@ parallel-agent merge contention bites.
   path already reads any file), defence-in-depth only, left for a scoped consolidation. Model routing:
   orchestration on Claude Fable 5; five parallel hunters, six per-finding refuters, and one of the two
   pre-merge reviewers on Claude Opus 5; the second pre-merge reviewer on Claude Fable 5 (dual-model merge gate).
+- 2026-08-20 — Homebrew distribution recorded and parked. Viable now that the
+  repo is public, and it is what the reference class (gh, lazygit, k9s) leans
+  on; a personal tap is the solo-maintainer shape and homebrew-core needs
+  notability. Deferred until after a binary-update verb exists, because the
+  two interact: an updater must gate on install-channel detection and print
+  `brew upgrade abcd` instead of self-replacing when the binary's RESOLVED
+  path sits under a brew prefix (/opt/homebrew, /usr/local,
+  /home/linuxbrew/.linuxbrew — a prefix test, never a "Cellar" substring
+  match). The named incident is flyctl's autoupdate postmortem, "Flyctl
+  Versions, Autoupdating, and the CLI Apocalypse"
+  (https://community.fly.io/t/flyctl-versions-autoupdating-and-the-cli-apocalypse/13794):
+  brew-path update loops, Nix read-only breakage, Windows UAC. Note
+  for the revisit: goreleaser's `homebrew_casks` pipe is the current SOTA
+  route, but abcd's release pipeline is bespoke (semantic-gate attestations,
+  no goreleaser), so the tap push would be a hand-rolled release-workflow step.

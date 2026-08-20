@@ -888,6 +888,15 @@ func modeWouldChange(opts InstallOptions, det DetectionResult, target string) bo
 	if kind == binTargetForeign {
 		return false
 	}
+	// A dangling owned entry is not a mode to switch away from: it flows
+	// through the symlink.dangling gap, so the ConfigChange approval still
+	// gates the write. Forcing it here would let --dev replace the entry past
+	// a declined approval (iss-345 review).
+	if kind == binTargetOwnedSymlink {
+		if present, err := fsutil.Exists(target); err != nil || !present {
+			return false
+		}
+	}
 	if opts.Dev {
 		// Only a switch away from the pinned symlink is a forced change. A missing
 		// entry is NOT forced: it flows through the symlink.missing gap so a declined
@@ -1001,8 +1010,11 @@ func Uninstall(cwd, binDir string) (UninstallReceipt, error) {
 	case !ok:
 		receipt.Symlink.Note = "plugin root unresolved; left untouched"
 	default:
-		dest, _ := os.Readlink(target)
-		if resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
+		// One ownership predicate for the whole package: classifyBinTarget,
+		// which also owns the entry a plugin update stranded (iss-345) — the
+		// symlink.dangling fix hint names this verb as the remedy, so the two
+		// must agree.
+		if classifyBinTarget(target, pluginRoot) == binTargetOwnedSymlink {
 			if err := os.Remove(target); err == nil {
 				receipt.Symlink.Removed = true
 			} else {

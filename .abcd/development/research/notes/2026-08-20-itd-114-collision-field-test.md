@@ -56,10 +56,30 @@ two minters starting from the **same max** collide.
   parallel task would have to re-carry by hand. (The protocol is itself the
   argument: safety should live in the mint, not in every minter's prompt.)
 
-## Results — TO BE GRADED after the morning resolves
+## Results — graded (same day, ~11:30)
 
-_Pre-registered and deliberately empty until the reconciler's PR, hunt 1's
-round, and hunt 2's 11:00 round have all landed or failed. Grade each
-prediction CONFIRMED / FALSIFIED with the evidence (branch, PR, run), count
-collisions and near-misses, and record where each was detected and what it
-cost. This section is the input the itd-114 planning interview opens with._
+- **P1 — CONFIRMED.** The reconciler's iss-305..325 landed intact (PR #384,
+  three just-in-time verifications, zero renumbers). No concurrent mint
+  touched the gap, and none structurally could: max+1 never looks down.
+- **P2 — CONFIRMED, third collision of the window.** The 11:00 round
+  (bughunt-b round 2, PR #386) checked out while main's max was 343 and
+  minted iss-344..356 — colliding at exactly max+1 with iss-344, which a
+  maintainer-session PR had merged minutes earlier. Merge timing alone
+  decided it, as pre-registered; and the colliding pair was hunt-vs-session,
+  the third distinct minter pairing to collide in two days (hunt-vs-session
+  twice, hunt-vs-hunt once). The mechanism does not care who the minters are.
+- **P3 — CONFIRMED.** Detection again fell to `issue_id_unique` at PR CI —
+  after the round's work was complete and pushed, the most expensive moment
+  short of a frozen receipt. Nothing warned at capture time.
+- **P4 — CONFIRMED, both halves.** The protocol works: the one minter
+  carrying it (the reconciler) crossed the window unscathed. It does not
+  scale: the minter without it (the 11:00 round) collided immediately — and
+  grading this very note had to defer its own ledger capture, because a fresh
+  mint at max+1=345 would have landed inside PR #386's unmerged block. Every
+  safe mint in a multi-agent window currently requires bespoke care.
+
+**Net for the planning interview:** three collisions, three pairings, one
+mechanism; detection always late; the defence exists but is prompt-carried
+per task. The mint must be collision-proof by construction, and the grill
+should weigh the forge-backed option's shared-registry side effect (iss-344,
+the semantic sibling) as real.
