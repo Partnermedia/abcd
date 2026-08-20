@@ -231,6 +231,7 @@ func NewRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&asJSON, "json", false, "emit machine-readable JSON")
 
 	root.AddCommand(newVersionCommand(&asJSON))
+	root.AddCommand(newUpdateCommand(&asJSON))
 
 	root.AddCommand(newAhoyCommand(&asJSON))
 	root.AddCommand(newLintCommand(&asJSON))
