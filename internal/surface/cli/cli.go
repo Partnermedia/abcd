@@ -1203,31 +1203,23 @@ const maxTranscriptBytes = 64 << 20 // 64 MiB
 
 // readTranscript reads the file named by the Stop payload's transcript_path.
 //
-// The path is external input, so the open is defensive on the two failure modes
-// that would actually hurt: O_NONBLOCK so a FIFO or device node cannot hang the
-// hook (a hung Stop hook wedges the user's session), and a regular-file check so
-// only a real file is ever read. The size cap bounds the redaction pass.
+// The path is external input, so the read goes through fsutil.ReadGuarded —
+// O_NOFOLLOW so a planted symlink is refused rather than followed, O_NONBLOCK
+// so a FIFO or device node cannot hang the hook (a hung Stop hook wedges the
+// user's session), a regular-file check on the opened descriptor, and a cap+1
+// probe so a file that grows past the cap between stat and read is refused
+// whole instead of stored silently truncated (iss-347).
 func readTranscript(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	raw, err := fsutil.ReadGuarded(path, maxTranscriptBytes)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open transcript %q (%v)", path, err)
-	}
-	defer f.Close()
-
-	st, err := f.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("cannot stat transcript %q (%v)", path, err)
-	}
-	if !st.Mode().IsRegular() {
-		return nil, fmt.Errorf("transcript %q is not a regular file", path)
-	}
-	if st.Size() > maxTranscriptBytes {
-		return nil, fmt.Errorf("transcript %q is %d bytes, over the %d-byte cap", path, st.Size(), maxTranscriptBytes)
-	}
-
-	raw, err := io.ReadAll(io.LimitReader(f, maxTranscriptBytes))
-	if err != nil {
-		return nil, fmt.Errorf("cannot read transcript %q (%v)", path, err)
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+			return nil, fmt.Errorf("transcript %q is not a readable regular file (a symlink or non-regular transcript is refused)", path)
+		case errors.Is(err, fsutil.ErrTooBig):
+			return nil, fmt.Errorf("transcript %q is over the %d-byte cap", path, maxTranscriptBytes)
+		default:
+			return nil, fmt.Errorf("cannot read transcript %q (%v)", path, err)
+		}
 	}
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("transcript %q is empty", path)
