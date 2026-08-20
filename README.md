@@ -74,7 +74,7 @@ Some things the project needs aren't user-facing — cross-cutting rules every f
 
 # Process
 
-**It starts with the brief.** You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. `abcd` has a skill that ingests that material and produces a plain-language draft of your project's brief; the parts that feel fuzzy, you sharpen together with a *Socratic interview* the framework provides. By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about. Much of it is ambition rather than fact at this stage, and that's fine: The brief never bluffs, so those passages are marked accordingly.
+**It starts with the brief.** You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. Your facilitator works that material into a plain-language draft of your project's brief, and the parts that feel fuzzy you sharpen together in conversation. *(Automating that first pass — a discovery-ingest surface and a Socratic-interview sub-verb of `abcd intent` — is a design target, not yet shipped.)* By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about. Much of it is ambition rather than fact at this stage, and that's fine: The brief never bluffs, so those passages are marked accordingly.
 
 ## Capturing intents
 

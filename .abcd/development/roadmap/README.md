@@ -92,7 +92,7 @@ See [intents/README.md](../intents/README.md) for the full intent index.
 
 **Phase audit.** A phase's delivered reality is reviewed against its structured
 `## Phase Acceptance` by the **phase-audit reviewer** (Go tooling) — a sibling of
-`intent-fidelity-reviewer` that resolves member specs through the editorial
+`intent-auditor` that resolves member specs through the editorial
 `## Scope` membership chain (intents → implementing specs), emits per-acceptance
 verdicts, and writes a receipt under `.abcd/logbook/audit/` without mutating the
 phase doc. The companion `PA001` lint verifies any `phase:` anchor names a real

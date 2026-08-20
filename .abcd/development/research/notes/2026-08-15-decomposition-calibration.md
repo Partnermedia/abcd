@@ -380,3 +380,25 @@ Per hand-run, append:
   neither reviewer.
 - **Notes:** acceptance criteria rebuilt against what a read-only probe can
   decide per caller; the draft stays in `drafts/` for the planning interview.
+
+### 2026-08-19 — one canonical YAML scalar resolver (itd-128)
+
+- **Proposal:** from the PR #294 commissioned review's F6 — the fix widened
+  two of four independent YAML scalar decoders; extract one exported
+  resolution helper and have every decoder delegate.
+- **Initial routing (proposed before the human ruled):** capability (the
+  exported resolver, all four decoders delegating) | intent | itd-128;
+  trust rule (ledger-canonical issue store, per-field ownership — decided the
+  same session but a distinct part) | decision log now, ADR at graduation;
+  stance (fix the class, not the instance) | already carried by the existing
+  one-canonical-primitive principle, no new filing; plumbing (where quoting
+  normalisation lives, whether the dump-path null list folds in) | intent
+  open questions, settled at planning. Typed links: itd-128 closes iss-285;
+  iss-287 is evidence. No reversal flags.
+- **Confirmed routing:** adopted unchanged (human confirmation 2026-08-19,
+  after filing — the prediction preceded the label).
+- **Verdict:** FILE-AS-IS — survived confirmation unedited.
+- **Notes:** the stance slot resolving to an *existing* principle (no
+  artefact filed) is a case the four-piece table handles but the entry format
+  under-describes: "home" here is a citation, not a filing. Worth a line in
+  the protocol page when the enum question is next revisited.

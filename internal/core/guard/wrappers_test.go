@@ -1,11 +1,13 @@
 package guard
 
 import (
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -253,10 +255,26 @@ func helpFlags(name string) []string {
 	return flags
 }
 
+// probeDir is a throwaway working directory for the wrapper probes. Some probe
+// values land in an operand position that the wrapper opens as a file — flock
+// treats its FILE operand as a lock file and creates it — so without a cwd
+// outside the source tree, `go test` would write junk files (`0`, `1`, `PATH`,
+// `root`) into internal/core/guard and they would be committed. It is created
+// once per test process; the OS reclaims it.
+var probeDir = sync.OnceValue(func() string {
+	d, err := os.MkdirTemp("", "guard-wrapper-probe-")
+	if err != nil {
+		return os.TempDir()
+	}
+	return d
+})
+
 // runsCommand reports whether the wrapper launched the command, which is the only
 // discriminator that does not depend on reading a message.
 func runsCommand(name string, args ...string) bool {
-	out, err := exec.Command(name, args...).CombinedOutput()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = probeDir()
+	out, err := cmd.CombinedOutput()
 	return err == nil && strings.Contains(string(out), probeMarker)
 }
 

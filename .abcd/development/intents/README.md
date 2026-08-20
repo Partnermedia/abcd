@@ -10,7 +10,7 @@ An **intent** captures *what user-facing capability exists once shipped* — wri
 
 **Why press releases instead of feature specs:** Feature specs are engineering-shaped from the start (Problem → Design → Tasks). Press releases are user-experience-shaped (what *exists for the user* once shipped). Forcing intent capture in user-facing language disciplines product clarity before engineering scope.
 
-**Plumbing work doesn't get intents.** Adapters, agents, harness, scaffolding — these have no user moment, and forcing press-release format on them produces strained or mis-targeted prose. Plumbing lives in the brief at `.abcd/development/brief/README.md`. See brief § 1.5 for the full three-layer model (brief = whole picture, intents = user-facing why, specs = how).
+**Plumbing work doesn't get intents.** Adapters, agents, harness, scaffolding — these have no user moment, and forcing press-release format on them produces strained or mis-targeted prose. Plumbing lives in the brief at `.abcd/development/brief/README.md`. See the brief for the full three-layer model (brief = whole picture, intents = user-facing why, specs = how).
 
 This is a **codified abcd principle**: intent capture is press-release-shaped. abcd ships projects with this convention pre-baked.
 

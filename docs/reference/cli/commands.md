@@ -686,5 +686,5 @@ Print abcd's version, install mode, and vintage
 **Flags:**
 
 ```
-      --check   fetch the latest release once and compare (the only command that touches the network); names its source
+      --check   fetch the latest release once and compare (this command's only network touch; abcd never fetches implicitly — adr-38); names its source
 ```

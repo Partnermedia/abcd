@@ -40,9 +40,22 @@ func ParseSemver(value string) (Semver, error) {
 	if m == nil {
 		return Semver{}, fmt.Errorf("not a strict SemVer 2.0.0 version (semver.org, no leading 'v'): %q", value)
 	}
-	major, _ := strconv.Atoi(m[1])
-	minor, _ := strconv.Atoi(m[2])
-	patch, _ := strconv.Atoi(m[3])
+	// A component wider than int overflows to MaxInt64 on the discarded error, so
+	// two distinct oversized versions collide to one String() and the next Patch++
+	// wraps negative — the same defect guarded in spec/spec.go:specNum. A version
+	// this tool cannot represent is not a version; fail the parse.
+	major, err := strconv.Atoi(m[1])
+	if err != nil {
+		return Semver{}, fmt.Errorf("semver component out of range: %q: %w", value, err)
+	}
+	minor, err := strconv.Atoi(m[2])
+	if err != nil {
+		return Semver{}, fmt.Errorf("semver component out of range: %q: %w", value, err)
+	}
+	patch, err := strconv.Atoi(m[3])
+	if err != nil {
+		return Semver{}, fmt.Errorf("semver component out of range: %q: %w", value, err)
+	}
 	return Semver{Major: major, Minor: minor, Patch: patch, Prerelease: m[4], Build: m[5]}, nil
 }
 

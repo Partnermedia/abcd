@@ -35,3 +35,18 @@ func TestParseSemver(t *testing.T) {
 		t.Error("trailing newline must be rejected")
 	}
 }
+
+// TestParseSemverRejectsOutOfRangeComponent pins that a component too wide for
+// int is rejected rather than silently clamped to MaxInt64 (which would collide
+// distinct versions and wrap negative on the next Patch++).
+func TestParseSemverRejectsOutOfRangeComponent(t *testing.T) {
+	for _, v := range []string{
+		"0.0.99999999999999999999",
+		"99999999999999999999.0.0",
+		"0.88888888888888888888.0",
+	} {
+		if _, err := ParseSemver(v); err == nil {
+			t.Errorf("ParseSemver(%q): want out-of-range error, got nil", v)
+		}
+	}
+}

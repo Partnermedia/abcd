@@ -19,3 +19,4 @@ spellings `Null`/`NULL`, so records using an uppercase null were misread
 in flight by PR #294, which widens both predicates with regression tests;
 resolve this issue when that PR merges, citing its commit. Evidence:
 `.abcd/work/reviews/2026-08-19-pr-294-null-predicate/` (F10).
+Forge mirror: #374
