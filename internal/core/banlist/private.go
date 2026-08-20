@@ -83,6 +83,13 @@ type PrivateReport struct {
 	// history. The read path surfaces it (AddPrivate refuses outright); it is only
 	// meaningful when the store is Present and inside a git repo.
 	NotIgnored bool `json:"not_ignored"`
+	// Reach is the one-sentence statement of what the private layer does and does
+	// not protect (PrivateReachNote), carried on the report unconditionally. It is
+	// on the struct rather than added by a renderer so a surface that only
+	// summarises the JSON can relay the caveat verbatim rather than paraphrase a
+	// reach that CI cannot enforce — matching the ahoy status board, which carries
+	// the same note as `banlist.reach`.
+	Reach string `json:"reach"`
 }
 
 // PrivateResult is the outcome of a private-layer mutation.
@@ -319,7 +326,7 @@ func mkdirLocalTier(repoRoot string) error {
 // enforcement engine cannot use, the lines it accepts but reads differently, and
 // whether this machine has opted in at all.
 func ListPrivate(repoRoot string) (PrivateReport, error) {
-	rep := PrivateReport{Path: PrivateRelPath, Entries: []Entry{}, Malformed: []int{}, Inert: []int{}}
+	rep := PrivateReport{Path: PrivateRelPath, Entries: []Entry{}, Malformed: []int{}, Inert: []int{}, Reach: PrivateReachNote}
 	data, err := readPrivate(repoRoot)
 	switch {
 	case err == nil:

@@ -278,6 +278,11 @@ func TestListPrivateReportsAnAbsentStore(t *testing.T) {
 	if rep.Path != PrivateRelPath {
 		t.Errorf("Path = %q, want %q", rep.Path, PrivateRelPath)
 	}
+	// The reach caveat is carried on the report unconditionally so a surface that
+	// only summarises the JSON can relay it verbatim rather than paraphrase it.
+	if rep.Reach != PrivateReachNote {
+		t.Errorf("Reach = %q, want the canonical reach note", rep.Reach)
+	}
 }
 
 // TestAddPrivateRefusals covers the input contract. Every refusal is checked for
