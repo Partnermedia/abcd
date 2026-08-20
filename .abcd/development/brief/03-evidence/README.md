@@ -4,7 +4,7 @@ This chapter is the slot lifeboat extraction populates: patterns that earned the
 keep, dead ends, unresolved questions, and tradeoffs weighed. Most files are
 deliberate placeholders during development — evidence accumulates as the project
 progresses and the disembark process fills them from memory, oracle reviews, and
-the activity record.
+the working record under `.abcd/work/`.
 
 | # | File | Role |
 |---|---|---|

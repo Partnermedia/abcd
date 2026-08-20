@@ -16,21 +16,11 @@ ADRs are a faithful subset of the source.
 
 This is the heart of abcd — the surface that makes a project survivable.
 
-> **Two claims this section used to make have been withdrawn, per
-> [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).**
->
-> 1. It said the lifeboat is *"high-fidelity enough that someone with no prior
->    context can understand **why it was built the way it was**."* A
->    transcript-less lifeboat **cannot deliver that** — the rationale nobody
->    wrote down is not in the repository at any tier. The promise is now the
->    **recorded** why, every claim citing its source; Pass B ships as a declared
->    exemption in `_provenance.json`.
-> 2. It said the phase *"lands last because it depends on every prior substrate
->    being native."* Checked against the binary, that was **mostly false** — and
->    load-bearing, because it parked abcd's defining surface behind four phases
->    that do not gate it. See `## Dependency rationale` below. The coverage
->    experiment (itd-88) is pulled out of this phase and sequenced ahead of it;
->    what remains here is the packer, embark, and the round-trip.
+The fidelity promise and this phase’s sequencing follow
+[adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md): the
+promise is the **recorded** why, every claim citing its source, and the
+coverage experiment (itd-88) is sequenced outside this phase — see
+`## Dependency rationale` below.
 
 ## Milestone
 
@@ -76,12 +66,10 @@ This is the heart of abcd — the surface that makes a project survivable.
   it, **then** they can reconstruct not just *what* the project is but **the
   recorded why, with every claim citing its source** — and every gap in that why
   is named in `coverage.{json,md}` as a question for a human, never left as a
-  silent omission. Re-authored per
-  [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md): the
-  original bullet asserted a reader could reconstruct *why it was built the way
-  it was*, which a **transcript-less lifeboat cannot deliver** — the rationale
-  nobody wrote down is not in the repository at any tier. Pass B ships as a
-  declared exemption in `_provenance.json`.
+  silent omission (per
+  [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md), a
+  transcript-less lifeboat carries the recorded why, never the unrecorded one).
+  Pass B ships as a declared exemption in `_provenance.json`.
 - **Given** a `dev-sync` source fails, **when** disembark runs, **then** the
   pipeline degrades gracefully with the failure named in the report rather than
   aborting — an end-to-end resilience property spanning every pass.
@@ -128,14 +116,11 @@ principles/compose/audit — plus the embark unpack half of the round-trip.
 
 ## Dependency rationale
 
-> **Corrected per [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md).**
-> This phase's original rationale — *"it lands last because it depends on every
-> prior substrate being native"* — was checked against the binary and found
-> **mostly false**. The error was load-bearing: it parked abcd's defining surface
-> behind four phases that do not gate it. The **coverage experiment (itd-88) is
-> pulled out of this phase** and separately sequenced; what remains here is the
-> packer and the round-trip, and it is built to whatever section list the
-> experiment's cross-repo aggregate leaves standing.
+> Per [adr-35](../../decisions/adrs/0035-lifeboat-as-coverage-experiment.md):
+> the **coverage experiment (itd-88) lives outside this phase** and is
+> separately sequenced; what remains here is the packer and the round-trip,
+> built to whatever section list the experiment's cross-repo aggregate leaves
+> standing. No prior phase gates this work.
 
 - **Phases 3, 4 and 5 do not gate this work.** The native spec engine
   (`spec.Load` / `Create` / `Close` / `Validate`) ships; reviews are already
