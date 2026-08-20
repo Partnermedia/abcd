@@ -45,7 +45,7 @@ change to `promoted_to` (itd-119/spc-24).
   `findIssue` uses (exact id or id-prefixed slug, extension `.md`).
 - `--spec`: `^spc-[0-9]+$` and the same probe over
   `.abcd/development/specs/{open,closed}/`.
-- `--commit`: shape only, `^[0-9a-f]{7,40}$` — no git invocation; a sha's
+- `--commit`: shape only, `^[0-9a-f]{7,64}$` — no git invocation; a sha's
   home may be the remote and shallow/rebased states must not refuse a
   legitimate resolution.
 

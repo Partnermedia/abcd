@@ -232,3 +232,21 @@ func TestGuardCheckMalformedRepoConfigIsAFault(t *testing.T) {
 		t.Errorf("the fault must be named on stderr; stderr = %q", stderr)
 	}
 }
+
+// A synthetic block over registry warns appends the winner LAST in Matches
+// (blockers, warns, synthetics — guard.Decision's documented order), so the
+// render must select "also matched" entries by id, not by position: indexing
+// Matches[1:] dropped the matched warn and echoed the winner twice (iss-346).
+func TestGuardCheckAlsoMatchedListsTheNonWinners(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	stdout, _, code := runGuard("", "guard", "check", "--command", `git clean -fd && env -S "a$b"`)
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 (block maps to 1 on check)\n%s", code, stdout)
+	}
+	if !strings.Contains(stdout, "also matched: git-clean") {
+		t.Fatalf("also-matched line lost the matched warn entry:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "also matched: execute-string-uninspectable") {
+		t.Fatalf("also-matched line echoes the winner:\n%s", stdout)
+	}
+}

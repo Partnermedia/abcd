@@ -25,8 +25,9 @@ phased set is the union across the seven phase docs, and this page keeps no
 static copy of it (a hand-kept count re-drifts the moment a phase doc changes,
 the same failure the roadmap dashboard avoids by deriving counts from disk).
 The set spans two of the three kinds: standalone capabilities, plus the three
-disciplines (itd-1 acceptance gates, itd-5 prompt-quality + capability_scope,
-itd-37 modification grammar) — disciplines have no user moment; they impose
+phased disciplines (itd-1 acceptance gates, itd-5 prompt-quality +
+capability_scope, itd-37 modification grammar — the full active roster lives in
+[`intents/disciplines/`](../../intents/disciplines/)) — disciplines have no user moment; they impose
 acceptance gates on every other spec per the three-kinds taxonomy in
 [`01-product/03-mental-model.md`](03-mental-model.md) and itd-34.
 

@@ -23,7 +23,7 @@ It is split across numbered folders for concurrent editing, diff legibility, and
 | [`02-constraints/`](02-constraints) | Hard locked decisions — platform, dependencies, invariants, naming |
 | [`03-evidence/`](03-evidence) | What worked / what didn't / open questions / tradeoffs (placeholders for now; populated by lifeboat extraction) |
 | [`04-surfaces/`](04-surfaces) | One file per user-facing command surface |
-| [`05-internals/`](05-internals) | Plumbing — agents, adapters, configuration, universal patterns, prompt quality |
+| [`05-internals/`](05-internals) | Plumbing the surfaces depend on — indexed in [`05-internals/README.md`](05-internals/README.md) |
 | [`06-delivery/`](06-delivery) | Build sequence, verification matrix, out-of-scope |
 | [`glossary/`](glossary) | The canonical terminology glossary — one file per term per bounded context |
 
@@ -49,5 +49,5 @@ For a fast orientation:
 1. **Start with [`01-product/03-mental-model.md`](01-product/03-mental-model.md)** — the brief / intents / specs distinction underpins every other section.
 2. **Then [`02-constraints/01-platform.md`](02-constraints/01-platform.md)** — what's locked, what's not.
 3. **Skim [`04-surfaces/README.md`](04-surfaces/README.md)** — the command surfaces at a glance.
-4. **Drill into [`05-internals/`](05-internals) only when implementing** — agents, adapters, configuration, universal patterns, prompt quality.
+4. **Drill into [`05-internals/`](05-internals) only when implementing** — its README indexes the nine chapters.
 5. **Finish with [`06-delivery/01-build-sequence.md`](06-delivery/01-build-sequence.md)** — the order things ship.

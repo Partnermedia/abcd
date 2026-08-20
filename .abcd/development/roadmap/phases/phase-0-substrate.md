@@ -43,8 +43,8 @@ verb; what it does not carry is a product-capability user moment.
   not a required cascade (per [adr-25](../../decisions/adrs/0025-host-delegated-llm-default.md)).
 - The plugin surface is scaffolded: the command registry and dispatch skeleton
   exist so Phase 1's `ahoy`/`launch` and later surfaces have a place to land.
-- All three disciplines (`itd-1`, `itd-5`, `itd-37`) are registered as active
-  gates in `disciplines/`, and `itd-34`'s three-kinds taxonomy is the schema
+- The phase's three disciplines (`itd-1`, `itd-5`, `itd-37`) are registered as
+  active gates in `disciplines/` (later phases add more), and `itd-34`'s three-kinds taxonomy is the schema
   they are registered under.
 - The `itd-43` spec-terminology is settled: schema, reviews, and prose use
   "spec", with `terminology/core/spec.md` canonical. No half-renamed state
