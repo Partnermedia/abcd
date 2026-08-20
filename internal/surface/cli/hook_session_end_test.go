@@ -445,3 +445,34 @@ func TestHookSessionEndRefusesResidualHardFail(t *testing.T) {
 		t.Errorf("a surviving hard_fail span must write NO file at all, got %d record(s)", len(recs))
 	}
 }
+
+// TestHookSessionEndRefusesSymlinkedTranscript pins the O_NOFOLLOW half of the
+// guarded read (iss-347): a symlink at transcript_path is refused, not
+// followed, so a planted link cannot route a foreign file's bytes into the
+// history store. Before the fsutil.ReadGuarded conversion the target was read
+// and persisted.
+func TestHookSessionEndRefusesSymlinkedTranscript(t *testing.T) {
+	repo, rootSHA := sessionEndRepo(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "private.txt")
+	if err := os.WriteFile(target, []byte("not a transcript\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "session.jsonl")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	_, errlog := runHook(t, endPayload(t, "sym", repo, link), "hook", "session-end")
+
+	if !strings.Contains(errlog, "not a readable regular file") {
+		t.Errorf("a symlinked transcript must be refused as non-regular, got: %s", errlog)
+	}
+	recs, err := history.List(rootSHA)
+	if err != nil {
+		t.Fatalf("history.List: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("a symlinked transcript must write nothing, got %d record(s)", len(recs))
+	}
+}

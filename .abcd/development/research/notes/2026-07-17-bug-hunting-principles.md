@@ -105,6 +105,10 @@ pass that finished the env sweep — `identity.gitConfig` + `capture.discoverRep
    lineage), so a flock must NOT be held across it — a correct fix locks the
    load/write but resolves the prompt outside the lock (or re-reads under the lock
    after confirming). Track as an issue rather than rushing a concurrency change.
+   **FIXED (iss-101, verified 2026-08-20):** `ahoy/store.go` now wraps the
+   load-modify-write in `withHistoryLock` with the interactive prompt kept
+   outside the lock, and `bootstrapHistory` publishes via `os.Link` — struck
+   from the open frontiers.
 
 1. **Trust-boundary read sweep (remaining `os.ReadFile` sites) — still the top
    frontier for any NEW code.**

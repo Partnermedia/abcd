@@ -148,7 +148,7 @@ type ResolveRequest struct {
 	// shape-checked only. All optional — absent members are never defaulted.
 	ByIntent string // itd-N
 	BySpec   string // spc-N
-	ByCommit string // 7–40 hex chars
+	ByCommit string // 7–64 hex chars (64 covers a SHA-256 repo)
 }
 
 // WontfixRequest moves an open issue to wontfix/.
@@ -236,7 +236,7 @@ var (
 	reIssID       = regexp.MustCompile(`^iss-[0-9]+$`)
 	reItdID       = regexp.MustCompile(`^itd-[0-9]+$`)
 	reSpcID       = regexp.MustCompile(`^spc-[0-9]+$`)
-	reCommitSha   = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	reCommitSha   = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 	reFnID        = regexp.MustCompile(`^fn-[0-9]+$`)
 	reSlug        = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	reFilenameID  = regexp.MustCompile(`^(iss-[0-9]+)(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$`)

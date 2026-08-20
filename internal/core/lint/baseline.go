@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
 // BaselineSchemaVersion is the only baseline schema this build understands. A
@@ -178,6 +179,13 @@ func (b Baseline) validate() error {
 		}
 		if strings.TrimSpace(e.FinalURL) == "" {
 			return &BaselineError{who + " has no final_url; the resolved address is required"}
+		}
+		// Defence in depth behind the fetch boundary's percent-encoding
+		// (iss-359): a control, bidi or zero-width rune in a committed
+		// final_url is a terminal-escape / Trojan-Source vector in every diff
+		// and render of the record, whoever produced the entry.
+		if termsafe.Sanitize(e.FinalURL) != e.FinalURL {
+			return &BaselineError{who + " has a final_url carrying control or invisible characters; percent-encode them"}
 		}
 		if _, err := time.Parse(baselineDateLayout, e.LastChecked); err != nil {
 			return &BaselineError{who + " has an unparsable last_checked " + quote(e.LastChecked) +

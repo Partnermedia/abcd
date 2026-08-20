@@ -510,13 +510,36 @@ func TestRule_PrivacySkipsOversizeFile(t *testing.T) {
 		big[i] = 'a'
 	}
 	// Put a leak on the first line so a naive scanner would flag it; the size cap
-	// must skip the file before it is read.
+	// must skip the file before it is read — but the skip must be SAID, not
+	// silent: "conforms" over content nobody scanned is the didn't-scan-
+	// reported-clean shape (iss-356 item 4).
 	copy(big, []byte("/Users/alice/x/\n")) // abcd-audit:allow
 	b.file("huge.txt", string(big)).commit()
 	res := b.run()
 
+	f := findingFor(res, "privacy-hygiene")
+	if f == nil {
+		t.Fatal("an oversize textual file must yield a not-scanned warn, got no finding")
+	}
+	if f.Severity != repolint.SeverityWarn || !strings.Contains(f.Message, "not scanned") {
+		t.Fatalf("want a not-scanned warn for the skipped file, got %+v", f)
+	}
+	if strings.Contains(f.Message, "/Users/") {
+		t.Fatalf("the not-scanned warn must not quote the unscanned content: %+v", f)
+	}
+}
+
+// An oversize BINARY blob stays quiet: the scanner would skip it below the cap
+// too, so the cap loses nothing and a warn would tax every committed asset.
+func TestRule_PrivacyOversizeBinaryStaysQuiet(t *testing.T) {
+	b := newFixtureRepo(t).conforming()
+	big := make([]byte, repolint.MaxScanBytesForTest()+1)
+	copy(big, []byte("PNG\x00\x00binary")) // NUL in the probe window
+	b.file("asset.bin", string(big)).commit()
+	res := b.run()
+
 	if f := findingFor(res, "privacy-hygiene"); f != nil {
-		t.Fatalf("privacy-hygiene scanned an oversize file: %+v", f)
+		t.Fatalf("privacy-hygiene warned on an oversize binary: %+v", f)
 	}
 }
 

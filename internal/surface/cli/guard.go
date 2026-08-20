@@ -72,6 +72,8 @@ func newGuardCommand(asJSON *bool) *cobra.Command {
 			"under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside\n" +
 			"an interpreter payload (an execute-a-string payload IS read — `sh -c`,\n" +
 			"`env -S`; one the guard cannot read is warned or, for `env -S`, blocked),\n" +
+			"a hazard inside a top-level backtick substitution (`$(…)` is followed,\n" +
+			"backticks are not — a disclosed v1 limit, iss-148),\n" +
 			"a hazard inside a NON-shell interpreter's payload (`python -c`, `perl -e`) —\n" +
 			"one opaque token the tokenizer cannot read, today a silent allow (a warn for\n" +
 			"it is a recorded design target, not yet raised),\n" +
@@ -169,9 +171,15 @@ func newGuardHookCommand() *cobra.Command {
 				return &exitError{Code: 1}
 			}
 
-			raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes))
+			// One byte past the cap, so an over-cap payload names the cap
+			// instead of being truncated and misreported as unreadable JSON
+			// (iss-201; guardCandidate is the same probe on the check verb).
+			raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxHookStdinBytes+1))
 			if err != nil {
 				return failOpen("the hook payload could not be read (%v)", err)
+			}
+			if len(raw) > maxHookStdinBytes {
+				return failOpen("the hook payload is over the %d-byte cap; it was discarded unparsed", maxHookStdinBytes)
 			}
 			var in guardHookInput
 			if err := json.Unmarshal(raw, &in); err != nil {
@@ -334,7 +342,16 @@ func writeGuardDecision(w io.Writer, dec guard.Decision) {
 	fmt.Fprintf(w, "  entry:       %s (%s)\n", termsafe.Sanitize(dec.EntryID), termsafe.Sanitize(dec.Tier))
 	fmt.Fprintf(w, "  why:         %s\n", termsafe.Sanitize(dec.Why))
 	fmt.Fprintf(w, "  run instead: %s\n", termsafe.Sanitize(dec.Successor))
-	if len(dec.Matches) > 1 {
-		fmt.Fprintf(w, "  also matched: %s\n", termsafe.Sanitize(strings.Join(dec.Matches[1:], ", ")))
+	// Matches is ordered blockers, warns, synthetics — NOT winner-first: a
+	// synthetic block over registry warns appends the winner last, so the
+	// non-winners are selected by id rather than by position (iss-346).
+	var also []string
+	for _, id := range dec.Matches {
+		if id != dec.EntryID {
+			also = append(also, id)
+		}
+	}
+	if len(also) > 0 {
+		fmt.Fprintf(w, "  also matched: %s\n", termsafe.Sanitize(strings.Join(also, ", ")))
 	}
 }

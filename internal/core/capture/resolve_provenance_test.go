@@ -187,3 +187,22 @@ func TestFindRecordFileProbe(t *testing.T) {
 		t.Fatalf("probe prefix rule over-matched itd-120 against itd-12")
 	}
 }
+
+// A SHA-256 repo's commits are 64 hex chars; the shape check must accept them
+// (iss-356 item 5): the value is a provenance stamp, not a filter, and spc-25's
+// own rationale is "must not refuse a legitimate resolution". The sibling
+// receipt gate (lint.go receiptShaRe) already accepts {7,64}.
+func TestResolveAcceptsASHA256Commit(t *testing.T) {
+	repo, ir, issID := provenanceFixture(t)
+	sha := strings.Repeat("0123abcd", 8) // 64 hex chars
+	_, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID,
+		Resolution: "sha256 repo", Impact: "fix", ByCommit: sha,
+	})
+	if err != nil {
+		t.Fatalf("a 64-hex commit must be accepted: %v", err)
+	}
+	if iss := readIssue(t, ir, issID); iss.ResolvedBy == nil || iss.ResolvedBy.Commit != sha {
+		t.Fatalf("resolved_by = %+v, want the 64-hex sha", iss.ResolvedBy)
+	}
+}
