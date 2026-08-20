@@ -10,7 +10,8 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/Partnermedia/abcd/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint smoke
+.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint smoke \
+	check-attribution scaffold-sync scaffold-sync-check
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
 # Pass VERSION=vX.Y.Z to stamp the version (release builds); omit for a dev build.

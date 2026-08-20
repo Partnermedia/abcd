@@ -11,6 +11,19 @@
 #
 # Run: bash scripts/check-attribution-cases.sh   (exit 0 all pass, 1 otherwise)
 set -uo pipefail
+
+# Hermetic git (iss-28, iss-313): every scratch-repo command below is `git -C
+# "$repo" …`, but an inherited absolute GIT_DIR overrides -C and redirects the
+# harness's commits and `reset --hard` onto the ambient repository — which then
+# reports all-green while rewriting real history. An inherited GIT_CONFIG_GLOBAL
+# with commit.gpgsign can also break the scratch commits and skew every case.
+# Neutralise the ambient git environment before the first git call. This also
+# makes the corpus config-independent, matching gitutil.IsolatedEnv and the
+# pre-push hook's unset.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+	GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
+
 cd "$(git rev-parse --show-toplevel)"
 
 SCRIPT=scripts/check-attribution.sh
@@ -519,7 +532,10 @@ commits_case() {
 commit_as() {
 	GIT_AUTHOR_NAME="$1" GIT_AUTHOR_EMAIL="$2" \
 		GIT_COMMITTER_NAME="$3" GIT_COMMITTER_EMAIL="$4" \
-		git -C "$repo" commit -q --allow-empty -m "$5"
+		git -C "$repo" commit -q --allow-empty -m "$5" || {
+		echo "FAIL: could not create the scratch commit (git config leak?)" >&2
+		exit 1
+	}
 }
 
 MSG_OK='Text.
