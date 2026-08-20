@@ -10,7 +10,28 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **`abcd update` completes a chosen update in one verb.** It fetches the
+  named release (or resolves the latest, naming the tag before acting),
+  verifies the platform binary against the same release's `checksums.txt`
+  over a pinned transport (no proxy or CA overrides from the environment,
+  redirects only onto the release origin's own hosts), and swaps the
+  PATH-installed copy atomically, printing a receipt with origin, tag,
+  digest, and old→new versions. A plugin-root binary, the dev shim, a
+  stranded entry, a Homebrew-owned install, and any file abcd cannot prove
+  is its own are refused loudly, each naming its remedy. Nothing ambient
+  changes: this verb and `version --check` remain the only two paths to the
+  release origin, each only when invoked. (itd-130)
+
 ### Fixed
+
+- **`ahoy install` heals the PATH entry a plugin update strands.** The entry
+  pointing into a deleted previous plugin cache dir classified as a foreign
+  occupant — never healed, refused by `ahoy uninstall` against the dangling
+  gap's own fix hint. Ownership now extends to exactly that shape, one
+  predicate serves detection, install, and uninstall alike, and `--dev`
+  cannot rewrite a stranded entry past a declined approval. (iss-345)
 
 - **GitHub-handle redaction fires regardless of the remote's letter case.** The
   remote-URL parser matched the `github.com` host case-sensitively, so a
