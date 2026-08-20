@@ -1,0 +1,30 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "dc4de340d8179a38ced1069b3c2e81a8f847a502"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-20T05:42:39Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "Claude Fable 5",
+  "tier": "full",
+  "manifestHash": "sha256:3a9258674c585fcad636d912a94b8cd0e0cb2a33f8725c95ebbfcbd53f0c0bce",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.0"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [],
+  "_reviewProvenance": "Reviewed the pristine worktree at commit dc4de34 — the v0.6.1 RE-CUT after the parallel-mint id collision (iss-330) superseded the first cut; nothing was reused from the earlier review because the tree gained the bughunt round-1 changes, in scope for this detector. Ran the deterministic docs gate (make docs-lint: 0 blockers, one accurate advisory), the CLI-reference parity test (PASS), and the guard, launch, scaffold, scanner and cli suites (green). Exercised the built darwin-arm64 binary against every behavioural claim in README.md, docs/, and the two newest CHANGELOG sections: the iss-291 cluster bypass now blocks live, the gh-297/gh-299/iss-272 guard spellings behave as documented, version --check matches the iss-294 rewording, the README onboarding marks the facilitator automation as a design target matching the binary's actual intent sub-verbs, and capture/resolve/promote/id-dispatch/disembark-review/lint/intent-audit were verified live. The superseded review's three findings are confirmed fixed in this tree (iss-268 single entry, no phantom reference pages, no contradicting fence-stripping variant), and zero pre-0.6.0 spellings remain in docs/ or README.md. ZERO findings. VERDICT: PROMOTE. The judge is the release session's pinned harness model (Anthropic Claude Fable 5); the exact API model identifier is recorded in the session transcript, withheld from committed artifacts by harness policy."
+}
