@@ -14,136 +14,197 @@ severity: minor
 ## Press Release
 
 > **abcd record ids stop colliding when the work goes parallel.** Every id abcd
-> mints — issues, intents, specs, decisions — is collision-proof by
-> construction, with no coordination between agents: a native default that
-> needs no network stamps each id with a time-ordered prefix and a content
-> hash, so two agents minting the same instant on different branches produce
-> different ids and neither is ever renumbered. Where a team would rather let a
-> forge own the numbers, an optional backend records straight to GitHub issues,
-> where the number is allocated server-side and is atomic by definition — the
-> same `capture` verb, a different store. The id stays human-legible and
-> time-sortable either way; collision-safety is not paid for in readability.
+> mints is collision-proof by construction, with no coordination between
+> agents: the native default needs no network and no registry, and two agents
+> minting the same instant on different branches produce different ids —
+> neither is ever renumbered. The concrete scheme is the planning grill's one
+> big decision, chosen against this repository's own id grammar so that
+> collision-safety is not paid for in readability or in ripple. Where a team
+> wants a shared mint registry, an optional forge-backed **allocator** can
+> hand out numbers server-side — allocation only: the committed ledger stays
+> the sole store, exactly as the forge-mirror decision requires.
 >
-> "We had three agents draining plans in parallel and every few captures two of
-> them would mint the same `iss-N` and one branch would fail the merge check,"
-> said Bob, a maintainer. "Now they just run. Alice's routine and Carol's
-> routine never step on each other's ids, and I still read the record at a
-> glance."
+> "Two hunts and a release session minted over eighty ids in one weekend and
+> collided three times — one collision cost us a release re-cut," said Kira,
+> an open-source maintainer. "Now every routine just mints. Nothing renumbers,
+> nothing waits, and I still read `capture list` newest-first at a glance."
 
 ## Why This Matters
 
-Record-id allocation is branch-local: each agent scans the refs for the
-family's highest id and takes the next one ([iss-80], resolved). `MaxAcrossRefs`
-closed the common commit-then-branch case, but its own resolution names the
-residual and defers the real fix: *"two branches that BOTH mint before either
-commits still collide … a collision-free allocation scheme (forge-minted /
-random-suffix / timestamp / reserve-registry — SOTA under research)."* This
-intent is that deferred scheme.
+Record-id allocation is branch-local: each minter scans the refs for the
+family's highest id and takes the next one. iss-80 closed the
+commit-then-branch case with `MaxAcrossRefs` and **accepted** the residual —
+two branches that both mint before either commits — as a trade-off, tracked by
+no open item, with the candidate schemes ("forge-minted / random-suffix /
+timestamp / reserve-registry") named as SOTA under research in the issue's
+body. That acceptance was reasonable for one maintainer; the repository it
+priced no longer exists.
 
-The pain is no longer hypothetical. Once work runs across parallel agents — two
-subscriptions draining two plans, plus an autonomous bug-hunt — minting is
-constant and concurrent, and the manual mitigation is agents messaging each
-other *"what is your highest in-flight id?"* before every mint. That does not
-scale to unattended routines. The record-lint uniqueness detectors make a
-collision fail-safe (it is caught at merge, never silent) but not free: it
-forces a renumber, which breaks the *ids-are-capture-stable* invariant the same
-record depends on. Collision-proof minting removes the coordination tax and the
-renumber both.
+The week of 2026-08-19/20 reopened the question with recorded costs: **three
+live id collisions in two days** across three distinct minter pairings
+(hunt-vs-session twice, hunt-vs-hunt once; iss-330 is the standing record, the
+round-2 renumber in `DECISIONS.md` the second occurrence, PR #386 the third),
+one of which invalidated a tagged release cut whose receipts were already
+frozen and forced a full re-cut. The
+[graded field test](../../research/notes/2026-08-20-itd-114-collision-field-test.md)
+confirmed all four pre-registered predictions: the mechanism is max+1 from a
+stale checkout, decided purely by merge timing; detection always falls to
+`issue_id_unique` at PR CI, after the work is done; and the working mitigation
+— just-in-time fetch-and-verify twice per task, plus scanning unmerged
+`bughunt-*` branch ledgers — held for the one minter carrying it and nobody
+else. Safety must live in the mint, not in every minter's prompt.
+
+## What's In Scope
+
+- **The mint itself**: a collision-proof allocation scheme behind the one
+  id-minting seam the record families share, chosen at the grill against the
+  fit criterion below.
+- **Every family the chosen scheme reaches for free.** The maintainer's
+  observed ranking (2026-08-20) is iss ≫ itd > adr > spc — issues are where
+  all three collisions happened, intents are mechanically agent-mintable via
+  `capture promote`, adr had a reservation near-miss (the adr-42/adr-43
+  rename), specs are interview-serialised. A format-preserving scheme costs
+  the same for all families, making scope a rollout order (captures first),
+  not an exclusion; an expensive scheme narrows to `iss` with the rest a
+  recorded residual.
+- **The optional forge-backed allocator** — number allocation and, as a side
+  effect, a shared mint registry visible to every forge-configured minter.
+  Allocation only.
+
+## What's Out of Scope
+
+- **The forge as a store.** The 2026-08-19 decision (`DECISIONS.md`; embodied
+  in [itd-129](itd-129-forge-mirror-as-an-opt-in-adapter-the-ledger-mirrors-out-to.md))
+  is ledger-canonical, mirror-out, "the forge owns nothing" — this intent's
+  forge option allocates numbers and never stores records. Any forge
+  read/write beyond allocation is itd-129's surface (typed relation:
+  itd-114's allocator option `builds_on` itd-129's adapter seam).
+- **Semantic deduplication** (iss-344, the same-defect-twice class): belongs
+  to the capture-time validator rung (itd-84). The grill should still weigh
+  that the forge allocator incidentally gives minters visibility of each
+  other — the shared root cause of both collision classes — a property no
+  purely-local scheme has.
+- **Any remap of legacy ids**: `iss-N`/`itd-N`/`spc-N`/adr ordinals already
+  minted stay exactly as they are (the ids-are-capture-stable invariant).
 
 ## SOTA
 
-Anchors: **UUIDv7 / ULID** (time-ordered, collision-resistant ids generated with
-no central coordinator — the current answer for distributed id generation);
-**git's short-hash / full-sha** dual id (a human-friendly handle over a
-collision-proof stable core); and **forge server-side issue numbering**
-(GitHub/GitLab allocate `#N` atomically, so concurrent creation cannot collide).
+Anchors: **UUIDv7 / ULID** (time-ordered, coordinator-free distributed ids);
+**git's dual id** (collision-proof core + human short handle); **forge
+server-side numbering** (atomic by definition); and the two candidates iss-80
+named that the first draft of this section dropped: **timestamp-numeric ids**
+and **reserve-registry**.
 
-**Declared path: 2 — native floor, adapter seam.** The native default is a
-time-ordered id plus a content-hash discriminator (UUIDv7/ULID-shaped, adapted
-to the record families) — no network, no coordinator, in-tree, offline, and
-part of the durable record, exactly as abcd's [basics-built-in /
-adapter-over-native-default] stance requires. The forge backend (GitHub issues,
-server-allocated numbers) is the **optional adapter** behind the same `capture`
-seam — opt-in, never a runtime dependency, so this path proceeds without the
-new-dependency stop. The seam is one id-minting interface with two
-implementations (native / forge); the independent fit-challenge runs at plan
-time.
+**The fit criterion is this repository's own id grammar.** The repo is a
+closed numeric id type-system: the release bijection, the canonical resolver,
+the record-lint handle and uniqueness rules, `capture list` ordering, the
+`abcd <id>` dispatch and its typo guard, the ledger store contract, and every
+`promoted_to`/`resolved_by` field anchor on `(iss|itd|spc)-[0-9]+` (and adr's
+zero-padded filename ordinals), with several consumers failing *silently* on a
+non-matching id — a ULID-shaped record drops out of the release cut unreported,
+its typed links go unchecked, and it sorts below every legacy record forever.
+The adversarial design review of 2026-08-20 sized that ripple at roughly
+thirty surfaces. Candidates are therefore judged on collision-safety **times
+ripple**:
+
+- **Timestamp-numeric** (`iss-<yymmddHHMMSS><random digits>`): time-ordered,
+  offline, coordination-free; kills the observed max+1 mechanism; matches
+  `[0-9]+` literally, so the existing grammar, parsers, sorts, and gates hold
+  unchanged (the existing O_EXCL bump-retry absorbs same-second residue).
+  Cost: 14–16-digit ids; legacy ids sort numerically below all new ones —
+  which is correct time order.
+- **ULID/UUIDv7-shaped**: strongest entropy; breaks the numeric grammar —
+  pays the full ~30-surface ripple plus a permanent dual-grammar tax, and the
+  CHANGELOG line the bijection forces is where "legible at a glance" goes to
+  die.
+- **Forge-allocated numbers**: atomic, registry-visible; allocates for the
+  issues family only, needs network at mint, and is opt-in — the benefit
+  accrues only to configured minters.
+- **Reserve-registry / random-suffix**: named by iss-80; a committed
+  reservation file recreates merge-contention on itself; random suffixes
+  alone lose time-ordering. Kept on the table for the grill to dismiss with
+  reasons rather than silence.
+
+**Declared path: 2 — native floor, adapter seam.** The native default is
+whichever scheme the grill selects under the fit criterion (no network, no
+coordinator, offline, in-tree); the forge allocator is the optional adapter
+behind the same seam. The id **format** is a trust surface, not plumbing: its
+decision lands as an **ADR at planning** (with a brief-invariant seat for
+capture-stability), per the adr-44 extraction precedent — not deferred to
+adoption.
 
 ## Acceptance Criteria
 
-> _BDD (the [itd-1] discipline)._
+> _BDD (the itd-1 discipline). The mint's clock and entropy are injectable
+> seams so the race cases are deterministic in tests._
 
-- **Given** two agents on separate branches each `capture` an issue at the same
-  instant, **when** both mints complete before either pushes, **then** the two
-  ids differ and no merge-time uniqueness check ever forces a renumber.
-- **Given** no network is available, **when** an id is minted, **then** it is
-  collision-proof by the native scheme alone (no forge call, no failure).
-- **Given** the optional forge backend is configured, **when** `abcd capture`
-  runs, **then** the record is created on the forge with its server-allocated
-  number and abcd references that number stably.
-- **Given** a record carrying a legacy sequential id (`iss-200`), **when** the
-  new scheme is in effect, **then** the legacy id stays valid and stable — no
-  forced renumber of history.
-- **Given** a human reads or sorts records, **when** they need recency or
-  identity at a glance, **then** the id is time-sortable and legible — the
-  readability property of the old sequential ids is preserved, not traded away
-  for collision-safety.
+- **Given** two minters on separate branches whose injected clocks read the
+  same instant, **when** both mint before either pushes, **then** the two ids
+  differ, and merging both branches passes every uniqueness gate with no
+  renumber.
+- **Given** no network is available, **when** an id is minted natively,
+  **then** the mint succeeds and is collision-proof by the native scheme
+  alone.
+- **Given** ids minted by the chosen scheme, **when** the repository's own
+  consumers run against them — the release-cut derivation and bijection, the
+  canonical resolver, the record-lint handle and uniqueness rules, `capture
+  list` ordering, and the `abcd <id>` dispatch — **then** every one resolves,
+  cites, sorts, and gates them without modification beyond what the scheme's
+  ADR names, and a mixed ledger (legacy + new) time-orders correctly in
+  `capture list`.
+- **Given** a record carrying a legacy sequential id, **when** the new scheme
+  is in effect, **then** the legacy id stays valid, stable, and unrenumbered.
+- **Given** the forge allocator is configured, **when** `abcd capture` mints,
+  **then** the number is allocated server-side, the record is written to the
+  committed ledger (never stored on the forge), and an offline mint under
+  forge configuration refuses loudly or falls back per the ADR's explicit
+  choice — never a silent mixed outcome.
+- **Given** the rollout's first family (captures) has run the scheme for a
+  release cycle, **when** a second family adopts it, **then** the adoption is
+  a configuration of the shared mint seam, not a second implementation.
 
-## Decomposition (itd-84 hand-run, 2026-08-16)
-
-Verdict **FILE-AS-IS with flags** — one capability, no separate records to file
-now:
+## Decomposition (itd-84 re-run, 2026-08-20 — supersedes the 2026-08-16 table)
 
 | Part | Type | Home |
 |------|------|------|
-| Collision-proof id minting, native default + optional forge backend | capability | this intent |
-| The native time+hash scheme and the forge-adapter seam | SOTA declaration (path 2) | this intent's SOTA section (above) |
-| "Ids are collision-proof by construction; native-default, forge-optional" | stance | embodies [basics-built-in / adapter-over-native-default / prefer-sota] — no new principle |
-| Changing the id **format** (sequential `iss-N` → time+hash) pervades the record | architecture decision, **only if adopted** | a **future ADR at adoption**, not now |
+| Collision-proof minting, native default + optional forge allocator | capability | this intent |
+| Candidate schemes and the repo-grammar fit criterion | SOTA declaration (path 2) | this intent's SOTA section |
+| The id format and its capture-stability guarantee | **trust rule** | **ADR at planning** + brief-invariant seat (adr-44 precedent) |
+| The forge allocator's network posture at mint time | **trust rule** | the same ADR, ruled against brief invariants 7 and 10 |
+| "Native-default, adapter-optional" | stance | already carried by brief invariant 2 (adr-22) and `prefer-sota` — correctly cited, no new principle |
+| Mint-seam mechanics, per-family rollout | plumbing | the spec at planning |
 
-Typed links: `refines` [iss-80] (the deferred "SOTA under research" scheme it
-names); driven by parallel autonomous routines (the itd-107 lineage).
+Typed links: `refines` [iss-80] (reopens the residual its resolution accepted,
+on the strength of iss-330, the round-2 renumber, and the graded field test);
+the forge-allocator option `builds_on` itd-129's adapter seam and never
+crosses its ledger-canonical line; evidence: iss-330, iss-344,
+[the field test](../../research/notes/2026-08-20-itd-114-collision-field-test.md).
 
-**Advisory reversal flag (human confirms at planning):** a pure time+hash id
-would reverse the *human-sequential-readable, orderable* property of today's
-`iss-N`. The last acceptance criterion is written to forbid that reversal — the
-scheme must stay legible — but whether the answer is a time-sortable id, a
-git-style dual id (collision-proof stable core + human short display id), or a
-forge number is a genuine design fork for the grill, not settled here.
+**Advisory reversal flag (human confirms at the grill):** a non-numeric id
+would reverse the *human-readable, orderable* `iss-N` property. Note the flag
+is scheme-dependent: timestamp-numeric triggers no reversal at all; ULID
+triggers it in full. The grill's scheme choice is simultaneously the ruling on
+this flag.
 
 ## Open Questions
 
-- **The semantic sibling: same defect, two mints (iss-344).** The two hunts
-  captured the identical scanner bug independently (iss-306 and iss-339),
-  because parallel minters cannot see each other's unmerged mints — the same
-  root cause as the id collision, surfacing as a duplicate record instead of
-  a duplicate id. Deduplication is OUT of this intent's scope (a similarity
-  check belongs to the capture-time validator rung, itd-84), but the mint
-  decision should weigh it: the forge-backed option incidentally creates the
-  shared registry that gives minters visibility of each other, and the grill
-  should count that as a benefit the purely-local schemes lack.
-
-- **Readability vs collision-safety — the central fork.** Candidate
-  reconciliations: (a) a time-ordered id (ULID-shaped) that sorts by recency;
-  (b) a git-style dual id — a collision-proof stable id plus a short
-  human/sequential display id assigned single-writer at merge; (c) the forge
-  number as the id when the adapter is on. Resolve at the grill.
-- **Migration.** Do legacy `iss-N`/`itd-N`/`spc-N` stay as-is (dual-scheme, new
-  ids in the new format) or is there a one-time remap? The stable-id invariant
-  argues for leave-as-is.
-- **Which families.** All of `iss-N`/`itd-N`/`spc-N`/adr, or start with the
-  highest-churn one (captures)?
-- **Forge-adapter scope.** Does `abcd capture --backend github` also *read*
-  (list/resolve) via the forge, and how does folder-as-status map onto GitHub
-  open/closed + labels? Ties to the record-lint enforcement that assumes in-tree
-  files.
-- **Interaction with the record-lint uniqueness detectors** — do they retire, or
-  become a cheap assertion that the scheme held?
+- **The central fork, restated after review:** timestamp-numeric vs
+  ULID-shaped vs forge-allocated, judged on collision-safety × ripple ×
+  registry-visibility. The design review's evidence puts timestamp-numeric as
+  the candidate to beat; the grill must either adopt it or say what it buys
+  by paying more.
+- **Rollout order** (not scope): captures first is settled by the evidence;
+  when do itd/adr/spc follow, and does adr's zero-padded filename ordinal
+  join the scheme or stay interview-serialised by declaration?
+- **Offline-under-forge-configuration**: refuse loudly vs fall back to
+  native — the ADR must choose one; a connectivity-dependent mixed ledger is
+  the outcome both reviews forbid.
+- **The uniqueness detectors**: retire, or keep as the cheap assertion the
+  scheme held? (The field test's P3 argues keep: late detection is bad, but
+  no detection is worse.)
 
 ## Audit Notes
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 [iss-80]: ../../../work/issues/resolved/iss-80-record-id-allocators-itd-n-spc-n-iss-n-are-branch-local-para.md
-[itd-1]: ../disciplines/itd-1-acceptance-gates.md
-[basics-built-in / adapter-over-native-default / prefer-sota]: ../../principles/prefer-sota.md
