@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "commands/lint.md"
+resolution: "lint.md now scopes the abcd-lint:allow waiver to privacy-hygiene and names docs-currency's own escape"
+impact: fix
 ---
 
 commands/lint.md presents the abcd-lint:allow line waiver as applying to any finding, but only the privacy-hygiene rule consumes it; a user waiving a docs-currency/three-tier-layout/etc finding gets a silent no-op and a stray committed token, colliding with docs-currency's own differently-spelled escape

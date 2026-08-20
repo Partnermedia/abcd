@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/work/issues/README.md"
+resolution: "issues/README.md store contract now lists impact (required in resolved/) and agent-observation source, and states the required --impact flag on resolve"
+impact: internal
 ---
 
 .abcd/work/issues/README.md self-declares the store contract with strict validation but omits the impact field (mandatory in resolved/, gated by the issue_impact_valid blocker) and the agent-observation source value (accepted by capture and used by live records) — a reader hand-authoring a resolved record per the contract fails preflight

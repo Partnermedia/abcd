@@ -20,7 +20,8 @@ Also here: `personas.json` — data for press-release quote attribution (migrate
 embedded Go data when the intent surface is built).
 
 **Conventions.** Durable-vs-working is the `development/` ↔ `../work/` ↔
-`../.work.local/` tiering. Issues graduate into `intents/` or `principles/` rather
-than a ledger. ADRs use sequential `NNNN` (stable cross-reference handles); plans and
-research notes are date-prefixed (chronological). Present tense only; history lives
-in git.
+`../.work.local/` tiering. Issues are not a record folder: the ledger lives in the
+working tier at [`../work/issues/`](../work/issues) (adr-32), and a
+design-significant issue graduates from it into `intents/` or `principles/`. ADRs
+use sequential `NNNN` (stable cross-reference handles); plans and research notes are
+date-prefixed (chronological). Present tense only; history lives in git.

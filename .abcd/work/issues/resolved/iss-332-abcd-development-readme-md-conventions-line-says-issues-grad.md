@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/development/README.md"
+resolution: "development/README.md conventions line now states the ledger lives at ../work/issues/ (adr-32) and graduates into intents/ or principles/"
+impact: internal
 ---
 
 .abcd/development/README.md conventions line says issues graduate into intents/ or principles/ rather than a ledger, but the repo runs on a committed issue ledger at .abcd/work/issues/ (adr-32); the map of the durable record denies the store it governs, in the file iss-42 ruled must be current

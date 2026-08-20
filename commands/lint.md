@@ -32,8 +32,11 @@ lead with how many errors and warnings there are. The process exit code is the
 Conftest tri-state — `0` clean, `1` warnings only, `2` any error — so
 `abcd lint` can also gate a repo's CI.
 
-A finding on a deliberately illustrative line can be waived by adding
-`abcd-lint:allow` on that line (the earlier `abcd-audit:allow` spelling is honoured too).
+A `privacy-hygiene` finding on a deliberately illustrative line can be waived by
+adding `abcd-lint:allow` on that line (the earlier `abcd-audit:allow` spelling is
+honoured too). No other rule honours that marker: a `docs-currency` finding takes
+the docs-lint engine's own `<!-- docs-lint: allow -->` escape, and the remaining
+rules have no line waiver — resolve what they report.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

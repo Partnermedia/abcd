@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/development/intents/README.md"
+resolution: "intents/README.md swept intent review->intent audit and intent-fidelity-reviewer->intent-auditor at the eight current-state sites; historical struck-through row left"
+impact: internal
 ---
 
 intents/README.md teaches the v0.6.0-retired intent review verb and the intent-fidelity-reviewer agent (retired to intent audit / intent-auditor by adr-40); the intents store front door documents an invocation that exits non-zero and an agent absent from the tree, and its template block is copied into new intents while contradicting create.go

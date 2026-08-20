@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "commands/prepare-this-repo.md"
+resolution: "prepare-this-repo.md now names the flat commands/ path and 'two levels up', tied to CLAUDE_PLUGIN_ROOT"
+impact: fix
 ---
 
 commands/prepare-this-repo.md locates the record at commands/abcd/prepare-this-repo.md and says the repo root is three levels up, but the file lives flat at commands/prepare-this-repo.md (two levels up) since the iss-161 flattening — an agent following it resolves $ABCD one dir above the repo and every Phase 0/1 read misses, under a no-search-fallback directive

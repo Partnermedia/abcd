@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".abcd/development/brief/05-internals/03-configuration.md"
+resolution: "brief 05-internals/03-configuration.md development tree redrawn flat by artefact type per adr-30 (intents/ five buckets, decisions/adrs, plans/, principles/, specs/ inside development/); no roadmap/intents literal"
+impact: internal
 ---
 
 brief/05-internals/03-configuration.md's Plugin-internal development namespace tree draws the pre-adr-30 layout: roadmap/intents/{drafts,planned,shipped}, research/adr/, research/phase/, and specs/ under .abcd/ — the record's only map of its own namespace routes a reader to four paths that do not exist; the blocker moved-intents-path rule is defeated only by the ASCII art splitting the string
