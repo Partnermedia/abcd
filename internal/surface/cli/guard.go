@@ -331,7 +331,16 @@ func writeGuardDecision(w io.Writer, dec guard.Decision) {
 	fmt.Fprintf(w, "  entry:       %s (%s)\n", termsafe.Sanitize(dec.EntryID), termsafe.Sanitize(dec.Tier))
 	fmt.Fprintf(w, "  why:         %s\n", termsafe.Sanitize(dec.Why))
 	fmt.Fprintf(w, "  run instead: %s\n", termsafe.Sanitize(dec.Successor))
-	if len(dec.Matches) > 1 {
-		fmt.Fprintf(w, "  also matched: %s\n", termsafe.Sanitize(strings.Join(dec.Matches[1:], ", ")))
+	// Matches is ordered blockers, warns, synthetics — NOT winner-first: a
+	// synthetic block over registry warns appends the winner last, so the
+	// non-winners are selected by id rather than by position (iss-346).
+	var also []string
+	for _, id := range dec.Matches {
+		if id != dec.EntryID {
+			also = append(also, id)
+		}
+	}
+	if len(also) > 0 {
+		fmt.Fprintf(w, "  also matched: %s\n", termsafe.Sanitize(strings.Join(also, ", ")))
 	}
 }
