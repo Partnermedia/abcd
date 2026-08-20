@@ -100,3 +100,35 @@ func TestDialControlRefusesBlockedAddress(t *testing.T) {
 		t.Errorf("DialControl refused a public address: %v", err)
 	}
 }
+
+// TestBlockedIPCoversReservedNonPrivateRanges pins the RFC 6890 ranges Go's
+// net.IP predicates do not cover (iss-356 item 2): CGNAT 100.64/10 is
+// Tailscale's and carrier/cloud-internal addressing, and none of IsPrivate /
+// IsLoopback / IsUnspecified sees it, so a redirect there reached "internal
+// services" the package doc promises are out of reach.
+func TestBlockedIPCoversReservedNonPrivateRanges(t *testing.T) {
+	blocked := []string{
+		"100.64.0.1", "100.127.255.254", // CGNAT (RFC 6598)
+		"0.1.2.3",         // "this network" (RFC 791)
+		"192.0.0.8",       // IETF protocol assignments (RFC 6890)
+		"198.18.0.1",      // benchmarking (RFC 2544)
+		"198.19.255.254",  // benchmarking upper half
+		"240.0.0.1",       // reserved (RFC 1112)
+		"255.255.255.255", // limited broadcast
+	}
+	for _, s := range blocked {
+		if !BlockedIP(net.ParseIP(s)) {
+			t.Errorf("BlockedIP(%s) = false, want true", s)
+		}
+	}
+	// The nearest public neighbours stay reachable.
+	for _, s := range []string{"100.63.255.254", "100.128.0.1", "198.17.255.254", "198.20.0.1", "192.0.1.1"} {
+		if BlockedIP(net.ParseIP(s)) {
+			t.Errorf("BlockedIP(%s) = true, want false (public address)", s)
+		}
+	}
+	// The NAT64 unwrap re-checks the new ranges too.
+	if !BlockedIP(net.ParseIP("64:ff9b::100.64.0.1")) {
+		t.Error("BlockedIP(64:ff9b::100.64.0.1) = false, want true (embedded CGNAT)")
+	}
+}
