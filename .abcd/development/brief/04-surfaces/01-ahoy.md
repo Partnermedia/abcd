@@ -196,7 +196,12 @@ Steps, run in parallel where independent:
    entry), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
    hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
    against the hazard registry before it runs) — five event types in all;
-   verification covers only the three prompt-router commands above. A missing or
+   verification covers only the three prompt-router commands above. Every
+   event command is a self-provisioning shim, not a plain binary call: the
+   non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root
+   binary is missing (throttled by a `.bootstrap.attempt` marker within a
+   10-minute window), then fall back to a PATH-resolved `abcd` before failing
+   loudly. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.
