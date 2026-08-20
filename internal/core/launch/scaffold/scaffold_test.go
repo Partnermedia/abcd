@@ -384,6 +384,18 @@ func TestRefusalAbortReportMatchesDisk(t *testing.T) {
 	}
 }
 
+// TestDeriveRepoFactsKeepsPatchVersion is iss-386: a go.mod pinning a patch
+// (the shape a modern `go mod tidy` writes) must scaffold that exact toolchain,
+// not a floating minor that setup-go resolves to whatever patch a runner offers
+// on release day.
+func TestDeriveRepoFactsKeepsPatchVersion(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "go.mod"), "module example.com/x\n\ngo 1.25.6\n")
+	if _, gv := DeriveRepoFacts(dir); gv != "1.25.6" {
+		t.Errorf("a patch-pinned go.mod must scaffold the patch, got %q want 1.25.6", gv)
+	}
+}
+
 // TestDeriveRepoFactsRejectsHostileInputs proves the substitution inputs are
 // sanitised before they can reach the YAML — a crafted go.mod or ref name falls
 // back to the safe default rather than injecting workflow content.

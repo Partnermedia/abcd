@@ -209,12 +209,16 @@ func classify(abs string, want []byte) (disposition, string) {
 	return dispDiffers, "existing file differs from the current machinery (hand-edited or stale)"
 }
 
-// goVersionRe matches a strict major.minor Go version — the only shape allowed
+// goVersionRe matches a major.minor[.patch] Go version — the only shape allowed
 // into the rendered `go-version:` value, so a crafted go.mod cannot inject YAML.
-var goVersionRe = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+// The patch is admitted so a repo pinning `go 1.25.6` scaffolds that exact
+// toolchain rather than a floating minor that setup-go resolves on release day
+// (iss-386); the allowlist stays injection-safe.
+var goVersionRe = regexp.MustCompile(`^[0-9]+\.[0-9]+(?:\.[0-9]+)?$`)
 
-// goModVersionRe extracts the `go X.Y[.Z]` directive from go.mod.
-var goModVersionRe = regexp.MustCompile(`(?m)^go[ \t]+([0-9]+\.[0-9]+)(?:\.[0-9]+)?`)
+// goModVersionRe extracts the `go X.Y[.Z]` directive from go.mod, keeping the
+// patch when the module declares one.
+var goModVersionRe = regexp.MustCompile(`(?m)^go[ \t]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
 
 // branchNameRe is the injection-safe allowlist for a default-branch name written
 // into the workflow YAML: git ref characters only, no whitespace or YAML
