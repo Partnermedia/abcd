@@ -440,6 +440,10 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 			// Unreadable link: say nothing rather than guess.
 		case resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)):
 			installed = true
+		case strandedSiblingDest(target, dest, pluginRoot):
+			// Ours, stranded by a plugin update: the symlink.dangling gap above
+			// already carries it, and a foreign-worded gap here would tell the
+			// user to hand-resolve a link abcd itself wrote (iss-344).
 		default:
 			gaps = append(gaps, Gap{
 				ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
