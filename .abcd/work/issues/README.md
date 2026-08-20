@@ -48,7 +48,7 @@ Optional:
 
 - `found_at` — repo-relative path or conceptual location.
 - `related_intents` — list of `itd-N` ids.
-- `related_specs` — list of `fn-N` ids.
+- `related_specs` — list of `spc-N` ids.
 - `related_issues` — list of `iss-N` ids.
 - `blocked_by` — list of `iss-N` ids this issue depends on (see below).
 - `promoted_to` — the `itd-N` this issue graduated into.

@@ -107,14 +107,14 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 				Text: "b", Severity: SeverityMajor, Category: "drift",
 				Source: "agent-finding", Slug: "drifted", FoundDuring: "fn-3 review",
 				FoundAt: "internal/x.go", RelatedIntents: []string{"itd-4"},
-				RelatedSpecs: []string{"fn-12"},
+				RelatedSpecs: []string{"spc-12"},
 			},
 			want: Issue{
 				SchemaVersion: 1, ID: "iss-1", Slug: "drifted",
 				Severity: SeverityMajor, Category: "drift", Source: "agent-finding",
 				FoundDuring: "fn-3 review", FoundAt: "internal/x.go",
 				RelatedIntents: []string{"itd-4"},
-				RelatedSpecs:   []string{"fn-12"}, Status: StateOpen, Body: "b",
+				RelatedSpecs:   []string{"spc-12"}, Status: StateOpen, Body: "b",
 			},
 		},
 	}
