@@ -215,7 +215,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || needs.changes.outputs.inert != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
 
       # Enforce the format gate AGENTS.md documents (`gofmt -l .`). Formatting is
       # platform-independent, so run it once on the ubuntu leg to avoid duplicate
@@ -358,7 +358,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
       - name: Smoke every command
         run: make smoke
 
@@ -393,6 +393,6 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.7'
       - name: Scan for known vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
