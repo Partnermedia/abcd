@@ -445,7 +445,7 @@ The three live `suggestion_type` values this role produces:
 
 ### Review and audit trail layout
 
-Shipped `/abcd:intent audit` keeps its record in the intent file itself: `review ingest --verdict-json <path>` writes the per-criterion verdict into the shipped intent's `## Audit Notes` section (the verdict of record), and the emit path stages an ephemeral review request under `.abcd/.work.local/reviews/` (gitignored, report-only). Idempotency and review state live in that one committed place — directory/file-as-truth, no side database.
+Shipped `/abcd:intent audit` keeps its record in the intent file itself: `audit ingest --verdict-json <path>` writes the per-criterion verdict into the shipped intent's `## Audit Notes` section (the verdict of record), and the emit path stages an ephemeral review request under `.abcd/.work.local/reviews/` (gitignored, report-only). Idempotency and review state live in that one committed place — directory/file-as-truth, no side database.
 
 The later-phase review/audit verbs write their per-run receipts under the local ephemeral logs tier, `.abcd/.work.local/logs/audit/<sub-tier>-<ts>/`, where the `audit/` name reflects "this is the on-disk audit trail" regardless of which verb produced it and the sub-tier prefix names the verb:
 

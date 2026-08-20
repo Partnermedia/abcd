@@ -23,8 +23,9 @@ cannot drift apart.
 
 
 Bare `/abcd:ahoy` shows read-only status only — never mutates state. The
-`/abcd:ahoy` slash command dispatches only this bare read-only pass and names
-the CLI for anything that writes; the sub-verbs below ship on the CLI as
+`/abcd:ahoy` slash command dispatches every sub-verb (`status | install |
+uninstall | doctor | dry-run`), the two write verbs included — each announces
+that it writes before it runs — and each also ships on the CLI as
 `abcd ahoy <sub-verb>`. Current sub-verbs:
 
 - **`/abcd:ahoy install`** — install or update the plugin in this repo
@@ -43,8 +44,9 @@ the CLI for anything that writes; the sub-verbs below ship on the CLI as
   detail, including the user-scope state (history store, `index.json`, symlink,
   hook) that the shared detection pass validates on every sub-verb — doctor's
   distinct contribution is the read-only audit pass layered on top.
-  Distinct from bare invocation, which shows the folder kind, plugin-root
-  status, root SHA, and gap count.
+  Distinct from bare invocation, which shows the status board (folder kind,
+  plugin-root status, root SHA, binary vintage/staleness, citations on a
+  managed repo, gap count, guard health, and the banlist block).
 - **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
   does not match `.abcd/config/identity.json` (the commit-identity gate).
   Read-only; a CLI-only operator/CI check with no slash-command surface.
@@ -105,7 +107,7 @@ detection pass** and differ only in what they do with its output:
 
 | Sub-verb | Detection | Then |
 |---|---|---|
-| bare `/abcd:ahoy` | full | render folder kind, plugin-root status, root SHA, gap count — no gap detail |
+| bare `/abcd:ahoy` | full | render the status board: folder kind, plugin-root status, root SHA, vintage, staleness, citations (managed repo), gap count, guard health, banlist block — no gap detail |
 | `doctor` | full | render detection- and audit-gap counts (full per-gap detail in the JSON envelope) |
 | `dry-run` | full | render the canonical `DetectionResult` JSON envelope (per spc-16 T1 — no unified-diff) |
 | `install` | full | run the apply pass over the gaps |
@@ -194,7 +196,12 @@ Steps, run in parallel where independent:
    entry), `abcd hook session-end` (a `SessionEnd` event), and `abcd guard
    hook` (a `PreToolUse` event, matcher `Bash`, that checks a shell command
    against the hazard registry before it runs) — five event types in all;
-   verification covers only the three prompt-router commands above. A missing or
+   verification covers only the three prompt-router commands above. Every
+   event command is a self-provisioning shim, not a plain binary call: the
+   non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root
+   binary is missing (throttled by a `.bootstrap.attempt` marker within a
+   10-minute window), then fall back to a PATH-resolved `abcd` before failing
+   loudly. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.
@@ -259,9 +266,11 @@ unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 `both` | `skip`) sets the marker target, `--oracle-backend`
 (`host-delegated` | `native` | `cli` | `api` | `mcp`) sets the oracle,
 `--scan-deep` (`true` | `false`) toggles the deep scan, `--visibility`
-(`private` | `public`) sets repo visibility, and `--dev` selects track-latest
+(`private` | `public`) sets repo visibility, `--dev` selects track-latest
 dogfood mode (the PATH entry rebuilds from the source tip on every call instead
-of pinning the built binary). `--yes` does not adopt an
+of pinning the built binary), and `--allow-stale-binary` proceeds even when the
+running binary is stale against its source tip or of undeterminable vintage
+(the default refuses before any write and names the rebuild fix). `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
 answered prompt. The identity-pin exclusion is stated, never assumed: `--yes`
 names it in its own help, the install envelope carries it as `optional_skipped`,
@@ -416,9 +425,9 @@ acceptance criterion, not just prose — see § Acceptance.
 canonical `DetectionResult` envelope as JSON (per spc-16 T1 — JSON ONLY; no
 unified-diff renderer in this command surface). Exits without writing. The
 JSON envelope shape is `{folder_kind, adopted, root_sha,
-plugin_root_status, repo_identity, signals, guard, gaps}` (the `guard` key
+plugin_root_status, repo_identity, signals, guard, banlist, gaps}` (the `guard` key
 reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
-`binary_reachable`, `registry_loadable`, `disabled`, and `entries`) so the plugin command
+`binary_reachable`, `registry_loadable`, `disabled`, `detail`, and `entries`) so the plugin command
 (`commands/ahoy.md`) summarises state off `folder_kind` + `gaps` and
 names `abcd ahoy install` for anything actionable.
 
@@ -436,11 +445,13 @@ user-scope app-state.
 ## Acceptance
 
 - **Given** any abcd-aware terminal, **when** the user runs bare `/abcd:ahoy`,
-  **then** the dispatcher runs the detection pass and shows the folder kind,
-  plugin-root status, root SHA, and gap count, plus a next-step line on the
-  unmanaged kinds (naming `/abcd:ahoy install` on an `unmanaged-repo`, "nothing
-  to act on" on an `unmanaged-folder`); a `managed-repo` prints the four status
-  lines with no next-step line — and never mutates state.
+  **then** the dispatcher runs the detection pass and shows the status board —
+  folder kind, plugin-root status, root SHA, vintage, staleness, citations (on
+  a managed repo), gap count, guard health, and the banlist block — plus a
+  next-step line on the unmanaged kinds (naming `/abcd:ahoy install` on an
+  `unmanaged-repo`, "nothing to act on" on an `unmanaged-folder`); a
+  `managed-repo` prints the status board with no next-step line — and never
+  mutates state.
 - **Given** a fresh repo with no `.abcd/` directory, **when** `/abcd:ahoy
   install` runs to completion, **then** the two-file repo carve-out
   (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written,
@@ -483,7 +494,7 @@ user-scope app-state.
 - **Given** the user runs `/abcd:ahoy dry-run`, **when** the command completes,
   **then** the detection pass runs, the canonical `DetectionResult` JSON
   envelope (`{folder_kind, adopted, root_sha,
-  plugin_root_status, repo_identity, signals, guard, gaps}` per spc-16 T1) is printed
+  plugin_root_status, repo_identity, signals, guard, banlist, gaps}` per spc-16 T1) is printed
   to stdout, and no files are modified.
 - **Given** the user runs `/abcd:ahoy doctor` on an installed repo whose
   registered history-store `path` no longer matches `index.json`, **then** an
