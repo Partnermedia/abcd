@@ -14,7 +14,7 @@ impact: additive
 
 ## Press Release
 
-> **Citation data travels through the repo; corpora never do.** Alice works from a personal sources corpus ([itd-76](../planned/itd-76-source-provenance-ledger.md), which this intent `refines`); her teammate Bob has his own, or none. `abcd source share` writes a public source's *citation data* into the repo's committed CSL-JSON references store — `.abcd/development/research/references.csl.json`, the store the acknowledgements list already reads (maintainer ruling, 2026-08-16: one committed bibliography, not a second exchange file) — and refuses any `confidential: true` entry mechanically. `abcd source ingest` imports the repo's shared entries into the local corpus. Documents and influence ledgers never travel — only bibliography.
+> **Citation data travels through the repo; corpora never do.** Alice works from a personal sources corpus ([itd-76](../planned/itd-76-source-provenance-ledger.md), which this intent `refines`); their teammate Bob has their own, or none. `abcd source share` writes a public source's *citation data* into the repo's committed CSL-JSON references store — `.abcd/development/research/references.csl.json`, the store the acknowledgements list already reads (maintainer ruling, 2026-08-16: one committed bibliography, not a second exchange file) — and refuses any `confidential: true` entry mechanically. `abcd source ingest` imports the repo's shared entries into the local corpus. Documents and influence ledgers never travel — only bibliography.
 >
 > "I just ingest the repo's shared references," said Bob, "and every public source Alice worked from is in my own local store, ready to consult."
 
@@ -26,9 +26,9 @@ A repo is a team surface even when every corpus is personal. Without a mechanica
 
 > _Seeded by the itd-76 planning session, unconfirmed — the planning interview must walk these with the maintainer._
 
-- Given a public entry in Alice's corpus, when she runs `abcd source share`, then its citation data is written into `.abcd/development/research/references.csl.json` and nothing else — no document, no ledger line — enters the repo.
+- Given a public entry in Alice's corpus, when they run `abcd source share`, then its citation data is written into `.abcd/development/research/references.csl.json` and nothing else — no document, no ledger line — enters the repo.
 - Given a `confidential: true` entry, when share is attempted, then the refusal is mechanical and names the gate, not the source's identifying strings.
-- Given shared entries in the repo, when Bob runs `abcd source ingest`, then they enter his local corpus as public entries.
+- Given shared entries in the repo, when Bob runs `abcd source ingest`, then they enter their local corpus as public entries.
 
 ## Open Questions
 

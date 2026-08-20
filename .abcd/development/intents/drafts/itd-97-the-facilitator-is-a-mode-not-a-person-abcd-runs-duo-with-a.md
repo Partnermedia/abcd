@@ -29,7 +29,7 @@ severity: major
 > said Alice, a product thinker. "abcd drafted the plan from my intent, queued
 > the work, ran the reviews, and every time a decision was genuinely mine it
 > arrived as a clear proposal with the price spelled out. Bob still prefers
-> duo, with a human translator beside him — same framework, same gates, his
+> duo, with a human translator beside them — same framework, same gates, their
 > choice."
 
 ## Why This Matters

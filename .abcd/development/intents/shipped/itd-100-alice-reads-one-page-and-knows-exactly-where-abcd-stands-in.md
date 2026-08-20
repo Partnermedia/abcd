@@ -14,7 +14,7 @@ impact: additive
 
 ## Press Release
 
-> **Alice reads one page and knows exactly where abcd stands in the agentic-AI landscape.** Alice evaluates developer tooling for her team. Every tool describes itself in its own invented vocabulary, and she has to reverse-engineer how it relates to the terms the industry actually uses — MCP, the agent loop, context engineering, guardrails, policy-as-code, evaluations. abcd gives her a single reference page: a terminology crosswalk mapping each established agentic-AI term to how abcd incorporates it (naming the native verb or principle), adapts it under a sharper name, deliberately rejects it for a recorded reason, or is still watching it via a ledger entry she can follow. Every established definition cites a primary source — a spec, a standards body, or a peer-reviewed paper — and every claim about abcd is verified against the committed record, never memory. "I stopped reverse-engineering the invented names," said Alice. "One page told me, in the vocabulary I already use, what this tool does — and, rarer still, what it deliberately does not."
+> **Alice reads one page and knows exactly where abcd stands in the agentic-AI landscape.** Alice evaluates developer tooling for their team. Every tool describes itself in its own invented vocabulary, and they have to reverse-engineer how it relates to the terms the industry actually uses — MCP, the agent loop, context engineering, guardrails, policy-as-code, evaluations. abcd gives them a single reference page: a terminology crosswalk mapping each established agentic-AI term to how abcd incorporates it (naming the native verb or principle), adapts it under a sharper name, deliberately rejects it for a recorded reason, or is still watching it via a ledger entry they can follow. Every established definition cites a primary source — a spec, a standards body, or a peer-reviewed paper — and every claim about abcd is verified against the committed record, never memory. "I stopped reverse-engineering the invented names," said Alice. "One page told me, in the vocabulary I already use, what this tool does — and, rarer still, what it deliberately does not."
 
 ## Why This Matters
 
@@ -22,7 +22,7 @@ A tool that invents its own vocabulary asks every evaluator to do translation wo
 
 ## Acceptance Criteria
 
-- Given Alice opens `docs/reference/terminology.md`, when she reads any row, then it carries the term, a one-line established definition with a footnote citation, and abcd's position as exactly one of USES / ADAPTS / REJECTS / WATCHING.
+- Given Alice opens `docs/reference/terminology.md`, when they read any row, then it carries the term, a one-line established definition with a footnote citation, and abcd's position as exactly one of USES / ADAPTS / REJECTS / WATCHING.
 - Given any footnote is followed, then it resolves to a primary source — a specification, a standards body, a peer-reviewed paper with DOI, or the engineering document where the term originated — never an aggregator or secondary write-up.
 - Given any abcd-position claim in the table, then it is verifiable against a committed record artefact (a verb, principle, ADR, intent, or ledger id); WATCHING rows cite an open ledger entry by id.
 - Given `abcd docs` (docs-currency lint) runs over the repo, then the page passes, with host and vendor names confined to citation footnote lines under the sanctioned allow escape.
