@@ -38,11 +38,14 @@ when a maintainer asks.
   documentation cites can be confirmed.
 
 Bare `abcd docs` prints command usage — it does **not** render a status board;
-the bare-status convention is scoped to `ahoy`/`capture`/`memory`/`intent`/`spec`
+the bare-status convention is scoped to
+`ahoy`/`banlist`/`capture`/`identity`/`memory`/`intent`/`spec`
 and bare `abcd`, not to `docs`. The global `--json` flag emits the
-machine-readable payload. Every verb here accepts `--config` (path to the
+machine-readable payload. The working verbs — `lint`, `cite refresh`, and
+`cite confirm` — accept `--config` (path to the
 `docs-lint.json` it loads, default `<root>/.abcd/docs-lint.json`) and `--root`
-(repo root, default the current working directory), so the refresh fetches
+(repo root, default the current working directory); the bare `cite` parent
+only routes to its sub-verbs and takes neither flag. So the refresh fetches
 exactly the set the gate demands receipts for. `docs lint` additionally accepts
 `--release-gate`, which promotes an overdue citation from a warning to a blocker;
 the flag is release machinery's, so an ordinary commit is never blocked by the

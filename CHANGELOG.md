@@ -24,6 +24,13 @@ called out in a **Breaking** section.
   changes: this verb and `version --check` remain the only two paths to the
   release origin, each only when invoked. (itd-130)
 
+### Changed
+
+- **Released binaries build on Go 1.26.** Go 1.25 has left the support window,
+  so the toolchain moves to the current 1.26 line (1.26.7) in lockstep across
+  the `go.mod` directive, the CI pins, and the release workflow's pin via the
+  scaffold substitutions — `govulncheck` scans clean on the new line. (iss-329)
+
 ### Fixed
 
 - **A hostile source repo cannot inject terminal escapes through `disembark

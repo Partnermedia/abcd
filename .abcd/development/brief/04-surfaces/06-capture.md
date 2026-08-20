@@ -30,7 +30,7 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 | `/abcd:capture list --wontfix` | Query the ledger for wontfix issues | — |
 | `/abcd:capture list --all` | Query the ledger across all three states | — |
 | `/abcd:capture promote <iss-N> [--intent <itd-N>]` | Promote an issue to an intent draft, native CLI sub-verb (spc-24, itd-119): one invocation mints a draft under `intents/drafts/` — slug reused from the issue, body carrying a by-id pointer, never a copy (SSOT) — and stamps the issue's `promoted_to` with the minted `itd-N`; the draft's `promoted_from` is the reciprocal edge. Works from any status folder (promotion is orthogonal to fix-status). `--intent` is the stamp-only mode that links an existing draft — the repair path after a post-mint stamp failure, which the error names. | (issue stays; intent created in `drafts/`) |
-| `/abcd:capture resolve <iss-N> "<resolution-note>" --impact <additive\|breaking\|fix\|internal>` | Mark issue resolved (`--impact` is required — resolving without it exits 1) | `open/` → `resolved/` |
+| `/abcd:capture resolve <iss-N> "<resolution-note>" --impact <additive\|breaking\|fix\|internal>` | Mark issue resolved (`--impact` is required — resolving without it exits 1). Three optional `resolved_by` provenance flags name what fixed it: `--intent itd-N` (must exist), `--spec spc-N` (must exist), `--commit <sha>` (shape-checked hex) | `open/` → `resolved/` |
 | `/abcd:capture wontfix <iss-N> "<reason>"` | Explicit non-action decision | `open/` → `wontfix/` |
 
 The unfiltered CLI shape `abcd capture list` (no flag) is rejected with
@@ -103,8 +103,10 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 - **Command flow:** delivered by the predecessor's `spc-21-abcdcapture-command-flow-text-ingest` (predecessor store).
 - **Legacy `.abcd/.work.local/` scratch migration:** design target per the predecessor's `spc-22-workissuesmd-migration-promote-legacy` (predecessor store) — a later phase, not yet built (rides the `dev-sync` surface, § 3).
 - **intent-auditor cross-check:** delivered by the predecessor's `spc-23-intent-auditor-extension` (predecessor store); the reviewer surface ships as `agents/intent-auditor.md`.
-- **`promote <iss-N>` bridge:** the command-orchestrated flow leans on
-  `abcd intent "<text>"`, delivered by `spc-7-abcd-intent-quoted-text-create-symmetric`
-  (itd-46). The issue body is handed to that create path, which files a new draft;
-  the reciprocal back-link onto the `iss-N` record is written by hand —
-  no engine verb writes that edge.
+- **`promote <iss-N>` bridge:** a native engine sub-verb (spc-24, itd-119) —
+  `internal/core/capture/promote.go` mints the draft under `intents/drafts/`
+  and stamps the issue's `promoted_to` field itself, one invocation writing
+  both edges (the draft's `promoted_from` is the reciprocal); the command file
+  invokes the binary verb directly. It superseded the earlier
+  command-orchestrated flow that leaned on `abcd intent "<text>"` and left the
+  back-link to be written by hand (see the § 1 table row).

@@ -1565,3 +1565,4 @@ parallel-agent merge contention bites.
   Model routing: orchestration on Claude Fable 5; five parallel hunters, seven
   per-finding adversarial refuters on Claude Opus 5; the dual pre-merge review runs one
   reviewer as Claude Fable 5 and one as Claude Opus 5.
+- 2026-08-20 — ideate: deterministic-delivery-pipeline — verdict reframed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-20-ideate-deterministic-delivery-pipeline.md
