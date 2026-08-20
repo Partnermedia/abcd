@@ -92,9 +92,9 @@ at its first public release.
 - **Wiring to the repo's own facts**: the required-status-check contexts and the
   release-gate's required detectors are derived from the target repo's actual CI
   job names / configured gates, not hard-coded to abcd-cli's.
-- **The deterministic ship flow** *(folded 2026-08-19 from iss-292, the
+- **The deterministic ship flow** *(folded 2026-08-19 from iss-327, the
   maintainer's decision after abcd-cli's own v0.6.0 tag fail-closed
-  unpublishably — iss-291)*: the gate that today fires at tag time — the most
+  unpublishably — iss-326)*: the gate that today fires at tag time — the most
   expensive, unrecoverable moment — shifts left into the verb, so the happy
   path is the only path an operator can walk. Three pieces: the **emit step
   prints the receipts protocol as its own checklist** (run the semantic gates
@@ -165,12 +165,12 @@ at its first public release.
   completes), **then** the output names each missing or non-PROMOTE receipt
   and the commit it must name — and the same repository state fails the
   release job's receipt gate identically, so the local check and the remote
-  gate can never disagree (folded 2026-08-19, iss-292).
+  gate can never disagree (folded 2026-08-19, iss-327).
 - **Given** an operator who runs the emit step, **when** it renders the cut,
   **then** the output ends with the receipts protocol as a numbered checklist
   — the semantic gates to run, the commit to key receipts to, and the
   two-commit branch shape — so a first-time operator learns the protocol from
-  the verb, never from a failed release run (folded 2026-08-19, iss-292).
+  the verb, never from a failed release run (folded 2026-08-19, iss-327).
 
 ## Prior Art
 
