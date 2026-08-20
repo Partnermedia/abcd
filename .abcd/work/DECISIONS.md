@@ -1437,3 +1437,9 @@ parallel-agent merge contention bites.
   probeDir). Re-derived rather than replayed: the doc fixes — main had already fixed iss-316/317/320
   its own way (round 2's anchor sweep is on main verbatim), so only the still-true corrections were
   applied. Open record-only: iss-322..iss-325.
+- 2026-08-20 — itd-114 (collision-proof record ids) is pulled forward: two live
+  parallel-mint collisions in one day (iss-330; the round-2 renumber), with a
+  third structurally predicted whenever two minters start from the same max.
+  The 2026-08-20 multi-minter morning is pre-registered as its field test
+  (research/notes/2026-08-20-itd-114-collision-field-test.md); the planning
+  interview opens with that note's graded results.
