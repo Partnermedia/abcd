@@ -40,3 +40,23 @@ func TestRedirectTargetControlRunesNotRecordedRaw(t *testing.T) {
 		t.Errorf("FinalURL should percent-encode the hazard losslessly, got %q", got.FinalURL)
 	}
 }
+
+// An invalid UTF-8 byte in the final address must be percent-encoded raw, not
+// rewritten to U+FFFD: net/url preserves bytes over 0x20 in a query verbatim,
+// and losing the byte would contradict the recorded-losslessly contract.
+func TestEncodeHiddenRunesKeepsInvalidBytes(t *testing.T) {
+	in := "https://example.com/a?b=" + string([]byte{0xFF}) + "c"
+	got := encodeHiddenRunes(in)
+	if !strings.Contains(got, "%FF") {
+		t.Errorf("raw 0xFF should percent-encode to %%FF, got %q", got)
+	}
+	if strings.ContainsRune(got, '�') {
+		t.Errorf("invalid byte was rewritten to U+FFFD: %q", got)
+	}
+	// Already-encoded and clean inputs pass through untouched.
+	for _, clean := range []string{"https://example.com/a?b=%E2%80%8B", "https://example.com/plain"} {
+		if out := encodeHiddenRunes(clean); out != clean {
+			t.Errorf("clean input changed: %q -> %q", clean, out)
+		}
+	}
+}

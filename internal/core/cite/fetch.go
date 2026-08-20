@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Partnermedia/abcd/internal/urlguard"
 
@@ -267,19 +268,29 @@ func transportDetail(err error) string {
 // runes (net/url rejects C0 outright and percent-encodes the path itself), so
 // encoding them cannot break a legitimate final URL.
 func encodeHiddenRunes(s string) string {
-	if termsafe.Sanitize(s) == s {
+	if termsafe.Sanitize(s) == s && utf8.ValidString(s) {
 		return s
 	}
 	var b strings.Builder
-	for _, r := range s {
-		rs := string(r)
-		if termsafe.Sanitize(rs) != rs {
-			for i := 0; i < len(rs); i++ {
-				fmt.Fprintf(&b, "%%%02X", rs[i])
-			}
+	for i := 0; i < len(s); {
+		r, width := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && width == 1 {
+			// An invalid byte, which strings.Map would silently rewrite to
+			// U+FFFD — percent-encode the RAW byte so the record stays
+			// lossless on non-UTF-8 input too.
+			fmt.Fprintf(&b, "%%%02X", s[i])
+			i++
 			continue
 		}
-		b.WriteString(rs)
+		rs := s[i : i+width]
+		if termsafe.Sanitize(rs) != rs {
+			for j := 0; j < width; j++ {
+				fmt.Fprintf(&b, "%%%02X", rs[j])
+			}
+		} else {
+			b.WriteString(rs)
+		}
+		i += width
 	}
 	return b.String()
 }
