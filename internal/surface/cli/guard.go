@@ -176,7 +176,7 @@ func newGuardHookCommand() *cobra.Command {
 				return failOpen("the hook payload could not be read (%v)", err)
 			}
 			if len(raw) > maxHookStdinBytes {
-				return failOpen("the hook payload is over the %d-byte cap; nothing was read", maxHookStdinBytes)
+				return failOpen("the hook payload is over the %d-byte cap; it was discarded unparsed", maxHookStdinBytes)
 			}
 			var in guardHookInput
 			if err := json.Unmarshal(raw, &in); err != nil {

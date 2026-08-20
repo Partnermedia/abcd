@@ -27,8 +27,10 @@ import (
 // of Go's net.IP predicates cover: IsPrivate is RFC 1918 + ULA only and
 // IsUnspecified is the single zero address. CGNAT 100.64/10 is the one with
 // live internal services behind it (Tailscale tailnets, carrier and cloud
-// provider internal addressing); the rest are here so this table is the last
-// time a range gap in this guard needs finding one at a time.
+// provider internal addressing); the rest close the not-globally-routable
+// class in one pass. The RFC 5737 documentation blocks stay reachable on
+// purpose: they are guaranteed non-routable and are the fixture vocabulary
+// the repo's own tests and docs use.
 var reservedV4 = func() []net.IPNet {
 	var nets []net.IPNet
 	for _, cidr := range []string{

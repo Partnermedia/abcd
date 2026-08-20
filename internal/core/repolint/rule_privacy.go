@@ -2,6 +2,7 @@ package repolint
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -112,7 +113,8 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 					RuleID:   "privacy-hygiene",
 					Severity: SeverityWarn,
 					File:     rel,
-					Message:  "not scanned: over the 4 MiB privacy-scan cap; split the file or verify it by hand",
+					Message: fmt.Sprintf("not scanned: over the %d MiB privacy-scan cap; split the file or verify it by hand",
+						maxScanBytes>>20),
 				})
 			}
 			continue
@@ -292,8 +294,14 @@ func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText b
 		// can warn on a skipped textual file without flagging every committed
 		// binary asset. 8 KiB is isBinary's own probe horizon.
 		probe := make([]byte, 8<<10)
-		n, _ := io.ReadFull(f, probe)
-		return nil, false, n > 0 && !isBinary(probe[:n])
+		n, err := io.ReadFull(f, probe)
+		if n == 0 {
+			// The probe itself failed, so nothing about the file is known —
+			// warn rather than stay silent (the not-scanned shape again).
+			_ = err
+			return nil, false, true
+		}
+		return nil, false, !isBinary(probe[:n])
 	}
 	// LimitReader is a belt-and-suspenders cap in case Size understates (a file
 	// growing during the read): never buffer past the cap.

@@ -107,14 +107,17 @@ func TestDialControlRefusesBlockedAddress(t *testing.T) {
 // IsLoopback / IsUnspecified sees it, so a redirect there reached "internal
 // services" the package doc promises are out of reach.
 func TestBlockedIPCoversReservedNonPrivateRanges(t *testing.T) {
+	// Non-reserved literals carry waivers: the point of this test is that these
+	// exact values are refused, so the fixture cannot use the documentation
+	// ranges the privacy lint would wave through.
 	blocked := []string{
-		"100.64.0.1", "100.127.255.254", // CGNAT (RFC 6598)
-		"0.1.2.3",         // "this network" (RFC 791)
-		"192.0.0.8",       // IETF protocol assignments (RFC 6890)
-		"198.18.0.1",      // benchmarking (RFC 2544)
-		"198.19.255.254",  // benchmarking upper half
-		"240.0.0.1",       // reserved (RFC 1112)
-		"255.255.255.255", // limited broadcast
+		"100.64.0.1", "100.127.255.254", // CGNAT (RFC 6598) abcd-audit:allow
+		"0.1.2.3",         // "this network" (RFC 791) abcd-audit:allow
+		"192.0.0.8",       // IETF protocol assignments (RFC 6890) abcd-audit:allow
+		"198.18.0.1",      // benchmarking (RFC 2544) abcd-audit:allow
+		"198.19.255.254",  // benchmarking upper half abcd-audit:allow
+		"240.0.0.1",       // reserved (RFC 1112) abcd-audit:allow
+		"255.255.255.255", // limited broadcast abcd-audit:allow
 	}
 	for _, s := range blocked {
 		if !BlockedIP(net.ParseIP(s)) {
@@ -122,13 +125,15 @@ func TestBlockedIPCoversReservedNonPrivateRanges(t *testing.T) {
 		}
 	}
 	// The nearest public neighbours stay reachable.
-	for _, s := range []string{"100.63.255.254", "100.128.0.1", "198.17.255.254", "198.20.0.1", "192.0.1.1"} {
+	for _, s := range []string{ // abcd-audit:allow
+		"100.63.255.254", "100.128.0.1", "198.17.255.254", "198.20.0.1", "192.0.1.1", // abcd-audit:allow
+	} {
 		if BlockedIP(net.ParseIP(s)) {
 			t.Errorf("BlockedIP(%s) = true, want false (public address)", s)
 		}
 	}
 	// The NAT64 unwrap re-checks the new ranges too.
-	if !BlockedIP(net.ParseIP("64:ff9b::100.64.0.1")) {
-		t.Error("BlockedIP(64:ff9b::100.64.0.1) = false, want true (embedded CGNAT)")
+	if !BlockedIP(net.ParseIP("64:ff9b::100.64.0.1")) { // abcd-audit:allow
+		t.Error("BlockedIP failed to refuse the NAT64-embedded CGNAT form")
 	}
 }

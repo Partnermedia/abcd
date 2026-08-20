@@ -961,7 +961,7 @@ func readHookInput(cmd *cobra.Command) (hookInput, error) {
 		return hookInput{}, err
 	}
 	if len(raw) > maxHookStdinBytes {
-		return hookInput{}, fmt.Errorf("payload is over the %d-byte cap; nothing was read", maxHookStdinBytes)
+		return hookInput{}, fmt.Errorf("payload is over the %d-byte cap; it was discarded unparsed", maxHookStdinBytes)
 	}
 	var in hookInput
 	if err := json.Unmarshal(raw, &in); err != nil {

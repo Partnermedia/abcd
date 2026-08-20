@@ -46,7 +46,8 @@ on:
   # `verify`, and nothing that publishes: the publish job (`release`) is gated off
   # this event, and the rehearsal arms the gate's resolution path against a
   # simulated changelog roll and reviewed-content commit, proves the deterministic
-  # gates admit it, and creates no tag, Release, or attestation. Run it green once before the first real release (see
+  # gates admit it, and creates no tag, Release, or attestation. Run it green
+  # once before the first real release (see
   # the release-gate runbook) — it closes the private->public activation gap that
   # otherwise surfaces only when the gate first meets a real tag.
   workflow_dispatch:
