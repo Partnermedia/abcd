@@ -80,7 +80,7 @@ done
 | Drafts | [intents/drafts/](../intents/drafts) | Captured (press release written), no plan yet |
 | Planned | [intents/planned/](../intents/planned) | `/abcd:intent plan` has linked an in-flight native spec |
 | Shipped | [intents/shipped/](../intents/shipped) | Linked spec closed; fidelity audit queued/appended (a spec-side guard keeps the lifecycle state from re-drifting) |
-| Disciplines | [intents/disciplines/](../intents/disciplines) | Active cross-cutting rules (itd-1, itd-5, itd-37) |
+| Disciplines | [intents/disciplines/](../intents/disciplines) | Active cross-cutting rules — the directory is the roster |
 | Superseded | [intents/superseded/](../intents/superseded) | Killed by reclassification |
 
 **Phase membership** is editorial, not counted here — each phase doc's `## Scope`
