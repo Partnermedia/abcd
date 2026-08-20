@@ -10,14 +10,18 @@ artefact type**, one canonical home per concept:
 |--------|---------------|
 | [`brief/`](brief) | The living canvas: what abcd IS (product … delivery) + the [glossary](brief/glossary). |
 | [`intents/`](intents) | Press-release intents — the WHY of each user-facing change. Lifecycle by directory: `disciplines/` `drafts/` `planned/` `shipped/` `superseded/`. |
+| [`specs/`](specs) | Specs (`spc-N`) — the HOW derived from an intent. Lifecycle by directory: `open/` `closed/`. |
 | [`principles/`](principles) | Distilled cross-cutting design principles (first-class — the lifeboat packs these). |
 | [`decisions/`](decisions) | ADRs (MADR) — ratified architecture decisions, one canonical home; plus `notes/`. |
 | [`roadmap/`](roadmap) | Sequencing: `phases/` + `rfcs/` (an accepted RFC produces an ADR). |
 | [`plans/`](plans) | Dated design / implementation plans (`YYYY-MM-DD-*`). |
 | [`research/`](research) | <!-- index: research-children -->Investigations: `notes/` (dated write-ups) + `prompting/` (prompt R&D).<!-- /index --> |
+| [`release/`](release) | The committed compatibility baseline: `surface.json` (the shipped-surface registry `surface_coverage` reads). |
+| [`release-gate/`](release-gate) | The pre-tag runbook and its `manifest.json` — the periodic brief↔surface cross-check `gate_lockstep` pins. |
 
-Also here: `personas.json` — data for press-release quote attribution (migrates to
-embedded Go data when the intent surface is built).
+Also here: `personas.json` — the machine-checked persona roster for press-release
+quote attribution (the `persona_registry` lint reads it); it migrates to embedded
+Go data once the grill sub-verb lands.
 
 **Conventions.** Durable-vs-working is the `development/` ↔ `../work/` ↔
 `../.work.local/` tiering. Issues are not a record folder: the ledger lives in the
