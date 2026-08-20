@@ -172,10 +172,15 @@ func (b Baseline) validate() error {
 		if strings.TrimSpace(k) == "" {
 			return &BaselineError{"citation baseline has an empty url key"}
 		}
-		who := "citation baseline entry " + k
+		// Every entry field printed below can come from a committed record a
+		// hostile branch supplied, so each reaches the error surface through
+		// termsafe — the CLI error path applies no sanitiser of its own
+		// (iss-384). This generalises the iss-359 final_url rung to the sibling
+		// fields the same struct carries.
+		who := "citation baseline entry " + termsafe.Sanitize(k)
 		// Declared-key tolerance: restating the key is fine, disagreeing is not.
 		if e.URL != "" && e.URL != k {
-			return &BaselineError{who + " declares url " + e.URL + ", which disagrees with its key"}
+			return &BaselineError{who + " declares url " + termsafe.Sanitize(e.URL) + ", which disagrees with its key"}
 		}
 		if strings.TrimSpace(e.FinalURL) == "" {
 			return &BaselineError{who + " has no final_url; the resolved address is required"}
@@ -188,23 +193,23 @@ func (b Baseline) validate() error {
 			return &BaselineError{who + " has a final_url carrying control or invisible characters; percent-encode them"}
 		}
 		if _, err := time.Parse(baselineDateLayout, e.LastChecked); err != nil {
-			return &BaselineError{who + " has an unparsable last_checked " + quote(e.LastChecked) +
+			return &BaselineError{who + " has an unparsable last_checked " + quote(termsafe.Sanitize(e.LastChecked)) +
 				"; expected " + baselineDateLayout}
 		}
 		switch e.Outcome {
 		case OutcomeAlive, OutcomeBroken:
 		default:
-			return &BaselineError{who + " has outcome " + quote(e.Outcome) +
+			return &BaselineError{who + " has outcome " + quote(termsafe.Sanitize(e.Outcome)) +
 				"; expected " + OutcomeAlive + " or " + OutcomeBroken}
 		}
 		switch e.Verification {
 		case VerificationAutomatic, VerificationManual:
 		default:
-			return &BaselineError{who + " has verification " + quote(e.Verification) +
+			return &BaselineError{who + " has verification " + quote(termsafe.Sanitize(e.Verification)) +
 				"; expected " + VerificationAutomatic + " or " + VerificationManual}
 		}
 		if _, err := time.Parse(baselineDateLayout, e.VerifiedOn); err != nil {
-			return &BaselineError{who + " has an unparsable verified_on " + quote(e.VerifiedOn) +
+			return &BaselineError{who + " has an unparsable verified_on " + quote(termsafe.Sanitize(e.VerifiedOn)) +
 				"; expected " + baselineDateLayout}
 		}
 	}
