@@ -90,8 +90,10 @@ func ProbeIdentity(repoRoot string) Identity {
 }
 
 var (
-	// GitHub username inside a remote URL (https or ssh form).
-	githubRemoteRe = regexp.MustCompile(`github\.com[:/]([A-Za-z0-9-]+)/`)
+	// GitHub username inside a remote URL (https or ssh form). Case-insensitive
+	// on the host: git stores the remote verbatim, so a hand-typed GitHub.com
+	// must still resolve the handle, or github_username redaction never arms.
+	githubRemoteRe = regexp.MustCompile(`(?i)github\.com[:/]([A-Za-z0-9-]+)/`)
 	// Generic home path. Both boundaries are Go predicates: a leading RE2 \b is
 	// wrong here — it is an ASCII word boundary that requires a WORD character
 	// immediately before the '/', which never holds at line start or after a

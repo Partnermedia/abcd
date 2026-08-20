@@ -911,7 +911,7 @@ func reseal(t *testing.T, dest string) {
 		if isManifestExcluded(rel) {
 			continue
 		}
-		data, err := readLifeboatFile(root, dest, rel)
+		data, err := readLifeboatFile(root, rel)
 		if err != nil {
 			t.Fatal(err)
 		}

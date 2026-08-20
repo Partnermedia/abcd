@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/surface/cli/cli.go"
+resolution: "history show/list now pass the transcript body through termsafe.SanitizeBlock and metadata fields through termsafe.Sanitize (test TestHistoryShowSanitisesTranscriptBody)"
+impact: fix
 ---
 
 abcd history show writes the stored transcript body to the terminal with no termsafe sanitisation (cli.go human render branch) — a transcript that ingested hostile content (fetched pages, target-repo files) replays ESC/CSI/C1/bidi sequences raw; the termsafe sweep missed the history surface

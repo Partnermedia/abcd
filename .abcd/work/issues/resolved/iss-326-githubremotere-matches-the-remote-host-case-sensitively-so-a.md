@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/adapter/scanner/identity.go"
+resolution: "githubRemoteRe now carries (?i); ProbeIdentity resolves the handle from a mixed-case github.com remote (test TestProbeIdentityRemoteHostCaseInsensitive)"
+impact: fix
 ---
 
 githubRemoteRe matches the remote host case-sensitively, so a mixed-case github.com remote (git@GitHub.com:...) leaves GitRemoteUsername empty and the github_username redaction kind is never compiled — the caller's handle survives history capture redaction and the PII scan

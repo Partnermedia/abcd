@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -143,7 +142,7 @@ func VerifyManifest(dir string) error {
 		if isManifestExcluded(rel) {
 			continue // the layer-3 interpretation and the header are not sealed
 		}
-		data, err := readLifeboatFile(root, abs, rel)
+		data, err := readLifeboatFile(root, rel)
 		if err != nil {
 			return err
 		}
@@ -243,7 +242,7 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 		case dispUnknown:
 			ignored = append(ignored, IgnoredFile{LifeboatPath: rel, Reason: IgnoredUnknown})
 		case dispPlanned:
-			data, err := readLifeboatFile(root, lifeboatAbs, rel)
+			data, err := readLifeboatFile(root, rel)
 			if err != nil {
 				return plannerResult{}, err
 			}
@@ -559,32 +558,27 @@ func walkLifeboatFiles(root *os.Root) ([]string, error) {
 }
 
 // readLifeboatFile reads one lifeboat file through the containment root behind
-// the trust guards: no symlink, regular file, size under maxEmbarkFileBytes.
-func readLifeboatFile(root *os.Root, abs, rel string) ([]byte, error) {
-	fi, err := root.Lstat(rel)
-	if err != nil {
+// the trust guards: no symlink, regular file, size under maxEmbarkFileBytes. The
+// lifeboat is untrusted, so the read goes through fsutil.ReadGuardedInRoot, which
+// closes the lstat→open TOCTOU (O_NONBLOCK so a FIFO swapped in cannot block the
+// open, an fstat-on-fd regular-file check, and os.SameFile to refuse a descriptor
+// that is no longer the vetted file). The leading Lstat is kept only to preserve
+// the distinct "is a symlink" message.
+func readLifeboatFile(root *os.Root, rel string) ([]byte, error) {
+	if fi, err := root.Lstat(rel); err != nil {
 		return nil, err
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
+	} else if fi.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf("lifeboat file %q is a symlink (refusing to follow)", rel)
 	}
-	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("lifeboat file %q is not a regular file", rel)
-	}
-	if fi.Size() > maxEmbarkFileBytes {
-		return nil, fmt.Errorf("lifeboat file %q exceeds the %d-byte cap", rel, maxEmbarkFileBytes)
-	}
-	f, err := root.Open(rel)
+	data, err := fsutil.ReadGuardedInRoot(root, rel, maxEmbarkFileBytes)
 	if err != nil {
+		if errors.Is(err, fsutil.ErrNotRegular) {
+			return nil, fmt.Errorf("lifeboat file %q is not a regular file", rel)
+		}
+		if errors.Is(err, fsutil.ErrTooBig) {
+			return nil, fmt.Errorf("lifeboat file %q exceeds the %d-byte cap", rel, maxEmbarkFileBytes)
+		}
 		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxEmbarkFileBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxEmbarkFileBytes {
-		return nil, fmt.Errorf("lifeboat file %q exceeds the %d-byte cap", rel, maxEmbarkFileBytes)
 	}
 	return data, nil
 }

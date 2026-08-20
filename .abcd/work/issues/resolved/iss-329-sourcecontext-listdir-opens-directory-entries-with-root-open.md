@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/core/lifeboat/probe.go"
+resolution: "SourceContext.ListDir now opens with O_RDONLY|nonBlock so a planted FIFO returns promptly instead of hanging probe/plan/pack (test TestListDirDoesNotBlockOnFifo)"
+impact: fix
 ---
 
 SourceContext.ListDir opens directory entries with root.Open (no O_NONBLOCK), so a statically-planted FIFO named at a path a probe adapter lists (e.g. docs) hangs abcd disembark probe/plan/pack forever over an untrusted target repo — no race required, breaking the package's stated no-hang-on-FIFO invariant

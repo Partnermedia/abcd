@@ -34,6 +34,39 @@ called out in a **Breaking** section.
   discovery-ingest and Socratic-interview automation marked as a not-yet-shipped
   design target rather than a present capability (iss-295).
 
+- **GitHub-handle redaction fires regardless of the remote's letter case.** The
+  remote-URL parser matched the `github.com` host case-sensitively, so a
+  hand-typed mixed-case remote (`git@GitHub.com:…`) left the derived username
+  empty and the `github_username` redaction kind was never armed — the caller's
+  handle survived `abcd history capture` redaction and the launch/pack PII scan.
+  The host match is now case-insensitive, matching its sibling patterns. (iss-326)
+
+- **`abcd history show` neutralises terminal-control sequences in a stored
+  transcript.** The transcript body is untrusted input, and capture redacts only
+  secrets and home paths, so an ESC/CSI/C1/bidi sequence in ingested content
+  replayed raw on the reader's terminal. The human render now passes the body,
+  and the metadata fields the read path does not re-validate, through `termsafe`
+  while preserving the transcript's line structure. (iss-327)
+
+- **The lifeboat read no longer hangs on, or trusts, a swapped file.** `embark`
+  vetted a file with `Lstat` then opened it separately, so an entry in an
+  untrusted lifeboat swapped for a FIFO blocked the open indefinitely, and an
+  in-root symlink was read in place of the vetted file. The read now routes
+  through the guarded primitive (`O_NONBLOCK`, fstat-on-descriptor, `os.SameFile`).
+  (iss-328)
+
+- **`abcd disembark probe`/`plan`/`pack` no longer hangs on a planted FIFO.** The
+  probe listed a directory's entries with a blocking open, so a FIFO named where
+  an adapter expects a directory (for example `docs`) hung the command over an
+  untrusted target repository, with no race required. The listing open is now
+  non-blocking, matching the probe's file reads. (iss-329)
+
+- **Two user-facing command docs corrected.** `/abcd:prepare-this-repo` located
+  the record at a path and level count that predate the command-file flattening,
+  sending an agent one directory above the repository root (iss-330); and
+  `/abcd:lint` presented the `abcd-lint:allow` line waiver as applying to any
+  finding when only `privacy-hygiene` honours it (iss-331).
+
 ## [0.6.0] - 2026-08-19
 
 ### Breaking

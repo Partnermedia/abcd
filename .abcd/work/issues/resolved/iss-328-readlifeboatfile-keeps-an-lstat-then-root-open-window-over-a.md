@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: "internal/core/lifeboat/embark.go"
+resolution: "readLifeboatFile routes through fsutil.ReadGuardedInRoot (O_NONBLOCK + fstat-on-fd + SameFile), keeping the Lstat symlink message; unused abs param dropped (test TestReadLifeboatFileDoesNotBlockOnFifo)"
+impact: fix
 ---
 
 readLifeboatFile keeps an Lstat then root.Open window over an untrusted lifeboat (embark), bypassing fsutil.ReadGuardedInRoot — a vetted regular file swapped for a FIFO blocks the open forever, or an in-root symlink is read/hashed in place of the vetted file
