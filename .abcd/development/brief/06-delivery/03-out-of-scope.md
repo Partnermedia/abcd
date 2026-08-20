@@ -83,7 +83,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-110` — The grill interview renders with clear structure and colour
 - `itd-112` — Generated ferry-style CLI banner from the identity block, for abcd and managed CLIs
 - `itd-113` — The MCP front door opens — abcd's core verbs from any MCP-capable harness (the [adr-39](../../decisions/adrs/0039-host-tier-policy.md) universal floor)
-- `itd-114` — Two agents can mint at the same instant and never collide (collision-proof record ids: native time+hash default, optional forge backend)
 - `itd-115` — A ready PR merges without ever wedging BEHIND (managed-repo merge queue by default, rung-1 auto-update fallback, strict preserved)
 - `itd-116` — Validated GitHub issues become ledger entries without retyping (capture extension adopts externally filed findings with provenance; mint stays capture-only)
 - `itd-118` — Merged work leaves no residue (post-merge complement of itd-115: delete the PR branch on merge, tidy the stale local branch, tracking ref, and worktree)

@@ -1,8 +1,8 @@
 ---
 id: itd-114
 slug: abcd-mints-collision-proof-record-ids-across-parallel-agents
-spec_id: null
-kind: null
+spec_id: spc-33
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -74,7 +74,7 @@ else. Safety must live in the mint, not in every minter's prompt.
 ## What's Out of Scope
 
 - **The forge as a store.** The 2026-08-19 decision (`DECISIONS.md`; embodied
-  in [itd-129](itd-129-forge-mirror-as-an-opt-in-adapter-the-ledger-mirrors-out-to.md))
+  in [itd-129](../drafts/itd-129-forge-mirror-as-an-opt-in-adapter-the-ledger-mirrors-out-to.md))
   is ledger-canonical, mirror-out, "the forge owns nothing" — this intent's
   forge option allocates numbers and never stores records. Any forge
   read/write beyond allocation is itd-129's surface (typed relation:
@@ -125,10 +125,11 @@ ripple**:
   alone lose time-ordering. Kept on the table for the grill to dismiss with
   reasons rather than silence.
 
-**Declared path: 2 — native floor, adapter seam.** The native default is
-whichever scheme the grill selects under the fit criterion (no network, no
-coordinator, offline, in-tree); the forge allocator is the optional adapter
-behind the same seam. The id **format** is a trust surface, not plumbing: its
+**Declared path: 2 — native floor, adapter seam. Scheme selected at the
+2026-08-20 planning interview: timestamp-numeric** (`iss-<yymmddHHMMSS><random
+digits>`), under the fit criterion above — collision-proof against the
+observed mechanism at near-zero ripple, format-preserving for every existing
+consumer. The forge allocator is the optional adapter behind the same seam. The id **format** is a trust surface, not plumbing: its
 decision lands as an **ADR at planning** (with a brief-invariant seat for
 capture-stability), per the adr-44 extraction precedent — not deferred to
 adoption.
@@ -180,28 +181,32 @@ the forge-allocator option `builds_on` itd-129's adapter seam and never
 crosses its ledger-canonical line; evidence: iss-330, iss-344,
 [the field test](../../research/notes/2026-08-20-itd-114-collision-field-test.md).
 
-**Advisory reversal flag (human confirms at the grill):** a non-numeric id
-would reverse the *human-readable, orderable* `iss-N` property. Note the flag
-is scheme-dependent: timestamp-numeric triggers no reversal at all; ULID
-triggers it in full. The grill's scheme choice is simultaneously the ruling on
-this flag.
+**Advisory reversal flag — CONFIRMED DISCHARGED at the 2026-08-20
+interview:** the selected scheme (timestamp-numeric) keeps the id numeric,
+human-readable, and time-ordered; no property of `iss-N` reverses.
 
 ## Open Questions
 
-- **The central fork, restated after review:** timestamp-numeric vs
-  ULID-shaped vs forge-allocated, judged on collision-safety × ripple ×
-  registry-visibility. The design review's evidence puts timestamp-numeric as
-  the candidate to beat; the grill must either adopt it or say what it buys
-  by paying more.
-- **Rollout order** (not scope): captures first is settled by the evidence;
-  when do itd/adr/spc follow, and does adr's zero-padded filename ordinal
-  join the scheme or stay interview-serialised by declaration?
-- **Offline-under-forge-configuration**: refuse loudly vs fall back to
-  native — the ADR must choose one; a connectivity-dependent mixed ledger is
-  the outcome both reviews forbid.
-- **The uniqueness detectors**: retire, or keep as the cheap assertion the
-  scheme held? (The field test's P3 argues keep: late detection is bad, but
-  no detection is worse.)
+_All four interview questions were ruled at the 2026-08-20 planning
+interview; the rulings live in adr-45 and are folded into the SOTA and scope
+sections above:_
+
+- **The central fork — RULED: timestamp-numeric.** Chosen against the fit
+  criterion; the reversal flag is discharged (no reversal — the format stays
+  numeric and time-ordered).
+- **Rollout — RULED: captures first, all families follow** as configuration
+  of the shared seam after one release cycle; adr's zero-padded ordinal gets
+  its ruling at its turn.
+- **Offline-under-forge — RULED: fall back to native, loudly.** Capture never
+  blocks on network; the mint names the path it took; the format stays
+  uniform either way.
+- **The uniqueness detectors — RULED: keep**, as the cheap assertion the
+  scheme held (the field test's P3: late detection is bad, no detection is
+  worse).
+
+One question remains genuinely open for the spec: the random-digit width and
+same-instant tiebreak (the existing O_EXCL bump-retry vs wider entropy) —
+mechanics, not policy.
 
 ## Audit Notes
 
