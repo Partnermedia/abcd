@@ -1523,3 +1523,4 @@ parallel-agent merge contention bites.
   for the revisit: goreleaser's `homebrew_casks` pipe is the current SOTA
   route, but abcd's release pipeline is bespoke (semantic-gate attestations,
   no goreleaser), so the tap push would be a hand-rolled release-workflow step.
+- 2026-08-20 — ideate: deterministic-delivery-pipeline — verdict reframed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-20-ideate-deterministic-delivery-pipeline.md
