@@ -100,8 +100,21 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 
 	var out []Finding
 	for _, rel := range tracked {
-		data, ok := readTrackedFile(root, filepath.FromSlash(rel))
+		data, ok, oversizeText := readTrackedFile(root, filepath.FromSlash(rel))
 		if !ok {
+			// A textual file over the scan cap was NOT scanned, and silence
+			// here would report "conforms" for content nobody looked at —
+			// the didn't-scan-reported-clean shape the engine contract
+			// forbids (iss-356 item 4). Binary blobs stay quiet: the scan
+			// would skip them anyway, so the cap loses nothing there.
+			if oversizeText {
+				out = append(out, Finding{
+					RuleID:   "privacy-hygiene",
+					Severity: SeverityWarn,
+					File:     rel,
+					Message:  "not scanned: over the 4 MiB privacy-scan cap; split the file or verify it by hand",
+				})
+			}
 			continue
 		}
 		if isBinary(data) {
@@ -260,28 +273,35 @@ func isUsersRoot(m string) bool {
 // writer appears; the regular-file check then skips it before any read. It reads
 // only regular files and never more than maxScanBytes, so a huge or
 // device-backed file cannot exhaust memory. A file that cannot be opened, is not
-// a regular file, or exceeds the cap is skipped (ok=false), not a scan failure.
-func readTrackedFile(root *os.Root, rel string) ([]byte, bool) {
+// a regular file, or exceeds the cap is skipped (ok=false), not a scan failure;
+// oversizeText additionally reports that a skipped file is over the cap yet
+// looks textual, so the caller can say "not scanned" instead of staying silent.
+func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText bool) {
 	f, err := root.OpenFile(rel, os.O_RDONLY|syscallNoFollow, 0)
 	if err != nil {
-		return nil, false // escapes the root, missing, or unreadable
+		return nil, false, false // escapes the root, missing, or unreadable
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return nil, false // FIFO, device, directory, or vanished
+		return nil, false, false // FIFO, device, directory, or vanished
 	}
 	if info.Size() > maxScanBytes {
-		return nil, false // a data blob, not prose — skip
+		// Not scanned — but say whether it LOOKS like prose, so the caller
+		// can warn on a skipped textual file without flagging every committed
+		// binary asset. 8 KiB is isBinary's own probe horizon.
+		probe := make([]byte, 8<<10)
+		n, _ := io.ReadFull(f, probe)
+		return nil, false, n > 0 && !isBinary(probe[:n])
 	}
 	// LimitReader is a belt-and-suspenders cap in case Size understates (a file
 	// growing during the read): never buffer past the cap.
-	data, err := io.ReadAll(io.LimitReader(f, maxScanBytes))
+	data, err = io.ReadAll(io.LimitReader(f, maxScanBytes))
 	if err != nil {
-		return nil, false
+		return nil, false, false
 	}
-	return data, true
+	return data, true, false
 }
 
 // isBinary reports whether data looks non-textual: a NUL byte in the first 8 KiB
