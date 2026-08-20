@@ -88,7 +88,7 @@ func (c Coverage) Render() string {
 	var b strings.Builder
 	tiers := make([]string, len(c.TiersPresent))
 	for i, t := range c.TiersPresent {
-		tiers[i] = string(t)
+		tiers[i] = sanitize(string(t))
 	}
 	fmt.Fprintf(&b, "coverage for %s", sanitize(c.Repo.Name))
 	if c.Repo.Commits > 0 {
@@ -101,9 +101,9 @@ func (c Coverage) Render() string {
 
 	for _, s := range c.Sections {
 		mark := statusGlyph(s.Status)
-		fmt.Fprintf(&b, "%s %-32s %s", mark, s.Name, s.Status)
+		fmt.Fprintf(&b, "%s %-32s %s", mark, sanitize(string(s.Name)), sanitize(string(s.Status)))
 		if s.Confidence != "" {
-			fmt.Fprintf(&b, " (%s, %s)", s.Tier, s.Confidence)
+			fmt.Fprintf(&b, " (%s, %s)", sanitize(string(s.Tier)), sanitize(string(s.Confidence)))
 		}
 		b.WriteString("\n")
 		if len(s.Evidence) > 0 {
@@ -268,40 +268,52 @@ func statusOf(c Coverage, section Section) Status {
 func (a AggregateReport) Render() string {
 	var b strings.Builder
 	b.WriteString("cross-repo brief coverage\n\n")
-	for _, r := range a.Repos {
+	// A coverage report is decoded from an untrusted cross-repo file, so every
+	// repo-derived string (name, tier, section label, cell status) is sanitised
+	// before it reaches the terminal; the raw r.Name is still the cell-map key.
+	repoNames := make([]string, len(a.Repos))
+	for i, r := range a.Repos {
+		repoNames[i] = sanitize(r.Name)
+	}
+	for i, r := range a.Repos {
 		tiers := make([]string, len(r.TiersPresent))
-		for i, t := range r.TiersPresent {
-			tiers[i] = string(t)
+		for j, t := range r.TiersPresent {
+			tiers[j] = sanitize(string(t))
 		}
-		fmt.Fprintf(&b, "  %s — %d commits, tiers: %s\n", r.Name, r.Commits, tiersOrNone(tiers))
+		fmt.Fprintf(&b, "  %s — %d commits, tiers: %s\n", repoNames[i], r.Commits, tiersOrNone(tiers))
 	}
 	b.WriteString("\n")
 
-	// Column widths.
+	sectionLabels := make([]string, len(a.Sections))
+	for i, row := range a.Sections {
+		sectionLabels[i] = sanitize(string(row.Section))
+	}
+
+	// Column widths, computed from the sanitised strings so alignment holds.
 	nameW := len("brief section")
-	for _, row := range a.Sections {
-		if len(string(row.Section)) > nameW {
-			nameW = len(string(row.Section))
+	for _, label := range sectionLabels {
+		if len(label) > nameW {
+			nameW = len(label)
 		}
 	}
 	colW := make([]int, len(a.Repos))
-	for i, r := range a.Repos {
-		colW[i] = len(r.Name)
+	for i := range a.Repos {
+		colW[i] = len(repoNames[i])
 		if colW[i] < 8 {
 			colW[i] = 8
 		}
 	}
 
 	fmt.Fprintf(&b, "%-*s", nameW, "brief section")
-	for i, r := range a.Repos {
-		fmt.Fprintf(&b, "  %-*s", colW[i], r.Name)
+	for i := range a.Repos {
+		fmt.Fprintf(&b, "  %-*s", colW[i], repoNames[i])
 	}
 	b.WriteString("  verdict\n")
 
 	for ri, row := range a.Sections {
-		fmt.Fprintf(&b, "%-*s", nameW, row.Section)
+		fmt.Fprintf(&b, "%-*s", nameW, sectionLabels[ri])
 		for i, r := range a.Repos {
-			fmt.Fprintf(&b, "  %-*s", colW[i], row.Cells[r.Name])
+			fmt.Fprintf(&b, "  %-*s", colW[i], sanitize(string(row.Cells[r.Name])))
 		}
 		v := a.Verdict[ri]
 		if v.AlwaysBlank {

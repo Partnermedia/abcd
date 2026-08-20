@@ -160,3 +160,45 @@ func TestSanitizeStripsBidiAndZeroWidth(t *testing.T) {
 		t.Errorf("sanitize = %q, want bidi/zero-width mapped to '?'", got)
 	}
 }
+
+// TestRenderSanitisesUntrustedCoverageFields proves both the per-repo and the
+// cross-repo renders route every repo-derived string through termsafe. A coverage
+// report is a cross-repo artefact decoded from an untrusted file, and Status/Tier/
+// Section are bare strings with no enum validation on the render path, so a crafted
+// report could otherwise inject a raw ANSI escape (U+001B) or a right-to-left
+// override (U+202E) into the operator's terminal. Written with \u/\x escapes so
+// this source stays ASCII.
+func TestRenderSanitisesUntrustedCoverageFields(t *testing.T) {
+	esc := "\x1b[31mvil"
+	rlo := "x\u202ey"
+
+	perRepo := Coverage{
+		SchemaVersion: 2,
+		Repo:          RepoInfo{Name: "repo" + esc, Commits: 3},
+		TiersPresent:  []Tier{Tier("git" + esc)},
+		Sections: []SectionCoverage{{
+			Name:       Section("brief" + esc),
+			Status:     Status("grounded" + rlo),
+			Confidence: Confidence("high" + esc),
+			Tier:       Tier("git" + rlo),
+		}},
+		Summary: Summary{Grounded: 1},
+	}
+	agg := AggregateReport{
+		SchemaVersion: 2,
+		Repos:         []AggregateRepo{{Name: "repo" + esc, Commits: 3, TiersPresent: []Tier{Tier("git" + rlo)}}},
+		Sections:      []AggregateRow{{Section: Section("brief" + esc), Cells: map[string]Status{"repo" + esc: Status("blank" + rlo)}}},
+		Verdict:       []SectionVerdict{{Section: Section("brief" + esc), AlwaysBlank: true}},
+	}
+
+	for _, tc := range []struct {
+		name string
+		out  string
+	}{{"per-repo", perRepo.Render()}, {"aggregate", agg.Render()}} {
+		for _, r := range tc.out {
+			if r == 0x1b || (r >= 0x202A && r <= 0x202E) {
+				t.Fatalf("%s render leaked attack rune %U: %q", tc.name, r, tc.out)
+			}
+		}
+	}
+}
