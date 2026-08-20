@@ -12,12 +12,6 @@ called out in a **Breaking** section.
 
 ### Fixed
 
-- **Network redaction catches a hostname abutting an underscore.** `lanHostRe`
-  and `deviceHostRe` kept the trailing ASCII word boundary the secret-token and
-  address patterns had already retired, so `printer.local_backup` in a
-  snake_case filename scanned to nothing. The boundary is dropped and a
-  positional skip keeps a truncated longer label quiet. (iss-344)
-
 - **A redirect cannot smuggle hidden runes into the citation record.** The
   final URL a fetch ends at is redirect-controlled, and `encoding/json`
   escapes neither C1 nor bidi/zero-width runes, so a hostile Location query
