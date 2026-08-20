@@ -578,3 +578,44 @@ func TestAC_DocsCurrencySkippedWhenNoDocs(t *testing.T) {
 		t.Errorf("docs-currency not in Skipped when docs/ is absent: skipped=%v", res.Skipped)
 	}
 }
+
+// A relative path segment or a URL path that merely contains "home/" or "Users/"
+// is NOT an absolute local leak and must not hard-fail the privacy rule
+// (iss-305). Before the leading-boundary gate, ordinary committed content —
+// route directories, import paths, docs URLs — tripped SeverityError.
+func TestAC_PrivacyRelativeHomeSegmentNotFlagged(t *testing.T) {
+	const benign = "" + // abcd-audit:allow
+		"import Hero from \"../components/home/Hero\";\n" +
+		"see https://docs.example.com/home/getting-started for more\n" +
+		"handler mounted at internal/web/home/handler.go\n" +
+		"route file src/pages/home/index.tsx\n"
+	b := newFixtureRepo(t).conforming().
+		file("reference/routes.md", benign).
+		commit()
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f != nil {
+		t.Fatalf("a relative/URL home segment was flagged as an absolute leak: %+v", f)
+	}
+	if res.ExitCode != 0 {
+		t.Errorf("exit = %d, want 0", res.ExitCode)
+	}
+}
+
+// The Windows arm of absPathRe is case-folded (iss-308): NTFS is
+// case-insensitive and a lowercase `c:\users\<name>` is a real leak that the
+// capital-U-only literal missed.
+func TestAC_PrivacyWindowsLowercaseUsersPath(t *testing.T) {
+	const leak = "cache dir is c:\\users\\dave\\AppData\\Local\\thing\n" // abcd-audit:allow
+	b := newFixtureRepo(t).conforming().
+		file("reference/win.md", leak).
+		commit()
+	res := b.run()
+
+	if f := findingFor(res, "privacy-hygiene"); f == nil {
+		t.Fatal("lowercase c:\\users\\<name> path was not flagged")
+	}
+	if res.ExitCode != 2 {
+		t.Errorf("exit = %d, want 2", res.ExitCode)
+	}
+}

@@ -72,7 +72,7 @@ var (
 
 	// A dotted quad. Octet-range validation is done by netip in the skip, not by
 	// the regex: a regex that spells out 0-255 is unreadable and no more correct.
-	ipv4Re = regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`)
+	ipv4Re = regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`)
 
 	// An IPv6 candidate, in two spellings. The second is a hextet followed by at
 	// least two more colon-separated groups, whose leading \b is load-bearing:
@@ -87,8 +87,14 @@ var (
 	// Correctness is netip's job; the regex only bounds the candidate.
 	ipv6Re = regexp.MustCompile(`::[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){1,6}(?:(?:\.\d{1,3}){3})?|\b[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:(?:\.\d{1,3}){3})?`)
 
-	// A MAC address in either separator style.
-	macRe = regexp.MustCompile(`\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b|\b[0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5}\b`)
+	// A MAC address in either separator style. No trailing \b: a fixed-length,
+	// pure-word-char token followed by '\b' silently drops the whole match when
+	// the next char is a word char (a MAC suffixed with "_eth0" or an alnum), the
+	// dead corner the token patterns already retired. The whole-match suppression that
+	// the trailing \b incidentally gave — a hex digit right after the address,
+	// meaning a longer hex group was truncated — is preserved by
+	// insideLongerColonRun's trailing isHexDigit test.
+	macRe = regexp.MustCompile(`\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}|\b[0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5}`)
 
 	// A hostname under a LAN/private suffix: mDNS (.local), the plain .lan
 	// convention, and the home-router default (.fritz.box, whose leading label is
@@ -441,6 +447,13 @@ func personaDerivedHost(m string) bool {
 // vanishingly rare next to address.port output.
 func insideLongerDottedRun(line string, start, end int) bool {
 	if start > 0 && line[start-1] == '.' {
+		return true
+	}
+	// A digit immediately after the last octet means the regex truncated a longer
+	// number (a 4+-digit build tail, "192.168.0.1000"): the candidate is a
+	// fragment, not a whole address. ipv4Re carries no trailing \b, so this
+	// mirrors insideLongerColonRun's trailing isHexDigit test on the dotted side.
+	if end < len(line) && isASCIIDigit(line[end]) {
 		return true
 	}
 	return trailingDottedGroups(line, end) >= 2
