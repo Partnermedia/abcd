@@ -24,7 +24,7 @@ import "strings"
 // zero-width runes pass through raw (pinned by TestJSONLeavesC1AndBidiRaw).
 // A JSON surface whose strings reach a terminal or a committed record needs
 // its values shape-checked or encoded at the boundary that produced them
-// (iss-345); this function is the mask for the human/terminal render path.
+// (iss-359); this function is the mask for the human/terminal render path.
 func Sanitize(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {

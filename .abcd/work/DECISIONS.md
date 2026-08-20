@@ -1456,13 +1456,13 @@ parallel-agent merge contention bites.
   never CHANGELOG.md; the residual is the already-open iss-256). Model routing: orchestration on
   Claude Fable 5; hunters, per-finding refuters, and one of the two pre-merge reviewers on Claude
   Opus 5; the second pre-merge reviewer on Claude Fable 5 (dual-model merge gate).
-- 2026-08-20 — bughunt round 2 (branch bughunt-b/round-2): captured iss-344..iss-357, fixed
-  eleven records, closed iss-201, and wontfixed iss-344 on pre-merge review evidence.
-  Code: iss-344 lanHostRe/deviceHostRe trailing-\b redaction miss (the iss-307 sweep's
+- 2026-08-20 — bughunt round 2 (branch bughunt-b/round-2): captured the round-2 records (iss-346..iss-357, with the two colliding ids re-minted as iss-358/iss-359), fixed
+  eleven records, closed iss-201, and wontfixed iss-358 on pre-merge review evidence.
+  Code: iss-358 lanHostRe/deviceHostRe trailing-\b redaction miss (the iss-307 sweep's
   residual) — BUILT, then REVERTED: the pre-merge adversarial review proved the loosened
   pattern flags snake_case selectors (stream.local_addr, args.local_rank) and Stage-1
   redaction rewrites findings into the irreversible history store, so the warn-tier miss
-  is the accepted cost, pinned by TestSnakeCaseSelectorsStayQuiet; iss-345 redirect-controlled FinalURL
+  is the accepted cost, pinned by TestSnakeCaseSelectorsStayQuiet; iss-359 redirect-controlled FinalURL
   carried C1/bidi/zero-width runes raw into --json and the committed baseline (fetch
   boundary percent-encodes, baseline validates, termsafe/coverage doc claims corrected);
   iss-346 guard also-matched dropped a matched warn under a synthetic block; iss-347

@@ -9,7 +9,7 @@ import (
 )
 
 // TestRedirectTargetControlRunesNotRecordedRaw pins the fetch boundary
-// (iss-345): net/url preserves raw non-ASCII in a Location query, and
+// (iss-359): net/url preserves raw non-ASCII in a Location query, and
 // encoding/json escapes none of DEL/C1/bidi/zero-width, so a hostile redirect
 // could land a C1 escape or a bidi override raw in `docs cite refresh --json`
 // and in the committed citations baseline. The runes are assembled numerically

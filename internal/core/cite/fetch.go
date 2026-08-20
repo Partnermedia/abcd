@@ -209,7 +209,7 @@ func (c *HTTPChecker) Check(rawURL string) CheckOutcome {
 		// The final address is redirect-controlled: net/url preserves raw
 		// non-ASCII in the query, and encoding/json escapes neither C1 nor
 		// bidi/zero-width runes, so an unencoded value would reach the --json
-		// surface and the committed baseline verbatim (iss-345).
+		// surface and the committed baseline verbatim (iss-359).
 		// Percent-encoding is lossless where the terminal sanitizer's masking
 		// would corrupt a record that must round-trip.
 		out.FinalURL = encodeHiddenRunes(resp.Request.URL.String())

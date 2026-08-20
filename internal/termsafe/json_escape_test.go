@@ -10,7 +10,7 @@ import (
 // note rests on: C0 and U+2028/9 are escaped, while DEL, C1, bidi overrides
 // and zero-width runes pass through raw — so a JSON surface is NOT covered by
 // the marshaller and needs its values handled at the producing boundary
-// (iss-345). If a Go release starts escaping these, this test says so and the
+// (iss-359). If a Go release starts escaping these, this test says so and the
 // note can be revisited.
 func TestJSONLeavesC1AndBidiRaw(t *testing.T) {
 	escaped := []rune{0x0000, 0x001B, 0x2028}

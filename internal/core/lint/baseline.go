@@ -181,7 +181,7 @@ func (b Baseline) validate() error {
 			return &BaselineError{who + " has no final_url; the resolved address is required"}
 		}
 		// Defence in depth behind the fetch boundary's percent-encoding
-		// (iss-345): a control, bidi or zero-width rune in a committed
+		// (iss-359): a control, bidi or zero-width rune in a committed
 		// final_url is a terminal-escape / Trojan-Source vector in every diff
 		// and render of the record, whoever produced the entry.
 		if termsafe.Sanitize(e.FinalURL) != e.FinalURL {

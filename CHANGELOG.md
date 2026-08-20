@@ -18,7 +18,7 @@ called out in a **Breaking** section.
   could land a terminal escape or Trojan-Source override raw in
   `docs cite refresh --json` and the committed baseline. The fetch boundary now
   percent-encodes them losslessly and the baseline validator refuses them from
-  any producer. (iss-345)
+  any producer. (iss-359)
 
 - **`guard check` reports every matched entry.** The human report assumed the
   winner led the match list, so a synthetic block over registry warns dropped

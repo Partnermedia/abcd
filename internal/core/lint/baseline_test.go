@@ -224,7 +224,7 @@ func TestLoadBaselineMissingFile(t *testing.T) {
 }
 
 // TestBaselineRefusesControlRunesInFinalURL pins the defence-in-depth rung
-// behind the fetch boundary (iss-345): whatever produced the entry, a
+// behind the fetch boundary (iss-359): whatever produced the entry, a
 // final_url carrying a bidi override or C1 escape must not round-trip through
 // the committed record. The rune is assembled numerically — a raw byte in a
 // fixture decodes to U+FFFD and tests nothing.

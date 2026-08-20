@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestSnakeCaseSelectorsStayQuiet pins the iss-344 wontfix decision: the
+// TestSnakeCaseSelectorsStayQuiet pins the iss-358 wontfix decision: the
 // hostname patterns keep their trailing word boundary, so a snake_case
 // selector whose leading segments happen to spell a LAN suffix is NEVER a
 // finding. The alternative — dropping the boundary so `printer.local_backup`

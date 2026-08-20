@@ -9,4 +9,4 @@ found_during: "bughunt-round-2"
 found_at: "internal/core/memory/ingest.go"
 ---
 
-memory ingest records a redirect-controlled FinalURL verbatim into stored material origins — the iss-345 class one door over; the cite fix neither touched nor recorded the sibling site
+memory ingest records a redirect-controlled FinalURL verbatim into stored material origins — the iss-359 class one door over; the cite fix neither touched nor recorded the sibling site
