@@ -1,7 +1,12 @@
 # `/abcd:version` — Print the Installed Version
 
-`/abcd:version` reports the installed abcd version. It is **strictly read-only**
-— it performs zero writes.
+`/abcd:version` reports the installed abcd version, install mode, and vintage
+(the verb's own help summary). It performs **zero writes**, and it is
+network-silent unless the opt-in `--check` flag is passed — that flag fetches
+the latest release exactly once and compares, this command's **only network
+touch** (abcd never fetches implicitly —
+[adr-38](../../decisions/adrs/0038-implicit-checks-are-disk-only.md)), naming its
+source and verdict in the render.
 
 ## Behaviour
 
@@ -9,11 +14,17 @@
 abcd version --json
 ```
 
-emits `{ "name": "abcd", "version": "<version>" }`. The plugin command
-(`commands/version.md`) reads the JSON and tells the user the `name` and
-`version`. Without `--json`, bare `abcd version` prints the version string only
-(e.g. `abcd dev` in a development build) — it does **not** render a status board;
-the bare-status convention is scoped to `ahoy`/`capture`/`intent`/`memory`/`spec`
+emits `{ "name": "abcd", "version": "<version>", "vintage": "<revision>",
+"staleness": "<fresh|stale|unknown>" }`, plus `install_mode` when a PATH-entry
+install mode is resolvable (the field is omitted when empty) and a `check`
+object (latest, source, verdict) when `--check` was passed. The plugin command
+(`commands/version.md`) reads the JSON and tells the user the `name`,
+`version`, `install_mode`, `vintage`, and `staleness`. Without `--json`, bare
+`abcd version` prints a short block — the version line (e.g. `abcd dev` in a
+development build) followed by `install:` (when resolvable), `vintage:`, and
+`staleness:` lines — not the version string alone, and it does **not** render
+a full status board; the bare-status convention is scoped to
+`ahoy`/`banlist`/`capture`/`identity`/`intent`/`memory`/`spec`
 and bare `abcd`, not to `version`.
 
 ## Where the version comes from
