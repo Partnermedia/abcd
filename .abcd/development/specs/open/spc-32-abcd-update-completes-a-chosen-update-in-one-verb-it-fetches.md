@@ -55,7 +55,7 @@ rather than update re-implementing it).
 | dev shim at the entry | refuse; name the shim's track-latest contract and `ahoy install` mode switch |
 | abcd-owned dangling symlink (iss-345 shape) | refuse; name `abcd ahoy install` as the heal |
 | owned symlink, healthy | refuse; the plugin update owns that binary — name the plugin-update path |
-| regular file whose SHA-256 appears in a published release's `checksums.txt` (any release, walked newest-first) | OWNED BY PROVENANCE → swap in place |
+| regular file whose SHA-256 is proven against a published release (the install tag's manifest first, then the release list walked newest-first from the origin's atom feed, bounded) | OWNED BY PROVENANCE → swap in place; the old version is the release the on-disk bytes belong to, derived here, never read from the running binary |
 | regular file matching no release | refuse; describe the occupant, suggest `--help` install docs |
 | resolved path under a brew prefix (`/opt/homebrew`, `/usr/local`, `/home/linuxbrew/.linuxbrew` — prefix test on the RESOLVED path) | refuse; print `brew upgrade abcd` |
 | entry shadowed by an earlier PATH occupant | proceed on the owned entry but the receipt reports the shadowing occupant; never claim the machine runs the new version |

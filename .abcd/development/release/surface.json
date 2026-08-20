@@ -859,6 +859,19 @@
       "flags": []
     },
     {
+      "path": "abcd update",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "yes",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd version",
       "hidden": false,
       "flags": [
