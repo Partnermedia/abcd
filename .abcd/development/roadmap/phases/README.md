@@ -106,10 +106,10 @@ checked against the binary and found mostly false, and the experiment's whole
 point is to test the brief's structure *before* a packer is written to it — so
 it cannot sit behind the phase whose section list it exists to revise. Phase 6
 retains the packer, embark, and the round-trip, and is built to whatever section
-list the experiment leaves standing. itd-88 is in `planned/` and enters no
-phase's `## Scope` — scheduled and planned are orthogonal axes (per
-[adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)), and
-an intent committed-to but unsequenced is a valid state.
+list the experiment leaves standing. itd-88 enters no phase's `## Scope` —
+scheduled and planned are orthogonal axes (per
+[adr-34](../../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)), so
+an intent can be delivered without ever being sequenced into a phase.
 
 ## Related Documentation
 

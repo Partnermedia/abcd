@@ -21,8 +21,9 @@ themselves.
   may *inform* an ADR; the ADR is where the choice is recorded.
 - **Intents** — go to `.abcd/development/intents/`. A note may seed an
   intent; the intent is the forward-looking record.
-- **Phase-scoped research** — goes to `research/phase/<N>/` (design inputs a
-  given phase consumes).
+- **Phase-scoped or work-scoped research** — stays in `notes/`, grouped by a
+  dated subdirectory when a cluster of notes serves one piece of work (design
+  inputs a given phase consumes).
 - **Prompt R&D** — goes to `research/prompting/` (agent prompt drafts, templates).
 - **Run logs / ephemeral acceptance output** — go to `.abcd/logbook/`.
 
@@ -43,6 +44,6 @@ into ADRs/intents by hand.
 
 ## Related
 
-- [`../decisions/adrs/`](../../decisions/adrs) — decisions a note may inform
-- [`../intents/`](../../intents) — intents a note may seed
-- [`../research/`](..) — sibling research directories (`phase/`, `prompting/`, `adr/`)
+- [`../../decisions/adrs/`](../../decisions/adrs) — decisions a note may inform
+- [`../../intents/`](../../intents) — intents a note may seed
+- [`../`](..) — sibling research directories (`notes/`, `prompting/`)
