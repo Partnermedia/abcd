@@ -402,3 +402,35 @@ Per hand-run, append:
   artefact filed) is a case the four-piece table handles but the entry format
   under-describes: "home" here is a citation, not a filing. Worth a line in
   the protocol page when the enum question is next revisited.
+
+### 2026-08-20 — `abcd update` in one verb (itd-130)
+
+- **Proposal:** from the update-mechanism investigation — automatic updates
+  for abcd across its two install shapes (plugin, standalone CLI), covering
+  the self-update verb, plugin-side delivery, Homebrew, and the bootstrap
+  script's future.
+- **Initial routing (proposed before the human ruled):** capability (the
+  `abcd update` verb: fetch/verify/swap, dispatch, refusals, progress) |
+  intent | itd-130; trust rules ("never touches a plugin-root binary",
+  "never ambient") | citations of existing records, not filings — adr-38
+  tier 3 and itd-108's one-cut coherence carry both, no new ADR; stance
+  (notify-only-plus-explicit-verb over silent auto-update) | already carried
+  by adr-38, no new principle; decision (Homebrew parked until the verb
+  exists; install-channel refusal ships with the verb) | dated DECISIONS.md
+  entry 2026-08-20; plumbing (bootstrap.sh demoted to cold-start trampoline)
+  | itd-130 open question (sequencing + delegation hardening), brief
+  internals when it lands; defect discovered en route (stranded PATH symlink
+  classifies foreign) | iss-345, fixed test-first the same day, independent
+  of the verb. Typed links: itd-130 builds_on itd-105, itd-108. No reversal
+  flags.
+- **Confirmed routing:** adopted unchanged (human confirmation 2026-08-20,
+  in-session, after two adversarial reviews had already reshaped the draft's
+  scope — the reviews moved the trampoline from scope commitment to open
+  question before the human saw the table).
+- **Verdict:** FILE-AS-IS — survived confirmation unedited.
+- **Notes:** like itd-128's stance slot, three of the six parts resolved to
+  citations of existing records rather than filings; the four-piece table
+  keeps working when "home" means "already recorded there". The defect slot
+  (a bug found while investigating a capability) is a fifth part-type the
+  table absorbs under plumbing-adjacent routing but the protocol page does
+  not name; second data point for the enum revisit.

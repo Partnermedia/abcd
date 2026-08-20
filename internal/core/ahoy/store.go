@@ -435,12 +435,48 @@ func classifyBinTarget(target, pluginRoot string) binTargetKind {
 		if resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)) {
 			return binTargetOwnedSymlink
 		}
+		if strandedSiblingDest(target, dest, pluginRoot) {
+			return binTargetOwnedSymlink
+		}
 		return binTargetForeign
 	}
 	if isDevShimFile(target) {
 		return binTargetDevShim
 	}
 	return binTargetForeign
+}
+
+// strandedSiblingDest reports whether a symlink's destination is the binary of
+// a sibling plugin root that no longer exists — the entry every plugin update
+// strands (iss-345): the harness provisions each update into a fresh cache dir
+// and deletes the old one, so the pinned link points at <old-cache-dir>/abcd
+// while the current root is <new-cache-dir>. Ownership extends to exactly that
+// shape and no further: the leaf must be the binary name, the destination must
+// be GONE (a live link into another root is somebody's working install, never
+// adopted), and the dead root must share the current root's parent directory.
+// The destination itself cannot be resolved (it no longer exists, so
+// EvalSymlinks fails), so its grandparent — which survives the update — is
+// resolved and compared against the parent of the RESOLVED current root; a
+// plugin root that is itself a symlink out of its own parent therefore never
+// matches, which fails toward foreign, the refusing side. In a source
+// checkout the "parent" is the directory holding the checkout, so the sibling
+// scope is every sibling project dir — wider than the plugin cache, still the
+// developer's own tree, and still gated on the destination being gone.
+func strandedSiblingDest(symlinkPath, dest, pluginRoot string) bool {
+	if pluginRoot == "" {
+		return false
+	}
+	if !filepath.IsAbs(dest) {
+		dest = filepath.Join(filepath.Dir(symlinkPath), dest)
+	}
+	if filepath.Base(dest) != binName {
+		return false
+	}
+	if present, err := fsutil.Exists(dest); err != nil || present {
+		return false
+	}
+	oldRoot := filepath.Dir(dest)
+	return resolvePath(filepath.Dir(oldRoot)) == filepath.Dir(resolvePath(pluginRoot))
 }
 
 func isDir(p string) bool {
