@@ -13,7 +13,15 @@ the operator-internal hook entrypoints are omitted.
 
 Agent-based configuration for development
 
-**Usage:** `abcd`
+**Usage:** `abcd [<record-id>]`
+
+Agent-based configuration for development.
+
+Bare `abcd` renders the read-only status board — what can I do. A single
+positional matching a record id (`iss-N`, `itd-N`, `spc-N`, `adr-N`) instead
+reports what that record is, where it lives, and the next move for its
+lifecycle state — what is this. Both forms are strictly read-only; any other
+positional is refused as an unknown command.
 
 **Flags:**
 
@@ -400,6 +408,8 @@ under a prefix (a GitHub Enterprise Server install mounts the same endpoints
 under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside
 an interpreter payload (an execute-a-string payload IS read — `sh -c`,
 `env -S`; one the guard cannot read is warned or, for `env -S`, blocked),
+a hazard inside a top-level backtick substitution (`$(…)` is followed,
+backticks are not — a disclosed v1 limit, iss-148),
 or a dangerous form no entry describes. Coverage is what the registry
 names.
 
@@ -573,7 +583,7 @@ Report whether an intent is ready to implement (planned + AC + written spec); ex
 
 ### `abcd launch`
 
-Preview the public launch bundle and release gates (read-only)
+Preview the public launch bundle and release gates (--dry-run required; read-only)
 
 **Usage:** `abcd launch [flags]`
 

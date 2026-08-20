@@ -177,8 +177,14 @@ func NewRootCommand() *cobra.Command {
 	var asJSON bool
 
 	root := &cobra.Command{
-		Use:           "abcd",
-		Short:         "Agent-based configuration for development",
+		Use:   "abcd [<record-id>]",
+		Short: "Agent-based configuration for development",
+		Long: "Agent-based configuration for development.\n\n" +
+			"Bare `abcd` renders the read-only status board — what can I do. A single\n" +
+			"positional matching a record id (`iss-N`, `itd-N`, `spc-N`, `adr-N`) instead\n" +
+			"reports what that record is, where it lives, and the next move for its\n" +
+			"lifecycle state — what is this. Both forms are strictly read-only; any other\n" +
+			"positional is refused as an unknown command.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Bare answers "what can I do"; `abcd <id>` answers "what is this, and
@@ -240,7 +246,7 @@ func NewRootCommand() *cobra.Command {
 	var launchDryRun bool
 	launchCmd := &cobra.Command{
 		Use:   "launch",
-		Short: "Preview the public launch bundle and release gates (read-only)",
+		Short: "Preview the public launch bundle and release gates (--dry-run required; read-only)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
