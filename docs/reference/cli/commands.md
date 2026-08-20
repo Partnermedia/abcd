@@ -690,6 +690,25 @@ Close a spec (open/ -> closed/) and ship its linked intent (planned/ -> shipped/
 
 **Usage:** `abcd spec close <spc-N>`
 
+### `abcd update`
+
+Complete a chosen update: fetch, verify, and swap the PATH-installed binary
+
+**Usage:** `abcd update [tag] [flags]`
+
+Fetches the named release (or resolves the latest, naming it before acting),
+verifies the platform binary against the same release's checksums.txt, and
+swaps the PATH-installed copy atomically. The verb is the only ask: abcd
+never checks for or applies updates on its own (adr-38). A plugin-root
+binary, the dev shim, and package-manager installs are refused with the
+command that owns them.
+
+**Flags:**
+
+```
+      --yes   skip the TTY confirmation of a freshly resolved tag
+```
+
 ### `abcd version`
 
 Print abcd's version, install mode, and vintage

@@ -26,9 +26,10 @@ newer version exists, add `--check`:
 "${CLAUDE_PLUGIN_ROOT}/abcd" version --check --json
 ```
 
-This is the **one** command that reaches the network. It fetches the latest
-release once, compares, and reports under `check` (with its `source` named).
-Every other path reads only what is on disk.
+`--check` reaches the network — it fetches the latest release once, compares,
+and reports under `check` (with its `source` named). The only other verb that
+does is `update`, which completes what `--check` reports; every other path
+reads only what is on disk.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a
