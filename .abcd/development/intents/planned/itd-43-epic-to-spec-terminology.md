@@ -40,7 +40,7 @@ The reviews subsystem, the schemas, and the spec store are all abcd-owned — th
 - **Reviews subsystem rename** — the review-index, review-postprocess, and review-verify surfaces: `epic_id` parameters → `spec_id`, the `--epic` CLI flag, the `## Epic:` rendered heading, the `epic_id` JSON field, and the `epic-review`/`epic` review-type tokens. All of it is abcd-owned, so the review-type token becomes `spec-review` throughout with no external token to accommodate.
 - **`issue.schema.json`** — `related_epics` → `related_specs`, nested `epic` key → `spec`, descriptions updated.
 - **`grill-report.schema.json`** — prose mentions of `epic`/task ID updated.
-- **Prose sweep** — `intents/README.md`, the brief (`04-surfaces/`, `02-constraints/`, etc.), `docs/reference/{commands,facilitator,review-schema}.md`, `commands/abcd/intent.md`, the grill `SKILL.md` boundary message, project READMEs: `epic` as a noun → `spec`.
+- **Prose sweep** — `intents/README.md`, the brief (`04-surfaces/`, `02-constraints/`, etc.), `docs/reference/{commands,facilitator,review-schema}.md`, `commands/intent.md`, the grill `SKILL.md` boundary message, project READMEs: `epic` as a noun → `spec`.
 - **The native spec store's README** — the directory-purpose prose still says `epics`; align to `specs`.
 
 ## What's Out of Scope
@@ -70,6 +70,6 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Follows: the `epic_id`→`spec_id` intent-field rename (intent.schema.json, prd.schema.json, all 41 intent files, internal/core/lint, commands/abcd/intent.md) — the atomic part, done first; this intent is the non-atomic remainder.
+- Follows: the `epic_id`→`spec_id` intent-field rename (intent.schema.json, prd.schema.json, all 41 intent files, internal/core/lint, commands/intent.md) — the atomic part, done first; this intent is the non-atomic remainder.
 - Sequenced with: the `intents/README.md` v1/v2/v3 → phase migration (logged in a dated working-log entry, 2026-05-16 session) — both rewrite the same README; order or merge them.
 - Triggered by: the native spec store adopting `spec` as its term ([adr-26](../../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), which leaves abcd's older `epic` surfaces inconsistent.
