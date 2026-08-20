@@ -7,6 +7,8 @@ category: "drift"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/release-gate/manifest.json"
+resolution: "pin the four shipped surface chapters in the release-gate manifest; checkerCount 26; README counts corrected"
+impact: fix
 ---
 
 the release-gate manifest pins 17 briefDocs while four shipped surface chapters (guard, ideate, identity, banlist) are outside the pin, so every full-tier crosscheck attests coverage it never ran

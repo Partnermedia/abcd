@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/research/notes/README.md"
+resolution: "route phase-scoped research to notes/ and fix the Related siblings/hrefs"
+impact: fix
 ---
 
 research notes README routes phase-scoped research to research/phase/N/ and names research/adr/ as a sibling — both layouts adr-30 rejected and the gated research-children index denies — and its Related display texts sit one level short of their hrefs

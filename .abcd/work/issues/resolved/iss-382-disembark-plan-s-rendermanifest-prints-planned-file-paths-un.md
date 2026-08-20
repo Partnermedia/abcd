@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "internal/core/lifeboat/plan.go"
+resolution: "sanitise planned file paths in RenderManifest; watched-fail TestRenderManifestSanitisesFilePaths"
+impact: fix
 ---
 
 disembark plan's RenderManifest prints planned file paths unsanitised, so a hostile source-repo filename injects raw C1/bidi terminal escapes into the plan render and its --json twin

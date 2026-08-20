@@ -26,6 +26,30 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **A hostile source repo cannot inject terminal escapes through `disembark
+  plan`.** The dry-run render printed planned file paths raw while the same
+  view already sanitised the source name and omission lines, so a crafted
+  filename carried C1/bidi runes to the operator's terminal. Every path in the
+  render now passes the terminal-safe sanitiser. (iss-382)
+- **The transcript history store's read path is guarded.** `history list` and
+  `history show` read records from the cross-repo store under HOME with a raw
+  read while the write path was fully hardened, so a planted symlink was
+  followed and a FIFO wedged `history capture` under the store lock. Both reads
+  now use the guarded primitive (no symlink follow, no blocking open, a size
+  cap). (iss-383)
+- **A committed citation baseline cannot smuggle escapes through the lint
+  gate.** The baseline validator sanitised the final URL but echoed the entry
+  key and the other field values raw into a refusal that reaches the terminal,
+  so a hostile entry could replay ESC/bidi/zero-width through the blocking
+  docs-lint gate. Every echoed value is now sanitised. (iss-384)
+- **`abcd launch scaffold` pins the adopter's Go toolchain.** The generated
+  release workflow carried a floating `go-version` (the go.mod patch was
+  stripped), so an adopter shipped binaries built on whatever patch a runner
+  resolved on release day. A patch-pinned `go.mod` now scaffolds that exact
+  toolchain. (iss-386)
+- **`/abcd:version` names every network-touching verb.** Its guidance claimed
+  only `version --check` and `update` reach the network; `docs cite refresh`
+  and `memory ingest <url>` do too. The enumeration is corrected. (iss-385)
 - **`ahoy install` heals the PATH entry a plugin update strands.** The entry
   pointing into a deleted previous plugin cache dir classified as a foreign
   occupant — never healed, refused by `ahoy uninstall` against the dangling

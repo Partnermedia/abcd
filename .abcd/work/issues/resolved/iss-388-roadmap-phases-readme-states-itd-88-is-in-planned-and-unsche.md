@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/roadmap/phases/README.md"
+resolution: "drop the stale planned/ bucket claim for the shipped itd-88, keeping the adr-34 orthogonality point"
+impact: fix
 ---
 
 roadmap phases README states itd-88 is in planned/ and unscheduled, but the intent has shipped — a false bucket claim in present-tense current-state prose

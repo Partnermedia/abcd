@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "internal/core/lint/baseline.go"
+resolution: "sanitise the key and echoed fields in Baseline.validate; watched-fail TestBaselineErrorSanitisesEchoedFields"
+impact: fix
 ---
 
 Baseline.validate sanitises final_url alone while echoing the entry key, url and quoted fields raw, so a committed citations-baseline entry writes ESC/bidi/zero-width to the terminal through the blocking docs-lint gate

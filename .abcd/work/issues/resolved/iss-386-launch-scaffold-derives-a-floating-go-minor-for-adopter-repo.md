@@ -7,6 +7,8 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "internal/core/launch/scaffold/scaffold.go"
+resolution: "admit the go.mod patch in scaffold go-version derivation; watched-fail TestDeriveRepoFactsKeepsPatchVersion"
+impact: fix
 ---
 
 launch scaffold derives a floating Go minor for adopter repos — goModVersionRe strips the go.mod patch, goVersionRe rejects supplying one, the toolchain directive is ignored, and a hand-pinned release.yml is refused then overwritten — the adopter-side residue of iss-289

@@ -7,6 +7,8 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/work/issues"
+resolution: "confirmed nitpick batch: canonical id-uniqueness key, .yaml lockstep sweep, scripts eol=lf, lifeboat-reviewer 0.1.1, commands/abcd path repoint"
+impact: fix
 ---
 
 bughunt round-3 confirmed nitpick batch — zero-padded record-id filenames evade the id-uniqueness lint in all three families; the go-version lockstep test skips .yaml workflows; scripts/*.sh lack the eol=lf pin the repo's own policy states; agents/CHANGELOG announces lifeboat-reviewer 0.1.1 while the prompt carries 0.1.0; five live records still route to the pre-flattening commands/abcd/ and retired docs/reference pages

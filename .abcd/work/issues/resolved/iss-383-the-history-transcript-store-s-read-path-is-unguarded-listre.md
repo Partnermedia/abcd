@@ -7,6 +7,8 @@ category: "security"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "internal/core/history/store.go"
+resolution: "route listRecords and Read through fsutil.ReadGuarded; watched-fail TestListSkipsSymlinkedRecord"
+impact: fix
 ---
 
 the history transcript store's read path is unguarded — listRecords and Read use raw os.ReadFile, so a planted FIFO wedges history list and history capture while the store flock is held, and a symlinked record is followed

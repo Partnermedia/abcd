@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: ".abcd/development/principles/examples-use-reserved-identifiers.md"
+resolution: "record the iss-154 lint as enforced in the principle and point the owed promotion at iss-390"
+impact: fix
 ---
 
 the examples-use-reserved-identifiers principle still says a fixture-identifier lint would make it a discipline — the allowlist-inversion lint shipped (iss-154) and cites the principle by name, so the Promotion paragraph misdirects an agent to build an existing rule

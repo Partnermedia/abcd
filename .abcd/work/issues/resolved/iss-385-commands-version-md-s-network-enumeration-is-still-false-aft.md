@@ -7,6 +7,8 @@ category: "documentation"
 source: "agent-finding"
 found_during: "bughunt-round-3"
 found_at: "commands/version.md"
+resolution: "enumerate all four network-touching verbs in commands/version.md"
+impact: fix
 ---
 
 commands/version.md's network enumeration is still false after two rewrites — it names version --check and update as the only fetch verbs while docs cite refresh and memory ingest <url> also reach the network
