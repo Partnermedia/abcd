@@ -97,7 +97,13 @@ var (
 	// may carry a leading underscore so an mDNS SERVICE INSTANCE — the form
 	// avahi/dns-sd actually print, "alice-laptop._ipp._tcp.local" — is not broken into
 	// pieces by the service labels and missed.
-	lanHostRe = regexp.MustCompile(`(?i)\b(?:(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:local|lan)|(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*fritz\.box)\b`)
+	// No trailing \b: the suffix is a fixed literal RE2 cannot shorten, so a
+	// hostname abutting '_' or an alnum ("printer.local_backup" in a snake_case
+	// filename) would silently drop the whole match — the dead corner the token
+	// patterns and ipv4Re/macRe already retired. The suppression the boundary
+	// gave incidentally (an alnum right after the suffix means a LONGER label
+	// was truncated) moves to truncatedLabel in SkipAt.
+	lanHostRe = regexp.MustCompile(`(?i)\b(?:(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:local|lan)|(?:_?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*fritz\.box)`)
 
 	// A device hostname: <name>-<device noun>. The noun set is deliberately narrow
 	// — it excludes "server", "host", "machine", "router" and "box", which are
@@ -107,7 +113,9 @@ var (
 	// "docker-desktop" and "ubuntu-desktop" are platform names, not machines. A
 	// persona-derived name (alice-laptop, carol-server) is allowed by the skip
 	// below whether or not its noun is in this set.
-	deviceHostRe = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*-(?:laptop|macbook|mbp|imac|thinkpad|netbook|chromebook|nas)\b`)
+	// No trailing \b, for the same reason as lanHostRe; truncatedLabel keeps
+	// "alexs-macbookpro" (a longer noun, not a macbook) quiet.
+	deviceHostRe = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*-(?:laptop|macbook|mbp|imac|thinkpad|netbook|chromebook|nas)`)
 )
 
 // personaNames is the persona registry's given-name sequence
@@ -212,7 +220,8 @@ func NetworkPatterns() []Pattern {
 			Re: lanHostRe, Severity: SeverityWarn,
 			Skip: func(m string) bool { return personaDerivedHost(m) },
 			SkipAt: func(line string, start, end int) bool {
-				return dottedFileOrDirectory(line, start, end) ||
+				return truncatedLabel(line, start, end) ||
+					dottedFileOrDirectory(line, start, end) ||
 					selectorExpression(line, start, end) ||
 					mixedCaseSelector(line, start, end)
 			},
@@ -221,8 +230,10 @@ func NetworkPatterns() []Pattern {
 		{
 			Name: "net_device_hostname", Kind: kindNetDeviceHost, Label: "device hostname",
 			Re: deviceHostRe, Severity: SeverityWarn,
-			Skip:       func(m string) bool { return personaDerivedHost(m) },
-			SkipAt:     commonNounPhrase,
+			Skip: func(m string) bool { return personaDerivedHost(m) },
+			SkipAt: func(line string, start, end int) bool {
+				return truncatedLabel(line, start, end) || commonNounPhrase(line, start, end)
+			},
 			Suggestion: "replace with a persona-derived fixture host (alice-laptop, bob-macbook)",
 		},
 	}
@@ -657,6 +668,16 @@ func commonNounPhrase(line string, start, _ int) bool {
 }
 
 func isASCIIDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+// truncatedLabel reports whether a hostname match is immediately followed by a
+// host-label byte — the regex then truncated a LONGER label ("printer.local2",
+// "alexs-macbookpro") rather than matching a whole name. This is the positional
+// form of the suppression the patterns' former trailing \b provided; a '_' or
+// other non-label byte after the match does NOT suppress, which is the whole
+// point (iss-344).
+func truncatedLabel(line string, _, end int) bool {
+	return end < len(line) && isHostLabelByte(line[end])
+}
 
 // isWordByte matches the bytes that continue an ASCII word.
 func isWordByte(b byte) bool {
