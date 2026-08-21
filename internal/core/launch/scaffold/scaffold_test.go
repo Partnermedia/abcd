@@ -465,3 +465,36 @@ func gitInit(t *testing.T, dir, branchName string) {
 	}
 	run("init", "-q", "-b", branchName)
 }
+
+// TestDeriveRepoFactsResolvesWorktreeGitfile is the S7 regression: in a linked
+// worktree (or submodule) ".git" is a FILE holding "gitdir: <path>", not a
+// directory. deriveBranch must follow it — reading HEAD from the worktree gitdir
+// and origin/HEAD from the shared (commondir) git dir — instead of failing both
+// raw reads and silently stamping the "main" fallback into the release workflows.
+func TestDeriveRepoFactsResolvesWorktreeGitfile(t *testing.T) {
+	root := t.TempDir()
+	// Shared (common) git dir with the remote default branch pinned to "mainline".
+	commonGit := filepath.Join(root, "common", ".git")
+	mustWrite(t, filepath.Join(commonGit, "refs", "remotes", "origin", "HEAD"),
+		"ref: refs/remotes/origin/mainline\n")
+	// The linked worktree: ".git" is a gitfile; its gitdir carries HEAD (on a
+	// different branch) and a commondir pointer back to the shared dir.
+	wt := filepath.Join(root, "wt")
+	wtGitDir := filepath.Join(commonGit, "worktrees", "wt")
+	mustWrite(t, filepath.Join(wtGitDir, "HEAD"), "ref: refs/heads/feature\n")
+	mustWrite(t, filepath.Join(wtGitDir, "commondir"), "../..\n")
+	mustWrite(t, filepath.Join(wt, ".git"), "gitdir: "+wtGitDir+"\n")
+
+	if b, _ := DeriveRepoFacts(wt); b != "mainline" {
+		t.Errorf("worktree default branch = %q, want %q (fell back to main = the bug)", b, "mainline")
+	}
+
+	// With no origin/HEAD, it falls back to the per-worktree checked-out branch,
+	// still read through the gitfile rather than defaulting to main.
+	if err := os.Remove(filepath.Join(commonGit, "refs", "remotes", "origin", "HEAD")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := DeriveRepoFacts(wt); b != "feature" {
+		t.Errorf("worktree HEAD branch = %q, want %q", b, "feature")
+	}
+}
