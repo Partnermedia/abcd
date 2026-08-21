@@ -204,13 +204,34 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 	}
 
 	for _, root := range cfg.Roots {
+		// The walk reads committed files whose content AND paths a cloned repo
+		// controls through its committed .abcd/docs-lint.json / record-lint.json
+		// roots. Contain the root and every resolved leaf, and guard the read,
+		// exactly as CollectCitedURLs does over this same cfg.Roots — otherwise a
+		// `roots` of "../private", or a committed `docs/leak.md -> /etc/passwd`
+		// symlink inside a contained root, reads and lints a file the repository
+		// does not own (its path and line then printed to stdout/--json/CI), and
+		// a `-> /dev/zero` link is followed and read unbounded.
+		if err := containedRepoPath(root); err != nil {
+			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
+				"; the lint reads only inside the repository"}
+		}
 		rootAbs := filepath.Join(repoRoot, root)
+		if err := resolvedInsideRoot(repoRoot, rootAbs); err != nil {
+			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
+				"; the lint reads only inside the repository"}
+		}
 		mdFiles, err := markdownFiles(rootAbs)
 		if err != nil {
 			return nil, err
 		}
 		for _, fileAbs := range mdFiles {
-			content, err := os.ReadFile(fileAbs)
+			realPath, err := containedRealPath(repoRoot, fileAbs)
+			if err != nil {
+				return nil, &configError{"file " + quote(repoRel(repoRoot, fileAbs)) + " " + err.Error() +
+					"; the lint reads only inside the repository"}
+			}
+			content, err := fsutil.ReadGuarded(realPath, citationPageSizeLimit)
 			if err != nil {
 				return nil, err
 			}
@@ -2218,12 +2239,9 @@ func loadForbiddenSynonyms(repoRoot, glossaryDir string) (map[string]bool, map[s
 			return nil, nil, err
 		}
 		lines := strings.Split(string(content), "\n")
-		// Glossary term files carry a leading attribution comment before the `---`
-		// block (the mattpocock template), so slice from the opening delimiter — the
-		// shared frontmatter scanner requires `---` on line 0.
-		if start := frontmatterOpen(lines); start > 0 {
-			lines = lines[start:]
-		}
+		// frontmatterFields tolerates a glossary term file's leading attribution
+		// comment (the mattpocock template) before the `---` block, so no manual
+		// slice is needed here.
 		fields := frontmatterFields(lines)
 		term, ok := fields["term"]
 		if !ok {
@@ -2382,8 +2400,20 @@ type fmField struct {
 // copy here.
 func frontmatterFields(lines []string) map[string]fmField {
 	fields := map[string]fmField{}
+	// A record file may carry a leading attribution comment before its `---`
+	// block (the mattpocock glossary template), and the shared scanner requires
+	// `---` on line 0 — so a comment-led file would otherwise yield no fields and
+	// slip every frontmatter check (checkGitMetadata's no_git_metadata blocker,
+	// contentExempt, scanRecordStores). Slice from the opening delimiter, as
+	// loadForbiddenSynonyms and the glossary reader already do, and add the
+	// skipped-line offset back so reported line numbers stay absolute.
+	offset := 0
+	if start := frontmatterOpen(lines); start > 0 {
+		offset = start
+		lines = lines[start:]
+	}
 	for key, f := range frontmatter.Fields(lines) {
-		fields[key] = fmField{value: f.Value, line: f.Line}
+		fields[key] = fmField{value: f.Value, line: f.Line + offset}
 	}
 	return fields
 }

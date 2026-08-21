@@ -19,6 +19,117 @@ func writeFile(t *testing.T, root, rel, content string) {
 	}
 }
 
+// TestLintWalkContainsRootsAndLeaves pins that the reporting walk — not only the
+// citation collector three functions away — refuses a cloned repo's committed
+// config that points its roots or a leaf symlink outside the repository. A
+// `roots` of "../secret" read and linted a file the repo does not own, and a
+// committed `docs/leak.md -> outside` was followed by the raw os.ReadFile; both
+// now fail closed the way CollectCitedURLs already does over the same cfg.Roots.
+func TestLintWalkContainsRootsAndLeaves(t *testing.T) {
+	banCfg := Config{
+		Roots: []string{"docs"},
+		BannedTokens: []BannedToken{{
+			ID: "t1", Pattern: "SEKRET", Message: "no", Severity: "blocker",
+			Successor: "x", AllowContext: []string{"never"},
+		}},
+	}
+
+	t.Run("escaping root is refused", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "docs/ok.md", "# ok\n")
+		outside := t.TempDir()
+		if err := os.WriteFile(filepath.Join(outside, "notes.md"), []byte("SEKRET\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg := banCfg
+		cfg.Roots = []string{"../" + filepath.Base(outside)}
+		if _, err := Lint(cfg, root); err == nil {
+			t.Fatal("Lint accepted a root outside the repository")
+		}
+	})
+
+	t.Run("a symlinked leaf pointing outside is refused", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "docs/ok.md", "# ok\n")
+		outside := t.TempDir()
+		secret := filepath.Join(outside, "notes.md")
+		if err := os.WriteFile(secret, []byte("SEKRET\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(secret, filepath.Join(root, "docs", "leak.md")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		fs, err := Lint(banCfg, root)
+		if err == nil {
+			for _, f := range fs {
+				if strings.Contains(f.File, "leak.md") || strings.Contains(f.File, "notes.md") {
+					t.Fatal("Lint read and reported a leaf that resolves outside the repository")
+				}
+			}
+			t.Fatal("Lint read a leaf that resolves outside the repository")
+		}
+	})
+
+	t.Run("an in-repo symlink bridge is allowed", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "docs/real.md", "# real\n")
+		if err := os.Symlink(filepath.Join(root, "docs", "real.md"), filepath.Join(root, "docs", "bridge.md")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if _, err := Lint(banCfg, root); err != nil {
+			t.Fatalf("Lint refused a legitimate in-repo symlink bridge: %v", err)
+		}
+	})
+}
+
+// TestGitMetadataSeesCommentLedFrontmatter pins that the no_git_metadata blocker
+// reaches a record whose `---` block is preceded by a leading attribution comment
+// (the mattpocock glossary template). frontmatter.Fields requires `---` on line 0,
+// so such a file previously yielded an empty field map and slipped the blocker
+// entirely; the lint-local frontmatterFields now slices past the comment.
+func TestGitMetadataSeesCommentLedFrontmatter(t *testing.T) {
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"no_git_metadata": {Enabled: true, Severity: "blocker", Fields: []string{"author"}},
+		},
+	}
+	root := t.TempDir()
+	// A plain ---led record: the blocker already caught this one.
+	writeFile(t, root, "rec/plain.md", "---\nauthor: someone\n---\n\n# Plain\n")
+	// A comment-led record carrying the same banned key.
+	writeFile(t, root, "rec/commented.md",
+		"<!-- Adapted from mattpocock/skills (MIT). -->\n---\nauthor: someone\n---\n\n# Commented\n")
+
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain, commented int
+	var commentedLine int
+	for _, f := range fs {
+		if f.RuleID != "no_git_metadata" {
+			continue
+		}
+		switch {
+		case strings.HasSuffix(f.File, "plain.md"):
+			plain++
+		case strings.HasSuffix(f.File, "commented.md"):
+			commented++
+			commentedLine = f.Line
+		}
+	}
+	if plain != 1 {
+		t.Errorf("no_git_metadata on the ---led record = %d, want 1", plain)
+	}
+	if commented != 1 {
+		t.Fatalf("no_git_metadata on the comment-led record = %d, want 1 (the blocker was bypassed)", commented)
+	}
+	if commentedLine != 3 {
+		t.Errorf("comment-led finding line = %d, want 3 (absolute, not offset by the sliced comment)", commentedLine)
+	}
+}
+
 // countRule returns how many findings carry the given rule id.
 func countRule(fs []Finding, ruleID string) int {
 	n := 0
