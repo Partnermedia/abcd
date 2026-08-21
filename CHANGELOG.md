@@ -12,6 +12,14 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **The OPINIONS rules domain carries the memory-graduation principle.** A
+  lesson whose "why" is a correction any agent should receive belongs in the
+  repo's committed record — the `AGENTS.md` conventions section, a custom
+  `.abcd/rules.json` domain, or a ledger capture — never only in one user's
+  local agent memory; a memory item recalled twice is a graduation candidate.
+  The bundled domain line is self-contained so managed repos receive the whole
+  rule; the full principle lives in the development record.
+  (iss-2608210923436594)
 - **`abcd banlist --json` carries the private layer's `reach` caveat.** The
   private report now includes a `reach` field holding the one-sentence statement
   of what the layer does and does not protect, unconditionally — mirroring the
