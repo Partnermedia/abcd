@@ -10,14 +10,15 @@ import (
 	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
-// binaryMetaFile is the provenance record hooks/bootstrap.sh writes into the
-// plugin root when it installs a binary: which release it fetched, and which
-// plugin commit it fetched that release for.
+// binaryMetaFile is the root-local provenance record the bootstrap's DEGRADED
+// per-root fetch still writes (spc-21 behaviour, kept for harnesses that export
+// no persistent data dir). Cache-provisioned roots carry none: their provenance
+// lives once in the data dir's cache/binary-meta (spc-35).
 const binaryMetaFile = ".binary-meta"
 
 // maxBinaryMetaBytes caps the read. A handful of short key=value lines
-// (release_tag, release_sha, binary_sha256, fetched_at, plugin_sha,
-// plugin_root_basename); anything larger is not the file the bootstrap wrote.
+// (release_tag, release_sha, binary_sha256, fetched_at); anything larger is not
+// a file the bootstrap wrote.
 const maxBinaryMetaBytes = 4 << 10
 
 // binarySkewNotice is the one-line session-start notice for a plugin surface
@@ -28,6 +29,12 @@ const maxBinaryMetaBytes = 4 << 10
 // two apart (itd-105). The bootstrap records `unknown` for anything it could not
 // resolve, and an unknown commit yields no notice: visibility that guesses is
 // worse than none.
+//
+// The surface side of the comparison is the LIVE plugin root's basename, read
+// at render time (spc-35). One cached binary now serves every plugin root, so
+// a provisioning-time snapshot of "the root that fetched" would routinely
+// describe a root the harness has already replaced and deleted — the very
+// update this notice exists to talk about.
 func binarySkewNotice() string {
 	root := os.Getenv("ABCD_PLUGIN_ROOT")
 	if root == "" {
@@ -36,18 +43,16 @@ func binarySkewNotice() string {
 	if root == "" {
 		return ""
 	}
-	meta := readBinaryMeta(filepath.Join(root, binaryMetaFile))
-	pluginSHA, releaseSHA := meta["plugin_sha"], meta["release_sha"]
+	meta := readSkewMeta(root)
+	pluginSHA, releaseSHA := livePluginSHA(root), meta["release_sha"]
 	// Silence here has two distinct causes and they are NOT the same news. Either
 	// the two commits genuinely agree (nothing to report), or one of them never
-	// parsed — and `plugin_sha` failing to parse is the interesting one, because
-	// it is downstream of itd-105's unverified warrant that the harness names each
-	// plugin cache directory for the commit it was cloned from. If that stops
-	// holding, this returns "" forever and no notice can ever fire. The bootstrap
-	// records the raw, ungated `plugin_root_basename` beside the gated field
-	// precisely so that case is diagnosable from the file; it is deliberately not
-	// read here, because a notice built on a value that is not a commit would be
-	// the guesswork this whole path refuses to do.
+	// parsed — and the live basename failing the 40-hex gate is the interesting
+	// one, because it is downstream of itd-105's unverified warrant that the
+	// harness names each plugin cache directory for the commit it was cloned
+	// from. If that stops holding, this returns "" forever; the directory name
+	// itself is the diagnosable evidence, visible to anyone who looks at the
+	// live root — which is exactly what this function reads.
 	if !resolvedSHA(pluginSHA) || !resolvedSHA(releaseSHA) || pluginSHA == releaseSHA {
 		return ""
 	}
@@ -67,8 +72,36 @@ func binarySkewNotice() string {
 		shortSHA(pluginSHA), tag, shortSHA(releaseSHA))
 }
 
-// readBinaryMeta parses the bootstrap's key=value file. An unreadable or absent
-// file is an empty map, which every caller reads as "nothing to say".
+// readSkewMeta reads the provenance record the notice renders from. The
+// root-local file wins when it exists: it is written only by the per-root
+// fetch, so it describes exactly the binary sitting in THIS root — including a
+// migrated pre-cache root whose binary stays put while the shared cache moves
+// on to a newer release. Cache-provisioned roots carry no root-local record,
+// and for them the shared cache meta (spc-35) is the record of the very
+// artefact that was copied in. Unreadable on both paths is a nil map —
+// "nothing to say".
+func readSkewMeta(root string) map[string]string {
+	if meta := readBinaryMeta(filepath.Join(root, binaryMetaFile)); meta != nil {
+		return meta
+	}
+	if data := os.Getenv("CLAUDE_PLUGIN_DATA"); data != "" {
+		return readBinaryMeta(filepath.Join(data, "cache", "binary-meta"))
+	}
+	return nil
+}
+
+// livePluginSHA is the surface commit as the harness names it RIGHT NOW: the
+// live plugin root's basename, which the commit-stamped-cache warrant says is
+// the commit the root was cloned from. It is deliberately not a recorded value
+// — recording it at provisioning time is what spc-35 removed, because the
+// recorder's root and the session's root part ways at every plugin update. The
+// caller's 40-hex gate (resolvedSHA) decides whether the name is a commit.
+func livePluginSHA(root string) string {
+	return filepath.Base(root)
+}
+
+// readBinaryMeta parses a bootstrap-written key=value file. An unreadable or
+// absent file is a nil map, which every caller reads as "nothing to say".
 func readBinaryMeta(path string) map[string]string {
 	data, err := fsutil.ReadGuarded(path, maxBinaryMetaBytes)
 	if err != nil {
@@ -83,12 +116,13 @@ func readBinaryMeta(path string) map[string]string {
 	return out
 }
 
-// resolvedSHA reports whether the bootstrap actually resolved this commit, as
-// opposed to recording that it could not. The SHAPE is the test, not the absence
-// of the literal "unknown": .binary-meta is written by a shell script a crash can
-// interrupt, and a truncated value is neither a commit nor an admission that
-// there is none — shortSHA would abbreviate half a hash into a notice that reads
-// exactly like a real one.
+// resolvedSHA reports whether a value actually names a commit, as opposed to
+// recording that none was resolved. The SHAPE is the test, not the absence of
+// the literal "unknown": the meta is written by a shell script a crash can
+// interrupt, and the live basename is whatever the harness called a directory —
+// a truncated value is neither a commit nor an admission that there is none,
+// and shortSHA would abbreviate half a hash into a notice that reads exactly
+// like a real one.
 func resolvedSHA(s string) bool {
 	if len(s) != 40 {
 		return false

@@ -1,6 +1,8 @@
 package ahoy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -729,16 +731,20 @@ func markerFilesDropped(from, to string) []string {
 	return dropped
 }
 
-// stepSymlink installs the PATH entry: an owned symlink to the pinned binary
-// (default), or the track-latest dev shim under --dev. It runs on a fresh install
-// (the symlink.missing / symlink.dangling gaps) or when a mode switch was forced
-// on an already-present owned entry (apply-as-update, iss-107). It refuses to
-// clobber a foreign binary.
+// stepSymlink installs the PATH entry: an abcd-owned regular-file copy of the
+// verified cache artefact (default, spc-35), the spc-21 pinned symlink when no
+// cache exists to copy from, or the track-latest dev shim under --dev. It runs
+// on a fresh install (the symlink.missing / symlink.dangling gaps), to heal a
+// legacy symlink into the plugin root (symlink.legacy — that link dies at the
+// next plugin update), or when a mode switch was forced on an already-present
+// owned entry (apply-as-update, iss-107). It refuses to clobber a foreign
+// binary.
 func (a *applyCtx) stepSymlink() {
 	if a.det.pluginRoot == "" || a.binTarget == "" {
 		return
 	}
-	gapDriven := a.approved[ConfigChange] && (a.has("symlink.missing") || a.has("symlink.dangling"))
+	gapDriven := a.approved[ConfigChange] &&
+		(a.has("symlink.missing") || a.has("symlink.dangling") || a.has("symlink.legacy"))
 	if !gapDriven && !a.modeForced {
 		return
 	}
@@ -762,18 +768,88 @@ func (a *applyCtx) stepSymlink() {
 		a.installDevShim(target, kind)
 		return
 	}
-	a.installPinnedSymlink(target, kind)
+	a.installOwnedEntry(target, kind)
 }
 
-// installDevShim writes the track-latest shim, replacing an owned pinned symlink
-// if one is there. An existing dev shim is left as-is (idempotent).
+// installOwnedEntry writes the default PATH entry. With a verified cache
+// artefact available it installs the abcd-owned regular-file COPY (spc-35):
+// the artefact is read once, hashed, checked against the cache meta's recorded
+// binary_sha256 — every promotion out of the cache re-verifies, and a mismatch
+// refuses loudly and installs nothing — and the very bytes that were verified
+// are written 0755 with the provenance recorded in the data dir's path-entry.
+// A legacy owned symlink or a dev shim at the target is replaced (the heal); an
+// owned copy already matching is left alone. Without a usable cache it
+// degrades, loudly, to the spc-21 pinned symlink — there is nothing on disk
+// whose provenance a copy could record.
+func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
+	if !ownedCopySourceReady() {
+		if kind != binTargetOwnedSymlink {
+			// Notes is the loud channel (see refuse): the degradation must be
+			// SAID, because a symlink into the plugin root dies at the next
+			// plugin update and a silent fallback would hide why.
+			a.refuse("no verified release artefact is available in the persistent plugin data directory, so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Re-run `abcd ahoy install` from a session whose hooks have provisioned the cache to upgrade it to an owned copy.")
+		}
+		a.installPinnedSymlink(target, kind)
+		return
+	}
+	dataDir := pluginDataDir()
+	artefact := cacheAssetPath(dataDir)
+	want := cacheRecordedSHA(dataDir)
+	data, err := fsutil.ReadGuarded(artefact, maxBinaryArtefactBytes)
+	if err != nil {
+		a.refuse("could not read the cached release artefact " + displayPath(artefact) + ": " + errText(err))
+		return
+	}
+	// Hash the bytes just read, not the file again: what is verified is exactly
+	// what gets written, with no swap window between the two.
+	sum := sha256.Sum256(data)
+	got := hex.EncodeToString(sum[:])
+	if got != want {
+		a.refuse("refused to install the PATH entry: the cached artefact " + displayPath(artefact) +
+			" does not match its recorded SHA-256 checksum, so it may be tampered with or corrupted and nothing was installed. Remove that file and start a session with network access to fetch a fresh verified copy.")
+		return
+	}
+	if kind == binTargetOwnedCopy {
+		if cur, ok := fileSHA256Hex(target); ok && cur == want {
+			return // idempotent: the entry already is the verified artefact
+		}
+	}
+	if kind == binTargetOwnedSymlink || kind == binTargetDevShim {
+		if err := os.Remove(target); err != nil {
+			a.refuse("could not replace the existing PATH entry " + displayPath(target) + ": " + errText(err))
+			return
+		}
+		if kind == binTargetDevShim {
+			a.echoChange("install_mode", "dev", "pinned")
+		}
+	}
+	if err := fsutil.WriteFileAtomic(target, data, 0o755); err != nil {
+		a.refuse("could not write the PATH entry " + displayPath(target) + ": " + errText(err))
+		return
+	}
+	if err := writePathEntry(target, want, a.det.pluginRoot); err != nil {
+		// The copy is genuine and works; without the record it will classify
+		// foreign, so the failure is loud rather than latent.
+		a.refuse("the PATH entry was installed but its provenance record could not be written (" + errText(err) + "); re-run `abcd ahoy install` — without the record abcd will treat the entry as foreign.")
+	}
+	a.note(target)
+}
+
+// installDevShim writes the track-latest shim, replacing an owned pinned
+// symlink or owned copy if one is there. An existing dev shim is left as-is
+// (idempotent).
 func (a *applyCtx) installDevShim(target string, kind binTargetKind) {
 	if kind == binTargetDevShim {
 		return
 	}
-	if kind == binTargetOwnedSymlink {
+	if kind == binTargetOwnedSymlink || kind == binTargetOwnedCopy {
 		if err := os.Remove(target); err != nil {
 			return
+		}
+		if kind == binTargetOwnedCopy {
+			// The provenance record vouches for bytes that are gone; keeping it
+			// would let a later foreign file inherit the ownership claim.
+			removePathEntry()
 		}
 		a.echoChange("install_mode", "pinned", "dev")
 	}
@@ -898,11 +974,12 @@ func modeWouldChange(opts InstallOptions, det DetectionResult, target string) bo
 		}
 	}
 	if opts.Dev {
-		// Only a switch away from the pinned symlink is a forced change. A missing
-		// entry is NOT forced: it flows through the symlink.missing gap so a declined
-		// ConfigChange approval is honoured (a fresh --dev must not bypass consent the
-		// way a plain install cannot). An existing dev shim is already correct.
-		return kind == binTargetOwnedSymlink
+		// Only a switch away from a pinned entry (legacy symlink or owned copy) is
+		// a forced change. A missing entry is NOT forced: it flows through the
+		// symlink.missing gap so a declined ConfigChange approval is honoured (a
+		// fresh --dev must not bypass consent the way a plain install cannot). An
+		// existing dev shim is already correct.
+		return kind == binTargetOwnedSymlink || kind == binTargetOwnedCopy
 	}
 	// Plain install: only a switch away from an existing dev shim is a forced
 	// change; a missing entry is handled by the symlink.missing gap, and an owned
@@ -949,8 +1026,10 @@ func (a *applyCtx) stepVersionStamp() {
 	}
 }
 
-// Uninstall removes the marker block and the owned PATH symlink only. It never
-// mutates hooks.json or the .abcd/ namespace.
+// Uninstall removes the marker block and the owned PATH entry (the spc-35 owned
+// copy plus its provenance record, or a legacy pinned symlink) only. It never
+// mutates hooks.json or the .abcd/ namespace, and leaves the download cache to
+// the harness's own uninstall.
 //
 // binDir names the directory to look in, for the one case detection cannot
 // derive: an install placed by `--bin-dir` in a directory that is not on PATH is
@@ -996,15 +1075,28 @@ func Uninstall(cwd, binDir string) (UninstallReceipt, error) {
 	case lerr != nil:
 		receipt.Symlink.Note = "absent"
 	case fi.Mode()&os.ModeSymlink == 0:
-		// A regular file: our own dev shim (remove it — it is ours), else foreign.
-		if isDevShimFile(target) {
+		// A regular file: our own dev shim or owned copy (remove it — it is
+		// ours, and for the copy the provenance record goes with it), else
+		// foreign. The cache in the data dir is deliberately left alone:
+		// uninstall removes what abcd owns on PATH, and the harness's
+		// uninstall-from-all-scopes deletion owns the data dir itself.
+		switch {
+		case isDevShimFile(target):
 			if err := os.Remove(target); err == nil {
 				receipt.Symlink.Removed = true
 				receipt.Symlink.Note = "removed dev shim"
 			} else {
 				receipt.Symlink.Note = "remove failed"
 			}
-		} else {
+		case isOwnedCopyFile(target):
+			if err := os.Remove(target); err == nil {
+				receipt.Symlink.Removed = true
+				receipt.Symlink.Note = "removed owned copy"
+				removePathEntry()
+			} else {
+				receipt.Symlink.Note = "remove failed"
+			}
+		default:
 			receipt.Symlink.Note = "not a symlink; left untouched"
 		}
 	case !ok:

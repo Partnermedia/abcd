@@ -489,3 +489,48 @@ Per hand-run, append:
   (itd-128, itd-130), once to a promote (itd-131). Worth a line in the protocol
   page: "promote an existing seed" is a distinct routing outcome from "file new"
   and "cite existing," and the four-piece table should name it.
+
+### 2026-08-21 — hook binary to persistent data dir (itd-132)
+
+- **Proposal:** from the plugin-update post-mortem (session 8db3dbd6) — the
+  hook binary lives in the harness's re-cloned, GC'd plugin cache dir, so
+  every update re-downloads it, an update-then-quit cancels the SessionEnd
+  bootstrap and loses the transcript, and the pinned PATH symlink dangles
+  when the orphaned dir is collected. Five ledger captures
+  (iss-2608210934566221..225) preceded the routing.
+- **Initial routing (proposed, human confirmed same session):** capability
+  (binary + .binary-meta relocate to the harness persistent data dir; PATH
+  symlink retargets; refresh only on release-tag change) | intent | itd-132,
+  absorbing iss-…222; trust rule (persistence must not weaken the spc-21
+  verification posture; SessionEnd performs no network work) | ADR + brief
+  invariant, drafted alongside the spec; stance (store durable state where
+  the platform documents it survives — never fight the harness lifecycle
+  inside the cache dir) | principle candidate; plumbing (pluginBinaryPath
+  consumers, hooks.json exec order, meta relocation, migration) | spec
+  detail; independent defect (SessionEnd bootstraps at exit) | iss-…223,
+  fixed test-first on its own branch, no intent; seeds (missed-capture
+  recovery sweep, statusline verb) | iss-…224/225 held in the ledger.
+  Typed links: itd-132 builds_on itd-105; supersedes spc-21's cache-dir
+  fast-path contract (flagged for the human — spc-21's "update into fresh
+  cache dir heals by re-fetch" AC is deliberately reversed to "update never
+  re-fetches unless the release changed"). No other reversal flags.
+- **Confirmed routing:** SPLIT, human-confirmed 2026-08-21 in-session.
+  Sequencing caveat for calibration: confirmation preceded the two-reviewer
+  prerequisite (reviews launched after, per the interview protocol) — the
+  reverse of itd-130's order. The planning interview is the final label;
+  relabel here if the reviewers or the interview overturn the table.
+- **Verdict:** SPLIT (blind prediction, confirmed pre-review).
+- **Notes:** the defect slot recurs (iss-…223 mirrors itd-130's iss-345:
+  a bug found en route, fixed test-first, routed outside the intent) —
+  third data point for naming that part-type in the protocol enum. The
+  reversal flag here is of a shipped spec's acceptance criterion rather
+  than an invariant; the table's supersedes link carried it naturally.
+  **Interview label (2026-08-21, same day):** the SPLIT table survived the
+  two-reviewer prerequisite and the interview unchanged — routing homes and
+  typed links held; the reviews instead overturned the *capability's
+  internal shape* (relocate-execution → download-cache + per-root copy +
+  owned PATH regular file, maintainer-ruled) and forced the record fixes
+  (builds_on written, supersession flag recorded, SPLIT parts captured as
+  iss-2608210934566226/227 before planning). Counts as a graded sample:
+  routing prediction correct; shape prediction wrong. Planned same session
+  as itd-132/spc-35.

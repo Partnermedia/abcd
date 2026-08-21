@@ -426,6 +426,10 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 			// Our own track-latest dev shim (abcd ahoy install --dev) — a valid
 			// install, not a foreign occupant. Surfaced via the install_mode signal.
 			installed = true
+		} else if isOwnedCopyFile(target) {
+			// The spc-35 owned copy: a regular file the data dir's path-entry
+			// vouches for, byte-for-byte. The healthy default install.
+			installed = true
 		} else {
 			gaps = append(gaps, Gap{
 				ID: "symlink.foreign", Category: ConfigChange, Scope: "machine",
@@ -440,6 +444,20 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 			// Unreadable link: say nothing rather than guess.
 		case resolveSymlinkDest(target, dest) == resolvePath(pluginBinaryPath(pluginRoot)):
 			installed = true
+			// A working install TODAY, and a casualty of the next plugin
+			// update: the link points into a directory the harness replaces and
+			// garbage-collects (spc-35). Heal-able only while a verified cache
+			// artefact exists to copy from — without one there is nothing
+			// better to offer than the symlink that works.
+			if ownedCopySourceReady() {
+				gaps = append(gaps, Gap{
+					ID: "symlink.legacy", Category: ConfigChange, Scope: "machine",
+					Title:    "PATH entry is a symlink into the plugin root",
+					Detail:   displayPath(target) + " points into the harness-owned plugin directory, which every plugin update replaces and later deletes — the entry will dangle after the next update.",
+					FixHint:  "ahoy install replaces it with an abcd-owned copy of the verified release binary, which survives updates.",
+					Required: true, Resolvable: true,
+				})
+			}
 		case strandedSiblingDest(target, dest, pluginRoot):
 			// Ours, stranded by a plugin update: the symlink.dangling gap above
 			// already carries it, and a foreign-worded gap here would tell the
@@ -527,7 +545,7 @@ func detectInstallMode(pluginRoot string, pluginOK bool) string {
 	switch classifyBinTarget(target, pluginRoot) {
 	case binTargetDevShim:
 		mode = "dev (tip build)"
-	case binTargetOwnedSymlink:
+	case binTargetOwnedSymlink, binTargetOwnedCopy:
 		mode = "pinned"
 	default:
 		return ""

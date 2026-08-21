@@ -106,6 +106,19 @@ func resolvePluginRoot() (string, bool) {
 			dir = filepath.Dir(dir)
 		}
 	}
+	// The owned-copy PATH entry (spc-35) is a regular file, so it has no symlink
+	// target inside the plugin root for the ancestor walk to follow home — the
+	// route the old pinned symlink doubled as. The home-scoped provenance record
+	// carries the plugin root the copy was provisioned from, so it stands in as
+	// the last candidate, AFTER the env-var and executable-ancestor routes: a
+	// live CLAUDE_PLUGIN_ROOT is always preferred, and the recorded root — a
+	// commit-stamped cache dir the harness replaces on update, which the hook-side
+	// bootstrap re-stamps each time it provisions — is the terminal's fallback
+	// (iss-2608210934566230). pluginRootValid still gates it, so a stale recorded
+	// root that has been garbage-collected is skipped, not trusted.
+	if rec, ok := readPathEntry(); ok && rec.pluginRoot != "" {
+		candidates = append(candidates, rec.pluginRoot)
+	}
 	for _, c := range candidates {
 		if pluginRootValid(c) {
 			return c, true
@@ -120,7 +133,8 @@ func pluginRootValid(candidate string) bool {
 	return isDir(filepath.Join(candidate, "hooks"))
 }
 
-// pluginBinaryPath is the binary the owned PATH symlink points at.
+// pluginBinaryPath is the binary a legacy owned PATH symlink points at (and the
+// source the owned copy is provisioned from).
 func pluginBinaryPath(pluginRoot string) string {
 	return filepath.Join(pluginRoot, "abcd")
 }
@@ -188,10 +202,10 @@ type pathEntry struct {
 	dangling bool          // ours, but the binary it points at is gone
 }
 
-// owned reports whether the entry is one abcd installed (a pinned symlink or the
-// dev shim) rather than a foreign occupant.
+// owned reports whether the entry is one abcd installed (the owned copy, a
+// legacy pinned symlink, or the dev shim) rather than a foreign occupant.
 func (e pathEntry) owned() bool {
-	return e.kind == binTargetOwnedSymlink || e.kind == binTargetDevShim
+	return e.kind == binTargetOwnedSymlink || e.kind == binTargetDevShim || e.kind == binTargetOwnedCopy
 }
 
 // scanPathEntries walks PATH in order and classifies every `abcd` it finds. It
@@ -299,6 +313,8 @@ func describeEntry(e pathEntry) string {
 	switch {
 	case e.kind == binTargetDevShim:
 		return "abcd's own dev-mode shim"
+	case e.kind == binTargetOwnedCopy:
+		return "abcd's own installed copy"
 	case e.kind == binTargetOwnedSymlink && e.dangling:
 		return "an abcd symlink whose target is gone"
 	case e.kind == binTargetOwnedSymlink:
@@ -412,8 +428,9 @@ type binTargetKind int
 
 const (
 	binTargetAbsent       binTargetKind = iota // nothing there
-	binTargetOwnedSymlink                      // our symlink -> the pinned binary
+	binTargetOwnedSymlink                      // our LEGACY symlink -> the pinned binary (pre-spc-35)
 	binTargetDevShim                           // our dev-mode rebuild-then-exec shim
+	binTargetOwnedCopy                         // our regular-file copy, vouched for by path-entry (spc-35)
 	binTargetForeign                           // something else; never clobber it
 )
 
@@ -442,6 +459,12 @@ func classifyBinTarget(target, pluginRoot string) binTargetKind {
 	}
 	if isDevShimFile(target) {
 		return binTargetDevShim
+	}
+	// A regular file is ours only when the data dir's path-entry names this
+	// very entry AND the bytes still hash to the recorded value (spc-35):
+	// ownership is recorded provenance, never content-guessing.
+	if isOwnedCopyFile(target) {
+		return binTargetOwnedCopy
 	}
 	return binTargetForeign
 }

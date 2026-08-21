@@ -35,6 +35,7 @@ func setupHermetic(t *testing.T) (home, pluginRoot string) {
 	t.Setenv("HOME", home)
 	t.Setenv("ABCD_PLUGIN_ROOT", pluginRoot)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	t.Setenv("CLAUDE_PLUGIN_DATA", "")
 	t.Setenv("ABCD_BIN_TARGET", binTargetPath)
 	// The detector walks PATH looking for abcd entries, so a machine that has a
 	// real install — exactly the machines that dogfood the install — leaks
