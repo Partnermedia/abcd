@@ -1,24 +1,31 @@
-// Package recordid is abcd's canonical support for minting sequential record
-// ids (iss-N, itd-N, spc-N) that do not collide across parallel branches.
+// Package recordid is abcd's canonical home for the record-id space: the
+// native timestamp-numeric mint (mint.go), the read-side resolver
+// (resolve.go), and the legacy max+1 allocator support this file keeps for the
+// families that have not yet adopted the mint seam.
 //
-// Every ledger mints "max observed N, plus one". Historically each ledger looked
-// only at ITS OWN WORKING TREE, so two branches cut from the same base silently
-// minted the same next id — invisible on each branch, surfacing only at merge
-// (iss-115, iss-120: two programmes both minted spc-10/spc-11, iss-110/iss-111).
+// THE NATIVE MINT (adr-45; mechanics per spc-33): an adopted family mints
+// <family>-<yymmddHHMMSS><4 random digits> through Minter.Mint — time-ordered,
+// coordination-free, offline, and reading no maximum anywhere, so two minters
+// sharing a stale view can never converge on one id. Captures (iss) mint this
+// way; itd/spc adopt the same seam as configuration at their own turn (rollout
+// per adr-45 ruling 3). The armed record-lint uniqueness rules
+// (issue_id_unique, intent_lifecycle, spec_id_unique) stay as the scheme's
+// fail-safe, no longer the primary defence.
 //
+// THE LEGACY ALLOCATOR (itd/spc until they adopt): every ledger mints "max
+// observed N, plus one". Historically each ledger looked only at ITS OWN
+// WORKING TREE, so two branches cut from the same base silently minted the
+// same next id — invisible on each branch, surfacing only at merge (iss-115,
+// iss-120: two programmes both minted spc-10/spc-11, iss-110/iss-111).
 // MaxAcrossRefs is the one home for the git-ref side of that maximum: it scans
 // every local branch and remote-tracking ref for a family's highest id, so a
 // branch that has ALREADY committed a higher id is seen even though its file is
-// absent from the current working tree. Each ledger keeps its own working-tree
-// scan (which alone sees uncommitted mints) and folds this in — union, then +1.
-//
-// RESIDUAL WINDOW (accepted, documented): a ref only carries a mint once it is
-// committed. Two branches that BOTH mint before either commits still collide —
-// the ref scan cannot see an uncommitted file on another branch. That window is
-// left to the armed record-lint uniqueness rules (issue_id_unique,
-// intent_lifecycle, spec_id_unique), which run on the merged PR's union in CI and
-// flag every colliding claimant. Refs-union minting closes the common
-// commit-then-branch case; the detectors close the rest.
+// absent from the current working tree. Each remaining ledger keeps its own
+// working-tree scan (which alone sees uncommitted mints) and folds this in —
+// union, then +1. Its residual window — two branches that BOTH mint before
+// either commits — is exactly the mechanism that produced the 2026-08-19/20
+// collisions (iss-330, the itd-114 field test) and is why the native mint
+// replaces this allocator family by family rather than hardening it.
 package recordid
 
 import (

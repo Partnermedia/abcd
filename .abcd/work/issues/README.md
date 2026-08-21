@@ -4,7 +4,12 @@ The per-repo issue ledger: abcd's structured replacement for a free-form
 `issues.md`. It lives here, under the shared working tier (`.abcd/work/`), so it
 is committed and travels with the repository. Each issue is a single
 YAML-frontmatter + Markdown-body file named `iss-<N>-<slug>.md`, with an
-unpadded, per-repo `iss-N` id namespace.
+unpadded, per-repo `iss-N` id namespace. Ids are minted timestamp-numeric —
+`iss-<yymmddHHMMSS><4 random digits>`, a UTC second stamp plus a uniform random
+suffix — so two agents minting the same instant on different branches produce
+different ids with no coordination, and an id, once minted, is never renumbered
+(adr-45; the ledger is dual-vintage: sequential ids from the max+1 era remain
+valid forever beside the native ones, one numeric grammar for both).
 
 This document is the store contract. The write side is
 `internal/core/capture`; the front door is `abcd capture`.
@@ -70,8 +75,9 @@ issue's timeline; the ledger does not duplicate it.
 
 ## The capture verb
 
-`abcd capture "<text>"` appends a new issue to `open/`, allocating the next
-`iss-N`. Flags refine the frontmatter — `--severity`, `--category`, `--source`,
+`abcd capture "<text>"` appends a new issue to `open/`, minting a fresh
+timestamp-numeric `iss-N` (never "the next" one — the mint reads no maximum).
+Flags refine the frontmatter — `--severity`, `--category`, `--source`,
 `--slug`, `--found-during`, `--found-at`, and `--blocked-by` (a comma-separated
 list of `iss-N` ids). Bare `abcd capture` renders a read-only status board;
 `abcd capture list` filters by state; `abcd capture resolve` moves an open issue

@@ -180,7 +180,7 @@ func TestPromoteRefusesAlreadyPromoted(t *testing.T) {
 // TestPromoteUnknownOrMalformedIDWritesNothing: a structural fault leaves both
 // stores byte-identical.
 func TestPromoteUnknownOrMalformedIDWritesNothing(t *testing.T) {
-	repo, ir, _ := promoteFixture(t, "an innocent bystander")
+	repo, ir, issID := promoteFixture(t, "an innocent bystander")
 	for _, bad := range []string{"iss-999", "not-an-id", "../../evil"} {
 		if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: bad}); err == nil {
 			t.Fatalf("Promote(%q) must fail", bad)
@@ -190,10 +190,10 @@ func TestPromoteUnknownOrMalformedIDWritesNothing(t *testing.T) {
 		}
 	}
 	// Link mode with an unknown intent: structural fault, nothing written.
-	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", LinkIntent: "itd-42"}); err == nil {
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-42"}); err == nil {
 		t.Fatalf("link mode must refuse an unknown itd-N")
 	}
-	if iss := readIssue(t, ir, "iss-1"); iss.PromotedTo != "" {
+	if iss := readIssue(t, ir, issID); iss.PromotedTo != "" {
 		t.Fatalf("failed link mode stamped promoted_to = %q", iss.PromotedTo)
 	}
 }

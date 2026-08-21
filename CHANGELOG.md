@@ -60,9 +60,54 @@ called out in a **Breaking** section.
   is its own are refused loudly, each naming its remedy. Nothing ambient
   changes: this verb and `version --check` remain the only two paths to the
   release origin, each only when invoked. (itd-130)
+- **`abcd capture` mints collision-proof record ids.** A captured issue's id is
+  now timestamp-numeric — `iss-<yymmddHHMMSS><4 random digits>`, a UTC second
+  stamp plus a uniform random suffix — so two agents minting at the same
+  instant on different branches produce different ids with no coordination, no
+  network, and no registry; nothing is ever renumbered, and existing
+  sequential ids stay exactly as minted. The id grammar is unchanged
+  (`iss-[0-9]+`), so listing, resolution, promotion, dispatch, and release
+  cuts hold as before; the capture result no longer carries the max+1 era's
+  `mint_warning` degrade note, since the mint consults no refs. (itd-114,
+  spc-33, adr-45; resolves iss-330)
+
+### Changed
+
+- **Released binaries build on Go 1.26.** Go 1.25 has left the support window,
+  so the toolchain moves to the current 1.26 line (1.26.7) in lockstep across
+  the `go.mod` directive, the CI pins, and the release workflow's pin via the
+  scaffold substitutions — `govulncheck` scans clean on the new line. (iss-329)
 
 ### Fixed
 
+- **A hostile source repo cannot inject terminal escapes through `disembark
+  plan`.** The dry-run render printed planned file paths raw while the same
+  view already sanitised the source name and omission lines, so a crafted
+  filename carried C1/bidi runes to the operator's terminal. Every path in the
+  render now passes the terminal-safe sanitiser. (iss-382)
+- **The transcript history store's read path is guarded.** `history list` and
+  `history show` read records from the cross-repo store under HOME with a raw
+  read while the write path was fully hardened, so a planted symlink was
+  followed and a FIFO wedged `history capture` under the store lock. Both reads
+  now use the guarded primitive (no symlink follow, no blocking open, a size
+  cap). (iss-383)
+- **A committed citation baseline cannot smuggle escapes through the lint
+  gate.** The baseline validator sanitised the final URL but echoed the entry
+  key and the other field values raw into a refusal that reaches the terminal,
+  so a hostile entry could replay ESC/bidi/zero-width through the blocking
+  docs-lint gate. Every echoed value is now sanitised. (iss-384)
+- **`abcd launch scaffold` pins the adopter's Go toolchain.** The generated
+  release workflow carried a floating `go-version` (the go.mod patch was
+  stripped), so an adopter shipped binaries built on whatever patch a runner
+  resolved on release day. A patch-pinned `go.mod` now scaffolds that exact
+  toolchain. (iss-386)
+- **`/abcd:version` names every network-touching verb.** Its guidance claimed
+  only `version --check` and `update` reach the network; `docs cite refresh`
+  and `memory ingest <url>` do too. The enumeration is corrected. (iss-385)
+- **`record-lint` catches a zero-padded record-id collision.** The
+  id-uniqueness backstop keyed on the raw filename, so a hand-added
+  `iss-0100-*.md` beside `iss-100-*.md` read as two distinct ids and slipped
+  through. It now keys on the canonical id, matching the resolver. (iss-392)
 - **`ahoy install` heals the PATH entry a plugin update strands.** The entry
   pointing into a deleted previous plugin cache dir classified as a foreign
   occupant — never healed, refused by `ahoy uninstall` against the dangling

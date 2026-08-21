@@ -78,7 +78,7 @@ When structure and content disagree (e.g., a later spec mentions an earlier deci
 
 ```
 <dest>/                                 # operator-chosen, outside the source repo (adr-35)
-├── _provenance.json                    # the lifeboat marker and re-pack gate key (written last): schema_version, generator, source name and root SHA, tiers present, manifest_sha256 over every other file, omissions
+├── _provenance.json                    # the lifeboat marker and re-pack gate key (written last): schema_version, generator, source name and root SHA, tiers present, manifest_sha256 over every other file, record_manifest_sha256 over the record-derived families alone (docs/adrs, activity/issues, rescue/intents, rescue/specs, graveyard/abandoned.json), omissions
 ├── coverage.json                       # per-section status (grounded|partial|blank), evidence, what was searched
 ├── coverage.md                         # rendered
 ├── brief/                              # the brief, section by section, grounded from the source

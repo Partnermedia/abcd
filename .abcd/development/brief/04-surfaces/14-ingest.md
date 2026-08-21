@@ -63,8 +63,11 @@ propagate before anything else is written.
 `/abcd:ingest` and `/abcd:consult` are the two halves of one corpus surface:
 ingest writes sources in, consult reads them out and records which decisions they
 influenced. Both share the confidentiality guard and the `~/.abcd/sources/` store.
-The human quick path `abcd-ingest <url-or-file>` reaches the same registrar; the
-command prefers explicit `add-source` flags because it has better metadata in hand.
+The command prefers explicit `add-source` flags because it has better metadata
+in hand. (The `abcd-ingest <url-or-file>` human quick path `commands/ingest.md`
+names is **not a demonstrable surface** — no binary sub-verb, repo-shipped
+script, or corpus-store wrapper provides it; where it exists it is an
+operator-local convenience outside the corpus contract.)
 
 ## References
 

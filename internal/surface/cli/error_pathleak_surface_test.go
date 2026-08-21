@@ -69,45 +69,52 @@ func TestJSONErrorEnvelopeNoAbsolutePathLeak(t *testing.T) {
 // output. The contract is repo-relative everywhere: the field stays a useful locator
 // but is never absolute.
 func TestJSONSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
+	// prepCapture mints a fixture issue and returns its id (the mint is
+	// timestamp-numeric, so the id must be read from the envelope, never assumed).
+	prepCapture := func(t *testing.T, text string) string {
+		t.Helper()
+		var so, se bytes.Buffer
+		if code := Run([]string{"capture", text, "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
+			t.Fatalf("prep capture failed (code %d): %s", code, se.String())
+		}
+		var res struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(so.Bytes(), &res); err != nil || res.ID == "" {
+			t.Fatalf("prep capture envelope unreadable: %v\n%s", err, so.String())
+		}
+		return res.ID
+	}
 	cases := []struct {
 		name string
-		// prep establishes state a verb needs (e.g. an open issue to resolve).
-		prep func(t *testing.T)
-		args []string
+		// prep establishes state a verb needs and returns the args, so a verb
+		// that targets an issue can name the freshly minted id.
+		args func(t *testing.T) []string
 	}{
 		{
 			name: "capture success path",
-			args: []string{"capture", "a defect", "--json"},
+			args: func(t *testing.T) []string { return []string{"capture", "a defect", "--json"} },
 		},
 		{
 			name: "resolve success path",
-			prep: func(t *testing.T) {
-				var so, se bytes.Buffer
-				if code := Run([]string{"capture", "to resolve", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
-					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
-				}
+			args: func(t *testing.T) []string {
+				id := prepCapture(t, "to resolve")
+				return []string{"capture", "resolve", id, "handled", "--impact", "fix", "--json"}
 			},
-			args: []string{"capture", "resolve", "iss-1", "handled", "--impact", "fix", "--json"},
 		},
 		{
 			name: "wontfix success path",
-			prep: func(t *testing.T) {
-				var so, se bytes.Buffer
-				if code := Run([]string{"capture", "to wontfix", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
-					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
-				}
+			args: func(t *testing.T) []string {
+				id := prepCapture(t, "to wontfix")
+				return []string{"capture", "wontfix", id, "declined", "--json"}
 			},
-			args: []string{"capture", "wontfix", "iss-1", "declined", "--json"},
 		},
 		{
 			name: "list issue path",
-			prep: func(t *testing.T) {
-				var so, se bytes.Buffer
-				if code := Run([]string{"capture", "to list", "--slug", "detector-fixture", "--json"}, &so, &se); code != 0 {
-					t.Fatalf("prep capture failed (code %d): %s", code, se.String())
-				}
+			args: func(t *testing.T) []string {
+				prepCapture(t, "to list")
+				return []string{"capture", "list", "--all", "--json"}
 			},
-			args: []string{"capture", "list", "--all", "--json"},
 		},
 	}
 
@@ -115,11 +122,9 @@ func TestJSONSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := t.TempDir()
 			t.Chdir(repo)
-			if tc.prep != nil {
-				tc.prep(t)
-			}
+			args := tc.args(t)
 			var stdout, stderr bytes.Buffer
-			code := Run(tc.args, &stdout, &stderr)
+			code := Run(args, &stdout, &stderr)
 			if code != 0 {
 				t.Fatalf("expected a zero exit; code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 			}
