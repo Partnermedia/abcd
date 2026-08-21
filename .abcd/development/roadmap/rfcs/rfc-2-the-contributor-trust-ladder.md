@@ -5,6 +5,10 @@ status: open
 discussion_opened: 2026-08-19
 discussion_closes: TBD
 spawned_from: adr-43
+spawned_intents: []
+related_intents: []
+related_adrs: [adr-43]
+authors: [project]
 ---
 
 # RFC-2: The contributor trust ladder — what earns a rung, and when

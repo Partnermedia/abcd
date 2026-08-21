@@ -80,9 +80,10 @@ slug: <kebab-case-slug>
 status: open                          # see Lifecycle table above
 discussion_opened: YYYY-MM-DD
 discussion_closes: YYYY-MM-DD-or-TBD
-spawned_from: null                    # itd-N if RFC originated from a contested intent
+spawned_from: null                    # itd-N or adr-N if RFC originated from a contested intent or a settled decision
 spawned_intents: []                   # [itd-N, ...] populated when status = resolved-yes/modified
 related_intents: []                   # [itd-N, ...] cross-references
+related_adrs: []                      # [adr-N, ...] ADRs this RFC references or whose resolution it becomes
 authors: [project]                    # "project" for maintainer-authored; usernames for community-authored
 ---
 
@@ -128,8 +129,10 @@ frontmatter links).
 
 | File | Frontmatter field |
 |---|---|
-| `rfcs/rfc-N-<slug>.md` | `spawned_from: itd-N` (if the RFC originated from a contested intent) |
+| `rfcs/rfc-N-<slug>.md` | `spawned_from: itd-N or adr-N` (if the RFC originated from a contested intent or a settled decision) |
 | `rfcs/rfc-N-<slug>.md` | `spawned_intents: [itd-N, ...]` (if the RFC's resolution produced new intents) |
+| `rfcs/rfc-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an RFC references an ADR or its resolution becomes one) |
+| `adrs/NNNN-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
 | `intents/{drafts,planned,shipped}/itd-N-<slug>.md` | `related_rfcs: [rfc-N, ...]` (when an intent references an RFC) |
 
 A Go lint (per itd-4 + [`brief/05-internals/06-lint.md`](../../brief/05-internals/06-lint.md)) extends to verify these reciprocally.
