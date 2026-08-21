@@ -184,6 +184,44 @@ func tokenize(line string) ([]segment, error) {
 			flushToken()
 			pending = append(pending, hd)
 			i = next
+		case c == '>' || (c == '<' && !strings.HasPrefix(line[i:], "<<")):
+			// A redirection operator (`>`, `>>`, `>|`, `>&`, `<`, `<>`, `<&`),
+			// optionally prefixed by an fd digit that sits in cur. `<<`/`<<<`
+			// are recognised above; process substitution `>(...)`/`<(...)` is
+			// not a redirection and keeps its prior handling. A redirection
+			// terminates the current word and its target is a filename or fd,
+			// never a command in command position — so both the operator and
+			// the target are dropped. Without this, gluing a redirection onto a
+			// token (`git push --force>/dev/null`) mutated the flag token so
+			// every blocker missed and the verdict was a silent allow, and a
+			// leading redirection (`>/dev/null git push --force`) displaced the
+			// command out of position and degraded a Tier-1 block to a warn.
+			if i+1 < len(line) && line[i+1] == '(' {
+				cur = append(cur, c)
+				hasCur = true
+				lastList = false
+				i++
+				break
+			}
+			opEnd := i + 1
+			if c == '>' {
+				if opEnd < len(line) && (line[opEnd] == '>' || line[opEnd] == '|' || line[opEnd] == '&') {
+					opEnd++
+				}
+			} else if opEnd < len(line) && (line[opEnd] == '>' || line[opEnd] == '&') {
+				opEnd++
+			}
+			// A pure-digit cur immediately before the operator is the fd prefix
+			// (`2>`, `1>&2`), part of the redirection rather than a token; drop
+			// it. Otherwise flush the real word the operator terminates.
+			if hasCur && isAllDigits(cur) {
+				cur = nil
+				hasCur = false
+			} else {
+				flushToken()
+			}
+			i = skipRedirectTarget(line, opEnd)
+			lastList = false
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
@@ -204,6 +242,72 @@ func tokenize(line string) ([]segment, error) {
 	}
 	flushSegment()
 	return segs, nil
+}
+
+// isAllDigits reports whether b is a non-empty run of ASCII digits — the shape
+// of a file-descriptor prefix on a redirection (`2>`, `1>&2`).
+func isAllDigits(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	for _, c := range b {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// skipRedirectTarget consumes optional whitespace and a single redirection
+// target word starting at pos, returning the position just past it. The target
+// of a redirection is a filename or fd, never a command in command position, so
+// the guard drops it. Quotes and backslashes inside the target are honoured so
+// an embedded space or operator does not end the target early.
+func skipRedirectTarget(line string, pos int) int {
+	for pos < len(line) && (line[pos] == ' ' || line[pos] == '\t') {
+		pos++
+	}
+	for pos < len(line) {
+		c := line[pos]
+		switch {
+		case c == '\\':
+			if pos+1 >= len(line) {
+				return pos + 1
+			}
+			pos += 2
+		case c == '\'':
+			j := pos + 1
+			for j < len(line) && line[j] != '\'' {
+				j++
+			}
+			if j >= len(line) {
+				return j
+			}
+			pos = j + 1
+		case c == '"':
+			j := pos + 1
+			for j < len(line) {
+				if line[j] == '\\' && j+1 < len(line) {
+					j += 2
+					continue
+				}
+				if line[j] == '"' {
+					break
+				}
+				j++
+			}
+			if j >= len(line) {
+				return j
+			}
+			pos = j + 1
+		case c == ' ' || c == '\t' || c == '\n' || c == '&' || c == '|' ||
+			c == ';' || c == '(' || c == ')' || c == '<' || c == '>':
+			return pos
+		default:
+			pos++
+		}
+	}
+	return pos
 }
 
 // heredoc is one pending here-document: the delimiter word that ends its body,

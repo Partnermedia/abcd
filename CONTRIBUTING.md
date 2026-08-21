@@ -77,12 +77,16 @@ disclosure, and never an authorship assertion for a tool. The rules:
   <tool>" footer names a tool outside the two credit surfaces this project
   sanctions (the README badge and `ACKNOWLEDGEMENTS.md`), so the gate refuses one
   in a commit message or a pull-request body — including the italic and bold forms
-  a host appends by default. Writing *about* the rule is expressly allowed: the
-  check reads the document's own voice, so a banned form quoted inside a fenced
-  code block is an example rather than a violation. The same cuts both ways — a
-  trailer that appears only inside a fence is an example too, and does not count
-  as your disclosure. Close your fences: an unbalanced one is checked as ordinary
-  prose, so a stray ``` cannot switch the gate off for everything below it.
+  a host appends by default. Writing *about* the rule is expressly allowed. In a
+  pull-request body — which a forge renders as markdown — the check reads the
+  document's own voice, so a banned form quoted inside a fenced code block is an
+  example rather than a violation, and, the same way, a trailer that appears only
+  inside a fence there does not count as your disclosure. A commit message is never
+  rendered as markdown, so the gate reads it verbatim: a fenced footer in a commit
+  message is refused exactly like a real one — quote the banned form mid-sentence
+  instead of fencing it. Close your fences: in a pull-request body an unbalanced one
+  is checked as ordinary prose, so a stray ``` cannot switch the gate off for
+  everything below it.
 
 ## Security
 

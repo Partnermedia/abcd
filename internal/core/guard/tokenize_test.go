@@ -103,9 +103,12 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
 		},
 		{
+			// The `> doc.md` redirection is dropped (a target is never in
+			// command position), and the heredoc body stays data — the
+			// `git push --force` inside it must never reach command position.
 			name: "heredoc body is data, not commands",
 			line: "cat > doc.md <<'EOF'\ngit push --force\nEOF",
-			want: []string{"0:cat|>|doc.md"},
+			want: []string{"0:cat"},
 		},
 		{
 			name: "heredoc body ends at its delimiter line",
@@ -168,6 +171,36 @@ func TestTokenizeSegments(t *testing.T) {
 			name: "empty quoted token is preserved",
 			line: `grep "" file`,
 			want: []string{"0:grep||file"},
+		},
+		{
+			name: "a glued redirection terminates the word and drops the target",
+			line: "git push --force>/dev/null",
+			want: []string{"0:git|push|--force"},
+		},
+		{
+			name: "a glued redirection with a spaced target keeps later words",
+			line: "git push --force>out.txt origin main",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "a leading redirection does not displace the command",
+			line: ">/dev/null git push --force origin main",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "an append redirection drops only its target",
+			line: "echo a >> log b",
+			want: []string{"0:echo|a|b"},
+		},
+		{
+			name: "an fd-prefixed dup redirection is dropped whole",
+			line: "go test ./... 2>&1",
+			want: []string{"0:go|test|./..."},
+		},
+		{
+			name: "process substitution keeps its prior handling",
+			line: "cat <(echo hi)",
+			want: []string{"0:cat|<", "0:echo|hi"},
 		},
 	}
 	for _, tc := range tests {

@@ -47,6 +47,35 @@ func TestCheckDecisions(t *testing.T) {
 			entryID: "git-push-force",
 		},
 		{
+			name:    "a glued redirection does not hide the flag",
+			command: "git push --force>/dev/null",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "a glued redirection with a real target still fires",
+			command: "git push --force>out.txt origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "a leading redirection does not displace the command",
+			command: ">/dev/null git push --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "a glued redirection in a cd chain still fires",
+			command: "cd scratch && rm -rf>/dev/null *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "an ordinary fd redirection is not a hazard",
+			command: "go test ./... 2>&1",
+			verdict: VerdictAllow,
+		},
+		{
 			name:    "git global value flags do not hide the subcommand",
 			command: "git -C /repo push --force origin main",
 			verdict: VerdictBlock,

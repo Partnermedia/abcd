@@ -663,7 +663,14 @@ func checkCitationBaseline(repoRoot string, refs []citedRef, cfg RuleConfig, now
 // which would surface as a URL the verb thinks current and the gate thinks
 // overdue, with nothing to say which is right.
 func DaysBetween(from, to time.Time) int {
-	f := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
-	t := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+	// Convert to UTC before taking the calendar date, don't merely restamp the
+	// local Y/M/D at UTC: the gate reads time.Now() (local) while the baseline
+	// dates are stamped time.Now().UTC(), so a bare Year()/Month()/Day() made
+	// the boundary — and, under the release gate, the citation-overdue blocker —
+	// depend on the maintainer's timezone, the very drift this shared function
+	// exists to prevent.
+	fu, tu := from.UTC(), to.UTC()
+	f := time.Date(fu.Year(), fu.Month(), fu.Day(), 0, 0, 0, 0, time.UTC)
+	t := time.Date(tu.Year(), tu.Month(), tu.Day(), 0, 0, 0, 0, time.UTC)
 	return int(t.Sub(f).Hours() / 24)
 }

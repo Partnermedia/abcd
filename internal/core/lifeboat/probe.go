@@ -239,8 +239,12 @@ func (c *SourceContext) ReadFile(rel string) ([]byte, bool) {
 	if info.Size() > maxProbeReadBytes {
 		return nil, false
 	}
-	data, err := io.ReadAll(io.LimitReader(f, maxProbeReadBytes))
-	if err != nil {
+	// Read cap+1, not exactly the cap: a file that grew past the cap between the
+	// fstat and the read (a size TOCTOU over an untrusted target repo) is refused
+	// rather than silently truncated to a prefix the convention scanners would
+	// then judge as the whole file — matching fsutil.ReadGuarded's discipline.
+	data, err := io.ReadAll(io.LimitReader(f, maxProbeReadBytes+1))
+	if err != nil || int64(len(data)) > maxProbeReadBytes {
 		return nil, false
 	}
 	return data, true

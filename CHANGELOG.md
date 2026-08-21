@@ -173,6 +173,52 @@ called out in a **Breaking** section.
   `AGENTS.md` and `.abcd/README.md` now names the issue ledger, reviews charter,
   and ruleset mirror that also live there.
   (iss-2608211432489481, iss-2608211432489288, iss-2608211432482363, iss-2608211432483805)
+- **The command guard recognises shell redirection operators.** The tokenizer
+  knew the compound and grouping operators but not `>`, `>>`, `<`, `>&` and
+  their kin, so a redirection glued to a token — `git push --force>/dev/null` —
+  mutated the flag and the blocker missed, a silent allow, and a leading
+  redirection displaced the command and degraded a Tier-1 block to a warn. A
+  redirection now terminates the word and its target is dropped, so every glued
+  and leading form blocks again. (iss-2608211849467013)
+- **The record/docs lint reporting and glossary walks stay inside the
+  repository.** Both read a cloned-repo-controlled config path (the `roots` and
+  `glossary_dir` fields) with an unguarded `os.ReadFile` while the citation
+  collector guards the same class, so a committed lint config could point either
+  outside the tree — or a committed symlink leaf resolve outside it — and the
+  lint read, followed, and reported a file the repository does not own. Both now
+  run through the same containment and guarded-read stack; the remaining
+  config-derived record reads in the package are tracked for a follow-up sweep.
+  (iss-2608211849463840, iss-2608211914592726)
+- **`no_git_metadata` sees comment-led records.** A record whose frontmatter is
+  preceded by a leading attribution comment yielded no fields to the shared
+  scanner, so a git-inferable metadata key there slipped the blocker entirely.
+  The lint now reads past the comment. (iss-2608211849461061)
+- **Citation staleness is timezone-stable.** The age arithmetic took each date's
+  local calendar day, so the 180-day boundary — and, under the release gate, the
+  citation-overdue blocker — depended on the maintainer's timezone. Both ends are
+  now converted to UTC before the date is taken. (iss-2608211849466878)
+- **The attribution gate accepts CRLF pull-request bodies.** The trailer and
+  human-only presence checks are line-end-anchored over a class excluding the
+  carriage return, so a web-UI pull-request body — which arrives CRLF — false-red
+  a correct `Assisted-by:` trailer on the required check. The gate now normalises
+  line endings before every rule. (iss-2608211849468791)
+- **`abcd identity init` exits 2 on a fault.** A structural fault mapped to exit
+  1 — the code a rendered refusal reserves — while init renders nothing on that
+  path and its sibling verbs use 2. (iss-2608211850070541)
+- **`abcd history list --json` emits `[]` for an empty store.** An empty store
+  marshalled to bare `null` while the command doc promises an empty list.
+  (iss-2608211850070318)
+- **The lifeboat probe refuses a file that grows past its read cap.** The read
+  sized with an fstat then read exactly the cap, so a file that grew in between
+  was silently truncated to a prefix rather than refused. (iss-2608211850074600)
+- **The README describes the persistent provisioning cache.** The provisioning
+  section still described a download on every plugin update and a `.binary-meta`
+  remedy that is a no-op on a cache-provisioned root; both now describe the
+  shipped persistent per-plugin cache. (iss-2608211849580624)
+- **The contributing guide scopes the fenced-quotation carve-out to the body.**
+  The gate strips fences on the pull-request-body arm only, but the guide granted
+  the carve-out for commit messages too; the guide now says a commit message is
+  read verbatim. (iss-2608211849582190)
 
 ### Changed
 

@@ -80,7 +80,11 @@ func newIdentityCommand(asJSON *bool) *cobra.Command {
 				Location: positioning.BlockLocation{File: file, Heading: heading},
 			})
 			if err != nil {
-				return &exitError{Code: 1, Msg: "abcd identity init: " + scrubPaths(err)}
+				// A fault, not a rendered refusal: init prints nothing on this
+				// path, so it takes the tree-wide "could not be evaluated" code 2
+				// (matching `identity`/`identity render` and loadPositioning), not
+				// the code-1 an already-rendered refusal reserves.
+				return &exitError{Code: 2, Msg: "abcd identity init: " + scrubPaths(err)}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderIdentityInit(w, res)
