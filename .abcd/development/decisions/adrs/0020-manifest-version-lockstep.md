@@ -185,5 +185,3 @@ binding detail.
 - The launch documentation states adr-19's polarity directly: only the release
   view is versioned, the render leaves the source view's manifests untouched, and
   the anti-drift note points here.
-</content>
-</invoke>

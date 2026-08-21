@@ -55,6 +55,9 @@ func TestSanitizeNeutralisesDisplayAttacks(t *testing.T) {
 		{"bidi-lrm", withRune("a", 0x200e, "b"), "a?b"},
 		{"arabic-mark", withRune("a", 0x061c, "b"), "a?b"},
 		{"zero-width-space", withRune("ad", 0x200b, "min"), "ad?min"},
+		{"word-joiner", withRune("ad", 0x2060, "min"), "ad?min"},
+		{"invisible-times", withRune("a", 0x2062, "b"), "a?b"},
+		{"soft-hyphen", withRune("ad", 0x00ad, "min"), "ad?min"},
 		{"bom", withRune("", 0xfeff, "head"), "?head"},
 		{"tab-to-space", "a\tb", "a b"},
 		{"plain-unicode-kept", "Emilie ok — fine", "Emilie ok — fine"},
@@ -71,14 +74,15 @@ func TestSanitizeNeutralisesDisplayAttacks(t *testing.T) {
 // TestSanitizeLeavesNoControlOrBidi is a property check: no attack rune survives.
 func TestSanitizeLeavesNoControlOrBidi(t *testing.T) {
 	in := ""
-	for _, r := range []rune{0x1b, 0x9b, 0x7f, 0x202e, 0x2066, 0x200b, 0xfeff, 0x061c, 'a', 'b'} {
+	for _, r := range []rune{0x1b, 0x9b, 0x7f, 0x202e, 0x2066, 0x200b, 0x2060, 0x00ad, 0xfeff, 0x061c, 'a', 'b'} {
 		in += string(r)
 	}
 	for _, r := range Sanitize(in) {
 		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) ||
 			(r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069) ||
 			r == 0x200E || r == 0x200F || r == 0x061C ||
-			r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF {
+			r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF ||
+			(r >= 0x2060 && r <= 0x2064) || r == 0x00AD {
 			t.Fatalf("attack rune %U survived Sanitize", r)
 		}
 	}

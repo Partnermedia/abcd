@@ -82,5 +82,3 @@ is named "spec".
 **Downstream decisions enabled:**
 - The terminology-lint guard means a future reintroduction of an older concept
   noun fails CI rather than drifting in silently.
-</content>
-</invoke>

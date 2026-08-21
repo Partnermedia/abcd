@@ -104,10 +104,17 @@ func isBidiControl(r rune) bool {
 }
 
 // isZeroWidth reports whether r is a zero-width character that can hide or splice
-// text invisibly (ZWSP/ZWNJ/ZWJ and the BOM/ZWNBSP).
+// text invisibly. It covers ZWSP/ZWNJ/ZWJ and the BOM/ZWNBSP (U+FEFF), the WORD
+// JOINER (U+2060) that Unicode designates as U+FEFF's non-BOM successor, the
+// invisible-operator block (U+2061–U+2064), and SOFT HYPHEN (U+00AD) — each
+// renders zero-width, so two distinct byte strings can display identically.
 func isZeroWidth(r rune) bool {
-	switch r {
-	case 0x200B, 0x200C, 0x200D, 0xFEFF:
+	switch {
+	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF:
+		return true
+	case r >= 0x2060 && r <= 0x2064: // WORD JOINER + invisible operators
+		return true
+	case r == 0x00AD: // SOFT HYPHEN
 		return true
 	}
 	return false

@@ -12,6 +12,43 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **`abcd banlist --json` carries the private layer's `reach` caveat.** The
+  private report now includes a `reach` field holding the one-sentence statement
+  of what the layer does and does not protect, unconditionally — mirroring the
+  ahoy status board's `banlist.reach`. A surface that summarises the JSON can now
+  relay the caveat verbatim instead of paraphrasing a reach that CI cannot
+  enforce. (iss-362)
+
+### Fixed
+
+- **The lifeboat coverage render neutralises terminal-control sequences from an
+  untrusted report.** A coverage report is a cross-repo artefact, and its
+  `status`, `tier`, `tiers_present`, and section-name fields are bare strings
+  with no enum validation on the render path, so a crafted report replayed a raw
+  ANSI escape or bidi override on the operator's terminal — only the repository
+  name was sanitised. Both the per-repo and cross-repo renders now pass every
+  repo-derived string through `termsafe`, with column widths computed from the
+  sanitised strings. (iss-361)
+
+- **`termsafe` masks the modern zero-width characters, not only the deprecated
+  ones.** The sanitiser masked the BOM/ZWNBSP (`U+FEFF`) but not its
+  Unicode-designated successor `U+2060` WORD JOINER, nor the `U+2061`–`U+2064`
+  invisible operators or `U+00AD` SOFT HYPHEN, so those default-ignorable
+  characters passed through every render surface and two distinct byte strings
+  could display identically. They are now masked. (iss-366)
+
+- **`abcd capture` accepts the live spec namespace in `related_specs`.** The
+  field was validated against the retired `fn-N` namespace, so linking a real
+  spec (`spc-N`) was rejected and the field was unusable — the `fn-` prefix was
+  itself renamed to `spec` and is a banned token elsewhere. The validator now
+  accepts `spc-N`. (iss-364)
+
+- **Two user-facing command docs corrected.** `/abcd:lint` and
+  `/abcd:prepare-this-repo` enumerated the conventions the binary checks as five,
+  omitting `identity-positioning` — a shipped default rule the same
+  prepare-this-repo flow arms (iss-363); and `/abcd:launch` documented a
+  top-level `files` count in `--dry-run --json` that does not exist, when the
+  file list is the `bundle.files` array (iss-367).
 - **`abcd update` completes a chosen update in one verb.** It fetches the
   named release (or resolves the latest, naming the tag before acting),
   verifies the platform binary against the same release's `checksums.txt`

@@ -72,9 +72,11 @@ build the gap report on its result, rather than hand-producing the whole thing.
 
 Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
 `message`, `fix`) cover the conventions the binary checks — the three-tier
-`.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency, and
-privacy hygiene (absolute local paths in committed files). Its `skipped` list
-names rules that did not apply (e.g. `docs-currency` where there is no `docs/`).
+`.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency,
+privacy hygiene (absolute local paths in committed files), and identity
+positioning (rendered surfaces match the canonical identity block). Its
+`skipped` list names rules that did not apply (e.g. `docs-currency` where there
+is no `docs/`, or `identity-positioning` where there is no `.abcd/positioning.json`).
 The exit code is the tri-state (`0` clean, `1` warnings, `2` any error).
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
