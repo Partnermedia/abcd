@@ -86,6 +86,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-115` — A ready PR merges without ever wedging BEHIND (managed-repo merge queue by default, rung-1 auto-update fallback, strict preserved)
 - `itd-116` — Validated GitHub issues become ledger entries without retyping (capture extension adopts externally filed findings with provenance; mint stays capture-only)
 - `itd-118` — Merged work leaves no residue (post-merge complement of itd-115: delete the PR branch on merge, tidy the stale local branch, tracking ref, and worktree)
+- `itd-134` — Managed-repo banner generator: a managed CLI in any language opens with its own identity, rendered from its identity block (split from itd-112)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief
