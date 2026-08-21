@@ -143,15 +143,21 @@ repository rather than a versioned artefact: the manifests here carry no version
 key, and a release publishes the `abcd` binaries and their checksums, alongside
 the source archives GitHub attaches for the tagged tree.
 
-The plugin provisions its own binary. This repository commits none, and every
-plugin update lands in a fresh cache directory, so a plugin root starts empty
-each time: [`hooks/bootstrap.sh`](hooks/bootstrap.sh) runs first at session
-start, downloads the release binary for this platform along with
-`checksums.txt`, verifies the binary's SHA-256 against the manifest, and
-installs it into the plugin root. A mismatch, a manifest that doesn't list the
-platform, or a platform outside the released matrix (darwin and linux on amd64
-and arm64) installs nothing and says why in plain language. A plugin root that
-already holds the binary costs one file test and no network.
+The plugin provisions its own binary; this repository commits none. The
+verified artefact is kept once in the plugin's persistent per-plugin download
+cache (`$CLAUDE_PLUGIN_DATA`), and a plugin update — which lands in a fresh,
+empty plugin root — is provisioned by a re-verified copy out of that cache
+rather than a fresh download. [`hooks/bootstrap.sh`](hooks/bootstrap.sh) runs
+first at session start: when the cache already holds the artefact for the
+resolved release it copies it into the plugin root with no network —
+authenticating the cached hash against the release's published `checksums.txt`
+when online, or noting in its success line that it provisioned from an
+unauthenticated cache when offline. Only an empty, stale, or unavailable cache
+falls back to downloading the release binary and `checksums.txt` and verifying
+the binary's SHA-256 against the manifest. A mismatch, a manifest that doesn't
+list the platform, or a platform outside the released matrix (darwin and linux
+on amd64 and arm64) installs nothing and says why in plain language. A plugin
+root that already holds the binary costs one file test and no network.
 
 Session start is not the only chance. Every other live-session hook that needs
 the binary resolves it the same way the command files do — the plugin root
@@ -183,10 +189,12 @@ the same place.
 For a stronger root of trust than same-origin checksums, build from source —
 `go build ./cmd/abcd` — and place the binary in the plugin root and on your
 `PATH` yourself. A binary placed there by hand takes the same no-network fast
-path, so the `.binary-meta` provenance record beside it still describes
-whichever release the bootstrap last fetched: delete that file so no
-version-skew notice is rendered from a release the binary in place did not come
-from.
+path. A plugin root provisioned from the cache carries no root-local
+`.binary-meta`: its provenance lives in the data directory's
+`cache/binary-meta`, and it records whichever release the bootstrap last cached
+— so a hand-built binary reports that release's vintage. Replace or remove the
+cached provenance you control if you want a hand-built binary to stop reporting
+a release it did not come from.
 
 ## CLI
 
