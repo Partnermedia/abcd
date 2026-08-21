@@ -188,10 +188,10 @@ type pathEntry struct {
 	dangling bool          // ours, but the binary it points at is gone
 }
 
-// owned reports whether the entry is one abcd installed (a pinned symlink or the
-// dev shim) rather than a foreign occupant.
+// owned reports whether the entry is one abcd installed (the owned copy, a
+// legacy pinned symlink, or the dev shim) rather than a foreign occupant.
 func (e pathEntry) owned() bool {
-	return e.kind == binTargetOwnedSymlink || e.kind == binTargetDevShim
+	return e.kind == binTargetOwnedSymlink || e.kind == binTargetDevShim || e.kind == binTargetOwnedCopy
 }
 
 // scanPathEntries walks PATH in order and classifies every `abcd` it finds. It
@@ -299,6 +299,8 @@ func describeEntry(e pathEntry) string {
 	switch {
 	case e.kind == binTargetDevShim:
 		return "abcd's own dev-mode shim"
+	case e.kind == binTargetOwnedCopy:
+		return "abcd's own installed copy"
 	case e.kind == binTargetOwnedSymlink && e.dangling:
 		return "an abcd symlink whose target is gone"
 	case e.kind == binTargetOwnedSymlink:
@@ -412,8 +414,9 @@ type binTargetKind int
 
 const (
 	binTargetAbsent       binTargetKind = iota // nothing there
-	binTargetOwnedSymlink                      // our symlink -> the pinned binary
+	binTargetOwnedSymlink                      // our LEGACY symlink -> the pinned binary (pre-spc-35)
 	binTargetDevShim                           // our dev-mode rebuild-then-exec shim
+	binTargetOwnedCopy                         // our regular-file copy, vouched for by path-entry (spc-35)
 	binTargetForeign                           // something else; never clobber it
 )
 
@@ -442,6 +445,12 @@ func classifyBinTarget(target, pluginRoot string) binTargetKind {
 	}
 	if isDevShimFile(target) {
 		return binTargetDevShim
+	}
+	// A regular file is ours only when the data dir's path-entry names this
+	// very entry AND the bytes still hash to the recorded value (spc-35):
+	// ownership is recorded provenance, never content-guessing.
+	if isOwnedCopyFile(target) {
+		return binTargetOwnedCopy
 	}
 	return binTargetForeign
 }

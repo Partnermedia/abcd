@@ -1,0 +1,194 @@
+package ahoy
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"github.com/Partnermedia/abcd/internal/fsutil"
+)
+
+// The PATH entry as an abcd-owned regular file (spc-35). A symlink into the
+// plugin root dies at every plugin update — the harness re-clones into a fresh
+// commit-stamped directory and garbage-collects the old one — so the entry is
+// a COPY of the verified release artefact kept in the persistent data dir's
+// cache, and ownership is RECORDED PROVENANCE: the data dir's path-entry file
+// names the installed path and its SHA-256. A file that matches the record is
+// ours to refresh or remove; anything else is foreign and never touched.
+// Content-guessing (recognising "a binary that looks like abcd") is
+// deliberately not attempted anywhere.
+
+// maxBinaryArtefactBytes caps reads of the release binary for hashing and
+// copying. The artefact is ~11 MB today; 64 MiB bounds a planted device or
+// endless file without ever refusing a legitimate release.
+const maxBinaryArtefactBytes = 64 << 20
+
+// maxPathEntryBytes caps the provenance-record read: two short key=value lines.
+const maxPathEntryBytes = 4 << 10
+
+// cacheAssetPath is the verified release artefact for this platform inside the
+// persistent data dir — the same name and layout hooks/bootstrap.sh writes.
+func cacheAssetPath(dataDir string) string {
+	return filepath.Join(dataDir, "cache", "abcd-"+runtime.GOOS+"-"+runtime.GOARCH)
+}
+
+// cacheMetaPath is the cache's provenance record (release_tag / release_sha /
+// binary_sha256 / fetched_at), written by the bootstrap.
+func cacheMetaPath(dataDir string) string {
+	return filepath.Join(dataDir, "cache", "binary-meta")
+}
+
+// pathEntryFile is the PATH-copy provenance record inside the data dir.
+const pathEntryFile = "path-entry"
+
+func pathEntryPath(dataDir string) string {
+	return filepath.Join(dataDir, pathEntryFile)
+}
+
+// cacheRecordedSHA reads the cache meta's binary_sha256, or "" when the record
+// is absent, unreadable, or not a full lowercase hex digest — a promotion can
+// only re-verify against a hash that actually parses.
+func cacheRecordedSHA(dataDir string) string {
+	data, err := fsutil.ReadGuarded(cacheMetaPath(dataDir), maxPathEntryBytes)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok && k == "binary_sha256" {
+			if hexDigestOK(v) {
+				return v
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+// hexDigestOK reports whether s is a full lowercase-hex SHA-256.
+func hexDigestOK(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// pathEntryRecord is the parsed provenance of the owned PATH copy.
+type pathEntryRecord struct {
+	path string // where the copy was installed
+	sha  string // its SHA-256 at install/refresh time
+}
+
+// readPathEntry loads the provenance record, reporting ok only when both
+// fields are present and the hash parses — a truncated record vouches for
+// nothing.
+func readPathEntry() (pathEntryRecord, bool) {
+	dataDir := pluginDataDir()
+	if dataDir == "" {
+		return pathEntryRecord{}, false
+	}
+	raw, err := fsutil.ReadGuarded(pathEntryPath(dataDir), maxPathEntryBytes)
+	if err != nil {
+		return pathEntryRecord{}, false
+	}
+	var rec pathEntryRecord
+	for _, line := range strings.Split(string(raw), "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "path":
+			rec.path = v
+		case "binary_sha256":
+			rec.sha = v
+		}
+	}
+	if rec.path == "" || !hexDigestOK(rec.sha) {
+		return pathEntryRecord{}, false
+	}
+	return rec, true
+}
+
+// writePathEntry records (atomically) that the file at target with the given
+// hash is abcd's owned PATH copy.
+func writePathEntry(target, shaHex string) error {
+	dataDir := pluginDataDir()
+	if dataDir == "" {
+		return os.ErrNotExist
+	}
+	body := "path=" + target + "\nbinary_sha256=" + shaHex + "\n"
+	return fsutil.WriteFileAtomic(pathEntryPath(dataDir), []byte(body), 0o644)
+}
+
+// removePathEntry drops the provenance record; absent is fine.
+func removePathEntry() {
+	if dataDir := pluginDataDir(); dataDir != "" {
+		_ = os.Remove(pathEntryPath(dataDir))
+	}
+}
+
+// fileSHA256Hex hashes a regular file through the guarded read (no symlink
+// leaf, no device, bounded size), or ok=false when it cannot.
+func fileSHA256Hex(path string) (string, bool) {
+	data, err := fsutil.ReadGuarded(path, maxBinaryArtefactBytes)
+	if err != nil {
+		return "", false
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), true
+}
+
+// isOwnedCopyFile reports whether target is the regular file abcd installed as
+// its PATH entry: path-entry must name this very entry AND the file must still
+// hash to the recorded value. A file that stopped matching was changed by
+// something else, so it classifies foreign — refreshing or removing it would
+// destroy work abcd cannot account for.
+func isOwnedCopyFile(target string) bool {
+	rec, ok := readPathEntry()
+	if !ok || !sameEntry(rec.path, target) {
+		return false
+	}
+	got, ok := fileSHA256Hex(target)
+	return ok && got == rec.sha
+}
+
+// ownedCopySourceReady reports whether a verified cache artefact exists to copy
+// from — the precondition for installing (or healing to) an owned copy. When it
+// does not hold, install degrades loudly to the spc-21 pinned symlink.
+func ownedCopySourceReady() bool {
+	dataDir := pluginDataDir()
+	if dataDir == "" {
+		return false
+	}
+	if cacheRecordedSHA(dataDir) == "" {
+		return false
+	}
+	return fileExists(cacheAssetPath(dataDir))
+}
+
+// RefreshPathEntryDigest re-records the provenance hash for the owned PATH
+// copy after `abcd update` swapped the file at target — the one other verb
+// that legitimately changes those bytes, and only after proving the new
+// content against a published release's own checksums. Without this the entry
+// update just refreshed would classify foreign forever after. A record that
+// does not name target, a malformed digest, or no record at all is a no-op:
+// this refreshes provenance, it never creates it.
+func RefreshPathEntryDigest(target, shaHex string) {
+	shaHex = strings.ToLower(shaHex)
+	if !hexDigestOK(shaHex) {
+		return
+	}
+	rec, ok := readPathEntry()
+	if !ok || !sameEntry(rec.path, target) {
+		return
+	}
+	_ = writePathEntry(rec.path, shaHex)
+}
