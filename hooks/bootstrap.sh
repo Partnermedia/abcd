@@ -71,11 +71,13 @@ lock=''
 tmp=''
 root_tmp=''
 path_tmp=''
+auth_tmp=''
 
 cleanup() {
 	[ -n "$tmp" ] && rm -rf "$tmp"
 	[ -n "$root_tmp" ] && rm -rf "$root_tmp"
 	[ -n "$path_tmp" ] && rm -f "$path_tmp"
+	[ -n "$auth_tmp" ] && rm -rf "$auth_tmp"
 	[ -n "$lock" ] && rm -rf "$lock"
 	return 0
 }
@@ -304,6 +306,7 @@ trap 'cleanup; exit 1' HUP INT TERM
 rm -rf "$plugin_root"/.bootstrap.tmp.* 2>/dev/null
 if [ -n "$cache_mode" ]; then
 	rm -rf "$data_dir"/.bootstrap.tmp.* 2>/dev/null
+	rm -rf "$data_dir"/.bootstrap.auth.* 2>/dev/null
 fi
 
 # 5. Refresh detector (spc-35): the recorded cache state plus ONE best-effort
@@ -332,16 +335,54 @@ if command -v curl >/dev/null 2>&1; then
 	resolved_tag=$(printf '%s\n' "$redirect" | sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p')
 fi
 
-# Provision from the cache when its recorded release is still the latest, and
-# when the resolve fails (offline): a fresh plugin update with no working hooks
-# for as long as the network is out would be strictly worse, and the artefact is
-# re-verified below before anything is installed. The accepted gap: a release
-# cut with no plugin update never triggers a fetch here — the version-skew
-# notice surfaces it, and `abcd update` is the explicit refresh path.
+# Decide whether the cache is trusted, and on what evidence. A cached artefact
+# and its co-located binary-meta are equally same-UID-writable, so re-hashing
+# the artefact against that record proves only corruption, never tamper: an
+# attacker who writes BOTH satisfies it, and because the cache is now preferred
+# over the network across every update, the implant persists rather than healing
+# at the next update (adr-46 decision 3, iss-2608210934566228).
+#
+#   - Resolve fails (offline): no published manifest is reachable, so the cache
+#     is trusted at CORRUPTION-EVIDENCE ONLY (re-hash below). The success notice
+#     says so — an unauthenticated cache while offline — never claiming a
+#     verification it did not perform. The deliberate availability trade.
+#   - Resolve answers the cached tag (online): AUTHENTICATE the cached hash
+#     against the release's PUBLISHED checksums.txt (the same same-origin,
+#     HTTPS-pinned, -q-first manifest fetch spc-21 step 5 uses) before trusting
+#     the cache. Match -> provision from cache, manifest-verified. Mismatch ->
+#     the cache is tampered or stale: discard it and fall to the download path.
+#     Manifest fetch fails though the tag resolved -> treat as offline.
+#   - Resolve answers a different tag -> download path.
+# The accepted gap: a release cut with no plugin update never triggers a fetch
+# here — the version-skew notice surfaces it, `abcd update` is the explicit path.
 use_cache=''
+cache_trust=''
 if [ -n "$cached_sha" ]; then
-	if [ -z "$resolved_tag" ] || [ "$resolved_tag" = "$cached_tag" ]; then
+	if [ -z "$resolved_tag" ]; then
 		use_cache=yes
+		cache_trust=offline
+	elif [ "$resolved_tag" = "$cached_tag" ]; then
+		auth_tmp="$data_dir/.bootstrap.auth.$$"
+		rm -rf "$auth_tmp"
+		if command -v curl >/dev/null 2>&1 && mkdir "$auth_tmp" 2>/dev/null &&
+			curl -q -fsSL --proto '=https' --proto-redir '=https' --max-time 30 -o "$auth_tmp/checksums.txt" "$releases_url/download/$resolved_tag/checksums.txt" 2>/dev/null; then
+			published=$(grep " $asset\$" "$auth_tmp/checksums.txt" 2>/dev/null | head -n 1 | sed -n 's/^\([0-9a-fA-F]\{64\}\).*/\1/p' | tr 'ABCDEF' 'abcdef')
+			rm -rf "$auth_tmp"
+			auth_tmp=''
+			if [ -n "$published" ] && [ "$published" = "$cached_sha" ]; then
+				use_cache=yes
+				cache_trust=manifest
+			fi
+			# Mismatch or an unlisted asset leaves use_cache empty: the cache is
+			# tampered or stale, so it is discarded and the download path below
+			# re-fetches and re-verifies over it.
+		else
+			# The tag resolved but the manifest is unreachable: treat as offline.
+			rm -rf "$auth_tmp"
+			auth_tmp=''
+			use_cache=yes
+			cache_trust=offline
+		fi
 	fi
 fi
 
@@ -353,7 +394,15 @@ from_note=''
 if [ -n "$use_cache" ]; then
 	release_tag="$cached_tag"
 	expected_sha="$cached_sha"
-	from_note=' No download was needed: the artefact came from the persistent plugin cache.'
+	# The notice names the trust the install rests on, never more (adr-46
+	# decision 3): a manifest-verified cache says so; an offline one says it was
+	# provisioned from an unauthenticated cache, so the reader is never told a
+	# verification happened that did not.
+	if [ "$cache_trust" = manifest ]; then
+		from_note=' No download was needed: the cached artefact was verified against the published release manifest.'
+	else
+		from_note=' No download was needed: the artefact was provisioned from an unauthenticated cache while offline.'
+	fi
 else
 	command -v curl >/dev/null 2>&1 ||
 		refuse 'curl is not available, so the release binary cannot be downloaded'

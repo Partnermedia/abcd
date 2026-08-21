@@ -77,7 +77,10 @@ func TestBootstrapProvisionsRootFromCacheWithoutDownload(t *testing.T) {
 	cached := []byte("#!/bin/sh\n# cached artefact\nexit 0\n")
 	served := []byte("#!/bin/sh\n# served artefact\nexit 0\n")
 	seedBootstrapCache(t, data, bootstrapTag, cached)
-	fx := bootstrapServer(t, served, bootstrapManifest(served))
+	// The published manifest authenticates the CACHED artefact (the cache is the
+	// legitimate release for this tag), while the served asset bytes differ — so
+	// a script that re-downloaded the asset could not pass by coincidence.
+	fx := bootstrapServer(t, served, bootstrapManifest(cached))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
 	if code != 2 {
@@ -91,7 +94,12 @@ func TestBootstrapProvisionsRootFromCacheWithoutDownload(t *testing.T) {
 		t.Errorf("the root binary is not the cached artefact (it matches the served bytes: %v) — the cache was bypassed", string(got) == string(served))
 	}
 	if n := atomic.LoadInt32(fx.artefactHits); n != 0 {
-		t.Errorf("a cache hit with an unchanged release must download no artefact, got %d artefact request(s)", n)
+		t.Errorf("a cache hit with an unchanged release must download no binary artefact, got %d asset request(s)", n)
+	}
+	// The published manifest IS fetched — that is how the cache is authenticated
+	// before it is trusted (adr-46 decision 3).
+	if n := atomic.LoadInt32(fx.manifestHits); n == 0 {
+		t.Error("an online cache hit must fetch the published checksums.txt to authenticate the cache; no manifest request was recorded")
 	}
 	fi, err := os.Stat(filepath.Join(root, "abcd"))
 	if err != nil || fi.Mode().Perm() != 0o755 {
@@ -99,6 +107,11 @@ func TestBootstrapProvisionsRootFromCacheWithoutDownload(t *testing.T) {
 	}
 	if got := firstLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
 		t.Errorf("the success must lead the first visible line; first line = %q", got)
+	}
+	// An online cache hit is authenticated against the published manifest, and
+	// the notice says which trust it rests on (adr-46 decision 3).
+	if !strings.Contains(out, "verified against the published") {
+		t.Errorf("an online cache hit must name the manifest-verified trust; output %q", out)
 	}
 	// Cache-provisioned roots carry no root-local .binary-meta: the cache meta
 	// is the one provenance record, and the skew notice reads the LIVE root.
@@ -129,6 +142,15 @@ func TestBootstrapCacheHitSurvivesOfflineResolve(t *testing.T) {
 	}
 	if n := atomic.LoadInt32(fx.artefactHits); n != 0 {
 		t.Errorf("no artefact may be fetched when the resolve fails and the cache holds one, got %d", n)
+	}
+	// Offline, no published manifest is reachable, so the cache is trusted at
+	// corruption-evidence only — and the notice says so, never claiming a
+	// manifest verification it did not perform (adr-46 decision 3).
+	if !strings.Contains(out, "unauthenticated cache while offline") {
+		t.Errorf("an offline cache hit must name the unauthenticated/offline trust; output %q", out)
+	}
+	if strings.Contains(out, "verified against the published") {
+		t.Errorf("an offline cache hit must not claim manifest verification; output %q", out)
 	}
 }
 
@@ -275,12 +297,17 @@ func TestBootstrapNewReleaseLeavesForeignPathFileAlone(t *testing.T) {
 func TestBootstrapCorruptCacheRefusesLoudly(t *testing.T) {
 	root := bootstrapRoot(t)
 	data := t.TempDir()
-	seedBootstrapCache(t, data, bootstrapTag, []byte("the recorded bytes"))
+	recorded := []byte("the recorded bytes")
+	seedBootstrapCache(t, data, bootstrapTag, recorded)
 	tampered := []byte("tampered bytes")
 	if err := os.WriteFile(filepath.Join(data, "cache", bootstrapAsset()), tampered, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fx := bootstrapServer(t, []byte("never served"), bootstrapManifest([]byte("never served")))
+	// The meta is INTACT (records the recorded bytes' hash), so the online
+	// authentication against the published manifest passes — and the
+	// promotion-time re-hash of the corrupted artefact is what catches the
+	// bytes-only corruption and refuses.
+	fx := bootstrapServer(t, recorded, bootstrapManifest(recorded))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
 	if code == 0 || code == 2 {
@@ -296,6 +323,60 @@ func TestBootstrapCorruptCacheRefusesLoudly(t *testing.T) {
 	// re-fetching over it would heal tampering without anyone ever knowing.
 	if got, err := os.ReadFile(filepath.Join(data, "cache", bootstrapAsset())); err != nil || string(got) != string(tampered) {
 		t.Errorf("the mismatching artefact must be left as evidence; got %q (%v)", got, err)
+	}
+}
+
+// TestBootstrapAuthenticatesCacheAgainstPublishedManifest is
+// iss-2608210934566228: the cache promotion's "re-verify against recorded
+// binary_sha256" is a CORRUPTION check, not a TAMPER check. The artefact and
+// the binary-meta that records its expected hash both live in the cache,
+// equally same-UID-writable, so an attacker who writes BOTH — a payload plus a
+// meta recording its hash and the current release tag — passed the promotion
+// gate and got an unverified binary installed at the guard path. When online
+// (the tag resolved), the cached hash must be authenticated against the
+// PUBLISHED checksums.txt for the resolved release before the cache is trusted;
+// a mismatch discards the cache and falls to the download path.
+func TestBootstrapAuthenticatesCacheAgainstPublishedManifest(t *testing.T) {
+	root := bootstrapRoot(t)
+	data := t.TempDir()
+	poison := []byte("#!/bin/sh\n# forged payload\nexit 0\n")
+	published := []byte("#!/bin/sh\n# the real release\nexit 0\n")
+	// A self-consistent poisoned pair: the artefact AND the binary-meta that
+	// vouches for it, both rewritten to record the poison's own hash under the
+	// CURRENT release tag. Re-hashing the artefact against its co-located record
+	// (the old design) passes — which is the whole defect.
+	seedBootstrapCache(t, data, bootstrapTag, poison)
+	fx := bootstrapServer(t, published, bootstrapManifest(published))
+
+	out, code := runBootstrapWithData(t, root, data, fx, "")
+	if code != 2 {
+		t.Fatalf("the authenticated cache path must install the published release, got %d (output %q)", code, out)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "abcd"))
+	if err != nil {
+		t.Fatalf("the root must be provisioned: %v", err)
+	}
+	if string(got) == string(poison) {
+		t.Fatal("the POISONED artefact was installed at the guard path: the cache was trusted on its co-located record alone, which the same-UID attacker also wrote")
+	}
+	if string(got) != string(published) {
+		t.Errorf("the root binary is neither poison nor published; got %q", got)
+	}
+	// The published checksums.txt was fetched to authenticate the cache, the
+	// mismatch was detected, and the download path then fetched the real asset
+	// to replace the tampered cache.
+	if n := atomic.LoadInt32(fx.manifestHits); n == 0 {
+		t.Error("the equal-tag cache path must fetch the published checksums.txt to authenticate the cache; no manifest request was made")
+	}
+	if n := atomic.LoadInt32(fx.artefactHits); n == 0 {
+		t.Error("a rejected cache must be replaced by a real asset download; no asset request was made")
+	}
+	if c, err := os.ReadFile(filepath.Join(data, "cache", bootstrapAsset())); err != nil || string(c) != string(published) {
+		t.Errorf("the tampered cache must be replaced by the verified download; got %q (%v)", c, err)
+	}
+	// The success notice rests its claim on the manifest, not on the cache.
+	if !strings.Contains(out, "verified") {
+		t.Errorf("the notice must name the verification the install rests on; output %q", out)
 	}
 }
 
@@ -506,11 +587,14 @@ func TestBootstrapCachePathsStayOutOfMessagesRaw(t *testing.T) {
 	if err := os.MkdirAll(data, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	seedBootstrapCache(t, data, bootstrapTag, []byte("the recorded bytes"))
+	recorded := []byte("the recorded bytes")
+	seedBootstrapCache(t, data, bootstrapTag, recorded)
 	if err := os.WriteFile(filepath.Join(data, "cache", bootstrapAsset()), []byte("tampered"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fx := bootstrapServer(t, []byte("never served"), bootstrapManifest([]byte("never served")))
+	// Meta intact -> online authentication passes, and the promotion re-hash
+	// catches the corrupted bytes and refuses (naming the cache path).
+	fx := bootstrapServer(t, recorded, bootstrapManifest(recorded))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
 	if code == 0 || code == 2 {

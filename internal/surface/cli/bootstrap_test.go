@@ -164,11 +164,18 @@ type bootstrapFixture struct {
 	base string // https://127.0.0.1:<port>
 	ca   string // PEM file holding the fixture's self-signed certificate
 	hits *int32 // every request the script makes, counted
-	// artefactHits counts only the requests that download release ARTEFACTS
-	// (the platform asset, its CDN redirect target, checksums.txt) — the
-	// spc-35 cache cases assert these stay at zero while still allowing the
-	// one best-effort tag resolve the refresh detector makes.
+	// artefactHits counts only the requests that download the release BINARY
+	// (the platform asset and its CDN redirect target) — the spc-35 cache cases
+	// assert these stay at zero while still allowing the one best-effort tag
+	// resolve the refresh detector makes and the checksums.txt fetch the online
+	// cache authentication needs.
 	artefactHits *int32
+	// manifestHits counts checksums.txt fetches, kept SEPARATE from the binary
+	// download: the online cache-authentication path (spc-35, adr-46 decision 3)
+	// fetches the published manifest to check the cached hash before trusting
+	// the cache, WITHOUT downloading the artefact, so a cache hit must show a
+	// manifest fetch and zero asset fetches.
+	manifestHits *int32
 	// failLatest, when set non-zero, makes /releases/latest answer 500 — the
 	// offline-resolve case: the refresh detector's best-effort resolve fails
 	// and a cache hit must still provision the root.
@@ -193,7 +200,7 @@ type bootstrapFixture struct {
 // server — so it is not the class of seam that was removed from the script.
 func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixture {
 	t.Helper()
-	var count, artefacts, failLatest int32
+	var count, artefacts, manifests, failLatest int32
 	asset := bootstrapAsset()
 	pinned := "/releases/download/" + bootstrapTag + "/"
 	mux := http.NewServeMux()
@@ -218,7 +225,7 @@ func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixtu
 			atomic.AddInt32(&artefacts, 1)
 			_, _ = w.Write(body)
 		case pinned + "checksums.txt":
-			atomic.AddInt32(&artefacts, 1)
+			atomic.AddInt32(&manifests, 1)
 			_, _ = w.Write([]byte(manifest))
 		case "/commits/" + bootstrapTag:
 			_, _ = w.Write([]byte(`{"sha":"` + bootstrapRelease + `","node_id":"x"}`))
@@ -234,7 +241,7 @@ func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixtu
 	if err := os.WriteFile(ca, pemBytes, 0o600); err != nil {
 		t.Fatalf("writing the fixture CA: %v", err)
 	}
-	fx := &bootstrapFixture{base: srv.URL, ca: ca, hits: &count, artefactHits: &artefacts, failLatest: &failLatest}
+	fx := &bootstrapFixture{base: srv.URL, ca: ca, hits: &count, artefactHits: &artefacts, manifestHits: &manifests, failLatest: &failLatest}
 
 	// Prove the harness itself works before any case blames the script. Without
 	// this, a curl build that ignored CURL_CA_BUNDLE would surface as "the latest
