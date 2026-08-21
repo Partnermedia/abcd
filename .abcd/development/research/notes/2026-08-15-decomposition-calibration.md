@@ -460,3 +460,32 @@ Per hand-run, append:
   prerequisite (itd-92 was the first) — the prerequisite is earning its
   cost; the calibration question for the eventual automated pre-pass is
   whether "trust rule parked in intent prose" is mechanically detectable.
+
+### 2026-08-21 — managed-repo identity gate, routine extension (itd-131)
+
+- **Proposal:** from a session finding — ahoy/new-repo setup should establish
+  the human git identity so autonomous-routine commits pass the attribution
+  gate (a routine defaults to `Claude <noreply@anthropic.com>` and its PR
+  reads as unmergeable). Captured as `iss-…367948`
+  (ahoy-setup-routine-git-identity).
+- **Initial routing (proposed before the human ruled):** capability (guarantee
+  the human git identity on every commit incl. routines) | intent — but the
+  grill found iss-62 (managed-repo-identity-gate) ALREADY owns this capability,
+  so the routing was PROMOTE iss-62, not file-new; the new capture refines it
+  (cloud-routine instance). Trust rule ("human is author of record; AI only in
+  the trailer) | already a convention (AGENTS.md § Attribution + check-attribution),
+  no new ADR. Stance (how AI is acknowledged) | itd-91, cited not duplicated.
+  Plumbing (local attribution mirror; lint the pushed tree) | the two sibling
+  captures filed the same session. Typed links: new capture refines iss-62;
+  intent refines/relates itd-91; adr-44 adjacent.
+- **Confirmed routing:** adopted (human confirmation 2026-08-21) — PROMOTE
+  iss-62 to itd-131, fold in the routine refinement, cite itd-91.
+- **Verdict:** SPLIT/HOLD reached, NOT file-as-is — the decomposition caught
+  that a fresh intent would duplicate iss-62. This is the discipline working:
+  the grill's "already owned by iss-62" is exactly the miss itd-84 exists to
+  prevent, and it landed before an intent was minted, not after.
+- **Notes:** third session data point (with itd-128, itd-130) where the grill
+  redirected a would-be new intent to an existing owner — twice to a citation
+  (itd-128, itd-130), once to a promote (itd-131). Worth a line in the protocol
+  page: "promote an existing seed" is a distinct routing outcome from "file new"
+  and "cite existing," and the four-piece table should name it.
