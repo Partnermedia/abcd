@@ -1,50 +1,11 @@
 package capture
 
 import (
-	"errors"
-	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
-
-// TestReservePathRefusesOverflowingCounter (B25) pins the overflow guard: a
-// hand-crafted MaxInt-adjacent filename would make maxN+1+attempt wrap to a
-// negative "iss--N" that fails reIssID, so reservePath must refuse to allocate
-// with a clear error rather than transiently create a bogus placeholder.
-func TestReservePathRefusesOverflowingCounter(t *testing.T) {
-	ir := filepath.Join(t.TempDir(), "issues")
-	if err := ensureLedgerDirs(ir); err != nil {
-		t.Fatal(err)
-	}
-	name := fmt.Sprintf("iss-%d-x.md", math.MaxInt)
-	if err := os.WriteFile(filepath.Join(ir, "open", name), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	id, target, err := reservePath(ir, "note", "", 0)
-	if !errors.Is(err, ErrAllocatorContention) {
-		t.Fatalf("reservePath must refuse an overflowing counter, got id=%q target=%q err=%v", id, target, err)
-	}
-}
-
-// TestMaxIssNSkipsOverIntFilename (B25) confirms an over-int digit run is not
-// parsed (and not folded to 0), leaving the genuine maximum intact.
-func TestMaxIssNSkipsOverIntFilename(t *testing.T) {
-	ir := filepath.Join(t.TempDir(), "issues")
-	if err := ensureLedgerDirs(ir); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"iss-5-real.md", "iss-99999999999999999999-x.md"} {
-		if err := os.WriteFile(filepath.Join(ir, "open", name), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := maxIssN(ir); got != 5 {
-		t.Fatalf("maxIssN = %d, want 5 (the over-int filename must be skipped)", got)
-	}
-}
 
 // TestOrphanStillRemovableRejectsCommittedFile (B26) proves the pre-unlink guard
 // refuses to remove a placeholder that a capture commit has replaced/filled in

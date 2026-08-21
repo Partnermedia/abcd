@@ -3,20 +3,19 @@ package capture
 import (
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/Partnermedia/abcd/internal/core/recordid"
 	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 const lockFilename = ".iss-alloc.lock"
 
-// placeholderRetryBudget bounds the O_EXCL bump-retry loop.
+// placeholderRetryBudget bounds the mint's redraw loop (spc-33 ruling 2).
 const placeholderRetryBudget = 8
 
 // orphanAgeThreshold is how old a zero-byte placeholder must be before the
@@ -34,7 +33,6 @@ var lockTimeout = 5 * time.Second
 var beforeOrphanRemoveHook func(cand string)
 
 var rePlaceholderName = regexp.MustCompile(`^iss-[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?\.md$`)
-var reMaxIssN = regexp.MustCompile(`^iss-([0-9]+)(?:-[a-z0-9-]+)?\.md$`)
 
 // ensureLedgerDirs provisions issuesRoot and the three status sub-directories,
 // refusing symlinked leaves. Idempotent.
@@ -98,17 +96,24 @@ func withLedgerLock(issuesRoot string, fn func() error) error {
 	return err
 }
 
-// reservePath reserves an iss-N id and creates a zero-byte placeholder under
-// open/, mirroring reserve_issue_path: flock -> scan max N -> O_EXCL create
-// with bump-retry. When forceID is non-empty it demands that exact id.
+// minter is the capture family's mint seam (adr-45; mechanics per spc-33). The
+// zero value is the production configuration — real clock, crypto entropy;
+// tests inject both so same-instant and race cases are deterministic.
+var minter recordid.Minter
+
+// reservePath reserves a native timestamp-numeric iss id and creates a
+// zero-byte placeholder under open/: flock -> mint -> presence check -> O_EXCL
+// create, redrawing a fresh id on any clash (spc-33 ruling 2 — a redraw keeps
+// candidates independent and uniform, where a bump would re-derive the next id
+// from the ledger's occupancy, a miniature max+1). When forceID is non-empty it
+// demands that exact id.
 //
-// refFloor is the highest iss-N observed across other git refs
-// (recordid.MaxAcrossRefs), computed by the caller before the lock: the reserved
-// id starts at max(local max N, refFloor)+1, so a branch that has already
-// committed a higher id is not re-minted (iss-115, iss-120). It is a floor, not a
-// substitute for the local scan — the local scan alone sees uncommitted mints in
-// this worktree, and the O_EXCL bump-retry still resolves any residual clash.
-func reservePath(issuesRoot, slug, forceID string, refFloor int) (string, string, error) {
+// The mint consults no maximum — not the ledger's, not the refs' (adr-45
+// ruling 2) — so there is no scan here and no floor parameter: time orders the
+// ids and entropy separates same-second minters on other branches. The
+// presence check runs first because the O_EXCL create guards open/ alone; a
+// clash with a resolved or wontfixed id also redraws.
+func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
 	// to build a path or create a placeholder — a traversal id (../../evil) must
 	// never touch the filesystem outside the ledger, even transiently.
@@ -134,19 +139,14 @@ func reservePath(issuesRoot, slug, forceID string, refFloor int) (string, string
 			return nil
 		}
 
-		maxN := maxIssN(issuesRoot)
-		if refFloor > maxN {
-			maxN = refFloor
-		}
-		// Guard the id arithmetic below (maxN+1+attempt) against int overflow: a
-		// hand-crafted MaxInt-adjacent filename would otherwise wrap to a negative
-		// "iss--N" that fails reIssID, creating a bogus placeholder that only fails
-		// downstream. Refuse clearly instead.
-		if maxN > math.MaxInt-placeholderRetryBudget {
-			return fmt.Errorf("%w: iss-N counter near the integer ceiling (highest observed %d); refusing to allocate", ErrAllocatorContention, maxN)
-		}
 		for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
-			issID := fmt.Sprintf("iss-%d", maxN+1+attempt)
+			issID, mErr := minter.Mint("iss")
+			if mErr != nil {
+				return mErr
+			}
+			if issPresent(issuesRoot, issID) {
+				continue
+			}
 			target := filepath.Join(issuesRoot, "open", issID+"-"+slug+".md")
 			fd, cErr := createPlaceholder(target)
 			if cErr != nil {
@@ -159,7 +159,7 @@ func reservePath(issuesRoot, slug, forceID string, refFloor int) (string, string
 			resID, resTarget = issID, target
 			return nil
 		}
-		return fmt.Errorf("%w: could not allocate iss-N after %d retries", ErrAllocatorContention, placeholderRetryBudget)
+		return fmt.Errorf("%w: could not mint a free iss id after %d draws", ErrAllocatorContention, placeholderRetryBudget)
 	})
 	if err != nil {
 		return "", "", err
@@ -183,34 +183,6 @@ func createPlaceholder(target string) (int, error) {
 		return -1, err
 	}
 	return fd, nil
-}
-
-// maxIssN scans all three status dirs for the highest iss-N (0 if none).
-func maxIssN(issuesRoot string) int {
-	maxN := 0
-	for _, sub := range []string{"open", "resolved", "wontfix"} {
-		entries, err := os.ReadDir(filepath.Join(issuesRoot, sub))
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			m := reMaxIssN.FindStringSubmatch(e.Name())
-			if m == nil {
-				continue
-			}
-			// An over-int digit run (or otherwise unparseable N) is not a usable
-			// maximum — skip it rather than silently folding it to 0, which would
-			// mask a filename that should have driven allocation higher.
-			n, err := strconv.Atoi(m[1])
-			if err != nil {
-				continue
-			}
-			if n > maxN {
-				maxN = n
-			}
-		}
-	}
-	return maxN
 }
 
 // issPresent reports whether issID exists in any status dir.

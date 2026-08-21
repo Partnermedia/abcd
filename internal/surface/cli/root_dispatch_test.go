@@ -17,9 +17,15 @@ func TestRootDispatchJSONContract(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
 
-	runCLI(t, "capture", "a dispatchable observation", "--json")
+	capOut := runCLI(t, "capture", "a dispatchable observation", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
 
-	out := runCLI(t, "iss-1", "--json")
+	out := runCLI(t, minted.ID, "--json")
 	var d struct {
 		ID        string   `json:"id"`
 		Family    string   `json:"family"`
@@ -30,13 +36,13 @@ func TestRootDispatchJSONContract(t *testing.T) {
 	if err := json.Unmarshal(out, &d); err != nil {
 		t.Fatalf("dispatch output not JSON: %v\n%s", err, out)
 	}
-	if d.ID != "iss-1" || d.Family != "issue" || d.Status != "open" {
+	if d.ID != minted.ID || d.Family != "issue" || d.Status != "open" {
 		t.Fatalf("unexpected description: %+v", d)
 	}
 	if d.Path == "" || filepath.IsAbs(d.Path) {
 		t.Fatalf("path must be repo-relative: %+v", d)
 	}
-	if len(d.NextMoves) == 0 || !strings.Contains(strings.Join(d.NextMoves, " "), "capture promote iss-1") {
+	if len(d.NextMoves) == 0 || !strings.Contains(strings.Join(d.NextMoves, " "), "capture promote "+minted.ID) {
 		t.Fatalf("open issue next moves wrong: %v", d.NextMoves)
 	}
 }
@@ -82,7 +88,13 @@ func TestRootNonIDPositionalUnchanged(t *testing.T) {
 func TestRootDispatchZeroWrites(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
-	runCLI(t, "capture", "watch for stray writes", "--json")
+	capOut := runCLI(t, "capture", "watch for stray writes", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
 
 	before := map[string]string{}
 	_ = filepath.Walk(repo, func(path string, info os.FileInfo, err error) error {
@@ -94,8 +106,8 @@ func TestRootDispatchZeroWrites(t *testing.T) {
 		return nil
 	})
 
-	runCLI(t, "iss-1")
-	runCLI(t, "iss-1", "--json")
+	runCLI(t, minted.ID)
+	runCLI(t, minted.ID, "--json")
 
 	n := 0
 	_ = filepath.Walk(repo, func(path string, info os.FileInfo, err error) error {

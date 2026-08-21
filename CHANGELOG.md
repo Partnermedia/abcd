@@ -23,6 +23,16 @@ called out in a **Breaking** section.
   is its own are refused loudly, each naming its remedy. Nothing ambient
   changes: this verb and `version --check` remain the only two paths to the
   release origin, each only when invoked. (itd-130)
+- **`abcd capture` mints collision-proof record ids.** A captured issue's id is
+  now timestamp-numeric — `iss-<yymmddHHMMSS><4 random digits>`, a UTC second
+  stamp plus a uniform random suffix — so two agents minting at the same
+  instant on different branches produce different ids with no coordination, no
+  network, and no registry; nothing is ever renumbered, and existing
+  sequential ids stay exactly as minted. The id grammar is unchanged
+  (`iss-[0-9]+`), so listing, resolution, promotion, dispatch, and release
+  cuts hold as before; the capture result no longer carries the max+1 era's
+  `mint_warning` degrade note, since the mint consults no refs. (itd-114,
+  spc-33, adr-45; resolves iss-330)
 
 ### Changed
 

@@ -70,8 +70,8 @@ func TestCaptureFreeTextStillWrites(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("capture output not JSON: %v\n%s", err, out)
 	}
-	if r.ID != "iss-1" {
-		t.Fatalf("free-text capture id = %q, want iss-1", r.ID)
+	if !regexp.MustCompile(`^iss-[0-9]{16}$`).MatchString(r.ID) {
+		t.Fatalf("free-text capture id = %q, want a native timestamp-numeric id", r.ID)
 	}
 	if n := ledgerIssueCount(t, repo); n != 1 {
 		t.Fatalf("free-text capture wrote %d issue(s), want 1", n)
@@ -232,9 +232,15 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
 
-	runCLI(t, "capture", "the parser eats trailing newlines", "--json")
+	capOut := runCLI(t, "capture", "the parser eats trailing newlines", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
 
-	out := runCLI(t, "capture", "promote", "iss-1", "--json")
+	out := runCLI(t, "capture", "promote", minted.ID, "--json")
 	var r struct {
 		IssueID    string `json:"issue_id"`
 		IssuePath  string `json:"issue_path"`
@@ -245,7 +251,7 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("promote output not JSON: %v\n%s", err, out)
 	}
-	if r.IssueID != "iss-1" || r.IntentID != "itd-1" || r.Linked {
+	if r.IssueID != minted.ID || r.IntentID != "itd-1" || r.Linked {
 		t.Fatalf("unexpected promote result: %+v", r)
 	}
 	for _, p := range []string{r.IssuePath, r.IntentPath} {
@@ -258,7 +264,7 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	}
 
 	// Second promote refuses (exit non-zero) and names the existing intent.
-	if _, err := runCLIErr(t, "capture", "promote", "iss-1"); err == nil || !strings.Contains(err.Error(), "itd-1") {
+	if _, err := runCLIErr(t, "capture", "promote", minted.ID); err == nil || !strings.Contains(err.Error(), "itd-1") {
 		t.Fatalf("second promote must refuse naming itd-1, got: %v", err)
 	}
 }
@@ -270,7 +276,13 @@ func TestCaptureResolveProvenanceJSON(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
 
-	runCLI(t, "capture", "a provenance-carrying issue", "--json")
+	capOut := runCLI(t, "capture", "a provenance-carrying issue", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
 	intentRel := ".abcd/development/intents/shipped/itd-4-the-fixer.md"
 	if err := os.MkdirAll(filepath.Join(repo, filepath.Dir(intentRel)), 0o755); err != nil {
 		t.Fatal(err)
@@ -280,11 +292,11 @@ func TestCaptureResolveProvenanceJSON(t *testing.T) {
 	}
 
 	// Unknown intent refuses; the issue stays open.
-	if _, err := runCLIErr(t, "capture", "resolve", "iss-1", "nope", "--impact", "fix", "--intent", "itd-99"); err == nil {
+	if _, err := runCLIErr(t, "capture", "resolve", minted.ID, "nope", "--impact", "fix", "--intent", "itd-99"); err == nil {
 		t.Fatalf("resolve with an unknown --intent must refuse")
 	}
 
-	out := runCLI(t, "capture", "resolve", "iss-1", "fixed by the fixer", "--impact", "fix",
+	out := runCLI(t, "capture", "resolve", minted.ID, "fixed by the fixer", "--impact", "fix",
 		"--intent", "itd-4", "--commit", "abcdef0123", "--json")
 	var r struct {
 		ID         string `json:"id"`
@@ -298,7 +310,7 @@ func TestCaptureResolveProvenanceJSON(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("resolve output not JSON: %v\n%s", err, out)
 	}
-	if r.ID != "iss-1" || r.ToStatus != "resolved" {
+	if r.ID != minted.ID || r.ToStatus != "resolved" {
 		t.Fatalf("unexpected resolve result: %+v", r)
 	}
 	if r.ResolvedBy == nil || r.ResolvedBy.Intent != "itd-4" || r.ResolvedBy.Commit != "abcdef0123" || r.ResolvedBy.Spec != "" {
