@@ -78,6 +78,37 @@ func writeTree(t *testing.T, dir string, files map[string]string) {
 // recursive walk: a probed tree is foreign and may point anywhere, so a
 // symlinked file and a symlinked directory must both be skipped rather than
 // followed, and no path the walk yields may resolve outside the repository root.
+// TestReadFileCapBoundary pins ReadFile's size boundary after the cap+1 read
+// change (which refuses a file that grows past the cap between the fstat and the
+// read, rather than silently truncating it to a prefix): a file exactly at the
+// cap is still read in full, and a file one byte over is refused.
+func TestReadFileCapBoundary(t *testing.T) {
+	repo := t.TempDir()
+	atCap := make([]byte, maxProbeReadBytes)
+	for i := range atCap {
+		atCap[i] = 'a'
+	}
+	if err := os.WriteFile(filepath.Join(repo, "atcap.txt"), atCap, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "over.txt"), append(atCap, 'b'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := newSourceContext(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	data, ok := ctx.ReadFile("atcap.txt")
+	if !ok || len(data) != maxProbeReadBytes {
+		t.Fatalf("ReadFile(atcap) ok=%v len=%d, want true and %d", ok, len(data), maxProbeReadBytes)
+	}
+	if _, ok := ctx.ReadFile("over.txt"); ok {
+		t.Fatal("ReadFile accepted a file one byte over the cap")
+	}
+}
+
 func TestWalkFilesCannotEscapeTheContainmentRoot(t *testing.T) {
 	base := t.TempDir()
 	repo := filepath.Join(base, "repo")
