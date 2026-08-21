@@ -8,7 +8,7 @@ dev-adjacent tree the release artifact carries.
 
 Three tiers, on two axes (durability × sharing):
 
-- **`development/`** — durable record (committed): brief, roadmap/intents,
+- **`development/`** — durable record (committed): brief, roadmap, intents,
   decisions/adrs, research. The specification for the build.
 - **`work/`** — shared working (committed): `CONTEXT.md`, `DECISIONS.md`.
 - **`.work.local/`** — local ephemeral (gitignored): `NEXT.md`, `scratch/`,

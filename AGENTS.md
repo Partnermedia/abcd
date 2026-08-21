@@ -54,7 +54,7 @@ markdown plugin surface, and (later) an MCP server are thin front doors onto it.
 Start with the plan and the design record:
 
 - Design record (the specification): [`.abcd/development/`](.abcd/development/) —
-  brief, roadmap/intents, decisions/adrs, research.
+  brief, roadmap, intents, decisions/adrs, research.
 - Package map: [`internal/README.md`](internal/README.md).
 
 ## Build, test, and checks
