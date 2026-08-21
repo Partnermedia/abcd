@@ -106,6 +106,19 @@ func resolvePluginRoot() (string, bool) {
 			dir = filepath.Dir(dir)
 		}
 	}
+	// The owned-copy PATH entry (spc-35) is a regular file, so it has no symlink
+	// target inside the plugin root for the ancestor walk to follow home — the
+	// route the old pinned symlink doubled as. The home-scoped provenance record
+	// carries the plugin root the copy was provisioned from, so it stands in as
+	// the last candidate, AFTER the env-var and executable-ancestor routes: a
+	// live CLAUDE_PLUGIN_ROOT is always preferred, and the recorded root — a
+	// commit-stamped cache dir the harness replaces on update, which the hook-side
+	// bootstrap re-stamps each time it provisions — is the terminal's fallback
+	// (iss-2608210934566230). pluginRootValid still gates it, so a stale recorded
+	// root that has been garbage-collected is skipped, not trusted.
+	if rec, ok := readPathEntry(); ok && rec.pluginRoot != "" {
+		candidates = append(candidates, rec.pluginRoot)
+	}
 	for _, c := range candidates {
 		if pluginRootValid(c) {
 			return c, true

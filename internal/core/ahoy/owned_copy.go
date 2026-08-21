@@ -41,11 +41,21 @@ func cacheMetaPath(dataDir string) string {
 	return filepath.Join(dataDir, "cache", "binary-meta")
 }
 
-// pathEntryFile is the PATH-copy provenance record inside the data dir.
-const pathEntryFile = "path-entry"
-
-func pathEntryPath(dataDir string) string {
-	return filepath.Join(dataDir, pathEntryFile)
+// userPathEntryPath is the PATH-copy provenance record, home-scoped and
+// abcd-owned (~/.abcd/path-entry, alongside the history store). It deliberately
+// does NOT live in the harness data dir: CLAUDE_PLUGIN_DATA is exported only to
+// hook processes, yet `ahoy install`, `ahoy uninstall`, and `abcd update` all
+// run from a terminal where it is unset — so a record readable only from a hook
+// could not establish ownership exactly where those verbs run, and would
+// silently reclassify abcd's own binary as foreign (iss-2608210934566230,
+// adr-46 decision 4). The data dir stays the CACHE's home only. Empty when the
+// home directory cannot be resolved (every caller then reads "no record").
+func userPathEntryPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".abcd", "path-entry")
 }
 
 // cacheRecordedSHA reads the cache meta's binary_sha256, or "" when the record
@@ -82,19 +92,21 @@ func hexDigestOK(s string) bool {
 
 // pathEntryRecord is the parsed provenance of the owned PATH copy.
 type pathEntryRecord struct {
-	path string // where the copy was installed
-	sha  string // its SHA-256 at install/refresh time
+	path       string // where the copy was installed
+	sha        string // its SHA-256 at install/refresh time
+	pluginRoot string // the plugin root at install/refresh time (may be empty)
 }
 
 // readPathEntry loads the provenance record, reporting ok only when both
-// fields are present and the hash parses — a truncated record vouches for
-// nothing.
+// required fields are present and the hash parses — a truncated record vouches
+// for nothing. plugin_root is optional (a legacy record predating it, or a
+// degraded install, carries none); its absence never fails the read.
 func readPathEntry() (pathEntryRecord, bool) {
-	dataDir := pluginDataDir()
-	if dataDir == "" {
+	path := userPathEntryPath()
+	if path == "" {
 		return pathEntryRecord{}, false
 	}
-	raw, err := fsutil.ReadGuarded(pathEntryPath(dataDir), maxPathEntryBytes)
+	raw, err := fsutil.ReadGuarded(path, maxPathEntryBytes)
 	if err != nil {
 		return pathEntryRecord{}, false
 	}
@@ -109,6 +121,8 @@ func readPathEntry() (pathEntryRecord, bool) {
 			rec.path = v
 		case "binary_sha256":
 			rec.sha = v
+		case "plugin_root":
+			rec.pluginRoot = v
 		}
 	}
 	if rec.path == "" || !hexDigestOK(rec.sha) {
@@ -118,20 +132,30 @@ func readPathEntry() (pathEntryRecord, bool) {
 }
 
 // writePathEntry records (atomically) that the file at target with the given
-// hash is abcd's owned PATH copy.
-func writePathEntry(target, shaHex string) error {
-	dataDir := pluginDataDir()
-	if dataDir == "" {
+// hash is abcd's owned PATH copy, installed from pluginRoot. pluginRoot is the
+// route home the old PATH symlink used to provide (its target sat inside the
+// root); a regular-file copy severs that, so the record carries it and
+// resolvePluginRoot reads it as a candidate. An empty pluginRoot records no
+// such line — a degraded install has no root to record.
+func writePathEntry(target, shaHex, pluginRoot string) error {
+	path := userPathEntryPath()
+	if path == "" {
 		return os.ErrNotExist
 	}
 	body := "path=" + target + "\nbinary_sha256=" + shaHex + "\n"
-	return fsutil.WriteFileAtomic(pathEntryPath(dataDir), []byte(body), 0o644)
+	if pluginRoot != "" {
+		body += "plugin_root=" + pluginRoot + "\n"
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return fsutil.WriteFileAtomic(path, []byte(body), 0o644)
 }
 
 // removePathEntry drops the provenance record; absent is fine.
 func removePathEntry() {
-	if dataDir := pluginDataDir(); dataDir != "" {
-		_ = os.Remove(pathEntryPath(dataDir))
+	if path := userPathEntryPath(); path != "" {
+		_ = os.Remove(path)
 	}
 }
 
@@ -190,5 +214,7 @@ func RefreshPathEntryDigest(target, shaHex string) {
 	if !ok || !sameEntry(rec.path, target) {
 		return
 	}
-	_ = writePathEntry(rec.path, shaHex)
+	// Preserve the recorded plugin_root: `abcd update` re-stamps the digest, not
+	// the route home, so the terminal-side root resolution keeps working.
+	_ = writePathEntry(rec.path, shaHex, rec.pluginRoot)
 }

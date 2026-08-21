@@ -28,6 +28,33 @@ func runBootstrapWithData(t *testing.T, root, data string, fx *bootstrapFixture,
 		append(fx.env(), "CLAUDE_PLUGIN_DATA="+data), extraPath)
 }
 
+// runBootstrapWithDataHome is runBootstrapWithData with HOME pinned, so a test
+// can seed and read the home-scoped owned-copy provenance record (spc-35 keeps
+// it at $HOME/.abcd/path-entry, reachable from a terminal that has no
+// CLAUDE_PLUGIN_DATA).
+func runBootstrapWithDataHome(t *testing.T, root, data, home string, fx *bootstrapFixture, extraPath string) (string, int) {
+	t.Helper()
+	bootstrapRequires(t)
+	return runScript(t, bootstrapFixtureScript(t, fx.base), root,
+		append(fx.env(), "CLAUDE_PLUGIN_DATA="+data, "HOME="+home), extraPath)
+}
+
+// homePathEntry is $HOME/.abcd/path-entry, the home-scoped provenance record.
+func homePathEntry(home string) string {
+	return filepath.Join(home, ".abcd", "path-entry")
+}
+
+// seedHomePathEntry writes the provenance record under a pinned HOME.
+func seedHomePathEntry(t *testing.T, home, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(home, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(homePathEntry(home), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // seedBootstrapCache plants a provisioned cache: the artefact plus the
 // binary-meta record the bootstrap itself would have written for it.
 func seedBootstrapCache(t *testing.T, data, tag string, body []byte) {
@@ -220,18 +247,17 @@ func TestBootstrapNewReleaseRefreshesCacheAndPathEntry(t *testing.T) {
 	fresh := []byte("#!/bin/sh\n# new release\nexit 0\n")
 	seedBootstrapCache(t, data, "v9.9.8", old)
 	oldSum := sha256.Sum256(old)
+	home := t.TempDir()
 	pathDir := t.TempDir()
 	pathCopy := filepath.Join(pathDir, "abcd")
 	if err := os.WriteFile(pathCopy, old, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(oldSum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(oldSum[:]) + "\nplugin_root=" + t.TempDir() + "\n"
+	seedHomePathEntry(t, home, entry)
 	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
 
-	out, code := runBootstrapWithData(t, root, data, fx, "")
+	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
 	if code != 2 {
 		t.Fatalf("a new release must install, got %d (output %q)", code, out)
 	}
@@ -249,12 +275,17 @@ func TestBootstrapNewReleaseRefreshesCacheAndPathEntry(t *testing.T) {
 	if got, err := os.ReadFile(pathCopy); err != nil || string(got) != string(fresh) {
 		t.Errorf("the owned PATH copy must be refreshed to the new release; got %q (%v)", got, err)
 	}
-	entryRaw, err := os.ReadFile(filepath.Join(data, "path-entry"))
+	entryRaw, err := os.ReadFile(homePathEntry(home))
 	if err != nil {
 		t.Fatalf("path-entry must survive the refresh: %v", err)
 	}
 	if !strings.Contains(string(entryRaw), hex.EncodeToString(freshSum[:])) {
 		t.Errorf("path-entry must record the refreshed hash; got %q", entryRaw)
+	}
+	// The record's plugin_root is re-stamped to the LIVE root each provision, so
+	// a terminal (no CLAUDE_PLUGIN_ROOT) can still resolve the plugin root.
+	if !strings.Contains(string(entryRaw), "plugin_root="+root+"\n") {
+		t.Errorf("path-entry must re-stamp plugin_root to the live root %q; got %q", root, entryRaw)
 	}
 }
 
@@ -270,18 +301,17 @@ func TestBootstrapNewReleaseLeavesForeignPathFileAlone(t *testing.T) {
 	foreign := []byte("#!/bin/sh\n# somebody else's abcd\nexit 0\n")
 	seedBootstrapCache(t, data, "v9.9.8", old)
 	oldSum := sha256.Sum256(old)
+	home := t.TempDir()
 	pathDir := t.TempDir()
 	pathCopy := filepath.Join(pathDir, "abcd")
 	if err := os.WriteFile(pathCopy, foreign, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(oldSum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	seedHomePathEntry(t, home, entry)
 	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
 
-	out, code := runBootstrapWithData(t, root, data, fx, "")
+	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
 	if code != 2 {
 		t.Fatalf("the install itself must proceed, got %d (output %q)", code, out)
 	}
@@ -557,23 +587,35 @@ func TestBootstrapCacheModeSkipsPathRefreshOnCacheHit(t *testing.T) {
 	seedBootstrapCache(t, data, bootstrapTag, cached)
 	stale := []byte("#!/bin/sh\n# stale path copy\nexit 0\n")
 	staleSum := sha256.Sum256(stale)
+	home := t.TempDir()
 	pathDir := t.TempDir()
 	pathCopy := filepath.Join(pathDir, "abcd")
 	if err := os.WriteFile(pathCopy, stale, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(staleSum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(staleSum[:]) + "\nplugin_root=" + t.TempDir() + "\n"
+	seedHomePathEntry(t, home, entry)
 	fx := bootstrapServer(t, cached, bootstrapManifest(cached))
 
-	out, code := runBootstrapWithData(t, root, data, fx, "")
+	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
 	if code != 2 {
 		t.Fatalf("the cache hit must provision the root, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(pathCopy); err != nil || string(got) != string(stale) {
 		t.Errorf("a cache hit must not touch the PATH copy (`abcd ahoy install` heals on demand); got %q (%v)", got, err)
+	}
+	// A cache hit does not touch the PATH COPY, but it still re-stamps the
+	// record's plugin_root to the live root — the terminal's route home tracks
+	// the latest root within one hook firing of any update.
+	entryRaw, err := os.ReadFile(homePathEntry(home))
+	if err != nil {
+		t.Fatalf("path-entry must survive a cache hit: %v", err)
+	}
+	if !strings.Contains(string(entryRaw), "plugin_root="+root+"\n") {
+		t.Errorf("a cache hit must re-stamp plugin_root to the live root %q; got %q", root, entryRaw)
+	}
+	if !strings.Contains(string(entryRaw), "binary_sha256="+hex.EncodeToString(staleSum[:])) {
+		t.Errorf("the re-stamp must preserve the recorded path and hash; got %q", entryRaw)
 	}
 }
 

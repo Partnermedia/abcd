@@ -21,6 +21,23 @@ import (
 // no other fixture bytes can pass for it.
 var cacheArtefact = []byte("#!/bin/sh\n# abcd release artefact fixture\nexit 0\n")
 
+// writeUserPathEntry writes the home-scoped provenance record (spc-35 moved it
+// out of the harness data dir, which is unreachable from a terminal). The
+// parent ~/.abcd is created first, matching writePathEntry.
+func writeUserPathEntry(t *testing.T, body string) {
+	t.Helper()
+	p := userPathEntryPath()
+	if p == "" {
+		t.Fatal("no home-scoped path-entry location resolved")
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // seedDataCache provisions a persistent data dir holding the verified cache —
 // artefact plus binary-meta — and points CLAUDE_PLUGIN_DATA at it.
 func seedDataCache(t *testing.T, body []byte) string {
@@ -51,7 +68,7 @@ func TestInstallWritesOwnedCopyFromCache(t *testing.T) {
 	home, pluginRoot := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
@@ -76,7 +93,7 @@ func TestInstallWritesOwnedCopyFromCache(t *testing.T) {
 	if err != nil || string(got) != string(cacheArtefact) {
 		t.Errorf("the owned copy must hold the verified cache artefact; got %q (%v)", got, err)
 	}
-	raw, err := os.ReadFile(filepath.Join(data, "path-entry"))
+	raw, err := os.ReadFile(userPathEntryPath())
 	if err != nil {
 		t.Fatalf("install must record the provenance in the data dir's path-entry: %v", err)
 	}
@@ -110,7 +127,7 @@ func TestInstallHealsLegacySymlinkToOwnedCopy(t *testing.T) {
 	t.Setenv("PATH", binDir)
 	link := filepath.Join(binDir, "abcd")
 	linkOwned(t, link, pluginRoot)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 
 	det, err := Detect(managedRepo(t))
 	if err != nil {
@@ -141,7 +158,7 @@ func TestInstallHealsLegacySymlinkToOwnedCopy(t *testing.T) {
 	if got, err := os.ReadFile(link); err != nil || string(got) != string(cacheArtefact) {
 		t.Errorf("the healed entry must hold the verified artefact; got %q (%v)", got, err)
 	}
-	if _, err := os.Stat(filepath.Join(data, "path-entry")); err != nil {
+	if _, err := os.Stat(userPathEntryPath()); err != nil {
 		t.Errorf("healing must record the provenance: %v", err)
 	}
 }
@@ -153,8 +170,8 @@ func TestInstallRefusesCorruptCacheArtefact(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
-	if err := os.WriteFile(cacheAssetPath(data), []byte("tampered"), 0o755); err != nil {
+	seedDataCache(t, cacheArtefact)
+	if err := os.WriteFile(cacheAssetPath(pluginDataDir()), []byte("tampered"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	repo := t.TempDir()
@@ -169,7 +186,7 @@ func TestInstallRefusesCorruptCacheArtefact(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(binDir, "abcd")); !os.IsNotExist(err) {
 		t.Errorf("a mismatching artefact must never be installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(data, "path-entry")); !os.IsNotExist(err) {
+	if _, err := os.Stat(userPathEntryPath()); !os.IsNotExist(err) {
 		t.Errorf("no provenance may be recorded for a refused install: %v", err)
 	}
 	joined := notesJoined(res.Notes)
@@ -216,7 +233,7 @@ func TestInstallRefusesForeignFileDespitePathEntry(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	target := filepath.Join(binDir, "abcd")
 	foreign := []byte("#!/bin/sh\n# hand-built abcd\nexit 0\n")
 	writeForeign(t, target)
@@ -225,9 +242,7 @@ func TestInstallRefusesForeignFileDespitePathEntry(t *testing.T) {
 	}
 	sum := sha256.Sum256(cacheArtefact)
 	entry := "path=" + target + "\nbinary_sha256=" + hex.EncodeToString(sum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeUserPathEntry(t, entry)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
@@ -258,7 +273,7 @@ func TestUninstallRemovesOwnedCopyAndPathEntry(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
@@ -281,10 +296,10 @@ func TestUninstallRemovesOwnedCopyAndPathEntry(t *testing.T) {
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Errorf("the owned copy survived uninstall: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(data, "path-entry")); !os.IsNotExist(err) {
+	if _, err := os.Stat(userPathEntryPath()); !os.IsNotExist(err) {
 		t.Errorf("the provenance record survived uninstall: %v", err)
 	}
-	if _, err := os.Stat(cacheAssetPath(data)); err != nil {
+	if _, err := os.Stat(cacheAssetPath(pluginDataDir())); err != nil {
 		t.Errorf("the cache is the harness's to delete, not uninstall's: %v", err)
 	}
 }
@@ -296,14 +311,12 @@ func TestUninstallLeavesForeignFileDespitePathEntry(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	target := filepath.Join(binDir, "abcd")
 	writeForeign(t, target)
 	sum := sha256.Sum256(cacheArtefact)
 	entry := "path=" + target + "\nbinary_sha256=" + hex.EncodeToString(sum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeUserPathEntry(t, entry)
 
 	receipt, err := Uninstall(managedRepo(t), "")
 	if err != nil {
@@ -324,7 +337,7 @@ func TestDetectOwnedCopyIsAHealthyInstall(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	target := filepath.Join(binDir, "abcd")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -334,9 +347,7 @@ func TestDetectOwnedCopyIsAHealthyInstall(t *testing.T) {
 	}
 	sum := sha256.Sum256(cacheArtefact)
 	entry := "path=" + target + "\nbinary_sha256=" + hex.EncodeToString(sum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeUserPathEntry(t, entry)
 
 	det, err := Detect(managedRepo(t))
 	if err != nil {
@@ -359,13 +370,11 @@ func TestRefreshPathEntryDigest(t *testing.T) {
 	home, _ := setupUserScope(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	t.Setenv("PATH", binDir)
-	data := seedDataCache(t, cacheArtefact)
+	seedDataCache(t, cacheArtefact)
 	target := filepath.Join(binDir, "abcd")
 	sum := sha256.Sum256(cacheArtefact)
 	entry := "path=" + target + "\nbinary_sha256=" + hex.EncodeToString(sum[:]) + "\n"
-	if err := os.WriteFile(filepath.Join(data, "path-entry"), []byte(entry), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeUserPathEntry(t, entry)
 	swapped := []byte("#!/bin/sh\n# updated release\nexit 0\n")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -385,5 +394,74 @@ func TestRefreshPathEntryDigest(t *testing.T) {
 	RefreshPathEntryDigest(other, strings.Repeat("0", 64))
 	if kind := classifyBinTarget(target, ""); kind != binTargetOwnedCopy {
 		t.Errorf("a refresh for an unrelated path must not disturb the record, got %v", kind)
+	}
+}
+
+// TestTerminalOwnedCopySurvivesClearedHarnessEnv is the regression the harness
+// hid (iss-2608210934566230): `ahoy install`, `ahoy uninstall`, and `abcd
+// update` run from a plain terminal, where CLAUDE_PLUGIN_DATA and
+// CLAUDE_PLUGIN_ROOT are NOT exported. With the provenance record moved home-
+// scoped and carrying the plugin root, an owned copy installed under a hook's
+// environment still classifies as ours and still resolves its plugin root once
+// every harness variable is cleared and abcd is invoked by name through the copy
+// — so Detect reports a healthy pinned install (never abcd's own binary as
+// foreign), and Uninstall still removes the copy.
+func TestTerminalOwnedCopySurvivesClearedHarnessEnv(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+	seedDataCache(t, cacheArtefact) // sets CLAUDE_PLUGIN_DATA
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(binDir, "abcd")
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("precondition: the owned copy must be installed: %v", err)
+	}
+
+	// Now the terminal: every harness variable is gone, and abcd is invoked by
+	// name through the copy (os.Executable reports the copy, whose ancestors hold
+	// no plugin layout). Only the home-scoped record can carry ownership and the
+	// route home now.
+	t.Setenv("CLAUDE_PLUGIN_DATA", "")
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	t.Setenv("ABCD_PLUGIN_ROOT", "")
+	saved := osExecutable
+	t.Cleanup(func() { osExecutable = saved })
+	osExecutable = func() (string, error) { return target, nil }
+
+	det, err := Detect(managedRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.PluginRootStatus != "resolved" {
+		t.Errorf("the plugin root must resolve from the record in a terminal, got %q", det.PluginRootStatus)
+	}
+	if hasGap(det.Gaps, "plugin.root_missing") {
+		t.Errorf("the plugin root must not read as missing from a terminal: %+v", det.Gaps)
+	}
+	if hasGap(det.Gaps, "symlink.foreign") {
+		t.Errorf("abcd must not report its own installed copy as foreign from a terminal: %+v", det.Gaps)
+	}
+	if m, _ := det.Signals["install_mode"].(string); m != "pinned" {
+		t.Errorf("install_mode = %q from a terminal, want pinned", m)
+	}
+	if kind := classifyBinTarget(target, pluginRoot); kind != binTargetOwnedCopy {
+		t.Errorf("classify = %v from a terminal, want owned copy", kind)
+	}
+
+	receipt, err := Uninstall(managedRepo(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.Symlink.Removed {
+		t.Fatalf("uninstall must remove the owned copy from a terminal: %+v", receipt.Symlink)
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Errorf("the owned copy survived a terminal uninstall: %v", err)
 	}
 }

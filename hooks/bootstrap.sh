@@ -254,7 +254,6 @@ degrade_note=' The persistent plugin data directory is unavailable, so the binar
 cache_dir=''
 cache_binary=''
 cache_meta=''
-path_entry=''
 if [ -n "$data_dir" ]; then
 	cache_dir="$data_dir/cache"
 	if mkdir -p "$cache_dir" 2>/dev/null; then
@@ -262,9 +261,18 @@ if [ -n "$data_dir" ]; then
 		degrade_note=''
 		cache_binary="$cache_dir/$asset"
 		cache_meta="$cache_dir/binary-meta"
-		path_entry="$data_dir/path-entry"
 	fi
 fi
+
+# The owned-copy provenance record is HOME-scoped, never in the data dir: a
+# terminal (where `ahoy install`/`uninstall` and `abcd update` run) has HOME but
+# not CLAUDE_PLUGIN_DATA, so a record behind that variable would be unreadable
+# exactly where those verbs run (iss-2608210934566230, adr-46 decision 4). HOME
+# is a filesystem destination here, never a fetch origin. Empty when HOME is
+# unset, which every use below guards.
+path_entry=''
+home_dir="${HOME:-}"
+[ -n "$home_dir" ] && path_entry="$home_dir/.abcd/path-entry"
 
 # 4. Concurrency lock. mkdir is atomic on POSIX, so the loser of the race is the
 #    process whose mkdir fails; it exits quietly rather than racing the winner.
@@ -495,7 +503,7 @@ else
 		# still matches the recorded provenance hash is ever replaced — anything
 		# else is foreign, whatever put it there owns it — and the replacement
 		# is re-verified before the rename, like every promotion.
-		if [ -f "$path_entry" ]; then
+		if [ -n "$path_entry" ] && [ -f "$path_entry" ]; then
 			entry_path=$(sed -n 's/^path=//p' "$path_entry" 2>/dev/null | head -n 1 | tr -d '\000-\037\177')
 			entry_sha=$(meta_field "$path_entry" binary_sha256)
 			refresh_ok=yes
@@ -519,10 +527,15 @@ else
 						chmod 0755 "$path_tmp" 2>/dev/null &&
 						mv -f "$path_tmp" "$entry_path" 2>/dev/null; then
 						path_tmp=''
+						# Re-record path + the refreshed hash + the LIVE plugin
+						# root: the record's plugin_root is the terminal's route
+						# home, and this fresh root replaced the one it named.
 						{
 							printf 'path=%s\n' "$entry_path"
 							printf 'binary_sha256=%s\n' "$new_sha"
+							printf 'plugin_root=%s\n' "$plugin_root"
 						} > "$tmp/path-entry" 2>/dev/null &&
+							mkdir -p "$(dirname "$path_entry")" 2>/dev/null &&
 							mv -f "$tmp/path-entry" "$path_entry" 2>/dev/null
 						path_note=' The abcd command on your PATH was refreshed to the same release.'
 					else
@@ -595,6 +608,33 @@ else
 		} > "$tmp/binary-meta" 2>/dev/null &&
 			mv -f "$tmp/binary-meta" "$meta_path" 2>/dev/null ||
 			meta_note=' (the .binary-meta provenance record could not be written, so version-skew reporting stays silent for this plugin root)'
+	fi
+fi
+
+# Re-stamp the owned-copy record's plugin_root to THIS root, on every provision.
+# The record's plugin_root is the route home the terminal uses to reach the
+# plugin root (the old PATH symlink's job); a plugin root is a commit-stamped
+# cache dir the harness replaces on update, so the recorded one goes stale at
+# every update, and the hook — the one context with CLAUDE_PLUGIN_ROOT — is what
+# keeps it current. Only an existing, well-formed record is rewritten (this
+# re-stamps provenance, never creates it); path + hash are preserved verbatim.
+# Runs for cache hits too, where the PATH-copy refresh above did not fire.
+if [ -n "$path_entry" ] && [ -f "$path_entry" ]; then
+	rec_path=$(sed -n 's/^path=//p' "$path_entry" 2>/dev/null | head -n 1 | tr -d '\000-\037\177')
+	rec_sha=$(meta_field "$path_entry" binary_sha256)
+	rec_ok=yes
+	[ -n "$rec_path" ] || rec_ok=''
+	case "$rec_sha" in *[!0-9a-f]*) rec_ok='' ;; esac
+	[ "${#rec_sha}" -eq 64 ] || rec_ok=''
+	if [ -n "$rec_ok" ]; then
+		rec_tmp="$path_entry.rewrite.$$"
+		{
+			printf 'path=%s\n' "$rec_path"
+			printf 'binary_sha256=%s\n' "$rec_sha"
+			printf 'plugin_root=%s\n' "$plugin_root"
+		} > "$rec_tmp" 2>/dev/null &&
+			mv -f "$rec_tmp" "$path_entry" 2>/dev/null ||
+			rm -f "$rec_tmp" 2>/dev/null
 	fi
 fi
 

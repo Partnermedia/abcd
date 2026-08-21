@@ -827,7 +827,7 @@ func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
 		a.refuse("could not write the PATH entry " + displayPath(target) + ": " + errText(err))
 		return
 	}
-	if err := writePathEntry(target, want); err != nil {
+	if err := writePathEntry(target, want, a.det.pluginRoot); err != nil {
 		// The copy is genuine and works; without the record it will classify
 		// foreign, so the failure is loud rather than latent.
 		a.refuse("the PATH entry was installed but its provenance record could not be written (" + errText(err) + "); re-run `abcd ahoy install` — without the record abcd will treat the entry as foreign.")

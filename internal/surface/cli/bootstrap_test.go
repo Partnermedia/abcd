@@ -309,11 +309,11 @@ func runScript(t *testing.T, script, root string, extraEnv []string, extraPath s
 		pathValue = extraPath + string(os.PathListSeparator) + pathValue
 	}
 	cmd := exec.Command(script)
-	cmd.Env = append([]string{
+	cmd.Env = dedupEnvKeepLast(append([]string{
 		"PATH=" + pathValue,
 		"HOME=" + t.TempDir(),
 		"CLAUDE_PLUGIN_ROOT=" + root,
-	}, extraEnv...)
+	}, extraEnv...))
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if err != nil {
@@ -324,6 +324,28 @@ func runScript(t *testing.T, script, root string, extraEnv []string, extraPath s
 		}
 	}
 	return string(out), code
+}
+
+// dedupEnvKeepLast collapses duplicate KEY= entries keeping the LAST value, so a
+// caller that appends HOME= (or CURL_HOME=) after the constructed defaults
+// really does override them regardless of how the child's libc resolves a
+// duplicated key.
+func dedupEnvKeepLast(env []string) []string {
+	idx := map[string]int{}
+	var out []string
+	for _, kv := range env {
+		key := kv
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			key = kv[:i]
+		}
+		if at, ok := idx[key]; ok {
+			out[at] = kv
+			continue
+		}
+		idx[key] = len(out)
+		out = append(out, kv)
+	}
+	return out
 }
 
 // metaValues parses the key=value .binary-meta the bootstrap writes.
@@ -1056,9 +1078,10 @@ func bootstrapEnvRefNames(s string) []string {
 // environment read.
 //
 // A name is safe only if every assignment of it takes its value from constants,
-// from CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA (the two harness-supplied
-// FILESYSTEM locations — destinations, never fetch origins), or from names that
-// are themselves already safe AT THAT POINT in the file. Anything else is an
+// from CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA / HOME (FILESYSTEM locations —
+// destinations, never fetch origins; HOME locates the home-scoped owned-copy
+// provenance record spc-35 keeps outside the data dir), or from names that are
+// themselves already safe AT THAT POINT in the file. Anything else is an
 // environment read wearing a local name, so the name is tainted and stays
 // tainted.
 //
@@ -1110,7 +1133,7 @@ func bootstrapSafeNames(body string) map[string]bool {
 					// Reads the environment under its own name before
 					// falling back to a default.
 					external = true
-				case ref == "CLAUDE_PLUGIN_ROOT", ref == "CLAUDE_PLUGIN_DATA":
+				case ref == "CLAUDE_PLUGIN_ROOT", ref == "CLAUDE_PLUGIN_DATA", ref == "HOME":
 				case tainted[ref], !defined[ref]:
 					external = true
 				}
@@ -1154,7 +1177,7 @@ func bootstrapUnrecognisedEnvReads(body string) []bootstrapEnvRead {
 			continue
 		}
 		for _, name := range bootstrapEnvRefNames(line) {
-			if name == "CLAUDE_PLUGIN_ROOT" || name == "CLAUDE_PLUGIN_DATA" || safe[name] || seen[name] {
+			if name == "CLAUDE_PLUGIN_ROOT" || name == "CLAUDE_PLUGIN_DATA" || name == "HOME" || safe[name] || seen[name] {
 				continue
 			}
 			seen[name] = true
@@ -1229,9 +1252,9 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	// real invariant this test exists to hold is narrower and checkable directly:
 	// every $NAME / ${NAME} reference the script contains, after subtracting the
 	// names it genuinely defines itself, must be exactly {CLAUDE_PLUGIN_ROOT,
-	// CLAUDE_PLUGIN_DATA} — the two harness-supplied filesystem destinations,
-	// never a fetch origin. This is an ALLOWLIST: an unrecognised environment
-	// reference under any name fails it.
+	// CLAUDE_PLUGIN_DATA, HOME} — filesystem destinations, never a fetch origin.
+	// This is an ALLOWLIST: an unrecognised environment reference under any name
+	// fails it.
 	//
 	// "Genuinely defines itself" is the whole difficulty, and it is
 	// bootstrapSafeNames' job: a name assigned from the environment is not
@@ -1239,7 +1262,7 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	// chains of such assignments. TestBootstrapEnvAllowlistTaintsReferenceChains
 	// is that helper's own detector.
 	for _, read := range bootstrapUnrecognisedEnvReads(body) {
-		t.Errorf("unrecognised environment reference $%s in a non-comment line — every environment read must be CLAUDE_PLUGIN_ROOT or a name this script assigns itself: %q", read.name, read.line)
+		t.Errorf("unrecognised environment reference $%s in a non-comment line — every environment read must be CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA, HOME, or a name this script assigns itself: %q", read.name, read.line)
 	}
 	for _, origin := range []string{bootstrapReleaseOrigin, bootstrapAPIOrigin} {
 		if n := strings.Count(body, origin); n != 1 {
