@@ -2751,6 +2751,13 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// An empty store is an empty LIST in JSON, not bare `null`: the
+			// command doc promises "an empty list means no transcripts", and a
+			// consumer that iterates the value should get [], as every other
+			// --json verb's collection does.
+			if records == nil {
+				records = []history.Record{}
+			}
 			return render(cmd.OutOrStdout(), *asJSON, records, func(w io.Writer) {
 				if len(records) == 0 {
 					fmt.Fprintln(w, "abcd history — no transcripts stored for this repo")

@@ -360,6 +360,30 @@ func gitCmd(t *testing.T, repo string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// TestHistoryListEmptyStoreIsJSONArray pins that `history list --json` on a repo
+// with nothing stored emits an empty array, not bare `null` — the command doc
+// promises "an empty list", and a consumer that iterates the value must get [].
+func TestHistoryListEmptyStoreIsJSONArray(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	repo := t.TempDir()
+	gitCmd(t, repo, "init")
+	gitCmd(t, repo, "config", "user.email", "test@example.com")
+	gitCmd(t, repo, "config", "user.name", "Test User")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, repo, "add", ".")
+	gitCmd(t, repo, "commit", "-m", "init")
+	t.Chdir(repo)
+
+	out := strings.TrimSpace(string(runCLI(t, "history", "list", "--json")))
+	if out != "[]" {
+		t.Fatalf("history list --json on an empty store = %q, want %q", out, "[]")
+	}
+}
+
 // TestHistoryCaptureWiredAndRedacts proves the Finding-B wiring: `abcd history
 // capture` reaches history.Capture from the CLI front door, redacts a planted
 // secret, and stores the record on disk. Before this change history.Capture was
