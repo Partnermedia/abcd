@@ -30,13 +30,13 @@ func newLintCommand(asJSON *bool) *cobra.Command {
 			if dir == "" {
 				cwd, err := os.Getwd()
 				if err != nil {
-					return err
+					return &exitError{Code: 2, Msg: scrubPaths(err)}
 				}
 				dir = cwd
 			}
 			dir, err := filepath.Abs(dir)
 			if err != nil {
-				return err
+				return &exitError{Code: 2, Msg: scrubPaths(err)}
 			}
 			// Validate the root before evaluating: the rules read ENOENT as
 			// "artifact missing" and would emit confident, fabricated convention
@@ -52,7 +52,13 @@ func newLintCommand(asJSON *bool) *cobra.Command {
 
 			result, err := repolint.Evaluate(repolint.DefaultRules(), repolint.Context{RepoRoot: dir})
 			if err != nil {
-				return err
+				// A rule that cannot run (a stat error, an unreadable tracked file, a
+				// git-index fault) is a check that never happened, not a clean-ish
+				// warnings-only pass: map it to the tri-state's "any error" code (2),
+				// so a CI gate keying on >=2 fails closed instead of reading a
+				// lint-that-never-ran as advisory. scrubPaths keeps the developer
+				// identity path out of the rendered error.
+				return &exitError{Code: 2, Msg: scrubPaths(err)}
 			}
 
 			if *asJSON {
