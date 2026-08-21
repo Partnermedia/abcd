@@ -164,6 +164,15 @@ type bootstrapFixture struct {
 	base string // https://127.0.0.1:<port>
 	ca   string // PEM file holding the fixture's self-signed certificate
 	hits *int32 // every request the script makes, counted
+	// artefactHits counts only the requests that download release ARTEFACTS
+	// (the platform asset, its CDN redirect target, checksums.txt) — the
+	// spc-35 cache cases assert these stay at zero while still allowing the
+	// one best-effort tag resolve the refresh detector makes.
+	artefactHits *int32
+	// failLatest, when set non-zero, makes /releases/latest answer 500 — the
+	// offline-resolve case: the refresh detector's best-effort resolve fails
+	// and a cache hit must still provision the root.
+	failLatest *int32
 }
 
 // bootstrapServer stands in for the release host, shaped like the real one
@@ -184,7 +193,7 @@ type bootstrapFixture struct {
 // server — so it is not the class of seam that was removed from the script.
 func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixture {
 	t.Helper()
-	var count int32
+	var count, artefacts, failLatest int32
 	asset := bootstrapAsset()
 	pinned := "/releases/download/" + bootstrapTag + "/"
 	mux := http.NewServeMux()
@@ -197,12 +206,19 @@ func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixtu
 		atomic.AddInt32(&count, 1)
 		switch r.URL.Path {
 		case "/releases/latest":
+			if atomic.LoadInt32(&failLatest) != 0 {
+				http.Error(w, "unavailable", http.StatusInternalServerError)
+				return
+			}
 			http.Redirect(w, r, "/releases/tag/"+bootstrapTag, http.StatusFound)
 		case pinned + asset:
+			atomic.AddInt32(&artefacts, 1)
 			http.Redirect(w, r, "/cdn-blob/1292161760/10d722b0?sig=x", http.StatusFound)
 		case "/cdn-blob/1292161760/10d722b0":
+			atomic.AddInt32(&artefacts, 1)
 			_, _ = w.Write(body)
 		case pinned + "checksums.txt":
+			atomic.AddInt32(&artefacts, 1)
 			_, _ = w.Write([]byte(manifest))
 		case "/commits/" + bootstrapTag:
 			_, _ = w.Write([]byte(`{"sha":"` + bootstrapRelease + `","node_id":"x"}`))
@@ -218,7 +234,7 @@ func bootstrapServer(t *testing.T, body []byte, manifest string) *bootstrapFixtu
 	if err := os.WriteFile(ca, pemBytes, 0o600); err != nil {
 		t.Fatalf("writing the fixture CA: %v", err)
 	}
-	fx := &bootstrapFixture{base: srv.URL, ca: ca, hits: &count}
+	fx := &bootstrapFixture{base: srv.URL, ca: ca, hits: &count, artefactHits: &artefacts, failLatest: &failLatest}
 
 	// Prove the harness itself works before any case blames the script. Without
 	// this, a curl build that ignored CURL_CA_BUNDLE would surface as "the latest
@@ -390,11 +406,14 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	if meta["release_sha"] != bootstrapRelease {
 		t.Errorf("release_sha = %q, want %q (the commit the release API reports)", meta["release_sha"], bootstrapRelease)
 	}
-	if meta["plugin_sha"] != bootstrapCommit {
-		t.Errorf("plugin_sha = %q, want the plugin root's commit stamp", meta["plugin_sha"])
-	}
-	if meta["plugin_root_basename"] != bootstrapCommit {
-		t.Errorf("plugin_root_basename = %q, want the raw plugin-root basename %q", meta["plugin_root_basename"], bootstrapCommit)
+	// spc-35 dropped plugin_sha (and its raw-basename companion) from the
+	// record: the version-skew notice compares the LIVE plugin root's basename
+	// at render time, so a provisioning-time snapshot of the root is recorded
+	// nowhere any more.
+	for _, gone := range []string{"plugin_sha", "plugin_root_basename"} {
+		if v, has := meta[gone]; has {
+			t.Errorf("%s = %q must no longer be recorded — the skew notice reads the live plugin root", gone, v)
+		}
 	}
 	// The hash the verification just accepted is recorded, so a human (or a later
 	// verb) can tell the binary that was verified from one that replaced it.
@@ -562,34 +581,6 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 			t.Errorf("the command the notice printed does not run when pasted into a shell: %v (command %q)", err, command)
 		}
 	})
-}
-
-// TestBootstrapRecordsTheRawPluginRootBasename is the observability half of the
-// commit-stamped-cache WARRANT. plugin_sha is gated to exactly forty lowercase
-// hex characters because itd-105 assumes the harness names each plugin cache
-// directory for the commit it was cloned from. Nothing in this repository
-// verifies that against the real harness. If it ever stops holding, the gate
-// records `unknown` for every install, the version-skew notice goes silent
-// permanently, and — without this raw field — there is nothing anywhere for a
-// human to look at. The raw value is recorded, never compared and never
-// rendered, so the notice's behaviour is unchanged.
-func TestBootstrapRecordsTheRawPluginRootBasename(t *testing.T) {
-	const notACommit = "abcd-plugin-v0.5.0"
-	root := bootstrapRootNamed(t, notACommit)
-	body := []byte("payload")
-	fx := bootstrapServer(t, body, bootstrapManifest(body))
-
-	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
-		t.Fatalf("a plugin root that is not commit-stamped must still install, got %d (output %q)", code, out)
-	}
-	meta := metaValues(t, root)
-	if meta["plugin_sha"] != "unknown" {
-		t.Errorf("plugin_sha = %q, want unknown: %q is not a commit", meta["plugin_sha"], notACommit)
-	}
-	if meta["plugin_root_basename"] != notACommit {
-		t.Errorf("plugin_root_basename = %q, want the raw basename %q — otherwise a warrant that stopped holding is invisible", meta["plugin_root_basename"], notACommit)
-	}
 }
 
 // TestBootstrapRefusesChecksumMismatch is the trust bar: a download whose SHA-256
@@ -871,51 +862,34 @@ func TestBootstrapStripsControlCharactersFromMessages(t *testing.T) {
 	})
 }
 
-// TestBootstrapSanitizesPluginRootBasename: plugin_root_basename is the RAW,
-// unvalidated plugin-cache directory name, recorded so "why has the skew
-// notice never fired" has an answer in the file when the commit-stamped-cache
-// warrant does not hold. .binary-meta is a key=value text file another process
-// parses with last-line-wins semantics, so a basename is not an inert label —
-// an embedded newline could forge an additional key into that file, and an
-// unbounded one could push the file past the guarded read size and silence the
-// notice by a second route. Both must be neutralised before the value is ever
-// written.
-func TestBootstrapSanitizesPluginRootBasename(t *testing.T) {
-	t.Run("embedded newline cannot forge a key", func(t *testing.T) {
-		forged := strings.Repeat("f", 40)
-		root := bootstrapRootNamed(t, "evil\nrelease_sha="+forged)
-		body := []byte("payload")
-		fx := bootstrapServer(t, body, bootstrapManifest(body))
+// TestBootstrapMetaHoldsExactlyItsDeclaredFields: .binary-meta is a key=value
+// text file another process parses with last-line-wins semantics, so its shape
+// is a contract, not a formatting nicety. spc-35 reduced the record to four
+// fields — release_tag, release_sha, binary_sha256, fetched_at — by dropping
+// the provisioning-time plugin_sha (and its raw-basename companion, which
+// existed only to diagnose plugin_sha's 40-hex gate): the skew notice now
+// compares the LIVE plugin root at render time, and dropping the basename also
+// removes the one value a hostile directory name could once have used to forge
+// an extra key into the record.
+func TestBootstrapMetaHoldsExactlyItsDeclaredFields(t *testing.T) {
+	root := bootstrapRootNamed(t, "evil\nrelease_sha="+strings.Repeat("f", 40))
+	body := []byte("payload")
+	fx := bootstrapServer(t, body, bootstrapManifest(body))
 
-		out, code := runBootstrap(t, root, fx, "")
-		if code != 2 {
-			t.Fatalf("the install must still succeed despite the hostile basename, got %d (output %q)", code, out)
+	out, code := runBootstrap(t, root, fx, "")
+	if code != 2 {
+		t.Fatalf("the install must still succeed despite the hostile basename, got %d (output %q)", code, out)
+	}
+	raw := strings.TrimSpace(mustReadFile(t, filepath.Join(root, ".binary-meta")))
+	lines := strings.Split(raw, "\n")
+	if len(lines) != 4 {
+		t.Fatalf(".binary-meta must hold exactly its four declared fields, got %d lines: %q", len(lines), raw)
+	}
+	for i, key := range []string{"release_tag", "release_sha", "binary_sha256", "fetched_at"} {
+		if !strings.HasPrefix(lines[i], key+"=") {
+			t.Errorf("line %d must be %s=…, got %q", i+1, key, lines[i])
 		}
-		meta := metaValues(t, root)
-		if got := meta["release_sha"]; got == forged {
-			t.Errorf("a newline in the plugin-root basename forged an extra release_sha line: %q", got)
-		}
-		lines := strings.Count(strings.TrimSpace(mustReadFile(t, filepath.Join(root, ".binary-meta"))), "\n") + 1
-		if lines != 6 {
-			t.Errorf(".binary-meta must hold exactly its six declared fields, got %d lines", lines)
-		}
-	})
-	t.Run("length is capped", func(t *testing.T) {
-		// 200 bytes: past the 120-byte cap this test exists to prove, but under the
-		// 255-byte filename limit most filesystems enforce.
-		root := bootstrapRootNamed(t, strings.Repeat("a", 200))
-		body := []byte("payload")
-		fx := bootstrapServer(t, body, bootstrapManifest(body))
-
-		out, code := runBootstrap(t, root, fx, "")
-		if code != 2 {
-			t.Fatalf("the install must still succeed despite the oversized basename, got %d (output %q)", code, out)
-		}
-		got := metaValues(t, root)["plugin_root_basename"]
-		if len(got) != 120 {
-			t.Errorf("plugin_root_basename must be capped at 120 bytes, got %d", len(got))
-		}
-	})
+	}
 }
 
 // mustReadFile is a small helper so the tests above can assert on
@@ -1075,9 +1049,11 @@ func bootstrapEnvRefNames(s string) []string {
 // environment read.
 //
 // A name is safe only if every assignment of it takes its value from constants,
-// from CLAUDE_PLUGIN_ROOT, or from names that are themselves already safe AT
-// THAT POINT in the file. Anything else is an environment read wearing a local
-// name, so the name is tainted and stays tainted.
+// from CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA (the two harness-supplied
+// FILESYSTEM locations — destinations, never fetch origins), or from names that
+// are themselves already safe AT THAT POINT in the file. Anything else is an
+// environment read wearing a local name, so the name is tainted and stays
+// tainted.
 //
 // The propagation is run to a FIXPOINT rather than in one pass, because taint
 // travels through chains. A single-pass, single-line self-reference check
@@ -1127,7 +1103,7 @@ func bootstrapSafeNames(body string) map[string]bool {
 					// Reads the environment under its own name before
 					// falling back to a default.
 					external = true
-				case ref == "CLAUDE_PLUGIN_ROOT":
+				case ref == "CLAUDE_PLUGIN_ROOT", ref == "CLAUDE_PLUGIN_DATA":
 				case tainted[ref], !defined[ref]:
 					external = true
 				}
@@ -1159,8 +1135,9 @@ type bootstrapEnvRead struct {
 }
 
 // bootstrapUnrecognisedEnvReads applies the allowlist: every $NAME reference in
-// a non-comment line must be CLAUDE_PLUGIN_ROOT or a name bootstrapSafeNames
-// vouches for. Anything else is reported, whatever it is called.
+// a non-comment line must be CLAUDE_PLUGIN_ROOT, CLAUDE_PLUGIN_DATA, or a name
+// bootstrapSafeNames vouches for. Anything else is reported, whatever it is
+// called.
 func bootstrapUnrecognisedEnvReads(body string) []bootstrapEnvRead {
 	safe := bootstrapSafeNames(body)
 	seen := map[string]bool{}
@@ -1170,7 +1147,7 @@ func bootstrapUnrecognisedEnvReads(body string) []bootstrapEnvRead {
 			continue
 		}
 		for _, name := range bootstrapEnvRefNames(line) {
-			if name == "CLAUDE_PLUGIN_ROOT" || safe[name] || seen[name] {
+			if name == "CLAUDE_PLUGIN_ROOT" || name == "CLAUDE_PLUGIN_DATA" || safe[name] || seen[name] {
 				continue
 			}
 			seen[name] = true
@@ -1244,9 +1221,10 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 	// renamed the variable (e.g. $GH_MIRROR) would sail through unnoticed. The
 	// real invariant this test exists to hold is narrower and checkable directly:
 	// every $NAME / ${NAME} reference the script contains, after subtracting the
-	// names it genuinely defines itself, must be exactly {CLAUDE_PLUGIN_ROOT} — a
-	// filesystem destination, never a fetch origin. This is an ALLOWLIST: an
-	// unrecognised environment reference under any name fails it.
+	// names it genuinely defines itself, must be exactly {CLAUDE_PLUGIN_ROOT,
+	// CLAUDE_PLUGIN_DATA} — the two harness-supplied filesystem destinations,
+	// never a fetch origin. This is an ALLOWLIST: an unrecognised environment
+	// reference under any name fails it.
 	//
 	// "Genuinely defines itself" is the whole difficulty, and it is
 	// bootstrapSafeNames' job: a name assigned from the environment is not
