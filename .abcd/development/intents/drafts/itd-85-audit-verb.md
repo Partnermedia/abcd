@@ -23,7 +23,7 @@ Today `abcd ahoy` reports abcd's own install-plumbing gaps (config, rules, marke
 
 ## What's In Scope
 
-- A new read-only `abcd audit` verb, distinct from `ahoy doctor` (doctor = tool-setup health; audit = repo conformance). Wired from both front doors: CLI plus `commands/abcd/audit.md`, with a `shipped` row in the `04-surfaces` registry so `surface_coverage` stays honest.
+- A new read-only `abcd audit` verb, distinct from `ahoy doctor` (doctor = tool-setup health; audit = repo conformance). Wired from both front doors: CLI plus `commands/audit.md`, with a `shipped` row in the `04-surfaces` registry so `surface_coverage` stays honest.
 - Engine reuse: build on `internal/core/lint` (severity + fix-message + allow-context), adding the two primitives it lacks — path presence/absence and simple structural assertions (a path is gitignored; a directory holds at least one entry).
 - A declarative rule schema adapting repolinter's vocabulary: `{ id, severity (error|warn|off), where (conditional enablement), fix, policyInfo }`, separate from the evaluator, with bundled in-binary defaults.
 - Five v1 rules: `three-tier-layout` (error), `conventions-router` (error), `decision-durability` (warn), `docs-currency` (warn, reusing docs-lint), `privacy-hygiene` (error).

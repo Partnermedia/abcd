@@ -45,6 +45,11 @@ func historyRoot() (string, error) {
 	return filepath.Join(home, ".abcd", "history"), nil
 }
 
+// maxTranscriptBytes caps a single guarded record read from the store. It
+// matches the transcript-capture cap on the write side; a record grown past it
+// out of band is refused rather than read wholly into memory.
+const maxTranscriptBytes = 64 << 20 // 64 MiB
+
 // transcriptsDir returns ~/.abcd/history/<rootSHA>/transcripts.
 func transcriptsDir(rootSHA string) (string, error) {
 	root, err := historyRoot()
@@ -261,7 +266,11 @@ func listRecords(tdir string) ([]Record, error) {
 			continue
 		}
 		p := filepath.Join(tdir, e.Name())
-		data, err := os.ReadFile(p)
+		// Guarded read: the transcripts dir is a cross-repo store under HOME,
+		// so a *.md symlink or FIFO planted by anything running as the caller
+		// must not be followed or block the listing (iss-383). A refused leaf
+		// is skipped like an unparseable one.
+		data, err := fsutil.ReadGuarded(p, maxTranscriptBytes)
 		if err != nil {
 			continue
 		}

@@ -246,3 +246,22 @@ func TestBaselineRefusesControlRunesInFinalURL(t *testing.T) {
 		t.Errorf("refusal should name the rune class, got: %v", err)
 	}
 }
+
+// TestBaselineErrorSanitisesEchoedFields is iss-384: validate() echoes the
+// entry key and the offending value into a *BaselineError that reaches the
+// terminal through the CLI error surface, which applies no sanitiser. A
+// malformed field carrying a bidi/C1/zero-width rune must not replay raw — the
+// iss-359 rung guarded final_url; its sibling fields need the same.
+func TestBaselineErrorSanitisesEchoedFields(t *testing.T) {
+	rlo := string(rune(0x202E))
+	body := `{"schema_version":1,"entries":{"https://example.org/a` + rlo +
+		`":{"final_url":"https://example.org/a","last_checked":"2026-07-01","outcome":"alive` + rlo +
+		`","verification":"automatic","verified_on":"2026-07-01"}}}`
+	err := LoadBaseline2Err(t, writeBaselineFile(t, body))
+	if err == nil {
+		t.Fatal("a malformed outcome with a bidi rune was accepted")
+	}
+	if strings.ContainsRune(err.Error(), 0x202E) {
+		t.Errorf("BaselineError replayed a raw U+202E to the terminal: %q", err.Error())
+	}
+}
