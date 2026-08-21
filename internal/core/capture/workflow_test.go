@@ -1,14 +1,16 @@
 package capture
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Partnermedia/abcd/internal/core/recordid"
 )
 
 // TestTransitionSerializesOnLedgerLock (iss-71 C4) proves a status transition
@@ -61,7 +63,7 @@ func TestReservePathRejectsUnsafeForceID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"../../evil", "iss-1/x", "iss-1 ", "not-an-id", "iss-1/../../evil"} {
-		id, target, err := reservePath(ir, "note", bad, 0)
+		id, target, err := reservePath(ir, "note", bad)
 		if err == nil {
 			t.Fatalf("reservePath must reject unsafe ForceID %q before any fs op (got id=%q target=%q)", bad, id, target)
 		}
@@ -95,7 +97,7 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 				FoundDuring: "manual smoke",
 			},
 			want: Issue{
-				SchemaVersion: 1, ID: "iss-1", Slug: "something-off",
+				SchemaVersion: 1, ID: "iss-2608201142070789", Slug: "something-off",
 				Severity: SeverityMinor, Category: "bug", Source: "manual-test",
 				FoundDuring: "manual smoke",
 				Status:      StateOpen, Body: "Something is off.\n",
@@ -110,7 +112,7 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 				RelatedSpecs: []string{"spc-12"},
 			},
 			want: Issue{
-				SchemaVersion: 1, ID: "iss-1", Slug: "drifted",
+				SchemaVersion: 1, ID: "iss-2608201142070789", Slug: "drifted",
 				Severity: SeverityMajor, Category: "drift", Source: "agent-finding",
 				FoundDuring: "fn-3 review", FoundAt: "internal/x.go",
 				RelatedIntents: []string{"itd-4"},
@@ -121,6 +123,10 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, ir := ledger(t)
+			setMinter(t, recordid.Minter{
+				Now:     func() time.Time { return time.Date(2026, 8, 20, 11, 42, 7, 0, time.UTC) },
+				Entropy: bytes.NewReader([]byte{0x03, 0x15}), // suffix 0789
+			})
 			tc.req.RepoRoot, tc.req.IssuesRoot = repo, ir
 			res, err := Capture(tc.req)
 			if err != nil {
@@ -162,8 +168,10 @@ func issueEqual(a, b Issue) bool {
 		a.Path == b.Path
 }
 
-func TestCaptureAllocatesIncrementingIDs(t *testing.T) {
+func TestCaptureMintsTimeOrderedDistinctIDs(t *testing.T) {
 	repo, ir := ledger(t)
+	setSeqMinter(t)
+	var prev string
 	for i := 1; i <= 3; i++ {
 		res, err := Capture(CaptureRequest{
 			RepoRoot: repo, IssuesRoot: ir, Text: "x", Severity: SeverityNitpick,
@@ -172,9 +180,13 @@ func TestCaptureAllocatesIncrementingIDs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("capture %d: %v", i, err)
 		}
-		if want := "iss-" + strconv.Itoa(i); res.ID != want {
-			t.Fatalf("id = %s want %s", res.ID, want)
+		if !reNativeIssID.MatchString(res.ID) {
+			t.Fatalf("id = %s, want the 16-digit native shape", res.ID)
 		}
+		if prev != "" && issNumber(res.ID) <= issNumber(prev) {
+			t.Fatalf("later mint %s does not order above earlier %s", res.ID, prev)
+		}
+		prev = res.ID
 	}
 }
 
@@ -413,6 +425,7 @@ func TestListToleratesVirginLedgerAndStrayFiles(t *testing.T) {
 
 func TestStatusCountsAndRecentOpen(t *testing.T) {
 	repo, ir := ledger(t)
+	setSeqMinter(t)
 	var ids []string
 	for i := 0; i < 3; i++ {
 		res, _ := Capture(CaptureRequest{
@@ -432,9 +445,9 @@ func TestStatusCountsAndRecentOpen(t *testing.T) {
 	if st.OpenCount != 2 || st.ResolvedCount != 1 || st.WontfixCount != 0 {
 		t.Fatalf("counts open=%d resolved=%d wontfix=%d", st.OpenCount, st.ResolvedCount, st.WontfixCount)
 	}
-	// Newest first: iss-3 before iss-2.
-	if len(st.RecentOpen) != 2 || st.RecentOpen[0].ID != "iss-3" || st.RecentOpen[1].ID != "iss-2" {
-		t.Fatalf("recent-open = %v", recentIDs(st.RecentOpen))
+	// Newest first: the third mint before the second.
+	if len(st.RecentOpen) != 2 || st.RecentOpen[0].ID != ids[2] || st.RecentOpen[1].ID != ids[1] {
+		t.Fatalf("recent-open = %v, want [%s %s]", recentIDs(st.RecentOpen), ids[2], ids[1])
 	}
 }
 
@@ -538,22 +551,21 @@ func TestPathUnsafeSymlinkedLedger(t *testing.T) {
 
 func TestCaptureWritesBlockedByAndReadsBack(t *testing.T) {
 	repo, ir := ledger(t)
-	if _, err := Capture(CaptureRequest{
+	setSeqMinter(t)
+	rootRes, err := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "root cause", Severity: SeverityMinor,
 		Category: "bug", Source: "manual-test", Slug: "root", FoundDuring: "t",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	res, err := Capture(CaptureRequest{
 		RepoRoot: repo, IssuesRoot: ir, Text: "dependent", Severity: SeverityMajor,
 		Category: "bug", Source: "manual-test", Slug: "dep", FoundDuring: "t",
-		BlockedBy: []string{"iss-1"},
+		BlockedBy: []string{rootRes.ID},
 	})
 	if err != nil {
 		t.Fatalf("Capture with blocked_by: %v", err)
-	}
-	if res.ID != "iss-2" {
-		t.Fatalf("id = %s want iss-2", res.ID)
 	}
 	lr, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
 	if err != nil {
@@ -561,15 +573,15 @@ func TestCaptureWritesBlockedByAndReadsBack(t *testing.T) {
 	}
 	var dep *Issue
 	for i := range lr.Issues {
-		if lr.Issues[i].ID == "iss-2" {
+		if lr.Issues[i].ID == res.ID {
 			dep = &lr.Issues[i]
 		}
 	}
 	if dep == nil {
-		t.Fatalf("iss-2 not read back: %+v", lr.Issues)
+		t.Fatalf("%s not read back: %+v", res.ID, lr.Issues)
 	}
-	if strings.Join(dep.BlockedBy, ",") != "iss-1" {
-		t.Fatalf("blocked_by = %v want [iss-1]", dep.BlockedBy)
+	if strings.Join(dep.BlockedBy, ",") != rootRes.ID {
+		t.Fatalf("blocked_by = %v want [%s]", dep.BlockedBy, rootRes.ID)
 	}
 }
 

@@ -11,8 +11,10 @@ It is a **host-delegated command**: no dedicated Go verb backs it and there is
 no bare-status render. The workflow runs in the host agent from the markdown in
 [`commands/prepare-this-repo.md`](../../../../commands/prepare-this-repo.md),
 invoking the binary's read-only `abcd lint --json` for the engine-backed
-conformance core. It takes no argument — it always operates on the current
-repository.
+conformance core and — in the adopt phase — `abcd identity init` (a write: it
+records the identity block pointer and `.abcd/positioning.json`), with
+`abcd identity render` and `abcd ahoy install` named as the follow-on surfaces.
+It takes no argument — it always operates on the current repository.
 
 ## What it does
 
@@ -34,8 +36,9 @@ repository.
 Four phases, each gated on the one before:
 
 0. **Refuse unless owned** — origin-remote ownership check; stop if it fails.
-1. **Orient** — read the abcd record from `$ABCD` (the abcd checkout, three
-   levels up from the command file): the three-tier README, the brief,
+1. **Orient** — read the abcd record from `$ABCD` (the abcd checkout root —
+   the directory above `commands/`, where the flat command file lives, the
+   same root `${CLAUDE_PLUGIN_ROOT}` names): the three-tier README, the brief,
    principles, ADRs, intents, `docs/` Diátaxis rules, and the lint configs as
    patterns.
 2. **Conformance lint** — run `abcd lint --json` for the engine-backed conformance core
@@ -45,8 +48,12 @@ Four phases, each gated on the one before:
 3. **Adopt** — create the three tiers with a repo-specific `CONTEXT.md`, migrate
    any historical `.work/` layout to the new tiers (propose then wait for sign-off;
    never leave a repo with both the old and new working-state homes), merge into
-   `AGENTS.md`, offer the commit gates, and — only where the user says the repo
-   requires AI disclosure — install the attribution hook (opt-in).
+   `AGENTS.md`, offer the commit gates, register the repo's **identity block**
+   (detect an existing block and adopt it via `abcd identity init --file`,
+   interview only where none exists — the one write the binary makes here;
+   `abcd identity render` then holds every surface to it), and — only where the
+   user says the repo requires AI disclosure — install the attribution hook
+   (opt-in).
 
 When abcd's own record has conflicting sources, the command trusts a fixed
 authority order: `AGENTS.md`, then `work/CONTEXT.md`'s live-constraints section,
@@ -77,6 +84,10 @@ then ratified ADRs, then everything else read for understanding only.
   the marked nameless working-conventions section (the done-test — a fresh agent
   can build and test from `AGENTS.md` alone — passes), and any historical `.work/`
   layout is fully migrated or fully left alone.
+- **Given** sign-off, **when** it adopts, **then** one identity block is
+  recorded and registered — adopted where the repo already had one,
+  interviewed only where it did not — and `abcd identity` reports every
+  rendered surface against it.
 - **Given** the adoption completes, **then** nothing from `private-names.txt`
   and no abcd-internal content appears in any committed artefact.
 

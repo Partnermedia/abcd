@@ -119,16 +119,14 @@ type CaptureRequest struct {
 	ForceID        string   // migrator-only; "" = auto-allocate
 }
 
-// CaptureResult is the outcome of a successful Capture. MintWarning is the
-// loud-degrade note from the iss-id refs-union scan (empty when the scan
-// completed) — the surface MUST render it so a degrade to working-tree-only
-// minting is never silent.
+// CaptureResult is the outcome of a successful Capture. The timestamp-numeric
+// mint (adr-45) consults no refs, so the max+1 era's mint_warning degrade note
+// no longer exists on this result.
 type CaptureResult struct {
-	ID          string `json:"id"`
-	Slug        string `json:"slug"`
-	Path        string `json:"path"`
-	Status      State  `json:"status"` // always "open"
-	MintWarning string `json:"mint_warning,omitempty"`
+	ID     string `json:"id"`
+	Slug   string `json:"slug"`
+	Path   string `json:"path"`
+	Status State  `json:"status"` // always "open"
 }
 
 // ResolveRequest moves an open issue to resolved/.

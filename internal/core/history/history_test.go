@@ -359,6 +359,37 @@ func TestListAndRead(t *testing.T) {
 	}
 }
 
+// TestListSkipsSymlinkedRecord is iss-383: the store's read path must not
+// follow a planted symlink — the write path already refuses symlinks at every
+// parent (ownedDirsReal) and the leaf (WriteFileAtomic), so a *.md symlink in
+// the transcripts dir is never store-authored and reads out-of-store bytes.
+func TestListSkipsSymlinkedRecord(t *testing.T) {
+	repoRoot, home := setupStore(t)
+	tdir := filepath.Join(home, ".abcd", "history", testRootSHA, "transcripts")
+	if _, err := Capture(repoRoot, testRootSHA, "sess-real", []byte("real one\n"), "native"); err != nil {
+		t.Fatal(err)
+	}
+	recs, err := List(testRootSHA)
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("want 1 real record, got %d (err %v)", len(recs), err)
+	}
+	// Move the real record out of the store and symlink it back in.
+	outside := filepath.Join(home, "outside.md")
+	if err := os.Rename(recs[0].Path, outside); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(tdir, filepath.Base(recs[0].Path))); err != nil {
+		t.Fatal(err)
+	}
+	recs, err = List(testRootSHA)
+	if err != nil {
+		t.Fatalf("List over a store holding a symlink errored: %v", err)
+	}
+	if len(recs) != 0 {
+		t.Errorf("List followed a planted symlink out of the store: %+v", recs)
+	}
+}
+
 // TestListAbsentCorpusIsCleanEmpty distinguishes an un-populated store (no
 // records, no error) from a malformed one, mirroring history_store's LoadResult.
 func TestListAbsentCorpusIsCleanEmpty(t *testing.T) {

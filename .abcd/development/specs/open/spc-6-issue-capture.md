@@ -68,7 +68,7 @@ AC as ordered in itd-4 → status and evidence:
    (`related_intents: [itd-M]`) onto an existing open `iss-N` —
    `capture.Capture` sets `related_intents` at creation only, and
    resolve/wontfix write only their own note fields; (c)
-   `commands/abcd/capture.md` documents promote only as "the intent-new
+   `commands/capture.md` documents promote only as "the intent-new
    interview seeded with the issue body", without the bidirectional
    contract. Hand-editing frontmatter from markdown would violate the
    engine-backed convention (iss-86), so nothing was implemented. AC3

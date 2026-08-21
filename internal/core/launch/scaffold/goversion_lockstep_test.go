@@ -25,7 +25,7 @@ func TestWorkflowGoVersionsMatchSubstitutions(t *testing.T) {
 	}
 	checked := 0
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".yml" {
+		if ext := filepath.Ext(e.Name()); e.IsDir() || (ext != ".yml" && ext != ".yaml") {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))

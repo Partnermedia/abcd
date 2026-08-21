@@ -749,3 +749,21 @@ func TestPlanManifestReportsHashAndTotals(t *testing.T) {
 		t.Errorf("manifest total bytes %d != %d", m.TotalBytes, total)
 	}
 }
+
+// TestRenderManifestSanitisesFilePaths is iss-382: the planned-file list
+// derives its leaves from source-repo directory entries, so a hostile
+// filename must not carry C1/bidi/zero-width runes to the terminal raw —
+// the same boundary the omission and source-name lines already sanitise.
+func TestRenderManifestSanitisesFilePaths(t *testing.T) {
+	hostile := "activity/issues/open/iss-1-\u009b2K\u202eevil.md"
+	lb := Lifeboat{Files: []PlannedFile{{Path: hostile, Bytes: 4}}}
+	out := lb.RenderManifest()
+	for _, r := range []rune{0x009b, 0x202e} {
+		if strings.ContainsRune(out, r) {
+			t.Errorf("RenderManifest carries raw %U to the terminal", r)
+		}
+	}
+	if !strings.Contains(out, "iss-1-") {
+		t.Error("sanitised render lost the legible part of the path")
+	}
+}
