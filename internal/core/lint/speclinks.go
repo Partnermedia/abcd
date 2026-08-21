@@ -119,6 +119,10 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 		if id == "" {
 			return nil
 		}
+		// Canonicalise so the KnownIntents/IntentSpecID maps key on the canonical
+		// spelling: a zero-padded intent (itd-047) and its canonical twin are one
+		// handle everywhere else in the record (iss-392's canonRecordID keyspace).
+		id = canonRecordID(id)
 		bucket := filepath.Base(filepath.Dir(path))
 		if !intentBuckets[bucket] {
 			bucket = ""

@@ -54,6 +54,41 @@ func TestDeliveryStateCatchesDraftCitation(t *testing.T) {
 	}
 }
 
+// TestDeliveryStatePaddedIntentFilename pins the canonical-id keyspace on the
+// delivery-state gate in both directions: a zero-padded intent filename
+// (itd-047-*.md) cited as itd-47, and a canonically-named intent cited padded
+// (itd-048). Before the canonRecordID keyspace fix the bucket map keyed on the
+// raw filename spelling and the citation on the raw digits, so the drafts
+// citation resolved to "" and the gate failed open over exactly the case it
+// exists to catch.
+func TestDeliveryStatePaddedIntentFilename(t *testing.T) {
+	root := t.TempDir()
+	// Padded filename, canonical citation.
+	writeFile(t, root, filepath.Join(".abcd", "development", "intents", "drafts", "itd-047-padded.md"),
+		"---\nid: itd-47\n---\n\n# fixture\n")
+	// Canonical filename, padded citation.
+	writeFile(t, root, filepath.Join(".abcd", "development", "intents", "drafts", "itd-48-canon.md"),
+		"---\nid: itd-48\n---\n\n# fixture\n")
+	writeFile(t, root, "CHANGELOG.md", strings.Join([]string{
+		"# Changelog",
+		"",
+		"## [v0.1.0] - 2026-07-07",
+		"",
+		"### Added",
+		"",
+		"- Padded intent file cited canonically (itd-47).",
+		"- Canonical intent file cited padded (itd-048).",
+	}, "\n")+"\n")
+
+	fs, err := Lint(deliveryCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleDeliveryState); n != 2 {
+		t.Fatalf("expected both padded-spelling drafts citations to fire, got %d: %+v", n, fs)
+	}
+}
+
 // TestDeliveryStateIgnoresNonDeliverySections is the precision half: an id named
 // under Fixed is provenance for a defect (which draft two branches minted at
 // once), not a claim that the intent is built, and must not fire.
