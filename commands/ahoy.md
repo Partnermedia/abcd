@@ -28,8 +28,10 @@ Then summarise the JSON for the user:
 - `plugin_root_status` and `root_sha` — where abcd is anchored.
 - `signals.install_mode` — the PATH-entry install mode: `dev (tip build)` when
   the track-latest dogfood shim is installed, `pinned` for the built-binary
-  symlink, empty when there is nothing on `PATH` yet. Report it so a dev install
-  is never invisible.
+  symlink, empty when there is nothing on `PATH` yet. Either non-empty value may
+  carry a trailing ` (shadowed on PATH)` when another `abcd` comes first on
+  `PATH`. Report it so a dev install — or an entry abcd wrote that is not the one
+  that runs — is never invisible.
 - `vintage` and `staleness` — the running binary's build revision (in a source
   checkout) or pinned version, and whether it is up to date, stale, or of an
   undeterminable vintage relative to the on-disk reference. Report them so a

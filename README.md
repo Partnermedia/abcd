@@ -153,13 +153,17 @@ platform, or a platform outside the released matrix (darwin and linux on amd64
 and arm64) installs nothing and says why in plain language. A plugin root that
 already holds the binary costs one file test and no network.
 
-Session start is not the only chance. Every other hook that needs the binary
-resolves it the same way the command files do — the plugin root first, then an
-`abcd` on `PATH` — and when the plugin root is empty it first attempts the
-bootstrap itself, silently and at most once per ten-minute window. A session
-where provisioning cannot succeed degrades loudly rather than noisily: each
-affected hook says in one line what is inactive (the rules loader, the shell
-guard, the transcript capture) and that the [install](#cli) one-liner
+Session start is not the only chance. Every other live-session hook that needs
+the binary resolves it the same way the command files do — the plugin root
+first, then an `abcd` on `PATH` — and when the plugin root is empty it first
+attempts the bootstrap itself, silently and at most once per ten-minute window.
+Session end is the deliberate exception: it resolves the plugin root then
+`PATH` but never downloads, because a fetch there would race the host's
+shutdown and lose the very transcript it exists to capture — so it says in one
+line if the transcript was not captured rather than blocking on a bootstrap. A
+session where provisioning cannot succeed degrades loudly rather than noisily:
+each affected hook says in one line what is inactive (the rules loader, the
+shell guard, the transcript capture) and that the [install](#cli) one-liner
 restores it — after which the hooks resolve the `PATH` binary with no session
 restart needed.
 
