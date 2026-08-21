@@ -238,14 +238,30 @@ func recordedSetupVersion(cwd string) string {
 	return v
 }
 
-// readPinnedTag reads the release tag the plugin-cache manifest recorded, or ""
-// when the manifest is absent or the tag unresolved. NOTE: the same .binary-meta
-// file is parsed by internal/surface/cli/skew.go's readBinaryMeta; that copy is
-// the retired skew notice (iss-206) and is left untouched here. The two readers
-// should be consolidated when skew.go is removed.
+// readPinnedTag reads the release tag the bootstrap's provenance record pins,
+// or "" when no record answers. The root-local .binary-meta wins when present —
+// it is written only by the degraded per-root fetch, so it describes exactly
+// this root's binary (a migrated pre-cache root included, whose binary stays
+// put while the shared cache moves on). A cache-provisioned root carries no
+// root-local record; for it the tag comes from the persistent data dir's
+// cache/binary-meta (spc-35). The same precedence lives in
+// internal/surface/cli/skew.go's readSkewMeta; the two readers should be
+// consolidated if either record changes shape again.
 func readPinnedTag(pluginRoot string) string {
+	if tag := metaReleaseTag(filepath.Join(pluginRoot, ".binary-meta")); tag != "" {
+		return tag
+	}
+	if data := pluginDataDir(); data != "" {
+		return metaReleaseTag(filepath.Join(data, "cache", "binary-meta"))
+	}
+	return ""
+}
+
+// metaReleaseTag extracts release_tag from one bootstrap-written key=value
+// record, or "" when the file is absent, unreadable, or carries no tag.
+func metaReleaseTag(path string) string {
 	const maxBytes = 4 << 10
-	data, err := fsutil.ReadGuarded(filepath.Join(pluginRoot, ".binary-meta"), maxBytes)
+	data, err := fsutil.ReadGuarded(path, maxBytes)
 	if err != nil {
 		return ""
 	}
