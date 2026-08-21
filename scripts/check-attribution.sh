@@ -92,10 +92,10 @@ GENERATED_RE='^[[:space:]]*(🤖[[:space:]]*)?([_*]{1,3})?(🤖[[:space:]]*)?[Gg
 # only Claude let `Co-authored-by: ChatGPT` through (iss-215).
 #
 # This refuses EVERY co-authorship trailer, including a genuinely human one. That
-# over-reach is deliberate and worth stating: abcd defers DCO/Signed-off-by until
-# the repo is public or takes its first outside contribution, so there is no human
-# co-authorship case in flight today, and refusing is the fail-safe direction. If
-# a real human co-author arrives, this is the line to revisit.
+# over-reach is deliberate and worth stating: abcd has no DCO and requires no
+# Signed-off-by (contributions are inbound = outbound MIT, adr-43), so there is no
+# co-authorship trailer to preserve, and refusing every one is the fail-safe
+# direction. If a real human co-author arrives, this is the line to revisit.
 COAUTHOR_RE='^[[:space:]]*[Cc]o-[Aa]uthored-[Bb]y:'
 
 # The git IDENTITY itself, not only the message. A commit authored AND committed
@@ -319,9 +319,9 @@ check_text() {
 		note "abcd never uses Co-Authored-By: for AI — it asserts an authorship the tool does"
 		note "not hold and inflates the contributor graph. Disclosure goes in the kernel"
 		note "trailer instead: Assisted-by: <Vendor>:<model-version>"
-		note "(This refuses human co-authorship too. abcd defers DCO until the repo is public"
-		note "or takes its first outside contribution, so there is no such case today; if one"
-		note "arrives, COAUTHOR_RE in this script is the line to revisit.)"
+		note "(This refuses human co-authorship too. abcd has no DCO and requires no"
+		note "Signed-off-by: inbound = outbound MIT (adr-43), so there is no such trailer to"
+		note "keep; if a human co-author case arrives, COAUTHOR_RE in this script is the line to revisit.)"
 		fail=1
 		return
 	fi
