@@ -2,6 +2,7 @@ package launch
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +104,26 @@ func TestResolvePointerOverflowIndex(t *testing.T) {
 	// A valid in-range index still resolves.
 	if v, present := resolvePointer(doc, "/0"); !present || v != "a" {
 		t.Errorf("resolvePointer(/0)=(%v,%v); want (a,true)", v, present)
+	}
+}
+
+// TestLockstepUnreadableDetailHasNoAbsolutePath proves an unreadable pinned input
+// yields a path-free detail: the dry-run report carrying it is a success envelope
+// that never passes through cli.scrubPaths, so an embedded os.PathError absolute
+// path would leak the developer-identity root into machine output (iss-76/iss-29).
+func TestLockstepUnreadableDetailHasNoAbsolutePath(t *testing.T) {
+	root := t.TempDir()
+	// version-location.json is absent, so loadJSON returns an os.ReadFile error.
+	vl := filepath.Join(root, ".abcd/config/version-location.json")
+	res := CheckLockstep(TreePublic, root, vl)
+	if !res.Unreadable || res.ExitCode != 2 {
+		t.Fatalf("expected unreadable/2, got %+v", res)
+	}
+	if strings.Contains(res.Detail, root) || strings.Contains(res.Detail, string(filepath.Separator)+".abcd") {
+		t.Errorf("detail leaks an absolute path: %q", res.Detail)
+	}
+	// The cause is still named, just without the path.
+	if !strings.Contains(res.Detail, "version-location.json not readable") {
+		t.Errorf("detail dropped the cause: %q", res.Detail)
 	}
 }
