@@ -29,6 +29,22 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The hook binary survives plugin updates.** The checksum-verified release
+  artefact is now kept once in the plugin's persistent data directory and each
+  fresh plugin root is provisioned from it by a re-verified copy, so a plugin
+  update no longer re-downloads ~11MB and the first-hook window without a
+  binary shrinks from once per plugin update to once per released binary. The
+  `abcd` command on PATH is now a regular file abcd owns and refreshes — never
+  a symlink into a directory the plugin update lifecycle deletes — recorded
+  with its hash in the data directory's `path-entry` file; a legacy symlink is
+  healed to an owned copy by `abcd ahoy install`, and `abcd ahoy uninstall`
+  removes the copy and its record. Every promotion out of the cache re-verifies
+  the artefact against its recorded SHA-256 and refuses loudly on a mismatch;
+  a harness that provides no persistent data directory degrades loudly to the
+  previous per-root fetch. The version-skew notice is now computed against the
+  live plugin root at render time, so it stays truthful when one cached binary
+  serves many roots. (itd-132 / spc-35; iss-2608210934566221,
+  iss-2608210934566222)
 - **The lifeboat coverage render neutralises terminal-control sequences from an
   untrusted report.** A coverage report is a cross-repo artefact, and its
   `status`, `tier`, `tiers_present`, and section-name fields are bare strings
