@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "r=\"${CLAUDE_PLUGIN_ROOT:-}\"; [ -n \"$r\" ] || exit 0; if [ ! -x \"$r/abcd\" ] && [ -x \"$r/hooks/bootstrap.sh\" ] && [ -z \"$(find \"$r/.bootstrap.attempt\" -maxdepth 0 -mmin -10 2>/dev/null)\" ]; then : > \"$r/.bootstrap.attempt\" 2>/dev/null || true; \"$r/hooks/bootstrap.sh\" >/dev/null 2>&1 </dev/null || true; fi; g=\"\"; [ -x \"$r/abcd\" ] && g=\"$r/abcd\"; if [ -z \"$g\" ] && command -v abcd >/dev/null 2>&1; then g=abcd; fi; if [ -n \"$g\" ]; then exec \"$g\" hook session-end; fi; printf '%s\\n' \"abcd: the plugin binary is missing, so this session's transcript was not captured — install per https://github.com/Partnermedia/abcd#install\" >&2; exit 1"
+            "command": "r=\"${CLAUDE_PLUGIN_ROOT:-}\"; [ -n \"$r\" ] || exit 0; if [ -f \"$r/abcd\" ] && [ -x \"$r/abcd\" ]; then exec \"$r/abcd\" hook session-end; fi; if command -v abcd >/dev/null 2>&1; then exec abcd hook session-end; fi; printf '%s\\n' \"abcd: the plugin binary is missing, so this session's transcript was not captured — install per https://github.com/Partnermedia/abcd#install\" >&2; exit 1"
           }
         ]
       }

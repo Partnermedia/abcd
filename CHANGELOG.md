@@ -249,6 +249,16 @@ called out in a **Breaking** section.
   before the first git call, and a scratch commit that cannot be created now
   fails loudly. (iss-313)
 
+- **The SessionEnd hook no longer downloads the binary at exit.** SessionEnd
+  carried the same bootstrap salvage as the other hooks, but it fires exactly
+  when the session is going away and the host cancels a slow hook rather than
+  wait — so after a plugin update landed a fresh binary-less cache dir,
+  update-then-quit exited through a blocking ~11 MB download, the hook was
+  cancelled mid-flight, and the session's transcript capture was silently
+  lost. The hook now runs the plugin-root binary if present, falls back to an
+  `abcd` on PATH, and otherwise says in one line that the transcript was not
+  captured — no network work at session end. (iss-2608210934566223)
+
 ## [0.6.1] - 2026-08-20
 
 ### Fixed

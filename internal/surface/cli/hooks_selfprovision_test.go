@@ -22,7 +22,10 @@ import (
 // binary is absent, and (3) on continued absence says what is degraded and how
 // to fix it in one plain line, with a non-blocking exit. The rate limit is a
 // stamp file, so a machine where provisioning cannot succeed pays the download
-// timeout at most once per window, not on every hook firing.
+// timeout at most once per window, not on every hook firing. SessionEnd is the
+// exception to (2): it never salvages, because the harness cancels a slow hook
+// at session exit and a mid-download cancellation loses the transcript capture
+// (iss-2608210934566223) — see TestSessionEndNeverBootstraps.
 
 // binaryHook is one binary-invoking hook event under test: the event name, an
 // optional matcher, and the verb the stub binary must record when the hook runs.
@@ -139,9 +142,15 @@ func hookRoot(t *testing.T, bootstrap string, withBinary bool) string {
 
 // TestBinaryHooksProvisionWhenTheBinaryIsAbsent is the iss-253 field failure
 // inverted: an empty plugin root plus a working bootstrap must yield a running
-// hook, whichever hook fires first.
+// hook, whichever hook fires first. SessionEnd is the one exception: the
+// session is exiting, the harness cancels a slow hook rather than wait, and a
+// blocking download there loses the transcript it exists to capture
+// (iss-2608210934566223) — TestSessionEndNeverBootstraps pins the inverse.
 func TestBinaryHooksProvisionWhenTheBinaryIsAbsent(t *testing.T) {
 	for _, h := range binaryHooks {
+		if h.event == "SessionEnd" {
+			continue
+		}
 		t.Run(h.event, func(t *testing.T) {
 			root := hookRoot(t, provisioningBootstrap, false)
 			_, stderr, _ := hookRun(t, h.event, root, "")
@@ -267,6 +276,39 @@ func TestGuardHookKeepsItsExitCodeFence(t *testing.T) {
 		if tc.binExit == 7 && !strings.Contains(stderr, "UNGUARDED") {
 			t.Fatalf("an unexpected guard exit must warn UNGUARDED; stderr: %s", stderr)
 		}
+	}
+}
+
+// TestSessionEndNeverBootstraps: SessionEnd is the transcript-capture hook, and
+// it fires exactly when the session is going away — the harness cancels a
+// still-running SessionEnd hook rather than wait for it. A blocking bootstrap
+// download there is therefore a race the capture loses: after a plugin update
+// lands a fresh binary-less cache dir, update-then-quit exits through
+// SessionEnd, the download is cancelled mid-flight, and the session's
+// transcript is silently lost (iss-2608210934566223, field-hit 2026-08-21).
+// So SessionEnd must never invoke bootstrap.sh and must perform no network
+// work: plugin-root binary first, PATH binary second, else one plain line and
+// a non-blocking failure exit.
+func TestSessionEndNeverBootstraps(t *testing.T) {
+	command := hookCommand(t, "SessionEnd")
+	if strings.Contains(command, "bootstrap.sh") {
+		t.Fatalf("the SessionEnd command references bootstrap.sh — session end must never download the binary: %q", command)
+	}
+	if !strings.Contains(command, "hook session-end") {
+		t.Fatalf("the SessionEnd command no longer invokes `hook session-end`: %q", command)
+	}
+	// Behavioural pin, not only a spelling pin: even a working bootstrap must
+	// not be consulted when the binary is absent at session end.
+	root := hookRoot(t, provisioningBootstrap, false)
+	_, stderr, code := hookRun(t, "SessionEnd", root, "")
+	if callLog(t, filepath.Join(root, "boot.log")) != "" {
+		t.Fatalf("SessionEnd invoked the bootstrap; a session-end download races the harness's hook cancellation and loses the transcript")
+	}
+	if code == 0 || code == 127 {
+		t.Fatalf("SessionEnd exit = %d without a binary; want a non-zero, non-exec-failure exit", code)
+	}
+	if !strings.Contains(stderr, "transcript was not captured") || !strings.Contains(stderr, "#install") {
+		t.Fatalf("SessionEnd stderr must keep the one-line transcript-not-captured remedy: %q", stderr)
 	}
 }
 
