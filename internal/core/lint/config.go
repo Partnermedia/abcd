@@ -14,8 +14,8 @@ import (
 )
 
 // maxLintConfigBytes caps the docs-lint/record-lint config read (trust
-// boundary). The shipped configs are a few kilobytes; the cap is three orders
-// above that, so it bounds a hostile /dev/zero-symlinked config without ever
+// boundary). The shipped configs are a few kilobytes; the cap is many times
+// larger, so it bounds a hostile /dev/zero-symlinked config without ever
 // constraining a real one.
 const maxLintConfigBytes = 256 * 1024
 
