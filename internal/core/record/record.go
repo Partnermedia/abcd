@@ -26,6 +26,13 @@ import (
 // here. Anything else stays on the unknown-command path, byte-for-byte.
 var IDRe = regexp.MustCompile(`^(iss|itd|spc|adr)-[0-9]+$`)
 
+// adrHandleRe parses a frontmatter id into its family prefix and zero-stripped
+// number, so the ADR confirm compares parsed handles the way record-lint
+// (schema.go) and the citation resolver (recordid) do — a quoted, zero-padded,
+// or case-shifted id (`"adr-12"`, `adr-0012`, `ADR-12`) is the same handle as
+// its bare canonical spelling, not a different record.
+var adrHandleRe = regexp.MustCompile(`^([A-Za-z]+)-0*([0-9]+)$`)
+
 // adrsRelDir is where decisions live; files are NNNN-slug.md with an id:
 // adr-N frontmatter line.
 const adrsRelDir = ".abcd/development/decisions/adrs"
@@ -264,10 +271,13 @@ func describeADR(repoRoot, id string) (Description, error) {
 	if err != nil {
 		return Description{}, fmt.Errorf("record: malformed adr id %q", id)
 	}
+	// The number the caller asked for is the identity; render the canonical
+	// spelling of it regardless of how the caller or the file spelled it.
+	canonical := "adr-" + strconv.Itoa(n)
 	dir := filepath.Join(repoRoot, adrsRelDir)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return Description{}, fmt.Errorf("record: %s not found — no decision record store at %s", id, adrsRelDir)
+		return Description{}, fmt.Errorf("record: %s not found — no decision record store at %s", canonical, adrsRelDir)
 	}
 	prefix := fmt.Sprintf("%04d-", n)
 	for _, e := range entries {
@@ -279,12 +289,22 @@ func describeADR(repoRoot, id string) (Description, error) {
 		}
 		rel := filepath.Join(adrsRelDir, e.Name())
 		fields, title := readRecordHead(filepath.Join(dir, e.Name()), strings.TrimSuffix(e.Name(), ".md"))
-		// The filename ordinal routes; the frontmatter id confirms.
-		if fields["id"].Value != id {
+		// The filename ordinal routes; the frontmatter id confirms. Compare
+		// parsed handles, not raw bytes: a quoted/zero-padded/case-shifted id is
+		// the same handle its record-lint and citation-resolver siblings accept,
+		// so the dispatch must not be the one reader that reports a present
+		// record as absent. A refused/empty head yields an empty value that
+		// matches no handle, preserving the hostile-leaf guard.
+		got := strings.Trim(strings.TrimSpace(fields["id"].Value), `"'`)
+		m := adrHandleRe.FindStringSubmatch(got)
+		if m == nil || !strings.EqualFold(m[1], "adr") {
+			continue
+		}
+		if fn, err := strconv.Atoi(m[2]); err != nil || fn != n {
 			continue
 		}
 		d := Description{
-			ID:     id,
+			ID:     canonical,
 			Family: "adr",
 			Title:  title,
 			Status: fields["status"].Value,
@@ -297,7 +317,7 @@ func describeADR(repoRoot, id string) (Description, error) {
 		d.NextMoves = []string{"none — decisions are read"}
 		return d, nil
 	}
-	return Description{}, fmt.Errorf("record: %s not found in %s", id, adrsRelDir)
+	return Description{}, fmt.Errorf("record: %s not found in %s", canonical, adrsRelDir)
 }
 
 // maxRecordHeadBytes bounds the head read (trust boundary, mirroring the

@@ -54,7 +54,7 @@ markdown plugin surface, and (later) an MCP server are thin front doors onto it.
 Start with the plan and the design record:
 
 - Design record (the specification): [`.abcd/development/`](.abcd/development/) —
-  brief, roadmap/intents, decisions/adrs, research.
+  brief, roadmap, intents, decisions/adrs, research.
 - Package map: [`internal/README.md`](internal/README.md).
 
 ## Build, test, and checks
@@ -132,9 +132,9 @@ irreversible; guessing downward costs nothing.**
 - **AI-assisted commits carry an `Assisted-by:` trailer**, kernel format
   (`Assisted-by: Claude:claude-opus-4-8`) — disclosure, not authorship. Never
   `Co-Authored-By:` for AI (it asserts an authorship the tool does not hold and
-  inflates the contributor graph). A human-only `Signed-off-by:` (DCO) is deferred
-  to the public flip or the first outside contribution. The human is the author of
-  record, responsible for all AI-assisted output. See `CONTRIBUTING.md`.
+  inflates the contributor graph). There is no DCO: contributions are inbound =
+  outbound MIT, so no `Signed-off-by:` is required (adr-43). The human is the
+  author of record, responsible for all AI-assisted output. See `CONTRIBUTING.md`.
 - **A human-only change declares itself: `Assisted-by: None`.** The convention is
   disclosure, and work no AI touched has nothing to disclose — but silence cannot
   say so, because an absent trailer and a forgotten one are the same bytes. The

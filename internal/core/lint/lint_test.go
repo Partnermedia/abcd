@@ -3,6 +3,7 @@ package lint
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -486,6 +487,68 @@ func TestSpecIDUniqueDuplicate(t *testing.T) {
 	for _, f := range fs {
 		if filepath.Base(f.File) == "spc-11-solo.md" && f.RuleID == "spec_id_unique" {
 			t.Errorf("unexpected spec_id_unique finding on unique spec: %+v", f)
+		}
+	}
+}
+
+// TestSpecIDUniqueZeroPadded is the spec-family sibling of TestIssueIDUniqueZeroPadded
+// (iss-392): spc-005 and spc-5 are one canonical id, so the uniqueness backstop
+// must key on the canonical spelling and catch the collision. Before the
+// canonRecordID keyspace fix the spec backstop keyed on the raw frontmatter
+// value and failed open on a padded twin.
+func TestSpecIDUniqueZeroPadded(t *testing.T) {
+	root := t.TempDir()
+	base := "rec/specs"
+	writeFile(t, root, base+"/open/spc-5-alpha.md", "---\nid: spc-5\nslug: alpha\nintent: itd-70\n---\n# a\n")
+	writeFile(t, root, base+"/closed/spc-005-beta.md", "---\nid: spc-005\nslug: beta\nintent: itd-80\n---\n# b\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"spec_id_unique": {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{
+		filepath.Join(base, "open", "spc-5-alpha.md"),
+		filepath.Join(base, "closed", "spc-005-beta.md"),
+	} {
+		if !hasFinding(fs, f, "spec_id_unique", 2) {
+			t.Errorf("zero-padded spec collision not caught on %s; got %+v", f, fs)
+		}
+	}
+}
+
+// TestSpecLifecyclePaddedIntentResolves pins the lookup side of the canonical-id
+// keyspace: a spec whose intent link and a padded intent file spell the same id
+// differently must resolve, not false-block. Before the fix the KnownIntents map
+// keyed on the canonical spelling while the lookup used the raw value (or vice
+// versa), so a padded intent produced a phantom "does not exist in any bucket".
+func TestSpecLifecyclePaddedIntentResolves(t *testing.T) {
+	root := t.TempDir()
+	// Intent id spelled zero-padded (itd-047); the spec links it canonically
+	// (itd-47). The two are one handle, so the link must resolve.
+	writeFile(t, root, "rec/intents/planned/itd-047-thing.md",
+		"---\nid: itd-047\nspec_id: spc-9\n---\n# intent\n")
+	writeFile(t, root, "rec/specs/open/spc-9-thing.md",
+		"---\nid: spc-9\nslug: thing\nintent: itd-47\n---\n# spec\n")
+
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			"spec_lifecycle": {Enabled: true, Severity: "blocker", SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if f.RuleID == "spec_lifecycle" && strings.Contains(f.Message, "does not exist in any bucket") {
+			t.Errorf("padded intent falsely reported missing: %+v", f)
 		}
 	}
 }

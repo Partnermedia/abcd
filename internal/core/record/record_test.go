@@ -267,6 +267,43 @@ func TestDescribeADRReadOnly(t *testing.T) {
 	assertZeroWrites(t, repo, before)
 }
 
+// TestDescribeADRIDSpellingsAreOneHandle pins that a quoted, zero-padded, or
+// case-shifted frontmatter id is the SAME handle the dispatch resolves — the
+// spelling record-lint (TestRecordSchemaFilenameIDComparesNumerically) blesses
+// and the citation resolver rebuilds from the parsed integer. Before the
+// parsed-handle compare the byte-exact check reported these present records as
+// absent. It also pins that a padded invocation (adr-0003) resolves and echoes
+// the canonical id.
+func TestDescribeADRIDSpellingsAreOneHandle(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, id, ask string
+	}{
+		{"quoted", "0012-quoted.md", `"adr-12"`, "adr-12"},
+		{"padded-id", "0013-padded.md", "adr-0013", "adr-13"},
+		{"cased", "0015-cased.md", "ADR-15", "adr-15"},
+		{"padded-ask", "0003-canon.md", "adr-3", "adr-0003"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			write(t, repo, ".abcd/development/decisions/adrs/"+tc.file,
+				"---\nid: "+tc.id+"\nstatus: accepted\n---\n\n# A decision\n")
+			d, err := Describe(repo, tc.ask)
+			if err != nil {
+				t.Fatalf("Describe(%s): %v", tc.ask, err)
+			}
+			if d.Status != "accepted" {
+				t.Fatalf("status wrong: %+v", d)
+			}
+			// The rendered id is always the canonical spelling, never the caller's
+			// or the file's variant.
+			wantCanonical := "adr-" + strings.TrimLeft(strings.TrimPrefix(tc.ask, "adr-"), "0")
+			if d.ID != wantCanonical {
+				t.Errorf("rendered id %q, want canonical %q", d.ID, wantCanonical)
+			}
+		})
+	}
+}
+
 func TestDescribeUnknownIDFaults(t *testing.T) {
 	repo := t.TempDir()
 	for _, id := range []string{"iss-9", "itd-9", "spc-9", "adr-9"} {

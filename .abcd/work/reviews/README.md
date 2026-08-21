@@ -19,7 +19,7 @@ Commissioned reviews of this project — plan reviews, code reviews, external au
 
 The machine-checkable half of this charter is enforced deterministically as lint codes `RD001`–`RD003` (defined in [`../../development/brief/05-internals/06-lint.md`](../../development/brief/05-internals/06-lint.md)):
 
-- **`RD001`** — each review directory is `<YYYY-MM-DD>-<scope>/` and carries a `00-summary.md`.
+- **`RD001`** — each review directory is `<YYYY-MM-DD>-<scope>/` and carries a `00-summary.md`. The 40-hex sha-keyed semantic-gate receipt directories (`<40-hex>/<gate>.json`, iss-35) are a distinct artefact class with their own `receipt_gate` integrity check and are exempt.
 - **`RD002`** — review files are append-only (no post-creation edit in git history).
 - **`RD003`** — repo-relative paths only (no absolute personal paths).
 

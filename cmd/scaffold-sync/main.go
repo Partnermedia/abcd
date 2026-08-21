@@ -7,8 +7,11 @@
 // manifests only — no ecosystem scans a .tmpl under internal/ — so every action
 // bump it opens lands on the rendered workflow alone, breaks parity, and can
 // never go green on its own (iss-209). This command is the other half of that
-// loop, run by the scaffold-sync workflow on a dependabot branch and by
-// `make scaffold-sync` locally.
+// loop, run by hand via `make scaffold-sync`. Nothing in CI invokes it: the
+// drift is gated by TestSelfScaffoldParity and TestSyncRepoPinsIsCleanToday
+// under preflight, and zero-touch propagation onto the dependabot branch is a
+// recorded dead end (a workflow_run implementation was built and rejected in
+// review — see iss-209).
 //
 // Re-rendering the template over the workflow would REVERT the bump and turn a
 // red PR into a silently useless green one, so the flow is one-way by design.

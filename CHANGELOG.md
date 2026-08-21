@@ -78,6 +78,37 @@ called out in a **Breaking** section.
   cuts hold as before; the capture result no longer carries the max+1 era's
   `mint_warning` degrade note, since the mint consults no refs. (itd-114,
   spc-33, adr-45; resolves iss-330)
+- **The docs-lint/record-lint config read is guarded like its `.abcd/*.json`
+  siblings.** `abcd docs lint`, `abcd lint`, `abcd docs cite refresh`, `ahoy`,
+  the session hooks, and `record-lint` read `.abcd/docs-lint.json` /
+  `.abcd/record-lint.json` with a raw, unguarded read, so a committed config
+  symlink to a FIFO wedged those verbs, a `/dev/zero` target exhausted memory,
+  and an out-of-repo symlink target ran the whole ruleset from a file the
+  repository does not own. The read now uses the shared guarded primitive
+  (`O_NOFOLLOW`, regular-file check, non-blocking open, size cap), matching
+  `guard.Load`/`rules.Load`. (iss-2608211132061930)
+- **Over-cap stdin operands are refused whole, not truncated.** The `-`
+  (stdin) transport for `ideate record --verdict-json`, the lifeboat lesson and
+  synthesis payloads, and `history capture` read exactly the byte cap, so an
+  over-cap payload was silently cut into a prefix while the file transport
+  refused it — and on `history capture` the truncated transcript was stored
+  under a sha256 idempotency key computed over the prefix. All four now refuse
+  an over-cap payload whole. (iss-2608211134281912)
+- **`abcd adr-N` resolves an ADR whose id is quoted, zero-padded, or
+  case-shifted.** The dispatch confirmed the frontmatter id byte-for-byte while
+  record-lint and the citation resolver treat `adr-0012`, `"adr-12"`, and
+  `ADR-12` as one handle, so a present, lint-green ADR (or a padded invocation
+  like `abcd adr-0003`) was reported absent. The confirm now compares parsed
+  handles and renders the canonical id. (iss-2608211140410761)
+- **The record-id lint rules key every keyspace canonically.** The delivery-state
+  drafts-citation gate, the spec-intent existence and supersession lookups, and
+  the spec-id uniqueness backstop keyed on the raw id spelling, so a zero-padded
+  intent or spec id could slip a gate open or false-block a valid link. Every
+  key and lookup now canonicalises the id. (iss-2608211139076040)
+- **The README front page reflects the shipped toolchain and mint scheme.** The
+  Go badge advertised 1.25 (the retired version) and `abcd capture` was still
+  described as minting "the next free id", the abolished max+1 protocol; both
+  corrected. (iss-2608211143184945, iss-2608211143185943)
 
 ### Changed
 

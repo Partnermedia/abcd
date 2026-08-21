@@ -1774,10 +1774,13 @@ func scanIssueLedger(repoRoot, issuesDir string) (issueLedger, error) {
 
 // canonRecordID normalises a matched record id to its canonical spelling by
 // stripping leading zeros from the numeric part (iss-0100 → iss-100), matching
-// recordid.fileID. Without it the uniqueness backstop keys on the raw filename
-// text, so a zero-padded hand-added file (iss-0100-*.md) sits beside its
-// canonical twin (iss-100-*.md) as two distinct keys and the collision the
-// rule exists to catch slips through (iss-392).
+// recordid.fileID. It governs every record-id keyspace the record-lint rules
+// build or query — the uniqueness backstops (issue, intent, spec), the
+// delivery-state bucket map and its CHANGELOG citations, and the intent
+// existence/supersession lookups — so a zero-padded spelling and its canonical
+// twin are one handle on both the key and the lookup side. Without it a padded
+// file or citation keys separately: a uniqueness backstop fails open on the
+// twin, and a lookup gate either misses (fail-open) or false-blocks (iss-392).
 func canonRecordID(match string) string {
 	m := recordIDRe.FindStringSubmatch(match)
 	if m == nil {
@@ -1908,7 +1911,7 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 		sup, supOK := fields["superseded_by"]
 		if !supOK || !supersededRe.MatchString(sup.value) {
 			add(sup.line, "superseded: superseded_by must be present and match ^(itd|adr)-\\d+")
-		} else if id := intentIDRe.FindString(sup.value); id != "" && !known[id] {
+		} else if id := canonRecordID(intentIDRe.FindString(sup.value)); id != "" && !known[id] {
 			add(sup.line, "superseded: superseded_by target '"+id+"' does not exist in any bucket")
 		}
 		if kindNull {
@@ -1995,10 +1998,13 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 		if spec.exempt {
 			continue
 		}
-		id := spec.fields["id"].value
-		if !specIDFullRe.MatchString(id) {
+		raw := spec.fields["id"].value
+		if !specIDFullRe.MatchString(raw) {
 			continue
 		}
+		// Canonical key so spc-005 and spc-5 collide as one id (iss-392's
+		// keyspace) — else the uniqueness backstop fails open on a padded twin.
+		id := canonRecordID(raw)
 		idFiles[id] = append(idFiles[id], filepath.Join(repoRoot, spec.Path))
 	}
 
@@ -2007,11 +2013,11 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 		if spec.exempt {
 			continue
 		}
-		id := spec.fields["id"].value
-		if !specIDFullRe.MatchString(id) {
+		raw := spec.fields["id"].value
+		if !specIDFullRe.MatchString(raw) {
 			continue
 		}
-		out = append(out, validateIDUnique(repoRoot, spec.Path, id, "spec", "spec_id_unique", cfg.Severity, spec.fields, idFiles)...)
+		out = append(out, validateIDUnique(repoRoot, spec.Path, canonRecordID(raw), "spec", "spec_id_unique", cfg.Severity, spec.fields, idFiles)...)
 	}
 	return out, nil
 }
@@ -2047,14 +2053,14 @@ func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]
 		add(intent.line, "spec intent link must be present and match ^itd-\\d+$ (got '"+intent.value+"')")
 		return out // no existence/agreement check possible without a well-formed link
 	}
-	if !knownIntent[intent.value] {
+	if !knownIntent[canonRecordID(intent.value)] {
 		add(intent.line, "spec intent '"+intent.value+"' does not exist in any bucket")
 		return out
 	}
 	// Bidirectional agreement: the named intent must carry spec_id == this spec's
 	// id. Drift either way (the intent points elsewhere, or at null) is flagged.
 	if idValid {
-		back := intentSpecID[intent.value]
+		back := intentSpecID[canonRecordID(intent.value)]
 		if specNum(back) != specNum(id.value) {
 			add(intent.line, "bidirectional drift: spec '"+id.value+"' names intent '"+intent.value+"' but that intent's spec_id is '"+back+"'")
 		}

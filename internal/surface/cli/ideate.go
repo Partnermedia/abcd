@@ -90,10 +90,10 @@ func newIdeateCommand(asJSON *bool) *cobra.Command {
 // readIdeatePayload reads the untrusted verdict document behind the same trust
 // guards every other host-delegated ingest uses: a file must be regular,
 // non-symlink, and under the cap the core enforces; "-" reads stdin bounded to the
-// same ceiling.
+// same ceiling and refused whole when over-cap (not truncated).
 func readIdeatePayload(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
-		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), ideate.MaxPayloadBytes))
+		return readCappedStdin(cmd, ideate.MaxPayloadBytes)
 	}
 	return readGuardedOperand(spec, ideate.MaxPayloadBytes)
 }

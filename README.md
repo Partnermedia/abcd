@@ -10,7 +10,7 @@
   <a href="https://github.com/Partnermedia/abcd/releases"><img src="https://img.shields.io/github/v/release/Partnermedia/abcd?cacheSeconds=300" alt="Release"></a>
   <img src="https://img.shields.io/github/last-commit/Partnermedia/abcd?cacheSeconds=300" alt="Last commit">
   <br />
-  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow -->
   <br />
   <img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS">
@@ -106,7 +106,7 @@ While intents are at the core of `abcd`, you will sometimes find that a thought 
 abcd capture "<whatever crossed your mind>"
 ```
 
-One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with the next free id. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself at this stage.
+One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with a collision-proof id (`iss-<yymmddHHMMSS><4 random digits>`) that no parallel agent can duplicate and nothing ever renumbers. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself at this stage.
 
 `abcd capture` essentially decouples retention from classification. Intents demand press-release discipline — a named user, acceptance criteria, a *why*. Forcing a half-formed doubt through that discipline either kills the thought (too much ceremony, you let it go) or pollutes the intent corpus (you file something vague to avoid losing it). The *fast hatch* makes retention almost free — seconds, zero decisions — and defers the "*what is this?*" question to someone in the right seat at the right time.
 

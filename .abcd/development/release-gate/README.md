@@ -13,8 +13,9 @@ Design of record: [`../plans/2026-07-11-iss35-semantic-release-gate.md`](../plan
 ## Deterministic gates (CI-enforced)
 
 The [`release.yml`](../../../.github/workflows/release.yml) `verify` job runs
-these, in order, on macOS + Linux. `release.yml` is authoritative; this list is
-the human-readable mirror.
+these, in order, on Linux (`ubuntu-latest`); the macOS + Linux matrix is
+`ci.yml`'s `check` job, which gates the merge. `release.yml` is authoritative;
+this list is the human-readable mirror.
 
 1. Format (gofmt)
 2. Build
@@ -58,9 +59,9 @@ gate with the *content* commit (`<merge>^2^` for an auto-release merge, `<tag>^`
 for a manual tag on the receipts commit) — not the merge commit — so
 `subject.digest.gitCommit` still matches the armed commit exactly and the gate
 stays strict. (Before this, the gate armed with the tagged merge commit, whose
-tree can never hold a receipt naming itself — an unsatisfiable self-reference
-that fail-closed every public release; it was dormant until the public flip, so
-it was never exercised.)
+tree can never hold a receipt naming itself — an unsatisfiable self-reference.
+Dormant while the repo was private, it surfaced at the first public release and
+fail-closed it, v0.3.0, iss-108.)
 
 Each semantic pass records its outcome as a **commit-sha-keyed receipt** — a
 Verification Summary Attestation (VSA) shape carrying `verificationResult`
@@ -142,10 +143,12 @@ trust root), not the in-tree config: `record-lint --release-gate <sha>
 attestation with `gh attestation verify` — no new dependency (the same attest
 family + `gh` the binary provenance already uses).
 
-> **Dormant until the public flip.** Artifact attestation is a public-repo
+> **Live, and visibility-gated.** Artifact attestation is a public-repo
 > feature, so the whole gate is gated `if: !github.event.repository.private` —
-> exactly like the binary attestation — and does nothing on a private repo,
-> activating on the public flip. And the signature is **auditable release
+> exactly like the binary attestation — and does nothing on a private repo. The
+> repo is public, so the gate is armed on every release, and it has fail-closed
+> two of them: v0.3.0 on the self-reference defect (iss-108) and v0.6.0 on a
+> missing receipts commit (iss-326). And the signature is **auditable release
 > provenance, not committer-forgery-proof**: a receipt forged and committed
 > before the tag would be signed too; that residual is bounded by the iss-62
 > identity gate + branch protection. Stated per
@@ -156,8 +159,13 @@ family + `gh` the binary provenance already uses).
 ## Procedure
 
 1. Land all work on the release commit; open the release the normal way (branch
-   → PR → merge). The `verify` job gates the merge.
+   → PR → merge). `ci.yml`'s required checks gate the merge; `verify` re-runs
+   the deterministic gates against the tagged commit before anything is
+   published.
 2. On the merged commit, run the two semantic gates above in the harness.
 3. Record each verdict as a receipt keyed to that commit's sha.
-4. Tag `vX.Y.Z` on the commit. Once the fail-closed verify rule is armed, the
-   tag is rejected unless every semantic receipt is present and PROMOTE.
+4. Tag `vX.Y.Z` on the commit. `receipt_gate` is armed fail-closed in
+   `release.yml`'s publish job: the release is refused unless every semantic
+   receipt is present and PROMOTE. The refusal does not remove the tag
+   (anti-tag-move), so a tag pushed without receipts is permanently
+   unpublishable and costs a version number to recover (iss-326).

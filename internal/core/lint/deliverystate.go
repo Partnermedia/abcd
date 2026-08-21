@@ -81,7 +81,11 @@ func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	}
 	bucket := map[string]string{}
 	for _, r := range tree.records {
-		bucket[strings.ToLower(intentIDRe.FindString(r.name))] = r.bucket
+		// Key on the canonical id spelling so a zero-padded intent filename
+		// (itd-047-*.md) and a canonical citation (itd-47) resolve to the same
+		// bucket — else the drafts-citation gate silently fails open over exactly
+		// the case it exists to catch (iss-392's canonRecordID keyspace).
+		bucket[canonRecordID(strings.ToLower(intentIDRe.FindString(r.name)))] = r.bucket
 	}
 
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
@@ -144,7 +148,9 @@ func changelogIntentCitations(line string) []string {
 	var ids []string
 	seen := map[string]bool{}
 	for _, m := range changelogIntentRe.FindAllStringSubmatch(line, -1) {
-		id := "itd-" + m[1]
+		// Canonical spelling so a padded citation (itd-047) resolves against the
+		// canonical bucket key — the citation side of the same keyspace fix.
+		id := canonRecordID("itd-" + m[1])
 		if seen[id] {
 			continue
 		}

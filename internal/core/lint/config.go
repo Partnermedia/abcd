@@ -2,10 +2,22 @@ package lint
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
+
+// maxLintConfigBytes caps the docs-lint/record-lint config read (trust
+// boundary). The shipped configs are a few kilobytes; the cap is many times
+// larger, so it bounds a hostile /dev/zero-symlinked config without ever
+// constraining a real one.
+const maxLintConfigBytes = 256 * 1024
 
 // Config is the on-disk record-lint configuration (.abcd/record-lint.json).
 type Config struct {
@@ -301,11 +313,36 @@ func ArmReceiptGate(cfg Config, commit string, requiredGates []string) Config {
 	return cfg
 }
 
-// LoadConfig reads and decodes a record-lint config file.
+// LoadConfig reads and decodes a record-lint config file. The config is a trust
+// boundary: it is a committed, cross-repo-clonable file (a hostile clone can
+// commit .abcd/docs-lint.json as a git mode-120000 symlink), and the read is
+// reachable automatically through the session hooks (ahoy.Detect), so it is
+// guarded exactly like its .abcd/*.json siblings guard.Load and rules.Load —
+// a symlinked config directory or leaf is refused, a FIFO/device leaf returns
+// immediately instead of hanging the open, and an over-cap file is rejected
+// rather than read into an OOM. Error strings stay path-free (iss-29); the
+// os.IsNotExist branch is preserved so callers that default an absent config
+// still work.
 func LoadConfig(path string) (Config, error) {
-	data, err := os.ReadFile(path)
+	// Refuse a symlinked config directory before touching the leaf, so a swapped
+	// .abcd cannot redirect the read at a config the repository does not own.
+	if di, err := os.Lstat(filepath.Dir(path)); err == nil && di.Mode()&os.ModeSymlink != 0 {
+		return Config{}, fmt.Errorf("lint: config directory is a symlink (refusing to follow)")
+	}
+	data, err := fsutil.ReadGuarded(path, maxLintConfigBytes)
 	if err != nil {
-		return Config{}, err
+		switch {
+		case os.IsNotExist(err):
+			return Config{}, err
+		case errors.Is(err, syscall.ELOOP):
+			return Config{}, fmt.Errorf("lint: config is a symlink (refusing to follow)")
+		case errors.Is(err, fsutil.ErrNotRegular):
+			return Config{}, fmt.Errorf("lint: config is not a regular file")
+		case errors.Is(err, fsutil.ErrTooBig):
+			return Config{}, fmt.Errorf("lint: config exceeds the %d-byte cap", maxLintConfigBytes)
+		default:
+			return Config{}, err
+		}
 	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
