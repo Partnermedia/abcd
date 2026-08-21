@@ -2,10 +2,12 @@ package capture
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/Partnermedia/abcd/internal/core/lint"
 	"github.com/Partnermedia/abcd/internal/core/recordid"
 	"github.com/Partnermedia/abcd/internal/gittest"
 )
@@ -63,5 +65,80 @@ func TestCaptureBranchesSameInstantNeverCollide(t *testing.T) {
 	}
 	if !reNativeIssID.MatchString(resA.ID) || !reNativeIssID.MatchString(resB.ID) {
 		t.Fatalf("mints are not native-shaped: %q, %q", resA.ID, resB.ID)
+	}
+}
+
+// TestCaptureBranchesMergeUnionPassesGates completes itd-114's first
+// acceptance criterion literally: after two branches mint at the same instant,
+// MERGING them must pass every uniqueness gate with no renumber. The sibling
+// test above stops at id inequality; this one performs the actual git merge
+// and runs the armed issue_id_unique detector over the union — then proves the
+// gate is not vacuous by planting a same-id duplicate and watching it fire.
+func TestCaptureBranchesMergeUnionPassesGates(t *testing.T) {
+	instant := time.Date(2026, 8, 20, 11, 42, 7, 0, time.UTC)
+	setMinter(t, recordid.Minter{
+		Now:     func() time.Time { return instant },
+		Entropy: bytes.NewReader([]byte{0x00, 0x2A, 0x11, 0x11}),
+	})
+
+	r := gittest.NewRepo(t)
+	r.Write("README.md", "# base\n")
+	r.Commit("base")
+	trunk := r.Git("rev-parse", "--abbrev-ref", "HEAD")
+	ledger := filepath.Join(r.Root(), LedgerRelPath)
+
+	resA, err := Capture(CaptureRequest{
+		RepoRoot: r.Root(), IssuesRoot: ledger, Text: "alpha observation",
+		Severity: SeverityMinor, Category: "bug", Source: "user-observation",
+		FoundDuring: "t", Slug: "alpha",
+	})
+	if err != nil {
+		t.Fatalf("branch A Capture: %v", err)
+	}
+	r.Commit("A: " + resA.ID)
+
+	r.Git("checkout", "-b", "branch-b", "HEAD~1")
+	resB, err := Capture(CaptureRequest{
+		RepoRoot: r.Root(), IssuesRoot: ledger, Text: "beta observation",
+		Severity: SeverityMinor, Category: "bug", Source: "user-observation",
+		FoundDuring: "t", Slug: "beta",
+	})
+	if err != nil {
+		t.Fatalf("branch B Capture: %v", err)
+	}
+	r.Commit("B: " + resB.ID)
+
+	// The literal merge of the two minting branches: it must be clean (the two
+	// ledger files cannot conflict) and the union must carry both ids unrenumbered.
+	r.Git("merge", "--no-edit", trunk)
+	for _, id := range []string{resA.ID, resB.ID} {
+		if _, status, ferr := findIssue(ledger, id); ferr != nil || status != StateOpen {
+			t.Fatalf("after the merge, %s is not intact in open/: status=%s err=%v", id, status, ferr)
+		}
+	}
+
+	gateCfg := lint.Config{Rules: map[string]lint.RuleConfig{
+		"issue_id_unique": {Enabled: true, Severity: "blocker", IssuesDir: LedgerRelPath},
+	}}
+	findings, err := lint.Lint(gateCfg, r.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("the merged union must pass the uniqueness gate, got %+v", findings)
+	}
+
+	// Negative control — the gate must be armed, not vacuously green: a planted
+	// same-id claimant makes it fire on every file in the colliding set.
+	dupe := filepath.Join(ledger, "open", resA.ID+"-planted-twin.md")
+	if err := os.WriteFile(dupe, []byte("---\nid: \""+resA.ID+"\"\n---\n# twin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	findings, err = lint.Lint(gateCfg, r.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) < 2 {
+		t.Fatalf("the planted duplicate must trip the gate on both claimants, got %+v", findings)
 	}
 }
