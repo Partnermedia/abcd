@@ -320,6 +320,36 @@ func TestBootstrapNewReleaseLeavesForeignPathFileAlone(t *testing.T) {
 	}
 }
 
+// TestBootstrapNewReleaseSkipsAbsentPathCopy is the sibling overclaim of
+// iss-2608210934566228 (security finding 3): the PATH-copy refresh comment
+// promised only a file that still matches the recorded hash is ever touched,
+// but the code's absent-path branch short-circuited past the ownership check
+// and CREATED a copy at a recorded path that held nothing. An absent path is
+// not the recorded bytes, so ownership cannot be proven and nothing is written
+// there.
+func TestBootstrapNewReleaseSkipsAbsentPathCopy(t *testing.T) {
+	root := bootstrapRoot(t)
+	data := t.TempDir()
+	old := []byte("#!/bin/sh\n# old release\nexit 0\n")
+	fresh := []byte("#!/bin/sh\n# new release\nexit 0\n")
+	seedBootstrapCache(t, data, "v9.9.8", old)
+	oldSum := sha256.Sum256(old)
+	home := t.TempDir()
+	// The recorded PATH copy does not exist on disk.
+	pathCopy := filepath.Join(t.TempDir(), "abcd")
+	entry := "path=" + pathCopy + "\nbinary_sha256=" + hex.EncodeToString(oldSum[:]) + "\n"
+	seedHomePathEntry(t, home, entry)
+	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
+
+	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
+	if code != 2 {
+		t.Fatalf("the install must proceed, got %d (output %q)", code, out)
+	}
+	if _, err := os.Stat(pathCopy); !os.IsNotExist(err) {
+		t.Errorf("bootstrap created a PATH copy at an absent recorded path — ownership it cannot prove: %v", err)
+	}
+}
+
 // TestBootstrapCorruptCacheRefusesLoudly is the trust bar at rest: every
 // promotion out of the cache re-verifies against the recorded binary_sha256,
 // and an artefact that no longer matches refuses loudly and installs nothing —

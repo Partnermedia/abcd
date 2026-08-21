@@ -499,10 +499,13 @@ else
 
 		# Refresh the abcd-owned PATH copy in the same run: a NEW release just
 		# landed in the cache, and the copy `ahoy install` recorded would
-		# otherwise serve the old one until someone re-ran it. Only a file that
-		# still matches the recorded provenance hash is ever replaced — anything
-		# else is foreign, whatever put it there owns it — and the replacement
-		# is re-verified before the rename, like every promotion.
+		# otherwise serve the old one until someone re-ran it. Only a REGULAR FILE
+		# that still matches the recorded provenance hash is ever replaced —
+		# anything else (a symlink, a mismatching file, or NOTHING at the recorded
+		# path) is not a matching owned copy, so it is left alone: the record
+		# vouches for the bytes it recorded, and an absent path is not those bytes,
+		# so creating one there would claim an ownership the record cannot prove.
+		# The replacement is re-verified before the rename, like every promotion.
 		if [ -n "$path_entry" ] && [ -f "$path_entry" ]; then
 			entry_path=$(sed -n 's/^path=//p' "$path_entry" 2>/dev/null | head -n 1 | tr -d '\000-\037\177')
 			entry_sha=$(meta_field "$path_entry" binary_sha256)
@@ -510,7 +513,9 @@ else
 			[ -n "$entry_path" ] || refresh_ok=''
 			case "$entry_sha" in *[!0-9a-f]*) refresh_ok='' ;; esac
 			[ "${#entry_sha}" -eq 64 ] || refresh_ok=''
-			if [ -n "$refresh_ok" ] && [ -e "$entry_path" ]; then
+			if [ -n "$refresh_ok" ]; then
+				# Ownership-check unconditionally: an absent recorded path is NOT
+				# an owned copy, so it never short-circuits to "refresh it".
 				if [ -f "$entry_path" ] && [ ! -L "$entry_path" ]; then
 					cur_sha=$(sha256_file "$entry_path")
 					[ "$cur_sha" = "$entry_sha" ] || refresh_ok=''

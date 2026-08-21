@@ -133,7 +133,8 @@ func pluginRootValid(candidate string) bool {
 	return isDir(filepath.Join(candidate, "hooks"))
 }
 
-// pluginBinaryPath is the binary the owned PATH symlink points at.
+// pluginBinaryPath is the binary a legacy owned PATH symlink points at (and the
+// source the owned copy is provisioned from).
 func pluginBinaryPath(pluginRoot string) string {
 	return filepath.Join(pluginRoot, "abcd")
 }

@@ -1026,8 +1026,10 @@ func (a *applyCtx) stepVersionStamp() {
 	}
 }
 
-// Uninstall removes the marker block and the owned PATH symlink only. It never
-// mutates hooks.json or the .abcd/ namespace.
+// Uninstall removes the marker block and the owned PATH entry (the spc-35 owned
+// copy plus its provenance record, or a legacy pinned symlink) only. It never
+// mutates hooks.json or the .abcd/ namespace, and leaves the download cache to
+// the harness's own uninstall.
 //
 // binDir names the directory to look in, for the one case detection cannot
 // derive: an install placed by `--bin-dir` in a directory that is not on PATH is

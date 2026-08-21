@@ -1804,7 +1804,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	var uninstallBinDir string
 	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Remove the marker block and owned PATH symlink (leaves .abcd/ intact)",
+		Short: "Remove the marker block, abcd's owned PATH copy, and its provenance record (leaves .abcd/ intact)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()

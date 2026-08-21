@@ -76,7 +76,7 @@ Install or update abcd in this repo (idempotent)
 
 #### `abcd ahoy uninstall`
 
-Remove the marker block and owned PATH symlink (leaves .abcd/ intact)
+Remove the marker block, abcd's owned PATH copy, and its provenance record (leaves .abcd/ intact)
 
 **Usage:** `abcd ahoy uninstall [flags]`
 

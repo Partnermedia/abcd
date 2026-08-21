@@ -27,9 +27,9 @@ Then summarise the JSON for the user:
 - `folder_kind` — `managed-repo`, `unmanaged-repo`, or `unmanaged-folder`.
 - `plugin_root_status` and `root_sha` — where abcd is anchored.
 - `signals.install_mode` — the PATH-entry install mode: `dev (tip build)` when
-  the track-latest dogfood shim is installed, `pinned` for the built-binary
-  symlink, empty when there is nothing on `PATH` yet. Report it so a dev install
-  is never invisible.
+  the track-latest dogfood shim is installed, `pinned` for the abcd-owned copy
+  of the verified release binary, empty when there is nothing on `PATH` yet.
+  Report it so a dev install is never invisible.
 - `vintage` and `staleness` — the running binary's build revision (in a source
   checkout) or pinned version, and whether it is up to date, stale, or of an
   undeterminable vintage relative to the on-disk reference. Report them so a
@@ -117,9 +117,9 @@ configured. When the result carries `optional_skipped`, report it and offer the
 `yes |` form above as the way to apply it.
 
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
-shim instead of the pinned-binary symlink: the `PATH` entry rebuilds abcd from
+shim instead of the pinned owned copy: the `PATH` entry rebuilds abcd from
 the source tip on every call and fails loudly on a broken build. Re-running
-`abcd ahoy install` without `--dev` switches back to the pinned symlink.
+`abcd ahoy install` without `--dev` switches back to the pinned owned copy.
 
 ## `uninstall` — reversible marker-only removal
 
@@ -128,8 +128,10 @@ the source tip on every call and fails loudly on a broken build. Re-running
 ```
 
 **This writes.** It removes the BEGIN/END marker block and abcd's own `PATH`
-entry — found wherever it sits on `PATH` — and leaves `.abcd/` intact, so the
-repo's record survives. Report `marker.removed` and the symlink note; the
+entry — the owned copy (or a legacy pinned symlink), found wherever it sits on
+`PATH`, along with its provenance record — and leaves `.abcd/` intact, so the
+repo's record survives. The persistent download cache is left to the harness's
+own uninstall to delete. Report `marker.removed` and the entry note; the
 receipt's `symlink.target` is already rendered in tilde form, so relay it as
 given rather than expanding it. It never touches `hooks.json`. An entry that was
 installed with `--bin-dir` into a directory outside `PATH` cannot be found by a
