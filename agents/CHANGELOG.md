@@ -9,7 +9,8 @@ pre-flight outcome and calibration-corpus delta).
 corpus — `0.x` means "shipped and wired, honestly unmeasured"; `1.0.0` means
 "measured against a corpus and locked" (itd-81's amendment to itd-5, which governs
 over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
-agents below ship at `0.1.0`: wired to their `abcd disembark` verbs, unmeasured.
+agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
+unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
 ## 0.2.0 — 2026-08-19 (iss-278 — the itd-5 contract reaches the review/research agents)
 

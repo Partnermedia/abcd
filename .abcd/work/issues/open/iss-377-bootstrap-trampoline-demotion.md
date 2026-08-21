@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-370"
+id: "iss-377"
 slug: "bootstrap-trampoline-demotion"
 severity: "minor"
 category: "future-work-seed"

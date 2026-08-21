@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-372"
+id: "iss-379"
 slug: "abcd-update-attestation-verify"
 severity: "minor"
 category: "future-work-seed"

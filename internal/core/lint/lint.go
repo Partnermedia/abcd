@@ -71,6 +71,9 @@ var (
 	// Issue id embedded in a ledger filename (issue_id_unique).
 	issueIDRe   = regexp.MustCompile(`iss-\d+`)
 	issueFileRe = regexp.MustCompile(`^iss-\d+.*\.md$`)
+	// Splits a matched record id into its prefix and numeric part, so the
+	// uniqueness backstop keys on the canonical id rather than the raw spelling.
+	recordIDRe = regexp.MustCompile(`^([a-z]+)-0*([0-9]+)$`)
 	// Surface registry Command cell: the bare "/abcd" top-level, or "/abcd:<name>".
 	surfaceCmdRe = regexp.MustCompile(`^/abcd(?::([a-z0-9-]+))?$`)
 	// receipt_gate arming inputs are release-time and become externally supplied
@@ -1540,7 +1543,7 @@ func scanIntentTree(repoRoot, rootAbs, intentsDir string) (intentTree, error) {
 			return nil
 		}
 		if intentFileRe.MatchString(d.Name()) {
-			id := intentIDRe.FindString(d.Name())
+			id := canonRecordID(intentIDRe.FindString(d.Name()))
 			known[id] = true
 			idFiles[id] = append(idFiles[id], path)
 		}
@@ -1653,7 +1656,7 @@ func checkIntentImpact(tree intentTree, cfg RuleConfig) []Finding {
 // validateIntentIDUnique flags a duplicated intent id, delegating to the shared
 // validateIDUnique primitive (the issue-id rule uses the same logic).
 func validateIntentIDUnique(repoRoot, rel, name string, fields map[string]fmField, idFiles map[string][]string, severity string) []Finding {
-	id := intentIDRe.FindString(name)
+	id := canonRecordID(intentIDRe.FindString(name))
 	return validateIDUnique(repoRoot, rel, id, "intent", "intent_lifecycle", severity, fields, idFiles)
 }
 
@@ -1748,7 +1751,7 @@ func scanIssueLedger(repoRoot, issuesDir string) (issueLedger, error) {
 				continue
 			}
 			fileAbs := filepath.Join(issuesRoot, sub, e.Name())
-			id := issueIDRe.FindString(e.Name())
+			id := canonRecordID(issueIDRe.FindString(e.Name()))
 			ledger.idFiles[id] = append(ledger.idFiles[id], fileAbs)
 			files = append(files, pending{status: sub, abs: fileAbs})
 		}
@@ -1762,11 +1765,25 @@ func scanIssueLedger(repoRoot, issuesDir string) (issueLedger, error) {
 		ledger.records = append(ledger.records, issueRecord{
 			rel:    repoRel(repoRoot, p.abs),
 			status: p.status,
-			id:     issueIDRe.FindString(filepath.Base(p.abs)),
+			id:     canonRecordID(issueIDRe.FindString(filepath.Base(p.abs))),
 			fields: frontmatterFields(strings.Split(string(content), "\n")),
 		})
 	}
 	return ledger, nil
+}
+
+// canonRecordID normalises a matched record id to its canonical spelling by
+// stripping leading zeros from the numeric part (iss-0100 → iss-100), matching
+// recordid.fileID. Without it the uniqueness backstop keys on the raw filename
+// text, so a zero-padded hand-added file (iss-0100-*.md) sits beside its
+// canonical twin (iss-100-*.md) as two distinct keys and the collision the
+// rule exists to catch slips through (iss-392).
+func canonRecordID(match string) string {
+	m := recordIDRe.FindStringSubmatch(match)
+	if m == nil {
+		return match
+	}
+	return m[1] + "-" + m[2]
 }
 
 // checkIssueIDUnique flags any iss-N id claimed by two or more files across the

@@ -1,7 +1,7 @@
 ---
 name: lifeboat-reviewer
 description: Audit a packed lifeboat against its source repo; return a registered verdict (SHIP / NEEDS_WORK / MAJOR_RETHINK) and findings that each cite a packed lifeboat file. Host-delegated; feeds `abcd disembark review <lifeboat-dir> <source-repo> --review-json`.
-prompt_version: 0.1.0
+prompt_version: 0.1.1
 reads_untrusted_input: true
 capability_scope:
   task_classes: [oracle_review, audit]
@@ -50,7 +50,7 @@ fabricate a manifest hash or claim a verification you did not run. Emit:
 {
   "schema_version": 1,
   "mode": "delegated",
-  "prompt_version": "0.1.0",
+  "prompt_version": "0.1.1",
   "verdict": "NEEDS_WORK",
   "findings": [
     {
@@ -67,7 +67,7 @@ Field rules:
 
 - `schema_version`: integer `1`. Required — a missing or `0` value is rejected.
 - `mode`: `"delegated"`. If present it must be exactly `"delegated"`.
-- `prompt_version`: `"0.1.0"`. Required in your delegated output.
+- `prompt_version`: `"0.1.1"`. Required in your delegated output.
 - `verdict`: exactly one of `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK` (see vocabulary).
   An out-of-enum verdict is **not** dropped-and-continued — it refuses the whole
   payload (the binary exits non-zero, writes nothing).

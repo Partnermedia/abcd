@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-373"
+id: "iss-380"
 slug: "homebrew-tap-distribution"
 severity: "minor"
 category: "future-work-seed"

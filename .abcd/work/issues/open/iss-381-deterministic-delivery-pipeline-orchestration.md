@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-374"
+id: "iss-381"
 slug: "deterministic-delivery-pipeline-orchestration"
 severity: "major"
 category: "future-work-seed"

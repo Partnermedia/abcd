@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-id: "iss-371"
+id: "iss-378"
 slug: "windows-cold-start-shim"
 severity: "minor"
 category: "future-work-seed"

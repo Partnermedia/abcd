@@ -27,9 +27,10 @@ newer version exists, add `--check`:
 ```
 
 `--check` reaches the network — it fetches the latest release once, compares,
-and reports under `check` (with its `source` named). The only other verb that
-does is `update`, which completes what `--check` reports; every other path
-reads only what is on disk.
+and reports under `check` (with its `source` named). abcd never fetches
+implicitly (adr-38): the network is only ever touched by a verb whose documented
+job is that fetch — `version --check`, `update`, `docs cite refresh`, and
+`memory ingest <url>`; every other path reads only what is on disk.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

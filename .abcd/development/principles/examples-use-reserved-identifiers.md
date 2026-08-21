@@ -43,7 +43,9 @@ identifier from an illustrative one.
 already implements the name half; no fixture-identifier equivalent exists yet
 for hosts and addresses.
 
-**Promotion.** A docs-lint / privacy-hygiene rule that flags any committed
-network identifier *outside* the reserved ranges (the allowlist inversion
-recorded in iss-154) would make this a discipline, following the itd-79
-promotion path.
+**Enforcement.** The `privacy-hygiene` rule flags any committed network
+identifier *outside* the reserved ranges (the allowlist inversion recorded in
+iss-154): `scanner/network.go` encodes the RFC 5737/3849/2606/7042 ranges and
+cites this principle by name, and `repolint/rule_privacy.go` arms the rule.
+Because that mechanical gate now exists, the itd-79 path calls for a
+discipline-kind intent to carry the principle; minting it is tracked in iss-390.

@@ -50,7 +50,8 @@ type Substitutions struct {
 	// DefaultBranch is the branch auto-release triggers on and the no-branch-commit
 	// tripwire guards — derived from the target repo, never hard-coded.
 	DefaultBranch string
-	// GoVersion is the setup-go minor version (e.g. "1.25").
+	// GoVersion is the setup-go version, patch-precise when the source go.mod
+	// declares one (e.g. "1.25.6"), else major.minor.
 	GoVersion string
 	// Abcd selects abcd-cli's full rendering: the extra deterministic verify gates,
 	// the semantic release gate, and the four-binary cross-compile + attest build.

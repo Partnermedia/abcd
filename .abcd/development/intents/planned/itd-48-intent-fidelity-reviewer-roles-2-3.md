@@ -61,7 +61,7 @@ The intent is project-agnostic: every abcd project that uses the intent corpus b
   - **Naming conflicts** — same noun used for different concepts; different
     nouns used for the same concept.
 - Implement `/abcd:intent consistency [<itd-N>]` routing in
-  `commands/abcd/intent.md` (the row already exists in the doc but the
+  `commands/intent.md` (the row already exists in the doc but the
   routing is stubbed).
 - Findings emitted as structured records grouped by judgement category
   (terminology drift, premise contradictions, scope leakage, sequencing

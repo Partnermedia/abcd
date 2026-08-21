@@ -42,7 +42,8 @@ remain an itd-5 deliverable.) The frontmatter fields:
   calibration corpus (itd-81). `0.x` means "shipped and wired, honestly unmeasured";
   `1.0.0` means "measured against a corpus and locked" — and a lock must be earned
   (stamping `1.0.0` on an unmeasured prompt asserts a lock that was never run). The
-  four M6 agents are all `0.1.0`.
+  four M6 agents ship at `0.1.0`, save `lifeboat-reviewer` at `0.1.1` (the
+  rename from `lifeboat-oracle`).
 - **`reads_untrusted_input: true`** — declares the agent reads attacker-influenceable
   input (packed lifeboats, source repos). When `true`, the agent MUST carry at least
   one injection-canary fixture under `<name>/fixtures/`.
