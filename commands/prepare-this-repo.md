@@ -70,8 +70,8 @@ build the gap report on its result, rather than hand-producing the whole thing.
 "${CLAUDE_PLUGIN_ROOT}/abcd" lint --json
 ```
 
-Its `findings` (each with a stable `ruleId`, `severity`, `file`, `line`,
-`message`, `fix`) cover the conventions the binary checks — the three-tier
+Its `findings` (each with a stable `ruleId`, `severity`, `file`, a `line` where
+applicable, `message`, `fix`) cover the conventions the binary checks — the three-tier
 `.abcd/` layout, an `AGENTS.md` router, durable decisions, docs currency,
 privacy hygiene (absolute local paths in committed files), and identity
 positioning (rendered surfaces match the canonical identity block). Its

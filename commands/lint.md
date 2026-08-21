@@ -20,10 +20,12 @@ Then summarise the JSON for the user. Its shape is `{ "findings": [ … ],
 "skipped": [ … ] }`:
 
 - `findings` — each has a stable `ruleId`, a `severity` (`error` or `warn`), a
-  `file` and `line` (line `0` means the finding is not tied to one line), a
-  `message`, and a `fix`. Group them by severity: report `error` findings first
-  (these fail conformance), then `warn` findings (advisory). For each, give the
-  `file:line`, the `message`, and the `fix`.
+  `file`, a `line` on content-scanning findings only (`docs-currency`,
+  `privacy-hygiene`, `identity-positioning` — path-presence findings omit the
+  key entirely), a `message`, and a `fix`. Group them by severity: report
+  `error` findings first (these fail conformance), then `warn` findings
+  (advisory). For each, give the `file` (with `:line` when present), the
+  `message`, and the `fix`.
 - `skipped` — rule ids that did not apply to this repo (e.g. `docs-currency`
   when there is no `docs/`). Mention them as "not applicable", not as failures.
 

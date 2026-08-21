@@ -30,8 +30,8 @@ abcd lint --json
 
 emits `{ "findings": [ … ], "skipped": [ … ] }`. Each finding carries a stable
 `ruleId`, a `severity` (`error` or `warn`), a `file`, a `message`, a `fix`, and a
-`policyInfo` rationale; content-scanning rules (`docs-currency`, `privacy-hygiene`)
-additionally carry a `line`, while path-presence findings omit it. `skipped` names
+`policyInfo` rationale; content-scanning rules (`docs-currency`, `privacy-hygiene`,
+`identity-positioning`) additionally carry a `line`, while path-presence findings omit it. `skipped` names
 rules whose enablement condition was not met (e.g. `docs-currency` where there is
 no `docs/`), so a not-applicable rule reads as skipped, not failed. Without
 `--json`, `abcd lint` prints a grouped, doctor-style human report (severity glyph,
