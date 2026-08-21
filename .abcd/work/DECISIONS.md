@@ -1698,7 +1698,10 @@ parallel-agent merge contention bites.
   hunters swept the four dimensions; each candidate was adversarially refuted by an
   independent Opus 5 subagent before capture. Findings: 8 substantive + 2 confirmed
   doc/CLI, 5 refuted, 1 (I2) reverted on implementation. Fixed and resolved this
-  round (each code/script fix with a watched-fail test): iss-2608211849467013 the
+  round (each behaviour-changing code/script fix carries a test watched fail
+  before the change, the lifeboat probe size-TOCTOU excepted — that race is closed
+  by construction and its boundary test guards the cap, not the race):
+  iss-2608211849467013 the
   guard tokenizer did not know shell redirection operators, so a glued redirection
   (git push --force>/dev/null) mutated the flag token and the blocker missed — a
   silent allow — and a leading redirection degraded a Tier-1 block to a warn; the
@@ -1707,7 +1710,11 @@ parallel-agent merge contention bites.
   containment while the sibling citation collector guards the same field, so a
   cloned repo's committed lint config could read/lint/follow a file outside the
   tree (reproduced: escaping root, symlinked leaf, /dev/zero OOM) — routed through
-  containedRepoPath/resolvedInsideRoot/containedRealPath/ReadGuarded.
+  containedRepoPath/resolvedInsideRoot/containedRealPath/ReadGuarded, and the
+  sibling glossary_dir walk in loadForbiddenSynonyms (the same cloned-repo-config
+  read path, caught by both pre-merge reviews) was swept through the same stack;
+  the remaining config-derived record reads in the lint package are tracked as a
+  follow-up (iss-2608211914592726).
   iss-2608211849461061 frontmatter.Fields requires --- on line 0, so a comment-led
   record (13 glossary term files) slipped the no_git_metadata blocker; the
   lint-local frontmatterFields now slices past the comment, preserving absolute

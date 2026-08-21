@@ -180,13 +180,15 @@ called out in a **Breaking** section.
   redirection displaced the command and degraded a Tier-1 block to a warn. A
   redirection now terminates the word and its target is dropped, so every glued
   and leading form blocks again. (iss-2608211849467013)
-- **The record/docs lint stays inside the repository.** The reporting walk read
-  its `roots` with an unguarded `os.ReadFile` while the citation collector
-  guards the same field, so a cloned repo's committed lint config could point a
-  root outside the tree — or a committed symlink leaf resolve outside it — and
-  the lint read, followed, and reported a file the repository does not own. The
-  walk now runs through the same containment and guarded-read stack.
-  (iss-2608211849463840)
+- **The record/docs lint reporting and glossary walks stay inside the
+  repository.** Both read a cloned-repo-controlled config path (the `roots` and
+  `glossary_dir` fields) with an unguarded `os.ReadFile` while the citation
+  collector guards the same class, so a committed lint config could point either
+  outside the tree — or a committed symlink leaf resolve outside it — and the
+  lint read, followed, and reported a file the repository does not own. Both now
+  run through the same containment and guarded-read stack; the remaining
+  config-derived record reads in the package are tracked for a follow-up sweep.
+  (iss-2608211849463840, iss-2608211914592726)
 - **`no_git_metadata` sees comment-led records.** A record whose frontmatter is
   preceded by a leading attribution comment yielded no fields to the shared
   scanner, so a git-inferable metadata key there slipped the blocker entirely.
