@@ -7,6 +7,8 @@ suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: minor
+impact: additive
+related_adrs: [adr-45]
 ---
 
 # Two Agents Can Mint At The Same Instant And Never Collide
@@ -210,6 +212,75 @@ mechanics, not policy.
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
+
 
 [iss-80]: ../../../work/issues/resolved/iss-80-record-id-allocators-itd-n-spc-n-iss-n-are-branch-local-para.md
+
+<!-- abcd-review: INGESTED receipt=rcp-b0efd378c917 -->
+Fidelity review — receipt rcp-b0efd378c917 (verifier intent-fidelity-reviewer claude-fable-5).
+
+Provenance: intent-fidelity-reviewer@claude-fable-5 · rubric_hash sha256:335141cece2a50bace98c25567572b17690278eead062316b70502f2cba48d7f · prompt_hash sha256:c4a1de6076c1a45725b6a0d70466cf65a7772a1f45b1917f78543c3c99f04a10
+Input attestations: diff:9c1364c..4d58f05@sha256:082dda4963241179f4d34f73dc368158796d81db43e7c72ac3e774688114f8b6;
+
+Acceptance rollup: MET 4 · MET_WITH_CONCERNS 1 · NOT_MET 1 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: TestMintSameInstantDiffers pins two same-instant injected-clock minters producing distinct ids at the seam; TestCaptureBranchesSameInstantNeverCollide reproduces it across two real git branches minting before either pushes; and TestCaptureBranchesMergeUnionPassesGates closes the merge clause literally — it performs the git merge of the two minting branches, asserts both ids survive unrenumbered in open/, runs the armed issue_id_unique gate clean over the union, and proves the gate is not vacuous with a planted same-id duplicate that fires it. Both packages pass (go test ./internal/core/capture/ ./internal/core/recordid/).
+  evidence: internal/core/recordid/mint_test.go:60 — "func TestMintSameInstantDiffers(t *testing.T) {"
+  evidence: internal/core/capture/refunion_test.go:63 — "if resA.ID == resB.ID {"
+  evidence: internal/core/capture/refunion_test.go:113 — "r.Git(\"merge\", \"--no-edit\", trunk)"
+  evidence: internal/core/capture/refunion_test.go:127 — "if len(findings) != 0 {"
+  evidence: internal/core/capture/refunion_test.go:141 — "if len(findings) < 2 {"
+- ac-2 — MET: The native mint is offline by construction: mint.go's entire import set is crypto/rand, encoding/binary, fmt, io, regexp, time — no network-capable package exists in the path — and Mint's only inputs are the injected clock and entropy ("It reads nothing — no ledger, no refs, no maximum"); collision-proofness by the native scheme alone is the time-stamp-plus-uniform-suffix design exercised by the same-instant and ignores-ledger-maximum tests, all running hermetically with no network.
+  evidence: internal/core/recordid/mint.go:16 — "\"crypto/rand\""
+  evidence: internal/core/recordid/mint.go:55 — "It reads nothing — no ledger,"
+  evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:138 — "(the native path has no network use by construction — the mint's only"
+  evidence: internal/core/capture/mint_test.go:149 — "func TestCaptureMintIgnoresLedgerMaximum(t *testing.T) {"
+- ac-3 — MET: TestRippleGateConsumersHoldOnMintedIDs executes the criterion rather than asserting it: a mixed legacy+native ledger built partly by the real production mint is run through capture-list ordering (mixed ledger asserted in correct time order, legacy era first), the status board, the canonical resolver, the abcd <id> dispatch (record.Describe), the record-lint uniqueness/impact/schema rules gating clean, and the release-cut derivation and bijection (exactly the native resolved record cut, patch bump derived) — and the delivered diff modifies none of those consumer packages (changelog, record, lint untouched), matching adr-45 ruling 1's format-preserving claim.
+  evidence: internal/core/capture/ripplegate_test.go:45 — "func TestRippleGateConsumersHoldOnMintedIDs(t *testing.T) {"
+  evidence: internal/core/capture/ripplegate_test.go:98 — "if !(pos[legacyOpen.ID] < pos[legacyFixed.ID] && pos[legacyFixed.ID] < pos[nativeOpen.ID]"
+  evidence: internal/core/capture/ripplegate_test.go:144 — "if len(findings) != 0 {"
+  evidence: internal/core/capture/ripplegate_test.go:155 — "if len(shipped.Added) != 1 || shipped.Added[0].ID != nativeFixed.ID {"
+- ac-4 — MET: The ripple gate plants legacy sequential ids (iss-3, iss-374) beneath the native era and asserts they remain present, resolvable, and listed under their original ids beside timestamp mints — never renumbered; capture-stability is seated as adr-45 ruling 2 and brief invariant 11, and reservePath still refuses any id already present in the ledger rather than reusing or remapping it.
+  evidence: internal/core/capture/ripplegate_test.go:51 — "legacyOpen := mustCapture(t, root, ledger, \"legacy-open\", \"iss-3\")"
+  evidence: internal/core/capture/ripplegate_test.go:98 — "if !(pos[legacyOpen.ID] < pos[legacyFixed.ID]"
+  evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:36 — "2. **Ids are capture-stable**: once minted, an id is never renumbered by any"
+  evidence: .abcd/development/brief/02-constraints/03-invariants.md:35 — "Record ids are collision-proof by construction and capture-stable"
+- ac-5 — NOT_MET: The forge-backed allocator is not delivered: no forge allocation, server-side numbering, or offline-refusal/fallback code exists anywhere in the diff. This is a recorded, signed-off deferral, not an omission discovered here — spc-33 rules the forge allocator "out of this spec's delivery" as a later adapter behind the same seam, and adr-45 ruling 4 records the loud-native-fallback posture it must honour when it lands — but the criterion's observable outcome (server-side allocation under forge configuration) is absent from the delivered reality.
+  evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:18 — "adapter behind the same seam and is **out of this spec's delivery**"
+  evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:143 — "later adapter, not this delivery."
+  evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:43 — "4. **The optional forge allocator allocates and never stores**"
+- ac-6 — MET_WITH_CONCERNS: The ruled deliverable at this stage — the family-generic seam — is delivered and tested: Mint(family) costs itd and spc the identical call (TestMintFamilyGeneric), so adoption is a configuration swap, not a second implementation. Concern, per adr-45 ruling 3: the criterion's full scenario (a second family actually adopting after captures run a release cycle) is future-by-design — the itd/spc allocators deliberately keep their legacy max+1-with-refs-union minting until each family's adoption change swaps the allocation call, so the adoption itself remains owed.
+  evidence: internal/core/recordid/mint_test.go:82 — "func TestMintFamilyGeneric(t *testing.T) {"
+  evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:40 — "3. **Rollout is captures-first, then every family through the same seam**:"
+  evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:104 — "(`spc`) allocators keep their legacy max+1-with-refs-union minting and their"
+
+Gap audit:
+- honoured:
+  - In-Scope: one collision-proof mint behind the shared id-minting seam, wired into capture — the mint consults no maximum and capture's reservation redraws on clash
+    evidence: internal/core/recordid/mint.go:58 — "func (m Minter) Mint(family string) (string, error) {"
+    evidence: internal/core/capture/alloc.go:143 — "issID, mErr := minter.Mint(\"iss\")"
+  - Decomposition trust rule: the id format and capture-stability landed as an ADR at planning with a brief-invariant seat (adr-45 + invariant 11), per the adr-44 precedent
+    evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:13 — "# ADR-45: Record ids are timestamp-numeric, capture-stable, and never allocated by looking at the maximum"
+    evidence: .abcd/development/brief/02-constraints/03-invariants.md:35 — "Record ids are collision-proof by construction and capture-stable"
+  - Out-of-Scope: no remap of legacy ids — legacy sequential ids stay exactly as minted beside the native era
+    evidence: internal/core/capture/ripplegate_test.go:51 — "legacyOpen := mustCapture(t, root, ledger, \"legacy-open\", \"iss-3\")"
+    evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:36 — "2. **Ids are capture-stable**: once minted, an id is never renumbered by any"
+  - Open Questions: the one question left genuinely open (random-digit width and same-instant tiebreak) is settled by spc-33 rulings 1-2 and pinned by deterministic tests — 4-digit rejection-sampled suffix, redraw-on-clash
+    evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:27 — "followed by a 4-digit uniform random suffix, zero-padded to fixed width"
+    evidence: internal/core/recordid/mint_test.go:110 — "func TestMintSuffixRejectionSampling(t *testing.T) {"
+    evidence: internal/core/capture/mint_test.go:70 — "func TestCaptureSameInstantSameLedgerRedraws(t *testing.T) {"
+  - Open Questions ruling: the uniqueness detectors stay armed as the scheme's fail-safe — kept, reinterpreted as scheme assertions, and exercised non-vacuously by the merge-union test's planted-duplicate negative control
+    evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:48 — "5. **The uniqueness detectors stay** as the cheap assertion that the scheme"
+    evidence: internal/core/capture/refunion_test.go:141 — "if len(findings) < 2 {"
+- diverged:
+  - In-Scope: "every family the chosen scheme reaches for free" is delivered as seam generality only — itd/spc mint through the identical call in tests, but their production allocators deliberately keep legacy max+1-with-refs-union minting until each family's adoption turn (adr-45 ruling 3, captures-first)
+    evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:104 — "(`spc`) allocators keep their legacy max+1-with-refs-union minting and their"
+    evidence: internal/core/recordid/mint_test.go:82 — "func TestMintFamilyGeneric(t *testing.T) {"
+  - The intent's SOTA section sketched the existing O_EXCL bump-retry as the same-second tiebreak; spc-33 ruling 2 replaced the bump with a redraw (a bump is a miniature max+1) — a recorded, reasoned divergence, and the redraw is what shipped
+    evidence: .abcd/development/intents/shipped/itd-114-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:115 — "unchanged (the existing O_EXCL bump-retry absorbs same-second residue)."
+    evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:61 — "step: on `EEXIST` the mint **redraws a fresh id** (same clock read policy, new"
+- missing:
+  - In-Scope bullet 3: the optional forge-backed allocator — and with it the offline-under-forge loud-fallback behaviour ruled at the interview — is not in the delivery; spc-33 defers it by ruling to a later adapter behind the same seam, so the press release's forge-registry promise remains owed
+    evidence: .abcd/development/specs/closed/spc-33-abcd-mints-collision-proof-record-ids-across-parallel-agents.md:18 — "adapter behind the same seam and is **out of this spec's delivery**"
+    evidence: .abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md:43 — "4. **The optional forge allocator allocates and never stores**"
