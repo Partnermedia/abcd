@@ -420,6 +420,51 @@ func TestBootstrapMigrationIgnoresMismatchedRootBinary(t *testing.T) {
 	}
 }
 
+// TestBootstrapMigrationRefusesDirectoryAtCacheBinary is iss-2608210934566229:
+// the migration seed fast-path test `[ ! -f "$cache_binary" ]` is TRUE for a
+// DIRECTORY, so a directory planted at the cache artefact path passed it, the
+// seed `mv -f` moved the verified binary INTO the directory, and a lying
+// binary-meta then vouched for it — every fresh plugin root downloaded ~11 MB
+// and hit refuse, running the shell guard UNGUARDED every session until a human
+// removed the directory by hand, and this survived every plugin update. The
+// migration seed must refuse the non-regular-file shape exactly as the main
+// install site does.
+func TestBootstrapMigrationRefusesDirectoryAtCacheBinary(t *testing.T) {
+	root := bootstrapRoot(t)
+	data := t.TempDir()
+	body := []byte("#!/bin/sh\n# pre-cache install\nexit 0\n")
+	if err := os.WriteFile(filepath.Join(root, "abcd"), body, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	migrationRootMeta(t, root, body, "")
+	cacheBinDir := filepath.Join(data, "cache", bootstrapAsset())
+	if err := os.MkdirAll(cacheBinDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fx := bootstrapServer(t, []byte("never served"), bootstrapManifest([]byte("never served")))
+
+	out, code := runBootstrapWithData(t, root, data, fx, "")
+	if code == 0 {
+		t.Fatalf("a directory at the cache artefact path must be refused, not seeded into; got exit 0 (output %q)", out)
+	}
+	if !strings.Contains(out, "not a regular file") {
+		t.Errorf("the refusal must name the obstruction; output %q", out)
+	}
+	entries, err := os.ReadDir(cacheBinDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("the seed must never be moved INTO the obstructing directory: %v", entries)
+	}
+	if _, err := os.Stat(filepath.Join(data, "cache", "binary-meta")); !os.IsNotExist(err) {
+		t.Error("a lying binary-meta must not be written for a directory-shaped cache artefact")
+	}
+	if n := atomic.LoadInt32(fx.hits); n != 0 {
+		t.Errorf("the obstruction must be caught with no network, got %d request(s)", n)
+	}
+}
+
 // TestBootstrapCacheModeSkipsPathRefreshOnCacheHit documents the refresh
 // boundary: the PATH copy is refreshed when a NEW artefact lands in the cache,
 // not on every cache-hit provisioning — a hit means nothing changed, so there

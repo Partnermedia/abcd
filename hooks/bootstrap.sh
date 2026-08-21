@@ -160,6 +160,16 @@ if [ -f "$binary" ] && [ -x "$binary" ]; then
 	esac
 	cache_dir="$data_dir/cache"
 	cache_binary="$cache_dir/abcd-$mig_os-$mig_arch"
+	# `mv -f` onto a DIRECTORY moves the seed INTO it rather than replacing it,
+	# and a lying binary-meta then vouches for a directory — every later root
+	# then downloads and refuses, running the shell guard UNGUARDED every
+	# session until a human removes the directory by hand, and it survives every
+	# plugin update (iss-2608210934566229). The main install site refuses this
+	# non-regular-file shape (below); the migration seed must too. The fast-path
+	# `[ ! -f ]` test alone is TRUE for a directory, so it cannot stand in for it.
+	if [ -e "$cache_binary" ] && [ ! -f "$cache_binary" ]; then
+		refuse "$cache_binary exists and is not a regular file, so the plugin cache cannot be seeded from this plugin root"
+	fi
 	[ ! -f "$cache_binary" ] || exit 0
 	want=$(meta_field "$root_meta" binary_sha256)
 	case "$want" in *[!0-9a-f]*) exit 0 ;; esac
@@ -197,6 +207,11 @@ if [ -f "$binary" ] && [ -x "$binary" ]; then
 		printf 'fetched_at=%s\n' "$mig_at"
 	} > "$tmp/binary-meta" 2>/dev/null || exit 0
 	chmod 0755 "$tmp/artefact" 2>/dev/null || exit 0
+	# Re-check the obstruction under the lock: a directory that appeared in the
+	# window since the pre-lock guard must not swallow the seed either.
+	if [ -e "$cache_binary" ] && [ ! -f "$cache_binary" ]; then
+		refuse "$cache_binary exists and is not a regular file, so the plugin cache cannot be seeded from this plugin root"
+	fi
 	mv -f "$tmp/artefact" "$cache_binary" 2>/dev/null || exit 0
 	mv -f "$tmp/binary-meta" "$cache_dir/binary-meta" 2>/dev/null
 	exit 0
