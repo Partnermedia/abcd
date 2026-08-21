@@ -229,7 +229,7 @@ func Read(rootSHA, sessionOrFile string) (Record, []byte, error) {
 	if match == nil {
 		return Record{}, nil, fmt.Errorf("history: no record for %q under %s", sessionOrFile, rootSHA)
 	}
-	data, err := os.ReadFile(match.Path)
+	data, err := fsutil.ReadGuarded(match.Path, maxTranscriptBytes)
 	if err != nil {
 		return Record{}, nil, err
 	}

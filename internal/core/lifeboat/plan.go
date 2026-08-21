@@ -360,7 +360,7 @@ func (lb Lifeboat) RenderManifest() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "lifeboat plan for %s (dry run — nothing written)\n\n", sanitize(m.SourceName))
 	for _, f := range m.Files {
-		fmt.Fprintf(&b, "  %8d  %s\n", f.Bytes, f.Path)
+		fmt.Fprintf(&b, "  %8d  %s\n", f.Bytes, sanitize(f.Path))
 	}
 	fmt.Fprintf(&b, "\n%d files · %d bytes\n", m.FileCount, m.TotalBytes)
 	if len(m.Omissions) > 0 {

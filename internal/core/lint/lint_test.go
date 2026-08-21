@@ -423,6 +423,33 @@ func TestIssueIDUniqueDuplicate(t *testing.T) {
 	}
 }
 
+// TestIssueIDUniqueZeroPadded is iss-392: a zero-padded filename spells the same
+// canonical id as its un-padded twin (iss-0100 == iss-100), so the uniqueness
+// backstop must key on the canonical id and catch the collision rather than
+// treating the two spellings as distinct ids.
+func TestIssueIDUniqueZeroPadded(t *testing.T) {
+	root := t.TempDir()
+	base := ".abcd/work/issues"
+	writeFile(t, root, base+"/open/iss-100-canonical.md", "---\nid: \"iss-100\"\n---\n# one\n")
+	writeFile(t, root, base+"/resolved/iss-0100-padded.md", "---\nid: \"iss-100\"\n---\n# two\n")
+
+	cfg := Config{Rules: map[string]RuleConfig{
+		"issue_id_unique": {Enabled: true, Severity: "blocker", IssuesDir: ".abcd/work/issues"},
+	}}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{
+		filepath.Join(base, "open", "iss-100-canonical.md"),
+		filepath.Join(base, "resolved", "iss-0100-padded.md"),
+	} {
+		if !hasFinding(fs, f, "issue_id_unique", 2) {
+			t.Errorf("zero-padded collision not caught on %s; got %+v", f, fs)
+		}
+	}
+}
+
 func TestSpecIDUniqueDuplicate(t *testing.T) {
 	root := t.TempDir()
 	base := "rec/specs"
