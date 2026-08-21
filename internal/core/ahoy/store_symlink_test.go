@@ -1,6 +1,8 @@
 package ahoy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,5 +44,61 @@ func TestResolvePluginRootThroughPathSymlink(t *testing.T) {
 	}
 	if want := resolvePath(pluginRoot); got != want {
 		t.Errorf("resolvePluginRoot() = %q, want %q", got, want)
+	}
+}
+
+// TestResolvePluginRootThroughOwnedCopyRecord pins the SAME iss-170 contract by
+// BEHAVIOUR rather than by the symlink mechanism: spc-35 replaced the pinned
+// PATH symlink with an abcd-owned REGULAR-FILE copy, which has no link back into
+// the plugin root for the executable-ancestor walk to follow home. The
+// home-scoped provenance record carries the plugin root the copy was
+// provisioned from, and resolvePluginRoot reads it as a candidate — otherwise
+// every plugin-root verb no-ops from a terminal, where neither env candidate is
+// set (iss-2608210934566230).
+func TestResolvePluginRootThroughOwnedCopyRecord(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	pluginRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(pluginRoot, "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The owned copy sits in a directory with no plugin layout anywhere above it.
+	binDir := t.TempDir()
+	copyBin := filepath.Join(binDir, "abcd")
+	body := []byte("#!/bin/sh\nexit 0\n")
+	if err := os.WriteFile(copyBin, body, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(body)
+	if err := writePathEntry(copyBin, hex.EncodeToString(sum[:]), pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+
+	// Blank every env candidate so ONLY the record route can resolve the root.
+	t.Setenv("ABCD_PLUGIN_ROOT", "")
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	t.Setenv("CLAUDE_PLUGIN_DATA", "")
+
+	saved := osExecutable
+	t.Cleanup(func() { osExecutable = saved })
+	osExecutable = func() (string, error) { return copyBin, nil }
+
+	got, ok := resolvePluginRoot()
+	if !ok {
+		t.Fatalf("resolvePluginRoot() reported no plugin root; want %q via the owned-copy record", pluginRoot)
+	}
+	// The record stores the root verbatim (as the env candidates are returned
+	// verbatim), so compare canonically rather than assuming a resolved form.
+	if resolvePath(got) != resolvePath(pluginRoot) {
+		t.Errorf("resolvePluginRoot() = %q, want %q", got, pluginRoot)
+	}
+
+	// A recorded root the harness has since garbage-collected is skipped, not
+	// trusted: pluginRootValid still gates the candidate.
+	if err := os.RemoveAll(pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resolvePluginRoot(); ok {
+		t.Error("a garbage-collected recorded plugin root must not resolve")
 	}
 }

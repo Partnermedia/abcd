@@ -1,6 +1,8 @@
 package ahoy
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -120,5 +122,43 @@ func TestVintageDisplayAndStaleness(t *testing.T) {
 				t.Fatalf("Staleness = %q, want to contain %q", got, c.wantStale)
 			}
 		})
+	}
+}
+
+// TestReadPinnedTagPrefersRootThenCache pins the spc-35 record layout for the
+// vintage comparison: a root-local .binary-meta (written only by the degraded
+// per-root fetch, so it describes exactly this root's binary) wins when
+// present; a cache-provisioned root carries none, and for it the tag comes
+// from the shared cache meta in the persistent data dir.
+func TestReadPinnedTagPrefersRootThenCache(t *testing.T) {
+	root := t.TempDir()
+	data := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(data, "cache"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "cache", "binary-meta"),
+		[]byte("release_tag=v9.9.9\nrelease_sha=unknown\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_PLUGIN_DATA", data)
+
+	if got := readPinnedTag(root); got != "v9.9.9" {
+		t.Errorf("a cache-provisioned root must read the pin from the cache meta; got %q, want v9.9.9", got)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, ".binary-meta"),
+		[]byte("release_tag=v9.9.8\nrelease_sha=unknown\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := readPinnedTag(root); got != "v9.9.8" {
+		t.Errorf("a root-local record must win — it describes THIS root's binary; got %q, want v9.9.8", got)
+	}
+
+	t.Setenv("CLAUDE_PLUGIN_DATA", "")
+	if err := os.Remove(filepath.Join(root, ".binary-meta")); err != nil {
+		t.Fatal(err)
+	}
+	if got := readPinnedTag(root); got != "" {
+		t.Errorf("no record anywhere must read as no pin; got %q", got)
 	}
 }

@@ -69,6 +69,14 @@ func newUpdateCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The swap changed the bytes an owned-copy PATH entry hashes to, so
+			// the provenance record (spc-35) is re-stamped with the digest the
+			// release checksums just proved — otherwise the entry this verb
+			// refreshed would classify foreign forever after. A no-op when no
+			// record names this path (legacy installs, plugin-root refusals).
+			if rep.Action == update.ActionSwapped || rep.Action == update.ActionCurrent {
+				ahoy.RefreshPathEntryDigest(tgt.Path, rep.Digest)
+			}
 			renderUpdateReport(cmd.OutOrStdout(), *asJSON, rep)
 			if rep.Refusal != nil {
 				return fmt.Errorf("update refused (%s)", rep.Refusal.Shape)

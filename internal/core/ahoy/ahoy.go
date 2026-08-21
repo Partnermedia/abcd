@@ -6,7 +6,7 @@
 // on-disk/registry state.
 //
 // The package performs I/O only under a caller-supplied cwd and the user-scope
-// ~/.abcd/ store (and, on install, an owned PATH symlink). It never writes to
+// ~/.abcd/ store (and, on install, an owned PATH copy). It never writes to
 // stdout, never calls os.Exit, and never imports a transport (cobra/MCP), so it
 // is fully testable and reusable across surfaces. Interactive decisions are
 // routed through the injected Prompter seam.
