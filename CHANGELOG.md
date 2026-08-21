@@ -34,6 +34,13 @@ called out in a **Breaking** section.
   `mint_warning` degrade note, since the mint consults no refs. (itd-114,
   spc-33, adr-45; resolves iss-330)
 
+### Changed
+
+- **Released binaries build on Go 1.26.** Go 1.25 has left the support window,
+  so the toolchain moves to the current 1.26 line (1.26.7) in lockstep across
+  the `go.mod` directive, the CI pins, and the release workflow's pin via the
+  scaffold substitutions — `govulncheck` scans clean on the new line. (iss-329)
+
 ### Fixed
 
 - **`ahoy install` heals the PATH entry a plugin update strands.** The entry

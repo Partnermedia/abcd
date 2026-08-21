@@ -1535,3 +1535,4 @@ parallel-agent merge contention bites.
   detectors stay armed as the scheme's fail-safe. Once this lands on main,
   the per-task defensive minting protocols (fetch-and-verify twice, scanning
   unmerged hunt ledgers) retire for captures, per adr-45.
+- 2026-08-20 — ideate: deterministic-delivery-pipeline — verdict reframed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-20-ideate-deterministic-delivery-pipeline.md

@@ -1,6 +1,6 @@
 module github.com/Partnermedia/abcd
 
-go 1.25.6
+go 1.26.7
 
 require (
 	github.com/minio/selfupdate v0.6.0
