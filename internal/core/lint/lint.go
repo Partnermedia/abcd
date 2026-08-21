@@ -2228,13 +2228,30 @@ func (e *configError) Error() string { return e.msg }
 func loadForbiddenSynonyms(repoRoot, glossaryDir string) (map[string]bool, map[string]string, error) {
 	forbidden := map[string]bool{}
 	canonical := map[string]string{}
+	// glossary_dir is a cloned-repo-controlled config field, so this walk is
+	// contained and guarded exactly like the main lint walk and CollectCitedURLs:
+	// otherwise a "../secret" glossary_dir, or a committed symlink leaf inside it,
+	// reads a file the repository does not own (or a "-> /dev/zero" link unbounded).
+	if err := containedRepoPath(glossaryDir); err != nil {
+		return nil, nil, &configError{"glossary_dir " + quote(glossaryDir) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
 	dirAbs := filepath.Join(repoRoot, glossaryDir)
+	if err := resolvedInsideRoot(repoRoot, dirAbs); err != nil {
+		return nil, nil, &configError{"glossary_dir " + quote(glossaryDir) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
 	files, err := markdownFiles(dirAbs)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, fileAbs := range files {
-		content, err := os.ReadFile(fileAbs)
+		realPath, err := containedRealPath(repoRoot, fileAbs)
+		if err != nil {
+			return nil, nil, &configError{"file " + quote(repoRel(repoRoot, fileAbs)) + " " + err.Error() +
+				"; the lint reads only inside the repository"}
+		}
+		content, err := fsutil.ReadGuarded(realPath, citationPageSizeLimit)
 		if err != nil {
 			return nil, nil, err
 		}

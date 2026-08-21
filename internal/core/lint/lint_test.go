@@ -82,6 +82,36 @@ func TestLintWalkContainsRootsAndLeaves(t *testing.T) {
 	})
 }
 
+// TestForbiddenSynonymsGlossaryDirIsContained pins that the GL002 glossary walk —
+// over the cloned-repo-controlled glossary_dir config field — is contained like
+// the main walk, so a "../secret" glossary_dir cannot read a file outside the
+// repository. This is the sibling read path the main-walk containment shares.
+func TestForbiddenSynonymsGlossaryDirIsContained(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "docs/ok.md", "# ok\n")
+	writeFile(t, root, "glossary/term.md", "---\nterm: widget\nforbidden_synonyms: [gadget]\n---\n")
+
+	contained := Config{
+		Roots: []string{"docs"},
+		Rules: map[string]RuleConfig{
+			"forbidden_synonyms": {Enabled: true, Severity: "blocker", GlossaryDir: "glossary"},
+		},
+	}
+	if _, err := Lint(contained, root); err != nil {
+		t.Fatalf("Lint refused a contained glossary_dir: %v", err)
+	}
+
+	escaping := Config{
+		Roots: []string{"docs"},
+		Rules: map[string]RuleConfig{
+			"forbidden_synonyms": {Enabled: true, Severity: "blocker", GlossaryDir: "../secret"},
+		},
+	}
+	if _, err := Lint(escaping, root); err == nil {
+		t.Fatal("Lint accepted a glossary_dir outside the repository")
+	}
+}
+
 // TestGitMetadataSeesCommentLedFrontmatter pins that the no_git_metadata blocker
 // reaches a record whose `---` block is preceded by a leading attribution comment
 // (the mattpocock glossary template). frontmatter.Fields requires `---` on line 0,
