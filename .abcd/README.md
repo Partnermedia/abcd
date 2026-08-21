@@ -10,7 +10,9 @@ Three tiers, on two axes (durability × sharing):
 
 - **`development/`** — durable record (committed): brief, roadmap, intents,
   decisions/adrs, research. The specification for the build.
-- **`work/`** — shared working (committed): `CONTEXT.md`, `DECISIONS.md`.
+- **`work/`** — shared working (committed): `CONTEXT.md`, `DECISIONS.md`, the
+  issue ledger `issues/` (adr-32), the reviews charter `reviews/`, and the
+  branch-ruleset mirror `rulesets/`.
 - **`.work.local/`** — local ephemeral (gitignored): `NEXT.md`, `scratch/`,
   `logs/`.
 

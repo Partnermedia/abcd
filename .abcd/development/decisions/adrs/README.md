@@ -18,7 +18,7 @@ If any of the three is missing, skip the ADR. File-scoped rationale (why this se
 
 ADRs are *not* used for:
 
-- Forward-looking discussion — those are RFCs (`../roadmap/rfcs/`).
+- Forward-looking discussion — those are RFCs (`../../roadmap/rfcs/`).
 - User-facing capability — those are intents (`../../intents/`).
 - Bug fixes, refactors, content edits — git log + commit messages cover deltas.
 

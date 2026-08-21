@@ -166,7 +166,7 @@ Identity and lineage for one repo. Beyond the obvious identity fields:
 - **`note`** — free-text provenance: why the repo was re-founded, where a backup of the full pre-refounding tree lives, what the old git history carries.
 - **`corpus`** — paths (relative to the `<root-sha>/` dir) of the captured evidence: `{"transcripts": "transcripts/", "prompt_exports": "prompt-exports/"}`.
 
-Re-founding (clean-history rebuild — the case in [`../research/notes/ahoy-history-store-manual-scaffolding.md`](../../research/notes/ahoy-history-store-manual-scaffolding.md)) produces a *new* root SHA. ahoy registers the new entry with `supersedes` → old SHA, marks the old entry `superseded_by` → new SHA, and leaves the old corpus in place under its own `<root-sha>/` dir for lifeboat review.
+Re-founding (clean-history rebuild — the case in [`../../research/notes/ahoy-history-store-manual-scaffolding.md`](../../research/notes/ahoy-history-store-manual-scaffolding.md)) produces a *new* root SHA. ahoy registers the new entry with `supersedes` → old SHA, marks the old entry `superseded_by` → new SHA, and leaves the old corpus in place under its own `<root-sha>/` dir for lifeboat review.
 
 > **Legacy:** `~/ABCDevelopment/.abcd/changelog.md` is a hand-maintained toolchain changelog that predates abcd's `.abcd/` namespace. It is **not** an ahoy-managed artefact and is not part of the `.abcd/` namespace defined below.
 

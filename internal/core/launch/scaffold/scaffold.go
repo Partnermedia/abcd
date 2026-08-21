@@ -257,21 +257,66 @@ func deriveGoVersion(repoRoot string) string {
 // injection-safe allowlist. It reads git's plaintext refs directly rather than
 // shelling out, so it stays dependency-free and works on a bare checkout.
 func deriveBranch(repoRoot string) string {
-	gitDir := filepath.Join(repoRoot, ".git")
+	gitDir, commonDir := resolveGitDir(repoRoot)
 	// origin/HEAD, when set, names the remote default branch: a line
-	// "ref: refs/remotes/origin/<branch>" in .git/refs/remotes/origin/HEAD.
-	if data, err := os.ReadFile(filepath.Join(gitDir, "refs", "remotes", "origin", "HEAD")); err == nil {
+	// "ref: refs/remotes/origin/<branch>". It lives in the SHARED (common) git
+	// dir, which for a linked worktree is not the worktree's own gitdir.
+	if data, err := os.ReadFile(filepath.Join(commonDir, "refs", "remotes", "origin", "HEAD")); err == nil {
 		if b := branchFromSymref(string(data), "refs/remotes/origin/"); b != "" {
 			return b
 		}
 	}
-	// Fall back to the checked-out branch (.git/HEAD → "ref: refs/heads/<branch>").
+	// Fall back to the checked-out branch (HEAD → "ref: refs/heads/<branch>"). HEAD
+	// is per-worktree, so it is read from the worktree's own gitdir.
 	if data, err := os.ReadFile(filepath.Join(gitDir, "HEAD")); err == nil {
 		if b := branchFromSymref(string(data), "refs/heads/"); b != "" {
 			return b
 		}
 	}
 	return defaultBranch
+}
+
+// resolveGitDir returns the repo's git directory and its shared (common) git
+// directory. In an ordinary checkout ".git" is a directory and the two coincide.
+// In a linked worktree or a submodule ".git" is instead a FILE holding
+// "gitdir: <path>": HEAD lives at that path, while refs/remotes lives in the
+// shared dir named by the worktree's "commondir" file. Treating ".git" as always
+// a directory (the pre-fix behaviour) made both ref reads fail in a worktree, so
+// deriveBranch silently fell back to "main".
+func resolveGitDir(repoRoot string) (gitDir, commonDir string) {
+	dotGit := filepath.Join(repoRoot, ".git")
+	info, err := os.Lstat(dotGit)
+	if err != nil || info.IsDir() {
+		return dotGit, dotGit
+	}
+	data, err := os.ReadFile(dotGit)
+	if err != nil {
+		return dotGit, dotGit
+	}
+	line := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(line, "gitdir:") {
+		return dotGit, dotGit
+	}
+	target := strings.TrimSpace(strings.TrimPrefix(line, "gitdir:"))
+	if target == "" {
+		return dotGit, dotGit
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(repoRoot, target)
+	}
+	gitDir = filepath.Clean(target)
+	commonDir = gitDir
+	// A linked worktree's gitdir carries a "commondir" file pointing at the shared
+	// git dir that holds refs/remotes.
+	if cd, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
+		if c := strings.TrimSpace(string(cd)); c != "" {
+			if !filepath.IsAbs(c) {
+				c = filepath.Join(gitDir, c)
+			}
+			commonDir = filepath.Clean(c)
+		}
+	}
+	return gitDir, commonDir
 }
 
 // branchFromSymref extracts and validates a branch name from a "ref: <prefix><branch>"

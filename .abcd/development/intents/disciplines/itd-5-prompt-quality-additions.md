@@ -142,12 +142,12 @@ _Empty. Populated by intent-fidelity-reviewer's single-document role when this d
 
 ## References
 
-- [`../../../research/prompting/01-general-best-practices.md`](../../research/prompting/01-general-best-practices.md) — § 10 sources this discipline's first three additions.
+- [`../../research/prompting/01-general-best-practices.md`](../../research/prompting/01-general-best-practices.md) — § 10 sources this discipline's first three additions.
 - [`itd-14-prompt-registry-versioning.md`](../drafts/itd-14-prompt-registry-versioning.md) — heavier successor (full registry / diff-on-update).
 - [`itd-15-self-dogfooded-sota-audit.md`](../drafts/itd-15-self-dogfooded-sota-audit.md) — recurring sibling (per-disembark audit).
 - [`itd-1-acceptance-gates.md`](itd-1-acceptance-gates.md) — companion discipline; this discipline's acceptance block conforms to its Given-When-Then shape.
 - [`itd-37-modification-grammar.md`](itd-37-modification-grammar.md) — companion discipline (added 2026-05-08).
-- [`../../../brief/05-internals/05-prompt-quality.md`](../../brief/05-internals/05-prompt-quality.md) — the B+C+D baseline this discipline extends.
+- [`../../brief/05-internals/05-prompt-quality.md`](../../brief/05-internals/05-prompt-quality.md) — the B+C+D baseline this discipline extends.
 - [`../../../brief/05-internals/01-agents.md § Agent prompt frontmatter`](../../brief/05-internals/01-agents.md#agent-prompt-frontmatter) — canonical agent-frontmatter contract; this discipline's `prompt_version` + `capability_scope` requirements register there.
 - [Dell'Acqua et al. 2023][jagged-frontier] — framing source for the `capability_scope` Add 4 (added 2026-05-08 per idea-4 jagged-frontier review). Also at [`../../../research/related-work.md § Dell'Acqua et al. 2023 — Jagged Frontier`](../../research/related-work.md#dellacqua-et-al-2023--jagged-frontier).
 - Full assessment in a local working note (unmigrated), with 2-round review trail (chat `idea-4-jagged-frontier-r-33C475`); split static (itd-5 here) vs dynamic (Frontier Awareness) preserved in chat record.

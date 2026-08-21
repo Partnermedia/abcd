@@ -27,7 +27,7 @@ Three decision-record surfaces, each with a distinct job:
 
 | Class | Direction | Surface | Use when |
 |---|---|---|---|
-| **intent** (`itd-N`) | Forward-looking, user-facing | [`../intents/`](../../intents) | Capturing capability the project will ship. |
+| **intent** (`itd-N`) | Forward-looking, user-facing | [`../../intents/`](../../intents) | Capturing capability the project will ship. |
 | **RFC** (`rfc-N`) | Forward-looking, contested | this directory | A decision is contested; discussion is the deliverable. |
 | **ADR** (`adr-N`) | Retrospective | [`../../decisions/adrs/`](../../decisions/adrs) | A decision is settled; record the *why* + alternatives rejected. |
 

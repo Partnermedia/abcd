@@ -2,6 +2,7 @@ package launch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,13 +93,27 @@ func unreadable(res LockstepResult, detail string) LockstepResult {
 func loadJSON(path string) (any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, pathFreeError(err)
 	}
 	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}
 	return v, nil
+}
+
+// pathFreeError strips the filesystem path from an os.PathError, leaving only the
+// underlying cause. The lockstep detail names the file itself ("version-location.json
+// not readable: ..."), and the dry-run report carrying that detail is a SUCCESS
+// envelope, so it never passes through cli.scrubPaths — an unstripped *os.PathError
+// would leak the cwd/home-rooted absolute path into the report and its --json
+// output, against the no-absolute-paths-in-machine-output norm (iss-76/iss-29).
+func pathFreeError(err error) error {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	return err
 }
 
 // validateVersionLocation checks the consumed shape and returns the primary

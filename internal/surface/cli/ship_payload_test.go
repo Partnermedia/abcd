@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -275,4 +276,42 @@ func readJSON(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse %s: %v", path, err)
 	}
 	return doc
+}
+
+// TestLaunchDryRunSanitisesRefusalReasons is the S2 regression: a bundle reason in
+// the dry-run render embeds a raw repo filename, and a control-char-rejected path
+// carries the offending bytes. The human render must route each reason through the
+// terminal sanitiser (like the citation line), so a committed filename cannot inject
+// raw escapes into the maintainer's release preview or a CI log.
+func TestLaunchDryRunSanitisesRefusalReasons(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".abcd", "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".abcd", "config", "launch-payload.json"),
+		[]byte(`{"includes": ["commands"]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "commands"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A filename carrying a raw ESC (git permits it); the bundle rejects it as
+	// control_char and puts the raw path into WouldRefuseOn.
+	evil := filepath.Join(repo, "commands", "evil\x1b[31mRED.md")
+	if err := os.WriteFile(evil, []byte("# x\n"), 0o644); err != nil {
+		t.Skipf("cannot create control-char filename: %v", err)
+	}
+
+	t.Chdir(repo)
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"launch", "--dry-run"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("dry-run exit = %d, want 0\nstderr:%s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "would refuse on") {
+		t.Fatalf("dry-run did not render a refusal reason:\n%s", out)
+	}
+	if strings.ContainsRune(out, '\x1b') {
+		t.Errorf("dry-run output leaked a raw ESC from a repo filename:\n%q", out)
+	}
 }

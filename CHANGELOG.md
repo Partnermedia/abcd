@@ -125,6 +125,54 @@ called out in a **Breaking** section.
   Go badge advertised 1.25 (the retired version) and `abcd capture` was still
   described as minting "the next free id", the abolished max+1 protocol; both
   corrected. (iss-2608211143184945, iss-2608211143185943)
+- **`abcd launch --dry-run` output cannot be corrupted by a committed filename,
+  and no longer leaks an absolute path.** The refusal-reason lines were printed
+  unsanitised, so a repo filename carrying raw terminal escapes (a
+  control-char-rejected path carries its own bytes) reached the terminal and any
+  CI log; each reason now passes through the terminal sanitiser like the citation
+  line beside it. Separately, when a pinned manifest was unreadable the lockstep
+  detail embedded a raw absolute path — and the dry-run report is a success
+  envelope that never passes the error-surface path scrub — so the
+  developer-identity root leaked into the report and its `--json`; the path is now
+  stripped at the read, leaving the named cause.
+  (iss-2608211432258689, iss-2608211432257954)
+- **`abcd lint` fails closed when a rule cannot run.** A stat that hit a symlink
+  loop, an unreadable tracked file, or a git-index fault returned an engine fault
+  that mapped to exit 1 — the code the documented Conftest tri-state reserves for
+  "warnings only" — so a CI gate keying on exit `>=2` read a lint that never ran
+  as an advisory pass. An engine fault now exits 2 (the tri-state's "any error").
+  (iss-2608211432258975)
+- **`abcd launch scaffold` derives the right default branch from a linked
+  worktree.** `deriveBranch` assumed `.git` was a directory, so in a worktree or
+  submodule (where `.git` is a gitfile) both ref reads failed and the fallback
+  branch `main` was stamped into the generated release workflows — leaving the
+  release gate silently inert on a repo whose default branch is not `main`. It
+  now resolves the gitfile, reading `HEAD` from the worktree gitdir and
+  `origin/HEAD` from the shared `commondir`. (iss-2608211432254405)
+- **The intent verdict operand is read through the guarded primitive.**
+  `intent audit ingest --verdict-json` used an `Lstat`-then-`os.ReadFile` pair
+  whose comment wrongly called the window benign; `os.ReadFile` follows a symlink
+  swapped in after the `Lstat` and ignores the pre-checked size. It now reads
+  through `fsutil.ReadGuarded` (`O_NOFOLLOW` + regular-file + cap in one open),
+  the last CLI operand reader to join the shared primitive.
+  (iss-2608211432389181)
+- **The `history` rootSHA diagnostic names both accepted widths.** A rejected
+  rootSHA was told it must be a 40-char SHA though the validator also accepts a
+  64-char SHA-256 root; the message is now a shared const beside the regex naming
+  both widths. (iss-2608211432384430)
+- **Three user-facing docs corrected.** The README overstated that every
+  non-start hook self-bootstraps, when SessionEnd deliberately never downloads
+  (a fetch there would race shutdown and lose the transcript); `commands/memory.md`
+  named the citation field `source.class` where the JSON key is `source_class`;
+  and `commands/ahoy.md` omitted the ` (shadowed on PATH)` `install_mode` suffix.
+  (iss-2608211432384091, iss-2608211432389477, iss-2608211432389791)
+- **Record cross-references reconciled.** Seven record links carried a display
+  path that did not resolve from the containing file (the href did), two
+  backticked bare paths named directories that do not exist, `itd-26` gained the
+  reciprocal `related_rfcs` for `rfc-1`, and the `.abcd/work` tier roster in
+  `AGENTS.md` and `.abcd/README.md` now names the issue ledger, reviews charter,
+  and ruleset mirror that also live there.
+  (iss-2608211432489481, iss-2608211432489288, iss-2608211432482363, iss-2608211432483805)
 
 ### Changed
 

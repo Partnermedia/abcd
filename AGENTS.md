@@ -87,7 +87,9 @@ Development material lives under `.abcd/`; `docs/` is user-facing only.
   plans, research. In every repository checkout; not in the released binaries.
 - `.abcd/work/` — **shared working** (committed): `CONTEXT.md` (current
   orientation) and `DECISIONS.md` (append-only decision log; architecture-shaping
-  decisions graduate to ADRs under `.abcd/development/decisions/adrs/`).
+  decisions graduate to ADRs under `.abcd/development/decisions/adrs/`), plus the
+  issue ledger `issues/` (working-tier data per adr-32), the reviews charter
+  `reviews/`, and the branch-ruleset mirror `rulesets/`.
 - `.abcd/.work.local/` — **local ephemeral** (gitignored): `NEXT.md` handover,
   `scratch/`, `logs/`. Per-worktree, so it never merge-conflicts.
 
