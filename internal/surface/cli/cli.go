@@ -896,7 +896,7 @@ func newEmbarkCommand(asJSON *bool) *cobra.Command {
 // fd in one call — no lstat→ReadFile swap window.
 func readLessonsPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
-		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxLessonsBytes))
+		return readCappedStdin(cmd, lifeboat.MaxLessonsBytes)
 	}
 	return readGuardedOperand(spec, lifeboat.MaxLessonsBytes)
 }
@@ -912,7 +912,7 @@ func readSynthesisPayload(cmd *cobra.Command, spec string) ([]byte, error) {
 		return nil, nil // flag absent → deterministic mode (nil raw)
 	}
 	if spec == "-" {
-		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), lifeboat.MaxSynthesisBytes))
+		return readCappedStdin(cmd, lifeboat.MaxSynthesisBytes)
 	}
 	return readGuardedOperand(spec, lifeboat.MaxSynthesisBytes)
 }
@@ -950,6 +950,24 @@ type hookInput struct {
 	// TranscriptPath is supplied by the Stop hook; it names the session
 	// transcript on disk. Read by `hook session-end` only.
 	TranscriptPath string `json:"transcript_path"`
+}
+
+// readCappedStdin reads a "-" operand one byte past the cap so an over-cap
+// payload is refused whole rather than truncated into a severed prefix — the
+// same refuse-whole guarantee readGuardedOperand gives the file transport
+// (iss-201's class; spc-4's refuse-whole invariant on the transcript path). A
+// bare LimitReader(cap) reads exactly cap bytes, so an over-cap payload is
+// silently cut and its length-cap refusal never fires; the cap+1 probe closes
+// that.
+func readCappedStdin(cmd *cobra.Command, cap int64) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), cap+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > cap {
+		return nil, fmt.Errorf("stdin payload exceeds the %d-byte cap", cap)
+	}
+	return raw, nil
 }
 
 // readHookInput reads and size-caps the hook stdin payload. It reads one byte
@@ -2634,13 +2652,16 @@ const maxOperandJSONBytes = 8 << 20
 // readSource reads a JSON payload from a file path, or from stdin when spec is
 // "-" (the streaming transport the .5 skill uses). The operand is untrusted
 // content (host-produced pages, cross-machine artifacts), so both transports are
-// bounded and the file path is read behind the trust guards: stdin is capped by
-// a LimitReader, and a file is read with fsutil.ReadGuarded (O_NOFOLLOW so a
-// symlink operand is never followed, regular-file on the open fd, and the size
-// cap — all in one call, no lstat→read TOCTOU).
+// bounded and the file path is read behind the trust guards: stdin is refused
+// whole when over-cap (a cap+1 probe, never a severed prefix), and a file is
+// read with fsutil.ReadGuarded (O_NOFOLLOW so a symlink operand is never
+// followed, regular-file on the open fd, and the size cap — all in one call, no
+// lstat→read TOCTOU). Refusing the over-cap prefix matters most on the history
+// capture path, where a truncated transcript would be stored under a sha256
+// idempotency key computed over the prefix (spc-4's refuse-whole invariant).
 func readSource(cmd *cobra.Command, spec string) ([]byte, error) {
 	if spec == "-" {
-		return io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxOperandJSONBytes))
+		return readCappedStdin(cmd, maxOperandJSONBytes)
 	}
 	return readGuardedOperand(spec, maxOperandJSONBytes)
 }
