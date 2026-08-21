@@ -4,11 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/Partnermedia/abcd/internal/fsutil"
 )
@@ -361,28 +362,23 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 	}, nil
 }
 
-// readVerdictFile reads the payload behind the trust guards (regular file, no
-// symlink, size cap).
+// readVerdictFile reads the untrusted verdict payload behind fsutil.ReadGuarded
+// (O_NOFOLLOW + regular-file on the open fd + size cap, in one call). The single
+// guarded open is the only race-free form: an Lstat-then-ReadFile pair leaves a
+// window in which a symlink swapped in after the Lstat is followed by ReadFile
+// (which also ignores the pre-checked size), so this joins the shared operand
+// primitive rather than re-checking by hand (mirrors cli.readGuardedOperand).
 func readVerdictFile(path string) ([]byte, error) {
-	fi, err := os.Lstat(path)
+	data, err := fsutil.ReadGuarded(path, maxVerdictBytes)
 	if err != nil {
-		return nil, fmt.Errorf("intent: stat verdict %s: %w", path, err)
-	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("intent: verdict %s is a symlink (refusing to follow)", path)
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("intent: verdict %s is not a regular file", path)
-	}
-	if fi.Size() > maxVerdictBytes {
-		return nil, fmt.Errorf("intent: verdict %s exceeds the %d-byte cap", path, maxVerdictBytes)
-	}
-	// The Lstat->ReadFile gap is a benign TOCTOU: a swap between the two opens a
-	// different regular file, not a symlink escape, and is accepted under the
-	// trusted-worktree model (mirrors the ensureRealDir ancestor-symlink note).
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("intent: reading verdict %s: %w", path, err)
+		switch {
+		case errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP):
+			return nil, fmt.Errorf("intent: verdict %s is not a regular file (a symlink or non-regular operand is refused)", path)
+		case errors.Is(err, fsutil.ErrTooBig):
+			return nil, fmt.Errorf("intent: verdict %s exceeds the %d-byte cap", path, maxVerdictBytes)
+		default:
+			return nil, fmt.Errorf("intent: reading verdict %s: %w", path, err)
+		}
 	}
 	return data, nil
 }

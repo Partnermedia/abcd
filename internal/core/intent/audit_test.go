@@ -483,3 +483,24 @@ func TestFirstReviewBlockClearsPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// TestIngestVerdictRefusesSymlink is the S6 regression: the verdict operand read
+// goes through fsutil.ReadGuarded (O_NOFOLLOW), so a symlinked verdict path is
+// refused rather than followed. The prior Lstat-then-os.ReadFile form left a
+// window in which a symlink swapped in after the Lstat was followed by ReadFile.
+func TestIngestVerdictRefusesSymlink(t *testing.T) {
+	root := t.TempDir()
+	rcp := shipOne(t, root)
+	real := writeVerdict(t, root, validVerdict(rcp))
+	link := filepath.Join(root, "verdict-link.json")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	_, err := IngestVerdict(root, link)
+	if err == nil {
+		t.Fatal("expected a symlinked verdict path to be refused, got nil error")
+	}
+	if !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("unexpected error for symlinked verdict: %v", err)
+	}
+}
