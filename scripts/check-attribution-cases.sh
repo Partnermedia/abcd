@@ -627,5 +627,34 @@ commit_as Claude noreply@anthropic.com REPPL human@example.invalid 'docs: a chan
 Assisted-by: None'
 commits_case reject "AI identity claiming human-only"
 
+# --- CRLF bodies (GitHub web-UI line endings) ---------------------------------
+# A PR body authored or edited in the web UI arrives with \r\n. A valid trailer
+# that is not the very last byte reads as "Assisted-by: ...\r" and must still be
+# accepted (the gate normalises \r before the $-anchored presence check); a
+# banned footer under CRLF must still reject. case_is_crlf rewrites the body to
+# CRLF via awk (portable across GNU and BSD).
+case_is_crlf() {
+	local want="$1" label="$2" body="$3" got
+	printf '%s\n' "$body" | awk 'BEGIN{ORS="\r\n"} {print}' >"$tmp/body.md"
+	if bash "$SCRIPT" body "$tmp/body.md" >/dev/null 2>&1; then got=accept; else got=reject; fi
+	if [ "$got" = "$want" ]; then
+		pass=$((pass + 1))
+	else
+		fail=$((fail + 1))
+		echo "FAIL (crlf): $label — wanted $want, got $got" >&2
+	fi
+}
+case_is_crlf accept "CRLF body, trailer not the final byte" 'Text.
+
+Assisted-by: Claude:claude-opus-5'
+case_is_crlf accept "CRLF body, human-only declaration" 'Text.
+
+Assisted-by: None'
+case_is_crlf reject "CRLF body, tool footer still refused" 'Text.
+
+🤖 Generated with [Some Tool](https://example.invalid)
+
+Assisted-by: Claude:claude-opus-5'
+
 echo "check-attribution-cases: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
