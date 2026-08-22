@@ -12,6 +12,17 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **abcdev.app is rendered from this repository alone.** The `abcd site`
+  verb family builds the whole site — the landing page composed from the
+  docs under the single-source rule, the record explorer with every
+  decision, intent, spec, issue and principle as a page, the relationship
+  chart and genealogy, contributors and references, and `/install.sh` from
+  the shared template — and `abcd site check` gates the rendered tree on
+  seven fail-loud checks; production deploys per release from the tag via
+  the release chain, previews ride every push to main stamped as
+  unreleased, and README becomes a contributor page with its product
+  narrative living in `docs/` (itd-135/spc-37, itd-136/spc-38,
+  itd-137/spc-39, itd-138/spc-40; adr-47, adr-48).
 - **A bare `abcd` on an interactive terminal opens with its banner.** The
   a-b-c-d signal-flag hoist renders in half-block pixels on its painted
   panel — true ICS geometry, from the livery grids — with the version beside
