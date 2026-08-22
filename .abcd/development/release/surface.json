@@ -903,6 +903,19 @@
       ]
     },
     {
+      "path": "abcd site check",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "out",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd spec",
       "hidden": false,
       "flags": []

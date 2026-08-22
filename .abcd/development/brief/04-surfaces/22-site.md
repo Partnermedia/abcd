@@ -22,6 +22,7 @@ production renders from the tag, with the released bytes.
 | Verb | Bucket | Status |
 |---|---|---|
 | `build` | — | shipped |
+| `check` | gate | shipped |
 
 ## The single-source rule
 
