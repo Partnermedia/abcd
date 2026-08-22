@@ -14,10 +14,31 @@ package site
 // An image the page names but the repository does not carry is a build error.
 // The alternative is a broken image on a published page, which nobody notices
 // until a reader does.
+//
+// Two refusals guard the pair of holes an image reference opens, and both are
+// about the same thing: this file turns repository CONTENT into published
+// OUTPUT, and repository content is written by whoever can land a pull request.
+//
+//  1. A reference is a PATH, and a path read out of prose will name whatever it
+//     is pointed at. `![x](../../.git/config)` is a perfectly ordinary-looking
+//     image reference that publishes git's config — which on a CI runner carries
+//     the checkout token — into a public directory, under a name nobody reads
+//     twice, in a tree git never reports as changed. So a reference must resolve
+//     inside the asset root and carry a picture's extension, and anything else
+//     is refused by name.
+//
+//  2. An SVG is INLINED, which is the whole point of committing drawings as SVG
+//     — but inlining means its bytes become markup. A `<script>` element or an
+//     `on*` attribute inside one is executable code on the site's own origin,
+//     reached with no click, in a file that is not code and that no reviewer
+//     reads as code. So an SVG is parsed and held to an allowlist of the
+//     elements and attributes a drawing is made of.
 
 import (
 	"encoding/binary"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"path"
 	"regexp"
 	"sort"
@@ -34,8 +55,133 @@ const maxAssetBytes = 16 << 20
 // point.
 const assetOutDir = "assets/img"
 
+// assetRootPrefix is the only directory a picture may come from. adr-47
+// decision 2 says every picture is a committed asset under `docs/assets/img/`,
+// referenced from a docs page like any other image; this is that sentence made
+// enforceable.
+const assetRootPrefix = "docs/assets/"
+
+// pictureExts is what a picture's file name ends in. It is a closed list rather
+// than a "not one of these dangerous ones" list, because the dangerous set is
+// the whole rest of the repository.
+var pictureExts = map[string]bool{
+	".svg": true, ".png": true, ".jpg": true, ".jpeg": true,
+	".gif": true, ".webp": true, ".avif": true,
+}
+
 // svgSizeRe matches the width/height attributes the stylesheet replaces.
 var svgSizeRe = regexp.MustCompile(`\s(width|height)="\d+"`)
+
+// svgElements is what a drawing is made of: shapes, the scaffolding that
+// positions and paints them, and text. Anything else — a script, a stylesheet,
+// an embedded document, a foreign namespace — is refused, because a drawing
+// does not need it and an attack does.
+var svgElements = map[string]bool{
+	"svg": true, "g": true, "defs": true, "symbol": true, "title": true, "desc": true,
+	"path": true, "rect": true, "circle": true, "ellipse": true, "line": true,
+	"polyline": true, "polygon": true, "text": true, "tspan": true,
+	"clipPath": true, "mask": true, "marker": true, "pattern": true, "use": true,
+	"linearGradient": true, "radialGradient": true, "stop": true,
+	// <image> is allowed only because the committed drawings place raster
+	// panels inside them; its href is held to an embedded raster (below), never
+	// to a fetch and never to another SVG.
+	"image": true,
+}
+
+// embeddedRasterPrefixes are the only `data:` payloads an <image> may carry: a
+// self-contained raster. `data:image/svg+xml` is deliberately absent — that is
+// a document, not a picture, and nesting one inside a drawing reopens exactly
+// the surface this check exists to close.
+var embeddedRasterPrefixes = []string{
+	"data:image/png;base64,", "data:image/jpeg;base64,", "data:image/gif;base64,",
+	"data:image/webp;base64,", "data:image/avif;base64,",
+}
+
+// svgHrefAttrs are the attributes that point somewhere. Every one of them is
+// held to a same-document fragment: a drawing refers to its own defs and to
+// nothing else, so an absolute or relative URL here is either an external fetch
+// from a page that makes none, or a scheme that executes.
+var svgHrefAttrs = map[string]bool{"href": true, "xlink:href": true, "src": true}
+
+// checkInlinableSVG parses an SVG and refuses anything a drawing does not need.
+// It parses rather than greps: entities, CDATA, comments and attribute quoting
+// are exactly what a substring check gets wrong, and an XML decoder gets right.
+func checkInlinableSVG(svg, rel string) error {
+	bad := func(format string, args ...any) error {
+		return fmt.Errorf("%s: %s — an inlined drawing becomes markup in the published page, so it is held to the elements and attributes a drawing is made of",
+			rel, fmt.Sprintf(format, args...))
+	}
+	dec := xml.NewDecoder(strings.NewReader(svg))
+	// Entity expansion is how an XML parser is made to read files it was never
+	// given. A drawing needs no custom entity, so the map stays empty and any
+	// reference to one is an error from the decoder itself.
+	dec.Strict = true
+	dec.Entity = map[string]string{}
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return bad("is not well-formed XML (%v)", err)
+		}
+		switch t := tok.(type) {
+		case xml.ProcInst:
+			if strings.EqualFold(t.Target, "xml") {
+				continue // the XML declaration itself
+			}
+			return bad("carries a processing instruction (<?%s?>)", t.Target)
+		case xml.Directive:
+			// `<!DOCTYPE … [<!ENTITY x SYSTEM "file:///etc/passwd">]>` is the
+			// classic external-entity read, and no drawing has a doctype.
+			return bad("carries a document-type declaration")
+		case xml.StartElement:
+			name := t.Name.Local
+			if !svgElements[name] {
+				return bad("uses <%s>, which is not one of the drawing elements", name)
+			}
+			for _, a := range t.Attr {
+				if err := checkSVGAttr(a, name, bad); err != nil {
+					return err
+				}
+			}
+		}
+	}
+}
+
+// checkSVGAttr holds one attribute to the allowlist rules.
+func checkSVGAttr(a xml.Attr, element string, bad func(string, ...any) error) error {
+	local := a.Name.Local
+	full := local
+	if a.Name.Space != "" {
+		// The decoder resolves a prefix to its namespace URL; for the reader's
+		// sake report the conventional spelling.
+		if strings.Contains(a.Name.Space, "xlink") {
+			full = "xlink:" + local
+		}
+	}
+	if len(local) >= 2 && strings.EqualFold(local[:2], "on") {
+		return bad("sets %s on <%s>, which is an event handler", strings.ToLower(full), element)
+	}
+	if svgHrefAttrs[full] || svgHrefAttrs[local] {
+		v := strings.TrimSpace(a.Value)
+		if strings.HasPrefix(v, "#") {
+			return nil
+		}
+		if element == "image" {
+			for _, p := range embeddedRasterPrefixes {
+				if strings.HasPrefix(v, p) {
+					return nil
+				}
+			}
+			return bad("points %s on <image> at %q; an embedded panel is a self-contained raster (data:image/png|jpeg|gif|webp|avif;base64,…)",
+				full, clip(v))
+		}
+		return bad("points %s on <%s> at %q; a drawing refers only to its own definitions (#id)",
+			full, element, clip(v))
+	}
+	return nil
+}
 
 // assetPipe resolves image references and records what the build must copy.
 type assetPipe struct {
@@ -70,13 +216,29 @@ func (a *assetPipe) render(pageDir, src, alt string, at Source) (string, error) 
 	if !fsutil.ValidRelPath(rel) {
 		return "", fmt.Errorf("%s:%d: image %q resolves outside the repository", at.Path, at.Line, src)
 	}
+	// The build PUBLISHES what it reads here, so what may be read is a closed
+	// set: a picture, under the asset root, and nothing else. Without this a
+	// reference in prose reaches `.git/config`, `.env`, or the gitignored local
+	// tier, and copies it into a directory served to the public.
+	if !strings.HasPrefix(rel, assetRootPrefix) {
+		return "", fmt.Errorf("%s:%d: image %q resolves to %q, outside %s — every picture is a committed asset under the asset root",
+			at.Path, at.Line, src, rel, assetRootPrefix)
+	}
+	ext := strings.ToLower(path.Ext(rel))
+	if !pictureExts[ext] {
+		return "", fmt.Errorf("%s:%d: image %q is a %q file, which is not a picture the build publishes",
+			at.Path, at.Line, src, ext)
+	}
 	data, err := fsutil.ReadGuarded(joinRepo(a.repoRoot, rel), maxAssetBytes)
 	if err != nil {
 		return "", fmt.Errorf("%s:%d: image %q (%s): %w", at.Path, at.Line, src, rel, err)
 	}
 
 	name := path.Base(rel)
-	if strings.HasSuffix(name, ".svg") {
+	if ext == ".svg" {
+		if err := checkInlinableSVG(string(data), rel); err != nil {
+			return "", fmt.Errorf("%s:%d: %w", at.Path, at.Line, err)
+		}
 		svg := svgSizeRe.ReplaceAllString(string(data), "")
 		stem := strings.TrimSuffix(name, ".svg")
 		return `<span class="svgasset ` + escapeAttr(stem) + `" data-asset="` + escapeAttr(rel) + `">` + svg + `</span>`, nil
