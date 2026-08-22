@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/Partnermedia/abcd/internal/core/intent"
 	"github.com/Partnermedia/abcd/internal/core/lint"
 	"github.com/Partnermedia/abcd/internal/core/positioning"
 	"github.com/Partnermedia/abcd/internal/fsutil"
@@ -28,6 +29,28 @@ import (
 
 // maxPageBytes bounds one composed page read.
 const maxPageBytes = 1 << 20
+
+// The released asset names the hero links directly, one per published platform.
+//
+// The manifest's `release.assets` says these names come from the release
+// workflow, and that claim is EARNED rather than asserted: the build does not
+// parse the workflow (a page that reads CI configuration to decide what to link
+// is a worse dependency than a constant), so `installsurface_test.go` holds this
+// list to the exact `abcd-<os>-<arch>` matrix the four committed install
+// surfaces derive. A platform added to the release matrix without a link here —
+// or a link here to a platform nothing publishes — fails that test.
+const (
+	AssetDarwinARM64 = "abcd-darwin-arm64"
+	AssetDarwinAMD64 = "abcd-darwin-amd64"
+	AssetLinuxARM64  = "abcd-linux-arm64"
+	AssetLinuxAMD64  = "abcd-linux-amd64"
+	// AssetChecksums is the manifest every install form verifies against, and
+	// the one fixed-name asset the page links.
+	AssetChecksums = "checksums.txt"
+)
+
+// LinkedBinaryAssets is the set of per-platform binaries the page offers.
+var LinkedBinaryAssets = []string{AssetDarwinARM64, AssetDarwinAMD64, AssetLinuxARM64, AssetLinuxAMD64}
 
 // composer holds everything the landing page is composed from.
 type composer struct {
@@ -90,15 +113,21 @@ func (c *composer) renderer(p *docPage) *Renderer {
 		Image: func(src, alt string, at Source) (string, error) {
 			return c.assets.render(p.Dir, src, alt, at)
 		},
-		Link: func(href string, at Source) string { return siteHref(p.Dir, href) },
+		Link: func(href string, at Source) string { return siteHref(p.Dir, href, c.repo.Repository) },
 	}
 }
 
-// siteHref maps a link as the record wrote it to a link the site serves. An
-// absolute URL and an in-page fragment are already right; a repo-relative
-// markdown path becomes the docs route that renders it. Anything else is left
-// exactly as written — guessing would publish a link the record never made.
-func siteHref(pageDir, href string) string {
+// siteHref maps a link as the record wrote it to a link the site serves.
+//
+// An absolute URL and an in-page fragment are already right. A repo-relative
+// markdown path under `docs/` becomes the docs route that renders it. A
+// repo-relative markdown path ANYWHERE ELSE — a record file, a root document —
+// has no page on this site yet, so it becomes the forge's own view of that file:
+// a link that works today, rather than a relative path that 404s the moment
+// somebody follows it. When the record explorer ships those targets get real
+// pages and this arm narrows; a broken link in the meantime is not an
+// acceptable placeholder.
+func siteHref(pageDir, href, forge string) string {
 	switch {
 	case href == "",
 		strings.HasPrefix(href, "http://"),
@@ -114,7 +143,14 @@ func siteHref(pageDir, href string) string {
 	}
 	rel := path.Clean(path.Join(pageDir, target))
 	if !strings.HasPrefix(rel, "docs/") {
-		return href
+		if forge == "" || !fsutil.ValidRelPath(rel) {
+			return href
+		}
+		out := forge + "/blob/main/" + rel
+		if frag != "" {
+			out += "#" + frag
+		}
+		return out
 	}
 	route := strings.TrimSuffix(strings.TrimPrefix(rel, "docs/"), ".md")
 	if base := path.Base(route); strings.EqualFold(base, "README") {
@@ -249,7 +285,10 @@ func (c *composer) header() string {
 	if c.beta {
 		b.WriteString(`<span class="beta">` + escapeText(c.ui.Beta) + `</span>`)
 	}
-	b.WriteString(`<nav class="site-nav" aria-label="` + escapeAttr(c.ui.NavStory) + `">`)
+	// No aria-label: this is the page's only nav landmark, so a screen reader
+	// already announces it unambiguously, and labelling it "Story" would name it
+	// after one of its links.
+	b.WriteString(`<nav class="site-nav">`)
 	b.WriteString(`<a href="#` + escapeAttr(c.firstChapterAnchor()) + `">` + escapeText(c.ui.NavStory) + `</a>`)
 	b.WriteString(`<a href="#` + escapeAttr(c.installChapterAnchor()) + `">` + escapeText(c.ui.NavInstall) + `</a>`)
 	b.WriteString(`<a href="/docs/">` + escapeText(c.ui.NavDocs) + `</a>`)
@@ -301,11 +340,16 @@ func (c *composer) installChapterAnchor() string {
 func (c *composer) footer() string {
 	var b strings.Builder
 	b.WriteString(`<footer class="site-foot"><div class="wrap">`)
-	if c.repo.AuthorName != "" && c.repo.License != "" {
-		year := c.stamp.GeneratedAt
-		if len(year) >= 4 {
-			year = year[:4]
-		}
+	// The year comes from the build stamp, which a repository with no releases
+	// and no injected date cannot supply. "© <nothing> REPPL · MIT" is worse
+	// than no line, so the span is omitted rather than rendered half-empty.
+	year := c.stamp.GeneratedAt
+	if len(year) >= 4 {
+		year = year[:4]
+	} else {
+		year = ""
+	}
+	if year != "" && c.repo.AuthorName != "" && c.repo.License != "" {
 		b.WriteString(`<span>© ` + escapeText(year) + " " + escapeText(c.repo.AuthorName) + " · " + escapeText(c.repo.License) + `</span>`)
 	}
 	if c.repo.Repository != "" {
@@ -425,8 +469,8 @@ func (c *composer) downloads() string {
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="getit"><span class="eyebrow">` + escapeText(c.ui.LatestRelease) + `</span>`)
-	b.WriteString(`<span class="dl">` + link("abcd-darwin-arm64", c.ui.Platform.DarwinARM64) + ` · ` + link("abcd-darwin-amd64", tail(c.ui.Platform.DarwinAMD64)) + `</span>`)
-	b.WriteString(`<span class="dl">` + link("abcd-linux-arm64", c.ui.Platform.LinuxARM64) + ` · ` + link("abcd-linux-amd64", tail(c.ui.Platform.LinuxAMD64)) + `</span>`)
+	b.WriteString(`<span class="dl">` + link(AssetDarwinARM64, c.ui.Platform.DarwinARM64) + ` · ` + link(AssetDarwinAMD64, tail(c.ui.Platform.DarwinAMD64)) + `</span>`)
+	b.WriteString(`<span class="dl">` + link(AssetLinuxARM64, c.ui.Platform.LinuxARM64) + ` · ` + link(AssetLinuxAMD64, tail(c.ui.Platform.LinuxAMD64)) + `</span>`)
 	b.WriteString(`<a class="more" href="#` + escapeAttr(c.installChapterAnchor()) + `">` + escapeText(c.ui.CTAInstall) + ` ↓</a>`)
 	b.WriteString(`</div>`)
 	return b.String()
@@ -586,14 +630,17 @@ func leadIn(text string) (title, rest string, ok bool) {
 				return "", "", false
 			}
 			title = strings.TrimSpace(text[:i] + text[i+2:i+2+end])
-			rest = strings.TrimLeft(text[i+2+end+2:], " ")
+			rest = strings.TrimLeft(text[i+2+end+2:], " \t\n\r")
 			return title, rest, title != ""
 		}
+		// A word ends at ANY whitespace, not just a space: the script's `\S+\s+`
+		// counts a line-wrapped lead-in the same as a single-line one, and the
+		// record wraps its paragraphs.
 		j := i
-		for j < len(text) && text[j] != ' ' {
+		for j < len(text) && !isSpace(text[j]) {
 			j++
 		}
-		for j < len(text) && text[j] == ' ' {
+		for j < len(text) && isSpace(text[j]) {
 			j++
 		}
 		if j == i {
@@ -604,6 +651,9 @@ func leadIn(text string) (title, rest string, ok bool) {
 	}
 	return "", "", false
 }
+
+// isSpace reports whether a byte is markdown whitespace.
+func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
 
 // tablePortraits puts the role portraits above the column labels they name. The
 // portrait is not configured by asset name: the manifest names the PAGE the
@@ -770,7 +820,11 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 			continue
 		}
 		h2 = append(h2, i)
-		if s.Title == ch.Lead {
+		// FIRST match wins, as the script's `next(...)` does. A page carrying two
+		// sections of one name is malformed either way, but resolving to the last
+		// would silently pick the opposite section from the one a reader of the
+		// executable spec expects.
+		if leadIdx < 0 && s.Title == ch.Lead {
 			leadIdx = i
 		}
 	}
@@ -789,7 +843,7 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 	}
 	afterIdx := -1
 	for _, i := range h3 {
-		if ch.After != "" && p.Sections[i].Title == ch.After {
+		if afterIdx < 0 && ch.After != "" && p.Sections[i].Title == ch.After {
 			afterIdx = i
 		}
 	}
@@ -922,7 +976,7 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 		rr := c.repo.Repository
 		b.WriteString(`<p class="small muted">` +
 			`<a href="` + escapeAttr(rr+"/releases/latest") + `">` + escapeText(c.ui.LatestRelease) + `</a> · ` +
-			`<a href="` + escapeAttr(rr+"/releases/latest/download/checksums.txt") + `">checksums.txt</a> · ` +
+			`<a href="` + escapeAttr(rr+"/releases/latest/download/"+AssetChecksums) + `">` + escapeText(AssetChecksums) + `</a> · ` +
 			`<a href="` + escapeAttr(rr+"/blob/main/CHANGELOG.md") + `">CHANGELOG.md</a> · ` +
 			`<a href="` + escapeAttr(rr+"/releases") + `">` + escapeText(c.ui.AllReleases) + `</a></p>`)
 	}
@@ -1063,6 +1117,9 @@ func (c *composer) newestMetIntent() (lint.RecordNode, bool) {
 		if !c.auditIsMet(n.Path) {
 			continue
 		}
+		if c.pressReleaseIsUnwritten(n.Path) {
+			continue
+		}
 		d := c.history.EnteredBucket(n.Path)
 		switch {
 		case !found,
@@ -1072,6 +1129,59 @@ func (c *composer) newestMetIntent() (lint.RecordNode, bool) {
 		}
 	}
 	return best, found
+}
+
+// pressReleaseIsUnwritten reports whether an intent's `## Press Release` is
+// still, in its entirety, the placeholder a quoted-text capture mints.
+//
+// This is the ONE exclusion the derivation carries, and it is mechanical rather
+// than a judgement about quality: the body must equal `intent.CaptureSeedNote`
+// exactly, once the quote markers, emphasis markers and whitespace runs that
+// carry no meaning are removed. An intent that has had a single sentence
+// written into it is a candidate again.
+//
+// It exists because the featured quotation is the page's only testimonial, and
+// the record can legitimately hold a shipped, audit-met intent whose press
+// release nobody went back and wrote. Quoting the template at a reader is worse
+// than quoting the next intent down.
+func (c *composer) pressReleaseIsUnwritten(rel string) bool {
+	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes)
+	if err != nil {
+		return false
+	}
+	body, consumed := StripFrontmatter(string(data))
+	secs, err := Sections(rel, body, consumed)
+	if err != nil {
+		return false
+	}
+	for _, s := range secs {
+		if s.Title != "Press Release" {
+			continue
+		}
+		return plainPressReleaseText(s.Body) == intent.CaptureSeedNote
+	}
+	return false
+}
+
+// plainPressReleaseText reduces a press-release body to its words: quote
+// markers, emphasis markers and whitespace runs removed. Nothing else is
+// stripped, so any actual prose survives and fails the comparison.
+func plainPressReleaseText(body string) string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		t := strings.TrimSpace(line)
+		t = strings.TrimSpace(strings.TrimPrefix(t, ">"))
+		t = strings.Map(func(r rune) rune {
+			if r == '*' || r == '_' {
+				return -1
+			}
+			return r
+		}, t)
+		if f := strings.Fields(t); len(f) > 0 {
+			out = append(out, strings.Join(f, " "))
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // auditIsMet reads an intent's `## Audit Notes` rollup: at least one criterion

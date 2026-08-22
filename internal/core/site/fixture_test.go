@@ -51,7 +51,19 @@ func newFixture(t *testing.T) *fixture {
 	f.writeChangelog()
 	f.commitAt("2026-03-02T09:00:00+00:00", "docs: two releases", "None")
 	f.mergeInARecord()
+	// Shipped LAST, so a date-only derivation would pick it.
+	f.shipTheStub()
 	return f
+}
+
+// shipTheStub files the placeholder intent as shipped, after everything else.
+func (f *fixture) shipTheStub() {
+	f.t.Helper()
+	const date = "2026-03-06T09:00:00+00:00"
+	f.git(date, "mv",
+		".abcd/development/intents/planned/itd-3-the-stubbed-one.md",
+		".abcd/development/intents/shipped/itd-3-the-stubbed-one.md")
+	f.commitAt(date, "feat: ship itd-3", "None")
 }
 
 // mergeInARecord gives the fixture the history shape a linear one cannot have:
@@ -538,6 +550,34 @@ impact: additive
 ## Audit Notes
 
 Acceptance rollup: MET 2 · MET_WITH_CONCERNS 0 · NOT_MET 0 · INCONCLUSIVE 0
+`)
+
+	// A shipped intent with a met audit whose press release is still the mint
+	// placeholder. It is NEWER than itd-2, so a derivation that only sorts by
+	// date picks it — and quotes a template at the reader as a testimonial.
+	f.write(".abcd/development/intents/planned/itd-3-the-stubbed-one.md", `---
+id: itd-3
+slug: the-stubbed-one
+spec_id: null
+kind: standalone
+builds_on: []
+severity: minor
+impact: additive
+---
+
+# The Stubbed One
+
+## Press Release
+
+> _Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._
+
+## Acceptance Criteria
+
+- Given a stub, when it is picked, then the page quotes a template.
+
+## Audit Notes
+
+Acceptance rollup: MET 1 · MET_WITH_CONCERNS 0 · NOT_MET 0 · INCONCLUSIVE 0
 `)
 
 	f.write(".abcd/development/specs/open/spc-1-the-spec.md", `---

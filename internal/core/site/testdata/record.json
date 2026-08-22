@@ -99,6 +99,22 @@
       "degree": 1
     },
     {
+      "id": "itd-3",
+      "type": "intent",
+      "lifecycle": "shipped",
+      "title": "The Stubbed One",
+      "path": ".abcd/development/intents/shipped/itd-3-the-stubbed-one.md",
+      "kind": "standalone",
+      "severity": "minor",
+      "date": "2026-01-05",
+      "dates": {
+        "created": "2026-01-05",
+        "entered": "2026-03-06",
+        "touched": "2026-03-06"
+      },
+      "degree": 0
+    },
+    {
       "id": "spc-1",
       "type": "spec",
       "lifecycle": "open",
@@ -147,7 +163,7 @@
   "counts": {
     "by_type": {
       "adr": 3,
-      "intent": 2,
+      "intent": 3,
       "issue": 1,
       "spec": 1
     },
@@ -157,7 +173,7 @@
       },
       "intent": {
         "drafts": 1,
-        "shipped": 1
+        "shipped": 2
       },
       "issue": {
         "open": 1
@@ -178,21 +194,21 @@
     }
   ],
   "authorship": {
-    "commits": 5,
+    "commits": 6,
     "humans": [
       {
         "name": "Fixture",
-        "commits": 5
+        "commits": 6
       }
     ],
     "bots": [],
     "assisted": 1,
-    "declared_none": 3,
+    "declared_none": 4,
     "undeclared": 1,
     "by_model": [
       {
         "model": "None",
-        "commits": 3
+        "commits": 4
       },
       {
         "model": "Assistant:assistant-model-1",
@@ -219,27 +235,31 @@
       },
       {
         "x": 0,
-        "y": 0.7385
+        "y": 0.5291
       },
       {
-        "x": 0.5544,
-        "y": 0.2779
+        "x": 0.2304,
+        "y": 0.8673
       },
       {
-        "x": 0.5776,
-        "y": -0.2113
+        "x": 0.3876,
+        "y": 0.2096
       },
       {
-        "x": -0.658,
-        "y": 0.2973
+        "x": -0.4714,
+        "y": 0.213
       },
       {
-        "x": -0.5441,
-        "y": -0.4746
+        "x": -0.3898,
+        "y": -0.34
       },
       {
-        "x": 0.251,
-        "y": -0.6946
+        "x": 0.01,
+        "y": -0.4442
+      },
+      {
+        "x": 0.4918,
+        "y": -0.1951
       }
     ],
     "links": [
@@ -252,12 +272,12 @@
         "y": -0.7146
       },
       {
-        "x": 0,
-        "y": 0.97
+        "x": -0.905,
+        "y": 0
       },
       {
         "x": 0,
-        "y": 0.905
+        "y": 0.97
       },
       {
         "x": -0.0883,
@@ -266,6 +286,10 @@
       {
         "x": 0.1707,
         "y": -0.7817
+      },
+      {
+        "x": 0.905,
+        "y": 0
       },
       {
         "x": 0.1472,
@@ -279,6 +303,7 @@
       0.7,
       1,
       1,
+      0,
       1.4
     ],
     "radius": [
@@ -288,6 +313,7 @@
       3.7312,
       6.622,
       6.622,
+      3.87,
       7.0675
     ],
     "order": [
@@ -296,6 +322,7 @@
       4,
       5,
       6,
+      7,
       3,
       2
     ],
@@ -310,22 +337,26 @@
       }
     ],
     "overlaps": 0,
-    "coil_radius": 27,
+    "coil_radius": 37.7,
     "ref_scale": 0.86,
-    "isolated": 1,
+    "isolated": 2,
     "islands": [
       3
     ],
     "pairs": 1,
-    "unlinked": 2,
+    "unlinked": 3,
     "date_range": [
       "2026-01-02",
       "2026-03-05"
+    ],
+    "span": [
+      "2026-01-02",
+      "2026-03-06"
     ]
   },
   "history": {
     "first_commit": "2026-01-05",
-    "last_commit": "2026-03-05",
-    "commits": 5
+    "last_commit": "2026-03-06",
+    "commits": 6
   }
 }

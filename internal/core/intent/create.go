@@ -261,13 +261,23 @@ func seedDraft(id string, opts DraftOptions) string {
 	return b.String()
 }
 
+// CaptureSeedNote is the Press Release placeholder a quoted-text capture mints:
+// the exact sentence, without its emphasis markers.
+//
+// It is exported because a consumer that QUOTES a press release has to be able
+// to tell a written one from an unwritten one, and the only honest way to do
+// that is to compare against the template this package actually writes. A
+// second copy of the sentence elsewhere would drift the moment this one is
+// reworded, and the drift would show up as a placeholder quoted at a reader.
+const CaptureSeedNote = "Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning."
+
 // seedNote is the standard Press Release placeholder, honest about which create
 // path seeded the draft.
 func seedNote(opts DraftOptions) string {
 	if opts.PromotedFrom != "" {
 		return "_Seeded by promotion from " + opts.PromotedFrom + ". Expand into the full press-release narrative before planning._"
 	}
-	return "_Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._"
+	return "_" + CaptureSeedNote + "_"
 }
 
 // titleLine collapses internal whitespace and trims the seed text into a single

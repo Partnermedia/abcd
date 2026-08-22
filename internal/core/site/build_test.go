@@ -189,8 +189,8 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.SchemaVersion != 1 {
 		t.Errorf("schema_version: %d", exp.SchemaVersion)
 	}
-	if len(exp.Nodes) != 7 {
-		t.Fatalf("nodes: %d, want 7 (3 adrs, 2 intents, 1 spec, 1 issue)", len(exp.Nodes))
+	if len(exp.Nodes) != 8 {
+		t.Fatalf("nodes: %d, want 8 (3 adrs, 3 intents, 1 spec, 1 issue)", len(exp.Nodes))
 	}
 	byID := map[string]ExportNode{}
 	for _, n := range exp.Nodes {
@@ -284,11 +284,11 @@ func TestBuildRecordExportShape(t *testing.T) {
 		t.Errorf("the published date span begins at the empty string: %v", exp.Layout.DateRange)
 	}
 
-	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 2 ||
+	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 3 ||
 		exp.Counts.ByType["spec"] != 1 || exp.Counts.ByType["issue"] != 1 {
 		t.Errorf("counts: %+v", exp.Counts.ByType)
 	}
-	if exp.Counts.ByLifecycle["intent"]["shipped"] != 1 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
+	if exp.Counts.ByLifecycle["intent"]["shipped"] != 2 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
 		t.Errorf("lifecycle counts: %+v", exp.Counts.ByLifecycle)
 	}
 
@@ -297,10 +297,10 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.Authorship.Assisted != 1 {
 		t.Errorf("assisted commits: %d, want 1", exp.Authorship.Assisted)
 	}
-	// The changelog commit plus the branch and merge commits of the merge
-	// fixture, each declaring that no tool touched it.
-	if exp.Authorship.DeclaredNone != 3 {
-		t.Errorf("declared-None commits: %d, want 3", exp.Authorship.DeclaredNone)
+	// The changelog commit, the merge fixture's branch and merge commits, and the
+	// commit that ships the stub — each declaring that no tool touched it.
+	if exp.Authorship.DeclaredNone != 4 {
+		t.Errorf("declared-None commits: %d, want 4", exp.Authorship.DeclaredNone)
 	}
 	if len(exp.Authorship.Humans) != 1 || exp.Authorship.Humans[0].Name != "Fixture" {
 		t.Errorf("humans: %+v", exp.Authorship.Humans)
@@ -386,6 +386,16 @@ func TestBuildLandingCarriesProvenance(t *testing.T) {
 	if strings.Contains(html, "It has not been built") {
 		t.Error("the feature block quotes a DRAFTED intent")
 	}
+	// itd-3 is shipped, audited MET, and newer than itd-2 — but its press
+	// release is the mint placeholder. Quoting a template at a reader as this
+	// page's one testimonial is worse than quoting nothing, so the derivation
+	// falls through to the newest candidate that actually says something.
+	if strings.Contains(html, "Expand into the full press-release narrative") {
+		t.Error("the feature block quotes an unwritten press release")
+	}
+	if !strings.Contains(html, "itd-2") {
+		t.Error("the feature block did not fall through to the newest written press release")
+	}
 	// Exactly one acceptance criterion, as the manifest asks.
 	if strings.Contains(html, "it does not appear in the quote") {
 		t.Error("the feature block quotes more than the first acceptance criterion")
@@ -426,8 +436,10 @@ func TestBuildWithoutChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := t.TempDir()
+	// No GeneratedAt either: with no releases there is no date to fall back on,
+	// which is the path that actually runs when a repository has no changelog.
 	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
-		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}})
+		Stamp: BuildStamp{Commit: "abcdef1"}})
 	if err != nil {
 		t.Fatalf("a repository with no CHANGELOG must still build: %v", err)
 	}
@@ -444,6 +456,11 @@ func TestBuildWithoutChangelog(t *testing.T) {
 	}
 	if strings.Contains(html, `class="pill"`) {
 		t.Error("the release pill rendered with no release")
+	}
+	// The copyright year comes from the build stamp; with nothing to date the
+	// build from, the span is omitted rather than rendered without its year.
+	if strings.Contains(html, "©") {
+		t.Error("the footer rendered a copyright line with no year to put in it")
 	}
 	var exp RecordExport
 	rec, err := os.ReadFile(filepath.Join(out, "record.json"))
@@ -497,6 +514,78 @@ func TestBuildWithoutManifest(t *testing.T) {
 	if !strings.Contains(err.Error(), ManifestRelPath) {
 		t.Errorf("the refusal does not name the manifest: %v", err)
 	}
+}
+
+// TestBaselineComesFromTheManifest pins the thread the manifest key is supposed
+// to be. Declaring `checks.unresolved_reference_baseline` and having the build
+// read a hardcoded path anyway is the parsed-and-dropped failure in its most
+// consequential form: the ratchet a repo thinks it armed is not the one being
+// measured against.
+func TestBaselineComesFromTheManifest(t *testing.T) {
+	f := newFixture(t)
+	manifest := filepath.Join(f.Root(), ".abcd", "site.json")
+	original, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repoint := func(t *testing.T, to string) {
+		t.Helper()
+		body := strings.Replace(string(original),
+			`"unresolved_reference_baseline": ".abcd/site-baseline.json"`,
+			`"unresolved_reference_baseline": "`+to+`"`, 1)
+		if body == string(original) {
+			t.Fatal("the fixture manifest does not declare a baseline")
+		}
+		if err := os.WriteFile(manifest, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.WriteFile(manifest, original, 0o644) })
+	}
+
+	t.Run("a named baseline that does not exist refuses", func(t *testing.T) {
+		repoint(t, ".abcd/no-such-baseline.json")
+		_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(), Stamp: fixtureStamp})
+		if err == nil {
+			t.Fatal("the build measured against a baseline the manifest names but the repo does not carry")
+		}
+		if !strings.Contains(err.Error(), "no-such-baseline.json") {
+			t.Errorf("the refusal does not name the missing baseline: %v", err)
+		}
+	})
+
+	t.Run("an alternate baseline is the one counted", func(t *testing.T) {
+		alt := ".abcd/other-baseline.json"
+		if err := os.WriteFile(filepath.Join(f.Root(), filepath.FromSlash(alt)), []byte(`{
+  "schema_version": 1,
+  "unresolved_references": [
+    {"from": "adr-2", "to": "adr-9"},
+    {"from": "itd-9", "to": "spc-9"},
+    {"from": "itd-8", "to": "spc-8"}
+  ]
+}
+`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		repoint(t, alt)
+		out := t.TempDir()
+		res, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Baseline != 3 {
+			t.Errorf("baseline count: %d, want 3 — the manifest's baseline is the one measured against", res.Baseline)
+		}
+		st, err := Describe(f.Root(), "site")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.BaselinePath != alt {
+			t.Errorf("the status board reports %q, not the path it used (%q)", st.BaselinePath, alt)
+		}
+		if st.BaselineN != 3 {
+			t.Errorf("the status board counts %d, want 3", st.BaselineN)
+		}
+	})
 }
 
 // TestDescribeIsReadOnly pins the bare verb: it reports and writes nothing.
