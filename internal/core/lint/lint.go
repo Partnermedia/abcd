@@ -164,7 +164,7 @@ func Lint(cfg Config, repoRoot string) ([]Finding, error) {
 func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 	var findings []Finding
 
-	tokenChecks, err := compileTokens(cfg.BannedTokens)
+	tokenChecks, err := NewTokenChecker(cfg.BannedTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +246,8 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			// (spec_lifecycle, spec_id_unique) still do (iss-39).
 			exempt := contentExempt(rel, frontmatterFields(lines), cfg)
 
-			if len(tokenChecks) > 0 && !exempt {
-				findings = append(findings, checkBannedTokens(rel, lines, mask, tokenChecks)...)
+			if tokenChecks.Len() > 0 && !exempt {
+				findings = append(findings, tokenChecks.lintLines(rel, lines, mask)...)
 			}
 			if personaOn && !exempt {
 				findings = append(findings, checkPersonaRegistry(rel, lines, mask, personaRoster, personaCfg)...)
