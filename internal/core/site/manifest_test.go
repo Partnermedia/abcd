@@ -28,6 +28,10 @@ func TestManifestRefusesUnknownAndUnusableKeys(t *testing.T) {
 		{"unimplemented icon rule", `"icons": "image-before-lead-in"`, `"icons": "image-after-lead-in"`, "icons"},
 		{"unimplemented tab arrangement", `"tabs": "left-h2s, then lead-h3s and remaining-h2s as a labelled group"`, `"tabs": "alphabetical"`, "tabs"},
 		{"release read from elsewhere", `"from": "CHANGELOG.md"`, `"from": "RELEASES.md"`, "release.from"},
+		// A figure on a layout that lifts none would be read and dropped —
+		// including its deferred labels-from-page, which would ask the check
+		// slice to compare a diagram nothing renders.
+		{"figure on a layout that lifts none", `"layout": "prose",`, `"layout": "cards-from-h2",`, "figure"},
 		// Deferred keys: no slice reads these yet, and a typo still fails now.
 		{"deferred docs path", `"index": "docs/README.md"`, `"index": "/etc/passwd"`, "docs.index"},
 		{"deferred contributors path", `"file": "CONTRIBUTING.md"`, `"file": "../outside.md"`, "policy.file"},

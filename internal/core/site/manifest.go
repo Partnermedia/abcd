@@ -271,8 +271,14 @@ func (m Manifest) validate() error {
 			if ch.Figure.Kind != figureFirstImage {
 				return bad("%s.figure.kind %q is not a figure rule (want %q)", where, ch.Figure.Kind, figureFirstImage)
 			}
-			if ch.Figure.LabelsFromPage && ch.Figure.Kind == "" {
-				return bad("%s.figure.labels-from-page asks for a check against a figure the chapter does not select", where)
+			// Only the prose layout lifts a figure out of its page. A figure
+			// declared on any other layout is read and then dropped, which is the
+			// failure this validation exists to prevent — including the deferred
+			// `labels-from-page`, which would be asking `site check` to compare a
+			// diagram nothing renders.
+			if ch.Layout != LayoutProse {
+				return bad("%s.figure is declared on the %q layout, which lifts no figure (only %q does)",
+					where, ch.Layout, LayoutProse)
 			}
 		}
 		if ch.Icons != "" && ch.Icons != iconsBeforeLeadIn {
