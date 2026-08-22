@@ -1,0 +1,508 @@
+package site
+
+import (
+	"encoding/json"
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+var update = flag.Bool("update", false, "rewrite the golden files from this run's output")
+
+// fixtureStamp is the injected build metadata. Every field is fixed so the
+// golden files are a function of the fixture and nothing else — no clock, no
+// commit hash, no version resolved at run time.
+var fixtureStamp = BuildStamp{Version: "0.2.0", Commit: "abcdef1", GeneratedAt: "2026-02-11"}
+
+// buildFixture renders the fixture repository into a fresh directory.
+func buildFixture(t *testing.T, f *fixture, out string) Result {
+	t.Helper()
+	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	return res
+}
+
+// golden compares one output file against its committed copy.
+func golden(t *testing.T, name string, got []byte) {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	if *update {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("%s: %v (run `go test ./internal/core/site/ -update` to create it)", path, err)
+	}
+	if string(got) == string(want) {
+		return
+	}
+	t.Errorf("%s differs from the golden file; run `go test ./internal/core/site/ -update` and read the diff", path)
+	for i, line := range diffLines(string(want), string(got)) {
+		if i > 12 {
+			t.Errorf("  … and more")
+			break
+		}
+		t.Errorf("  %s", line)
+	}
+}
+
+// diffLines names the first lines that differ, so a failure says what changed
+// rather than dumping two files.
+func diffLines(want, got string) []string {
+	w := strings.Split(want, "\n")
+	g := strings.Split(got, "\n")
+	var out []string
+	for i := 0; i < len(w) || i < len(g); i++ {
+		var a, b string
+		if i < len(w) {
+			a = w[i]
+		}
+		if i < len(g) {
+			b = g[i]
+		}
+		if a == b {
+			continue
+		}
+		out = append(out, "line "+itoa(i+1)+" want: "+clip120(a))
+		out = append(out, "line "+itoa(i+1)+"  got: "+clip120(b))
+		if len(out) > 26 {
+			break
+		}
+	}
+	return out
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b []byte
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
+}
+
+func clip120(s string) string {
+	if len(s) > 120 {
+		return s[:120] + "…"
+	}
+	return s
+}
+
+// TestBuildGolden pins the whole render: the composed landing page and the
+// record export, byte for byte, over a repository this test built.
+func TestBuildGolden(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	for _, name := range []string{"index.html", "record.json", "_redirects", "_headers", "site.css", "site.js"} {
+		if !containsString(res.Files, name) {
+			t.Errorf("build did not write %s: %v", name, res.Files)
+		}
+	}
+	for _, name := range []string{"assets/img/intro.png", "assets/img/logo.png",
+		"assets/img/role-thinker.png", "assets/img/role-facilitator.png"} {
+		if !containsString(res.Files, name) {
+			t.Errorf("build did not copy %s: %v", name, res.Files)
+		}
+	}
+
+	html, err := os.ReadFile(filepath.Join(out, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "index.html", html)
+
+	rec, err := os.ReadFile(filepath.Join(out, "record.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "record.json", rec)
+}
+
+// TestBuildLayoutDoesNotOverlap is the coil packing's own sanity check, asserted
+// rather than reported: a bubble sitting on top of another means the placement
+// walked into a case it does not handle, and the chart is wrong.
+func TestBuildLayoutDoesNotOverlap(t *testing.T) {
+	f := newFixture(t)
+	res := buildFixture(t, f, t.TempDir())
+	if res.Overlaps != 0 {
+		t.Fatalf("coil packing overlaps: %d", res.Overlaps)
+	}
+}
+
+// TestBuildIsDeterministic builds the same tree twice into two directories and
+// diffs every byte. It is the property the published site rests on: production
+// is rendered from a tag, and a build that is not a function of its input cannot
+// be checked against the tree it claims to describe.
+func TestBuildIsDeterministic(t *testing.T) {
+	f := newFixture(t)
+	a, b := t.TempDir(), t.TempDir()
+	ra := buildFixture(t, f, a)
+	rb := buildFixture(t, f, b)
+	if len(ra.Files) != len(rb.Files) {
+		t.Fatalf("two builds wrote different files: %v vs %v", ra.Files, rb.Files)
+	}
+	for _, name := range ra.Files {
+		x, err := os.ReadFile(filepath.Join(a, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		y, err := os.ReadFile(filepath.Join(b, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(x) != string(y) {
+			t.Errorf("%s differs between two builds of the same tree", name)
+		}
+	}
+}
+
+// TestBuildRecordExportShape asserts the facts the export is FOR, so a change
+// that silently drops one is caught by something other than the golden diff.
+func TestBuildRecordExportShape(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+	data, err := os.ReadFile(filepath.Join(out, "record.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var exp RecordExport
+	if err := json.Unmarshal(data, &exp); err != nil {
+		t.Fatal(err)
+	}
+
+	if exp.SchemaVersion != 1 {
+		t.Errorf("schema_version: %d", exp.SchemaVersion)
+	}
+	if len(exp.Nodes) != 6 {
+		t.Fatalf("nodes: %d, want 6 (2 adrs, 2 intents, 1 spec, 1 issue)", len(exp.Nodes))
+	}
+	byID := map[string]ExportNode{}
+	for _, n := range exp.Nodes {
+		byID[n.ID] = n
+	}
+	// The shipped intent was moved into shipped/ in its own commit; that move is
+	// the only record of the day it shipped.
+	if got := byID["itd-2"].Dates.Entered; got != "2026-02-10" {
+		t.Errorf("itd-2 entered shipped/: %q, want 2026-02-10", got)
+	}
+	if got := byID["itd-2"].Dates.Created; got != "2026-01-05" {
+		t.Errorf("itd-2 created: %q", got)
+	}
+	// A record with no frontmatter date is dated from git; one with a date keeps
+	// its own.
+	if got := byID["adr-1"].Date; got != "2026-01-02" {
+		t.Errorf("adr-1 effective date: %q", got)
+	}
+	if got := byID["itd-2"].Date; got != "2026-01-05" {
+		t.Errorf("itd-2 effective date: %q", got)
+	}
+
+	// The intent↔spec link is declared from both ends and must render once.
+	implements := 0
+	for _, e := range exp.Edges {
+		if e.Rel == "implements" {
+			implements++
+			if e.From != "spc-1" || e.To != "itd-2" {
+				t.Errorf("implements edge points the wrong way: %+v", e)
+			}
+		}
+	}
+	if implements != 1 {
+		t.Errorf("implements edges: %d, want 1 (the mirrored pair collapses)", implements)
+	}
+	// So must the `related` pair adr-1 ↔ adr-2, which both files record.
+	adrPair := 0
+	for _, e := range exp.Edges {
+		if e.Rel != "related" {
+			continue
+		}
+		if (e.From == "adr-1" && e.To == "adr-2") || (e.From == "adr-2" && e.To == "adr-1") {
+			adrPair++
+		}
+	}
+	if adrPair != 1 {
+		t.Errorf("adr-1 ↔ adr-2 related edges: %d, want 1 (both files record it)", adrPair)
+	}
+
+	// The dangling supersession is measured and listed, and it is the one the
+	// committed baseline admits.
+	if len(exp.Health.Unresolved) != 1 || exp.Health.Unresolved[0].To != "adr-9" {
+		t.Errorf("unresolved: %+v", exp.Health.Unresolved)
+	}
+	if exp.Health.BaselineCount != 1 {
+		t.Errorf("baseline count: %d", exp.Health.BaselineCount)
+	}
+
+	// A body mention is carried, and never where a typed link already is.
+	if len(exp.Mentions) == 0 {
+		t.Error("no body mentions recorded")
+	}
+	for _, m := range exp.Mentions {
+		for _, e := range exp.Edges {
+			if (m.From == e.From && m.To == e.To) || (m.From == e.To && m.To == e.From) {
+				t.Errorf("mention duplicates a typed link: %+v", m)
+			}
+		}
+	}
+
+	if len(exp.Releases) != 2 || exp.Releases[0].Version != "0.2.0" || exp.Releases[0].Date != "2026-02-11" {
+		t.Errorf("releases: %+v", exp.Releases)
+	}
+	if exp.Counts.ByType["adr"] != 2 || exp.Counts.ByType["intent"] != 2 ||
+		exp.Counts.ByType["spec"] != 1 || exp.Counts.ByType["issue"] != 1 {
+		t.Errorf("counts: %+v", exp.Counts.ByType)
+	}
+	if exp.Counts.ByLifecycle["intent"]["shipped"] != 1 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
+		t.Errorf("lifecycle counts: %+v", exp.Counts.ByLifecycle)
+	}
+
+	// Attribution: one commit declared a model, one declared None, the rest
+	// declared nothing at all — and the export says so rather than guessing.
+	if exp.Authorship.Assisted != 1 {
+		t.Errorf("assisted commits: %d, want 1", exp.Authorship.Assisted)
+	}
+	if exp.Authorship.DeclaredNone != 1 {
+		t.Errorf("declared-None commits: %d, want 1", exp.Authorship.DeclaredNone)
+	}
+	if len(exp.Authorship.Humans) != 1 || exp.Authorship.Humans[0].Name != "Fixture" {
+		t.Errorf("humans: %+v", exp.Authorship.Humans)
+	}
+	if len(exp.Authorship.Bots) != 0 {
+		t.Errorf("bots: %+v — the fixture's only author is a person", exp.Authorship.Bots)
+	}
+	if len(exp.Authorship.ByModel) != 2 {
+		t.Errorf("by_model: %+v, want the declared model and the declared None", exp.Authorship.ByModel)
+	}
+}
+
+// TestAuthorshipSeparatesToolsFromPeople pins the derived bots-and-tools row: a
+// forge bot is recognised by the suffix the forge itself gives it, and a
+// pre-policy commit authored by the tool is recognised because the repository's
+// own trailers name that vendor as an assistant.
+func TestAuthorshipSeparatesToolsFromPeople(t *testing.T) {
+	f := newFixture(t)
+	f.write("bot.txt", "a dependency bump\n")
+	f.git("2026-03-03T09:00:00+00:00", "add", "-A")
+	f.git("2026-03-03T09:00:00+00:00",
+		"-c", "user.name=depbot[bot]", "-c", "user.email=depbot@example.invalid",
+		"commit", "-m", "chore: bump a dependency")
+	f.write("tool.txt", "a pre-policy commit\n")
+	f.git("2026-03-04T09:00:00+00:00", "add", "-A")
+	f.git("2026-03-04T09:00:00+00:00",
+		"-c", "user.name=Assistant", "-c", "user.email=noreply@example.invalid",
+		"commit", "-m", "chore: written before the trailer convention")
+
+	a, err := LoadAuthorship(f.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, b := range a.Bots {
+		names[b.Name] = true
+	}
+	if !names["depbot[bot]"] {
+		t.Errorf("a forge bot is not in the bots row: %+v", a.Bots)
+	}
+	if !names["Assistant"] {
+		t.Errorf("the pre-policy tool author is not in the bots row: %+v", a.Bots)
+	}
+	for _, h := range a.Humans {
+		if names[h.Name] {
+			t.Errorf("%q is in both rows", h.Name)
+		}
+	}
+}
+
+// TestBuildLandingCarriesProvenance asserts the property the single-source rule
+// is checked through: every composed block names the file and heading it came
+// from, and the only added words are ui.json's.
+func TestBuildLandingCarriesProvenance(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+	data, err := os.ReadFile(filepath.Join(out, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(data)
+
+	for _, want := range []string{
+		`data-src=".abcd/development/brief/01-product/README.md#identity-canonical"`,
+		`data-src="docs/explanation/rationale.md"`,
+		`data-src="docs/explanation/roles.md#product-thinker"`,
+		`data-src="docs/explanation/artefacts.md#artefacts"`,
+		`data-src="docs/explanation/process.md#capturing-intents"`,
+		`data-src="docs/how-to/install.md#macos"`,
+		`data-src=".abcd/development/intents/shipped/itd-2-the-shipped-one.md#press-release"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("landing page carries no %s", want)
+		}
+	}
+
+	// The feature block is derived: the shipped intent with a MET audit, not the
+	// drafted one and not the one whose audit says otherwise.
+	if !strings.Contains(html, "I stopped guessing") {
+		t.Error("the feature block does not quote the shipped intent's press release")
+	}
+	if strings.Contains(html, "It has not been built") {
+		t.Error("the feature block quotes a DRAFTED intent")
+	}
+	// Exactly one acceptance criterion, as the manifest asks.
+	if strings.Contains(html, "it does not appear in the quote") {
+		t.Error("the feature block quotes more than the first acceptance criterion")
+	}
+
+	// The Beta badge is a rule on the release version, not a copy decision.
+	if !strings.Contains(html, `<span class="beta">Beta</span>`) {
+		t.Error("no Beta badge at a 0.x release")
+	}
+	// The SVG is inlined so its var(--token) colours follow the theme; the
+	// raster is referenced from the copied file.
+	if !strings.Contains(html, `<span class="svgasset artefact-brief"`) || !strings.Contains(html, "var(--ink, #000)") {
+		t.Error("the SVG asset was not inlined")
+	}
+	if strings.Contains(html, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10"`) {
+		t.Error("the inlined SVG kept its width attribute; the stylesheet must size it")
+	}
+	if !strings.Contains(html, `<img src="assets/img/intro.png"`) {
+		t.Error("the raster was not referenced from the output tree")
+	}
+	// The install tab row: the manifest's left-hand section, then the CLI group.
+	if !strings.Contains(html, `<button role="tab" id="tab-plugin" aria-selected="true"`) {
+		t.Error("the Plugin tab is not the open one")
+	}
+	if !strings.Contains(html, `<div class="tabgroup"><span class="grp">CLI</span>`) {
+		t.Error("the CLI group is not labelled from ui.json")
+	}
+	if !strings.Contains(html, `data-copied="copied"`) {
+		t.Error("the copy button carries no ui.json label for its done state")
+	}
+}
+
+// TestBuildWithoutChangelog is the graceful-absence rule (itd-140): a missing
+// optional source omits what depends on it and the build still succeeds.
+func TestBuildWithoutChangelog(t *testing.T) {
+	f := newFixture(t)
+	if err := os.Remove(filepath.Join(f.Root(), "CHANGELOG.md")); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
+		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}})
+	if err != nil {
+		t.Fatalf("a repository with no CHANGELOG must still build: %v", err)
+	}
+	if res.Version != "" {
+		t.Errorf("version without a changelog: %q", res.Version)
+	}
+	data, err := os.ReadFile(filepath.Join(out, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(data)
+	if strings.Contains(html, `class="beta"`) {
+		t.Error("the Beta badge rendered with no release to read a major version from")
+	}
+	if strings.Contains(html, `class="pill"`) {
+		t.Error("the release pill rendered with no release")
+	}
+	var exp RecordExport
+	rec, err := os.ReadFile(filepath.Join(out, "record.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(rec, &exp); err != nil {
+		t.Fatal(err)
+	}
+	if len(exp.Releases) != 0 {
+		t.Errorf("releases without a changelog: %+v", exp.Releases)
+	}
+	if len(exp.Nodes) == 0 {
+		t.Error("the record vanished with the changelog")
+	}
+}
+
+// TestBuildWithoutIdentityBlock is the same rule at the hero: the three spans
+// the Identity block supplies are omitted, the headline and lede that carry the
+// page stay, and the build succeeds.
+func TestBuildWithoutIdentityBlock(t *testing.T) {
+	f := newFixture(t)
+	f.write(".abcd/development/brief/01-product/README.md", "# Product\n\nNo identity block here.\n")
+	out := t.TempDir()
+	if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp}); err != nil {
+		t.Fatalf("a repository with no Identity block must still build: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(out, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(data)
+	if strings.Contains(html, `class="eyebrow" data-src`) || strings.Contains(html, `class="tagline"`) {
+		t.Error("the hero rendered Identity spans with no Identity block to render them from")
+	}
+	if !strings.Contains(html, "<h1 data-src=\"docs/explanation/rationale.md\">Who this is for</h1>") {
+		t.Error("the headline did not survive the missing Identity block")
+	}
+}
+
+// TestBuildWithoutManifest refuses rather than rendering a page from nothing.
+func TestBuildWithoutManifest(t *testing.T) {
+	f := newFixture(t)
+	if err := os.Remove(filepath.Join(f.Root(), ".abcd", "site.json")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(), Stamp: fixtureStamp})
+	if err == nil {
+		t.Fatal("a repository declaring no composition must not silently build one")
+	}
+	if !strings.Contains(err.Error(), ManifestRelPath) {
+		t.Errorf("the refusal does not name the manifest: %v", err)
+	}
+}
+
+// TestDescribeIsReadOnly pins the bare verb: it reports and writes nothing.
+func TestDescribeIsReadOnly(t *testing.T) {
+	f := newFixture(t)
+	st, err := Describe(f.Root(), "site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Manifest || !st.UIStrings || !st.Baseline {
+		t.Errorf("status: %+v", st)
+	}
+	if st.Chapters != 4 {
+		t.Errorf("chapters: %d", st.Chapters)
+	}
+	if st.OutExists {
+		t.Error("status reports an output directory nothing built")
+	}
+	if _, err := os.Stat(filepath.Join(f.Root(), "site")); !os.IsNotExist(err) {
+		t.Error("describing the site created the output directory")
+	}
+}
+
+func containsString(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
