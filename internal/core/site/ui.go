@@ -65,7 +65,11 @@ type UI struct {
 	Standby       string         `json:"standby"`
 	CLIGroup      string         `json:"cli_group"`
 	MatchesSystem string         `json:"matches_system"`
-	Beta          string         `json:"beta"`
+	// ReadScript labels the link beside the install command that opens the
+	// script the command runs. It is an invitation to read before running, so it
+	// says what the reader would do, not what the file is.
+	ReadScript string `json:"read_script"`
+	Beta       string `json:"beta"`
 }
 
 // RecordNav labels the explorer's sub-navigation.

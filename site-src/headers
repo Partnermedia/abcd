@@ -1,10 +1,23 @@
 # Source of the Cloudflare _headers file. `abcd site build` copies it into the
 # output tree as `_headers`, comments and all.
 #
-# Every route the build emits must match a block here that carries a content
-# policy, `nosniff` and a referrer policy; `TestEveryRouteHasASecurityHeaderBlock`
-# walks the emitted tree and fails on one that does not, so a new route cannot
-# ship unprotected by being forgotten.
+# Every file the build emits must match a block here.
+# `TestEveryRouteHasASecurityHeaderBlock` keeps it two ways: it walks a whole
+# emitted tree and fails on any file matching no block, and it holds THIS file to
+# the route families the committed build emits, with the asset routes read off
+# the build's own copy list rather than restated — so a new copied source cannot
+# ship unprotected by being forgotten here.
+#
+# What a block must carry depends on what the host serves it as:
+#
+#   a DOCUMENT   a content policy, `nosniff` and a referrer policy.
+#   an ASSET     `nosniff` and a referrer policy. A content policy governs what
+#                a document may LOAD, and a stylesheet, a script file, an image
+#                or a JSON export loads nothing — so it would be a directive
+#                with no subject, not a tighter lock.
+#
+# `_headers` and `_redirects` are the host's own configuration. It reads them and
+# serves neither, so neither is a route and neither has a block.
 #
 # /install.sh is read before it is run, so it is served as text, never as a
 # download.
@@ -86,5 +99,31 @@
 # content type is the one way a JSON file becomes something a browser executes.
 /record.json
   Content-Type: application/json; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# The static assets the pages load: the stylesheet, the landing page's script,
+# the chart's runtime, and the rasters and drawings the build copies. Each is
+# requested directly as well as through a page, so each needs its own block.
+#
+# `nosniff` is the one that does the work here: it holds the browser to the
+# content type the host declares from the extension, and a script or a stylesheet
+# that a browser is free to re-interpret is the whole content-sniffing class of
+# bug. The referrer policy keeps a request for one of them from carrying a full
+# URL to another origin. A content policy is not meaningful for any of them —
+# see the rule at the top of this file.
+/site.css
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/site.js
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/record.js
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/assets/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

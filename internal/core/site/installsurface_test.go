@@ -222,7 +222,7 @@ func loadInstallSurfaces(t *testing.T) []installSurface {
 	guide := readFile(t, guidePath)
 	bothArches := []archMapping{amd64FromX8664, arm64FromAarch64}
 
-	return []installSurface{
+	surfaces := []installSurface{
 		{
 			name:      "readme-one-liner",
 			source:    "README.md",
@@ -256,6 +256,30 @@ func loadInstallSurfaces(t *testing.T) []installSurface {
 			archMap:   bothArches,
 		},
 	}
+
+	// The FIFTH form: the script this repository SERVES at /install.sh. It is the
+	// only form a reader of abcdev.app ever executes — the template is what was
+	// reviewed, this is what is downloaded — so holding it to the same rules is
+	// what makes the render's "copy plus a comment" claim checkable rather than
+	// asserted.
+	//
+	// It is RENDERED here rather than read off the disk. `abcd site build` writes
+	// it into a gitignored directory, and a test that read that file would make
+	// the suite's answer depend on whether somebody had happened to run a build:
+	// skipped in every clean checkout, including CI, and able to fail red over a
+	// stale artifact that `git status` does not show and no edit to the tree can
+	// fix. So the surface goes through the same function the build calls, and
+	// `TestBuildRendersTheInstallScript` closes the loop by proving that what
+	// `Build` writes to install.sh is exactly what that function returns.
+	surfaces = append(surfaces, installSurface{
+		name:      "emitted-install-sh",
+		source:    "the rendered " + installScriptName,
+		script:    string(renderInstallScript([]byte(readFile(t, templatePath)), fixtureStamp)),
+		osToken:   "$os",
+		verifiers: []string{verifierGNU, verifierBSD},
+		archMap:   bothArches,
+	})
+	return surfaces
 }
 
 func repoRoot() string { return filepath.Join("..", "..", "..") }

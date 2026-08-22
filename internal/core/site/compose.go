@@ -945,6 +945,7 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 	row.WriteString(`</div>`)
 
 	lead := p.Sections[leadIdx]
+	servesInstallScript, _ := fsutil.Exists(joinRepo(c.repoRoot, installTemplateRelPath))
 	var panels strings.Builder
 	for _, t := range tabs {
 		s := p.Sections[t.idx]
@@ -990,13 +991,23 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 			}
 			body += `<details class="more"><summary>` + escapeText(c.ui.More) + `</summary>` + rest + `</details>`
 		}
+		// The read-before-you-run link, beside the command it reads. It is offered
+		// only where the command is — an operating-system panel — and only when
+		// this repository actually serves the script, because the build writes
+		// /install.sh from that template and a link to a route nothing emitted is
+		// a dead link on the one page that is asking for trust.
+		read := ""
+		if t.isOS && hasCode && servesInstallScript {
+			read = `<p class="small muted readscript"><a href="/` + installScriptName + `">` +
+				escapeText(c.ui.ReadScript) + `</a></p>`
+		}
 		hidden := " hidden"
 		if first[t.idx] {
 			hidden = ""
 		}
 		panels.WriteString(`<div role="tabpanel" id="panel-` + escapeAttr(s.Anchor) + `" aria-labelledby="tab-` +
 			escapeAttr(s.Anchor) + `"` + hidden + srcAttr(p.Rel, s.Anchor) + `>` + head +
-			`<div class="prose small tabbody">` + body + `</div>` + extra + `</div>`)
+			`<div class="prose small tabbody">` + body + `</div>` + read + extra + `</div>`)
 	}
 
 	var b strings.Builder

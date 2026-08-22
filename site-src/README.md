@@ -16,7 +16,11 @@ comes from the repository. This directory holds:
   trackers, no network requests.
 - `install.sh.tmpl` — the committed source of `/install.sh`.
 - `redirects` — the `_redirects` source.
-- `headers` — the `_headers` source.
+- `headers` — the `_headers` source. Every file the build emits matches a block
+  in it: a document carries a content policy, `nosniff` and a referrer policy;
+  an asset carries the two of those that mean anything for a non-document.
 
-`abcd site build` copies `site.css`, `site.js`, `redirects` and `headers` into
-the output tree (the last two under their served names) and reads `ui.json`.
+`abcd site build` copies `site.css`, `site.js`, `record.js`, `redirects` and
+`headers` into the output tree (the last two under their served names), renders
+`install.sh.tmpl` to `install.sh` with one build-stamp comment added, and reads
+`ui.json`.

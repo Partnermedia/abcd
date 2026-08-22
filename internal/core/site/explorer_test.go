@@ -587,13 +587,68 @@ func headerPathMatches(pattern, path string) bool {
 	return strings.HasSuffix(rest, parts[len(parts)-1])
 }
 
+// The headers a route must carry, by what the host serves it as.
+//
+// A DOCUMENT is the only thing a content policy governs: the directives name
+// what the page may load, and a stylesheet or an image loads nothing. So an
+// asset is held to the two that do mean something for it — `nosniff`, so the
+// declared content type is the one that is honoured, and a referrer policy, so
+// a request for it carries no full URL off-origin.
+var (
+	documentHeaders = []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"}
+	assetHeaders    = []string{"X-Content-Type-Options", "Referrer-Policy"}
+)
+
+// servedRoute maps one emitted file to the path a reader requests and the
+// headers that path must carry. `_headers` and `_redirects` are the host's own
+// control files — it consumes them and serves neither — so they are not routes.
+func servedRoute(name string) (route string, required []string, served bool) {
+	switch name {
+	case "_headers", "_redirects":
+		return "", nil, false
+	}
+	if strings.HasSuffix(name, "index.html") {
+		// The served route is the directory the index sits in.
+		return "/" + strings.TrimSuffix(name, "index.html"), documentHeaders, true
+	}
+	if strings.HasSuffix(name, ".html") {
+		return "/" + name, documentHeaders, true
+	}
+	return "/" + name, assetHeaders, true
+}
+
+// assertHeaderCoverage holds one route to the headers its kind must carry.
+func assertHeaderCoverage(t *testing.T, source string, blocks []headerBlock, route string, required []string) {
+	t.Helper()
+
+	found := map[string]bool{}
+	for _, b := range blocks {
+		if !headerPathMatches(b.pattern, route) {
+			continue
+		}
+		for _, h := range required {
+			if b.headers[h] != "" {
+				found[h] = true
+			}
+		}
+	}
+	for _, h := range required {
+		if !found[h] {
+			t.Errorf("%s: %s matches no block setting %s", source, route, h)
+		}
+	}
+}
+
 // TestEveryRouteHasASecurityHeaderBlock is the rule a new route breaks by
 // existing: `_headers` is a hand-written file and the routes are generated, so
 // nothing but this connects the two.
 //
 // A route that matches no block is served with no content policy, no `nosniff`
 // and no referrer policy — and it is served that way silently, because a missing
-// header looks exactly like a page that works.
+// header looks exactly like a page that works. The walk covers EVERY file the
+// build emits, not the HTML alone: the stylesheet, the scripts, the record
+// export, the installer and the copied rasters are all routes a reader can
+// request, and an unprotected one is unprotected whatever its extension.
 func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
@@ -603,35 +658,26 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 	if len(blocks) == 0 {
 		t.Fatal("the build emitted no _headers blocks")
 	}
-	required := []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"}
 
-	routes := 0
+	docs, assets := 0, 0
 	for _, name := range res.Files {
-		if !strings.HasSuffix(name, "index.html") {
+		route, required, served := servedRoute(name)
+		if !served {
 			continue
 		}
-		// The served route: the directory the index sits in.
-		route := "/" + strings.TrimSuffix(name, "index.html")
-		routes++
-		found := map[string]bool{}
-		for _, b := range blocks {
-			if !headerPathMatches(b.pattern, route) {
-				continue
-			}
-			for _, h := range required {
-				if b.headers[h] != "" {
-					found[h] = true
-				}
-			}
+		if len(required) == len(documentHeaders) {
+			docs++
+		} else {
+			assets++
 		}
-		for _, h := range required {
-			if !found[h] {
-				t.Errorf("route %s matches no _headers block setting %s", route, h)
-			}
-		}
+		assertHeaderCoverage(t, "the emitted _headers", blocks, route, required)
 	}
-	if routes == 0 {
-		t.Fatal("the build emitted no routes, so this proves nothing")
+	// A walk that found nothing to walk proves nothing, and it proves nothing
+	// twice over if it found only one of the two kinds: the asset rule is the one
+	// this test exists to keep, and a run that saw no assets would pass while
+	// enforcing it on nobody.
+	if docs == 0 || assets == 0 {
+		t.Fatalf("the build emitted %d document routes and %d asset routes; this proves nothing without both", docs, assets)
 	}
 
 	// The chart is the one route that fetches, and a policy that forbade it
@@ -648,30 +694,36 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 	}
 	// And the file this repository actually ships, held to the same rule. The
 	// fixture proves the mechanism; this proves the committed policy covers the
-	// route families the committed build emits.
+	// route families the committed build emits — the asset routes included, which
+	// the fixture cannot prove because its `_headers` is a copy of the shape
+	// rather than the shipped policy.
 	shipped, err := os.ReadFile(filepath.FromSlash("../../../site-src/headers"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	shippedBlocks := parseHeaders(string(shipped))
 	for _, route := range []string{"/", "/record/", "/record/graph/", "/record/timeline/",
 		"/record/foundations/", "/record/adr/adr-1/", "/record/principle/retire-the-name/",
 		"/contributors/", "/references/"} {
-		found := map[string]bool{}
-		for _, b := range parseHeaders(string(shipped)) {
-			if !headerPathMatches(b.pattern, route) {
-				continue
-			}
-			for _, h := range required {
-				if b.headers[h] != "" {
-					found[h] = true
-				}
-			}
+		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, documentHeaders)
+	}
+	// The asset routes are DERIVED from the build's own copy list, not restated
+	// here: a source added to `copiedSources` then demands a block in the SHIPPED
+	// policy, rather than only in the fixture's — which a developer can make green
+	// by editing the fixture, leaving the file that is actually served short.
+	//
+	// The three the copy list cannot name are named: the rendered installer, the
+	// record export, and one copied raster standing for the asset root the
+	// manifest's own paths land under. Committed SVGs need no route — the build
+	// inlines them as markup and copies none.
+	assetRoutes := []string{"/" + installScriptName, "/record.json", "/assets/img/logo.png"}
+	for _, cp := range copiedSources {
+		if _, _, served := servedRoute(cp.dst); served {
+			assetRoutes = append(assetRoutes, "/"+cp.dst)
 		}
-		for _, h := range required {
-			if !found[h] {
-				t.Errorf("site-src/headers sets no %s for %s", h, route)
-			}
-		}
+	}
+	for _, route := range assetRoutes {
+		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, assetHeaders)
 	}
 
 	// Nothing anywhere may run inline script or eval.

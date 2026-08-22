@@ -1,7 +1,8 @@
 #!/bin/sh
-# abcd installer. Landed as the committed source of /install.sh; the slice that
-# serves it from abcdev.app comes later, and nothing renders or publishes this
-# file yet.
+# abcd installer, and the committed source of /install.sh. `abcd site build`
+# copies this file into the output tree under that name and adds one comment
+# naming the build; every executable byte served from abcdev.app is a byte of
+# this file.
 #
 # Its behaviour is the README one-liner's: detect the platform, download the
 # released binary and checksums.txt, verify the SHA-256 against the manifest,

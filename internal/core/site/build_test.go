@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,6 +132,191 @@ func TestBuildGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden(t, "record.json", rec)
+}
+
+// TestBuildRendersTheInstallScript is the endpoint itd-138 buys: `/install.sh`
+// is the committed template and nothing else. The build may stamp it, because a
+// reader who downloads a script is entitled to know which build wrote it, but
+// the stamp is a COMMENT — every executable byte is the reviewed file's.
+//
+// So the assertion is byte equality after the stamp line is removed, not a
+// resemblance check: a render that reformatted, substituted or truncated a
+// single character of the script would pass a looser test and ship a command
+// nobody reviewed.
+func TestBuildRendersTheInstallScript(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	if !containsString(res.Files, "install.sh") {
+		t.Fatalf("the build wrote no install.sh: %v", res.Files)
+	}
+	got := outFile(t, out, "install.sh")
+	tmpl, err := os.ReadFile(filepath.Join(f.Root(), "site-src", "install.sh.tmpl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(got, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("the emitted install.sh is %d lines long", len(lines))
+	}
+	if !strings.HasPrefix(lines[0], "#!") {
+		t.Errorf("the emitted install.sh does not open with a shebang: %q", lines[0])
+	}
+	// The stamp names the build: the same version and commit the footer carries.
+	stampLine := lines[1]
+	if !strings.HasPrefix(stampLine, "#") {
+		t.Fatalf("the line after the shebang is not a comment: %q", stampLine)
+	}
+	for _, want := range []string{fixtureStamp.Version, fixtureStamp.Commit} {
+		if !strings.Contains(stampLine, want) {
+			t.Errorf("the build stamp %q does not name %q", stampLine, want)
+		}
+	}
+
+	// Everything else is the template, byte for byte.
+	rest := append([]string{lines[0]}, lines[2:]...)
+	if body := strings.Join(rest, "\n"); body != string(tmpl) {
+		t.Errorf("the emitted install.sh is not the template plus a stamp comment:\n%s",
+			strings.Join(diffLines(string(tmpl), body), "\n"))
+	}
+
+	// And it is still a script the shell will read. A stamp inserted in the wrong
+	// place is a syntax error the agreement test cannot see.
+	assertParsesAsShell(t, filepath.Join(out, "install.sh"))
+}
+
+// TestBuildWithoutAnInstallTemplate is the graceful half: a repository that
+// commits no installer is a repository with no /install.sh, not a failed build.
+//
+// And the page must agree with the tree. Offering a link is the build's promise
+// that the route is there; a repository with no template emits no route, so a
+// link to it would be a dead one — on the single page whose job is to be worth
+// trusting with a command that pipes a download into a shell.
+func TestBuildWithoutAnInstallTemplate(t *testing.T) {
+	f := newFixture(t)
+	if err := os.Remove(filepath.Join(f.Root(), "site-src", "install.sh.tmpl")); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+	if containsString(res.Files, "install.sh") {
+		t.Errorf("the build invented an install.sh with no template: %v", res.Files)
+	}
+	if html := outFile(t, out, "index.html"); strings.Contains(html, "/install.sh") {
+		t.Error("the landing page links /install.sh, which this build did not write")
+	}
+}
+
+// TestInstallScriptWithoutAStampIsAVerbatimCopy pins the no-stamp path, which no
+// fixture build can reach: the build fills an empty stamp from the changelog and
+// from git HEAD, so a repository with neither is the only caller that sees this,
+// and it must get the template back unchanged rather than a comment reading
+// "built from ".
+func TestInstallScriptWithoutAStampIsAVerbatimCopy(t *testing.T) {
+	tmpl := []byte("#!/bin/sh\nmain() { :; }\nmain \"$@\"\n")
+	if got := renderInstallScript(tmpl, BuildStamp{}); string(got) != string(tmpl) {
+		t.Errorf("an unstamped render changed the script:\n got %q\nwant %q", got, tmpl)
+	}
+}
+
+// TestInstallScriptStampCannotAddALine is the one thing the stamp must never
+// do. The comment is built from two strings — a changelog heading and a git
+// object name — and a newline in either would END the comment and make what
+// follows a COMMAND, in a file whose whole purpose is to be piped into a shell.
+//
+// The fields are repository facts rather than attacker input, which is exactly
+// why this is worth a test: nothing else in the build would notice, and the
+// result is served to every reader who trusts the domain.
+func TestInstallScriptStampCannotAddALine(t *testing.T) {
+	tmpl := []byte("#!/bin/sh\nset -eu\nmain() { :; }\nmain \"$@\"\n")
+	hostile := []BuildStamp{
+		{Version: "0.1\necho pwned", Commit: "abc123"},
+		{Version: "0.1", Commit: "abc123\nrm -rf /"},
+		{Version: "0.1\r\necho pwned", Commit: "abc123"},
+	}
+	for _, stamp := range hostile {
+		got := string(renderInstallScript(tmpl, stamp))
+		if strings.Count(got, "\n") != strings.Count(string(tmpl), "\n")+1 {
+			t.Errorf("stamp %+v added more than one line:\n%q", stamp, got)
+		}
+		for _, banned := range []string{"echo pwned", "rm -rf"} {
+			if strings.Contains(got, banned) {
+				t.Errorf("stamp %+v put %q into the served script:\n%q", stamp, banned, got)
+			}
+		}
+	}
+}
+
+// assertParsesAsShell runs the shell's own parser over a file. `sh -n` reads the
+// whole script and executes none of it, which is exactly the question: is what
+// the build wrote still a script?
+func assertParsesAsShell(t *testing.T, path string) {
+	t.Helper()
+
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("no sh on PATH: %v", err)
+	}
+	out, err := exec.Command(sh, "-n", path).CombinedOutput()
+	if err != nil {
+		t.Errorf("sh -n %s: %v\n%s", filepath.Base(path), err, out)
+	}
+}
+
+// TestInstallStripLinksTheServedScript is itd-138's fifth criterion: a reader
+// looking at a command that pipes a download into a shell can read the download
+// first, from the page that is offering it.
+//
+// A link that exists but is not beside the command is not the criterion, so the
+// assertion is positional: the link sits inside the operating-system panel that
+// shows the command, not in the footer or the release row.
+func TestInstallStripLinksTheServedScript(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+	html := outFile(t, out, "index.html")
+
+	link := `<a href="/install.sh">read the script</a>`
+	if !strings.Contains(html, link) {
+		t.Errorf("the landing page carries no read-the-script link (%s)", link)
+	}
+
+	// Beside the command: inside the panel, after the block that holds it.
+	panel := sectionBetween(html, `<div role="tabpanel" id="panel-macos"`, `<div role="tabpanel" id="panel-linux"`)
+	if panel == "" {
+		t.Fatal("the landing page has no macOS install panel")
+	}
+	cmd := strings.Index(panel, `<div class="cmd">`)
+	at := strings.Index(panel, link)
+	switch {
+	case cmd < 0:
+		t.Fatal("the macOS install panel shows no command")
+	case at < 0:
+		t.Error("the read-the-script link is not in the panel that shows the command")
+	case at < cmd:
+		t.Error("the read-the-script link comes before the command it reads")
+	}
+
+	// And the releases link the manual path needs stays on the strip.
+	if !strings.Contains(html, `<a href="https://example.invalid/fixture/repo/releases">all releases</a>`) {
+		t.Error("the install strip lost its releases link, so the by-hand path has no destination")
+	}
+}
+
+// sectionBetween returns the span of s that opens at from and ends where to
+// begins, or "" when either marker is missing.
+func sectionBetween(s, from, to string) string {
+	i := strings.Index(s, from)
+	if i < 0 {
+		return ""
+	}
+	rest := s[i:]
+	if j := strings.Index(rest, to); j >= 0 {
+		return rest[:j]
+	}
+	return rest
 }
 
 // TestBuildLayoutDoesNotOverlap is the coil packing's own sanity check, asserted
