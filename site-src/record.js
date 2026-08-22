@@ -558,10 +558,14 @@
       var alive = (n.created && n.last)
         ? '<line x1="' + X(n.created).toFixed(1) + '" y1="20" x2="' + X(n.last).toFixed(1) + '" y2="20" class="alive"/>'
         : '';
-      if (n.date && n.date !== n.created) add(n.date, 'diamond', fmtDate(n.date), 'dated ' + n.type);
-      add(n.created, 'dot', fmtDate(n.created), 'tree');
+      /* Each date is named by the record's own field name — the same words the
+         record's page prints in its frontmatter table — so the line reads out
+         as four named dates rather than as four bare ones. The middle mark
+         takes the record's state instead, which is what that date means. */
+      if (n.date && n.date !== n.created) add(n.date, 'diamond', W_.fDate + ' ' + fmtDate(n.date), 'dated ' + n.type);
+      add(n.created, 'dot', W_.fCreated + ' ' + fmtDate(n.created), 'tree');
       if (n.entered && n.entered !== n.created) add(n.entered, 'ring', n.status + ' ' + fmtDate(n.entered), 'since ' + tone);
-      if (n.last && n.last !== n.created && n.last !== n.entered) add(n.last, 'small', fmtDate(n.last), 'last');
+      if (n.last && n.last !== n.created && n.last !== n.entered) add(n.last, 'small', W_.fTouched + ' ' + fmtDate(n.last), 'last');
       var sr = spoken.join(' · ');
       return '<svg class="continuum" viewBox="0 0 ' + Wd + ' 40" role="img" aria-label="' + esc(sr) + '">' +
         '<line x1="' + x0 + '" y1="20" x2="' + x1 + '" y2="20" class="base"/>' +

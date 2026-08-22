@@ -141,6 +141,17 @@ func (e *explorer) recordBody(n ExportNode) (string, error) {
 	return b.String(), nil
 }
 
+// The record's own field names. They are the record format's words, not the
+// generator's, so they are shared rather than repeated: the frontmatter table
+// prints them and the chart's card names its dates by them, and the two cannot
+// come to call the same fact by two different names.
+const (
+	fieldDate    = "date"
+	fieldCreated = "created"
+	fieldEntered = "entered"
+	fieldTouched = "touched"
+)
+
 // frontmatterTable is the record's own fields, plus the three dates git carries
 // for its file. Every cell is a value the record already holds.
 func (e *explorer) frontmatterTable(n ExportNode) string {
@@ -151,10 +162,10 @@ func (e *explorer) frontmatterTable(n ExportNode) string {
 		{"status", n.Status},
 		{"kind", n.Kind},
 		{"severity", n.Severity},
-		{"date", n.Date},
-		{"created", n.Dates.Created},
-		{"entered", n.Dates.Entered},
-		{"touched", n.Dates.Touched},
+		{fieldDate, n.Date},
+		{fieldCreated, n.Dates.Created},
+		{fieldEntered, n.Dates.Entered},
+		{fieldTouched, n.Dates.Touched},
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="tablewrap"><table class="fm"><tbody>`)

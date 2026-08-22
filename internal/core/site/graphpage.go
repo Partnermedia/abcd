@@ -30,6 +30,14 @@ func (e *explorer) graphPage() (string, error) {
 	b.WriteString(` data-open="` + escapeAttr(ui.Record.OpenOnForge) + `"`)
 	b.WriteString(` data-history="` + escapeAttr(ui.Record.CommitHistory) + `"`)
 	b.WriteString(` data-notintree="` + escapeAttr(ui.Record.NotInTree) + `"`)
+	// The four dates on the card's continuum are named by the record's OWN
+	// field names — the same words the per-record page's frontmatter table
+	// prints — so the line can be read out as "date … created … touched …"
+	// rather than as four unlabelled dates, without the generator inventing a
+	// word for any of them.
+	b.WriteString(` data-f-date="` + escapeAttr(fieldDate) + `"`)
+	b.WriteString(` data-f-created="` + escapeAttr(fieldCreated) + `"`)
+	b.WriteString(` data-f-touched="` + escapeAttr(fieldTouched) + `"`)
 	b.WriteString(` data-close="` + escapeAttr(g.Close) + `"`)
 	b.WriteString(` data-back="` + escapeAttr(g.Back) + `"`)
 	b.WriteString(` data-forward="` + escapeAttr(g.Forward) + `"`)
