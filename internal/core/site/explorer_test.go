@@ -293,6 +293,45 @@ func TestContributorsRefuseWithoutTheirPolicy(t *testing.T) {
 	}
 }
 
+// TestEveryTableScrollsInsideItsOwnBox is the mobile rule stated where it can
+// be checked: a table is the one block whose content the author does not choose
+// the width of, so every one the build emits — composed, quoted or rendered
+// verbatim out of a record — sits in its own overflow container.
+//
+// Without it the widest cell sets the page's width and the whole layout scrolls
+// sideways at 390 px, which is a defect a reader meets on the first table and a
+// reviewer never meets at all.
+func TestEveryTableScrollsInsideItsOwnBox(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	tables := 0
+	for _, name := range res.Files {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		page := outFile(t, out, name)
+		for i := 0; ; {
+			j := strings.Index(page[i:], "<table")
+			if j < 0 {
+				break
+			}
+			at := i + j
+			tables++
+			before := page[:at]
+			if !strings.HasSuffix(before, `<div class="tablewrap">`) {
+				t.Errorf("%s: a table at byte %d is not inside a .tablewrap — it will widen the page on a phone:\n… %s",
+					name, at, clip120(page[max(0, at-90):at+40]))
+			}
+			i = at + 6
+		}
+	}
+	if tables == 0 {
+		t.Fatal("the fixture emitted no tables, so this proves nothing")
+	}
+}
+
 // TestReferencesRenderFromCSL pins the in-repo formatter: the sources render in
 // the CSL file's own order, with a DOI or a URL linked, beside the credited
 // inspirations under the acknowledgement file's own heading.

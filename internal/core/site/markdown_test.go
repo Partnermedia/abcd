@@ -42,8 +42,11 @@ func TestRenderSubset(t *testing.T) {
 		{"> quoted", "<blockquote>\n<p>quoted</p>\n</blockquote>"},
 		{"- one\n- two", "<ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
 		{"1. one\n2. two", "<ol>\n<li>one</li>\n<li>two</li>\n</ol>"},
+		// A table is the one block whose width its author does not choose, so it
+		// carries its own overflow container: without one the widest cell sets
+		// the width of the whole page on a phone.
 		{"| a | b |\n|---|---|\n| 1 | 2 |",
-			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table>"},
+			`<div class="tablewrap">` + "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table></div>"},
 		{"Escaped \\*not emphasis\\*", "<p>Escaped *not emphasis*</p>"},
 		// A bracket that opens no link is text, as every markdown reader agrees.
 		{"the array [0] holds it", "<p>the array [0] holds it</p>"},
@@ -51,7 +54,7 @@ func TestRenderSubset(t *testing.T) {
 		// An escaped pipe is table content, not a column boundary. Splitting on
 		// it silently shifts every cell after it into the wrong column.
 		{"| a | b |\n|---|---|\n| x \\| y | z |",
-			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>x | y</td>\n<td>z</td>\n</tr>\n</tbody>\n</table>"},
+			`<div class="tablewrap">` + "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>x | y</td>\n<td>z</td>\n</tr>\n</tbody>\n</table></div>"},
 	}
 	for _, c := range cases {
 		if got := render(t, c.md); got != c.want {

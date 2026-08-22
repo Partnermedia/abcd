@@ -337,15 +337,23 @@ func tableCells(ln string) []string {
 	return append(out, strings.TrimSpace(cur.String()))
 }
 
-// table renders a pipe table. Column alignment is not rendered — the site's
-// stylesheet aligns every column the same way — so an alignment row is accepted
-// and its colons ignored.
+// table renders a pipe table, inside its own overflow container.
+//
+// The container is emitted HERE rather than by each layout, because a table is
+// the one block whose width its author does not choose: the widest cell decides
+// it, and without a box to scroll inside, that cell sets the width of the whole
+// page on a phone. Every consumer — a composed chapter, a quoted span, a record
+// body rendered verbatim — gets the same treatment, so no new caller has to
+// remember.
+//
+// Column alignment is not rendered — the site's stylesheet aligns every column
+// the same way — so an alignment row is accepted and its colons ignored.
 func (r *Renderer) table(at Source, lines []string) (string, error) {
 	if len(lines) < 2 || !tableDelimRe.MatchString(lines[1]) {
 		return "", &UnsupportedError{at.Path, at.Line, "pipe table", "a table needs a header row and a |---|---| delimiter row"}
 	}
 	var b strings.Builder
-	b.WriteString("<table>\n<thead>\n<tr>\n")
+	b.WriteString(`<div class="tablewrap">` + "<table>\n<thead>\n<tr>\n")
 	for _, c := range tableCells(lines[0]) {
 		inner, err := r.inline(Source{at.Path, at.Line}, c)
 		if err != nil {
@@ -365,7 +373,7 @@ func (r *Renderer) table(at Source, lines []string) (string, error) {
 		}
 		b.WriteString("</tr>\n")
 	}
-	b.WriteString("</tbody>\n</table>")
+	b.WriteString("</tbody>\n</table></div>")
 	return b.String(), nil
 }
 

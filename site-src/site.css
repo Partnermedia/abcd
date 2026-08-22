@@ -442,7 +442,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .tlside{margin-top:14px}
 
 /* contributors */
-.bars{display:grid;grid-template-columns:max-content 1fr max-content;gap:6px 12px;align-items:center;font-size:.9rem}
+.bars{display:grid;grid-template-columns:minmax(0,max-content) minmax(40px,1fr) max-content;gap:6px 12px;align-items:center;font-size:.9rem}
 .bars .lab{font-family:"IBM Plex Mono",monospace;font-size:.78rem;word-break:break-word}
 .bars .bar{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
 .bars .bar i{display:block;height:100%;background:var(--s-adr);border-radius:3px}

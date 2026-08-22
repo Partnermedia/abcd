@@ -610,7 +610,9 @@ func (c *composer) leadInCards(p *docPage, ch Chapter) (string, error) {
 					return "", err
 				}
 			}
-			out.WriteString(`<div class="tablewrap"` + srcAttr(p.Rel, s.Anchor) + `>` + th + `</div>`)
+			// The renderer supplies the table's own overflow container, so this
+			// wrapper carries nothing but the provenance attribute.
+			out.WriteString(`<div` + srcAttr(p.Rel, s.Anchor) + `>` + th + `</div>`)
 		case isImageBlock(b):
 			h, err := r.RenderBlock(p.Rel, b)
 			if err != nil {

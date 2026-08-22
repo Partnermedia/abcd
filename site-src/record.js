@@ -527,6 +527,9 @@
     var span = [dayNum((L.span && L.span[0]) || ''), dayNum((L.span && L.span[1]) || '')];
     function dayNum(d) { return d ? Date.parse(d + 'T00:00:00Z') : 0; }
     function continuum(n) {
+      /* A record corpus none of whose entries can be dated has no axis to draw
+         one on. Drawing it anyway would walk a month at a time from 1970. */
+      if (!span[0] || !span[1]) return '';
       var Wd = 320, x0 = 8, x1 = Wd - 8;
       var lo = span[0], hi = span[1] > span[0] ? span[1] : span[0] + 1;
       var X = function (d) { return x0 + (dayNum(d) - lo) / (hi - lo) * (x1 - x0); };
@@ -759,7 +762,10 @@
     size();
     base = baseTarget(); view.tx = base.x; view.ty = base.y;
     nodes.forEach(function (n) { n.x = n.hx[arr]; n.y = n.hy[arr]; });
-    var ro = new ResizeObserver(function () { size(); });
+    var ro = new ResizeObserver(function () {
+      if (!canvas.isConnected) { ro.disconnect(); return; }
+      size();
+    });
     ro.observe(stage); G.ro = ro;
     G.raf = requestAnimationFrame(frame);
 
