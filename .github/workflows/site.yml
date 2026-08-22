@@ -29,7 +29,10 @@ name: site
 # bytes the README install one-liner hands a user — so abcdev.app is one verifiable
 # statement: this is abcd at that tag (adr-48 1). Every production run is idempotent
 # per tag: re-running deploys the same tag over itself and the release asset upload
-# uses --clobber, so re-running is always the safe response to a failure.
+# uses --clobber, so re-running is the safe response to a failure — with ONE
+# exception. A tag released before the `abcd site` verbs existed can never render, and
+# the render steps refuse it in one line rather than crashing mid-job; re-running that
+# cannot help, and the fix is to dispatch a tag that has the verbs.
 #
 # A site failure can neither block the release nor change a byte of what it published
 # — the isolation is the caller's job dependency (release.yml's `site` job needs
@@ -287,6 +290,14 @@ jobs:
         # against `abcd site build --help` once that slice merges.
         run: |
           set -euo pipefail
+          # Probe before use. Every tag released before the site slice carries a binary
+          # with no `site` verb, and a dispatch can name any tag: without this the job
+          # dies on an unknown-command error two steps into a render. One line, naming
+          # the actual cause.
+          ./abcd site --help >/dev/null 2>&1 || {
+            echo "::error::this binary has no site verb (released before the site slice); refusing — see PR #421"
+            exit 1
+          }
           # HEAD, never GITHUB_SHA: on the release-chain path GITHUB_SHA is the main
           # commit that triggered the run, not the tagged commit this job checked out,
           # so stamping it would attribute the site to a commit it was not built from.
@@ -313,7 +324,13 @@ jobs:
         # snippet drift, the cross-reference ratchet, the mobile audit (adr-47 3). It
         # runs AFTER the docs build so it sees the whole tree that will be deployed.
         # DEPENDENCY: same sibling slice as the render step above.
-        run: ./abcd site check
+        run: |
+          set -euo pipefail
+          ./abcd site --help >/dev/null 2>&1 || {
+            echo "::error::this binary has no site verb (released before the site slice); refusing — see PR #421"
+            exit 1
+          }
+          ./abcd site check
 
       - name: Pack the rendered site
         run: tar -czf site.tar.gz -C site .
@@ -395,6 +412,13 @@ jobs:
         # production job's render step for the full note.
         run: |
           set -euo pipefail
+          # Probe before use, as in production. Here it catches the window between this
+          # workflow merging and the site slice merging, when main itself builds a
+          # binary with no site verb.
+          ./abcd site --help >/dev/null 2>&1 || {
+            echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
+            exit 1
+          }
           # HEAD, for the same reason as production: the stamp names the commit this
           # job actually built, whatever selected it.
           commit="$(git rev-parse --verify HEAD)"
@@ -415,7 +439,13 @@ jobs:
         # The preview is held to the same provenance and mobile gates as production —
         # a preview that skipped them would stop being a preview of anything.
         # DEPENDENCY: as above.
-        run: ./abcd site check
+        run: |
+          set -euo pipefail
+          ./abcd site --help >/dev/null 2>&1 || {
+            echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
+            exit 1
+          }
+          ./abcd site check
 
       - name: Upload a non-production Worker version
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
