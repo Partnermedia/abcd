@@ -148,7 +148,7 @@ var symmetricRel = map[string]bool{"related": true, "implements": true}
 
 // BuildRecordExport derives record.json from the record graph, the git history
 // and the changelog.
-func BuildRecordExport(repoRoot string, graph lint.RecordGraph, hist History, stamp BuildStamp, opts RecordOpts) (RecordExport, error) {
+func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, hist History, stamp BuildStamp, opts RecordOpts) (RecordExport, error) {
 	nodes := graph.Nodes
 	if !opts.IssueLedger {
 		// The issue ledger is working-tier data (adr-32); publishing it is an
@@ -191,7 +191,7 @@ func BuildRecordExport(repoRoot string, graph lint.RecordGraph, hist History, st
 			Status: n.Status, Kind: n.Kind, Severity: n.Severity,
 			Date: date, Dates: hist.Files[n.Path],
 		}
-		lay[i] = LayoutNode{Type: n.Type, Date: date, Num: handleNum(n.ID)}
+		lay[i] = LayoutNode{Type: n.Type, Date: date, Num: handleNum(n.ID), Touched: hist.Files[n.Path].Touched}
 		exp.Counts.ByType[n.Type]++
 		if exp.Counts.ByLifecycle[n.Type] == nil {
 			exp.Counts.ByLifecycle[n.Type] = map[string]int{}
@@ -218,7 +218,7 @@ func BuildRecordExport(repoRoot string, graph lint.RecordGraph, hist History, st
 		return RecordExport{}, err
 	}
 
-	exp.Health, err = measureHealth(repoRoot, graph, index)
+	exp.Health, err = measureHealth(repoRoot, baselineRel, graph, index)
 	if err != nil {
 		return RecordExport{}, err
 	}
@@ -264,12 +264,12 @@ func collapseEdges(refs []lint.RecordEdge, index map[string]int) ([]ExportEdge, 
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].From != out[j].From {
-			return handleLess(out[i].From, out[j].From)
+			return lint.HandleLess(out[i].From, out[j].From)
 		}
 		if out[i].Rel != out[j].Rel {
 			return out[i].Rel < out[j].Rel
 		}
-		return handleLess(out[i].To, out[j].To)
+		return lint.HandleLess(out[i].To, out[j].To)
 	})
 	// The pair list feeds the layout, so it is rebuilt in the sorted order
 	// rather than in discovery order: the arrangement must not depend on which
@@ -324,9 +324,9 @@ func scanMentions(repoRoot string, nodes []lint.RecordNode, index map[string]int
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].From != out[j].From {
-			return handleLess(out[i].From, out[j].From)
+			return lint.HandleLess(out[i].From, out[j].From)
 		}
-		return handleLess(out[i].To, out[j].To)
+		return lint.HandleLess(out[i].To, out[j].To)
 	})
 	pairs = pairs[:0]
 	for _, m := range out {
@@ -345,7 +345,7 @@ func scanMentions(repoRoot string, nodes []lint.RecordNode, index map[string]int
 // — with one exception: the declaration itself. `supersedes: adr-14` names a
 // file that is gone by design, and that is precisely the reference the site's
 // committed ratchet tracks, so it counts.
-func measureHealth(repoRoot string, graph lint.RecordGraph, index map[string]int) (Health, error) {
+func measureHealth(repoRoot, baselineRel string, graph lint.RecordGraph, index map[string]int) (Health, error) {
 	retired := map[string]bool{}
 	for _, id := range graph.Retired {
 		retired[id] = true
@@ -369,11 +369,11 @@ func measureHealth(repoRoot string, graph lint.RecordGraph, index map[string]int
 	}
 	sort.SliceStable(h.Unresolved, func(i, j int) bool {
 		if h.Unresolved[i].From != h.Unresolved[j].From {
-			return handleLess(h.Unresolved[i].From, h.Unresolved[j].From)
+			return lint.HandleLess(h.Unresolved[i].From, h.Unresolved[j].From)
 		}
-		return handleLess(h.Unresolved[i].To, h.Unresolved[j].To)
+		return lint.HandleLess(h.Unresolved[i].To, h.Unresolved[j].To)
 	})
-	n, err := baselineCount(repoRoot)
+	n, err := baselineCount(repoRoot, baselineRel)
 	if err != nil {
 		return Health{}, err
 	}

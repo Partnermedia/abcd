@@ -192,7 +192,7 @@ func Build(req Request) (Result, error) {
 		return Result{}, err
 	}
 
-	export, err := BuildRecordExport(repoRoot, graph, hist, stamp, manifest.Record)
+	export, err := BuildRecordExport(repoRoot, manifest.Checks.UnresolvedReferenceBaseline, graph, hist, stamp, manifest.Record)
 	if err != nil {
 		return Result{}, err
 	}
@@ -279,18 +279,21 @@ func isPreOne(version string) bool {
 // Status is the read-only board the bare verb renders: what the repository has
 // declared, and what the last build left behind.
 type Status struct {
-	Manifest   bool   `json:"manifest"`
-	UIStrings  bool   `json:"ui_strings"`
-	UIPath     string `json:"ui_strings_path,omitempty"`
-	Baseline   bool   `json:"baseline"`
-	BaselineN  int    `json:"baseline_entries"`
-	OutDir     string `json:"out_dir"`
-	OutExists  bool   `json:"out_exists"`
-	OutFiles   int    `json:"out_files"`
-	Chapters   int    `json:"chapters"`
-	IssueLedge bool   `json:"issue_ledger"`
-	Version    string `json:"version"`
-	Commit     string `json:"commit"`
+	Manifest  bool   `json:"manifest"`
+	UIStrings bool   `json:"ui_strings"`
+	UIPath    string `json:"ui_strings_path,omitempty"`
+	Baseline  bool   `json:"baseline"`
+	BaselineN int    `json:"baseline_entries"`
+	// BaselinePath is the ratchet the board actually read: the manifest's
+	// declaration where it makes one, the default otherwise.
+	BaselinePath string `json:"baseline_path"`
+	OutDir       string `json:"out_dir"`
+	OutExists    bool   `json:"out_exists"`
+	OutFiles     int    `json:"out_files"`
+	Chapters     int    `json:"chapters"`
+	IssueLedge   bool   `json:"issue_ledger"`
+	Version      string `json:"version"`
+	Commit       string `json:"commit"`
 }
 
 // Describe reads the site's declared state without writing anything.
@@ -298,7 +301,8 @@ func Describe(repoRoot, outDir string) (Status, error) {
 	if outDir == "" {
 		outDir = DefaultOutDir
 	}
-	st := Status{OutDir: outDir, Commit: HeadCommit(repoRoot)}
+	st := Status{OutDir: outDir, Commit: HeadCommit(repoRoot), BaselinePath: BaselineRelPath}
+	baselineRel := ""
 	m, err := LoadManifest(repoRoot)
 	switch {
 	case err == nil:
@@ -309,11 +313,16 @@ func Describe(repoRoot, outDir string) (Status, error) {
 		if ok, _ := fsutil.Exists(joinRepo(repoRoot, m.UIStrings)); ok {
 			st.UIStrings = true
 		}
+		if baselineRel = m.Checks.UnresolvedReferenceBaseline; baselineRel != "" {
+			st.BaselinePath = baselineRel
+		}
 	case os.IsNotExist(err):
 	default:
 		return Status{}, err
 	}
-	b, ok, err := LoadBaseline(repoRoot)
+	// The board reports the path it ACTUALLY read, so a reader can tell the
+	// declared ratchet from the default one without opening the manifest.
+	b, ok, err := LoadBaseline(repoRoot, baselineRel)
 	if err != nil {
 		return Status{}, err
 	}

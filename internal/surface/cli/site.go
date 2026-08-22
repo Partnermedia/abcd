@@ -86,9 +86,10 @@ func renderSiteStatus(w io.Writer, st site.Status) {
 	fmt.Fprintf(w, "  issue ledger: %s\n", publishedWord(st.IssueLedge))
 	fmt.Fprintf(w, "  ui strings:   %s\n", mark(st.UIStrings, termsafe.Sanitize(st.UIPath)))
 	if st.Baseline {
-		fmt.Fprintf(w, "  baseline:     %s (%d unresolved references admitted)\n", site.BaselineRelPath, st.BaselineN)
+		fmt.Fprintf(w, "  baseline:     %s (%d unresolved references admitted)\n",
+			termsafe.Sanitize(st.BaselinePath), st.BaselineN)
 	} else {
-		fmt.Fprintf(w, "  baseline:     absent (%s)\n", site.BaselineRelPath)
+		fmt.Fprintf(w, "  baseline:     absent (%s)\n", termsafe.Sanitize(st.BaselinePath))
 	}
 	if st.Version != "" {
 		fmt.Fprintf(w, "  release:      v%s\n", termsafe.Sanitize(st.Version))

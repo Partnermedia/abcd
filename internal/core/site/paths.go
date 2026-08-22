@@ -35,12 +35,27 @@ type BaselineEntry struct {
 	To   string `json:"to"`
 }
 
-// LoadBaseline reads the committed ratchet. A repository without one is a state:
-// found is false and the build carries on.
-func LoadBaseline(repoRoot string) (Baseline, bool, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, BaselineRelPath), maxBaselineBytes)
+// LoadBaseline reads the ratchet at rel, or at the default path when rel is
+// empty.
+//
+// The distinction between "named" and "defaulted" is the whole point. A
+// repository that declares no baseline simply has none, and the build carries on
+// (found=false). A repository that NAMES one in its manifest and does not carry
+// it is a different situation: the ratchet it thinks it armed is not being
+// measured against anything, and reporting a count of zero would read as good
+// news. That refuses.
+func LoadBaseline(repoRoot, rel string) (Baseline, bool, error) {
+	named := rel != ""
+	if !named {
+		rel = BaselineRelPath
+	}
+	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, rel), maxBaselineBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if named {
+				return Baseline{}, false, fmt.Errorf("%w: %s is declared as checks.unresolved_reference_baseline but the repository does not carry it",
+					ErrBaselineInvalid, rel)
+			}
 			return Baseline{}, false, nil
 		}
 		return Baseline{}, false, err
@@ -49,18 +64,18 @@ func LoadBaseline(repoRoot string) (Baseline, bool, error) {
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&b); err != nil {
-		return Baseline{}, false, fmt.Errorf("%w: %s: %v", ErrBaselineInvalid, BaselineRelPath, err)
+		return Baseline{}, false, fmt.Errorf("%w: %s: %v", ErrBaselineInvalid, rel, err)
 	}
 	if b.SchemaVersion != 1 {
-		return Baseline{}, false, fmt.Errorf("%w: %s: schema_version is %d, want 1", ErrBaselineInvalid, BaselineRelPath, b.SchemaVersion)
+		return Baseline{}, false, fmt.Errorf("%w: %s: schema_version is %d, want 1", ErrBaselineInvalid, rel, b.SchemaVersion)
 	}
 	return b, true, nil
 }
 
-// baselineCount is the size of the committed ratchet, or zero where there is
-// none.
-func baselineCount(repoRoot string) (int, error) {
-	b, ok, err := LoadBaseline(repoRoot)
+// baselineCount is the size of the ratchet the manifest names, or zero where
+// the repository declares none.
+func baselineCount(repoRoot, rel string) (int, error) {
+	b, ok, err := LoadBaseline(repoRoot, rel)
 	if err != nil || !ok {
 		return 0, err
 	}
@@ -83,29 +98,4 @@ func handleNum(id string) int {
 		return 0
 	}
 	return n
-}
-
-// handleHead is the store prefix of a record handle (adr-47 -> adr).
-func handleHead(id string) string {
-	if i := strings.LastIndex(id, "-"); i >= 0 {
-		if _, err := strconv.Atoi(id[i+1:]); err == nil {
-			return id[:i]
-		}
-	}
-	return id
-}
-
-// handleLess orders two record handles by store, then NUMERICALLY, so adr-9
-// precedes adr-10 — which a string sort gets backwards, visibly, in every
-// rendered list.
-func handleLess(a, b string) bool {
-	pa, pb := handleHead(a), handleHead(b)
-	if pa != pb {
-		return pa < pb
-	}
-	na, nb := handleNum(a), handleNum(b)
-	if na != nb {
-		return na < nb
-	}
-	return a < b
 }

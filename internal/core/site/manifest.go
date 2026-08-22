@@ -134,8 +134,14 @@ type Feature struct {
 
 // Figure declares a chapter's lifted illustration.
 type Figure struct {
-	Kind           string `json:"kind"`
-	LabelsFromPage bool   `json:"labels-from-page,omitempty"`
+	Kind string `json:"kind"`
+	// LabelsFromPage asks that every label in the figure be a phrase on the page
+	// it illustrates, so a diagram cannot drift from the prose beside it.
+	// DEFERRED: consumed by `abcd site check` (spc-37's loop-figure assertion,
+	// ported from the script's closing check). Validated here — it is meaningless
+	// without a figure to check — so a manifest that asks for it and names no
+	// figure is refused today rather than ignored until the check lands.
+	LabelsFromPage bool `json:"labels-from-page,omitempty"`
 }
 
 // Release names where the install chapter reads version and asset names from.
@@ -261,8 +267,13 @@ func (m Manifest) validate() error {
 				}
 			}
 		}
-		if ch.Figure != nil && ch.Figure.Kind != figureFirstImage {
-			return bad("%s.figure.kind %q is not a figure rule (want %q)", where, ch.Figure.Kind, figureFirstImage)
+		if ch.Figure != nil {
+			if ch.Figure.Kind != figureFirstImage {
+				return bad("%s.figure.kind %q is not a figure rule (want %q)", where, ch.Figure.Kind, figureFirstImage)
+			}
+			if ch.Figure.LabelsFromPage && ch.Figure.Kind == "" {
+				return bad("%s.figure.labels-from-page asks for a check against a figure the chapter does not select", where)
+			}
 		}
 		if ch.Icons != "" && ch.Icons != iconsBeforeLeadIn {
 			return bad("%s.icons %q is not an icon rule the composer implements (want %q)", where, ch.Icons, iconsBeforeLeadIn)
@@ -293,10 +304,16 @@ func (m Manifest) validate() error {
 // silently correct for however many slices it takes to reach its consumer, and
 // then fail in a change that did not cause it.
 func (m Manifest) validateDeferred(bad func(string, ...any) error) error {
-	// DEFERRED to the docs-surface slice.
-	for key, p := range map[string]string{"docs.index": m.Docs.Index, "docs.cli": m.Docs.CLI} {
-		if p != "" && !fsutil.ValidRelPath(p) {
-			return bad("%s %q is not a repo-relative path", key, p)
+	// DEFERRED to the docs-surface slice. Checked in a fixed order, because a
+	// manifest with two bad paths must name the same one on every run — an error
+	// message that changes between identical builds is a bug report nobody can
+	// reproduce.
+	for _, f := range []struct{ key, path string }{
+		{"docs.index", m.Docs.Index},
+		{"docs.cli", m.Docs.CLI},
+	} {
+		if f.path != "" && !fsutil.ValidRelPath(f.path) {
+			return bad("%s %q is not a repo-relative path", f.key, f.path)
 		}
 	}
 	// DEFERRED to spc-38's pages half (the contributors page).
