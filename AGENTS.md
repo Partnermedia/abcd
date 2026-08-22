@@ -139,6 +139,15 @@ irreversible; guessing downward costs nothing.**
   uncommitted peer work is untouchable. (Mechanical presence detection is
   seeded as iss-2608220750029993; until it ships, this convention is the
   gate.)
+- **Isolation protects the tree, not the sequential record ids.** Intents and
+  specs still mint `max+1` under a lock that is advisory and scoped to one
+  checkout, so it cannot see a sibling worktree: Two current checkouts
+  minting in the same window allocate the same id by construction, and being
+  up to date does not help. Say which family you are about to mint into, or
+  mint from one checkout. The durable fix is the timestamp mint that captures
+  already use (iss-2608210737260468, with the collision paths recorded as
+  iss-2608220150157512 and iss-2608221126066632); this note is a caveat, not
+  a remedy.
 
 ## Definition of done
 
