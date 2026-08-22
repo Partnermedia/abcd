@@ -1,0 +1,36 @@
+{
+  "_purpose": "The complete list of words the site generator may add. Everything else the site shows is a span of a repository file selected by .abcd/site.json, or a number from record.json.",
+  "nav_story": "Story",
+  "nav_install": "Install",
+  "nav_docs": "Docs",
+  "nav_record": "Record",
+  "nav_references": "References",
+  "cta_roles": "Roles",
+  "cta_install": "Install",
+  "cta_docs": "Documentation",
+  "record_link": "built in the open",
+  "from_the_record": "from the record",
+  "latest_release": "Latest release",
+  "all_releases": "all releases",
+  "copy": "copy",
+  "copied": "copied",
+  "search_docs": "Search the docs",
+  "platform": {
+    "darwin-arm64": "macOS · Apple silicon",
+    "darwin-amd64": "macOS · Intel",
+    "linux-arm64": "Linux · arm64",
+    "linux-amd64": "Linux · amd64"
+  },
+  "tiles": {
+    "releases": "releases",
+    "adr": "decisions",
+    "intent": "intents",
+    "issue": "issues",
+    "commits": "commits"
+  },
+  "more": "more",
+  "standby": "Stand by…",
+  "cli_group": "CLI",
+  "matches_system": "matches this computer",
+  "beta": "Beta"
+}

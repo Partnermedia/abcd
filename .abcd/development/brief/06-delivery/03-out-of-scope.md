@@ -87,6 +87,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-116` — Validated GitHub issues become ledger entries without retyping (capture extension adopts externally filed findings with provenance; mint stays capture-only)
 - `itd-118` — Merged work leaves no residue (post-merge complement of itd-115: delete the PR branch on merge, tidy the stale local branch, tracking ref, and worktree)
 - `itd-134` — Managed-repo banner generator: a managed CLI in any language opens with its own identity, rendered from its identity block (split from itd-112)
+- `itd-139` — The generic record explorer demonstrated on a second, sparse managed instance (held in drafts until the itd-140 fixture gate can be met; carries the reframed generalisation verdict)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

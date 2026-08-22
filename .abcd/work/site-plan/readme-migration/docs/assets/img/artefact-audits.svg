@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="audits">
+  <circle cx="32" cy="32" r="31" fill="var(--surface-2, #e9edf3)" stroke="var(--rule, #d9dee6)" stroke-width="1"/>
+  <g fill="none" stroke="var(--ink-2, #4b5260)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="32" r="14"/><path d="M42 42l7 7"/></g>
+  <g stroke="var(--ld, #3e9a45)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M25.5 32.5l4.5 4.5 9-10"/></g>
+</svg>

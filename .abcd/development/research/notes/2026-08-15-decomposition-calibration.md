@@ -577,3 +577,40 @@ Per hand-run, append:
   (maintainer-confirmed at interview). Graded: routing prediction partly
   wrong (scope boundary and one link missed); the interview corrected it.
   Planned same session.
+### 2026-08-22 — the abcdev.app website proposal
+
+- **Proposal:** "give abcd a website generated from the repository" — the
+  full 2026-08-21 site plan (landing page, record explorer, install.sh,
+  README migration, `site` verb family, deploy pipeline) arriving as one
+  body of investigation.
+- **Initial routing table:** capability — the landing page | intent |
+  itd-135 (umbrella); capability — the record explorer, split further per
+  decompose-before-filing because one press release could not carry both
+  the reading surface and the visual chart | intents | itd-136 (record
+  pages, contributors, references) + itd-137 (relationship chart,
+  genealogy), `builds_on` itd-135; capability — install.sh | intent |
+  itd-138, `builds_on` itd-135; capability (gated) — the generic explorer
+  on a second instance | intent | itd-139, `builds_on` itd-135/136, held
+  in drafts pending its fixture demonstration; trust rules — the
+  single-source rule + the adr-30 amendment ("never bundled, rendered
+  read-only") | ADR | adr-47; trust rule — deploy-from-tag only | ADR |
+  adr-48; stance — the generic/specific boundary (genericity demonstrated,
+  never asserted; working-tier crossing by opt-in) | discipline | itd-140;
+  plumbing — README migration + the `site` verb family | brief |
+  05-internals/10-site.md. Typed links as recorded in the files; no
+  reversal flags (the adr-30 boundary change was routed as an amendment
+  recorded inside adr-47, not a reversal).
+- **Confirmed routing:** the coarse routing (three website intents +
+  plumbing-to-brief + two ADRs) was human-dictated in the facilitation
+  instructions before the run — the label preceded the prediction for
+  those parts. The explorer split (136/137), the discipline, and the gated
+  adoption intent follow the two ideate verdicts
+  (abcdev-site: survives; record-explorer-generalisation: reframed) and
+  await the interview label.
+- **Verdict:** SPLIT (eight parts across four record types), part-confirmed
+  in advance; the session-added parts pending interview confirmation.
+- **Notes:** first hand-run where an ideate reframing minted a discipline
+  (the boundary stance came out of the adversarial leg, not the proposal);
+  the "capability gated on demonstration" part-type (itd-139) is new to
+  the enum — a capability whose filing is confirmed but whose planning is
+  explicitly blocked on evidence.
