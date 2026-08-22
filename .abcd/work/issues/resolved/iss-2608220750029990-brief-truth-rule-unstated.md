@@ -7,6 +7,10 @@ category: "documentation"
 source: "user-observation"
 found_during: "2026-08-22 filing session (NEXT.md handover)"
 found_at: ".abcd/development/brief/00-meta.md"
+resolution: "Truth-rule paragraph added to 00-meta.md citing adr-5: everything in the brief is decided; the only variance is shipped vs staged, and a staged claim says so."
+impact: internal
+resolved_by:
+  commit: "76722c4"
 ---
 
 The brief nowhere states its truth rule: everything in the brief is decided — the only variance a reader must resolve is shipped vs staged, and a staged claim says so. One paragraph in 00-meta.md citing adr-5.
