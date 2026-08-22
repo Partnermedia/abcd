@@ -12,6 +12,20 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A bare `abcd` on an interactive terminal opens with its banner.** The
+  a-b-c-d signal-flag hoist renders in half-block pixels on its painted
+  panel — true ICS geometry, from the livery grids — with the version beside
+  it, the canonical tagline beneath, and two runnable next steps, all above
+  the unchanged status board. The words are baked in at build time from the
+  canonical identity block behind a drift gate (an installed abcd in a
+  foreign repo never wears that repo's tagline), and the colour ladder
+  resolves truecolor → 256 → 16 → mono automatically, honouring `NO_COLOR`
+  and a root-local `--no-color`; mono renders the art as shade-block glyphs,
+  and machine-consumed streams — pipes, hooks, `--json`, every subcommand —
+  receive no decoration byte at all, the boundary now recorded as its own
+  decision (adr-49) and brief invariant. Unstamped builds say
+  `abcd (dev build)` honestly. (itd-112/spc-41)
+
 - **abcd has a face: the livery assets ship as one drift-gated source.** A new
   internal `livery` package holds the canonical pixel grids for the visual
   identity — the duckling mascot, the a-b-c-d signal-flag logo (true ICS
