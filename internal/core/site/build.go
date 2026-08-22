@@ -322,9 +322,17 @@ func Describe(repoRoot, outDir string) (Status, error) {
 	}
 	// The board reports the path it ACTUALLY read, so a reader can tell the
 	// declared ratchet from the default one without opening the manifest.
+	//
+	// A baseline that is declared but missing, or present but unreadable, is
+	// REPORTED here rather than raised. This verb is the read-only board, and a
+	// broken baseline is precisely the kind of thing somebody runs it to
+	// discover — a board that exits non-zero instead of saying "absent" answers
+	// the question by refusing to answer it. `build` still refuses, because a
+	// health count measured against nothing would be published as if it meant
+	// something.
 	b, ok, err := LoadBaseline(repoRoot, baselineRel)
 	if err != nil {
-		return Status{}, err
+		ok, b = false, Baseline{}
 	}
 	st.Baseline, st.BaselineN = ok, len(b.UnresolvedReferences)
 

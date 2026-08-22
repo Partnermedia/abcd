@@ -189,8 +189,8 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.SchemaVersion != 1 {
 		t.Errorf("schema_version: %d", exp.SchemaVersion)
 	}
-	if len(exp.Nodes) != 8 {
-		t.Fatalf("nodes: %d, want 8 (3 adrs, 3 intents, 1 spec, 1 issue)", len(exp.Nodes))
+	if len(exp.Nodes) != 9 {
+		t.Fatalf("nodes: %d, want 9 (3 adrs, 4 intents, 1 spec, 1 issue)", len(exp.Nodes))
 	}
 	byID := map[string]ExportNode{}
 	for _, n := range exp.Nodes {
@@ -284,11 +284,11 @@ func TestBuildRecordExportShape(t *testing.T) {
 		t.Errorf("the published date span begins at the empty string: %v", exp.Layout.DateRange)
 	}
 
-	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 3 ||
+	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 4 ||
 		exp.Counts.ByType["spec"] != 1 || exp.Counts.ByType["issue"] != 1 {
 		t.Errorf("counts: %+v", exp.Counts.ByType)
 	}
-	if exp.Counts.ByLifecycle["intent"]["shipped"] != 2 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
+	if exp.Counts.ByLifecycle["intent"]["shipped"] != 3 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
 		t.Errorf("lifecycle counts: %+v", exp.Counts.ByLifecycle)
 	}
 
@@ -390,8 +390,13 @@ func TestBuildLandingCarriesProvenance(t *testing.T) {
 	// release is the mint placeholder. Quoting a template at a reader as this
 	// page's one testimonial is worse than quoting nothing, so the derivation
 	// falls through to the newest candidate that actually says something.
+	// Both minted placeholders are skipped — the capture-seeded one (itd-3) and
+	// the promotion-seeded one (itd-4), which is newer still.
 	if strings.Contains(html, "Expand into the full press-release narrative") {
 		t.Error("the feature block quotes an unwritten press release")
+	}
+	if strings.Contains(html, "Seeded by promotion from") {
+		t.Error("the feature block quotes a promotion-seeded placeholder")
 	}
 	if !strings.Contains(html, "itd-2") {
 		t.Error("the feature block did not fall through to the newest written press release")
@@ -550,6 +555,46 @@ func TestBaselineComesFromTheManifest(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "no-such-baseline.json") {
 			t.Errorf("the refusal does not name the missing baseline: %v", err)
+		}
+	})
+
+	// The board is documented as read-only and exit-0 whatever it finds. A
+	// missing declared baseline is exactly the kind of thing somebody runs the
+	// board to DISCOVER, so it has to be reportable state there — while staying
+	// a refusal in `build`, which would otherwise publish a health count
+	// measured against nothing.
+	t.Run("the board reports a missing declared baseline rather than failing", func(t *testing.T) {
+		repoint(t, ".abcd/no-such-baseline.json")
+		st, err := Describe(f.Root(), "site")
+		if err != nil {
+			t.Fatalf("the status board failed on a missing baseline: %v", err)
+		}
+		if st.Baseline {
+			t.Error("the board reports a baseline it could not read as present")
+		}
+		if st.BaselinePath != ".abcd/no-such-baseline.json" {
+			t.Errorf("the board reports %q, not the declared path", st.BaselinePath)
+		}
+		if st.BaselineN != 0 {
+			t.Errorf("the board counts %d entries from a baseline it could not read", st.BaselineN)
+		}
+	})
+
+	t.Run("the board reports an unreadable baseline rather than failing", func(t *testing.T) {
+		broken := ".abcd/broken-baseline.json"
+		if err := os.WriteFile(filepath.Join(f.Root(), filepath.FromSlash(broken)), []byte("{not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		repoint(t, broken)
+		st, err := Describe(f.Root(), "site")
+		if err != nil {
+			t.Fatalf("the status board failed on an unreadable baseline: %v", err)
+		}
+		if st.Baseline || st.BaselineN != 0 {
+			t.Errorf("the board treated an unreadable baseline as present: %+v", st)
+		}
+		if st.BaselinePath != broken {
+			t.Errorf("the board reports %q, not the declared path", st.BaselinePath)
 		}
 	})
 
