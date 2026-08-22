@@ -11,6 +11,7 @@ import (
 
 	"github.com/Partnermedia/abcd/internal/core/ahoy"
 	"github.com/Partnermedia/abcd/internal/core/update"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
@@ -41,7 +42,7 @@ func newUpdateCommand(asJSON *bool) *cobra.Command {
 			// the updater exists.
 			tgt := ahoy.ResolveUpdateTarget()
 			if r := update.Plan(tgt); r != nil {
-				rep := update.Report{Origin: "", Action: update.ActionRefused, TargetPath: tgt.Path, Refusal: r}
+				rep := refusalReport(tgt, r)
 				renderUpdateReport(cmd.OutOrStdout(), *asJSON, rep)
 				return fmt.Errorf("update refused (%s)", r.Shape)
 			}
@@ -93,6 +94,15 @@ func newUpdateCommand(asJSON *bool) *cobra.Command {
 func isTTY(f *os.File) bool {
 	fi, err := f.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// refusalReport shapes the receipt for a dispatch refusal. The target path is
+// redacted at construction: the refusal is a success-shaped envelope (text and
+// --json) the CLI error-surface scrub never touches, so an unredacted
+// target_path would sit beside the already-redacted refusal detail
+// (iss-2608220142158516).
+func refusalReport(tgt ahoy.UpdateTarget, r *update.Refusal) update.Report {
+	return update.Report{Action: update.ActionRefused, TargetPath: fsutil.RedactHome(tgt.Path), Refusal: r}
 }
 
 // renderUpdateReport prints the receipt in both modes. Tags and paths pass
