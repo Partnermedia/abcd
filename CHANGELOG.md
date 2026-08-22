@@ -12,6 +12,20 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **A bare `abcd` on an interactive terminal opens with its banner.** The
+  a-b-c-d signal-flag hoist renders in half-block pixels on its painted
+  panel — true ICS geometry, from the livery grids — with the version beside
+  it, the canonical tagline beneath, and two runnable next steps, all above
+  the unchanged status board. The words are baked in at build time from the
+  canonical identity block behind a drift gate (an installed abcd in a
+  foreign repo never wears that repo's tagline), and the colour ladder
+  resolves truecolor → 256 → 16 → mono automatically, honouring `NO_COLOR`
+  and a root-local `--no-color`; mono renders the art as shade-block glyphs,
+  and machine-consumed streams — pipes, hooks, `--json`, every subcommand —
+  receive no decoration byte at all, the boundary now recorded as its own
+  decision (adr-49) and brief invariant. Unstamped builds say
+  `abcd (dev build)` honestly. (itd-112/spc-41)
+
 - **abcd has a face: the livery assets ship as one drift-gated source.** A new
   internal `livery` package holds the canonical pixel grids for the visual
   identity — the duckling mascot, the a-b-c-d signal-flag logo (true ICS
@@ -33,6 +47,15 @@ called out in a **Breaking** section.
   The bundled domain line is self-contained so managed repos receive the whole
   rule; the full principle lives in the development record.
   (iss-2608210923436594)
+- **The writing style guide is a reference page.** `docs/reference/writing-style.md`
+  is the canonical home for prose rules — the British/US language split,
+  present-tense doctrine, Diátaxis page types, and the punctuation rules (no
+  em dash in list items; a capital after a colon; lower case after a
+  semicolon) — with every rule labelled machine-enforced (naming its shipped
+  docs-lint rule) or review. CONTRIBUTING.md and the DOCUMENTATION rules
+  domain point at it; the punctuation rules stay review-labelled until their
+  lint ships.
+
 - **`abcd banlist --json` carries the private layer's `reach` caveat.** The
   private report now includes a `reach` field holding the one-sentence statement
   of what the layer does and does not protect, unconditionally — mirroring the

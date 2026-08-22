@@ -35,6 +35,7 @@ import (
 	"github.com/Partnermedia/abcd/internal/core/spec"
 	"github.com/Partnermedia/abcd/internal/fsutil"
 	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/Partnermedia/abcd/internal/term"
 	"github.com/Partnermedia/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
@@ -175,6 +176,7 @@ func failOpenNoArgs(cmd *cobra.Command, args []string) error {
 // carry the actions.
 func NewRootCommand() *cobra.Command {
 	var asJSON bool
+	var noColor bool
 
 	root := &cobra.Command{
 		Use:   "abcd [<record-id>]",
@@ -222,6 +224,12 @@ func NewRootCommand() *cobra.Command {
 					}
 				})
 			}
+			// The banner: interactive-TTY bare invocation only, per adr-49 —
+			// --json, pipes, and hooks never receive a decoration byte, and
+			// the status board below renders exactly as it always has.
+			if !asJSON && bannerTTY(cmd.OutOrStdout()) {
+				writeBanner(cmd.OutOrStdout(), noColor, os.Getenv)
+			}
 			st, err := core.Status(cwd)
 			if err != nil {
 				return err
@@ -235,6 +243,9 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().BoolVar(&asJSON, "json", false, "emit machine-readable JSON")
+	// Root-local by design: colour exists only on the bare invocation, so a
+	// persistent flag would be dead surface on every subcommand (itd-112).
+	root.Flags().BoolVar(&noColor, "no-color", false, "render the banner without colour")
 
 	root.AddCommand(newVersionCommand(&asJSON))
 	root.AddCommand(newUpdateCommand(&asJSON))
@@ -1991,10 +2002,8 @@ func newPrompter(cmd *cobra.Command) ahoy.Prompter {
 		return ahoy.RefusingPrompter{}
 	}
 	p := &stdinPrompter{r: bufio.NewReader(in), w: cmd.ErrOrStderr()}
-	if f, ok := in.(*os.File); ok {
-		if fi, err := f.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-			p.tty = true
-		}
+	if f, ok := in.(*os.File); ok && term.IsTerminal(f) {
+		p.tty = true
 	}
 	return p
 }

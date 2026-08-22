@@ -1,6 +1,6 @@
 # What Didn't
 
-> **Status: PLACEHOLDER.** Evidence of dead ends and abandoned approaches accumulates as the project progresses; lifeboat extraction populates this slot from wontfix entries in the `.abcd/work/issues/` ledger, oracle review pitfalls, and abandoned specs. During development, leave empty; populated post-build by the disembark process.
+> **Status: LIVE.** Dead ends and abandoned approaches are recorded here as they are settled — from wontfix entries in the `.abcd/work/issues/` ledger, review pitfalls, and abandoned specs. The brief is the project's current state ([adr-5](../../decisions/adrs/0005-brief-is-current-state.md)): a dead end already closed with prejudice belongs here now. Lifeboat extraction *reads* this file and grounds what the record can prove; it is a reader, never the sole populator.
 
 ## Purpose
 
@@ -23,10 +23,9 @@ For each entry:
 
 Without this section, the next agent re-tries failed approaches because nothing tells them not to. With it, dead ends are documented with provenance — the agent gains time it would otherwise spend learning the same lessons.
 
-## Related sources during build
+## Related sources
 
-While this file is empty during development, related signals already exist:
+Signals feeding this file:
 
-- **`.abcd/.work.local/issues.md`** — running log of issues discovered during the build (see the abcd-CLAUDE.md "Mandatory Issue Recording" rule)
-- **wontfix entries in the `.abcd/work/issues/` ledger** — once `/abcd:capture` ships (itd-4), this becomes the canonical home for explicit non-action decisions
-- **Oracle review pitfalls** — the `.abcd/work/` area accumulates pitfall annotations that lifeboat extraction promotes here
+- **wontfix entries in the [`.abcd/work/issues/`](../../../work/issues/) ledger** — the canonical home for explicit non-action decisions (`abcd capture wontfix`); an entry whose lesson generalises is promoted here
+- **Review pitfalls** — the `.abcd/work/` area accumulates pitfall annotations that graduate here when they prove durable

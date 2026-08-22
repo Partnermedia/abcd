@@ -12,6 +12,7 @@ import (
 	"github.com/Partnermedia/abcd/internal/core/ahoy"
 	"github.com/Partnermedia/abcd/internal/core/update"
 	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/Partnermedia/abcd/internal/term"
 	"github.com/Partnermedia/abcd/internal/termsafe"
 )
 
@@ -91,9 +92,9 @@ func newUpdateCommand(asJSON *bool) *cobra.Command {
 
 // isTTY reports whether f is a character device — the progress/confirmation
 // gate. Piped and hooked invocations are silent except for the receipt.
+// Delegates to the canonical check in internal/term.
 func isTTY(f *os.File) bool {
-	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(f)
 }
 
 // refusalReport shapes the receipt for a dispatch refusal. The target path is

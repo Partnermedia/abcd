@@ -13,7 +13,7 @@ the operator-internal hook entrypoints are omitted.
 
 Agent-based configuration for development
 
-**Usage:** `abcd [<record-id>]`
+**Usage:** `abcd [<record-id>] [flags]`
 
 Agent-based configuration for development.
 
@@ -26,7 +26,8 @@ positional is refused as an unknown command.
 **Flags:**
 
 ```
-      --json   emit machine-readable JSON
+      --json       emit machine-readable JSON
+      --no-color   render the banner without colour
 ```
 
 ### `abcd ahoy`

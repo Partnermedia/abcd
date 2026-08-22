@@ -29,6 +29,14 @@
       "patterns": ["(?s)<!-- END ABCD -->\\n+(.*?)(?:\\n\\n|\\z)"],
       "requires": ["tagline"],
       "template": "{tagline}"
+    },
+    {
+      "id": "banner-baked-identity",
+      "files": ["internal/surface/cli/identity_gen.go"],
+      "kind": "regexp",
+      "patterns": ["bakedTagline = \"(.*?)\""],
+      "requires": ["tagline"],
+      "template": "{tagline}"
     }
   ]
 }

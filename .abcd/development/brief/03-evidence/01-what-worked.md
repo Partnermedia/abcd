@@ -1,6 +1,6 @@
 # What Worked
 
-> **Status: PLACEHOLDER.** Evidence-shaped content (patterns that earned their keep, with the *why*) accumulates as the project progresses — this is the slot lifeboat extraction populates from `.abcd/memory/`, oracle reviews, and the working record under `.abcd/work/`. During development, leave empty; populated post-build by the disembark process.
+> **Status: LIVE.** Evidence-shaped content (patterns that earned their keep, with the *why*) is recorded here as it accrues — from `.abcd/memory/`, reviews, and the working record under `.abcd/work/`. The brief is the project's current state ([adr-5](../../decisions/adrs/0005-brief-is-current-state.md)): a lesson already learned belongs here now, not after a disembark run. Lifeboat extraction *reads* this file and grounds what the record can prove; it is a reader, never the sole populator.
 
 ## Purpose
 

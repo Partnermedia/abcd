@@ -11,6 +11,13 @@
           "type": "bool",
           "required": false,
           "hidden": false
+        },
+        {
+          "name": "no-color",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
         }
       ]
     },
