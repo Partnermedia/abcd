@@ -218,10 +218,22 @@ func (c *composer) ComposeLanding() (string, error) {
 // head renders the document head. The one external request the page makes is
 // the font stylesheet; there are no analytics, no trackers and no scripts from
 // anywhere but this build (adr-38, adr-48).
-func (c *composer) head() string {
+func (c *composer) head() string { return c.headWith("", "") }
+
+// headWith renders the head of a page that names itself — every explorer route
+// does — and that may need one more script than the landing page.
+//
+// A named page's title is `<page> · <project>`: the leading half is what a tab
+// strip and a search result show first, and it is a record heading or a
+// navigation label rather than a sentence written here.
+func (c *composer) headWith(pageTitle, script string) string {
 	title, desc := c.repo.Name, ""
 	if blk, ok := c.identity(); ok {
 		title, desc = blk.Title, blk.Tagline
+	}
+	if pageTitle != "" {
+		title = pageTitle + " · " + title
+		desc = ""
 	}
 	var b strings.Builder
 	b.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n")
@@ -234,8 +246,13 @@ func (c *composer) head() string {
 	b.WriteString(`<link rel="preconnect" href="https://fonts.googleapis.com">` + "\n")
 	b.WriteString(`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>` + "\n")
 	b.WriteString(`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">` + "\n")
-	b.WriteString(`<link rel="stylesheet" href="site.css">` + "\n")
-	b.WriteString(`<script src="site.js" defer></script>` + "\n")
+	// Root-absolute, because the shared assets sit at one served path and the
+	// pages that link them sit at every depth the site has.
+	b.WriteString(`<link rel="stylesheet" href="/site.css">` + "\n")
+	b.WriteString(`<script src="/site.js" defer></script>` + "\n")
+	if script != "" {
+		b.WriteString(`<script src="` + escapeAttr(script) + `" defer></script>` + "\n")
+	}
 	b.WriteString("</head>\n<body>\n")
 	return b.String()
 }
@@ -269,9 +286,16 @@ func (c *composer) brandName() string {
 	return c.repo.Name
 }
 
-// header renders the shared site header: the mark, the beta badge while the
+// header renders the shared site header on the landing page.
+func (c *composer) header() string { return c.headerFor("") }
+
+// headerFor renders the shared site header: the mark, the beta badge while the
 // release major is 0, the navigation, and the release pill.
-func (c *composer) header() string {
+//
+// `active` is the top-level route the current page belongs to. It stays lit
+// while the reader moves between that route's sub-pages, so the Record label
+// does not go dark on the way from the dashboard to the chart.
+func (c *composer) headerFor(active string) string {
 	var b strings.Builder
 	b.WriteString(`<header class="site-head"><div class="wrap">`)
 	b.WriteString(`<a class="brand" href="/">`)
@@ -289,10 +313,16 @@ func (c *composer) header() string {
 	// already announces it unambiguously, and labelling it "Story" would name it
 	// after one of its links.
 	b.WriteString(`<nav class="site-nav">`)
-	b.WriteString(`<a href="#` + escapeAttr(c.firstChapterAnchor()) + `">` + escapeText(c.ui.NavStory) + `</a>`)
-	b.WriteString(`<a href="#` + escapeAttr(c.installChapterAnchor()) + `">` + escapeText(c.ui.NavInstall) + `</a>`)
+	on := func(route string) string {
+		if route != active {
+			return ""
+		}
+		return ` class="on" aria-current="page"`
+	}
+	b.WriteString(`<a href="/#` + escapeAttr(c.firstChapterAnchor()) + `">` + escapeText(c.ui.NavStory) + `</a>`)
+	b.WriteString(`<a href="/#` + escapeAttr(c.installChapterAnchor()) + `">` + escapeText(c.ui.NavInstall) + `</a>`)
 	b.WriteString(`<a href="/docs/">` + escapeText(c.ui.NavDocs) + `</a>`)
-	b.WriteString(`<a href="/record/">` + escapeText(c.ui.NavRecord) + `</a>`)
+	b.WriteString(`<a href="/record/"` + on("/record/") + `>` + escapeText(c.ui.NavRecord) + `</a>`)
 	if c.repo.Repository != "" {
 		b.WriteString(`<a class="gh" href="` + escapeAttr(c.repo.Repository) + `">` + escapeText(repoHandle(c.repo.Repository)) + ` ↗</a>`)
 	}
@@ -576,7 +606,9 @@ func (c *composer) leadInCards(p *docPage, ch Chapter) (string, error) {
 					return "", err
 				}
 			}
-			out.WriteString(`<div class="tablewrap"` + srcAttr(p.Rel, s.Anchor) + `>` + th + `</div>`)
+			// The renderer supplies the table's own overflow container, so this
+			// wrapper carries nothing but the provenance attribute.
+			out.WriteString(`<div` + srcAttr(p.Rel, s.Anchor) + `>` + th + `</div>`)
 		case isImageBlock(b):
 			h, err := r.RenderBlock(p.Rel, b)
 			if err != nil {
@@ -1085,21 +1117,25 @@ func (c *composer) featureBlock(f *Feature) (string, error) {
 // sits on. The manifest asks for ONE acceptance criterion, so it gets one.
 func firstListItem(b Block) (string, int) {
 	lines := strings.Split(b.Text, "\n")
-	if !isUnorderedItem(lines[0]) && !orderedItemRe.MatchString(lines[0]) {
+	first := strings.TrimLeft(lines[0], " \t")
+	switch {
+	case isUnorderedItem(first):
+		first = strings.TrimSpace(first[2:])
+	case orderedItemRe.MatchString(first):
+		first = strings.TrimSpace(orderedItemRe.FindStringSubmatch(first)[2])
+	default:
 		return b.Text, b.Line
 	}
-	var item []string
-	item = append(item, lines[0])
+	item := []string{first}
 	for _, ln := range lines[1:] {
-		if isUnorderedItem(ln) || orderedItemRe.MatchString(ln) {
+		t := strings.TrimLeft(ln, " \t")
+		if isUnorderedItem(t) || orderedItemRe.MatchString(t) {
 			break
 		}
 		item = append(item, ln)
 	}
-	text := strings.Join(item, "\n")
 	// Rendered as prose, not as a one-item list: it is a quotation.
-	text = strings.TrimSpace(strings.TrimLeft(text, "-*+ "))
-	return text, b.Line
+	return strings.TrimSpace(strings.Join(item, "\n")), b.Line
 }
 
 // newestMetIntent picks the shipped intent whose audit verdict is MET, most

@@ -42,8 +42,11 @@ func TestRenderSubset(t *testing.T) {
 		{"> quoted", "<blockquote>\n<p>quoted</p>\n</blockquote>"},
 		{"- one\n- two", "<ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
 		{"1. one\n2. two", "<ol>\n<li>one</li>\n<li>two</li>\n</ol>"},
+		// A table is the one block whose width its author does not choose, so it
+		// carries its own overflow container: without one the widest cell sets
+		// the width of the whole page on a phone.
 		{"| a | b |\n|---|---|\n| 1 | 2 |",
-			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table>"},
+			`<div class="tablewrap">` + "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table></div>"},
 		{"Escaped \\*not emphasis\\*", "<p>Escaped *not emphasis*</p>"},
 		// A bracket that opens no link is text, as every markdown reader agrees.
 		{"the array [0] holds it", "<p>the array [0] holds it</p>"},
@@ -51,12 +54,173 @@ func TestRenderSubset(t *testing.T) {
 		// An escaped pipe is table content, not a column boundary. Splitting on
 		// it silently shifts every cell after it into the wrong column.
 		{"| a | b |\n|---|---|\n| x \\| y | z |",
-			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>x | y</td>\n<td>z</td>\n</tr>\n</tbody>\n</table>"},
+			`<div class="tablewrap">` + "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>x | y</td>\n<td>z</td>\n</tr>\n</tbody>\n</table></div>"},
 	}
 	for _, c := range cases {
 		if got := render(t, c.md); got != c.want {
 			t.Errorf("render(%q)\n got: %s\nwant: %s", c.md, got, c.want)
 		}
+	}
+}
+
+// TestRenderWidenedSubset pins the constructs the record corpus actually uses
+// that the landing page's sources never did. Each one was a refusal before this
+// slice; each is now rendered as its source reads it, and a silent hole or a
+// flattened structure would fail here.
+func TestRenderWidenedSubset(t *testing.T) {
+	cases := []struct{ name, md, want string }{
+		{"thematic break", "---", "<hr>"},
+		{"thematic break with stars", "***", "<hr>"},
+		// `text` followed by a rule line is a setext heading in every reader the
+		// record is read in; rendering it as a rule would publish a different
+		// document from the one on the forge.
+		{"setext h1", "A heading\n=========", "<h1>A heading</h1>"},
+		{"setext h2", "A heading\n---", "<h2>A heading</h2>"},
+		{"setext then prose", "A heading\n---\nAfter.", "<h2>A heading</h2><p>After.</p>"},
+		{"nested unordered list", "- one\n  - deep\n- two",
+			"<ul>\n<li>one<ul>\n<li>deep</li>\n</ul></li>\n<li>two</li>\n</ul>"},
+		{"nested ordered inside unordered", "- one\n  1. first\n  2. second",
+			"<ul>\n<li>one<ol>\n<li>first</li>\n<li>second</li>\n</ol></li>\n</ul>"},
+		{"list continuation line", "- one\n  still one", "<ul>\n<li>one\nstill one</li>\n</ul>"},
+		{"list inside a blockquote", "> intro\n>\n> - one\n> - two",
+			"<blockquote>\n<p>intro</p>\n<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n</blockquote>"},
+		{"nested blockquote", "> outer\n>\n> > inner",
+			"<blockquote>\n<p>outer</p>\n<blockquote>\n<p>inner</p>\n</blockquote>\n</blockquote>"},
+		{"strong wrapping emphasis", "**shipped *code***",
+			"<p><strong>shipped <em>code</em></strong></p>"},
+		{"triple emphasis", "***loud***", "<p><em><strong>loud</strong></em></p>"},
+		// A lone asterisk that closes nothing is punctuation, and the record
+		// writes plenty of it (`npx-create-*`, glob patterns, footnote marks).
+		{"lone asterisk", "npx-create-* tool", "<p>npx-create-* tool</p>"},
+		{"lone underscore", "a _ b", "<p>a _ b</p>"},
+		// A code span beats emphasis: the asterisks inside one are content.
+		{"code span beats emphasis", "**`.abcd/**` stays**",
+			"<p><strong><code>.abcd/**</code> stays</strong></p>"},
+		{"autolink", "Read <https://example.invalid/> for more.",
+			`<p>Read <a href="https://example.invalid/">https://example.invalid/</a> for more.</p>`},
+		// A placeholder in angle brackets is not HTML: the record writes
+		// `<ts>` and `<file>` as prose, and a reader must see them.
+		{"angle-bracket placeholder", "the file lifeboat-<ts> holds it",
+			"<p>the file lifeboat-&lt;ts&gt; holds it</p>"},
+		{"html comment inline", "Kept. <!-- dropped --> Kept.", "<p>Kept.  Kept.</p>"},
+		{"html comment block", "<!-- a note\nover two lines -->", ""},
+		// A delimiter run trapped inside a matched pair can no longer match
+		// anything, but its CHARACTERS are still characters. Dropping them is a
+		// silent difference between the record and the page — the record writes
+		// `MET_WITH_CONCERNS` inside bold constantly.
+		{"underscores inside strong", "**MET_WITH_CONCERNS.**",
+			"<p><strong>MET_WITH_CONCERNS.</strong></p>"},
+		{"star inside strong", "**bold with * star**", "<p><strong>bold with * star</strong></p>"},
+		// The rule of three is asked of the flanking verdicts, which never
+		// change — not of the matching walk's own state, which does.
+		{"rule of three", "**a*b**", "<p><strong>a*b</strong></p>"},
+		// A list may interrupt a paragraph, and the record writes one that way
+		// constantly: a bold lead-in with its bullets under it, no blank line.
+		{"list interrupts a paragraph", "**Costs:**\n- one\n- two",
+			"<p><strong>Costs:</strong></p><ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
+		{"numbered list interrupts a paragraph", "Then:\n1. first\n2. second",
+			"<p>Then:</p><ol>\n<li>first</li>\n<li>second</li>\n</ol>"},
+		// …but only when it is numbered one. A paragraph that wraps onto a line
+		// beginning "2. " is prose, and cutting it there invents a list.
+		{"a wrapped line is not a list", "as in Figure\n2. above, the cost falls",
+			"<p>as in Figure\n2. above, the cost falls</p>"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := render(t, c.md); got != c.want {
+				t.Errorf("render(%q)\n got: %s\nwant: %s", c.md, got, c.want)
+			}
+		})
+	}
+}
+
+// TestRenderReferenceLinks pins the reference-link form the record's older
+// entries use: the destination is defined once at the foot of the document and
+// named from the prose, and the definition block itself renders as nothing.
+func TestRenderReferenceLinks(t *testing.T) {
+	md := "Prior art ([PAUL][paul]) treats it as a gate.\n\n" +
+		"[paul]: https://example.invalid/paul \"PAUL — a framework\"\n"
+	r := testRenderer()
+	r.Refs = LinkDefinitions(md)
+	got, err := r.RenderBlocks("docs/page.md", Blocks(md, 1))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	want := `<p>Prior art (<a href="https://example.invalid/paul">PAUL</a>) treats it as a gate.</p>`
+	if got != want {
+		t.Errorf("\n got: %s\nwant: %s", got, want)
+	}
+	// A document that uses the reference form is held to it: a label with no
+	// definition is a lost destination, and losing one silently is how a dead
+	// cross-reference survives review.
+	r2 := testRenderer()
+	r2.Refs = map[string]string{"paul": "https://example.invalid/paul"}
+	if _, err := r2.RenderBlocks("docs/page.md", Blocks("A [reference][nope] link.", 1)); err == nil {
+		t.Error("an undefined reference link rendered without complaint")
+	}
+	// A document that defines none is not writing one. `[A-Za-z][A-Za-z0-9]*`
+	// is a regular expression, and every reader shows it as the brackets it is.
+	r3 := testRenderer()
+	got, err = r3.RenderBlocks("docs/page.md", Blocks(`the pattern [A-Za-z][A-Za-z0-9._-]* holds`, 1))
+	if err != nil {
+		t.Fatalf("a bracketed pattern in a document with no references: %v", err)
+	}
+	if want := "<p>the pattern [A-Za-z][A-Za-z0-9._-]* holds</p>"; got != want {
+		t.Errorf("\n got: %s\nwant: %s", got, want)
+	}
+}
+
+// TestRenderAngleBracketsAreNotAlwaysHTML pins the split between markup and
+// prose: an element name alone is a placeholder, and only attributes, a closing
+// tag or a void element make it markup.
+func TestRenderAngleBracketsAreNotAlwaysHTML(t *testing.T) {
+	got := render(t, "run gh api collaborators/<u>/permission and read it")
+	if want := "<p>run gh api collaborators/&lt;u&gt;/permission and read it</p>"; got != want {
+		t.Errorf("\n got: %s\nwant: %s", got, want)
+	}
+	r := testRenderer()
+	if _, err := r.RenderBlocks("docs/page.md", Blocks("an <u>underlined</u> word", 1)); err == nil {
+		t.Error("a closed HTML element rendered without complaint")
+	}
+	if _, err := r.RenderBlocks("docs/page.md", Blocks("a <span class=\"x\">styled word", 1)); err == nil {
+		t.Error("an HTML element with attributes rendered without complaint")
+	}
+}
+
+// TestSectionsHonourIndentedFences pins the walk against the shape that loses
+// sections silently: a fenced block indented inside a list item, whose own `#`
+// lines would otherwise be read as headings and split the document at them.
+func TestSectionsHonourIndentedFences(t *testing.T) {
+	md := "# Title\n\n- an item, with a template:\n  ```\n  ## Audit Notes\n\n  ### a review\n  ```\n  and the sentence after it.\n\n## Real heading\n\nText.\n"
+	secs, err := Sections("docs/page.md", md, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secs) != 2 {
+		t.Fatalf("sections: %d — a heading inside an indented fence was read as a heading: %+v", len(secs), secs)
+	}
+	if secs[1].Title != "Real heading" {
+		t.Errorf("second section: %q", secs[1].Title)
+	}
+	got := render(t, secs[0].Body)
+	for _, want := range []string{"<ul>", "<code>## Audit Notes", "and the sentence after it."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered item missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestLinkDefinitions(t *testing.T) {
+	defs := LinkDefinitions("intro\n\n[a]: https://example.invalid/a\n[Bee]: https://example.invalid/b \"titled\"\n")
+	if defs["a"] != "https://example.invalid/a" {
+		t.Errorf("a: %q", defs["a"])
+	}
+	// Labels are matched case-insensitively, as every reader matches them.
+	if defs["bee"] != "https://example.invalid/b" {
+		t.Errorf("bee: %q", defs["bee"])
+	}
+	if len(defs) != 2 {
+		t.Errorf("defs: %v", defs)
 	}
 }
 
@@ -87,14 +251,8 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 	}{
 		{"raw HTML block", "Fine.\n\n<div class=\"x\">hidden</div>", 3, "raw HTML block"},
 		{"inline HTML", "Some <b>bold</b> prose.", 1, "inline HTML"},
-		{"autolink", "Read <https://example.invalid/> for more.", 1, "inline HTML or autolink"},
-		{"reference link", "A [reference][1] link.", 1, "link"},
 		{"link title", `A [titled](https://example.invalid/ "hi") link.`, 1, "link"},
-		{"setext heading", "A heading\n=========", 2, "setext heading"},
-		{"thematic break", "Before.\n\n---\n\nAfter.", 3, "thematic break"},
 		{"indented code", "Prose.\n\n    indented code", 3, "indented code block"},
-		{"nested list", "- one\n  - nested", 2, "nested list"},
-		{"unclosed emphasis", "An *unclosed emphasis.", 1, "unclosed emphasis"},
 		{"unclosed code span", "An `unclosed code span.", 1, "unclosed code span"},
 		{"table without a delimiter", "| a | b |\n| 1 | 2 |", 1, "pipe table"},
 		{"script href", "A [link](javascript:alert(1)) here.", 1, "link scheme"},
@@ -104,12 +262,9 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 		{"obfuscated script href", "A [link](java\x01script:alert(1)) here.", 1, "link scheme"},
 		{"upper-case script href", "A [link](JavaScript:alert(1)) here.", 1, "link scheme"},
 		{"data href", "A [link](data:text/html;base64,PHNjcmlwdD4=) here.", 1, "link scheme"},
-		// Flattening any of these publishes a structure the source does not
-		// have, and no reader can tell. The next slice renders every record
-		// body and will widen the subset guided by real refusals — silent wrong
-		// output is the one outcome that must not happen in the meantime.
-		{"nested blockquote", "> outer\n> > inner", 2, "nested blockquote"},
-		{"list inside a blockquote", "> intro\n>\n> - one\n> - two", 3, "list inside a blockquote"},
+		// A quoted block whose continuation lines drop the marker is ambiguous
+		// between a quote and the paragraph after it, so it stays a refusal.
+		{"lazy blockquote continuation", "> outer\nnot quoted", 2, "lazy blockquote continuation"},
 		{"nested link", "A [link with [another](b) inside](a).", 1, "nested link"},
 		// A fence that opens with no blank line before it is not a block of its
 		// own: the block walk hands the whole run to the paragraph renderer,

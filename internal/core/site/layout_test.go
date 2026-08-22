@@ -37,17 +37,6 @@ func synthRecords(n int) ([]LayoutNode, [][2]int, [][2]int) {
 	return nodes, typed, mentions
 }
 
-func isoDate(y, m, d int) string {
-	pad := func(v int) string {
-		if v < 10 {
-			return "0" + string(rune('0'+v))
-		}
-		return string(rune('0'+v/10)) + string(rune('0'+v%10))
-	}
-	return string(rune('0'+y/1000)) + string(rune('0'+(y/100)%10)) +
-		string(rune('0'+(y/10)%10)) + string(rune('0'+y%10)) + "-" + pad(m) + "-" + pad(d)
-}
-
 // TestCoilNeverOverlaps is the packing's own invariant, over a corpus big
 // enough to make it work for it. A bubble sitting on another one means the
 // placement walked into a case it does not handle, and the picture is wrong in

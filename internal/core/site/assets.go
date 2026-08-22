@@ -267,7 +267,12 @@ func (a *assetPipe) render(pageDir, src, alt string, at Source) (string, error) 
 	if w, h, ok := pngSize(data); ok {
 		size = fmt.Sprintf(` width="%d" height="%d"`, w, h)
 	}
-	return `<img src="` + escapeAttr(dst) + `" alt="` + escapeAttr(alt) + `"` + size + ` loading="lazy">`, nil
+	// The href is root-absolute, because the same asset is referenced from every
+	// depth the site serves: the landing page at `/`, and a record's page at
+	// `/record/adr/adr-1/`. An output-relative src resolves only at the root and
+	// 404s everywhere else — a picture missing on hundreds of pages and present
+	// on the one page anybody previews.
+	return `<img src="/` + escapeAttr(dst) + `" alt="` + escapeAttr(alt) + `"` + size + ` loading="lazy">`, nil
 }
 
 // pngSize reads a PNG's pixel dimensions out of its IHDR chunk, so the page can

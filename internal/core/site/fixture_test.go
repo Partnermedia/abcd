@@ -297,7 +297,26 @@ func (f *fixture) writeSources() {
     "linux-arm64": "Linux · arm64",
     "linux-amd64": "Linux · amd64"
   },
-  "tiles": {"releases": "releases", "adr": "decisions", "intent": "intents", "issue": "issues", "commits": "commits"},
+  "tiles": {"releases": "releases", "adr": "decisions", "intent": "intents", "spec": "specs",
+            "issue": "issues", "principle": "principles",
+            "discipline": "disciplines", "commits": "commits"},
+  "record_nav": {"dashboard": "Dashboard", "graph": "Relationships", "timeline": "Genealogy",
+                 "foundations": "Foundations", "contributors": "Contributors"},
+  "panels": {"cadence": "Release cadence", "latest": "Latest decisions", "health": "Record health",
+             "table_view": "Table view"},
+  "graph": {"arrange": "Arrange", "by_date": "by date", "by_links": "by links", "filters": "Filters",
+            "find": "Find a record", "mentions": "include body mentions", "browse_list": "Browse as a list",
+            "zoom_in": "Zoom in", "zoom_out": "Zoom out", "reset_view": "Reset view",
+            "full_screen": "Full screen", "exit_full_screen": "Exit full screen", "close": "Close",
+            "back": "Back", "forward": "Forward", "history": "History of records looked at",
+            "linked": "linked records", "no_links": "no typed cross-references"},
+  "record": {"frontmatter": "Frontmatter", "inbound": "Referenced by", "outbound": "References",
+             "mentions": "mentions", "not_in_tree": "not in the tree", "open_on_forge": "open on GitHub",
+             "commit_history": "commit history"},
+  "relations": {"blocked_by": "blocks", "supersedes": "superseded by",
+                "implements": "implemented by", "builds_on": "built on by"},
+  "contributors": {"authors": "Authors of record", "tools": "Bots and tools",
+                   "assisted": "commits disclose AI assistance", "trailers": "Assisted-by trailers"},
   "more": "more",
   "standby": "Stand by…",
   "cli_group": "CLI",
@@ -307,7 +326,41 @@ func (f *fixture) writeSources() {
 `)
 
 	f.write("site-src/redirects", "/old/  /docs/old/  301\n")
-	f.write("site-src/headers", "/install.sh\n  Content-Type: text/plain; charset=utf-8\n")
+	// The same block shape the repository ships, so the coverage check exercises
+	// the mechanism rather than a stub. The policies are abbreviated; what is
+	// under test is that every emitted route matches a block that sets all
+	// three security headers, and that the chart's route may fetch.
+	f.write("site-src/headers", `# fixture headers
+/install.sh
+  Content-Type: text/plain; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/record/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/contributors/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/references/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/record.json
+  Content-Type: application/json; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+`)
 	f.write("site-src/site.css", ":root{--ink:#000}\n")
 	f.write("site-src/site.js", "/* fixture */\n")
 
@@ -505,12 +558,16 @@ related_adrs: [adr-1]
 The second decision's body.
 `)
 
+	// itd-1 is BLOCKED BY itd-2, so the pair exercises a directed relation whose
+	// two ends are named by different words: itd-1 is "blocked by" itd-2, and
+	// itd-2 "blocks" itd-1.
 	f.write(".abcd/development/intents/drafts/itd-1-the-drafted-one.md", `---
 id: itd-1
 slug: the-drafted-one
 spec_id: null
 kind: standalone
 builds_on: []
+blocked_by: [itd-2]
 severity: minor
 impact: additive
 ---
@@ -632,6 +689,139 @@ source: "agent-finding"
 a fixture issue with no heading, mentioning adr-2 in its text
 `)
 
+	// A discipline: an intent that states a rule rather than shipping a change.
+	// It is what the foundations page lists beside the principles.
+	f.write(".abcd/development/intents/disciplines/itd-5-a-fixture-discipline.md", `---
+id: itd-5
+slug: a-fixture-discipline
+spec_id: null
+kind: discipline
+builds_on: []
+severity: minor
+impact: internal
+---
+
+# A Fixture Discipline
+
+## Rule
+
+Every fixture record carries a body, so the explorer has something to render.
+`)
+
+	// A superseded intent, so a set-aside lifecycle has a bubble and a pill.
+	f.write(".abcd/development/intents/superseded/itd-6-the-superseded-one.md", `---
+id: itd-6
+slug: the-superseded-one
+spec_id: null
+kind: standalone
+builds_on: [itd-1]
+severity: minor
+impact: additive
+---
+
+# The Superseded One
+
+## Press Release
+
+> **A fixture user reads a promise that was withdrawn.** The record keeps it.
+
+## Acceptance Criteria
+
+- Given a withdrawn promise, when the site builds, then it still has a page.
+`)
+
+	// The principle store: no frontmatter, the file name is the handle, and its
+	// README is the store's index rather than one of its records.
+	f.write(".abcd/development/principles/README.md", "# principles/\n\nThe store's own index.\n")
+	// The links here are the two shapes a record writes at a relative path that
+	// is NOT markdown: a directory that exists in the tree, and a file that does
+	// not. The first has a forge view to point at; the second has nothing, and
+	// the record's own text is what stands.
+	f.write(".abcd/development/principles/one-fixture-principle.md", `# One fixture principle
+
+**The rule.** A principle carries no frontmatter, so the lint scan cannot see
+it and the site reads the store directly. It sits beside
+[the decisions](../decisions) and is not [a missing thing](../nowhere).
+
+**Why.** It exercises the frontmatter-free path, mentioning adr-1 in passing.
+`)
+	f.write(".abcd/development/principles/a-second-fixture-principle.md", `# A second fixture principle
+
+**The rule.** Two entries make a deck rather than a card.
+`)
+
+	// The bibliography, and the acknowledgement file whose numbering it must
+	// agree with. Both are invented for this fixture: no line here is copied
+	// from the repository's own sources.
+	f.write(".abcd/development/research/references.csl.json", fixtureCSL)
+
+	// The attribution policy the contributors page quotes beside its numbers.
+	// The section opens with its own preamble before the bullets, which is the
+	// shape a policy section usually has: the manifest asks for the first
+	// BULLET, and a selector that took the first block would publish the
+	// lead-in and leave the rule off the page.
+	f.write("CONTRIBUTING.md", `# Contributing
+
+## Attribution
+
+A fixture preamble about disclosure. The rules:
+
+- **Human author of record.** The human contributor is the author of record and
+  is responsible for all assisted output. A trailer is disclosure, never an
+  authorship claim.
+- A change no tool touched declares itself.
+`)
 	f.write("SECURITY.md", "# Security\n")
-	f.write("ACKNOWLEDGEMENTS.md", "# Acknowledgements\n")
+	f.write("ACKNOWLEDGEMENTS.md", fixtureAcknowledgements)
 }
+
+// fixtureCSL is a synthetic bibliography: two invented sources, one with a DOI
+// and one with a URL, exercising both link forms and both title styles.
+const fixtureCSL = `[
+  {
+    "id": "quill2019fixtures",
+    "type": "article-journal",
+    "author": [{"family": "Quill", "given": "Fenella"}],
+    "title": "On the making of fixtures",
+    "container-title": "Journal of Invented Sources",
+    "volume": "4",
+    "issue": "2",
+    "page": "11-19",
+    "issued": {"date-parts": [[2019]]},
+    "DOI": "10.5555/fixture.2019.4"
+  },
+  {
+    "id": "tamsin2021rendering",
+    "type": "book",
+    "author": [{"family": "Tamsin", "given": "Orrin"}, {"family": "Vole", "given": "Iris"}],
+    "title": "Rendering the record",
+    "publisher": "Invented Press",
+    "publisher-place": "Nowhere",
+    "issued": {"date-parts": [[2021]]},
+    "URL": "https://example.invalid/rendering-the-record"
+  }
+]
+`
+
+// fixtureAcknowledgements numbers the same two sources in the same order, and
+// credits two inspirations beside them.
+const fixtureAcknowledgements = `# Acknowledgements
+
+The fixture's credits, in the three parts the convention keeps.
+
+## Inspirations
+
+Ideas that shaped the fixture — not code it depends on.
+
+- **A first invented inspiration** — the shape of the fixture's record.
+- **A second invented inspiration** — the shape of its pages.
+
+## References & sources
+
+CSL-JSON: ` + "`.abcd/development/research/references.csl.json`" + `
+
+1. Fenella Quill. 2019. On the making of fixtures. *Journal of Invented Sources*
+   4, 2 (2019), 11-19. [doi:10.5555/fixture.2019.4](https://doi.org/10.5555/fixture.2019.4)
+2. Orrin Tamsin and Iris Vole. 2021. *Rendering the record*. Invented Press,
+   Nowhere. <https://example.invalid/rendering-the-record>
+`
