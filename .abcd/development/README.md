@@ -15,7 +15,7 @@ artefact type**, one canonical home per concept:
 | [`decisions/`](decisions) | ADRs (MADR) — ratified architecture decisions, one canonical home; plus `notes/`. |
 | [`roadmap/`](roadmap) | Sequencing: `phases/` + `rfcs/` (an accepted RFC produces an ADR). |
 | [`plans/`](plans) | Dated design / implementation plans (`YYYY-MM-DD-*`). |
-| [`research/`](research) | <!-- index: research-children -->Investigations: `notes/` (dated write-ups) + `prompting/` (prompt R&D).<!-- /index --> |
+| [`research/`](research) | <!-- index: research-children -->Investigations: `notes/` (dated write-ups) + `prompting/` (prompt R&D) + `abcdev-site/` (the website work cluster).<!-- /index --> |
 | [`release/`](release) | The committed compatibility baseline: `surface.json` (the shipped-surface registry `surface_coverage` reads). |
 | [`release-gate/`](release-gate) | The pre-tag runbook and its `manifest.json` — the periodic brief↔surface cross-check `gate_lockstep` pins. |
 
