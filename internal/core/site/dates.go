@@ -76,7 +76,7 @@ func LoadHistory(repoRoot string) (History, error) {
 	// written on a branch keeps the day it was WRITTEN as its creation date; the
 	// merge then reads as the day it last changed, which is what landing on the
 	// trunk is.
-	out, err := gitutil.RunLimited(repoRoot, maxLogBytes,
+	out, err := gitutil.RunCapped(repoRoot, maxLogBytes,
 		"log", "--reverse", "--name-status", "-M", "--diff-merges=first-parent",
 		"--date=short", "--pretty=format:%x00%ad")
 	if err != nil {

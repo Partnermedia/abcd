@@ -92,7 +92,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		return a, nil
 	}
 
-	trailers, err := gitutil.RunLimited(repoRoot, maxShortlogBytes,
+	trailers, err := gitutil.RunCapped(repoRoot, maxShortlogBytes,
 		"log", "--pretty=format:%x00%(trailers:key=Assisted-by,valueonly,separator=%x1f)")
 	if err != nil {
 		return Authorship{}, err
@@ -137,7 +137,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		return a.ByModel[i].Model < a.ByModel[j].Model
 	})
 
-	shortlog, err := gitutil.RunLimited(repoRoot, maxShortlogBytes, "shortlog", "-sne", "HEAD")
+	shortlog, err := gitutil.RunCapped(repoRoot, maxShortlogBytes, "shortlog", "-sne", "HEAD")
 	if err != nil {
 		return Authorship{}, err
 	}
