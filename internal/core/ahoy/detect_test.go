@@ -80,6 +80,58 @@ func TestClassifyUnmanagedRepo(t *testing.T) {
 	}
 }
 
+// TestClassifyGitfileWorktreeIsARepo pins that a linked worktree or submodule —
+// where `.git` is a regular gitfile ("gitdir: …"), not a directory — is detected
+// as a git checkout, not an unmanaged folder. The old isDir check misread it and
+// silently aborted `ahoy install` there.
+func TestClassifyGitfileWorktreeIsARepo(t *testing.T) {
+	setupHermetic(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /somewhere/.git/worktrees/wt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	det, err := Detect(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.FolderKind != UnmanagedRepo {
+		t.Errorf("gitfile worktree kind = %q, want %q", det.FolderKind, UnmanagedRepo)
+	}
+	if reg, _ := det.Signals["git_repo"].(bool); !reg {
+		t.Errorf("git_repo signal = false over a gitfile worktree, want true")
+	}
+}
+
+// TestGuardOmittedForUnmanagedFolder pins that the guard-health object is omitted
+// for an unmanaged folder rather than serialising a never-computed all-false zero
+// value, which would report a broken guard in a document that also says the
+// plugin root is resolved. It mirrors the Banlist pointer's treatment.
+func TestGuardOmittedForUnmanagedFolder(t *testing.T) {
+	setupHermetic(t)
+	det, err := Detect(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if det.FolderKind != UnmanagedFolder {
+		t.Fatalf("precondition: kind = %q, want %q", det.FolderKind, UnmanagedFolder)
+	}
+	if det.Guard != nil {
+		t.Errorf("Guard = %+v for an unmanaged folder, want nil (omitted)", *det.Guard)
+	}
+	// A repo, by contrast, carries a computed guard object.
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rdet, err := Detect(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rdet.Guard == nil {
+		t.Errorf("Guard = nil for a repo, want a computed object")
+	}
+}
+
 // TestClassifyAbcdDirInRepoIsNotManaged pins iss-88: a git repo carrying a stray
 // .abcd/ directory but no index registration and no marker block is an
 // unmanaged-repo, not a managed-repo — the .abcd/ dir alone never promotes.

@@ -399,13 +399,15 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 			if root == "" {
 				cwd, err := os.Getwd()
 				if err != nil {
-					return err
+					// A fault, not a rendered refusal: exit 2 (could not be
+					// evaluated), consistent with the engine-fault path below.
+					return &exitError{Code: 2, Msg: "docs lint: " + scrubPaths(err)}
 				}
 				root = cwd
 			}
 			root, err := filepath.Abs(root)
 			if err != nil {
-				return err
+				return &exitError{Code: 2, Msg: "docs lint: " + scrubPaths(err)}
 			}
 			cfgPath := configPath
 			if cfgPath == "" {
@@ -446,7 +448,13 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 			}
 			findings, err := lint.Lint(cfg, root)
 			if err != nil {
-				return err
+				// A lint the engine could not run is "could not be evaluated",
+				// exit 2 — the same tri-state code `abcd lint` and record-lint
+				// return, never the code-1 a blocker finding reserves, so a CI
+				// gate keying on >=2 does not read a lint that never happened as
+				// an ordinary findings-pass. scrubPaths keeps an absolute path
+				// out of the message.
+				return &exitError{Code: 2, Msg: "docs lint: " + scrubPaths(err)}
 			}
 			blockers := 0
 			for _, f := range findings {
@@ -1707,7 +1715,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				}
 				fmt.Fprintf(w, "  gaps:        %d\n", len(res.Gaps))
 				if res.FolderKind != ahoy.UnmanagedFolder {
-					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(res.Guard))
+					fmt.Fprintf(w, "  guard:       %s\n", guardHealthLine(*res.Guard))
 					for i, line := range banlistHealthLines(*res.Banlist) {
 						label := "  banlist:     "
 						if i > 0 {
@@ -2721,6 +2729,11 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The stored path is absolute and home-rooted; this is a success
+			// envelope the CLI error scrub never sees, so redact the home root to
+			// ~ before it is rendered or marshalled. Callers re-derive the file
+			// handle from disk, never from this rendered value.
+			res.Record.Path = fsutil.RedactHome(res.Record.Path)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				if !res.Wrote {
 					fmt.Fprintf(w, "abcd history capture — %s already stored (no-op); redacted secrets=%d home=%d\n",
@@ -2728,7 +2741,7 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 					return
 				}
 				fmt.Fprintf(w, "abcd history capture — stored %s (%s)\n", res.Record.SessionID, res.Record.SourceKind)
-				fmt.Fprintf(w, "  path:     %s\n", res.Record.Path)
+				fmt.Fprintf(w, "  path:     %s\n", termsafe.Sanitize(res.Record.Path))
 				fmt.Fprintf(w, "  redacted: secrets=%d home=%d\n", res.Record.Secrets, res.Record.HomePaths)
 			})
 		},
@@ -2758,6 +2771,11 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if records == nil {
 				records = []history.Record{}
 			}
+			// The path field is absolute and home-rooted; redact the home root to ~
+			// in this success envelope (JSON and text) before it is marshalled.
+			for k := range records {
+				records[k].Path = fsutil.RedactHome(records[k].Path)
+			}
 			return render(cmd.OutOrStdout(), *asJSON, records, func(w io.Writer) {
 				if len(records) == 0 {
 					fmt.Fprintln(w, "abcd history — no transcripts stored for this repo")
@@ -2785,6 +2803,9 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Redact the home root out of the absolute stored path in this success
+			// envelope (JSON and the text path line) before it is rendered.
+			rec.Path = fsutil.RedactHome(rec.Path)
 			out := struct {
 				history.Record
 				Body string `json:"body"`

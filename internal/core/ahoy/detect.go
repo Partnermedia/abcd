@@ -82,8 +82,9 @@ func Detect(cwd string) (DetectionResult, error) {
 		// Guard health is computed for every managed or adoptable repo, so a
 		// broken guard is visible on the status board and not only from inside a
 		// session that has already stopped being protected (itd-103 AC 1).
-		res.Guard = detectGuardHealth(abs, pluginRoot, pluginOK)
-		gaps = append(gaps, detectGuardGaps(res.Guard)...)
+		guardHealth := detectGuardHealth(abs, pluginRoot, pluginOK)
+		res.Guard = &guardHealth
+		gaps = append(gaps, detectGuardGaps(guardHealth)...)
 		// The name guard's scaffolding is reported the same way and for the same
 		// reason: a private layer nobody opted into on this machine is invisible from
 		// inside a commit that passed, so the state has to be legible from outside.
@@ -119,7 +120,7 @@ func classify(cwd string, id RepoIdentity, idx *historyIndex) (FolderKind, map[s
 	}
 	signals["marker_block"] = markerFired
 
-	gitRepo := isDir(filepath.Join(cwd, ".git"))
+	gitRepo := gitPresent(cwd)
 	signals["git_repo"] = gitRepo
 
 	// A bare .abcd/ directory is not a managed signal on its own (iss-88): only
@@ -133,6 +134,18 @@ func classify(cwd string, id RepoIdentity, idx *historyIndex) (FolderKind, map[s
 	default:
 		return UnmanagedFolder, signals
 	}
+}
+
+// gitPresent reports whether cwd is the top of a git checkout — a `.git`
+// directory in a normal clone, but a `.git` regular file ("gitdir: …") in a
+// linked worktree or a submodule. Both are genuine checkouts abcd can adopt, so
+// the test is existence, not dir-ness; the old isDir check misread a worktree or
+// submodule as an unmanaged folder and silently aborted `ahoy install` there.
+// os.Stat (not Lstat) is deliberate: a dangling symlink named `.git` reads
+// false, matching core.exists and the iss-72 reasoning.
+func gitPresent(cwd string) bool {
+	_, err := os.Stat(filepath.Join(cwd, ".git"))
+	return err == nil
 }
 
 func detectPluginRoot(ok bool) []Gap {

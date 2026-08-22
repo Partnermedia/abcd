@@ -71,9 +71,16 @@ type DetectionResult struct {
 	RepoIdentity     RepoIdentity   `json:"repo_identity"`
 	Signals          map[string]any `json:"signals"`
 	// Guard is the execution-time shell guard's health. It is reported on every
-	// pass, healthy or not: a guard that fails open looks exactly like a working
-	// one from inside a session, so the state has to be legible from outside.
-	Guard GuardHealth `json:"guard"`
+	// pass over a repo, healthy or not: a guard that fails open looks exactly like
+	// a working one from inside a session, so the state has to be legible from
+	// outside.
+	//
+	// A POINTER, omitted entirely for an unmanaged folder — like Banlist below and
+	// for the same reason: its fields are definite booleans, so a never-computed
+	// zero value would serialise four `false` facts (and no detail) that read as "a
+	// broken guard" to a consumer that never asked about a repo, in a document that
+	// simultaneously reports the plugin root resolved.
+	Guard *GuardHealth `json:"guard,omitempty"`
 	// Banlist is the two-layer name guard's state. Like Guard it is reported on
 	// every pass over a repo — and it carries its own reach, because a private layer
 	// that looks installed says nothing about what a pull request is checked against.
