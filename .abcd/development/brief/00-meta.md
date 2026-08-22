@@ -2,6 +2,20 @@
 
 This file holds **stable conventions** for the brief itself: directory structure, file-naming rules, and the brief↔lifeboat shape contract. The brief reflects the project's *current* state at all times — not versioned, not archived in this directory; see [adr-5](../decisions/adrs/0005-brief-is-current-state.md). History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs).
 
+## The truth rule
+
+Everything in the brief is decided. A section may describe machinery that is
+**shipped** or machinery that is **staged** — a design target a future change
+builds toward — but never an undecided option: the brief records no proposals,
+no alternatives still under consideration, no aspirational maybes. The only
+variance a reader must resolve is shipped vs staged, and a staged claim says so
+explicitly. Unsettled questions live in
+[`03-evidence/03-open-questions.md`](03-evidence/03-open-questions.md) *as
+questions*, never as claims. This follows from
+[adr-5](../decisions/adrs/0005-brief-is-current-state.md): the brief is the
+project's current state, and that state includes what the project has decided
+to build but not yet built.
+
 ## Directory structure
 
 The brief is split across numbered folders rather than a single `README.md`. Reasons:
