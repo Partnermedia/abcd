@@ -89,6 +89,13 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   never a background poll.
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
+- **mattpocock/skills (Matt Pocock, MIT)** — two adaptations: the
+  glossary-file format (each term a frontmattered Markdown file with aliases
+  and forbidden synonyms) behind the brief's terminology glossary, and the
+  "grill me" frontier-questioning pattern — an interview that advances by
+  asking only what the answers so far cannot settle — adapted as the frontier
+  rounds of the brief-creation interview (itd-142).
+  <https://github.com/mattpocock/skills>
 - **OpenAI Codex's sandbox/approval split** — the vocabulary adr-42 borrows for
   naming what a parse layer is: the OS-enforced sandbox is the boundary, the
   approval policy is "a workflow choice layered on top of" it, and the pattern
