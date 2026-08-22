@@ -147,4 +147,6 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-44](0044-remote-mutation-and-caller-identity-trust-rules.md) | abcd never mutates a remote uninvited, and identity derives from caller-local facts | accepted | 2026-08-19 |
 | [adr-45](0045-record-ids-are-timestamp-numeric-and-capture-stable.md) | Record ids are timestamp-numeric, collision-proof by construction, and capture-stable | accepted | 2026-08-20 |
 | [adr-46](0046-persistence-never-weakens-the-verification-posture.md) | Persisting the hook binary never weakens the verification posture — every promotion re-verifies, and SessionEnd performs no network work | accepted | 2026-08-21 |
+| [adr-47](0047-abcdev-app-rendered-from-this-repository-alone.md) | abcdev.app is rendered from this repository alone | accepted | 2026-08-22 |
+| [adr-48](0048-website-deploys-on-release-not-on-merge.md) | The website deploys on release, not on merge | accepted | 2026-08-22 |
 | [adr-49](0049-terminal-emission-discipline.md) | Terminal emission discipline — decoration only on interactive TTYs, machine streams undecorated, untrusted text always sanitised | accepted | 2026-08-22 |
