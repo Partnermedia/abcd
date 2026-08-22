@@ -12,6 +12,19 @@ called out in a **Breaking** section.
 
 ### Added
 
+- **abcd has a face: the livery assets ship as one drift-gated source.** A new
+  internal `livery` package holds the canonical pixel grids for the visual
+  identity — the duckling mascot, the a-b-c-d signal-flag logo (true ICS
+  geometry at full size and in a two-by-two icon arrangement; the compact
+  variant declares itself approximate), and
+  the lifeboat mark — and generates the committed SVG assets under
+  `docs/assets/img/livery/`: panel variants legible on any background,
+  transparent variants labelled dark-surface-only, each on a natural and a
+  square avatar/icon canvas. A package test regenerates
+  every asset and fails on a single byte of drift, so the grids and the
+  artwork cannot diverge. No surface is rewired yet — the forge/web logo stays
+  as it is, and terminal rendering arrives with the planned banner work.
+  (itd-133/spc-36)
 - **The OPINIONS rules domain carries the memory-graduation principle.** A
   lesson whose "why" is a correction any agent should receive belongs in the
   repo's committed record — the `AGENTS.md` conventions section, a custom

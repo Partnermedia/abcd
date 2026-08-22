@@ -535,6 +535,48 @@ Per hand-run, append:
   routing prediction correct; shape prediction wrong. Planned same session
   as itd-132/spc-35.
 
+### 2026-08-21 — the visual-identity proposal (itd-133)
+
+- **Proposal:** one visual identity for abcd — a block-pixel duckling mascot,
+  an official logo spelling a-b-c-d in true maritime signal flags, and
+  lifeboat art scoped to the lifeboat verbs — rendered on any CLI and as
+  HTML/SVG (forge README and web). Live session; the artwork was iterated
+  interactively before filing.
+- **Initial routing:** three parts — the identity assets and their
+  multi-surface rendering (capability | this intent, filed as itd-133); the
+  pixel-grid single source of truth with ANSI/SVG generators (plumbing |
+  spec body at planning); the role assignment duckling=mascot /
+  flags=logo / lifeboat=lifeboat-verbs (intent content, not a separate
+  record). Typed link: itd-133 `refines` itd-112 — the banner draft
+  explicitly leaves its "small colour logo — an obvious object" open, and
+  this supplies it. No reversal flags.
+- **Confirmed routing:** adopted unchanged — the maintainer directed the
+  filing ("record it as an intent") after choosing the three assets
+  in-session.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived confirmation.
+- **Notes:** first aesthetic/identity capability in the corpus; the
+  stance-shaped part (role assignment) routed *into* the intent rather than
+  to a principle because it is the capability's content, not a standing
+  rule — a data point for the enum's stance boundary. Confirmation preceded
+  the two-reviewer prerequisite (as with itd-132); the planning interview is
+  the final label.
+  **Interview label (2026-08-21, same day):** the two reviews
+  (design/feasibility + record-discipline) overturned the routing in part:
+  the terminal-rendering slice (ANSI, colour detection, fallbacks) was
+  re-routed *out* of itd-133 to itd-112, which already claimed those
+  obligations — so FILE-AS-IS was optimistic; the honest retro-label is
+  SPLIT-at-interview. The role-assignment part additionally graduated to a
+  decision-log entry (the reviewers' RD4: an "official logo" designation
+  needs a durable home beyond the intent), refining the stance-boundary
+  data point above. Typed links held but had to be made machine-visible
+  (frontmatter `related_intents` written; prose-only `refines` was
+  invisible to the lexical pass), and a missed relation to itd-102
+  surfaced. A reversal-adjacent flag the initial table missed: itd-133
+  forecloses itd-112's object-vs-text-logo open question
+  (maintainer-confirmed at interview). Graded: routing prediction partly
+  wrong (scope boundary and one link missed); the interview corrected it.
+  Planned same session.
 ### 2026-08-22 — the abcdev.app website proposal
 
 - **Proposal:** "give abcd a website generated from the repository" — the
