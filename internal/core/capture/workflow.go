@@ -371,6 +371,14 @@ func List(req ListRequest) (ListResult, error) {
 	sortIssues(issues)
 	prioritise(issues, openIDSet(ir))
 	relativiseLedgerPaths(repoRoot, issues, skipped)
+	// A --json collection is an empty list, never bare null: a consumer that
+	// iterates the rows (the capture.md contract) errors on null.
+	if issues == nil {
+		issues = []Issue{}
+	}
+	if skipped == nil {
+		skipped = []SkipRecord{}
+	}
 	return ListResult{Issues: issues, Skipped: skipped}, nil
 }
 
