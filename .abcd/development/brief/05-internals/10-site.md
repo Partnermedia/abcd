@@ -31,9 +31,8 @@ and not in intents):
   and `abcd site check` (the provenance audit, docs-lint over rendered text,
   CLI-snippet drift, the `.abcd/site-baseline.json` ratchet, the 390 px
   mobile audit). Transport-agnostic core, front doors per adr-23; the
-  composition rules' executable spec is `compose.py`/`build_data.py` in the
-  working-tier migration bundle (see
-  [`research/abcdev-site/plan.md`](../../research/abcdev-site/plan.md)). The generic/specific boundary of the verb family
+  composition rules' executable spec is `compose.py`/`build_data.py` under
+  [`research/abcdev-site/`](../../research/abcdev-site/). The generic/specific boundary of the verb family
   is governed by the itd-140 discipline: repo-agnostic input contract,
   genericity demonstrated on a sparse second instance before it is claimed,
   working-tier ledger publication opt-in only.
@@ -41,10 +40,7 @@ and not in intents):
   `docs/explanation/{rationale,roles,artefacts,process}.md` and
   `docs/how-to/install.md`; README becomes a contributor page keeping the
   universal install one-liner, with a test that the one-liner, the
-  `install.sh` script and install.md's per-OS forms agree. The migration
-  bundle sits unpacked in the shared working tier
-  (`.abcd/work/site-plan/readme-migration/`) until Phase 1 of the build
-  moves the files to their real paths and deletes the working copy.
+  `install.sh` script and install.md's per-OS forms agree.
 
 The user-facing capabilities ride on this plumbing as intents: itd-135 (the
 landing page, umbrella), itd-136 (the record explorer pages), itd-137 (the
