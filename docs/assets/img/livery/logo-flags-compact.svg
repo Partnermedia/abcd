@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" width="360" height="120">
+<title>abcd logo-flags-compact</title>
+<desc>Compact variant: flag geometry is approximate, not the ICS specification.</desc>
+<rect width="360" height="120" rx="24" fill="#1c1f26"/>
+<g shape-rendering="crispEdges">
+<rect x="30" y="30" width="20" height="20" fill="#e8e8e8"/>
+<rect x="50" y="30" width="20" height="20" fill="#4a6fb5"/>
+<rect x="70" y="30" width="20" height="20" fill="#4a6fb5"/>
+<rect x="110" y="30" width="20" height="20" fill="#cf554d"/>
+<rect x="130" y="30" width="20" height="20" fill="#cf554d"/>
+<rect x="150" y="30" width="20" height="20" fill="#cf554d"/>
+<rect x="190" y="30" width="20" height="20" fill="#4a6fb5"/>
+<rect x="210" y="30" width="20" height="20" fill="#4a6fb5"/>
+<rect x="230" y="30" width="20" height="20" fill="#4a6fb5"/>
+<rect x="270" y="30" width="20" height="20" fill="#f0c052"/>
+<rect x="290" y="30" width="20" height="20" fill="#f0c052"/>
+<rect x="310" y="30" width="20" height="20" fill="#f0c052"/>
+<rect x="30" y="50" width="20" height="20" fill="#e8e8e8"/>
+<rect x="50" y="50" width="20" height="20" fill="#4a6fb5"/>
+<rect x="110" y="50" width="20" height="20" fill="#cf554d"/>
+<rect x="130" y="50" width="20" height="20" fill="#cf554d"/>
+<rect x="190" y="50" width="20" height="20" fill="#cf554d"/>
+<rect x="210" y="50" width="20" height="20" fill="#cf554d"/>
+<rect x="230" y="50" width="20" height="20" fill="#cf554d"/>
+<rect x="270" y="50" width="20" height="20" fill="#4a6fb5"/>
+<rect x="290" y="50" width="20" height="20" fill="#4a6fb5"/>
+<rect x="310" y="50" width="20" height="20" fill="#4a6fb5"/>
+<rect x="30" y="70" width="20" height="20" fill="#e8e8e8"/>
+<rect x="50" y="70" width="20" height="20" fill="#4a6fb5"/>
+<rect x="70" y="70" width="20" height="20" fill="#4a6fb5"/>
+<rect x="110" y="70" width="20" height="20" fill="#cf554d"/>
+<rect x="130" y="70" width="20" height="20" fill="#cf554d"/>
+<rect x="150" y="70" width="20" height="20" fill="#cf554d"/>
+<rect x="190" y="70" width="20" height="20" fill="#4a6fb5"/>
+<rect x="210" y="70" width="20" height="20" fill="#4a6fb5"/>
+<rect x="230" y="70" width="20" height="20" fill="#4a6fb5"/>
+<rect x="270" y="70" width="20" height="20" fill="#f0c052"/>
+<rect x="290" y="70" width="20" height="20" fill="#f0c052"/>
+<rect x="310" y="70" width="20" height="20" fill="#f0c052"/>
+</g>
+</svg>

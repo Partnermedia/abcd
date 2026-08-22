@@ -1653,6 +1653,14 @@ parallel-agent merge contention bites.
   rejects via aliasDenied). Model routing: orchestration on Claude Fable 5; five parallel
   hunters and ten per-finding adversarial refuters on Claude Opus 5; the dual pre-merge
   review runs one reviewer as Claude Fable 5 and one as Claude Opus 5.
+- 2026-08-21 — Visual identity roles (itd-133, maintainer-ruled at the planning
+  interview): the block-pixel duckling is the mascot; the a-b-c-d signal-flag
+  hoist (true ICS geometry at full size) is the official logo of the terminal
+  surfaces (CLI and plugin); a small lifeboat marks the lifeboat verbs; the
+  existing `docs/assets/img/logo.png` remains the forge/web logo for now. One
+  pixel-grid source of truth in the Go tree; all terminal rendering behaviour
+  stays with itd-112. This forecloses itd-112's object-vs-text-logo open
+  question — the object is the flag hoist.
 - 2026-08-21 — Bug-hunt round 5, branch bughunt-b/round-5. Baseline (make preflight
   + gofmt -l .) green before any change. Five parallel Opus 5 hunters swept the four
   dimensions; each candidate was adversarially refuted by an independent Opus 5
