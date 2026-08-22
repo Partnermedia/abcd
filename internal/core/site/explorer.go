@@ -272,14 +272,32 @@ func (e *explorer) genLine(parts ...string) string {
 // --- shared pieces --------------------------------------------------------
 
 // panel is one dashboard card: a heading, an optional right-aligned note, and a
-// body.
+// body. Its heading is an interface label from `site-src/ui.json`, which the
+// generator is entitled to add and which names no repository span.
 func panel(span, heading, note, body string) string {
+	return panelSourced(span, heading, "", note, body)
+}
+
+// panelSourced is a panel whose HEADING is repository text rather than an
+// interface label.
+//
+// The references page titles its two panels with the acknowledgement file's own
+// headings — the generator holds those names only as search keys — so the
+// heading has to name the span it was lifted from exactly as the body under it
+// does. `headingSrc` is a `path#anchor` span, or empty for the interface-label
+// case.
+func panelSourced(span, heading, headingSrc, note, body string) string {
 	cls := "panel"
 	if span != "" {
 		cls += " " + span
 	}
+	src := ""
+	if headingSrc != "" {
+		rel, anchor, _ := strings.Cut(headingSrc, "#")
+		src = srcAttr(rel, anchor)
+	}
 	var b strings.Builder
-	b.WriteString(`<div class="` + escapeAttr(cls) + `"><h3>` + escapeText(heading))
+	b.WriteString(`<div class="` + escapeAttr(cls) + `"><h3` + src + `>` + escapeText(heading))
 	if note != "" {
 		b.WriteString(`<span>` + escapeText(note) + `</span>`)
 	}

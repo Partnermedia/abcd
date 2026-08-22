@@ -103,10 +103,12 @@ type Bibliography struct {
 	InspirationsLead []Block
 	Heading          string
 	RefsHeading      string
-	// Source is the acknowledgement file, InspAnchor the heading the credited
-	// ideas sit under, and AckLinkDefs its link reference definitions — all
-	// three so the rendered list can carry its own provenance.
+	// Source is the acknowledgement file, RefsAnchor and InspAnchor the headings
+	// the numbered sources and the credited ideas sit under, and AckLinkDefs its
+	// link reference definitions — so every block rendered from that file can
+	// carry the span it came from.
 	Source      string
+	RefsAnchor  string
 	InspAnchor  string
 	AckLinkDefs map[string]string
 }
@@ -173,7 +175,7 @@ func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
 	for _, s := range secs {
 		switch {
 		case strings.EqualFold(s.Title, referencesHeading):
-			b.RefsHeading = s.Title
+			b.RefsHeading, b.RefsAnchor = s.Title, s.Anchor
 			numbered = numberedItems(s.Body)
 		case strings.EqualFold(s.Title, inspirationsHeading):
 			b.Heading, b.InspAnchor = s.Title, s.Anchor
@@ -364,17 +366,22 @@ func (e *explorer) referencesPage() (string, error) {
 	var out strings.Builder
 	out.WriteString(`<div class="dash">`)
 
+	// Every block on this page names the repository span it was lifted from, the
+	// same way a composed chapter does. The sources are the CSL file's own
+	// entries, so that file is their span; the heading above them is the
+	// acknowledgement file's, so that section is its.
 	var refs strings.Builder
-	refs.WriteString(`<ol class="refs">`)
+	refs.WriteString(`<ol class="refs"` + srcAttr(b.Path, "") + `>`)
 	for _, entry := range b.Entries {
 		refs.WriteString(`<li>` + entry.Render() + `</li>`)
 	}
 	refs.WriteString(`</ol>`)
 	if e.c.repo.Repository != "" {
-		refs.WriteString(`<p class="small muted"><a href="` +
+		refs.WriteString(`<p class="small muted"` + srcAttr(b.Path, "") + `><a href="` +
 			escapeAttr(e.c.repo.Repository+"/blob/main/"+b.Path) + `">` + escapeText(b.Path) + `</a></p>`)
 	}
-	out.WriteString(panel("c8", b.RefsHeading, strconv.Itoa(len(b.Entries)), refs.String()))
+	out.WriteString(panelSourced("c8", b.RefsHeading, b.Source+"#"+b.RefsAnchor,
+		strconv.Itoa(len(b.Entries)), refs.String()))
 
 	// Rendered only when the acknowledgement file supplied BOTH the heading and
 	// the entries. Without the heading there is nothing to call the panel that
@@ -393,7 +400,8 @@ func (e *explorer) referencesPage() (string, error) {
 		}
 		body := `<div class="prose small"` + srcAttr(b.Source, b.InspAnchor) + `>` + lead + `</div>` +
 			`<div class="insp"` + srcAttr(b.Source, b.InspAnchor) + `>` + items + `</div>`
-		out.WriteString(panel("c4", b.Heading, strconv.Itoa(countListItems(b.Inspirations)), body))
+		out.WriteString(panelSourced("c4", b.Heading, b.Source+"#"+b.InspAnchor,
+			strconv.Itoa(countListItems(b.Inspirations)), body))
 	}
 	out.WriteString(`</div>`)
 	return e.shell(routeReferences, e.c.ui.NavReferences, "", e.genLine(), out.String()), nil
