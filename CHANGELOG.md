@@ -47,6 +47,14 @@ called out in a **Breaking** section.
   The bundled domain line is self-contained so managed repos receive the whole
   rule; the full principle lives in the development record.
   (iss-2608210923436594)
+- **The writing style guide is a reference page.** `docs/reference/writing-style.md`
+  is the canonical home for prose rules — the British/US language split,
+  present-tense doctrine, Diátaxis page types, and the punctuation rules (no
+  em dash in list items; a capital after a colon; lower case after a
+  semicolon) — with every rule labelled machine-enforced (naming its shipped
+  docs-lint rule) or review. CONTRIBUTING.md and the DOCUMENTATION rules
+  domain point at it. (itd-141 stages the punctuation lint.)
+
 - **`abcd banlist --json` carries the private layer's `reach` caveat.** The
   private report now includes a `reach` field holding the one-sentence statement
   of what the layer does and does not protect, unconditionally — mirroring the
