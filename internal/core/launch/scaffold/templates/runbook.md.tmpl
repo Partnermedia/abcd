@@ -30,7 +30,11 @@ The `release.yml` `verify` job runs these, in order, on the released commit.
 2. Build
 3. Vet
 4. Test
+<%- if .Abcd %>
 5. Test (race, internal)
+<%- else %>
+5. Test (race)
+<%- end %>
 <%- range $i, $g := .ExtraGates %>
 <% add $i 6 %>. <% $g.Name %>
 <%- end %>
