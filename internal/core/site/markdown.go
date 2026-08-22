@@ -85,6 +85,19 @@ func (r *Renderer) RenderBlock(path string, blk Block) (string, error) {
 	lines := strings.Split(blk.Text, "\n")
 	first := lines[0]
 
+	// A fence must open its own block. Without a blank line before it the block
+	// walk never sees it start, so the whole run — prose, backticks and code —
+	// arrives here as one paragraph, and every backtick would be escaped into the
+	// page as visible punctuation with the code inlined into the sentence.
+	if !strings.HasPrefix(first, "```") {
+		for i, ln := range lines {
+			if strings.HasPrefix(ln, "```") {
+				return "", &UnsupportedError{at.Path, at.Line + i, "fenced code block without a blank line before it",
+					"a fence opens its own block; without the blank line the code renders as part of the paragraph above"}
+			}
+		}
+	}
+
 	switch {
 	case strings.HasPrefix(first, "```"):
 		return r.fence(at, lines)

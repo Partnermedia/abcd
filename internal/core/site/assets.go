@@ -248,12 +248,18 @@ func (a *assetPipe) render(pageDir, src, alt string, at Source) (string, error) 
 	if prev, ok := a.copies[rel]; ok {
 		dst = prev
 	} else {
+		// Two different files with the same basename would silently overwrite one
+		// another in the flat output directory. The clash is reported against the
+		// LOWEST-sorting other source rather than whichever the map happened to
+		// yield first, so two identical builds name the same pair.
+		clash := ""
 		for other, taken := range a.copies {
-			if taken == dst && other != rel {
-				// Two different files with the same basename would silently
-				// overwrite one another in the flat output directory.
-				return "", fmt.Errorf("%s:%d: assets %q and %q share a file name; the output tree is flat", at.Path, at.Line, other, rel)
+			if taken == dst && other != rel && (clash == "" || other < clash) {
+				clash = other
 			}
+		}
+		if clash != "" {
+			return "", fmt.Errorf("%s:%d: assets %q and %q share a file name; the output tree is flat", at.Path, at.Line, clash, rel)
 		}
 		a.copies[rel] = dst
 	}

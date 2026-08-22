@@ -383,3 +383,80 @@ func sortedKeys(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestLinkedAssetsMatchTheReleaseMatrix earns the manifest's `release.assets`
+// claim.
+//
+// The hero links four binaries and a checksums manifest by NAME. The manifest
+// says those names come from the release workflow, and the build deliberately
+// does not read that workflow — a page that parses CI configuration to decide
+// what to link is a worse dependency than a constant. So the claim is held here
+// instead: the linked names must be exactly the `abcd-<os>-<arch>` matrix the
+// four committed install surfaces themselves derive.
+//
+// A platform added to the release matrix with no link on the page, or a link to
+// a platform nothing publishes, fails this test — which is the whole content of
+// the claim.
+func TestLinkedAssetsMatchTheReleaseMatrix(t *testing.T) {
+	surfaces := loadInstallSurfaces(t)
+
+	// The OSes the per-OS surfaces resolve to, and the architectures their
+	// mappings produce. Both are read off the surfaces rather than restated.
+	oses := map[string]bool{}
+	arches := map[string]bool{}
+	for _, s := range surfaces {
+		if s.osToken != "$os" {
+			oses[s.osToken] = true
+		}
+		for _, m := range s.archMap {
+			arches[m.to] = true
+		}
+	}
+	// Apple silicon reports arm64 already, so no surface maps to it; it is the
+	// passthrough the aarch64 mapping proves is a published architecture.
+	if !arches["arm64"] || !arches["amd64"] {
+		t.Fatalf("the install surfaces resolve architectures %v; expected at least amd64 and arm64", keysOf(arches))
+	}
+	if len(oses) == 0 {
+		t.Fatal("no per-OS install surface names an operating system")
+	}
+
+	want := map[string]bool{}
+	for os := range oses {
+		for arch := range arches {
+			want["abcd-"+os+"-"+arch] = true
+		}
+	}
+
+	got := map[string]bool{}
+	for _, a := range LinkedBinaryAssets {
+		got[a] = true
+	}
+	for a := range want {
+		if !got[a] {
+			t.Errorf("the release matrix publishes %s but the page links no such asset", a)
+		}
+	}
+	for a := range got {
+		if !want[a] {
+			t.Errorf("the page links %s, which the install surfaces' release matrix does not publish", a)
+		}
+	}
+
+	// The one fixed-name asset must be the same file every install form verifies
+	// against — a page offering a different manifest would verify nothing.
+	if AssetChecksums != checksumsAsset {
+		t.Errorf("the page links %q as the checksum manifest; the install surfaces use %q",
+			AssetChecksums, checksumsAsset)
+	}
+}
+
+// keysOf renders a set for an error message, in a fixed order.
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}

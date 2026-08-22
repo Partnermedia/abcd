@@ -109,7 +109,7 @@ func LoadRecordGraph(cfg Config, repoRoot string) (RecordGraph, error) {
 			retired = append(retired, h.String())
 		}
 	}
-	sort.Slice(retired, func(i, j int) bool { return handleLess(retired[i], retired[j]) })
+	sort.Slice(retired, func(i, j int) bool { return HandleLess(retired[i], retired[j]) })
 
 	g := RecordGraph{
 		Nodes:    make([]RecordNode, 0, len(records)),
@@ -152,7 +152,7 @@ func LoadRecordGraph(cfg Config, repoRoot string) (RecordGraph, error) {
 	}
 
 	sort.Slice(g.Nodes, func(i, j int) bool {
-		return handleLess(g.Nodes[i].ID, g.Nodes[j].ID)
+		return HandleLess(g.Nodes[i].ID, g.Nodes[j].ID)
 	})
 	sortEdges(g.Edges)
 	sortEdges(g.Dangling)
@@ -165,19 +165,23 @@ func sortEdges(edges []RecordEdge) {
 	sort.Slice(edges, func(i, j int) bool {
 		a, b := edges[i], edges[j]
 		if a.From != b.From {
-			return handleLess(a.From, b.From)
+			return HandleLess(a.From, b.From)
 		}
 		if a.Field != b.Field {
 			return a.Field < b.Field
 		}
-		return handleLess(a.To, b.To)
+		return HandleLess(a.To, b.To)
 	})
 }
 
-// handleLess orders two record handles by store prefix, then NUMERICALLY — so
+// HandleLess orders two record handles by store prefix, then NUMERICALLY — so
 // adr-9 precedes adr-10, which a plain string sort gets backwards and which a
 // reader of any rendered list notices immediately.
-func handleLess(a, b string) bool {
+//
+// It is exported alongside the graph because every consumer that renders a
+// record list needs exactly this order, and the obvious second implementation
+// is a plain string sort that looks right until the store passes nine records.
+func HandleLess(a, b string) bool {
 	pa, na := splitHandle(a)
 	pb, nb := splitHandle(b)
 	if pa != pb {

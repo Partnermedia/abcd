@@ -111,6 +111,11 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 		{"nested blockquote", "> outer\n> > inner", 2, "nested blockquote"},
 		{"list inside a blockquote", "> intro\n>\n> - one\n> - two", 3, "list inside a blockquote"},
 		{"nested link", "A [link with [another](b) inside](a).", 1, "nested link"},
+		// A fence that opens with no blank line before it is not a block of its
+		// own: the block walk hands the whole run to the paragraph renderer,
+		// which would escape the backticks into the page as visible punctuation.
+		{"fence with no blank line before it", "Run this:\n```sh\necho hi\n```", 2, "fenced code block"},
+		{"fence after a list item", "- one\n```sh\necho hi\n```", 2, "fenced code block"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -274,17 +279,27 @@ func TestColumnLabelForDecodesEntities(t *testing.T) {
 }
 
 func TestSiteHref(t *testing.T) {
+	const forge = "https://example.invalid/o/r"
 	cases := []struct{ dir, in, want string }{
 		{"docs/explanation", "roles.md", "/docs/explanation/roles/"},
 		{"docs/explanation", "../how-to/install.md#cli", "/docs/how-to/install/#cli"},
 		{"docs/explanation", "../README.md", "/docs/"},
 		{"docs/explanation", "#plugin", "#plugin"},
 		{"docs/explanation", "https://example.invalid/", "https://example.invalid/"},
-		{"docs/explanation", "../../CONTRIBUTING.md", "../../CONTRIBUTING.md"},
+		// Outside docs/ there is no page on this site yet, so the link goes to
+		// the forge's view of the file rather than to a relative path that 404s.
+		{"docs/explanation", "../../CONTRIBUTING.md", forge + "/blob/main/CONTRIBUTING.md"},
+		{"docs/explanation", "../../.abcd/development/decisions/adrs/0047-x.md#decision",
+			forge + "/blob/main/.abcd/development/decisions/adrs/0047-x.md#decision"},
 	}
 	for _, c := range cases {
-		if got := siteHref(c.dir, c.in); got != c.want {
+		if got := siteHref(c.dir, c.in, forge); got != c.want {
 			t.Errorf("siteHref(%q, %q) = %q, want %q", c.dir, c.in, got, c.want)
 		}
+	}
+	// With no forge URL there is nothing to point at, and the record's own text
+	// is left exactly as written.
+	if got := siteHref("docs/explanation", "../../CONTRIBUTING.md", ""); got != "../../CONTRIBUTING.md" {
+		t.Errorf("siteHref with no forge = %q, want the href unchanged", got)
 	}
 }

@@ -78,6 +78,10 @@ type LayoutNode struct {
 	Date string
 	// Num is the id number, the last tie-break.
 	Num int
+	// Touched is the day the record's file last changed. It places nothing — the
+	// arrangements are chronological by when a record was WRITTEN — but it is
+	// what the span a timeline draws has to reach.
+	Touched string
 }
 
 // MonthMark is the first record of a month, in placement order.
@@ -122,8 +126,14 @@ type Arrangements struct {
 	Islands  []int `json:"islands"`
 	Pairs    int   `json:"pairs"`
 	Unlinked int   `json:"unlinked"`
-	// DateRange is the first and last effective date placed.
+	// DateRange is the first and last effective date placed — when the records
+	// were WRITTEN.
 	DateRange [2]string `json:"date_range"`
+	// Span is DateRange extended to the last day any placed record's file was
+	// touched, which is the axis a timeline draws: a decision written in May and
+	// amended in August occupies both ends of it, and a range that stopped at the
+	// writing dates would cut the chart short of its own newest fact.
+	Span [2]string `json:"span"`
 }
 
 // ComputeArrangements places every record twice: once in date order along the
@@ -180,6 +190,12 @@ func ComputeArrangements(nodes []LayoutNode, typed, mentions [][2]int) Arrangeme
 		}
 		if nodes[i].Date > a.DateRange[1] {
 			a.DateRange[1] = nodes[i].Date
+		}
+	}
+	a.Span = a.DateRange
+	for _, nd := range nodes {
+		if nd.Touched > a.Span[1] {
+			a.Span[1] = nd.Touched
 		}
 	}
 
