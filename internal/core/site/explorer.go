@@ -21,6 +21,8 @@ package site
 // rewriting it to look better on the site is what that decision forbids.
 
 import (
+	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -652,7 +654,11 @@ func (e *explorer) contributorsPage() (string, error) {
 				escapeText(ui.Contributors.Tools) + `</span></td><td class="tnum">` + strconv.Itoa(t.Commits) + `</td></tr>`)
 		}
 		rows.WriteString(`</tbody>`)
-		body := `<div class="tablewrap"><table>` + rows.String() + `</table></div>` + e.policyQuote()
+		policy, err := e.policyQuote()
+		if err != nil {
+			return "", err
+		}
+		body := `<div class="tablewrap"><table>` + rows.String() + `</table></div>` + policy
 		b.WriteString(panel("c6", ui.Contributors.Authors, "", body))
 	}
 
@@ -679,19 +685,31 @@ func (e *explorer) contributorsPage() (string, error) {
 // policyQuote renders the attribution policy the manifest selects, verbatim,
 // with the file it came from linked. The number above it means nothing without
 // the rule beside it.
-func (e *explorer) policyQuote() string {
+//
+// A repository that DECLARES no policy simply has none, and the page renders
+// without it. A repository that names one and cannot supply it REFUSES: the
+// tallies would go out unaccompanied, which is the reading — assistance as
+// authorship — the whole page exists to prevent.
+func (e *explorer) policyQuote() (string, error) {
 	p := e.c.manifest.RecordPages.Contributors.Policy
 	if p.File == "" {
-		return ""
+		return "", nil
+	}
+	bad := func(why string) error {
+		return fmt.Errorf("site: record_pages.contributors.policy names %s § %s, and %s — the assistance tallies are not published without the rule beside them",
+			p.File, p.Heading, why)
 	}
 	data, err := fsutil.ReadGuarded(joinRepo(e.c.repoRoot, p.File), maxPageBytes)
 	if err != nil {
-		return ""
+		if os.IsNotExist(err) {
+			return "", bad("the repository does not carry it")
+		}
+		return "", err
 	}
 	body, consumed := StripFrontmatter(string(data))
 	secs, err := Sections(p.File, body, consumed)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	for _, s := range secs {
 		if !strings.EqualFold(s.Title, p.Heading) {
@@ -699,7 +717,7 @@ func (e *explorer) policyQuote() string {
 		}
 		blocks := Blocks(s.Body, s.BodyLine)
 		if len(blocks) == 0 {
-			return ""
+			return "", bad("that section is empty")
 		}
 		if p.Part == "first-bullet" {
 			text, line := firstListItem(blocks[0])
@@ -712,16 +730,16 @@ func (e *explorer) policyQuote() string {
 			Link: func(href string, at Source) string { return e.href(p.File, href) }}
 		h, err := r.RenderBlocks(p.File, blocks)
 		if err != nil {
-			return ""
+			return "", err
 		}
 		out := `<div class="prose small policy"` + srcAttr(p.File, s.Anchor) + `>` + h
 		if e.c.repo.Repository != "" {
 			out += `<p class="small"><a href="` + escapeAttr(e.c.repo.Repository+"/blob/main/"+p.File) + `">` +
 				escapeText(p.File) + `</a></p>`
 		}
-		return out + `</div>`
+		return out + `</div>`, nil
 	}
-	return ""
+	return "", bad("that file has no such heading")
 }
 
 // --- link rewriting -------------------------------------------------------

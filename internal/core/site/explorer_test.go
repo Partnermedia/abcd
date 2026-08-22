@@ -263,6 +263,36 @@ func TestContributorsSeparatesAuthorshipFromDisclosure(t *testing.T) {
 	}
 }
 
+// TestContributorsRefuseWithoutTheirPolicy is the one place on the explorer
+// where an absent source is a FAULT rather than a state: the manifest names the
+// policy span, and publishing the assistance tallies without it leaves the
+// number to be read as authorship — the reading the page exists to prevent.
+func TestContributorsRefuseWithoutTheirPolicy(t *testing.T) {
+	cases := []struct{ name, file, body string }{
+		{"the declared file is gone", "", ""},
+		{"the declared heading is gone", "CONTRIBUTING.md", "# Contributing\n\n## Something else\n\n- A bullet.\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			if c.file == "" {
+				if err := os.Remove(filepath.Join(f.Root(), "CONTRIBUTING.md")); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				f.write(c.file, c.body)
+			}
+			_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(), Stamp: fixtureStamp})
+			if err == nil {
+				t.Fatal("the assistance tallies were published with no policy beside them")
+			}
+			if !strings.Contains(err.Error(), "record_pages.contributors.policy") {
+				t.Errorf("the refusal does not name the declaration: %v", err)
+			}
+		})
+	}
+}
+
 // TestReferencesRenderFromCSL pins the in-repo formatter: the sources render in
 // the CSL file's own order, with a DOI or a URL linked, beside the credited
 // inspirations under the acknowledgement file's own heading.

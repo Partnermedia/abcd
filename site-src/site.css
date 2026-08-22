@@ -281,6 +281,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .health{font-family:"IBM Plex Mono",monospace;font-size:.78rem;line-height:1.6}
 .health .w{color:var(--hazard-ink);background:var(--hazard-soft);padding:0 .3em;border-radius:3px}
 .health .hsum{margin-top:8px;color:var(--ink-2)}
+.health div{overflow-wrap:anywhere}
 /* A record that has left the tree: shown as the absence it is, never linked. */
 .stub{font-family:"IBM Plex Mono",monospace;font-weight:400;color:var(--hazard-ink);border-bottom:1px dashed var(--hazard);padding-bottom:1px}
 
@@ -303,6 +304,10 @@ svg text{font-family:"Bricolage Grotesque",sans-serif}
 .recbody h3{font-size:1.15rem;margin:1.2em 0 .4em}
 .recbody h4{font-size:1rem;margin:1em 0 .3em;font-family:"Bricolage Grotesque",sans-serif}
 .recbody>*:first-child{margin-top:0}
+/* A record's prose carries paths, ids and URLs that are longer than a phone is
+   wide. They wrap inside the column rather than pushing the page sideways. */
+.recbody{overflow-wrap:break-word}
+.recbody code,.recbody a{overflow-wrap:anywhere}
 .recbody p+p,.recbody p+ul,.recbody p+ol,.recbody ul+p,.recbody ol+p{margin-top:.9em}
 .recbody ul,.recbody ol{margin:.6em 0;padding-left:1.4em}
 .recbody li+li{margin-top:.35em}
@@ -318,6 +323,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .links{list-style:none;margin:0;padding:0;font-size:.88rem}
 .links li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--rule)}
 .links li:last-child{border-bottom:0}
+.links li>span{overflow-wrap:anywhere;min-width:0}
 .links .id{font-family:"IBM Plex Mono",monospace;font-size:.74rem;white-space:nowrap}
 .links .rel{font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--ink-3);margin-left:auto;white-space:nowrap}
 .policy{margin-top:12px;color:var(--ink-2)}
