@@ -43,16 +43,19 @@ opt-in composition declared in this repo's `.abcd/site.json`.
 
 - Promote the bundle to real paths: `docs/explanation/{rationale,roles,
   artefacts,process}.md`, `docs/how-to/install.md`, the two section indexes,
-  the seven assets under `docs/assets/img/`, `.abcd/site.json`,
+  the six referenced assets under `docs/assets/img/` (the third role
+  portrait stays out until a docs page references it), `.abcd/site.json`,
   `site-src/ui.json`, and the slim `README.md` (tagline `<p>` stays the first
   `<p>` so the `readme-strapline` surface keeps resolving). Delete
   `.abcd/work/site-plan/readme-migration/` including `MIGRATION.md` and
   `_sources/`.
 - `.abcd/site.json` gains one key the draft lacks: the explicit working-tier
   opt-in (`"record": {"issue_ledger": true}`) ruled in the interview.
-- `mkdocs.yml` moves `site_url` to `https://abcdev.app/docs/`; the docs build
-  output moves to `site/docs/`; `site-src/redirects` maps every URL on
-  today's sitemap to its `/docs/` home as a 301 (emitted as `_redirects`).
+- `site-src/redirects` lands as the committed 301 map for the docs URLs on
+  today's sitemap (the root stays unmapped — adr-47 gives `/` to the landing
+  page). The `mkdocs.yml` `site_url` flip to `https://abcdev.app/docs/`, the
+  `site/docs/` output move and the `_redirects` emission land together with
+  the deploy workflow, so canonical URLs never precede the serving move.
 - `site-src/install.sh.tmpl` enters with the migration: the universal
   one-liner's logic as a script template (no generator wiring yet — spc-40
   serves it). A Go surface test asserts README's one-liner, the template and
