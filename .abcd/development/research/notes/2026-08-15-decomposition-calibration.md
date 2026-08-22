@@ -729,3 +729,32 @@ Per hand-run, append:
   the protocol's value here was verifying no part was missing a home, not
   discovering the split. `enforcement-claims-are-facts` did real work: the
   guide labels the staged rules `review` until the lint ships.
+
+### 2026-08-22 — the livery-placement and credit-enforcement captures
+
+- **Proposal:** two threads surfaced by an end-of-session sweep — where the
+  unwired livery marks belong (the lifeboat shown on `disembark` and mirrored
+  on `embark`, the duckling as the harness mascot, the icon for the website),
+  and how the acknowledgement convention stops depending on the author
+  remembering.
+- **Initial routing:** four parts. Mark placement across surfaces (capability
+  | intent | itd-144); the forge/web logo decision itd-112 deferred (decision
+  | resolved inside itd-144's planning, `refines` itd-112 — not a separate
+  ADR: it is a positioning choice, not a trust rule); credit enforcement
+  (capability | intent | itd-145, shaped after itd-141's lint-arms-a-
+  convention precedent); the detector's heuristic — what counts as an
+  uncredited citation (plumbing | itd-145's spec at planning). Typed links:
+  itd-144 `builds_on` itd-133 and itd-112, `refines` itd-112; itd-145 carries
+  none, the itd-141 kinship being a shape precedent rather than a
+  supersedes/reverses/duplicates/refines edge. No reversal flags.
+- **Confirmed routing:** adopted; the maintainer directed both filings and
+  ruled the placement work explicitly non-urgent.
+- **Verdict:** FILE-AS-IS for both, proposed and confirmed.
+- **Notes:** itd-145 is the second instance of the "arm the convention that
+  currently relies on vigilance" shape in two days (iss-2608220750029993, the
+  session-presence detector, is the first) — both were surfaced by a live miss
+  rather than by review, which is worth watching as the corpus grows: the
+  protocol catches structure, but the missing-detector class keeps arriving
+  through incidents. The closed typed-link enum had no value for a
+  same-shape-different-subject sibling; recorded here rather than inventing a
+  fifth link type.
