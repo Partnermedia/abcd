@@ -383,7 +383,16 @@ jobs:
   # called workflow's failure IS the caller's failure, so a red site turns this
   # whole run red. The Release, its assets and its attestations are already made and
   # are untouched — a red run with a green `release` job means the website, and the
-  # fix is to re-run this job. It runs only on a SUCCESSFUL release — a site for a
+  # fix is to re-run this job.
+  #
+  # The job dependency isolates RUNTIME failures, and only those. The input contract
+  # below is resolved at PARSE time: a `with:` block that does not match site.yml's
+  # declared workflow_call inputs fails the whole run before any job starts, and no
+  # `needs:` can contain that. So the contract is pinned by a test instead —
+  # TestSiteWorkflowInputContract, in internal/core/site — and a drift fails CI on the
+  # pull request rather than on release day.
+  #
+  # It runs only on a SUCCESSFUL release — a site for a
   # release that failed to publish would describe bytes nobody can download; on the
   # rehearsal path `release` is skipped, so this is skipped too and nothing deploys.
   # The called workflow is idempotent per tag, so re-running this job is safe.
