@@ -23,12 +23,30 @@
   //
   // What Actions runs instead (.github/workflows/site.yml):
   //   production — on the release chain, from the tag, rendered by the released
-  //     checksum-verified binary; `wrangler deploy`, which is what asserts the
-  //     routes below.
+  //     binary that workflow checksum- AND attestation-verifies; the render job
+  //     holds no credential, and a separate deploy job runs `wrangler deploy`,
+  //     which is what asserts the routes below.
   //   preview — on every push to main, rendered from source with an
   //     "unreleased" build stamp; `wrangler versions upload`, which publishes a
   //     version and assigns it no production traffic, so a preview can never
   //     take the abcdev.app route.
+  //
+  // The credentials live in two GitHub Environments, and this is the only
+  // durable record of how they are configured:
+  //   site          protected by a deployment-tag restriction of `v*`; NO
+  //                 required reviewer, so the emergency dispatch path is never
+  //                 blocked on a human, while a branch-dispatched run still
+  //                 cannot obtain the secrets. Holds CLOUDFLARE_API_TOKEN and
+  //                 CLOUDFLARE_ACCOUNT_ID.
+  //   site-preview  unprotected; the preview deploys on every push to main.
+  //                 Holds CLOUDFLARE_PREVIEW_API_TOKEN and
+  //                 CLOUDFLARE_PREVIEW_ACCOUNT_ID — deliberately DIFFERENT
+  //                 names, so a missing environment cannot fall through to a
+  //                 repo-level secret and hand the preview a production token.
+  // Both tokens are scoped to this one Worker. Cloudflare cannot scope a token
+  // to a verb, so the preview token could technically run `deploy` against it;
+  // the controls that actually hold are the distinct secret names and the
+  // tag-restricted production environment, not the token's own scope.
   "name": "abcd",
   "compatibility_date": "2026-08-19",
   // The site's domain is committed config, not dashboard state: the deploy
