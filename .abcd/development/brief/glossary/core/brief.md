@@ -2,7 +2,7 @@
 ---
 term: brief
 bounded_context: core
-definition: The root document that defines a project's purpose, constraints, and success criteria before any implementation begins.
+definition: The living root document that holds a project's purpose, constraints, and success criteria — always the project's current state, revised in place as the project moves.
 aliases: ["project brief", "brief doc"]
 forbidden_synonyms: []
 status: stable
@@ -24,8 +24,8 @@ lives in `git log`; inflection-point rationale lives in the ADRs.
 
 ## When to use
 
-Use "brief" when referring to the top-level project specification document that lives at the root
-of the `.abcd/` hierarchy. A project has exactly one brief.
+Use "brief" when referring to the top-level project specification document that lives at
+`.abcd/development/brief/`. A project has exactly one brief.
 
 ## When NOT to use
 
