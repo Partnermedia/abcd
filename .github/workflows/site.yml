@@ -20,17 +20,14 @@ name: site
 #                     for what that restriction is actually protecting.
 #   push: [main]      the PREVIEW. main is ahead of every release, so the
 #                     released-bytes rule cannot apply: the preview is built from
-#                     SOURCE and uploaded as a non-production Worker version that
-#                     never takes the production route (adr-48 3). It replaces the
-#                     Cloudflare branch builds that ran only the version command.
-#                     adr-48 3 also asks the preview to carry an "unreleased —
-#                     main@<sha>" label, and the merged generator cannot express
-#                     one: its stamp renders as "v" + the value and `site check`
-#                     admits only ^v?\d+(\.\d+)*$ there. The stamp carries the main
-#                     COMMIT, which is never a release commit; the version half
-#                     still reads as the last release. That gap is real, is not
-#                     closable from a workflow, and is spelled out at the render
-#                     step in the preview job.
+#                     SOURCE, stamped `unreleased · <sha>` by `site build
+#                     --preview`, and uploaded as a non-production Worker version
+#                     that never takes the production route (adr-48 3). The
+#                     unreleased stamp IS the disclosure of that difference: the
+#                     page claims no version at all, only the commit it was built
+#                     from, so a preview can never be mistaken for a release. It
+#                     replaces the Cloudflare branch builds that ran only the
+#                     version command.
 #
 # Production renders the site with the RELEASED, checksum-and-attestation-verified
 # binary — the same bytes the README install one-liner hands a user — so abcdev.app is
@@ -730,31 +727,25 @@ jobs:
       - name: Build the binary from source
         run: go build -o ./abcd ./cmd/abcd
 
-      - name: Render the site from the pushed commit
-        # UNMET REQUIREMENT, recorded here rather than papered over. adr-48 3 wants
-        # this preview to carry an "unreleased — main@<short sha>" label, and the
-        # merged generator cannot express one. `--version` is free text, but the
-        # page renders the stamp as "v" + that value and `site check`'s provenance
-        # gate admits only a token matching ^v?\d+(\.\d+)*$ — so `unreleased`,
-        # `0.6.1-unreleased`, `0.6.1+main` and `0.6.1-main.<sha>` were each measured
-        # against a main-built binary and each fails the gate with 2 findings.
+      - name: Render the site with the unreleased build stamp
+        # --preview is the whole of adr-48 3's label, and it is the generator's job
+        # rather than this workflow's: the build stamps `unreleased · <commit>` and
+        # records `preview: true` in record.json, so the page claims no version at
+        # all. That is the disclosure the ADR asks for — main is ahead of every
+        # release, and a preview that named a version would be naming one that does
+        # not describe it.
         #
-        # So the stamp carries the COMMIT, which is the half of the label that does
-        # work: the footer names the exact main commit, which is never a release
-        # commit. The version half falls back to the newest CHANGELOG heading, and
-        # that is the honest gap — a preview built from main says it is the last
-        # release. Closing it belongs in internal/core/site (let the gate accept an
-        # injected stamp verbatim, or render an unreleased word from ui.json), not
-        # in a workflow that can only pass strings the gate already refuses.
-        #
-        # Deliberately NOT worked around by dropping the check step: a preview that
-        # skipped the gates would stop being a preview of anything.
+        # No --version alongside: the two are mutually exclusive and the binary
+        # refuses the pair outright, which is the right shape — a preview with a
+        # pinned version is a contradiction, and it fails loudly instead of picking
+        # one. The workflow therefore passes no version anywhere on this path.
         run: |
           set -euo pipefail
           # Probe before use, as in `render` — same root-listing grep, and see that
           # step for why the obvious `--help` forms all pass on a verb-less binary.
-          # Here it catches the window between this workflow merging and the site
-          # slice merging, when main itself builds a binary with no site verb.
+          # main carries the site verb now, so this is a standing guard rather than
+          # a window: it fires if the verb is ever renamed or withdrawn, and turns
+          # what would be a cobra usage dump mid-render into one line naming why.
           ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
             exit 1
@@ -762,7 +753,7 @@ jobs:
           # HEAD, for the same reason as the render job: the stamp names the commit this
           # job actually built, whatever selected it.
           commit="$(git rev-parse --verify HEAD)"
-          ./abcd site build --out site --commit "$commit"
+          ./abcd site build --out site --preview --commit "$commit"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
