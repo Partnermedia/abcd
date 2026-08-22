@@ -27,7 +27,7 @@ positional is refused as an unknown command.
 
 ```
       --json       emit machine-readable JSON
-      --no-color   render the banner without colour
+      --no-color   render the banner without color
 ```
 
 ### `abcd ahoy`

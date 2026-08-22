@@ -62,9 +62,13 @@ the whole machine-enforced surface:
 | No stray root-level markdown beyond the allowlisted set. | machine-enforced (`stray_root_docs`) |
 | Citations are well-formed, crosswalked, and within source policy. | machine-enforced (the `citation_*` rules) |
 | User-facing prose stays host-agnostic; naming a specific tool is confined to attribution. | machine-enforced (the `harness/*` rules) |
+| Reserved names the repository has banned do not appear (e.g. a record file naming itself). | machine-enforced (the verb-managed `names/*` rules) |
 
 ## Escapes
 
-A line that legitimately breaks a machine-enforced rule carries
-`<!-- docs-lint: allow -->` with a reason; the escape is deliberate and
-reviewable, never a default.
+A line that legitimately trips a **banned-token** rule — the `present_tense/*`,
+`harness/*` and `names/*` families — carries `<!-- docs-lint: allow -->` with a
+reason; the escape is deliberate and reviewable, never a default. The other
+machine-enforced rules have no line escape: `links_resolve`, `stray_root_docs`
+and the `citation_*` rules are satisfied by fixing the link, the file placement,
+or the citation itself, not by annotating the line.

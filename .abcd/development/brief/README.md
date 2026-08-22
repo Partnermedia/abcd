@@ -21,7 +21,7 @@ It is split across numbered folders for concurrent editing, diff legibility, and
 |---|---|
 | [`01-product/`](01-product) | The why and what — press release, context, mental model, scope, personas |
 | [`02-constraints/`](02-constraints) | Hard locked decisions — platform, dependencies, invariants, naming |
-| [`03-evidence/`](03-evidence) | What worked / what didn't / open questions / tradeoffs (placeholders for now; populated by lifeboat extraction) |
+| [`03-evidence/`](03-evidence) | What worked / what didn't / open questions / tradeoffs — live; lifeboat extraction reads it, never solely populates it |
 | [`04-surfaces/`](04-surfaces) | One file per user-facing command surface |
 | [`05-internals/`](05-internals) | Plumbing the surfaces depend on — indexed in [`05-internals/README.md`](05-internals/README.md) |
 | [`06-delivery/`](06-delivery) | Build sequence, verification matrix, out-of-scope |
