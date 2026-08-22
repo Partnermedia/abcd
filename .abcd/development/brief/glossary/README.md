@@ -163,7 +163,7 @@ The complete write-back protocol is a **design target** of `/abcd:intent grill`'
 
 | Term | Status | Definition |
 |---|---|---|
-| [brief](core/brief.md) | stable | The root document that defines a project's purpose, constraints, and success criteria before any implementation begins. |
+| [brief](core/brief.md) | stable | The living root document that holds a project's purpose, constraints, and success criteria — always the project's current state, revised in place as the project moves. |
 | [disembark](core/disembark.md) | stable | The act of packing a lifeboat — `abcd disembark <source-repo> to <dest>` reads a source repository without writing to it and distils its settled artefacts, decisions, and configuration into a portable lifeboat directory at a destination outside that repository, which a fresh context can later unpack via `/abcd:embark`. |
 | [intent](core/intent.md) | stable | A press-release-shaped description of a feature written before implementation begins, capturing the user problem, proposed solution, and success criteria. |
 | [lifeboat](core/lifeboat.md) | stable | A portable directory artefact packed by `/abcd:disembark` that captures the distilled knowledge and configuration of a source project so it can be unpacked into a fresh context by `/abcd:embark`. It always lands outside the source repository, at an operator-chosen destination. |
