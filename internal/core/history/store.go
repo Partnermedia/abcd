@@ -21,6 +21,11 @@ import (
 // ahoy layer derives at 64 chars — mirrors the voyage-ledger key fix.
 var rootSHARe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
+// rootSHAErrMsg is the diagnostic for a value that fails rootSHARe; it names both
+// accepted widths so it cannot drift from the regex (which accepts SHA-256's 64
+// as well as SHA-1's 40).
+const rootSHAErrMsg = "history: rootSHA must be a 40- or 64-character lowercase hex commit SHA"
+
 // sessionIDRe restricts a vendor session id to filesystem-safe characters so it
 // can be embedded verbatim in a record filename with no path-traversal or
 // separator surprises.

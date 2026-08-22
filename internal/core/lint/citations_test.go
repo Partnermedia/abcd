@@ -8,6 +8,31 @@ import (
 	"time"
 )
 
+// TestDaysBetweenIsTimezoneStable pins that the staleness arithmetic depends
+// only on the instants, not on the caller's timezone. The gate reads a local
+// clock (time.Now()) while the baseline dates are stamped UTC, so a bare
+// Year()/Month()/Day() put the 180-day boundary — and the release gate's
+// citation-overdue blocker — one day apart for a maintainer east of UTC.
+func TestDaysBetweenIsTimezoneStable(t *testing.T) {
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	// 2026-06-29T20:00Z is already 2026-06-30 in UTC+13, so a local-date read
+	// would return 180 there and 179 at UTC — the boundary crossing.
+	inst := time.Date(2026, 6, 29, 20, 0, 0, 0, time.UTC)
+	want := -1
+	for _, offset := range []int{0, -7 * 3600, 13 * 3600} {
+		got := DaysBetween(from, inst.In(time.FixedZone("z", offset)))
+		if want < 0 {
+			want = got
+		}
+		if got != want {
+			t.Errorf("DaysBetween at offset %ds = %d, want %d (timezone must not shift the boundary)", offset, got, want)
+		}
+	}
+	if want != 179 {
+		t.Errorf("DaysBetween(2026-01-01, 2026-06-29T20:00Z) = %d, want 179", want)
+	}
+}
+
 // citeRepo plants a fixture tree and returns its root. Keys are repo-relative
 // slash paths.
 func citeRepo(t *testing.T, files map[string]string) string {

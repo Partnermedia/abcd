@@ -731,3 +731,20 @@ func TestCaptureStoresUnanchoredEntropyVerbatim(t *testing.T) {
 		}
 	}
 }
+
+// TestCaptureRejectsBadRootSHAMessageNamesBothWidths pins the C3 fix: the
+// diagnostic for an invalid rootSHA names both accepted widths (40 and 64), so it
+// cannot drift from rootSHARe, which accepts SHA-256's 64 as well as SHA-1's 40.
+func TestCaptureRejectsBadRootSHAMessageNamesBothWidths(t *testing.T) {
+	_, err := Capture(t.TempDir(), "not-a-sha", "sess-x", []byte("assistant: hi\n"), "native")
+	if err == nil {
+		t.Fatal("expected an invalid rootSHA to be rejected")
+	}
+	if !strings.Contains(err.Error(), "64") || !strings.Contains(err.Error(), "40") {
+		t.Errorf("rootSHA error must name both 40- and 64-char widths, got %q", err.Error())
+	}
+	if _, err := List("also-not-a-sha"); err == nil ||
+		!strings.Contains(err.Error(), "64") || !strings.Contains(err.Error(), "40") {
+		t.Errorf("List rootSHA error must name both widths, got %v", err)
+	}
+}

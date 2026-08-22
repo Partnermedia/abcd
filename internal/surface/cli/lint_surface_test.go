@@ -173,3 +173,27 @@ func TestAuditRenameCleanBreak(t *testing.T) {
 		t.Fatalf("abcd audit must be unknown (exit 2), got exit %d stderr %q", code, stderr.String())
 	}
 }
+
+// TestLintEngineFaultExitsTwo is the S1 regression: a rule that cannot run (here a
+// stat that ELOOPs on a symlink loop at a path a layout rule reads) is a check
+// that never happened, not a warnings-only pass. It must exit 2 — the tri-state's
+// "any error" — so a CI gate keying on >=2 fails closed, not 1, which the doc
+// reserves for "warnings only" and would read as a clean-ish pass.
+func TestLintEngineFaultExitsTwo(t *testing.T) {
+	repo := lintRepo(t, true)
+	// Replace a file a layout rule stats with a self-referential symlink: os.Stat
+	// returns ELOOP (not ENOENT), which the rule propagates as an engine fault.
+	if err := os.Remove(filepath.Join(repo, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("AGENTS.md", filepath.Join(repo, "AGENTS.md")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	t.Chdir(repo)
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"lint"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("engine-fault exit = %d, want 2 (must not land on the tri-state's exit-1 'warnings only')\nstdout:%s\nstderr:%s", code, stdout.String(), stderr.String())
+	}
+}

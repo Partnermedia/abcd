@@ -16,6 +16,14 @@
         "Spine: most defects are a wrong implicit assumption at a trust boundary that fails SILENTLY (ASCII-only, SHA-1-only, case-sensitive, one control range, first-occurrence-wins, clean env, parseable config). A fix is not done until every sibling site is swept — grep the pattern, not the instance.",
         "Highest-leverage move: for each hardened primitive (gitutil.IsolatedEnv, fsutil.ReadGuarded, fsutil.WriteFileAtomic, refIsSafe, the (?i) identity matchers, lifeboat sanitize), grep for the unhardened sibling (raw os.Environ/os.ReadFile/os.WriteFile, a positional git arg, a case-sensitive matcher, a raw terminal print) and prove each is hardened or explicitly out of scope under the trusted-worktree model."
       ]
+    },
+    "INTENTS": {
+      "recall": ["intent", "acceptance", "spec"],
+      "rules": [
+        "Intents are press-release-first; acceptance criteria are BDD (Given/When/Then).",
+        "Personas come from .abcd/development/personas.json: pick by role, never by name, and refer to every persona as they/them. The persona_registry record-lint rule enforces the registry (itd-79). (The bundled default names Alice/Bob/Carol for a registry-less adopter; this repo ships the registry, so the roster is the full fourteen.)",
+        "Lifecycle is drafts/ -> planned/ -> shipped/; a planned intent's adoption is a maintainer decision."
+      ]
     }
   },
   "schema_version": 1

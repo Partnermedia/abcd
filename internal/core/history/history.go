@@ -19,6 +19,7 @@ package history
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,7 +86,7 @@ func (e *RedactionResidualError) Error() string {
 func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (CaptureResult, error) {
 	// Boundary validation — external inputs.
 	if !rootSHARe.MatchString(rootSHA) {
-		return CaptureResult{}, fmt.Errorf("history: rootSHA must be a 40-char lowercase hex SHA")
+		return CaptureResult{}, errors.New(rootSHAErrMsg)
 	}
 	if !sessionIDRe.MatchString(sessionID) {
 		return CaptureResult{}, fmt.Errorf("history: sessionID must be non-empty and match [A-Za-z0-9._-]+")
@@ -193,7 +194,7 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 // symlinked owned dir is refused with an error.
 func List(rootSHA string) ([]Record, error) {
 	if !rootSHARe.MatchString(rootSHA) {
-		return nil, fmt.Errorf("history: rootSHA must be a 40-char lowercase hex SHA")
+		return nil, errors.New(rootSHAErrMsg)
 	}
 	tdir, err := transcriptsDir(rootSHA)
 	if err != nil {

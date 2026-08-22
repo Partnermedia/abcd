@@ -1661,3 +1661,102 @@ parallel-agent merge contention bites.
   pixel-grid source of truth in the Go tree; all terminal rendering behaviour
   stays with itd-112. This forecloses itd-112's object-vs-text-logo open
   question — the object is the flag hoist.
+- 2026-08-21 — Bug-hunt round 5, branch bughunt-b/round-5. Baseline (make preflight
+  + gofmt -l .) green before any change. Five parallel Opus 5 hunters swept the four
+  dimensions; each candidate was adversarially refuted by an independent Opus 5
+  subagent before capture. Findings: 4 substantive, 9 nitpick, 9 refuted. The C1
+  ScrubbedEnv/GIT_CONFIG_GLOBAL candidate split the refuters (one CONFIRMED, one
+  REFUTED); adjudicated REFUTED — keeping the developer's global git config readable
+  is deliberate and test-pinned (TestScrubbedEnvStripsHijackKeepsGlobalConfig), the
+  attack needs control of abcd's process env (out of scope under the trusted-env
+  model), and the obvious fix (scrub to /dev/null) would blind the redaction probe
+  for every developer whose identity lives in global config. Fixed and resolved this
+  round (code, each with a watched-fail test): iss-2608211432258689 launch --dry-run
+  printed WouldRefuseOn unsanitised so a committed control-char filename injected raw
+  terminal escapes into the preview and CI log (now termsafe); iss-2608211432257954
+  the same dry-run leaked a raw absolute path in lockstep.detail (a success envelope
+  that never passes the error-surface scrub) — stripped at loadJSON; iss-2608211432258975
+  abcd lint mapped a rule-engine fault to exit 1 (the tri-state's warnings-only code)
+  so a CI gate keying on >=2 read a lint that never ran as an advisory pass — now
+  exit 2; iss-2608211432254405 launch scaffold deriveBranch assumed .git is a
+  directory, stamping the fallback branch main into the generated release workflows
+  from a linked worktree — now resolves the gitfile (worktree gitdir HEAD + shared
+  commondir origin/HEAD). Nitpicks fixed: iss-2608211432389181 the intent verdict
+  reader was the last CLI operand on Lstat-then-os.ReadFile (false benign-TOCTOU
+  comment) — routed through fsutil.ReadGuarded; iss-2608211432384430 the history
+  rootSHA diagnostic named only 40 chars though the regex accepts 64 (SHA-256);
+  iss-2608211432384091/389477/389791 three user-facing doc claims (README SessionEnd
+  self-bootstrap overclaim, memory.md source.class vs source_class, ahoy.md missing
+  the shadowed-on-PATH install_mode suffix); iss-2608211432489481/489288/482363/483805
+  record hygiene (seven display-text/href link mismatches, two bare paths to absent
+  dirs, the rfc-1/itd-26 one-sided pair, the work-tier roster omitting the issue
+  ledger/reviews/rulesets). Refuted / prior art (kept out of the ledger): C1 above;
+  C2 folding local_username to case-insensitive (net-negative — broadens a documented
+  hard_fail false-positive class and reopens iss-31); S3 widening hasControlChar (the
+  render sanitiser, not the integrity gate, is the fix); S4 launch --no-index dropping
+  a force-added tracked file (dry-run preview writes no artefact, exclusion is visible
+  and over-exclusion is the safe direction); D2 guard check exit-2 enumeration (the
+  governing "could not be evaluated at all" definition already covers a disabled
+  registry); R2 itd-3 spc-1 (a documented, minting-honored reservation). Model routing:
+  orchestration on Claude Fable 5; five parallel hunters and nine per-finding
+  adversarial refuters on Claude Opus 5; the dual pre-merge review runs one reviewer
+  as Claude Opus 5 and one as Claude Fable 5.
+- 2026-08-21 — Bug-hunt round 6, branch bughunt-b/round-6. Baseline (make preflight
+  + gofmt -l .) green before any change and on the final tree. Five parallel Opus 5
+  hunters swept the four dimensions; each candidate was adversarially refuted by an
+  independent Opus 5 subagent before capture. Findings: 8 substantive + 2 confirmed
+  doc/CLI, 5 refuted, 1 (I2) reverted on implementation. Fixed and resolved this
+  round (each behaviour-changing code/script fix carries a test watched fail
+  before the change, the lifeboat probe size-TOCTOU excepted — that race is closed
+  by construction and its boundary test guards the cap, not the race):
+  iss-2608211849467013 the
+  guard tokenizer did not know shell redirection operators, so a glued redirection
+  (git push --force>/dev/null) mutated the flag token and the blocker missed — a
+  silent allow — and a leading redirection degraded a Tier-1 block to a warn; the
+  tokenizer now drops a redirection and its target. iss-2608211849463840 the
+  record/docs lint reporting walk read cfg.Roots with a raw os.ReadFile and no
+  containment while the sibling citation collector guards the same field, so a
+  cloned repo's committed lint config could read/lint/follow a file outside the
+  tree (reproduced: escaping root, symlinked leaf, /dev/zero OOM) — routed through
+  containedRepoPath/resolvedInsideRoot/containedRealPath/ReadGuarded, and the
+  sibling glossary_dir walk in loadForbiddenSynonyms (the same cloned-repo-config
+  read path, caught by both pre-merge reviews) was swept through the same stack;
+  the remaining config-derived record reads in the lint package are tracked as a
+  follow-up (iss-2608211914592726).
+  iss-2608211849461061 frontmatter.Fields requires --- on line 0, so a comment-led
+  record (13 glossary term files) slipped the no_git_metadata blocker; the
+  lint-local frontmatterFields now slices past the comment, preserving absolute
+  line numbers. iss-2608211849466878 citation DaysBetween took each date's local
+  calendar day and restamped UTC, making staleness and the release-gate overdue
+  blocker timezone-dependent; both ends now convert to UTC first. iss-2608211849468791
+  the attribution gate's trailer/None presence checks are line-end-anchored over a
+  class excluding CR, so a CRLF web-UI pull-request body false-red a correct
+  trailer on the required check; check_text now normalises CRLF before every rule,
+  with CRLF corpus cases. iss-2608211850070541 identity init faults exit 2 (was 1);
+  iss-2608211850074600 the lifeboat probe read cap+1 and refuses a file grown past
+  the cap (size TOCTOU); iss-2608211850070318 history list --json emits [] not null.
+  Doc/record: iss-2608211849581263 + iss-2608211849583757 the persona brief said
+  the picker chooses at random and omitted Nia (a residual of resolved iss-300 —
+  selection is by role, never by name; roster is fourteen); iss-2608211849583208
+  the bundled INTENTS default persona rule reached this repo's own intent authors
+  because .abcd/rules.json never overrode INTENTS, so an INTENTS override now points
+  authors at the registry (the default stays correct for a registry-less adopter);
+  iss-2608211849580624 the README described download-on-every-update and a no-op
+  .binary-meta remedy, rewritten for the spc-35 persistent cache; iss-2608211849582190
+  CONTRIBUTING granted the fenced-quotation carve-out for commit messages too, now
+  scoped to the pull-request body. Refuted / considered-and-rejected (kept out of
+  the ledger): R3 the release-gate manifest prompt naming ten of twenty commands
+  (an illustrative grounding string, not a gated inventory, and editing it ripples
+  into receipt hashes); R4/R5 related_adrs and prose citations of superseded ADRs
+  (resolve via the retired-set mechanism, deliberate historical provenance); R6
+  "11 adapters" vs "five capability seams" (implementations vs categories, not a
+  contradiction); R7 the adr-13 bare path to itd-36's old bucket (a benign ungated
+  breadcrumb; the authoritative related_intents resolves by id); the update.go
+  redirect-host case-fold (fails closed, availability only, impractical to test
+  through a loopback redirect). I2 (release.yml "dormant until the public flip"
+  comments) was implemented then reverted: release.yml is a scaffold template
+  rendered for adopters who may be private, so the visibility-flip framing is
+  generic-correct there, unlike the abcd-specific runbook round 4 corrected. Model
+  routing: orchestration on Claude Fable 5; five parallel hunters and eight
+  per-finding adversarial refuters on Claude Opus 5; the dual pre-merge review runs
+  one reviewer as Claude Opus 5 and one as Claude Fable 5.

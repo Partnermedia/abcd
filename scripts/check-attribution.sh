@@ -306,6 +306,14 @@ check_ident() {
 # strip_fenced_blocks).
 check_text() {
 	local label="$1" text="$2"
+	# Normalise CRLF to LF first. A pull-request body authored or edited in the
+	# GitHub web UI arrives with \r\n line endings, and the $-anchored trailer and
+	# None presence checks below would otherwise read a valid final line as
+	# "Assisted-by: ...\r" — the \r sits between the value and the $ anchor — and
+	# false-red the required gate on a PR that carries the trailer correctly. The
+	# ban regexes are unanchored at line end and so are unaffected; the commits arm
+	# is already LF (git normalises %B), so this is a no-op there.
+	text="$(printf '%s' "$text" | tr -d '\r')"
 	if printf '%s' "$text" | grep -Eq "$GENERATED_RE"; then
 		echo "check-attribution: $label carries a tool's default 'generated with' footer" >&2
 		note "A 'Generated with <tool>' footer names a tool outside the two credit surfaces"

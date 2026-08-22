@@ -262,6 +262,22 @@ func TestIdentityWithoutARegistryExplainsHowToAdopt(t *testing.T) {
 	}
 }
 
+// TestIdentityInitFaultExitsTwo pins that an init that cannot proceed takes the
+// tree-wide fault code 2 (like `identity`, `identity render`, and every other
+// "could not be evaluated" path), not the code 1 an already-rendered refusal
+// reserves — init renders nothing on this path.
+func TestIdentityInitFaultExitsTwo(t *testing.T) {
+	repo := idRepo(t, map[string]string{"README.md": idCleanREADME})
+	t.Chdir(repo)
+
+	// Init with no --title/--tagline in a repo that has no block yet is a fault.
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"identity", "init"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("identity init fault exit = %d, want 2; stderr = %s", code, stderr.String())
+	}
+}
+
 // AC1: init lands a parseable block and the pointer that records its location.
 func TestIdentityInitScaffoldsTheBlockAndThePointer(t *testing.T) {
 	repo := idRepo(t, map[string]string{"README.md": idCleanREADME})

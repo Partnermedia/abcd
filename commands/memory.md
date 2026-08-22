@@ -45,7 +45,7 @@ Deterministic retrieval over the store, then a cited answer:
 ```
 
 The default answer is the deterministic citation-renderer over the top-ranked
-pages; every citation references `source.class`, `citation`, and `source_hash`.
+pages; every citation references `source_class`, `citation`, and `source_hash`.
 Optionally file the answer back as a new page with `--file-back --page-json
 <file|->` (one `DistilledPage` object you produce from the retrieved matches).
 Report the `answer` and, if present, the `file_back` result.

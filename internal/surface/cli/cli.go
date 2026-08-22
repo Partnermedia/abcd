@@ -278,8 +278,12 @@ func NewRootCommand() *cobra.Command {
 					}
 				}
 				fmt.Fprintf(w, "  would publish:  %v\n", rep.WouldPublish)
-				if len(rep.WouldRefuseOn) > 0 {
-					fmt.Fprintf(w, "  would refuse on: %v\n", rep.WouldRefuseOn)
+				for _, reason := range rep.WouldRefuseOn {
+					// Each reason embeds a raw repo filename (a control-char-rejected
+					// path carries the offending bytes), so it is untrusted terminal
+					// output and passes through the canonical sanitiser, matching the
+					// citation line above.
+					fmt.Fprintf(w, "  would refuse on: %s\n", termsafe.Sanitize(reason))
 				}
 			})
 		},
@@ -2746,6 +2750,13 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			records, err := history.List(rootSHA)
 			if err != nil {
 				return err
+			}
+			// An empty store is an empty LIST in JSON, not bare `null`: the
+			// command doc promises "an empty list means no transcripts", and a
+			// consumer that iterates the value should get [], as every other
+			// --json verb's collection does.
+			if records == nil {
+				records = []history.Record{}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, records, func(w io.Writer) {
 				if len(records) == 0 {

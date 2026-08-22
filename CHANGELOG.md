@@ -138,6 +138,100 @@ called out in a **Breaking** section.
   Go badge advertised 1.25 (the retired version) and `abcd capture` was still
   described as minting "the next free id", the abolished max+1 protocol; both
   corrected. (iss-2608211143184945, iss-2608211143185943)
+- **`abcd launch --dry-run` output cannot be corrupted by a committed filename,
+  and no longer leaks an absolute path.** The refusal-reason lines were printed
+  unsanitised, so a repo filename carrying raw terminal escapes (a
+  control-char-rejected path carries its own bytes) reached the terminal and any
+  CI log; each reason now passes through the terminal sanitiser like the citation
+  line beside it. Separately, when a pinned manifest was unreadable the lockstep
+  detail embedded a raw absolute path — and the dry-run report is a success
+  envelope that never passes the error-surface path scrub — so the
+  developer-identity root leaked into the report and its `--json`; the path is now
+  stripped at the read, leaving the named cause.
+  (iss-2608211432258689, iss-2608211432257954)
+- **`abcd lint` fails closed when a rule cannot run.** A stat that hit a symlink
+  loop, an unreadable tracked file, or a git-index fault returned an engine fault
+  that mapped to exit 1 — the code the documented Conftest tri-state reserves for
+  "warnings only" — so a CI gate keying on exit `>=2` read a lint that never ran
+  as an advisory pass. An engine fault now exits 2 (the tri-state's "any error").
+  (iss-2608211432258975)
+- **`abcd launch scaffold` derives the right default branch from a linked
+  worktree.** `deriveBranch` assumed `.git` was a directory, so in a worktree or
+  submodule (where `.git` is a gitfile) both ref reads failed and the fallback
+  branch `main` was stamped into the generated release workflows — leaving the
+  release gate silently inert on a repo whose default branch is not `main`. It
+  now resolves the gitfile, reading `HEAD` from the worktree gitdir and
+  `origin/HEAD` from the shared `commondir`. (iss-2608211432254405)
+- **The intent verdict operand is read through the guarded primitive.**
+  `intent audit ingest --verdict-json` used an `Lstat`-then-`os.ReadFile` pair
+  whose comment wrongly called the window benign; `os.ReadFile` follows a symlink
+  swapped in after the `Lstat` and ignores the pre-checked size. It now reads
+  through `fsutil.ReadGuarded` (`O_NOFOLLOW` + regular-file + cap in one open),
+  the last CLI operand reader to join the shared primitive.
+  (iss-2608211432389181)
+- **The `history` rootSHA diagnostic names both accepted widths.** A rejected
+  rootSHA was told it must be a 40-char SHA though the validator also accepts a
+  64-char SHA-256 root; the message is now a shared const beside the regex naming
+  both widths. (iss-2608211432384430)
+- **Three user-facing docs corrected.** The README overstated that every
+  non-start hook self-bootstraps, when SessionEnd deliberately never downloads
+  (a fetch there would race shutdown and lose the transcript); `commands/memory.md`
+  named the citation field `source.class` where the JSON key is `source_class`;
+  and `commands/ahoy.md` omitted the ` (shadowed on PATH)` `install_mode` suffix.
+  (iss-2608211432384091, iss-2608211432389477, iss-2608211432389791)
+- **Record cross-references reconciled.** Seven record links carried a display
+  path that did not resolve from the containing file (the href did), two
+  backticked bare paths named directories that do not exist, `itd-26` gained the
+  reciprocal `related_rfcs` for `rfc-1`, and the `.abcd/work` tier roster in
+  `AGENTS.md` and `.abcd/README.md` now names the issue ledger, reviews charter,
+  and ruleset mirror that also live there.
+  (iss-2608211432489481, iss-2608211432489288, iss-2608211432482363, iss-2608211432483805)
+- **The command guard recognises shell redirection operators.** The tokenizer
+  knew the compound and grouping operators but not `>`, `>>`, `<`, `>&` and
+  their kin, so a redirection glued to a token — `git push --force>/dev/null` —
+  mutated the flag and the blocker missed, a silent allow, and a leading
+  redirection displaced the command and degraded a Tier-1 block to a warn. A
+  redirection now terminates the word and its target is dropped, so every glued
+  and leading form blocks again. (iss-2608211849467013)
+- **The record/docs lint reporting and glossary walks stay inside the
+  repository.** Both read a cloned-repo-controlled config path (the `roots` and
+  `glossary_dir` fields) with an unguarded `os.ReadFile` while the citation
+  collector guards the same class, so a committed lint config could point either
+  outside the tree — or a committed symlink leaf resolve outside it — and the
+  lint read, followed, and reported a file the repository does not own. Both now
+  run through the same containment and guarded-read stack; the remaining
+  config-derived record reads in the package are tracked for a follow-up sweep.
+  (iss-2608211849463840, iss-2608211914592726)
+- **`no_git_metadata` sees comment-led records.** A record whose frontmatter is
+  preceded by a leading attribution comment yielded no fields to the shared
+  scanner, so a git-inferable metadata key there slipped the blocker entirely.
+  The lint now reads past the comment. (iss-2608211849461061)
+- **Citation staleness is timezone-stable.** The age arithmetic took each date's
+  local calendar day, so the 180-day boundary — and, under the release gate, the
+  citation-overdue blocker — depended on the maintainer's timezone. Both ends are
+  now converted to UTC before the date is taken. (iss-2608211849466878)
+- **The attribution gate accepts CRLF pull-request bodies.** The trailer and
+  human-only presence checks are line-end-anchored over a class excluding the
+  carriage return, so a web-UI pull-request body — which arrives CRLF — false-red
+  a correct `Assisted-by:` trailer on the required check. The gate now normalises
+  line endings before every rule. (iss-2608211849468791)
+- **`abcd identity init` exits 2 on a fault.** A structural fault mapped to exit
+  1 — the code a rendered refusal reserves — while init renders nothing on that
+  path and its sibling verbs use 2. (iss-2608211850070541)
+- **`abcd history list --json` emits `[]` for an empty store.** An empty store
+  marshalled to bare `null` while the command doc promises an empty list.
+  (iss-2608211850070318)
+- **The lifeboat probe refuses a file that grows past its read cap.** The read
+  sized with an fstat then read exactly the cap, so a file that grew in between
+  was silently truncated to a prefix rather than refused. (iss-2608211850074600)
+- **The README describes the persistent provisioning cache.** The provisioning
+  section still described a download on every plugin update and a `.binary-meta`
+  remedy that is a no-op on a cache-provisioned root; both now describe the
+  shipped persistent per-plugin cache. (iss-2608211849580624)
+- **The contributing guide scopes the fenced-quotation carve-out to the body.**
+  The gate strips fences on the pull-request-body arm only, but the guide granted
+  the carve-out for commit messages too; the guide now says a commit message is
+  read verbatim. (iss-2608211849582190)
 
 ### Changed
 

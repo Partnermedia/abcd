@@ -22,7 +22,7 @@ Intent IDs follow the pattern `itd-N` (unpadded, mirrors the native spec `spc-N`
 
 `itd` reads as "intent" and pairs visually with the native spec `spc-N`.
 
-**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
+**IDs are capture-stable.** An intent keeps its `itd-N` for life — IDs are assigned in capture order and never renumbered. Sequencing is *not* encoded in the ID; it lives in the phase docs at [`../roadmap/phases/`](../roadmap/phases), whose `## Scope` sections are the single source of truth for which intents a phase bundles (see [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)).
 
 **Why unpadded:** abcd anticipates intent counts that would exceed any practical padding budget. Unpadded matches `spc-N` visually, avoids the future migration, and reads naturally in prose ("itd-7 spawned itd-19"). Lexical-vs-numeric sort is handled at tool layer (the record lint, registries, dashboards) rather than via filename padding.
 
@@ -42,7 +42,7 @@ Standalone is the default (~60% of the corpus). Bundle-members ship together as 
 
 The kind is **project-agnostic** — application projects (e.g., a macOS app under abcd) produce their own disciplines (privacy-impact review, accessibility passes, code-style conventions). The three kinds are a property of the intent framework, not of abcd's particular subject matter.
 
-**The persisted `kind` enum stays three-valued.** The capture-time classifier has a *fourth* verdict, `decision` (a standing infrastructure choice — "we use Postgres"), but `decision` is **never a persisted `kind`** and never enters this lifecycle: a confirmed `decision` routes to the existing ADR store (`../../decisions/adrs/`, `adr-N-<slug>.md`), not to a draft. There is deliberately **no `intents/decisions/` directory**. See [itd-44](drafts/itd-44-fourth-intent-kind-decision.md) (spc-56 thin adoption) and `brief/04-surfaces/05-intent.md § 1`.
+**The persisted `kind` enum stays three-valued.** The capture-time classifier has a *fourth* verdict, `decision` (a standing infrastructure choice — "we use Postgres"), but `decision` is **never a persisted `kind`** and never enters this lifecycle: a confirmed `decision` routes to the existing ADR store (`../decisions/adrs/`, `adr-N-<slug>.md`), not to a draft. There is deliberately **no `intents/decisions/` directory**. See [itd-44](drafts/itd-44-fourth-intent-kind-decision.md) (spc-56 thin adoption) and `brief/04-surfaces/05-intent.md § 1`.
 
 ---
 
@@ -246,7 +246,7 @@ This is a discipline ([`disciplines/itd-79-persona-registry.md`](disciplines/itd
 
 ## Sequencing — see `phases/`
 
-Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — valid for `drafts/` and `planned/` alike: a draft is uncommitted, an unscheduled planned intent is committed but awaiting sequencing. The invariant runs one way only: any intent a phase `## Scope` names is committed by definition and lives in `planned/` (or `disciplines/`) — see [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md).
+Which intents a phase bundles, and in what order phases ship, is **not recorded here.** Sequencing lives in the phase docs at [`../roadmap/phases/`](../roadmap/phases) — each phase doc's `## Scope` section is the single source of truth (per [adr-9](../decisions/adrs/0009-phase-as-product-layer.md)). An intent listed in no phase doc's `## Scope` is implicitly **unscheduled** — valid for `drafts/` and `planned/` alike: a draft is uncommitted, an unscheduled planned intent is committed but awaiting sequencing. The invariant runs one way only: any intent a phase `## Scope` names is committed by definition and lives in `planned/` (or `disciplines/`) — see [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md).
 
 This README describes the intent corpus by *lifecycle state* — what each lifecycle directory means and how an intent moves between them. It transcribes neither the phase→intent mapping nor the directories' contents: both have a home that cannot go stale, and a copy kept here would (adr-5, derive don't store).
 
@@ -269,7 +269,7 @@ Bundles are declared in member intents' frontmatter (`bundle: <bundle-id>`); mem
 
 ## Drafts
 
-Captured intents that haven't been promoted to native specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../phases/`](../roadmap/phases).
+Captured intents that haven't been promoted to native specs yet. Each standalone or bundle-member intent moves to `planned/` once the user runs `/abcd:intent plan <itd-N>`; discipline-kind intents move to `disciplines/`. For the sequencing view — which phase bundles which intents — see [`../roadmap/phases/`](../roadmap/phases).
 
 The bench itself is [`drafts/`](drafts/) — the directory is the listing, and a transcription of it here is a second copy that drifts on the next capture or promotion (adr-5, derive don't store).
 
