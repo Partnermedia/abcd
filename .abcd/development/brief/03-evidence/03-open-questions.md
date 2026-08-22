@@ -1,6 +1,6 @@
 # Open Questions
 
-> **Status: PLACEHOLDER.** Open architectural questions accumulate during build; lifeboat extraction populates this slot from unresolved review threads, RFCs, and issue ledger items tagged "open-question". During development, leave empty; populated post-build by the disembark process.
+> **Status: LIVE.** Open architectural questions are recorded here as they arise — from unresolved review threads, RFCs, and ledger items. The brief is the project's current state ([adr-5](../../decisions/adrs/0005-brief-is-current-state.md)), and an unresolved question is part of that state: a question the team is carrying belongs here now. Lifeboat extraction *reads* this file and grounds what the record can prove; it is a reader, never the sole populator.
 
 ## Purpose
 
@@ -28,3 +28,10 @@ For each entry:
 - **[`.abcd/development/decisions/adrs/`](../../decisions/adrs/)** — Architecture Decision Records. Open questions that get resolved promote into ADRs.
 - **`.abcd/development/roadmap/rfcs/`** — Request for Comments. Multi-stakeholder discussion artefacts (open / resolved-yes / resolved-no).
 - **`.abcd/work/issues/`** ledger entries flagged as open questions or future-work seeds.
+
+## Where does a hold-register-shaped record live?
+
+- **Status:** open (not resolved)
+- **What's at stake:** capture's triage routes (defect fix / promote / brief fix / wontfix) force frame-level unease into artefact-level fixes. A hold route — non-articulation recorded as data, carrying axes and exiting by articulation — needs a home: a new ledger state, a brief section, or a record family of its own; each choice shapes what automated reviewers may read.
+- **Current best guess:** none recorded yet — candidate RFC or intent, decomposed before filing.
+- **Source:** ledger seed `iss-2608220750029991` (hold route missing from capture triage).
