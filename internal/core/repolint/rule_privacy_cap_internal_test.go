@@ -1,6 +1,7 @@
 package repolint
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,10 +14,10 @@ import (
 // not-scanned rather than truncated-and-reported-clean.
 //
 // The remaining case — a file that grows PAST the cap between the fstat and the
-// read — is a size TOCTOU closed by construction (the cap+1 probe now detects it
-// and routes it to the same not-scanned path); like the lifeboat probe fix
-// (iss-2608211850074600), the boundary is what a deterministic test can guard,
-// not the race itself.
+// read — cannot be raced deterministically, so it is pinned through the capRead
+// seam instead: a reader carrying more bytes than the fstat-time cap stands in
+// for the grown file, and the cap+1 probe must refuse it whole rather than
+// return the truncated prefix as scanned-clean.
 func TestReadTrackedFileCapBoundary(t *testing.T) {
 	dir := t.TempDir()
 	root, err := os.OpenRoot(dir)
@@ -60,5 +61,17 @@ func TestReadTrackedFileCapBoundary(t *testing.T) {
 	}
 	if !oversize {
 		t.Error("an over-cap textual file must report oversizeText so the caller warns")
+	}
+
+	// The grown-file TOCTOU, via the capRead seam: the reader carries one byte
+	// more than the cap the fstat saw. A capped read (no +1 probe) would return
+	// the truncated prefix as scanned-clean; the probe must refuse whole and
+	// report not-scanned-but-textual.
+	data, ok, oversize = capRead(bytes.NewReader(append(buf, 'z')))
+	if ok || data != nil {
+		t.Errorf("a grown file must not be scanned as a truncated prefix; ok=%v len=%d", ok, len(data))
+	}
+	if !oversize {
+		t.Error("a grown textual file must report oversizeText so the caller warns")
 	}
 }
