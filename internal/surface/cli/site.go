@@ -72,7 +72,76 @@ func newSiteCommand(asJSON *bool) *cobra.Command {
 	buildCmd.Flags().StringVar(&stampDate, "date", "", "date for the build stamp (default: the newest release's date)")
 	siteCmd.AddCommand(buildCmd)
 
+	var checkOut string
+	checkCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Gate the built site: provenance, hero drift, banned tokens, snippets, the reference ratchet, mobile and figure labels",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := site.Check(site.CheckRequest{RepoRoot: cwd, OutDir: checkOut})
+			if err != nil {
+				return &exitError{Code: 2, Msg: "abcd site check: " + scrubPaths(err)}
+			}
+			if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				renderSiteCheck(w, res)
+			}); rerr != nil {
+				return rerr
+			}
+			if !res.OK() {
+				return &exitError{Code: 1}
+			}
+			return nil
+		},
+	}
+	checkCmd.Flags().StringVar(&checkOut, "out", site.DefaultOutDir, "built output directory to check (rendered first if absent)")
+	siteCmd.AddCommand(checkCmd)
+
 	return siteCmd
+}
+
+// renderSiteCheck prints every failure, grouped by the gate that raised it, and
+// the shrink invitations that are news rather than failures.
+func renderSiteCheck(w io.Writer, res site.CheckResult) {
+	fmt.Fprintf(w, "abcd site check — %s\n", termsafe.Sanitize(res.OutDir))
+	if res.Built {
+		fmt.Fprintf(w, "  (rendered first: the output directory held no index.html)\n")
+	}
+	fmt.Fprintf(w, "  pages:   %d (%d composed surfaces)\n", len(res.Pages), len(res.Composed))
+	for _, name := range res.Checks {
+		n := 0
+		for _, f := range res.Findings {
+			if f.Check == name {
+				n++
+			}
+		}
+		if n == 0 {
+			fmt.Fprintf(w, "  ok       %s\n", name)
+			continue
+		}
+		fmt.Fprintf(w, "  FAIL     %s (%d)\n", name, n)
+		for _, f := range res.Findings {
+			if f.Check != name {
+				continue
+			}
+			where := f.Where
+			if f.Source != "" {
+				where += " ← " + f.Source
+			}
+			fmt.Fprintf(w, "    %s: %s\n", termsafe.Sanitize(where), termsafe.Sanitize(f.Detail))
+		}
+	}
+	for _, n := range res.Notes {
+		fmt.Fprintf(w, "  note     %s: %s: %s\n", n.Check, termsafe.Sanitize(n.Where), termsafe.Sanitize(n.Detail))
+	}
+	if res.OK() {
+		fmt.Fprintf(w, "every gate passes\n")
+		return
+	}
+	fmt.Fprintf(w, "%d finding(s); the site is not publishable until each is fixed at its source\n", len(res.Findings))
 }
 
 // renderSiteStatus prints the read-only board.
