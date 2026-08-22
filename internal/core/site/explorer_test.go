@@ -250,10 +250,21 @@ func TestContributorsSeparatesAuthorshipFromDisclosure(t *testing.T) {
 		"assistant-model-1",
 		// the policy span the manifest selects, with its provenance and its file
 		`data-src="CONTRIBUTING.md#attribution"`,
+		// The manifest asks for the first BULLET. A section opens with its own
+		// preamble more often than not, and quoting that instead leaves the rule
+		// off the page under the number it was supposed to explain.
+		//
+		// The bullet's own bold lead-in survives intact: stripping the marker by
+		// trimming a run of `-*+ ` would eat the opening `**` too and leave its
+		// closing pair stranded as two visible asterisks.
+		"<strong>Human author of record.</strong> The human contributor is the author of record",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the contributors page is missing %q", want)
 		}
+	}
+	if strings.Contains(page, "A fixture preamble about disclosure") {
+		t.Error("the policy panel quotes the section's lead-in instead of its first bullet")
 	}
 	// Model names are confined to this page under the attribution escape.
 	for _, other := range []string{"record/index.html", "record/graph/index.html", "index.html"} {
@@ -329,6 +340,68 @@ func TestEveryTableScrollsInsideItsOwnBox(t *testing.T) {
 	}
 	if tables == 0 {
 		t.Fatal("the fixture emitted no tables, so this proves nothing")
+	}
+}
+
+// TestEveryAssetIsReachableFromEveryDepth is the rule a relative href quietly
+// breaks: the same picture, stylesheet and script are linked from `/` and from
+// `/record/adr/adr-1/`, so their addresses are root-absolute or they resolve on
+// exactly one page and 404 on the other seven hundred.
+func TestEveryAssetIsReachableFromEveryDepth(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	checked := 0
+	for _, name := range res.Files {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		page := outFile(t, out, name)
+		for i := 0; ; {
+			j := strings.Index(page[i:], ` src="`)
+			if j < 0 {
+				break
+			}
+			at := i + j + len(` src="`)
+			end := strings.IndexByte(page[at:], '"')
+			if end < 0 {
+				break
+			}
+			ref := page[at : at+end]
+			i = at + end
+			if ref == "" || strings.HasPrefix(ref, "/") ||
+				strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") ||
+				strings.HasPrefix(ref, "data:") {
+				checked++
+				continue
+			}
+			t.Errorf("%s: src=%q is relative — it resolves only at the depth of the page that wrote it", name, ref)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("the fixture emitted no asset references, so this proves nothing")
+	}
+}
+
+// TestBibliographyRefusesAnExecutableAddress is the same guard the markdown path
+// applies to every repository-sourced link, at the one file that bypasses it.
+// Escaping an attribute is no defence: a well-formed `javascript:` href needs no
+// quote to break out of.
+func TestBibliographyRefusesAnExecutableAddress(t *testing.T) {
+	f := newFixture(t)
+	f.write(".abcd/development/research/references.csl.json", `[
+  {"id": "one", "type": "webpage", "author": [{"family": "Quill", "given": "Fenella"}],
+   "title": "One", "issued": {"date-parts": [[2019]]},
+   "URL": "javascript:alert(1)"}
+]
+`)
+	_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(), Stamp: fixtureStamp})
+	if err == nil {
+		t.Fatal("a bibliography address that runs code was published as a link")
+	}
+	if !strings.Contains(err.Error(), "javascript:") {
+		t.Errorf("the refusal does not name the scheme: %v", err)
 	}
 }
 

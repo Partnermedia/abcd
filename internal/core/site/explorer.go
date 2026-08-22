@@ -720,7 +720,21 @@ func (e *explorer) policyQuote() (string, error) {
 			return "", bad("that section is empty")
 		}
 		if p.Part == "first-bullet" {
-			text, line := firstListItem(blocks[0])
+			// The first BULLET, not the first block. A policy section opens with
+			// its own preamble more often than not, and quoting that instead
+			// published a dangling lead-in — "The rules:" and then nothing —
+			// under the number it was supposed to explain.
+			item := -1
+			for i, blk := range blocks {
+				if isUnorderedItem(strings.TrimLeft(blk.Text, " \t")) {
+					item = i
+					break
+				}
+			}
+			if item < 0 {
+				return "", bad("that section has no bullet to quote")
+			}
+			text, line := firstListItem(blocks[item])
 			blocks = []Block{{Text: text, Line: line}}
 		}
 		r := &Renderer{UI: e.c.ui, Refs: LinkDefinitions(body),

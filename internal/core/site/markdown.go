@@ -513,6 +513,22 @@ func indentOf(s string) int {
 // refusing that would fail the build on correct prose.
 func (r *Renderer) paragraph(at Source, lines []string) (string, error) {
 	for i, ln := range lines {
+		// A LIST may interrupt a paragraph, and the record writes one that way
+		// constantly — a bold lead-in and its bullets under it with no blank
+		// line between. Rendering the whole run as one paragraph flattens the
+		// bullets into stray hyphens in a run-on sentence, which is a different
+		// document from the one on the forge.
+		if i > 0 && listInterrupts(ln) {
+			head, err := r.paragraph(at, lines[:i])
+			if err != nil {
+				return "", err
+			}
+			rest, err := r.RenderBlock(at.Path, Block{Text: strings.Join(lines[i:], "\n"), Line: at.Line + i})
+			if err != nil {
+				return "", err
+			}
+			return head + rest, nil
+		}
 		if i > 0 && setextRe.MatchString(ln) {
 			level := 2
 			if strings.Contains(ln, "=") {
@@ -590,6 +606,21 @@ var voidElements = map[string]bool{
 	"track": true, "wbr": true,
 }
 
+// listInterrupts reports whether a line opening a list may cut the paragraph
+// above it.
+//
+// A bullet always may. An ordered item may only when it is numbered ONE, which
+// is CommonMark's rule and exists for exactly the sentence the record also
+// writes: a paragraph that wraps onto a line beginning "2. " is prose, not a
+// list, and cutting it there would invent a list nobody wrote.
+func listInterrupts(ln string) bool {
+	if isUnorderedItem(ln) {
+		return true
+	}
+	m := orderedItemRe.FindStringSubmatch(ln)
+	return m != nil && m[1] == "1"
+}
+
 // isUnorderedItem reports whether a line opens an unordered list item.
 func isUnorderedItem(ln string) bool {
 	return len(ln) > 2 && (ln[0] == '-' || ln[0] == '*' || ln[0] == '+') && ln[1] == ' '
@@ -605,8 +636,11 @@ type inlineNode struct {
 	// n is how many characters of the run are still unspent; origN the run's
 	// original length, which the matching rules are stated in terms of.
 	n, origN int
-	// canOpen and canClose are the flanking rules' verdict on this run.
-	canOpen, canClose bool
+	// canOpen and canClose are the matching walk's state: what this run may
+	// still do. origOpen and origClose are the flanking rules' verdict, which is
+	// a fact about the text and never changes.
+	canOpen, canClose   bool
+	origOpen, origClose bool
 	// before holds closing tags and after opening tags, so a run that both
 	// closes an inner span and opens nothing still emits them in the right
 	// order around whatever characters it has left over.
@@ -728,7 +762,8 @@ func (r *Renderer) scanInline(at Source, s string) ([]*inlineNode, error) {
 		case c == '*' || c == '_':
 			n := runLen(s, i, c)
 			opens, closes := flanking(s, i, n, c)
-			nodes = append(nodes, &inlineNode{delim: c, n: n, origN: n, canOpen: opens, canClose: closes})
+			nodes = append(nodes, &inlineNode{delim: c, n: n, origN: n,
+				canOpen: opens, canClose: closes, origOpen: opens, origClose: closes})
 			i += n
 		case c == '<':
 			h, next, err := r.angle(at, s, i)
@@ -846,7 +881,12 @@ func matchEmphasis(nodes []*inlineNode) {
 			// pairs with one whose combined length is not a multiple of three,
 			// unless both lengths are. It is what stops `**a*b**` pairing the
 			// wrong two runs.
-			if (c.canOpen || o.canClose) && (o.origN+c.origN)%3 == 0 &&
+			//
+			// It is asked of the FLANKING verdicts, which never change, and not
+			// of canOpen/canClose, which the walk turns off as it consumes runs:
+			// reading the mutable pair here made a closer that had already given
+			// up look like a run that cannot open, and the wrong two runs paired.
+			if (c.origOpen || o.origClose) && (o.origN+c.origN)%3 == 0 &&
 				!(o.origN%3 == 0 && c.origN%3 == 0) {
 				continue
 			}
@@ -867,9 +907,15 @@ func matchEmphasis(nodes []*inlineNode) {
 		c.n -= use
 		o.after = "<" + tag + ">" + o.after
 		c.before += "</" + tag + ">"
+		// A run trapped inside the pair can no longer match anything, but its
+		// CHARACTERS are still characters: `**MET_WITH_CONCERNS.**` keeps its
+		// underscores, exactly as every reader keeps them. Zeroing `n` here
+		// deleted them from the page instead — a silent difference between the
+		// record and what a reader was shown, which is the one thing this
+		// renderer exists to prevent.
 		for j := oi + 1; j < ci; j++ {
 			if nodes[j].delim != 0 {
-				nodes[j].n, nodes[j].canOpen, nodes[j].canClose = 0, false, false
+				nodes[j].canOpen, nodes[j].canClose = false, false
 			}
 		}
 		if c.n > 0 {
@@ -993,25 +1039,6 @@ func executableScheme(href string) (string, bool) {
 		b.WriteByte(c)
 	}
 	return "", false
-}
-
-// underscoreDelimits reports whether an underscore run at i opens or closes
-// emphasis rather than sitting inside a word — `snake_case` is a word, not
-// emphasis, and Markdown's own readers agree.
-func underscoreDelimits(s string, i, n int) bool {
-	before := byte(' ')
-	if i > 0 {
-		before = s[i-1]
-	}
-	after := byte(' ')
-	if i+n < len(s) {
-		after = s[i+n]
-	}
-	return !isWord(before) || !isWord(after)
-}
-
-func isWord(c byte) bool {
-	return isAlpha(c) || (c >= '0' && c <= '9')
 }
 
 func isAlpha(c byte) bool {

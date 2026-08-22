@@ -711,12 +711,19 @@ it and the site reads the store directly.
 	f.write(".abcd/development/research/references.csl.json", fixtureCSL)
 
 	// The attribution policy the contributors page quotes beside its numbers.
+	// The section opens with its own preamble before the bullets, which is the
+	// shape a policy section usually has: the manifest asks for the first
+	// BULLET, and a selector that took the first block would publish the
+	// lead-in and leave the rule off the page.
 	f.write("CONTRIBUTING.md", `# Contributing
 
 ## Attribution
 
-- **The human contributor is the author of record** and is responsible for all
-  assisted output. A trailer is disclosure, never an authorship claim.
+A fixture preamble about disclosure. The rules:
+
+- **Human author of record.** The human contributor is the author of record and
+  is responsible for all assisted output. A trailer is disclosure, never an
+  authorship claim.
 - A change no tool touched declares itself.
 `)
 	f.write("SECURITY.md", "# Security\n")

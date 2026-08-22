@@ -549,7 +549,7 @@
           : kind === 'ring'
             ? '<circle cx="' + x.toFixed(1) + '" cy="20" r="5.5"/>'
             : '<circle cx="' + x.toFixed(1) + '" cy="20" r="' + (kind === 'small' ? 3.5 : 5) + '"/>';
-        marks.push('<g class="mark ' + klass + '" tabindex="0"><title>' + esc(txt) + '</title>' +
+        marks.push('<g class="mark ' + esc(klass) + '" tabindex="0"><title>' + esc(txt) + '</title>' +
           '<circle class="hit" cx="' + x.toFixed(1) + '" cy="20" r="10"/>' + shape +
           '<text x="' + x.toFixed(1) + '" y="8" text-anchor="' + anchor + '">' + esc(txt) + '</text></g>');
         spoken.push(txt);

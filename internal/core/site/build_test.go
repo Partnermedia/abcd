@@ -431,8 +431,10 @@ func TestBuildLandingCarriesProvenance(t *testing.T) {
 	if strings.Contains(html, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10"`) {
 		t.Error("the inlined SVG kept its width attribute; the stylesheet must size it")
 	}
-	if !strings.Contains(html, `<img src="assets/img/intro.png"`) {
-		t.Error("the raster was not referenced from the output tree")
+	// Root-absolute: the same picture is referenced from `/` and from
+	// `/record/<type>/<id>/`, and a relative src resolves at only one of them.
+	if !strings.Contains(html, `<img src="/assets/img/intro.png"`) {
+		t.Error("the raster was not referenced from the output tree at its served path")
 	}
 	// The install tab row: the manifest's left-hand section, then the CLI group.
 	if !strings.Contains(html, `<button role="tab" id="tab-plugin" aria-selected="true"`) {

@@ -131,6 +131,18 @@ func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
+	// A bibliography is repository text like any other, and its addresses become
+	// hrefs on a published page. Nothing else in the tree validates this file, so
+	// the same scheme check the markdown path applies to every link runs here:
+	// escaping an attribute is no defence against a well-formed `javascript:`.
+	for i, e := range entries {
+		for _, u := range []string{e.URL, e.DOI} {
+			if scheme, bad := executableScheme(u); bad {
+				return nil, fmt.Errorf("site: %s entry %d (%s) addresses %q, which runs code in the reader's browser; a bibliography links to sources",
+					cslRel, i+1, e.ID, scheme)
+			}
+		}
+	}
 	b := &Bibliography{Entries: entries, Path: cslRel, RefsHeading: referencesHeading, Heading: inspirationsHeading}
 
 	ack, err := fsutil.ReadGuarded(joinRepo(repoRoot, ackRel), maxBibliographyBytes)

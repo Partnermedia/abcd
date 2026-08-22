@@ -104,6 +104,26 @@ func TestRenderWidenedSubset(t *testing.T) {
 			"<p>the file lifeboat-&lt;ts&gt; holds it</p>"},
 		{"html comment inline", "Kept. <!-- dropped --> Kept.", "<p>Kept.  Kept.</p>"},
 		{"html comment block", "<!-- a note\nover two lines -->", ""},
+		// A delimiter run trapped inside a matched pair can no longer match
+		// anything, but its CHARACTERS are still characters. Dropping them is a
+		// silent difference between the record and the page — the record writes
+		// `MET_WITH_CONCERNS` inside bold constantly.
+		{"underscores inside strong", "**MET_WITH_CONCERNS.**",
+			"<p><strong>MET_WITH_CONCERNS.</strong></p>"},
+		{"star inside strong", "**bold with * star**", "<p><strong>bold with * star</strong></p>"},
+		// The rule of three is asked of the flanking verdicts, which never
+		// change — not of the matching walk's own state, which does.
+		{"rule of three", "**a*b**", "<p><strong>a*b</strong></p>"},
+		// A list may interrupt a paragraph, and the record writes one that way
+		// constantly: a bold lead-in with its bullets under it, no blank line.
+		{"list interrupts a paragraph", "**Costs:**\n- one\n- two",
+			"<p><strong>Costs:</strong></p><ul>\n<li>one</li>\n<li>two</li>\n</ul>"},
+		{"numbered list interrupts a paragraph", "Then:\n1. first\n2. second",
+			"<p>Then:</p><ol>\n<li>first</li>\n<li>second</li>\n</ol>"},
+		// …but only when it is numbered one. A paragraph that wraps onto a line
+		// beginning "2. " is prose, and cutting it there invents a list.
+		{"a wrapped line is not a list", "as in Figure\n2. above, the cost falls",
+			"<p>as in Figure\n2. above, the cost falls</p>"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

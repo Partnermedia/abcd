@@ -246,14 +246,10 @@ func (c *composer) headWith(pageTitle, script string) string {
 	b.WriteString(`<link rel="preconnect" href="https://fonts.googleapis.com">` + "\n")
 	b.WriteString(`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>` + "\n")
 	b.WriteString(`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">` + "\n")
-	css, js := "site.css", "site.js"
-	if pageTitle != "" {
-		// A page below the root reaches the shared assets by their served path,
-		// which is the same path for every route.
-		css, js = "/site.css", "/site.js"
-	}
-	b.WriteString(`<link rel="stylesheet" href="` + css + `">` + "\n")
-	b.WriteString(`<script src="` + js + `" defer></script>` + "\n")
+	// Root-absolute, because the shared assets sit at one served path and the
+	// pages that link them sit at every depth the site has.
+	b.WriteString(`<link rel="stylesheet" href="/site.css">` + "\n")
+	b.WriteString(`<script src="/site.js" defer></script>` + "\n")
 	if script != "" {
 		b.WriteString(`<script src="` + escapeAttr(script) + `" defer></script>` + "\n")
 	}
@@ -1121,21 +1117,25 @@ func (c *composer) featureBlock(f *Feature) (string, error) {
 // sits on. The manifest asks for ONE acceptance criterion, so it gets one.
 func firstListItem(b Block) (string, int) {
 	lines := strings.Split(b.Text, "\n")
-	if !isUnorderedItem(lines[0]) && !orderedItemRe.MatchString(lines[0]) {
+	first := strings.TrimLeft(lines[0], " \t")
+	switch {
+	case isUnorderedItem(first):
+		first = strings.TrimSpace(first[2:])
+	case orderedItemRe.MatchString(first):
+		first = strings.TrimSpace(orderedItemRe.FindStringSubmatch(first)[2])
+	default:
 		return b.Text, b.Line
 	}
-	var item []string
-	item = append(item, lines[0])
+	item := []string{first}
 	for _, ln := range lines[1:] {
-		if isUnorderedItem(ln) || orderedItemRe.MatchString(ln) {
+		t := strings.TrimLeft(ln, " \t")
+		if isUnorderedItem(t) || orderedItemRe.MatchString(t) {
 			break
 		}
 		item = append(item, ln)
 	}
-	text := strings.Join(item, "\n")
 	// Rendered as prose, not as a one-item list: it is a quotation.
-	text = strings.TrimSpace(strings.TrimLeft(text, "-*+ "))
-	return text, b.Line
+	return strings.TrimSpace(strings.Join(item, "\n")), b.Line
 }
 
 // newestMetIntent picks the shipped intent whose audit verdict is MET, most
