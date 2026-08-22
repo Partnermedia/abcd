@@ -76,6 +76,36 @@ func TestCheckDecisions(t *testing.T) {
 			verdict: VerdictAllow,
 		},
 		{
+			name:    "an ampersand redirection does not hide the flag",
+			command: "git push &>/dev/null --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "a glued ampersand redirection does not hide the flag",
+			command: "git push&>/dev/null --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "an ampersand-append redirection does not hide --no-verify",
+			command: "git commit &>>log --no-verify -m x",
+			verdict: VerdictBlock,
+			entryID: "git-commit-no-verify",
+		},
+		{
+			name:    "an ampersand redirection in a cd chain still fires",
+			command: "cd scratch && rm &>/dev/null -rf *",
+			verdict: VerdictBlock,
+			entryID: "rm-rf-after-cd-chain",
+		},
+		{
+			name:    "an ampersand redirection inside a bash payload still fires",
+			command: `bash -c 'git push &>/dev/null --force origin main'`,
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
 			name:    "git global value flags do not hide the subcommand",
 			command: "git -C /repo push --force origin main",
 			verdict: VerdictBlock,

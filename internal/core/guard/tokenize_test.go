@@ -202,6 +202,36 @@ func TestTokenizeSegments(t *testing.T) {
 			line: "cat <(echo hi)",
 			want: []string{"0:cat|<", "0:echo|hi"},
 		},
+		{
+			name: "an ampersand redirection does not split the command",
+			line: "git push &>/dev/null --force origin main",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "a glued ampersand redirection terminates the word only",
+			line: "git push&>/dev/null --force origin main",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "an ampersand-append redirection drops only its target",
+			line: "git commit &>>log --no-verify -m x",
+			want: []string{"0:git|commit|--no-verify|-m|x"},
+		},
+		{
+			name: "an ampersand redirection mid cd chain keeps both segments",
+			line: "cd scratch && rm &>/dev/null -rf *",
+			want: []string{"0:cd|scratch", "0:rm|-rf|*"},
+		},
+		{
+			name: "a digit before an ampersand redirection stays a real argument",
+			line: "timeout 30&>/dev/null rm -rf *",
+			want: []string{"0:timeout|30|rm|-rf|*"},
+		},
+		{
+			name: "a logical and is not an ampersand redirection",
+			line: "git push && git push --force origin main",
+			want: []string{"0:git|push", "0:git|push|--force|origin|main"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
