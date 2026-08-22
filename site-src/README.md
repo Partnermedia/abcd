@@ -17,6 +17,12 @@ comes from the repository. This directory holds:
 - `install.sh.tmpl` — the committed source of `/install.sh`.
 - `redirects` — the `_redirects` source.
 - `headers` — the `_headers` source.
+- `audit/` — CI-only tooling, never part of the site. `overflow-audit.js` drives
+  a headless browser over every route at four viewport widths and fails on
+  horizontal overflow; it runs in the optional `site-screenshots` workflow and
+  in no build or deploy path. The build reaches it by no path: `copiedSources`
+  in `internal/core/site/build.go` is an explicit five-file allowlist and
+  nothing walks this directory, so files added here cannot reach the output.
 
 `abcd site build` copies `site.css`, `site.js`, `redirects` and `headers` into
 the output tree (the last two under their served names) and reads `ui.json`.

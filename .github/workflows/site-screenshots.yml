@@ -1,0 +1,167 @@
+name: site-screenshots
+
+# The RENDERED mobile audit: a real browser loads every route family at four
+# viewport widths and fails if the document scrolls horizontally (itd-135 AC 7,
+# itd-136 AC 8, itd-137 AC 7).
+#
+# THIS WORKFLOW IS OPTIONAL AND MUST STAY THAT WAY. It is deliberately a separate
+# file with its own triggers, and it must never be added to a required-checks set
+# or a merge-queue gate. Two reasons, both from the record:
+#
+#   - adr-47 keeps Node out of the build. Playwright is the ONE sanctioned
+#     exception, and it is sanctioned only for an optional CI job. A browser
+#     download on the critical path would make every release depend on a registry
+#     and a 100MB binary that nothing else here needs.
+#   - Rendered layout is the kind of check that goes amber for reasons that are
+#     not the author's fault — a font that loads slowly, a headless-Chromium
+#     upgrade that shifts a metric by a pixel. Blocking a merge on that trains
+#     people to bypass gates. Failing loudly next to the screenshots does not.
+#
+# It never runs in the build or deploy path: site.yml renders and deploys, and
+# this file is not reachable from it. Nothing here can touch abcdev.app — it
+# holds `contents: read`, no environment, and no credential.
+#
+# Repo-specific, NOT scaffolded. Unlike release.yml and auto-release.yml, this
+# workflow has no template under internal/core/launch/scaffold/templates/ and is
+# not rendered into a managed repo: it audits THIS repository's website, which is
+# a thing only this repository has.
+#
+# `abcd site check`'s `mobile` gate is the STATIC counterpart — viewport meta,
+# overflow containers, image constraints, inline widths — and that one DOES run in
+# the build path and does block a release. It reads emitted HTML and CSS, so it
+# cannot see layout. This one measures a laid-out document and gates nothing. The
+# two are complementary, not redundant.
+on:
+  pull_request:
+    # Only what can change the rendered page: the generator, the committed
+    # sources it copies and composes, the docs prose the site renders, and the
+    # composition manifest. A change to this workflow or its audit script runs it
+    # too — a guard whose own edits are unexercised is a guard nobody trusts.
+    paths:
+      - 'internal/core/site/**'
+      - 'site-src/**'
+      - 'docs/**'
+      - '.abcd/site.json'
+      - '.github/workflows/site-screenshots.yml'
+  workflow_dispatch:
+
+# Superseded by a newer push to the same pull request: this audit gates nothing,
+# so an in-flight run of a revision nobody will merge is pure waste. The opposite
+# of site.yml, where a cancelled run could leave a deploy half-moved.
+concurrency:
+  group: site-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only, and nothing elevates: this workflow builds, measures, and uploads an
+# artifact. It writes nothing to the repository and holds no secret.
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    # Generous: ~80 page renderings plus a browser download on a cold runner.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      # Hand-reviewed pin, aged deliberately. A version named here is invisible to
+      # dependabot's github-actions ecosystem, and npm offers nothing to verify a
+      # download against, so aging is the control: the newest release at least 7
+      # days old at the time of the bump, mirroring dependabot's cooldown, so a
+      # compromised publish has had time to surface. 1.62.1 was published
+      # 2026-07-30. This is the only Node dependency in the repository.
+      PLAYWRIGHT_VERSION: '1.62.1'
+      # Loopback only. The server is reachable by the browser in this job and by
+      # nothing else, for the seconds the audit takes.
+      AUDIT_PORT: '8080'
+    steps:
+      - name: Check out the pull request's merge result
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the record explorer derives per-record dates from git
+          # history and contributors from `git shortlog`. A shallow clone renders
+          # a site that is subtly wrong, and auditing that would prove nothing
+          # about the real one.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.7'
+
+      - name: Build the binary from source
+        # From source, not from a release: this audit runs on a pull request, to
+        # measure the page THIS change renders. There is no released binary that
+        # could contain it.
+        run: go build -o "$RUNNER_TEMP/abcd" ./cmd/abcd
+
+      - name: Render the site
+        # No --version or --commit: the defaults read the newest CHANGELOG heading
+        # and git HEAD, and nothing in this audit depends on the build stamp.
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/abcd" site build --out "$RUNNER_TEMP/site"
+
+      - name: Install Playwright and Chromium (pinned)
+        # Installed into RUNNER_TEMP, not the workspace, so the checkout this job
+        # audits keeps exactly the files the pull request has. `--with-deps` pulls
+        # the system libraries headless Chromium needs on the runner image.
+        #
+        # zizmor's `adhoc-packages` finding is suppressed, not dismissed: it is
+        # right that a version pin is weaker than a lockfile, which would carry an
+        # integrity hash per package. The stronger fix is a package.json plus
+        # package-lock.json under site-src/audit/ and `npm ci`. That is deliberately
+        # NOT done here without a decision, for two reasons: AGENTS.md makes any new
+        # dependency manifest an ask-first change, and adr-47 keeps a Node toolchain
+        # out of this repository — a committed npm manifest is exactly the thing it
+        # rules out, even one confined to CI. What bounds the risk meanwhile: the job
+        # holds `contents: read` and no secret, it runs on no branch anyone deploys
+        # from, and the version is aged past a 7-day cooldown. Raised for a ruling.
+        run: | # zizmor: ignore[adhoc-packages]
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP" --no-fund --no-audit "playwright@${PLAYWRIGHT_VERSION}"
+          "$RUNNER_TEMP/node_modules/.bin/playwright" install chromium --with-deps
+          "$RUNNER_TEMP/node_modules/.bin/playwright" --version
+
+      - name: Audit every route for horizontal overflow
+        # Server and audit in ONE step on purpose: a background process started in
+        # an earlier step is not guaranteed to survive into a later one, and a
+        # silently dead server would make every route fail to load — which the
+        # script reports as a failure, but for the wrong reason. Started here, it
+        # dies with the step, and the trap closes it on every path.
+        #
+        # `python3 -m http.server` is the whole server: it is on the runner image,
+        # it resolves a directory to its index.html exactly as the site's URLs
+        # expect, and it adds no dependency. Bound to loopback explicitly.
+        run: |
+          set -euo pipefail
+          python3 -m http.server "$AUDIT_PORT" \
+            --bind 127.0.0.1 \
+            --directory "$RUNNER_TEMP/site" \
+            >"$RUNNER_TEMP/http.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          base="http://127.0.0.1:${AUDIT_PORT}"
+          for _ in $(seq 1 50); do
+            if curl -fsS "$base/index.html" >/dev/null 2>&1; then break; fi
+            sleep 0.2
+          done
+          curl -fsS "$base/index.html" >/dev/null
+
+          NODE_PATH="$RUNNER_TEMP/node_modules" \
+            node site-src/audit/overflow-audit.js "$base" "$RUNNER_TEMP/screenshots"
+
+      - name: Upload the screenshots
+        # always(): the screenshots are most wanted when the audit FAILED — the
+        # picture is how someone sees what overflowed. Short retention because
+        # these are a debugging aid for one pull request, not a record.
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site-screenshots-${{ github.run_id }}
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: warn
+          retention-days: 7
