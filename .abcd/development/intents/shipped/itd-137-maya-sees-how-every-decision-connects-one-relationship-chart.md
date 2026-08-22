@@ -96,4 +96,5 @@ carry those files, and the chart says so.
 
 ## Audit Notes
 
-_Empty. Populated by intent-auditor when intent moves to shipped/._
+<!-- abcd-review: OWED receipt=rcp-6a21b21ffdd6 -->
+Fidelity review OWED (receipt rcp-6a21b21ffdd6).
