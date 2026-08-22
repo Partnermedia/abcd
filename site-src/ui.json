@@ -25,8 +25,63 @@
     "releases": "releases",
     "adr": "decisions",
     "intent": "intents",
+    "spec": "specs",
     "issue": "issues",
+    "principle": "principles",
     "commits": "commits"
+  },
+  "record_nav": {
+    "dashboard": "Dashboard",
+    "graph": "Relationships",
+    "timeline": "Genealogy",
+    "foundations": "Foundations",
+    "contributors": "Contributors"
+  },
+  "panels": {
+    "cadence": "Release cadence",
+    "latest": "Latest decisions",
+    "health": "Record health",
+    "table_view": "Table view"
+  },
+  "graph": {
+    "arrange": "Arrange",
+    "by_date": "by date",
+    "by_links": "by links",
+    "filters": "Filters",
+    "find": "Find a record",
+    "mentions": "include body mentions",
+    "browse_list": "Browse as a list",
+    "zoom_in": "Zoom in",
+    "zoom_out": "Zoom out",
+    "reset_view": "Reset view",
+    "full_screen": "Full screen",
+    "exit_full_screen": "Exit full screen",
+    "close": "Close",
+    "back": "Back",
+    "forward": "Forward",
+    "history": "History of records looked at",
+    "linked": "linked records",
+    "no_links": "no typed cross-references"
+  },
+  "record": {
+    "frontmatter": "Frontmatter",
+    "inbound": "Referenced by",
+    "outbound": "References",
+    "mentions": "mentions",
+    "not_in_tree": "not in the tree",
+    "open_on_forge": "open on GitHub",
+    "commit_history": "commit history"
+  },
+  "relations": {
+    "supersedes": "superseded by",
+    "implements": "implemented by",
+    "builds_on": "built on by"
+  },
+  "contributors": {
+    "authors": "Authors of record",
+    "tools": "Bots and tools",
+    "assisted": "commits disclose AI assistance",
+    "trailers": "Assisted-by trailers"
   },
   "more": "more",
   "standby": "Stand by…",

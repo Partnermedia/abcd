@@ -19,7 +19,7 @@
         "entered": "2026-01-05",
         "touched": "2026-01-05"
       },
-      "degree": 2.7
+      "degree": 3.1
     },
     {
       "id": "adr-2",
@@ -80,7 +80,7 @@
         "entered": "2026-01-05",
         "touched": "2026-01-05"
       },
-      "degree": 1
+      "degree": 2
     },
     {
       "id": "itd-2",
@@ -131,6 +131,38 @@
       "degree": 0.4
     },
     {
+      "id": "itd-5",
+      "type": "intent",
+      "lifecycle": "disciplines",
+      "title": "A Fixture Discipline",
+      "path": ".abcd/development/intents/disciplines/itd-5-a-fixture-discipline.md",
+      "kind": "discipline",
+      "severity": "minor",
+      "date": "2026-01-05",
+      "dates": {
+        "created": "2026-01-05",
+        "entered": "2026-01-05",
+        "touched": "2026-01-05"
+      },
+      "degree": 0
+    },
+    {
+      "id": "itd-6",
+      "type": "intent",
+      "lifecycle": "superseded",
+      "title": "The Superseded One",
+      "path": ".abcd/development/intents/superseded/itd-6-the-superseded-one.md",
+      "kind": "standalone",
+      "severity": "minor",
+      "date": "2026-01-05",
+      "dates": {
+        "created": "2026-01-05",
+        "entered": "2026-01-05",
+        "touched": "2026-01-05"
+      },
+      "degree": 1
+    },
+    {
       "id": "spc-1",
       "type": "spec",
       "lifecycle": "open",
@@ -143,6 +175,34 @@
         "touched": "2026-01-05"
       },
       "degree": 1.4
+    },
+    {
+      "id": "a-second-fixture-principle",
+      "type": "principle",
+      "lifecycle": "active",
+      "title": "A second fixture principle",
+      "path": ".abcd/development/principles/a-second-fixture-principle.md",
+      "date": "2026-01-05",
+      "dates": {
+        "created": "2026-01-05",
+        "entered": "2026-01-05",
+        "touched": "2026-01-05"
+      },
+      "degree": 0
+    },
+    {
+      "id": "one-fixture-principle",
+      "type": "principle",
+      "lifecycle": "active",
+      "title": "One fixture principle",
+      "path": ".abcd/development/principles/one-fixture-principle.md",
+      "date": "2026-01-05",
+      "dates": {
+        "created": "2026-01-05",
+        "entered": "2026-01-05",
+        "touched": "2026-01-05"
+      },
+      "degree": 0.4
     }
   ],
   "edges": [
@@ -157,6 +217,11 @@
       "rel": "related"
     },
     {
+      "from": "itd-6",
+      "to": "itd-1",
+      "rel": "builds_on"
+    },
+    {
       "from": "spc-1",
       "to": "itd-2",
       "rel": "implements"
@@ -166,6 +231,10 @@
     {
       "from": "adr-1",
       "to": "iss-1"
+    },
+    {
+      "from": "adr-1",
+      "to": "one-fixture-principle"
     },
     {
       "from": "adr-1",
@@ -183,8 +252,9 @@
   "counts": {
     "by_type": {
       "adr": 3,
-      "intent": 4,
+      "intent": 6,
       "issue": 1,
+      "principle": 2,
       "spec": 1
     },
     "by_lifecycle": {
@@ -192,14 +262,24 @@
         "": 3
       },
       "intent": {
+        "disciplines": 1,
         "drafts": 1,
-        "shipped": 3
+        "shipped": 3,
+        "superseded": 1
       },
       "issue": {
         "open": 1
       },
+      "principle": {
+        "active": 2
+      },
       "spec": {
         "open": 1
+      }
+    },
+    "by_status": {
+      "adr": {
+        "accepted": 3
       }
     }
   },
@@ -255,105 +335,149 @@
       },
       {
         "x": 0,
-        "y": 0.508
+        "y": 0.4922
       },
       {
-        "x": -0.2221,
-        "y": 0.832
+        "x": -0.6505,
+        "y": -0.3745
       },
       {
-        "x": 0.0868,
-        "y": 0.8943
+        "x": -0.7803,
+        "y": -0.1025
       },
       {
-        "x": -0.4526,
-        "y": 0.2045
+        "x": -0.0343,
+        "y": -0.5079
       },
       {
-        "x": -0.3743,
-        "y": -0.3264
+        "x": 0.4191,
+        "y": -0.2367
       },
       {
-        "x": 0.0096,
-        "y": -0.4265
+        "x": 0.39,
+        "y": 0.1402
       },
       {
-        "x": 0.3931,
-        "y": -0.2541
+        "x": 0.2357,
+        "y": 0.8336
       },
       {
-        "x": 0.4271,
-        "y": 0.3018
+        "x": -0.1064,
+        "y": 0.8521
+      },
+      {
+        "x": -0.4119,
+        "y": 0.6532
+      },
+      {
+        "x": -0.6907,
+        "y": 0.2908
+      },
+      {
+        "x": -0.316,
+        "y": 0.2681
+      },
+      {
+        "x": -0.4403,
+        "y": -0.1109
       }
     ],
     "links": [
       {
-        "x": -0.002,
-        "y": 0.0164
+        "x": -0.0523,
+        "y": -0.445
       },
       {
-        "x": 0.0883,
-        "y": -0.7146
+        "x": -0.084,
+        "y": -0.7151
       },
       {
-        "x": -0.9536,
-        "y": -0.1779
+        "x": -0.6399,
+        "y": -0.6399
       },
       {
-        "x": -0.9049,
-        "y": 0.0138
+        "x": -0.761,
+        "y": -0.6015
       },
       {
-        "x": -0.0883,
-        "y": 0.7144
+        "x": 0.0523,
+        "y": 0.445
       },
       {
         "x": 0.1707,
         "y": -0.7817
       },
       {
-        "x": 0.9049,
-        "y": -0.0138
+        "x": 0.6399,
+        "y": 0.6399
       },
       {
-        "x": 0.9536,
-        "y": 0.1779
+        "x": -0.2098,
+        "y": 0.947
+      },
+      {
+        "x": -0.6399,
+        "y": 0.6399
+      },
+      {
+        "x": 0.084,
+        "y": 0.7151
       },
       {
         "x": 0.1472,
         "y": -0.7864
+      },
+      {
+        "x": 0.6399,
+        "y": -0.6399
+      },
+      {
+        "x": 0.873,
+        "y": -0.4227
       }
     ],
     "degree": [
-      2.7,
+      3.1,
       1.4,
       0,
       1,
-      1,
+      2,
       1,
       0,
       0.4,
-      1.4
+      0,
+      1,
+      1.4,
+      0,
+      0.4
     ],
     "radius": [
-      8.392,
+      8.6762,
       7.0675,
       3.87,
       3.99,
-      6.622,
+      7.7619,
       6.622,
       3.87,
       5.4981,
-      7.0675
+      3.87,
+      6.622,
+      7.0675,
+      3.87,
+      5.4981
     ],
     "order": [
       0,
       1,
+      11,
+      12,
       4,
       5,
       6,
       7,
       8,
+      9,
+      10,
       3,
       2
     ],
@@ -368,14 +492,14 @@
       }
     ],
     "overlaps": 0,
-    "coil_radius": 39.3,
+    "coil_radius": 41.1,
     "ref_scale": 0.86,
-    "isolated": 2,
+    "isolated": 4,
     "islands": [
-      3
+      4
     ],
     "pairs": 1,
-    "unlinked": 4,
+    "unlinked": 7,
     "date_range": [
       "2026-01-02",
       "2026-03-05"

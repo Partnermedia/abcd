@@ -108,9 +108,18 @@ func renderSiteStatus(w io.Writer, st site.Status) {
 // renderSiteBuild prints what a build wrote and what it measured.
 func renderSiteBuild(w io.Writer, res site.Result) {
 	fmt.Fprintf(w, "abcd site build — %s\n", termsafe.Sanitize(res.OutDir))
-	for _, f := range res.Files {
+	// The explorer writes a page per record, so a full listing is hundreds of
+	// lines of scroll. The head of it still says what shape the tree took, and
+	// the count says how much of it is not shown.
+	const listed = 12
+	for i, f := range res.Files {
+		if i == listed && len(res.Files) > listed+1 {
+			fmt.Fprintf(w, "  … %d more\n", len(res.Files)-listed)
+			break
+		}
 		fmt.Fprintf(w, "  %s\n", termsafe.Sanitize(f))
 	}
+	fmt.Fprintf(w, "  pages:   %d rendered from the record\n", res.Pages)
 	fmt.Fprintf(w, "  record:  %d records · %d links · %d mentions\n", res.Records, res.Links, res.Mentions)
 	fmt.Fprintf(w, "  refs:    %d unresolved (baseline %d)\n", res.Unresolved, res.Baseline)
 	fmt.Fprintf(w, "  layout:  %d overlapping bubbles\n", res.Overlaps)

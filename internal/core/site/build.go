@@ -38,6 +38,9 @@ var copiedSources = []struct{ src, dst string }{
 	{"site-src/headers", "_headers"},
 	{"site-src/site.css", "site.css"},
 	{"site-src/site.js", "site.js"},
+	// The chart's runtime, loaded by `/record/graph/` alone. It is a separate
+	// file so the landing page never pays for it.
+	{"site-src/record.js", "record.js"},
 }
 
 // pluginManifestRelPath carries the package's own metadata: its name, its forge
@@ -97,6 +100,9 @@ type Result struct {
 	Files []string `json:"files"`
 	// Bytes is the total size written.
 	Bytes int64 `json:"bytes"`
+	// Pages is how many HTML pages the explorer rendered, beyond the landing
+	// page: one per route and one per record.
+	Pages int `json:"pages"`
 	// Records, Links and Mentions summarise the exported graph.
 	Records  int `json:"records"`
 	Links    int `json:"links"`
@@ -155,6 +161,13 @@ func Build(req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	// The principle store carries no frontmatter, so the lint scan cannot see
+	// it. It joins the graph here, and a repository that keeps none simply has
+	// none — the pages that would list them are omitted.
+	principles, err := LoadPrinciples(repoRoot, PrinciplesDir(lintCfg))
+	if err != nil {
+		return Result{}, err
+	}
 	hist, err := LoadHistory(repoRoot)
 	if err != nil {
 		return Result{}, err
@@ -192,7 +205,7 @@ func Build(req Request) (Result, error) {
 		return Result{}, err
 	}
 
-	export, err := BuildRecordExport(repoRoot, manifest.Checks.UnresolvedReferenceBaseline, graph, hist, stamp, manifest.Record)
+	export, err := BuildRecordExport(repoRoot, manifest.Checks.UnresolvedReferenceBaseline, graph, principles, hist, stamp, manifest.Record)
 	if err != nil {
 		return Result{}, err
 	}
@@ -201,6 +214,21 @@ func Build(req Request) (Result, error) {
 		return Result{}, err
 	}
 	recordJSON = append(recordJSON, '\n')
+
+	// The record explorer. Its optional inputs — a bibliography, a principle
+	// store, a changelog — each omit the page they feed rather than failing.
+	bib, err := LoadBibliography(repoRoot, CSLRelPath, AcknowledgementsRelPath)
+	if err != nil {
+		return Result{}, err
+	}
+	recordRoot := ""
+	if len(lintCfg.Roots) > 0 {
+		recordRoot = lintCfg.Roots[0]
+	}
+	pages, err := newExplorer(c, export, bib, recordRoot).Pages()
+	if err != nil {
+		return Result{}, err
+	}
 
 	res := Result{
 		OutDir:     outDir,
@@ -241,6 +269,19 @@ func Build(req Request) (Result, error) {
 	if err := write("record.json", recordJSON); err != nil {
 		return Result{}, err
 	}
+	// Written in a fixed order, so two builds of one tree write the same files
+	// in the same sequence and the reported list is a function of the record.
+	routes := make([]string, 0, len(pages))
+	for route := range pages {
+		routes = append(routes, route)
+	}
+	sort.Strings(routes)
+	for _, route := range routes {
+		if err := write(route, []byte(pages[route])); err != nil {
+			return Result{}, err
+		}
+	}
+	res.Pages = len(pages)
 	for _, cp := range copiedSources {
 		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, cp.src), maxAssetBytes)
 		if err != nil {

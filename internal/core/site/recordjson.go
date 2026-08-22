@@ -97,10 +97,18 @@ type ExportMention struct {
 	To   string `json:"to"`
 }
 
-// Counts is the corpus by store and by lifecycle bucket.
+// Counts is the corpus by store, by lifecycle bucket, and by declared status.
+//
+// The last of those is not a duplicate of the second. A store that grades its
+// records by MOVING them between directories (intents, specs, issues) is counted
+// by lifecycle; a FLAT store that grades them with a frontmatter field
+// (decisions) has one empty lifecycle bucket and its whole shape in the status
+// field. A page that only read the lifecycle would show a flat store as a single
+// undifferentiated block.
 type Counts struct {
 	ByType      map[string]int            `json:"by_type"`
 	ByLifecycle map[string]map[string]int `json:"by_lifecycle"`
+	ByStatus    map[string]map[string]int `json:"by_status"`
 }
 
 // Health is the record's reference hygiene as measured, not as claimed.
@@ -148,8 +156,15 @@ var symmetricRel = map[string]bool{"related": true, "implements": true}
 
 // BuildRecordExport derives record.json from the record graph, the git history
 // and the changelog.
-func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, hist History, stamp BuildStamp, opts RecordOpts) (RecordExport, error) {
+func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, extra []lint.RecordNode, hist History, stamp BuildStamp, opts RecordOpts) (RecordExport, error) {
 	nodes := graph.Nodes
+	if len(extra) > 0 {
+		// The frontmatter-free stores (principles) join the graph here rather
+		// than in the lint scan: they carry no typed references, so they add
+		// nodes and nothing else, and the scan stays the one parser of the
+		// record's typed shape.
+		nodes = append(append(nodes[:0:0], nodes...), extra...)
+	}
 	if !opts.IssueLedger {
 		// The issue ledger is working-tier data (adr-32); publishing it is an
 		// explicit per-repo opt-in, so without one it is not in the export at
@@ -181,8 +196,9 @@ func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, his
 		Nodes:         make([]ExportNode, len(nodes)),
 		Edges:         edges,
 		Mentions:      mentions,
-		Counts:        Counts{ByType: map[string]int{}, ByLifecycle: map[string]map[string]int{}},
-		History:       HistoryMeta{FirstCommit: hist.First, LastCommit: hist.Last, Commits: hist.Commits},
+		Counts: Counts{ByType: map[string]int{}, ByLifecycle: map[string]map[string]int{},
+			ByStatus: map[string]map[string]int{}},
+		History: HistoryMeta{FirstCommit: hist.First, LastCommit: hist.Last, Commits: hist.Commits},
 	}
 	for i, n := range nodes {
 		date := hist.EffectiveDate(n.Path, n.Date)
@@ -197,6 +213,12 @@ func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, his
 			exp.Counts.ByLifecycle[n.Type] = map[string]int{}
 		}
 		exp.Counts.ByLifecycle[n.Type][n.Lifecycle]++
+		if n.Status != "" {
+			if exp.Counts.ByStatus[n.Type] == nil {
+				exp.Counts.ByStatus[n.Type] = map[string]int{}
+			}
+			exp.Counts.ByStatus[n.Type][n.Status]++
+		}
 	}
 
 	exp.Layout = ComputeArrangements(lay, typedPairs, mentionPairs)

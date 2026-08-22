@@ -47,12 +47,110 @@ type UI struct {
 	SearchDocs    string   `json:"search_docs"`
 	Platform      Platform `json:"platform"`
 	Tiles         Tiles    `json:"tiles"`
-	More          string   `json:"more"`
-	Standby       string   `json:"standby"`
-	CLIGroup      string   `json:"cli_group"`
-	MatchesSystem string   `json:"matches_system"`
-	Beta          string   `json:"beta"`
+	// RecordNav labels the explorer's sub-navigation; each label is also that
+	// page's own heading, so a page and the tab that reaches it cannot drift.
+	RecordNav RecordNav `json:"record_nav"`
+	// Panels captions the dashboard's panels that no count names.
+	Panels Panels `json:"panels"`
+	// Graph labels the relationship chart's controls.
+	Graph GraphUI `json:"graph"`
+	// Record labels the per-record page's own sections.
+	Record RecordUI `json:"record"`
+	// Relations names a typed link read from the far end. The forward name is
+	// the relation's own word from the record; only the inverse needs saying.
+	Relations Relations `json:"relations"`
+	// Contributors labels the attribution page's two rows and two figures.
+	Contributors  ContributorsUI `json:"contributors"`
+	More          string         `json:"more"`
+	Standby       string         `json:"standby"`
+	CLIGroup      string         `json:"cli_group"`
+	MatchesSystem string         `json:"matches_system"`
+	Beta          string         `json:"beta"`
 }
+
+// RecordNav labels the explorer's sub-navigation.
+type RecordNav struct {
+	Dashboard    string `json:"dashboard"`
+	Graph        string `json:"graph"`
+	Timeline     string `json:"timeline"`
+	Foundations  string `json:"foundations"`
+	Contributors string `json:"contributors"`
+}
+
+// Panels captions the dashboard panels.
+type Panels struct {
+	Cadence   string `json:"cadence"`
+	Latest    string `json:"latest"`
+	Health    string `json:"health"`
+	TableView string `json:"table_view"`
+}
+
+// GraphUI labels the relationship chart's controls.
+type GraphUI struct {
+	Arrange        string `json:"arrange"`
+	ByDate         string `json:"by_date"`
+	ByLinks        string `json:"by_links"`
+	Filters        string `json:"filters"`
+	Find           string `json:"find"`
+	Mentions       string `json:"mentions"`
+	BrowseList     string `json:"browse_list"`
+	ZoomIn         string `json:"zoom_in"`
+	ZoomOut        string `json:"zoom_out"`
+	ResetView      string `json:"reset_view"`
+	FullScreen     string `json:"full_screen"`
+	ExitFullScreen string `json:"exit_full_screen"`
+	Close          string `json:"close"`
+	Back           string `json:"back"`
+	Forward        string `json:"forward"`
+	History        string `json:"history"`
+	Linked         string `json:"linked"`
+	NoLinks        string `json:"no_links"`
+}
+
+// RecordUI labels a per-record page's sections.
+type RecordUI struct {
+	Frontmatter   string `json:"frontmatter"`
+	Inbound       string `json:"inbound"`
+	Outbound      string `json:"outbound"`
+	Mentions      string `json:"mentions"`
+	NotInTree     string `json:"not_in_tree"`
+	OpenOnForge   string `json:"open_on_forge"`
+	CommitHistory string `json:"commit_history"`
+}
+
+// Relations names each directed link read from its target's side.
+type Relations struct {
+	Supersedes string `json:"supersedes"`
+	Implements string `json:"implements"`
+	BuildsOn   string `json:"builds_on"`
+}
+
+// ContributorsUI labels the attribution page.
+type ContributorsUI struct {
+	Authors  string `json:"authors"`
+	Tools    string `json:"tools"`
+	Assisted string `json:"assisted"`
+	Trailers string `json:"trailers"`
+}
+
+// Inverse names a directed relation read from the record it points at. An
+// undirected relation reads the same from both ends and is returned unchanged.
+func (r Relations) Inverse(rel string) string {
+	switch rel {
+	case "supersedes":
+		return r.Supersedes
+	case "implements":
+		return r.Implements
+	case "builds_on":
+		return r.BuildsOn
+	}
+	return relationWord(rel)
+}
+
+// relationWord is a relation's own name as prose: the record's field spelling
+// with its underscore opened out. It is derived rather than declared, so a new
+// relation never needs a word written for it.
+func relationWord(rel string) string { return strings.ReplaceAll(rel, "_", " ") }
 
 // Platform names each released binary in the reader's own words.
 type Platform struct {
@@ -64,11 +162,32 @@ type Platform struct {
 
 // Tiles captions the record dashboard's counts.
 type Tiles struct {
-	Releases string `json:"releases"`
-	ADR      string `json:"adr"`
-	Intent   string `json:"intent"`
-	Issue    string `json:"issue"`
-	Commits  string `json:"commits"`
+	Releases  string `json:"releases"`
+	ADR       string `json:"adr"`
+	Intent    string `json:"intent"`
+	Spec      string `json:"spec"`
+	Issue     string `json:"issue"`
+	Principle string `json:"principle"`
+	Commits   string `json:"commits"`
+}
+
+// ForType captions one record store's count. A store with no caption is named
+// by the store itself, which is a fact about the record rather than a word the
+// generator wrote.
+func (t Tiles) ForType(typ string) string {
+	switch typ {
+	case "adr":
+		return t.ADR
+	case "intent":
+		return t.Intent
+	case "spec":
+		return t.Spec
+	case "issue":
+		return t.Issue
+	case "principle":
+		return t.Principle
+	}
+	return typ
 }
 
 // LoadUI reads the interface-string allowlist named by the manifest.

@@ -189,8 +189,14 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.SchemaVersion != 1 {
 		t.Errorf("schema_version: %d", exp.SchemaVersion)
 	}
-	if len(exp.Nodes) != 9 {
-		t.Fatalf("nodes: %d, want 9 (3 adrs, 4 intents, 1 spec, 1 issue)", len(exp.Nodes))
+	if len(exp.Nodes) != 13 {
+		t.Fatalf("nodes: %d, want 13 (3 adrs, 6 intents, 1 spec, 1 issue, 2 principles)", len(exp.Nodes))
+	}
+	// The principle store carries no frontmatter, so nothing in the lint scan
+	// can see it; the file name is the handle and the H1 is the title. The
+	// store's own README is its index, not one of its records.
+	if got := exp.Counts.ByType["principle"]; got != 2 {
+		t.Errorf("principles: %d, want 2 (the README is the store's index)", got)
 	}
 	byID := map[string]ExportNode{}
 	for _, n := range exp.Nodes {
@@ -284,12 +290,19 @@ func TestBuildRecordExportShape(t *testing.T) {
 		t.Errorf("the published date span begins at the empty string: %v", exp.Layout.DateRange)
 	}
 
-	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 4 ||
+	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 6 ||
 		exp.Counts.ByType["spec"] != 1 || exp.Counts.ByType["issue"] != 1 {
 		t.Errorf("counts: %+v", exp.Counts.ByType)
 	}
-	if exp.Counts.ByLifecycle["intent"]["shipped"] != 3 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 {
+	if exp.Counts.ByLifecycle["intent"]["shipped"] != 3 || exp.Counts.ByLifecycle["intent"]["drafts"] != 1 ||
+		exp.Counts.ByLifecycle["intent"]["disciplines"] != 1 || exp.Counts.ByLifecycle["intent"]["superseded"] != 1 {
 		t.Errorf("lifecycle counts: %+v", exp.Counts.ByLifecycle)
+	}
+	// A FLAT store grades its records in frontmatter rather than by moving them,
+	// so its whole shape is in the status counts. A page reading only the
+	// lifecycle would show the decisions as one undifferentiated block.
+	if exp.Counts.ByStatus["adr"]["accepted"] != 3 {
+		t.Errorf("status counts: %+v", exp.Counts.ByStatus)
 	}
 
 	// Attribution: one commit declared a model, one declared None, the rest
