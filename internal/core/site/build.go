@@ -43,6 +43,79 @@ var copiedSources = []struct{ src, dst string }{
 	{"site-src/record.js", "record.js"},
 }
 
+// The installer: one committed template, served at one route. It is NOT in
+// copiedSources because it is the one copied file the build adds a byte to —
+// the stamp comment — and a reader is owed the difference being deliberate.
+const (
+	installTemplateRelPath = "site-src/install.sh.tmpl"
+	installScriptName      = "install.sh"
+)
+
+// renderInstallScript renders the committed installer to the bytes served at
+// /install.sh: the template, plus one comment naming the build that published
+// it.
+//
+// The template is complete shell and the render is a copy — nothing is
+// substituted, because a reader who verifies the script against the file in the
+// repository must find them the same, and a template with holes in it makes that
+// comparison a judgement call. The stamp is a COMMENT, and it goes after the
+// shebang, which must stay on the first line for the kernel and for `sh` to read
+// it.
+//
+// A build with no version and no commit adds nothing. "built from " naming
+// nothing is worse than silence: it looks like a stamp that failed rather than a
+// build that had nothing to stamp.
+func renderInstallScript(tmpl []byte, stamp BuildStamp) []byte {
+	var parts []string
+	if v := stampWord(strings.TrimPrefix(stamp.Version, "v")); v != "" {
+		parts = append(parts, "v"+v)
+	}
+	if c := stampWord(stamp.Commit); c != "" {
+		parts = append(parts, c)
+	}
+	if len(parts) == 0 {
+		return tmpl
+	}
+	comment := "# built from " + strings.Join(parts, " ") + "\n"
+
+	body := string(tmpl)
+	if !strings.HasPrefix(body, "#!") {
+		return []byte(comment + body)
+	}
+	// After the shebang LINE, so a script that is one line long still gets a
+	// stamp on a line of its own.
+	cut := strings.Index(body, "\n")
+	if cut < 0 {
+		return []byte(body + "\n" + comment)
+	}
+	return []byte(body[:cut+1] + comment + body[cut+1:])
+}
+
+// stampWord reduces one stamp field to what may appear inside a shell comment.
+//
+// The fields are repository facts — a version parsed out of the changelog, a
+// git object name — so this is not defence against an attacker. It is defence
+// against the OUTPUT FORMAT: a comment is terminated by a newline, and this file
+// is a script people pipe into a shell, so a stamp carrying one would not
+// corrupt a document, it would add a COMMAND. Nothing downstream would notice,
+// because the result is still a valid script.
+//
+// The rule is a whitelist rather than an escape, because there is no escaping
+// inside a `#` comment: the only safe answer to a character that could end the
+// line is to not write it. What survives is what a version or an object name is
+// made of; a field left empty by it is treated as a field that said nothing.
+func stampWord(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '.', r == '-', r == '_', r == '+':
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // pluginManifestRelPath carries the package's own metadata: its name, its forge
 // URL, its licence and its author. The site reads them rather than restating
 // them, so there is one place a rename has to happen.
@@ -293,6 +366,17 @@ func Build(req Request) (Result, error) {
 		if err := write(cp.dst, data); err != nil {
 			return Result{}, err
 		}
+	}
+	// The installer. A repository that commits no template serves no /install.sh
+	// — the same graceful absence every other copied source has.
+	switch tmpl, err := fsutil.ReadGuarded(joinRepo(repoRoot, installTemplateRelPath), maxAssetBytes); {
+	case err == nil:
+		if err := write(installScriptName, renderInstallScript(tmpl, stamp)); err != nil {
+			return Result{}, err
+		}
+	case os.IsNotExist(err):
+	default:
+		return Result{}, err
 	}
 	for _, pair := range c.assets.Copies() {
 		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, pair[0]), maxAssetBytes)

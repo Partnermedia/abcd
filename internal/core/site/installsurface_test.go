@@ -222,7 +222,7 @@ func loadInstallSurfaces(t *testing.T) []installSurface {
 	guide := readFile(t, guidePath)
 	bothArches := []archMapping{amd64FromX8664, arm64FromAarch64}
 
-	return []installSurface{
+	surfaces := []installSurface{
 		{
 			name:      "readme-one-liner",
 			source:    "README.md",
@@ -256,6 +256,29 @@ func loadInstallSurfaces(t *testing.T) []installSurface {
 			archMap:   bothArches,
 		},
 	}
+
+	// The FIFTH form, when a build has left one behind: the script this
+	// repository actually serves at /install.sh. `abcd site build` writes it into
+	// the default output directory, which is gitignored — so it is here on a
+	// machine that has built the site and absent in a clean checkout, and this
+	// test covers it whenever it exists rather than requiring a build to run.
+	//
+	// It matters because it is the only form a reader of abcdev.app ever
+	// executes. The template is what was reviewed; the emitted file is what is
+	// downloaded, and holding it to the same rules is what makes the render's
+	// "copy plus a comment" claim checkable rather than asserted.
+	emitted := filepath.Join(repoRoot(), DefaultOutDir, installScriptName)
+	if _, err := os.Stat(emitted); err == nil {
+		surfaces = append(surfaces, installSurface{
+			name:      "emitted-install-sh",
+			source:    filepath.ToSlash(filepath.Join(DefaultOutDir, installScriptName)),
+			script:    readFile(t, emitted),
+			osToken:   "$os",
+			verifiers: []string{verifierGNU, verifierBSD},
+			archMap:   bothArches,
+		})
+	}
+	return surfaces
 }
 
 func repoRoot() string { return filepath.Join("..", "..", "..") }

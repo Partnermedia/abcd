@@ -18,5 +18,7 @@ comes from the repository. This directory holds:
 - `redirects` — the `_redirects` source.
 - `headers` — the `_headers` source.
 
-`abcd site build` copies `site.css`, `site.js`, `redirects` and `headers` into
-the output tree (the last two under their served names) and reads `ui.json`.
+`abcd site build` copies `site.css`, `site.js`, `record.js`, `redirects` and
+`headers` into the output tree (the last two under their served names), renders
+`install.sh.tmpl` to `install.sh` with one build-stamp comment added, and reads
+`ui.json`.

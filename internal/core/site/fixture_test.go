@@ -321,11 +321,27 @@ func (f *fixture) writeSources() {
   "standby": "Stand by…",
   "cli_group": "CLI",
   "matches_system": "matches this computer",
+  "read_script": "read the script",
   "beta": "Beta"
 }
 `)
 
 	f.write("site-src/redirects", "/old/  /docs/old/  301\n")
+	// A miniature installer, structured like the one this repository ships: a
+	// shebang, a header comment, definitions, and a single final call. What the
+	// build does with it is copy it and stamp it, so the fixture only has to be
+	// real shell.
+	f.write("site-src/install.sh.tmpl", `#!/bin/sh
+# fixture installer. The build renders this to /install.sh.
+
+set -eu
+
+main() {
+	printf 'fixture install\n'
+}
+
+main "$@"
+`)
 	// The same block shape the repository ships, so the coverage check exercises
 	// the mechanism rather than a stub. The policies are abbreviated; what is
 	// under test is that every emitted route matches a block that sets all
