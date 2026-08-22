@@ -1,0 +1,507 @@
+package site
+
+// The Markdown subset renderer.
+//
+// The site renders repository prose, and the repository writes a small, stable
+// dialect: ATX headings, paragraphs, bold/italic/code spans, links, images,
+// fenced code, pipe tables, blockquotes and lists. That dialect is what this
+// renders, and everything else is a BUILD ERROR naming file and line.
+//
+// Refusing is the point. A renderer that passes an unknown construct through
+// unrendered publishes raw markdown to readers; a renderer that silently drops
+// it publishes a hole. Both are worse than a build that stops and says
+// "docs/explanation/roles.md:31 — reference link", because the fix for that is
+// one edit and the fix for a silent hole is noticing it exists.
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// UnsupportedError is a markdown construct outside the rendered subset.
+type UnsupportedError struct {
+	Path      string
+	Line      int
+	Construct string
+	Detail    string
+}
+
+func (e *UnsupportedError) Error() string {
+	d := ""
+	if e.Detail != "" {
+		d = ": " + e.Detail
+	}
+	return fmt.Sprintf("%s:%d: unsupported markdown construct: %s%s — the site renders a fixed subset and never passes text through unrendered",
+		e.Path, e.Line, e.Construct, d)
+}
+
+var (
+	tableDelimRe   = regexp.MustCompile(`^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$`)
+	orderedItemRe  = regexp.MustCompile(`^(\d+)[.)]\s+(.*)$`)
+	setextRe       = regexp.MustCompile(`^\s{0,3}(=+|-{2,})\s*$`)
+	thematicRe     = regexp.MustCompile(`^\s{0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$`)
+	rawHTMLStartRe = regexp.MustCompile(`^\s*<[A-Za-z!/]`)
+)
+
+// Renderer turns the markdown subset into the site's HTML. Its two hooks are
+// the places the site differs from a generic renderer: an image becomes a
+// committed asset (inlined SVG or copied raster) rather than a bare <img>, and
+// a repo-relative link becomes a site route.
+type Renderer struct {
+	// UI is the closed allowlist of interface strings; the renderer adds the
+	// copy-button label and nothing else.
+	UI UI
+	// Image renders one image reference. src is as written in the markdown,
+	// relative to the page; alt is its alt text.
+	Image func(src, alt string, at Source) (string, error)
+	// Link rewrites one href. It never fails: an href it does not recognise is
+	// left exactly as the record wrote it.
+	Link func(href string, at Source) string
+}
+
+// Source is a position in a repository file.
+type Source struct {
+	Path string
+	Line int
+}
+
+// RenderBlocks renders a block sequence in order.
+func (r *Renderer) RenderBlocks(path string, blocks []Block) (string, error) {
+	var b strings.Builder
+	for _, blk := range blocks {
+		h, err := r.RenderBlock(path, blk)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString(h)
+	}
+	return b.String(), nil
+}
+
+// RenderBlock renders one top-level block.
+func (r *Renderer) RenderBlock(path string, blk Block) (string, error) {
+	at := Source{Path: path, Line: blk.Line}
+	lines := strings.Split(blk.Text, "\n")
+	first := lines[0]
+
+	switch {
+	case strings.HasPrefix(first, "```"):
+		return r.fence(at, lines)
+	case headingRe.MatchString(first):
+		return r.heading(at, first)
+	case strings.HasPrefix(strings.TrimSpace(first), ">"):
+		return r.blockquote(at, lines)
+	case strings.HasPrefix(strings.TrimSpace(first), "|"):
+		return r.table(at, lines)
+	case isUnorderedItem(first) || orderedItemRe.MatchString(first):
+		return r.list(at, lines)
+	}
+	return r.paragraph(at, lines)
+}
+
+// fence renders a fenced code block as a copyable command block: the button's
+// label is a ui.json string, and its payload is the block's own raw text.
+func (r *Renderer) fence(at Source, lines []string) (string, error) {
+	info := strings.TrimSpace(strings.TrimPrefix(lines[0], "```"))
+	if strings.ContainsAny(info, " \t") {
+		return "", &UnsupportedError{at.Path, at.Line, "fenced-code info string", "only a bare language word is rendered, got " + quote(info)}
+	}
+	body := lines[1:]
+	if n := len(body); n > 0 && strings.HasPrefix(strings.TrimSpace(body[n-1]), "```") {
+		body = body[:n-1]
+	}
+	raw := strings.Join(body, "\n")
+	cls := ""
+	if info != "" {
+		cls = ` class="language-` + escapeAttr(info) + `"`
+	}
+	// The button's two labels both travel in the markup: the page's script adds
+	// no words of its own, so every string a reader sees comes from ui.json.
+	return `<div class="cmd"><pre><code` + cls + `>` + escapeText(raw) + "\n" +
+		`</code></pre><button class="copy" data-copy="` + escapeAttr(raw) +
+		`" data-copied="` + escapeAttr(r.UI.Copied) + `">` + escapeText(r.UI.Copy) + `</button></div>`, nil
+}
+
+// heading renders an ATX heading.
+func (r *Renderer) heading(at Source, line string) (string, error) {
+	m := headingRe.FindStringSubmatch(line)
+	level := len(m[1])
+	inner, err := r.inline(at, strings.TrimSpace(m[2]))
+	if err != nil {
+		return "", err
+	}
+	tag := fmt.Sprintf("h%d", level)
+	return "<" + tag + ">" + inner + "</" + tag + ">", nil
+}
+
+// blockquote renders a `>` block, splitting it into paragraphs on blank lines
+// exactly as the source does.
+func (r *Renderer) blockquote(at Source, lines []string) (string, error) {
+	var stripped []string
+	for i, ln := range lines {
+		t := strings.TrimSpace(ln)
+		if !strings.HasPrefix(t, ">") {
+			return "", &UnsupportedError{at.Path, at.Line + i, "lazy blockquote continuation", "every line of a quoted block must start with '>'"}
+		}
+		stripped = append(stripped, strings.TrimPrefix(strings.TrimPrefix(t, ">"), " "))
+	}
+	var b strings.Builder
+	b.WriteString("<blockquote>\n")
+	para := []string{}
+	paraLine := at.Line
+	flush := func() error {
+		if len(para) == 0 {
+			return nil
+		}
+		inner, err := r.inline(Source{at.Path, paraLine}, strings.Join(para, "\n"))
+		if err != nil {
+			return err
+		}
+		b.WriteString("<p>" + inner + "</p>\n")
+		para = nil
+		return nil
+	}
+	for i, ln := range stripped {
+		if strings.TrimSpace(ln) == "" {
+			if err := flush(); err != nil {
+				return "", err
+			}
+			continue
+		}
+		if len(para) == 0 {
+			paraLine = at.Line + i
+		}
+		para = append(para, ln)
+	}
+	if err := flush(); err != nil {
+		return "", err
+	}
+	b.WriteString("</blockquote>")
+	return b.String(), nil
+}
+
+// table renders a pipe table. Column alignment is not rendered — the site's
+// stylesheet aligns every column the same way — so an alignment row is accepted
+// and its colons ignored.
+func (r *Renderer) table(at Source, lines []string) (string, error) {
+	if len(lines) < 2 || !tableDelimRe.MatchString(lines[1]) {
+		return "", &UnsupportedError{at.Path, at.Line, "pipe table", "a table needs a header row and a |---|---| delimiter row"}
+	}
+	cells := func(ln string) []string {
+		t := strings.TrimSpace(ln)
+		t = strings.TrimPrefix(t, "|")
+		t = strings.TrimSuffix(t, "|")
+		out := strings.Split(t, "|")
+		for i := range out {
+			out[i] = strings.TrimSpace(out[i])
+		}
+		return out
+	}
+	var b strings.Builder
+	b.WriteString("<table>\n<thead>\n<tr>\n")
+	for _, c := range cells(lines[0]) {
+		inner, err := r.inline(Source{at.Path, at.Line}, c)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("<th>" + inner + "</th>\n")
+	}
+	b.WriteString("</tr>\n</thead>\n<tbody>\n")
+	for i, ln := range lines[2:] {
+		b.WriteString("<tr>\n")
+		for _, c := range cells(ln) {
+			inner, err := r.inline(Source{at.Path, at.Line + 2 + i}, c)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString("<td>" + inner + "</td>\n")
+		}
+		b.WriteString("</tr>\n")
+	}
+	b.WriteString("</tbody>\n</table>")
+	return b.String(), nil
+}
+
+// list renders a flat unordered or ordered list. A nested list is refused
+// rather than flattened: the record does not write one, and flattening it would
+// publish a different structure from the one on GitHub.
+func (r *Renderer) list(at Source, lines []string) (string, error) {
+	ordered := orderedItemRe.MatchString(lines[0])
+	var items []string
+	var itemLines []int
+	for i, ln := range lines {
+		switch {
+		case strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t"):
+			if len(items) == 0 {
+				return "", &UnsupportedError{at.Path, at.Line + i, "indented list content", "the rendered subset carries flat lists only"}
+			}
+			t := strings.TrimSpace(ln)
+			if isUnorderedItem(t) || orderedItemRe.MatchString(t) {
+				return "", &UnsupportedError{at.Path, at.Line + i, "nested list", "the rendered subset carries flat lists only"}
+			}
+			items[len(items)-1] += "\n" + t
+		case isUnorderedItem(ln):
+			if ordered {
+				return "", &UnsupportedError{at.Path, at.Line + i, "mixed list", "a list is ordered or unordered, not both"}
+			}
+			items = append(items, strings.TrimSpace(ln[2:]))
+			itemLines = append(itemLines, at.Line+i)
+		case orderedItemRe.MatchString(ln):
+			if !ordered {
+				return "", &UnsupportedError{at.Path, at.Line + i, "mixed list", "a list is ordered or unordered, not both"}
+			}
+			m := orderedItemRe.FindStringSubmatch(ln)
+			items = append(items, strings.TrimSpace(m[2]))
+			itemLines = append(itemLines, at.Line+i)
+		default:
+			if len(items) == 0 {
+				return "", &UnsupportedError{at.Path, at.Line + i, "list", "a list item starts with '- ' or '1. '"}
+			}
+			items[len(items)-1] += "\n" + strings.TrimSpace(ln)
+		}
+	}
+	tag := "ul"
+	if ordered {
+		tag = "ol"
+	}
+	var b strings.Builder
+	b.WriteString("<" + tag + ">\n")
+	for i, it := range items {
+		inner, err := r.inline(Source{at.Path, itemLines[i]}, it)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("<li>" + inner + "</li>\n")
+	}
+	b.WriteString("</" + tag + ">")
+	return b.String(), nil
+}
+
+// paragraph renders a run of prose, refusing the block constructs that are not
+// in the subset before it starts — a setext heading, a thematic break, an
+// indented code block, or a raw HTML block, each of which would otherwise be
+// escaped into the page as visible punctuation.
+func (r *Renderer) paragraph(at Source, lines []string) (string, error) {
+	for i, ln := range lines {
+		switch {
+		case i > 0 && setextRe.MatchString(ln):
+			return "", &UnsupportedError{at.Path, at.Line + i, "setext heading or thematic break", "write headings as '# ' and drop rules"}
+		case thematicRe.MatchString(ln):
+			return "", &UnsupportedError{at.Path, at.Line + i, "thematic break", "the rendered subset has no horizontal rule"}
+		case rawHTMLStartRe.MatchString(ln):
+			return "", &UnsupportedError{at.Path, at.Line + i, "raw HTML block", "every picture is a committed asset and every element is generated"}
+		case i == 0 && (strings.HasPrefix(ln, "    ") || strings.HasPrefix(ln, "\t")):
+			return "", &UnsupportedError{at.Path, at.Line, "indented code block", "fence code with ``` so it renders as a copyable command"}
+		}
+	}
+	inner, err := r.inline(at, strings.Join(lines, "\n"))
+	if err != nil {
+		return "", err
+	}
+	// An image on its own line is a block-level figure, exactly as the source
+	// markdown reads it; the layouts detect one by this shape.
+	return "<p>" + inner + "</p>", nil
+}
+
+// isUnorderedItem reports whether a line opens an unordered list item.
+func isUnorderedItem(ln string) bool {
+	return len(ln) > 2 && (ln[0] == '-' || ln[0] == '*' || ln[0] == '+') && ln[1] == ' '
+}
+
+// inline renders the span-level subset: code spans, images, links, strong,
+// emphasis, and backslash escapes. Everything else is text, and anything that
+// looks like a construct the subset does not carry is refused.
+func (r *Renderer) inline(at Source, s string) (string, error) {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		switch c := s[i]; {
+		case c == '\\' && i+1 < len(s) && isEscapable(s[i+1]):
+			b.WriteString(escapeText(string(s[i+1])))
+			i += 2
+		case c == '`':
+			n := runLen(s, i, '`')
+			end := strings.Index(s[i+n:], s[i:i+n])
+			if end < 0 {
+				return "", &UnsupportedError{at.Path, at.Line, "unclosed code span", quote(clip(s[i:]))}
+			}
+			code := s[i+n : i+n+end]
+			if n > 1 {
+				code = strings.Trim(code, " ")
+			}
+			b.WriteString("<code>" + escapeText(code) + "</code>")
+			i += n + end + n
+		case c == '!' && i+1 < len(s) && s[i+1] == '[':
+			text, href, next, ok := parseLink(s, i+1)
+			if !ok {
+				return "", &UnsupportedError{at.Path, at.Line, "image", "only ![alt](src) is rendered, got " + quote(clip(s[i:]))}
+			}
+			html, err := r.Image(href, text, at)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(html)
+			i = next
+		case c == '[':
+			text, href, next, ok := parseLink(s, i)
+			if !ok {
+				return "", &UnsupportedError{at.Path, at.Line, "link", "only [text](href) is rendered; reference and footnote links are not in the subset"}
+			}
+			inner, err := r.inline(at, text)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(`<a href="` + escapeAttr(r.Link(href, at)) + `">` + inner + "</a>")
+			i = next
+		case c == '*' || c == '_':
+			n := runLen(s, i, c)
+			if n > 2 {
+				return "", &UnsupportedError{at.Path, at.Line, "emphasis run", "only ** for strong and * for emphasis are rendered"}
+			}
+			if c == '_' && !underscoreDelimits(s, i, n) {
+				b.WriteString("_")
+				i++
+				continue
+			}
+			delim := s[i : i+n]
+			end := strings.Index(s[i+n:], delim)
+			if end < 0 {
+				if c == '_' {
+					b.WriteString(strings.Repeat("_", n))
+					i += n
+					continue
+				}
+				return "", &UnsupportedError{at.Path, at.Line, "unclosed emphasis", quote(clip(s[i:]))}
+			}
+			inner, err := r.inline(at, s[i+n:i+n+end])
+			if err != nil {
+				return "", err
+			}
+			tag := "em"
+			if n == 2 {
+				tag = "strong"
+			}
+			b.WriteString("<" + tag + ">" + inner + "</" + tag + ">")
+			i += n + end + n
+		case c == '<':
+			if i+1 < len(s) && (isAlpha(s[i+1]) || s[i+1] == '/' || s[i+1] == '!') {
+				return "", &UnsupportedError{at.Path, at.Line, "inline HTML or autolink", "wrap it in a code span or write it as [text](href): " + quote(clip(s[i:]))}
+			}
+			b.WriteString("&lt;")
+			i++
+		default:
+			j := i
+			for j < len(s) && !strings.ContainsRune("\\`![*_<", rune(s[j])) {
+				j++
+			}
+			if j == i {
+				j = i + 1
+			}
+			b.WriteString(escapeText(s[i:j]))
+			i = j
+		}
+	}
+	return b.String(), nil
+}
+
+// parseLink reads `[text](href)` starting at the '[' and returns the text, the
+// href, and the index just past the closing paren.
+func parseLink(s string, i int) (text, href string, next int, ok bool) {
+	depth := 0
+	j := i
+	for ; j < len(s); j++ {
+		switch s[j] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+		}
+		if depth == 0 {
+			break
+		}
+	}
+	if j >= len(s) || j+1 >= len(s) || s[j+1] != '(' {
+		return "", "", 0, false
+	}
+	text = s[i+1 : j]
+	k := j + 2
+	pd := 1
+	for ; k < len(s); k++ {
+		if s[k] == '(' {
+			pd++
+		} else if s[k] == ')' {
+			pd--
+			if pd == 0 {
+				break
+			}
+		}
+	}
+	if k >= len(s) {
+		return "", "", 0, false
+	}
+	href = strings.TrimSpace(s[j+2 : k])
+	if strings.ContainsAny(href, " \t") {
+		// A link title (`[t](u "title")`) is not in the subset: it renders as an
+		// attribute nothing on the site reads, and hiding prose in one would
+		// smuggle unsourced text onto the page.
+		return "", "", 0, false
+	}
+	return text, href, k + 1, true
+}
+
+// underscoreDelimits reports whether an underscore run at i opens or closes
+// emphasis rather than sitting inside a word — `snake_case` is a word, not
+// emphasis, and Markdown's own readers agree.
+func underscoreDelimits(s string, i, n int) bool {
+	before := byte(' ')
+	if i > 0 {
+		before = s[i-1]
+	}
+	after := byte(' ')
+	if i+n < len(s) {
+		after = s[i+n]
+	}
+	return !isWord(before) || !isWord(after)
+}
+
+func isWord(c byte) bool {
+	return isAlpha(c) || (c >= '0' && c <= '9')
+}
+
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isEscapable(c byte) bool {
+	return strings.IndexByte("\\`*_{}[]()#+-.!|<>&\"'~", c) >= 0
+}
+
+// runLen counts the run of c starting at i.
+func runLen(s string, i int, c byte) int {
+	n := 0
+	for i+n < len(s) && s[i+n] == c {
+		n++
+	}
+	return n
+}
+
+// escapeText escapes a text node.
+func escapeText(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+// escapeAttr escapes an attribute value.
+func escapeAttr(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;").Replace(s)
+}
+
+func quote(s string) string { return `"` + s + `"` }
+
+func clip(s string) string {
+	const max = 40
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > max {
+		return s[:max] + "…"
+	}
+	return s
+}

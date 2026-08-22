@@ -1,5 +1,5 @@
-# Source of the Cloudflare _headers file. Landed as data; nothing copies it
-# into the built site yet — the site build that emits it is a later slice.
+# Source of the Cloudflare _headers file. `abcd site build` copies it into the
+# output tree as `_headers`, comments and all.
 #
 # /install.sh is read before it is run, so it is served as text, never as a
 # download.

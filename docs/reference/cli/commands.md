@@ -678,6 +678,33 @@ Render the active rule set; a positional DOMAIN scopes to one (read-only)
 
 **Usage:** `abcd rules [domain]`
 
+### `abcd site`
+
+The website rendered from this repository: what is declared, and what was built (read-only)
+
+**Usage:** `abcd site [flags]`
+
+**Flags:**
+
+```
+      --out string   output directory to report on (default "site")
+```
+
+#### `abcd site build`
+
+Render the site into the output directory (writes nothing outside it)
+
+**Usage:** `abcd site build [flags]`
+
+**Flags:**
+
+```
+      --commit string    commit for the footer and the build stamp (default: git HEAD)
+      --date string      date for the build stamp (default: the newest release's date)
+      --out string       directory to render into (default "site")
+      --version string   version for the footer and the build stamp (default: the newest dated CHANGELOG heading)
+```
+
 ### `abcd spec`
 
 Native spec store; bare invocation is read-only status

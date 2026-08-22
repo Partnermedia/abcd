@@ -68,6 +68,47 @@ func LatestReleaseTag(root string) (launch.Semver, bool, error) {
 	return newest, found, nil
 }
 
+// DatedRelease is one dated release heading: the version it names and the date
+// it carries, exactly as written.
+type DatedRelease struct {
+	Version string `json:"version"`
+	Date    string `json:"date"`
+}
+
+// DatedReleases returns every dated heading in root's CHANGELOG.md, in file
+// order — newest first, the record's own Keep-a-Changelog convention.
+//
+// It reads the headings through datedHeadingRe, the same predicate
+// LatestChangelogVersion and the tagger use, and takes the date as the rest of
+// the line after that match rather than through a second pattern: two regexps
+// over one heading is two definitions of what a release is, and they drift.
+//
+// An absent CHANGELOG.md returns found=false and no error. A repository that
+// records no releases is a state — the site omits the sections that depend on
+// them and renders the rest.
+func DatedReleases(root string) ([]DatedRelease, bool, error) {
+	data, err := fsutil.ReadGuarded(filepath.Join(root, "CHANGELOG.md"), MaxChangelogBytes)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	var out []DatedRelease
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimRight(line, "\r")
+		loc := datedHeadingRe.FindStringSubmatchIndex(line)
+		if loc == nil {
+			continue
+		}
+		out = append(out, DatedRelease{
+			Version: line[loc[2]:loc[3]],
+			Date:    strings.TrimSpace(line[loc[1]:]),
+		})
+	}
+	return out, true, nil
+}
+
 // LatestChangelogVersion returns the version of the newest dated heading in
 // root's CHANGELOG.md — the heading auto-release.yml would tag on the next push
 // to main.

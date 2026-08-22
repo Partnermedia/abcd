@@ -25,6 +25,16 @@ plugin surface, and a future MCP server share one engine.
   those transports expose — so it is cobra-free like the rest of `core/`. The
   walk that reads the live command tree needs cobra and therefore lives in
   `surface/cli`, which hands its result in; the dependency never points back.
+- **`core/site/`** — the website as a rendering of this repository (adr-47). It
+  shares a word with nothing else here and is easy to mistake for a front door,
+  so: it is a pure producer of files, transport-free like the rest of `core/`,
+  and it writes only inside the output directory it is handed. It carries LAYOUT
+  and no prose — every sentence it emits is a span of a repository file selected
+  by `.abcd/site.json`, and the only words it may add are the closed allowlist in
+  `site-src/ui.json`. The record graph it renders comes from `core/lint`'s own
+  record scan (`LoadRecordGraph`), never a second parser; the dates come from one
+  `git log` pass; the chart arrangements are computed here so the published pages
+  need no layout engine and make no requests.
 - **`core/cite/`** — the live half of the citation gate: the bounded fetcher and
   the refresh that writes the committed baseline `core/lint` then enforces with
   zero network. It is the only place abcd dials out on behalf of documentation,

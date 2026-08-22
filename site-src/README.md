@@ -4,6 +4,17 @@ Build inputs for abcdev.app. Composition comes from `.abcd/site.json`; the text
 comes from the repository. This directory holds:
 
 - `ui.json` — the interface-string allowlist: every word the generator may add.
+  It is decoded against a closed struct with unknown fields refused, so a word
+  added here that no field reads fails the build.
+- `site.css` — the stylesheet: light is the base, dark redefines tokens only,
+  for the reader whose system asks for it and for the reader who chose it.
+- `site.js` — the landing page's only script: install tabs, copy buttons, and
+  nothing else. It adds no words of its own — every string it shows is read back
+  from the markup, where the build put it from `ui.json`. No analytics, no
+  trackers, no network requests.
 - `install.sh.tmpl` — the committed source of `/install.sh`.
 - `redirects` — the `_redirects` source.
 - `headers` — the `_headers` source.
+
+`abcd site build` copies `site.css`, `site.js`, `redirects` and `headers` into
+the output tree (the last two under their served names) and reads `ui.json`.
