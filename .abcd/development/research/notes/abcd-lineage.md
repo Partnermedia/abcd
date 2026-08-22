@@ -39,7 +39,7 @@ Status: ✅ built · ◑ partial · ⛔ stub/unbuilt.
 | **TruffleHog** — secret scan (optional) | — | — | — | — | — | ◑ planned gate (stub) | — |
 | **Presidio** — PII scan | — | — | — | — | — | ◑ planned gate (stub) | — |
 | **SpecStory** — session-transcript store | ● shim/history-store | — | — | ● Pass-B transcripts | — | — | ○ |
-| **OpenCode** — 2nd harness (port target) | ○ stub | — | — | — | — | — | ○ stub backend (itd-22) |
+| **opencode** — 2nd harness (port target) | ○ stub | — | — | — | — | — | ○ stub backend (itd-22) |
 | **Python ≥3.11** runtime — `mcp`, `anyio`, `jsonschema`, `packaging`, `psutil` | ● | ● | ● | ● | ● | ● | ● |
 | *Registry stubs (carl / paul / pocock / stoa)* — `implemented:false`, never gate | — | — | — | — | — | — | — |
 
@@ -157,7 +157,7 @@ flowchart LR
     gh["gh CLI"]
     scan["gitleaks · TruffleHog · Presidio<br/><i>secret/PII scan</i>"]
     specstory["SpecStory<br/><i>transcripts</i>"]
-    opencode["OpenCode<br/><i>2nd harness (itd-22)</i>"]
+    opencode["opencode<br/><i>2nd harness (itd-22)</i>"]
 
     %% ---- Agents (roles) ----
     ifr["intent-fidelity-reviewer<br/><i>review/consistency/shape</i><br/>✅ only built agent"]
