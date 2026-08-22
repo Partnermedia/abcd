@@ -144,7 +144,21 @@ func (r *Renderer) blockquote(at Source, lines []string) (string, error) {
 		if !strings.HasPrefix(t, ">") {
 			return "", &UnsupportedError{at.Path, at.Line + i, "lazy blockquote continuation", "every line of a quoted block must start with '>'"}
 		}
-		stripped = append(stripped, strings.TrimPrefix(strings.TrimPrefix(t, ">"), " "))
+		inner := strings.TrimPrefix(strings.TrimPrefix(t, ">"), " ")
+		// A quoted block carries paragraphs. Anything with structure of its own
+		// inside one would be FLATTENED into those paragraphs — the nesting and
+		// the bullets would simply cease to exist on the page, with nothing to
+		// tell a reader they ever did. That is the one outcome worse than a
+		// build error.
+		if strings.HasPrefix(strings.TrimSpace(inner), ">") {
+			return "", &UnsupportedError{at.Path, at.Line + i, "nested blockquote",
+				"a quoted block carries paragraphs; a quote inside a quote would flatten into them"}
+		}
+		if isUnorderedItem(inner) || orderedItemRe.MatchString(inner) {
+			return "", &UnsupportedError{at.Path, at.Line + i, "list inside a blockquote",
+				"a quoted block carries paragraphs; the bullets would flatten into one"}
+		}
+		stripped = append(stripped, inner)
 	}
 	var b strings.Builder
 	b.WriteString("<blockquote>\n")
@@ -181,6 +195,34 @@ func (r *Renderer) blockquote(at Source, lines []string) (string, error) {
 	return b.String(), nil
 }
 
+// tableCells splits one table row into its cells, honouring `\|` as content.
+// An escaped pipe is a pipe a cell contains, not a column boundary, and
+// splitting on it shifts every cell after it one column to the left — a table
+// that is quietly wrong, which is worse than one that fails to build. The
+// escape itself is left in place for the inline pass, which already knows `\|`
+// means `|`.
+func tableCells(ln string) []string {
+	t := strings.TrimSpace(ln)
+	t = strings.TrimPrefix(t, "|")
+	t = strings.TrimSuffix(t, "|")
+	var out []string
+	var cur strings.Builder
+	for i := 0; i < len(t); i++ {
+		switch {
+		case t[i] == '\\' && i+1 < len(t):
+			cur.WriteByte(t[i])
+			cur.WriteByte(t[i+1])
+			i++
+		case t[i] == '|':
+			out = append(out, strings.TrimSpace(cur.String()))
+			cur.Reset()
+		default:
+			cur.WriteByte(t[i])
+		}
+	}
+	return append(out, strings.TrimSpace(cur.String()))
+}
+
 // table renders a pipe table. Column alignment is not rendered — the site's
 // stylesheet aligns every column the same way — so an alignment row is accepted
 // and its colons ignored.
@@ -188,19 +230,9 @@ func (r *Renderer) table(at Source, lines []string) (string, error) {
 	if len(lines) < 2 || !tableDelimRe.MatchString(lines[1]) {
 		return "", &UnsupportedError{at.Path, at.Line, "pipe table", "a table needs a header row and a |---|---| delimiter row"}
 	}
-	cells := func(ln string) []string {
-		t := strings.TrimSpace(ln)
-		t = strings.TrimPrefix(t, "|")
-		t = strings.TrimSuffix(t, "|")
-		out := strings.Split(t, "|")
-		for i := range out {
-			out[i] = strings.TrimSpace(out[i])
-		}
-		return out
-	}
 	var b strings.Builder
 	b.WriteString("<table>\n<thead>\n<tr>\n")
-	for _, c := range cells(lines[0]) {
+	for _, c := range tableCells(lines[0]) {
 		inner, err := r.inline(Source{at.Path, at.Line}, c)
 		if err != nil {
 			return "", err
@@ -210,7 +242,7 @@ func (r *Renderer) table(at Source, lines []string) (string, error) {
 	b.WriteString("</tr>\n</thead>\n<tbody>\n")
 	for i, ln := range lines[2:] {
 		b.WriteString("<tr>\n")
-		for _, c := range cells(ln) {
+		for _, c := range tableCells(ln) {
 			inner, err := r.inline(Source{at.Path, at.Line + 2 + i}, c)
 			if err != nil {
 				return "", err
@@ -368,6 +400,14 @@ func (r *Renderer) inline(at Source, s string) (string, error) {
 			inner, err := r.inline(at, text)
 			if err != nil {
 				return "", err
+			}
+			// HTML has no nested anchor: a browser closes the outer one at the
+			// inner, so the markup a reader gets is not the markup written here
+			// and the outer link's tail stops being clickable. Markdown itself
+			// forbids the construct; this says so instead of emitting it.
+			if strings.Contains(inner, "<a ") {
+				return "", &UnsupportedError{at.Path, at.Line, "nested link",
+					"HTML has no anchor inside an anchor; the browser would silently close the outer one"}
 			}
 			b.WriteString(`<a href="` + escapeAttr(r.Link(href, at)) + `">` + inner + "</a>")
 			i = next

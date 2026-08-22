@@ -48,6 +48,10 @@ func TestRenderSubset(t *testing.T) {
 		// A bracket that opens no link is text, as every markdown reader agrees.
 		{"the array [0] holds it", "<p>the array [0] holds it</p>"},
 		{"a model named opus-5[1m]", "<p>a model named opus-5[1m]</p>"},
+		// An escaped pipe is table content, not a column boundary. Splitting on
+		// it silently shifts every cell after it into the wrong column.
+		{"| a | b |\n|---|---|\n| x \\| y | z |",
+			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>x | y</td>\n<td>z</td>\n</tr>\n</tbody>\n</table>"},
 	}
 	for _, c := range cases {
 		if got := render(t, c.md); got != c.want {
@@ -100,6 +104,13 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 		{"obfuscated script href", "A [link](java\x01script:alert(1)) here.", 1, "link scheme"},
 		{"upper-case script href", "A [link](JavaScript:alert(1)) here.", 1, "link scheme"},
 		{"data href", "A [link](data:text/html;base64,PHNjcmlwdD4=) here.", 1, "link scheme"},
+		// Flattening any of these publishes a structure the source does not
+		// have, and no reader can tell. The next slice renders every record
+		// body and will widen the subset guided by real refusals — silent wrong
+		// output is the one outcome that must not happen in the meantime.
+		{"nested blockquote", "> outer\n> > inner", 2, "nested blockquote"},
+		{"list inside a blockquote", "> intro\n>\n> - one\n> - two", 3, "list inside a blockquote"},
+		{"nested link", "A [link with [another](b) inside](a).", 1, "nested link"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -167,7 +178,11 @@ func TestStripFrontmatter(t *testing.T) {
 	if n != 2 {
 		t.Errorf("consumed %d lines, want 2", n)
 	}
-	if secs := Sections(body, n); len(secs) != 1 || secs[0].Line != 5 {
+	secs, err := Sections("docs/page.md", body, n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secs) != 1 || secs[0].Line != 5 {
 		t.Errorf("the H1 is not reported at its source line 5: %+v", secs)
 	}
 	body, n = StripFrontmatter("# No frontmatter\n")
@@ -178,7 +193,10 @@ func TestStripFrontmatter(t *testing.T) {
 
 func TestSectionsHonourFencesAndReportLines(t *testing.T) {
 	md := "# Title\n\nIntro.\n\n## Second\n\n```sh\n# not a heading\n```\n\nAfter.\n"
-	secs := Sections(md, 0)
+	secs, err := Sections("docs/page.md", md, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(secs) != 2 {
 		t.Fatalf("sections: %d — a '#' inside a fence was read as a heading: %+v", len(secs), secs)
 	}
@@ -197,6 +215,61 @@ func TestSectionsHonourFencesAndReportLines(t *testing.T) {
 	}
 	if blocks[1].Line != 11 || blocks[1].Text != "After." {
 		t.Errorf("trailing block: %+v", blocks[1])
+	}
+}
+
+// TestSectionsRefuseAnUnterminatedFence pins the quietest failure this walk
+// has. A fence that never closes swallows the rest of the document: no heading
+// after it is a heading any more, so every following section simply is not
+// there, and the page renders a short document nobody notices is short.
+func TestSectionsRefuseAnUnterminatedFence(t *testing.T) {
+	md := "# Title\n\nIntro.\n\n## Second\n\n```sh\necho hello\n\n## Third\n\nMore.\n"
+	_, err := Sections("docs/page.md", md, 0)
+	if err == nil {
+		t.Fatal("an unterminated fence swallowed the rest of the document without complaint")
+	}
+	var ue *UnsupportedError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error is not an UnsupportedError: %v", err)
+	}
+	if ue.Path != "docs/page.md" {
+		t.Errorf("the refusal does not name the file: %v", err)
+	}
+	// The line that OPENED the fence is the one to go and look at.
+	if ue.Line != 7 {
+		t.Errorf("the refusal names line %d, want 7 (where the fence opens): %v", ue.Line, err)
+	}
+	if !strings.Contains(err.Error(), "fence") {
+		t.Errorf("the refusal does not say what is wrong: %v", err)
+	}
+
+	// A closed fence is still fine, and still hides its '#' lines.
+	secs, err := Sections("docs/page.md", md+"```\n", 0)
+	if err != nil {
+		t.Fatalf("a closed fence was refused: %v", err)
+	}
+	if len(secs) != 2 {
+		t.Errorf("sections: %d, want 2 — the '## Third' inside the fence is not a heading", len(secs))
+	}
+}
+
+// TestColumnLabelForDecodesEntities pins the portrait match against the one
+// character that breaks it. A header reading "Research & design" renders as
+// `Research &amp; design`; comparing that against a section title fails on the
+// entity alone, and the only symptom is a missing picture that nobody reads as
+// a bug. The cell must come back EXACTLY as it sits in the table, so the caller
+// can substitute it.
+func TestColumnLabelForDecodesEntities(t *testing.T) {
+	table := "<table>\n<thead>\n<tr>\n<th></th>\n<th>Research &amp; design</th>\n<th>Delivery</th>\n</tr>\n</thead>\n</table>"
+	got, ok := columnLabelFor(table, "Research & design")
+	if !ok {
+		t.Fatal("an entity in the header lost the portrait")
+	}
+	if got != "Research &amp; design" {
+		t.Errorf("columnLabelFor = %q; the cell must come back as it sits in the table", got)
+	}
+	if _, ok := columnLabelFor(table, "Nothing like it"); ok {
+		t.Error("an unrelated section title matched a column")
 	}
 }
 

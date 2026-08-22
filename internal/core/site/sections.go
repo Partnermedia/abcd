@@ -77,13 +77,20 @@ func StripFrontmatter(t string) (string, int) {
 // code so a `#` comment inside a shell block is never read as a heading.
 // offset is the number of lines already consumed ahead of md (the frontmatter),
 // so the reported lines are the ones a reader would find in the file.
-func Sections(md string, offset int) []Section {
+//
+// A fence that never closes is refused, naming the line that opened it. It is
+// the quietest failure this walk has: once the fence is open no later heading is
+// a heading, so every section after it silently ceases to exist and the page
+// renders a document that is short in a way nobody notices. Refusing costs one
+// edit; not refusing costs a missing chapter nobody is looking for.
+func Sections(path, md string, offset int) ([]Section, error) {
 	lines := strings.Split(md, "\n")
 	var out []Section
 	cur := Section{Line: 0}
 	var body []string
 	bodyStart := offset + 1
 	fence := false
+	fenceLine := 0
 
 	flush := func() {
 		cur.Body, cur.BodyLine = trimBlankLines(body, bodyStart)
@@ -93,6 +100,9 @@ func Sections(md string, offset int) []Section {
 	for i, line := range lines {
 		if strings.HasPrefix(line, "```") {
 			fence = !fence
+			if fence {
+				fenceLine = offset + i + 1
+			}
 		}
 		var m []string
 		if !fence {
@@ -110,6 +120,11 @@ func Sections(md string, offset int) []Section {
 	}
 	flush()
 
+	if fence {
+		return nil, &UnsupportedError{path, fenceLine, "unterminated fenced code block",
+			"it swallows every heading after it, so the rest of the document silently stops existing"}
+	}
+
 	// A section that is neither a heading nor text is nothing: the script drops
 	// it so a document opening on its H1 does not grow an empty preamble.
 	kept := out[:0]
@@ -118,7 +133,7 @@ func Sections(md string, offset int) []Section {
 			kept = append(kept, s)
 		}
 	}
-	return kept
+	return kept, nil
 }
 
 // trimBlankLines removes leading and trailing blank lines from a body and
