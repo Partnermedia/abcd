@@ -162,7 +162,12 @@ func newIdentityMatchers(id Identity) identityMatchers {
 		m.github = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitRemoteUsername))
 	}
 	if id.HomeUser != "" {
-		m.localBare = regexp.MustCompile(regexp.QuoteMeta(id.HomeUser))
+		// Case-insensitive, for the same reason homeSelf is (above): HomeUser is
+		// the last segment of that same HomePath, so on a case-folding filesystem
+		// a case variant of the login (the natural prose spelling in a transcript)
+		// resolves to the same account and must still trip the hard_fail
+		// local_username gate — not slip redaction while the home path is caught.
+		m.localBare = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.HomeUser))
 		if enc := strings.ReplaceAll(id.HomeUser, ".", "-"); enc != id.HomeUser {
 			m.localEncoded = enc
 		}
@@ -399,18 +404,18 @@ func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span
 // lookbehind replacement) and followed by EOL or a non-[A-Za-z0-9.] rune.
 func encodedMatches(line, encoded string) [][]int {
 	var out [][]int
-	from := 0
-	for {
-		i := strings.Index(line[from:], encoded)
-		if i < 0 {
-			break
-		}
-		start := from + i
+	// Case-insensitive, matching the folded m.localBare matcher: the encoded
+	// (dot->dash) spelling of the login must be redacted whatever its case. The
+	// window is compared with EqualFold rather than lower-casing the whole line,
+	// whose byte length can shift on non-ASCII input and corrupt the offsets.
+	for start := 0; start+len(encoded) <= len(line); start++ {
 		end := start + len(encoded)
+		if !strings.EqualFold(line[start:end], encoded) {
+			continue
+		}
 		if boundaryBefore(line, start) && boundaryAfter(line, end) {
 			out = append(out, []int{start, end})
 		}
-		from = start + 1
 	}
 	return out
 }
@@ -438,7 +443,7 @@ var systemDirNames = map[string]bool{
 // prior path segment, and a trailing '/', so "/Users/<user>/x" and a bare "dev"
 // are NOT suppressed.
 func isSystemPathSegment(line string, start, end int) bool {
-	if !systemDirNames[line[start:end]] {
+	if !systemDirNames[strings.ToLower(line[start:end])] {
 		return false
 	}
 	if end >= len(line) || line[end] != '/' {
