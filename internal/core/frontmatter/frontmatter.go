@@ -34,7 +34,7 @@ func Fields(lines []string) map[string]Field {
 	// A delimiter line may carry trailing whitespace ("--- "); trim spaces/tabs/CR
 	// before comparing, so a trailing-space closing delimiter is still seen as the
 	// close and body lines after it do not leak in as fields.
-	if len(lines) == 0 || strings.TrimRight(lines[0], " \t\r") != "---" {
+	if len(lines) == 0 || strings.TrimRight(TrimBOM(lines[0]), " \t\r") != "---" {
 		return fields
 	}
 	closed := false
@@ -61,6 +61,19 @@ func Fields(lines []string) map[string]Field {
 		return map[string]Field{}
 	}
 	return fields
+}
+
+// utf8BOM is U+FEFF, the byte-order mark some editors prepend to a file. It is
+// not Unicode White_Space, so strings.TrimSpace leaves it in place.
+const utf8BOM = "\ufeff"
+
+// TrimBOM removes a single leading UTF-8 byte-order mark from s. The mark only
+// ever appears as the file's very first bytes, so callers apply this to the
+// first line before testing it for the opening `---`: a BOM sits invisibly
+// ahead of the delimiter and, untrimmed, makes a well-formed record read as
+// having no frontmatter — every frontmatter-keyed gate then passes it silently.
+func TrimBOM(s string) string {
+	return strings.TrimPrefix(s, utf8BOM)
 }
 
 // IsNull treats an empty value and the YAML nulls ""/"null"/"~" as null.

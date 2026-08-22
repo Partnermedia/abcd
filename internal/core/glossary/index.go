@@ -177,20 +177,37 @@ func readTerm(fileAbs, rel string) (Term, error) {
 }
 
 // frontmatterOpen returns the index of the opening `---` delimiter, skipping
-// leading blank lines and whole-line HTML comments; -1 when the leading block is
-// not frontmatter.
+// leading blank lines and HTML comments (single- and multi-line); -1 when the
+// leading block is not frontmatter. The first line is BOM-stripped before every
+// comparison so a UTF-8 byte-order mark ahead of the `---` does not read as
+// missing frontmatter.
 func frontmatterOpen(lines []string) int {
-	i := 0
-	for i < len(lines) {
-		t := strings.TrimSpace(lines[i])
-		if t == "" || (strings.HasPrefix(t, "<!--") && strings.HasSuffix(t, "-->")) {
-			i++
-			continue
+	norm := func(idx int) string {
+		s := lines[idx]
+		if idx == 0 {
+			s = frontmatter.TrimBOM(s)
 		}
-		break
+		return strings.TrimSpace(s)
 	}
-	if i < len(lines) && strings.TrimSpace(lines[i]) == "---" {
-		return i
+	inComment := false
+	for i := 0; i < len(lines); i++ {
+		t := norm(i)
+		switch {
+		case inComment:
+			if strings.Contains(t, "-->") {
+				inComment = false
+			}
+		case t == "":
+			// blank line: skip.
+		case strings.HasPrefix(t, "<!--") && strings.HasSuffix(t, "-->"):
+			// a complete single-line comment: skip.
+		case strings.HasPrefix(t, "<!--"):
+			inComment = true
+		case t == "---":
+			return i
+		default:
+			return -1
+		}
 	}
 	return -1
 }
