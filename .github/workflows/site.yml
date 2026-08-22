@@ -1,0 +1,394 @@
+name: site
+
+# Deploy abcdev.app (adr-48). ONE reusable workflow with three entry points:
+#
+#   workflow_call     the RELEASE CHAIN. release.yml invokes this as a separate,
+#                     non-gating job once its `release` job has succeeded. This is
+#                     deliberately NOT a `release: published` trigger: releases here
+#                     are created by release.yml's `gh release create` under the
+#                     workflow's own GITHUB_TOKEN, and GitHub Actions never fires
+#                     event triggers for actions taken with that token —
+#                     auto-release.yml's header documents exactly this semantic — so
+#                     a `release:` trigger would never fire for this repository's
+#                     releases at all. Being CALLED also removes the race against
+#                     asset uploads: `gh release create` has already returned.
+#   workflow_dispatch the EMERGENCY redeploy. Always from a tag, never from main: an
+#                     empty `tag` input resolves the latest PUBLISHED release, so the
+#                     released-bytes invariant survives the emergency (adr-48 4).
+#                     The ref this workflow FILE is dispatched from selects the file
+#                     only; the code and the record rendered always come from the tag.
+#   push: [main]      the PREVIEW. main is ahead of every release, so the
+#                     released-bytes rule cannot apply: the preview is built from
+#                     SOURCE, carries the "unreleased" build stamp that discloses
+#                     precisely that difference, and is uploaded as a non-production
+#                     Worker version that never takes the production route (adr-48 3).
+#                     It replaces the Cloudflare branch builds that ran only the
+#                     version command.
+#
+# Production renders the site with the RELEASED, checksum-verified binary — the same
+# bytes the README install one-liner hands a user — so abcdev.app is one verifiable
+# statement: this is abcd at that tag (adr-48 1). A site failure can neither block nor
+# taint a release: the isolation is the caller's job dependency (release.yml's `site`
+# job needs `release`), not workflow-file separation, and every production run is
+# idempotent per tag — re-running deploys the same tag over itself, and the release
+# asset upload uses --clobber.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The released tag to render and deploy (vX.Y.Z).
+        required: true
+        type: string
+      mode:
+        # Required, not defaulted: the caller states its intent, so a future caller
+        # cannot get the production path by omission. `resolve` refuses any other
+        # value rather than guessing.
+        description: production (render from the released tag) or preview.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to redeploy (vX.Y.Z). Empty resolves the latest published release.
+        required: false
+        type: string
+        default: ''
+  push:
+    branches: [main]
+
+# One group per deploy target — the tag on the production paths, the branch ref for
+# the main preview. cancel-in-progress is false everywhere: a deploy cancelled between
+# uploading assets and switching the route leaves the site half-moved, which is worse
+# than a queued run, and a production run must never be cancelled by a later push. A
+# dispatch with an empty tag shares the branch group and so queues behind a preview
+# rather than racing it — safe, because nothing here is ever cancelled.
+concurrency:
+  group: site-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+# Floor for the workflow: read-only. Each job elevates itself to exactly the scopes it
+# needs. A called workflow is additionally capped by its caller's grants, so
+# release.yml's `site` job hands down contents/id-token/attestations: write.
+permissions:
+  contents: read
+
+jobs:
+  # Decide which path this run is, and — on the production paths — which tag. Pure
+  # read: no checkout at all (so no credential is ever persisted here), only the
+  # releases API. Everything that decides whether production deploys is settled here,
+  # once, so the two build jobs below carry no mode logic.
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.resolve.outputs.mode }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      deploy: ${{ steps.resolve.outputs.deploy }}
+    steps:
+      - name: Resolve the deploy mode and the tag
+        id: resolve
+        # No ${{ }} interpolation in this script (injection-safe, zizmor): the event
+        # name, the call mode and the tag input arrive through env, and the script
+        # writes only $GITHUB_OUTPUT. GH_TOKEN via env so `gh` can read the repo's
+        # releases under the floor `contents: read`.
+        #
+        # `github.event_name` CANNOT distinguish the paths: inside a called workflow it
+        # reports the CALLER's event, which for the release chain is `push` — the same
+        # value the preview path sees. The discriminator is therefore the inputs: on a
+        # real push `inputs` is null (so CALL_MODE is empty), on workflow_call the
+        # caller states the mode, and a dispatch is production by definition (adr-48 4).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CALL_MODE: ${{ inputs.mode }}
+          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            mode=production
+          elif [ -n "$CALL_MODE" ]; then
+            mode="$CALL_MODE"
+          else
+            mode=preview
+          fi
+          case "$mode" in
+            production | preview) ;;
+            *)
+              echo "unknown site deploy mode '$mode' (expected production or preview)" >&2
+              exit 1
+              ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+          if [ "$mode" = preview ]; then
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "preview: building main from source; production is not touched."
+            exit 0
+          fi
+
+          tag="$INPUT_TAG"
+          if [ -z "$tag" ]; then
+            # The emergency dispatch with no tag. `releases/latest` is GitHub's own
+            # notion of latest and excludes drafts and pre-releases — the same endpoint
+            # the install one-liner downloads from, so the site and the install command
+            # can never disagree about which release is current.
+            tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')"
+            test -n "$tag"
+            echo "no tag given; the latest published release is $tag"
+          fi
+          # Validate the SHAPE before the tag is used anywhere. It is an externally
+          # supplied value (the dispatch input), and downstream it becomes a path
+          # component of an API URL and the `ref:` of a checkout — the same reason
+          # release.yml shape-checks its release-gate sha. Anything that is not a
+          # vX.Y.Z release tag is refused rather than resolved.
+          if ! printf '%s' "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+            echo "refusing '$tag': not a vX.Y.Z release tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          # Fail loudly on a tag that does not exist: a typo in the dispatch input must
+          # not fall through to a resolution that half-works.
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha' >/dev/null
+
+          # Pre-releases never deploy production (adr-48 2). Both readings of
+          # "pre-release" are refused, because they can disagree: `gh release create`
+          # marks a release as a full release unless told otherwise, so a vX.Y.Z-rc1
+          # TAG can carry a Release that is not flagged. The SemVer suffix is checked
+          # first for exactly that case.
+          #
+          # This SKIPS rather than fails: the run is informational, not a gate, and a
+          # red site run against a deliberate pre-release would train the maintainer to
+          # ignore this workflow.
+          prerelease=false
+          case "$tag" in
+            *-*) prerelease=true ;;
+          esac
+          # --repo is required, not optional: this job deliberately does not check out
+          # the repository, so gh has no git remote to infer the repo from.
+          if [ "$prerelease" = false ]; then
+            prerelease="$(gh release view "$tag" --repo "${GITHUB_REPOSITORY}" \
+              --json isPrerelease,isDraft \
+              --jq 'if (.isPrerelease or .isDraft) then "true" else "false" end')"
+          fi
+          if [ "$prerelease" = true ]; then
+            echo "::notice::$tag is a pre-release or draft; abcdev.app is not deployed (adr-48)."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          echo "production: rendering abcdev.app from $tag with that release's own binary."
+
+  # Production. Rendered by the RELEASED binary, checksum-verified exactly as the
+  # install one-liner verifies it, attested, attached to the release, and deployed to
+  # the production route from a protected GitHub Environment.
+  production:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The protected environment holds the Cloudflare credentials for the PRODUCTION
+    # Worker and is the server-side gate on this deploy. The preview job below uses a
+    # separate environment, so the production token is unreachable from any push to
+    # main. adr-48: the token is scoped to one Worker and never touches release signing.
+    environment: site
+    permissions:
+      contents: write       # upload site.tar.gz to the Release (no branch push)
+      id-token: write       # mint the OIDC token attest-build-provenance signs with
+      attestations: write   # publish the build-provenance attestation (public repo)
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+    steps:
+      - name: Check out the released tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The full refs/tags/ form, never the bare name: a bare name could resolve to
+          # a branch of the same name. This checkout supplies the RECORD the site
+          # renders; the binary that renders it is downloaded from the release below,
+          # never built from this tree.
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          # Full history: the record explorer derives per-record dates from git history
+          # and contributors from `git shortlog`, neither of which a shallow clone
+          # carries — the pages would render silently wrong rather than fail.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the released binary and checksums.txt
+        # The site is rendered by the bytes users actually run. Both files come from
+        # the release itself, so nothing here is rebuilt from source.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release download "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'abcd-linux-amd64' \
+            --pattern 'checksums.txt' \
+            --dir "$RUNNER_TEMP"
+
+      - name: Verify the binary's SHA-256 against the release manifest
+        # Byte-for-byte the install one-liner's check (README.md): select this
+        # platform's line from checksums.txt and hand it to sha256sum -c. It refuses on
+        # a mismatch AND on a manifest that does not list the binary — grep exits
+        # non-zero under `set -o pipefail`, and an empty checklist is a sha256sum error.
+        # Nothing is rendered by an unverified binary.
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          grep ' abcd-linux-amd64$' checksums.txt | sha256sum -c -
+          install -m 0755 abcd-linux-amd64 "${GITHUB_WORKSPACE}/abcd"
+          cd "$GITHUB_WORKSPACE"
+          ./abcd version
+
+      - name: Render the site with the released binary
+        # DEPENDENCY: the `abcd site` verb family (`site build` / `site check`) lands in
+        # a sibling slice of this website build (adr-47 decision 1, spc-37); it is not
+        # in the binary yet. The flag surface below is the one the plan documents —
+        # `--out` for the output tree and a build stamp carrying tag and commit
+        # (research/abcdev-site/plan.md, spc-40) — and is the single line to reconcile
+        # against `abcd site build --help` once that slice merges.
+        run: |
+          set -euo pipefail
+          # HEAD, never GITHUB_SHA: on the release-chain path GITHUB_SHA is the main
+          # commit that triggered the run, not the tagged commit this job checked out,
+          # so stamping it would attribute the site to a commit it was not built from.
+          commit="$(git rev-parse --verify HEAD)"
+          ./abcd site build --out site --tag "${TAG}" --commit "$commit"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # The version the Cloudflare build image ships, so a local reproduction of
+          # this build renders docs/ the same way.
+          python-version: '3.13'
+
+      - name: Build the docs into site/docs
+        # mkdocs-material is pinned in docs/requirements.txt, so /docs/ renders
+        # identically on every run.
+        run: |
+          set -euo pipefail
+          pip install -r docs/requirements.txt
+          mkdocs build -d site/docs
+
+      - name: Check the rendered site
+        # The provenance audit: unsourced text, docs-lint over rendered prose, CLI
+        # snippet drift, the cross-reference ratchet, the mobile audit (adr-47 3). It
+        # runs AFTER the docs build so it sees the whole tree that will be deployed.
+        # DEPENDENCY: same sibling slice as the render step above.
+        run: ./abcd site check
+
+      - name: Pack the rendered site
+        run: tar -czf site.tar.gz -C site .
+
+      - name: Attest build provenance for site.tar.gz
+        # Signed SLSA provenance over the exact bytes uploaded and deployed below, so
+        # what abcdev.app serves is traceable to this tag and this workflow. Skipped on
+        # a user-owned private repo (GitHub gates artifact attestation by repo
+        # visibility, exactly as release.yml documents); it re-enables automatically on
+        # the public flip, and a skipped step is not a failure, so the deploy still runs.
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: site.tar.gz
+
+      - name: Attach site.tar.gz to the release
+        # --clobber makes a re-run of this tag replace the asset instead of erroring, so
+        # the whole production path stays idempotent per tag.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${TAG}" site.tar.gz --repo "${GITHUB_REPOSITORY}" --clobber
+
+      - name: Deploy to the production Worker
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # `deploy` also asserts the custom domains declared in wrangler.jsonc, so a
+          # drifted route attachment is re-claimed here rather than left wherever the
+          # dashboard last put it.
+          command: deploy
+          # Hand-reviewed pin: a version named in a `with:` value is invisible to
+          # dependabot's github-actions ecosystem, so bumps are a deliberate maintainer
+          # act at each release cut — the same convention as ci.yml's GITLEAKS_VERSION.
+          wranglerVersion: '4.125.0'
+
+  # Preview. Every push to main, built from SOURCE (main is ahead of every release, so
+  # there are no released bytes to verify), stamped "unreleased", and uploaded as a
+  # Worker VERSION — never assigned production traffic, never on the abcdev.app route.
+  preview:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.mode == 'preview' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A separate environment from `site`: the preview needs a Cloudflare credential but
+    # must not be able to read the production one. Nothing here is protected — the
+    # preview deploys on every push — and nothing here can reach the production route.
+    environment: site-preview
+    permissions:
+      contents: read        # source-built, attests nothing, uploads no release asset
+    steps:
+      - name: Check out the pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          # Full history, for the same reason as the production job: record dates and
+          # contributors come from git history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.7'
+          # cache: false — this workflow publishes to the live site; a poisoned module
+          # cache would reach visitors (zizmor cache-poisoning), and release.yml
+          # disables it for the same reason.
+          cache: false
+
+      - name: Build the binary from source
+        run: go build -o ./abcd ./cmd/abcd
+
+      - name: Render the site with the unreleased build stamp
+        # No --tag: the stamp carries the commit alone, which is what makes the
+        # generator render the "unreleased — main@<short sha>" label from its own
+        # interface strings (adr-48 3). The workflow writes no site text — under
+        # adr-47's single-source rule it may pass numbers and shas, never prose.
+        # DEPENDENCY: the `abcd site` verb family is not in the binary yet; see the
+        # production job's render step for the full note.
+        run: |
+          set -euo pipefail
+          # HEAD, for the same reason as production: the stamp names the commit this
+          # job actually built, whatever selected it.
+          commit="$(git rev-parse --verify HEAD)"
+          ./abcd site build --out site --commit "$commit"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Build the docs into site/docs
+        run: |
+          set -euo pipefail
+          pip install -r docs/requirements.txt
+          mkdocs build -d site/docs
+
+      - name: Check the rendered site
+        # The preview is held to the same provenance and mobile gates as production —
+        # a preview that skipped them would stop being a preview of anything.
+        # DEPENDENCY: as above.
+        run: ./abcd site check
+
+      - name: Upload a non-production Worker version
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # `versions upload` publishes a preview version and assigns it NO production
+          # traffic; only `deploy` (the production job) moves the abcdev.app route.
+          command: versions upload
+          wranglerVersion: '4.125.0'
