@@ -64,12 +64,13 @@ abcd site build --out DIR    # render into DIR
 | git history | one `git log --reverse --name-status --diff-merges=first-parent` pass, plus `shortlog` and the `Assisted-by:` trailers |
 | `CHANGELOG.md` | the dated release headings |
 | `docs/**` | the composed pages and their committed assets |
-| `site-src/{site.css,site.js,redirects,headers}` | the static inputs copied into the output tree |
+| `site-src/{site.css,site.js,record.js,redirects,headers}`, `site-src/install.sh.tmpl` | the static inputs copied into the output tree, and the install script the site serves |
+| `CONTRIBUTING.md`, `ACKNOWLEDGEMENTS.md` | the credit sources the contributors and references pages render (the footer also probes `SECURITY.md` and `CITATION.cff` for their existence) |
 | `.claude-plugin/plugin.json` | the package's forge URL, licence and author, for links and the footer |
 
 It writes `index.html`, `record.json`, the `_redirects` and `_headers` maps, the
-stylesheet and script, and every referenced raster. Nothing else, nowhere else,
-and no network at any point.
+stylesheet, the two scripts, `install.sh`, and every referenced raster. Nothing
+else, nowhere else, and no network at any point.
 
 Two of those inputs are **declared deviations** from itd-140's generic-side
 input contract, and are recorded here rather than argued away.

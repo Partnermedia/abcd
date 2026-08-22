@@ -159,7 +159,7 @@ render says a repo is healthy and the user's experience says otherwise.
 
 Renders the canonical `DetectionResult` JSON envelope and writes nothing — the
 same pass `install` would apply, shown rather than applied. `dry-run` always
-emits JSON, so it takes no `--json` flag. Use it when the user wants to see
+emits JSON, so it needs no `--json` flag. Use it when the user wants to see
 exactly what an install would do before letting it run.
 
 ## Scoping note: `identity-check` is CLI-only

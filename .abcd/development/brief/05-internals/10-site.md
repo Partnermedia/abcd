@@ -2,8 +2,9 @@
 
 > **The passages marked below are design targets; the rest describes what
 > the binary does.** `abcd site build` renders the landing page, the record
-> explorer's pages and `record.json`. The `check` gates and the deploy workflow
-> are designs — abcdev.app serves the MkDocs rendering of
+> explorer's pages and `record.json`, and `abcd site check` runs its seven
+> gates. The deploy workflow is a design — abcdev.app serves the MkDocs
+> rendering of
 > `docs/` at its root, and the deploy is what moves it. Both halves rest on
 > [adr-47](../../decisions/adrs/0047-abcdev-app-rendered-from-this-repository-alone.md)
 > and [adr-48](../../decisions/adrs/0048-website-deploys-on-release-not-on-merge.md),
@@ -68,7 +69,7 @@ intents:
   record actually writes: nested lists, blockquotes with structure inside them,
   reference links, setext headings, rules, autolinks and CommonMark emphasis;
   anything still outside it is a build failure naming file and line.
-- **`abcd site check`** (design target) — the provenance audit over every
+- **`abcd site check`** — the provenance audit over every
   rendered text node, docs-lint's banned tokens over composed text, CLI-
   snippet drift against the generated reference, the
   `.abcd/site-baseline.json` ratchet, and the 390 px static mobile checks.

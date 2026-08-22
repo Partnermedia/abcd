@@ -3,6 +3,7 @@ package guard
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // segment is one command in command position: the tokens of a single simple
@@ -240,6 +241,28 @@ func tokenize(line string) ([]segment, error) {
 			flushToken()
 			i = skipRedirectTarget(line, opEnd)
 			lastList = false
+		case c == '$' && i+1 < len(line) && line[i+1] == '\'':
+			// bash ANSI-C quoting: $'...' contributes its escape-decoded body to
+			// the SAME word, exactly as '...' contributes its raw body. Without
+			// this the leading `$` fell through to the default word branch and
+			// prefixed the token (`$'--force'` tokenised to `$--force`), so a
+			// blocker naming `--force` missed — a silent allow of the very argv
+			// bash hands the child. Quoting must not change argument semantics
+			// (doc.go): `git push $'--force'` fires, like `git push '--force'`.
+			decoded, next, err := readAnsiCQuote(line, i+2)
+			if err != nil {
+				return nil, err
+			}
+			cur = append(cur, decoded...)
+			hasCur = true
+			lastList = false
+			i = next
+		case c == '$' && i+1 < len(line) && line[i+1] == '"':
+			// bash locale quoting: $"..." is a plain double-quoted word with the
+			// `$` stripped (the translation is identity for a tokenizer). Skip the
+			// `$` so the double-quote branch reads the string; the same silent
+			// allow as $'...' otherwise.
+			i++
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
@@ -260,6 +283,128 @@ func tokenize(line string) ([]segment, error) {
 	}
 	flushSegment()
 	return segs, nil
+}
+
+// readAnsiCQuote decodes a bash ANSI-C `$'...'` body that begins at start (the
+// byte just after the opening quote) and returns the decoded bytes together with
+// the index just past the closing quote. Inside `$'...'` a backslash introduces
+// an escape — so `\'` does not end the string — and the common escapes are
+// resolved so an encoded spelling of a hazard (`$'\x2d\x2dforce'`) tokenises to
+// the same bytes bash would hand the child (`--force`).
+func readAnsiCQuote(line string, start int) ([]byte, int, error) {
+	var out []byte
+	for i := start; i < len(line); {
+		switch {
+		case line[i] == '\'':
+			return out, i + 1, nil
+		case line[i] == '\\' && i+1 < len(line):
+			decoded, next := decodeAnsiCEscape(line, i+1)
+			out = append(out, decoded...)
+			i = next
+		default:
+			out = append(out, line[i])
+			i++
+		}
+	}
+	return nil, 0, fmt.Errorf("%w: unterminated $'' quote", ErrUnparsableCommand)
+}
+
+// decodeAnsiCEscape resolves one ANSI-C escape whose leading backslash has
+// already been consumed; p indexes the character after the backslash. It returns
+// the decoded bytes and the index just past the escape. An unrecognised escape
+// keeps the backslash and the character, matching bash.
+func decodeAnsiCEscape(line string, p int) ([]byte, int) {
+	switch c := line[p]; c {
+	case 'n':
+		return []byte{'\n'}, p + 1
+	case 't':
+		return []byte{'\t'}, p + 1
+	case 'r':
+		return []byte{'\r'}, p + 1
+	case 'a':
+		return []byte{'\a'}, p + 1
+	case 'b':
+		return []byte{'\b'}, p + 1
+	case 'f':
+		return []byte{'\f'}, p + 1
+	case 'v':
+		return []byte{'\v'}, p + 1
+	case 'e', 'E':
+		return []byte{0x1b}, p + 1
+	case '\\', '\'', '"', '?':
+		return []byte{c}, p + 1
+	case 'x':
+		val, n := 0, 0
+		for j := p + 1; j < len(line) && n < 2 && isHexDigit(line[j]); j++ {
+			val = val*16 + hexValue(line[j])
+			n++
+		}
+		if n == 0 {
+			return []byte{c}, p + 1
+		}
+		return []byte{byte(val)}, p + 1 + n
+	case '0', '1', '2', '3', '4', '5', '6', '7':
+		val, n := 0, 0
+		for j := p; j < len(line) && n < 3 && line[j] >= '0' && line[j] <= '7'; j++ {
+			val = val*8 + int(line[j]-'0')
+			n++
+		}
+		return []byte{byte(val)}, p + n
+	case 'u', 'U':
+		// bash \uHHHH (up to 4 hex) and \UHHHHHHHH (up to 8 hex): a Unicode code
+		// point, UTF-8 encoded. Without these an ASCII hazard spelled as
+		// `$'--force'` decoded to --force in the shell but not here, so a
+		// Tier-1 blocker missed on the same bytes the \x and octal forms already
+		// close.
+		width := 4
+		if c == 'U' {
+			width = 8
+		}
+		val, n := 0, 0
+		for j := p + 1; j < len(line) && n < width && isHexDigit(line[j]); j++ {
+			val = val*16 + hexValue(line[j])
+			n++
+		}
+		if n == 0 {
+			return []byte{c}, p + 1
+		}
+		r := rune(val)
+		if !utf8.ValidRune(r) {
+			r = utf8.RuneError
+		}
+		return utf8.AppendRune(nil, r), p + 1 + n
+	case 'c':
+		// bash \cX: the control character for X (X with bit 6 cleared, uppercased).
+		// `\c` at end of string is left literal.
+		if p+1 >= len(line) {
+			return []byte{c}, p + 1
+		}
+		x := line[p+1]
+		if x >= 'a' && x <= 'z' {
+			x -= 'a' - 'A'
+		}
+		return []byte{x & 0x1f}, p + 2
+	default:
+		return []byte{'\\', c}, p + 1
+	}
+}
+
+// isHexDigit reports whether b is an ASCII hexadecimal digit.
+func isHexDigit(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+// hexValue returns the value of an ASCII hexadecimal digit; the caller guarantees
+// isHexDigit(b).
+func hexValue(b byte) int {
+	switch {
+	case b >= '0' && b <= '9':
+		return int(b - '0')
+	case b >= 'a' && b <= 'f':
+		return int(b-'a') + 10
+	default:
+		return int(b-'A') + 10
+	}
 }
 
 // isAllDigits reports whether b is a non-empty run of ASCII digits — the shape

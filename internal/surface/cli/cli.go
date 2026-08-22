@@ -245,7 +245,7 @@ func NewRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&asJSON, "json", false, "emit machine-readable JSON")
 	// Root-local by design: colour exists only on the bare invocation, so a
 	// persistent flag would be dead surface on every subcommand (itd-112).
-	root.Flags().BoolVar(&noColor, "no-color", false, "render the banner without colour")
+	root.Flags().BoolVar(&noColor, "no-color", false, "render the banner without color")
 
 	root.AddCommand(newVersionCommand(&asJSON))
 	root.AddCommand(newUpdateCommand(&asJSON))

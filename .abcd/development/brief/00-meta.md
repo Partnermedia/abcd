@@ -9,9 +9,11 @@ Everything in the brief is decided. A section may describe machinery that is
 builds toward — but never an undecided option: the brief records no proposals,
 no alternatives still under consideration, no aspirational maybes. The only
 variance a reader must resolve is shipped vs staged, and a staged claim says so
-explicitly. Unsettled questions live in
-[`03-evidence/03-open-questions.md`](03-evidence/03-open-questions.md) *as
-questions*, never as claims. This follows from
+explicitly. Unsettled questions are recorded *as
+questions*, never as claims — registered in
+[`03-evidence/03-open-questions.md`](03-evidence/03-open-questions.md), or
+carried inline as an explicit `Open question (adr-35)` note where one bears
+directly on a passage (DECISIONS.md, 2026-07-14). This follows from
 [adr-5](../decisions/adrs/0005-brief-is-current-state.md): the brief is the
 project's current state, and that state includes what the project has decided
 to build but not yet built.

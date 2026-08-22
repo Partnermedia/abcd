@@ -1,6 +1,6 @@
 # Invariants
 
-> **Status: PLACEHOLDER.** Invariant-shaped rules are currently scattered through `05-internals/04-universal-patterns.md`, the visibility rule in `04-surfaces/`, and various command-acceptance sections. Future iterations may consolidate the load-bearing ones here. For now, treat this file as a navigational pointer.
+> **Status: LIVE.** This file is the canonical home for the project's invariants — the properties the system preserves regardless of how it is built. A new invariant lands here in the change that decides it (adr-49, adr-50 set that precedent). Related rule detail still lives in [`05-internals/04-universal-patterns.md`](../05-internals/04-universal-patterns.md), the visibility rule in `04-surfaces/`, and the command-acceptance sections; those are cross-references, not the register.
 
 ## Properties the system must preserve regardless of how it's built
 

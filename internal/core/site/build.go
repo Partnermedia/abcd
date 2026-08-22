@@ -246,6 +246,16 @@ func LoadRepoMeta(repoRoot string) (RepoMeta, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return RepoMeta{}, fmt.Errorf("site: %s: %w", pluginManifestRelPath, err)
 	}
+	// The repository address becomes an href on every emitted page (the forge
+	// link and the release-download links derive from it). It is repository text
+	// like any other — the same reason LoadBibliography screens its URLs — so an
+	// executable scheme is refused here rather than escaped downstream: escaping
+	// an attribute is no defence against a well-formed javascript: address.
+	if m.Repository != "" {
+		if scheme, bad := executableScheme(m.Repository); bad {
+			return RepoMeta{}, fmt.Errorf("site: %s: repository addresses the %q scheme, which runs code in the reader's browser; the site links to it from every page", pluginManifestRelPath, scheme)
+		}
+	}
 	m.AuthorName = m.Author.Name
 	return m, nil
 }

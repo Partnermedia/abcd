@@ -384,16 +384,18 @@ func List(req ListRequest) (ListResult, error) {
 
 // relativiseLedgerPaths rewrites every ledger Path in place to a repo-relative
 // locator, so no --json envelope echoes an absolute developer-identity path
-// (iss-81). It covers the structured Path field; a SkipRecord.Error string that
-// wraps an os.ReadFile failure can still carry an absolute path, which the CLI
-// text surface sanitises via termsafe but the --json surface does not — tracked
-// separately from this locator fix.
+// (iss-81). It covers both the structured Path field and a SkipRecord.Error
+// string that wraps an os.ReadFile/parse failure carrying the same absolute path:
+// the skipped list rides an exit-0 success envelope, which the CLI's error-path
+// scrubber never sees, so the abs path is stripped here for the --json surface.
 func relativiseLedgerPaths(repoRoot string, issues []Issue, skipped []SkipRecord) {
+	prefix := repoRoot + string(filepath.Separator)
 	for i := range issues {
 		issues[i].Path = fsutil.RepoRel(repoRoot, issues[i].Path)
 	}
 	for i := range skipped {
 		skipped[i].Path = fsutil.RepoRel(repoRoot, skipped[i].Path)
+		skipped[i].Error = strings.ReplaceAll(skipped[i].Error, prefix, "")
 	}
 }
 
