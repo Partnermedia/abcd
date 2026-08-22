@@ -54,8 +54,8 @@ Ordering and item specs unchanged from that plan:
 
 ## Workstream B — presence and orientation
 
-5. **[itd-112](../intents/drafts/itd-112-running-a-bare-abcd-and-any-abcd-managed-cli-opens-with-a-ge.md)**
-   — a bare `abcd` opens with a generated ferry-style banner from the
+5. **[itd-112](../intents/planned/itd-112-bare-abcd-opens-with-a-generated-banner.md)**
+   — a bare `abcd` opens with a generated object-style banner from the
    canonical identity block. Draft (quoted-text seed): grill before plan.
 6. **[iss-168](../../work/issues/open/iss-168-abcd-s-presence-should-be-visible-in-the-host-harness-s-stat.md)**
    — abcd's presence in the host status line, under the

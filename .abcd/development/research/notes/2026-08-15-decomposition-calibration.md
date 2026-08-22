@@ -614,3 +614,37 @@ Per hand-run, append:
   the "capability gated on demonstration" part-type (itd-139) is new to
   the enum — a capability whose filing is confirmed but whose planning is
   explicitly blocked on evidence.
+
+
+### 2026-08-22 — itd-112 planning interview (post-grill hand-run)
+
+- **Proposal:** itd-112 (the bare-abcd banner), already grilled 2026-08-21
+  (scope split to itd-134 confirmed there), at its planning interview after
+  two adversarial reviews (design/feasibility and record-discipline).
+- **Initial routing:** five parts — the banner capability (this intent);
+  the managed-repo generator (already split to itd-134 at the grill); the
+  emission-discipline trust rules — TTY-only decoration plus the termsafe
+  carve-out, one boundary — (trust rule | one ADR + one brief invariant,
+  adr-49 + invariant 13, not two records); the colour ladder and TTY seam
+  (plumbing, but a shared primitive with a declared second consumer —
+  named in-scope as exported primitives, with itd-110 gaining
+  `builds_on: [itd-112]` rather than minting its own record, per
+  one-canonical-primitive); the identity bake (plumbing | spec). Typed
+  links: itd-112 `builds_on` itd-133, `refines` itd-102; itd-134 carries
+  its own `refines` itd-112 (the coined `refined-by` direction was struck —
+  not in the enum; the corpus records the pair from the child's side).
+- **Confirmed routing:** adopted; the maintainer additionally ruled the
+  slug rename (retire-the-name ban on the old slug) and eight design forks
+  (identity baked at build time; half-blocks on a painted panel; five-row
+  shade-block mono; tagline-below layout; truecolor rung + pinned tables;
+  root-local --no-color; dev-build version render; Windows scoped out by
+  the release matrix).
+- **Verdict:** SPLIT overall (the generator half left at the grill; the
+  trust rules left at the interview) — proposed and confirmed in stages
+  across the two sessions.
+- **Notes:** first hand-run where the reviews moved parts the grill had
+  already settled *in prose* into their record homes — evidence for the
+  "grill settles, interview routes" division of labour. The
+  shared-primitive part (colour ladder) deliberately did NOT get its own
+  record: no user moment, so the routing is an in-scope export plus a
+  dependency edge — a taxonomy data point for plumbing-with-two-consumers.

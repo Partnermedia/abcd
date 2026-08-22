@@ -60,8 +60,8 @@ solid to build on.
 
 ## What's In Scope
 
-- One canonical pixel-grid definition of all six assets (duckling full and
-  mini; flag logo full and compact; lifeboat full and mini) in the Go tree.
+- One canonical pixel-grid definition of all seven assets (duckling full
+  and mini; flag logo strip, 2×2 icon, and compact; lifeboat full and mini) in the Go tree.
 - A Go generator deriving the committed SVG assets (dark-panel and
   transparent variants) from the grids; no other toolchain.
 - A CI drift gate: regenerating the SVGs from the grids is byte-identical.
