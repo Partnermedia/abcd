@@ -31,7 +31,7 @@ reference page documenting a `--color` flag spells the flag as the code does.
 | Rule | Enforcement |
 |---|---|
 | Docs state present reality: what is, never what was or what is planned. History lives in git; rationale lives in the development record. | review |
-| Change-narration tokens ("previously", "formerly", and their kin) are blocked in `docs/` and `README.md`. | machine-enforced (the `present_tense/*` docs-lint family) |
+| Change-narration tokens ("previously", "formerly", and their kin) are blocked in `docs/` and `README.md`. <!-- docs-lint: allow — this row documents the banned tokens themselves --> | machine-enforced (the `present_tense/*` docs-lint family) |
 
 ## Page types
 
