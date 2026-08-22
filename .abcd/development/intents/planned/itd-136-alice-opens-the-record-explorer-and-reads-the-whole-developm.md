@@ -70,6 +70,11 @@ human is the author of record; the trailer is disclosure.
   the `Assisted-by:` share and per-model tallies are presented as disclosure
   with `CONTRIBUTING.md` linked, and model names are confined to this page
   under the sanctioned attribution escape.
+- Given the repo declares principles (`principles/`) or active disciplines
+  (`intents/disciplines/`), then a foundations page lists each as a card
+  linking its record page — it lists and links, never explains (context
+  belongs in `docs/` and is selected from there); given neither directory
+  exists, then the page and its navigation entry are omitted.
 - Given `/references/` ships, then the bibliography renders from
   `.abcd/development/research/references.csl.json`, numbered identically to
   `ACKNOWLEDGEMENTS.md`, with DOIs linked and the attribution line the CSL

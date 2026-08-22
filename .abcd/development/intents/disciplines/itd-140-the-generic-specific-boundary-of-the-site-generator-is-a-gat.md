@@ -71,7 +71,9 @@ ADR erodes at exactly the moments it matters: a convenient abcd-only input
 slipped into a "generic" page, a marketing sentence calling the verb
 repo-agnostic ahead of evidence, a working-tier ledger rendered public by
 default. Naming the boundary as a discipline makes each of those a
-reviewable crossing instead of an accident.
+reviewable crossing instead of an accident. Rule 3 is the site-scoped form
+of [script-first-mvp](../../principles/script-first-mvp.md): a capability is
+earned by running its contract on real data before the claim ships.
 
 ## What's In Scope
 

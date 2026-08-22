@@ -71,7 +71,9 @@ carry those files, and the chart says so.
   pills in the GitHub palette, every date of the record on one continuum
   (frontmatter date, in-tree since, state since, last touched — from git),
   a linked-records pull-out phrased from the focused record, and the GitHub
-  link; back and forward (and Alt+arrows) walk the viewing history.
+  link; the last-touched date links the record's commit history on GitHub,
+  so an amendment is traceable from the card, not just visible as a date;
+  back and forward (and Alt+arrows) walk the viewing history.
 - Given a keyboard-only visitor, then the list twin under the stage reaches
   every record and every link the chart shows.
 - Given `/record/timeline/`, then five lanes render as one static SVG at
