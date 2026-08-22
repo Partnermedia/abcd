@@ -7,6 +7,12 @@ YAML frontmatter that defines the term's meaning, bounded context, and usage con
 vocabulary — the nouns the record uses in prose, with their aliases and forbidden synonyms — is
 registered here and nowhere else.
 
+**The glossary is a deliberate frame surface.** The committed terms are the framing's
+machine-visible fingerprint: what the project chose to name, what it refused to call things (the
+forbidden synonyms), and where it drew each bounded context are the parts of its framing a machine
+can read. Curating a term here is a framing act, not housekeeping — a rename or a new forbidden
+synonym changes how every later reader, human or automated, construes the record.
+
 The neighbouring registry in [`../02-constraints/04-naming.md`](../02-constraints/04-naming.md) is a
 different artefact: it registers the maritime naming convention and the controlled enums (command
 names, closed-vocabulary field values) that individual specs pin. It is not a glossary and holds no

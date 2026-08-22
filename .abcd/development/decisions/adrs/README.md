@@ -150,3 +150,5 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-47](0047-abcdev-app-rendered-from-this-repository-alone.md) | abcdev.app is rendered from this repository alone | accepted | 2026-08-22 |
 | [adr-48](0048-website-deploys-on-release-not-on-merge.md) | The website deploys on release, not on merge | accepted | 2026-08-22 |
 | [adr-49](0049-terminal-emission-discipline.md) | Terminal emission discipline — decoration only on interactive TTYs, machine streams undecorated, untrusted text always sanitised | accepted | 2026-08-22 |
+| [adr-50](0050-framing-traces-never-enter-the-record.md) | Framing traces never enter the record, and automated reviewers never read them | accepted | 2026-08-22 |
+| [adr-51](0051-intents-declare-mechanism-and-scope-conditions.md) | An intent can declare its mechanism claim and its scope conditions — optional sections, enforcement deferred | accepted | 2026-08-22 |
