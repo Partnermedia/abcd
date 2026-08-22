@@ -69,6 +69,10 @@ type UI struct {
 	// script the command runs. It is an invitation to read before running, so it
 	// says what the reader would do, not what the file is.
 	ReadScript string `json:"read_script"`
+	// Unreleased stands where the version goes on a build of an untagged tree.
+	// It is a word rather than a blank because a stamp reading "· · abcdef1"
+	// looks like a rendering fault, and one reading "v0.6.1" would be a lie.
+	Unreleased string `json:"unreleased"`
 	Beta       string `json:"beta"`
 }
 

@@ -307,6 +307,13 @@ func Build(req Request) (Result, error) {
 		outDir = abs
 	}
 
+	// The two version instructions are opposites — "stamp exactly this" and
+	// "stamp no version at all" — so a build given both would have to silently
+	// discard one and publish its output under the other's name.
+	if req.Stamp.Preview && req.Stamp.Version != "" {
+		return Result{}, errors.New("site: a preview build carries no version, so --preview and --version cannot be given together")
+	}
+
 	// Refuse EARLY. The render below is minutes of work, and a build that waits
 	// until the writes to discover it may not touch the directory has spent them
 	// for nothing. The PURGE waits, though: it happens at the first write, so a
@@ -368,7 +375,11 @@ func Build(req Request) (Result, error) {
 	if len(releases) > 0 {
 		version, releaseDate = releases[0].Version, releases[0].Date
 	}
-	if stamp.Version == "" {
+	// A preview takes no version — not the pinned one, and not the changelog
+	// fallback. The fallback is the whole defect: a build of main is ahead of the
+	// newest release, so stamping it with that release's number publishes a
+	// provenance a reader could go and check against a different tree.
+	if !stamp.Preview && stamp.Version == "" {
 		stamp.Version = version
 	}
 	if stamp.GeneratedAt == "" && len(releases) > 0 {

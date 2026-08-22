@@ -330,6 +330,110 @@ func TestBuildLayoutDoesNotOverlap(t *testing.T) {
 	}
 }
 
+// previewStamp is a preview build's metadata: a commit and a date, and no
+// version, because that is the whole point of the mode.
+var previewStamp = BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11", Preview: true}
+
+// TestPreviewStampSaysUnreleased is adr-48 decision 3's honesty requirement.
+//
+// A preview is built from main, which is ahead of the newest release. With the
+// version falling back to the CHANGELOG heading, every preview stamped itself
+// with a release it is not — a build claiming a provenance that belongs to a
+// tagged commit somebody could go and verify. The preview says what it actually
+// is: unreleased, at this commit.
+func TestPreviewStampSaysUnreleased(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: previewStamp})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if res.Version != "" {
+		t.Errorf("a preview build reports version %q, want none", res.Version)
+	}
+
+	// The landing page's footer stamp.
+	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span>`)
+	if foot == "" {
+		t.Fatal("the landing page has no build stamp")
+	}
+	if !strings.Contains(foot, "unreleased") {
+		t.Errorf("the preview footer stamp does not say unreleased: %q", foot)
+	}
+	if !strings.Contains(foot, previewStamp.Commit) {
+		t.Errorf("the preview footer stamp does not carry the commit: %q", foot)
+	}
+	if strings.Contains(foot, "v"+fixtureStamp.Version) {
+		t.Errorf("the preview footer stamp claims a released version: %q", foot)
+	}
+
+	// The explorer's stamp, which is a different renderer over the same fact.
+	gen := sectionBetween(outFile(t, out, "record/index.html"), `<p class="gen">`, `</p>`)
+	if gen == "" {
+		t.Fatal("the explorer dashboard has no generated line")
+	}
+	if !strings.Contains(gen, "unreleased") {
+		t.Errorf("the explorer's preview stamp does not say unreleased: %q", gen)
+	}
+	if strings.Contains(gen, "v"+fixtureStamp.Version) {
+		t.Errorf("the explorer's preview stamp claims a released version: %q", gen)
+	}
+
+	// And the export the chart reads.
+	var export struct {
+		Build BuildStamp `json:"build"`
+	}
+	if err := json.Unmarshal([]byte(outFile(t, out, "record.json")), &export); err != nil {
+		t.Fatal(err)
+	}
+	if !export.Build.Preview {
+		t.Error("record.json does not mark the build as a preview")
+	}
+	if export.Build.Version != "" {
+		t.Errorf("record.json carries version %q on a preview build", export.Build.Version)
+	}
+	if export.Build.Commit != previewStamp.Commit {
+		t.Errorf("record.json carries commit %q, want %q", export.Build.Commit, previewStamp.Commit)
+	}
+}
+
+// TestPreviewRefusesAPinnedVersion holds the two flags apart. They are opposite
+// instructions — "stamp this exact version" and "stamp no version at all" — and
+// a build that silently honoured one would produce the other's output under the
+// other's name. The refusal is the only honest answer.
+func TestPreviewRefusesAPinnedVersion(t *testing.T) {
+	f := newFixture(t)
+	_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(),
+		Stamp: BuildStamp{Version: "9.9.9", Commit: "abcdef1", Preview: true}})
+	if err == nil {
+		t.Fatal("a preview build accepted a pinned version")
+	}
+	for _, want := range []string{"preview", "version"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+}
+
+// TestPreviewBuildIsDeterministic keeps the preview on the same footing as every
+// other build: the shape chosen for the export — an empty version field beside
+// `preview: true`, rather than an omitted one — must render the same bytes twice.
+func TestPreviewBuildIsDeterministic(t *testing.T) {
+	f := newFixture(t)
+	a, b := t.TempDir(), t.TempDir()
+	for _, out := range []string{a, b} {
+		if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: previewStamp}); err != nil {
+			t.Fatalf("build: %v", err)
+		}
+	}
+	for _, name := range []string{"index.html", "record.json", "record/index.html"} {
+		if outFile(t, a, name) != outFile(t, b, name) {
+			t.Errorf("%s differs between two preview builds of the same tree", name)
+		}
+	}
+}
+
 // TestBuildIsDeterministic builds the same tree twice into two directories and
 // diffs every byte. It is the property the published site rests on: production
 // is rendered from a tag, and a build that is not a function of its input cannot

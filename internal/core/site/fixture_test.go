@@ -322,6 +322,7 @@ func (f *fixture) writeSources() {
   "cli_group": "CLI",
   "matches_system": "matches this computer",
   "read_script": "read the script",
+  "unreleased": "unreleased",
   "beta": "Beta"
 }
 `)
