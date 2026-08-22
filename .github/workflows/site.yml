@@ -20,11 +20,17 @@ name: site
 #                     for what that restriction is actually protecting.
 #   push: [main]      the PREVIEW. main is ahead of every release, so the
 #                     released-bytes rule cannot apply: the preview is built from
-#                     SOURCE, carries the "unreleased" build stamp that discloses
-#                     precisely that difference, and is uploaded as a non-production
-#                     Worker version that never takes the production route (adr-48 3).
-#                     It replaces the Cloudflare branch builds that ran only the
-#                     version command.
+#                     SOURCE and uploaded as a non-production Worker version that
+#                     never takes the production route (adr-48 3). It replaces the
+#                     Cloudflare branch builds that ran only the version command.
+#                     adr-48 3 also asks the preview to carry an "unreleased —
+#                     main@<sha>" label, and the merged generator cannot express
+#                     one: its stamp renders as "v" + the value and `site check`
+#                     admits only ^v?\d+(\.\d+)*$ there. The stamp carries the main
+#                     COMMIT, which is never a release commit; the version half
+#                     still reads as the last release. That gap is real, is not
+#                     closable from a workflow, and is spelled out at the render
+#                     step in the preview job.
 #
 # Production renders the site with the RELEASED, checksum-and-attestation-verified
 # binary — the same bytes the README install one-liner hands a user — so abcdev.app is
@@ -398,12 +404,6 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
 
       - name: Render the site with the released binary
-        # DEPENDENCY: the `abcd site` verb family (`site build` / `site check`) lands in
-        # a sibling slice of this website build (adr-47 decision 1, spc-37); it is not
-        # in the binary yet. The flag surface below is the one the plan documents —
-        # `--out` for the output tree and a build stamp carrying tag and commit
-        # (research/abcdev-site/plan.md, spc-40) — and is the single line to reconcile
-        # against `abcd site build --help` once that slice merges.
         run: |
           set -euo pipefail
           # Probe before use. Every tag released before the site slice carries a binary
@@ -431,7 +431,22 @@ jobs:
           # commit that triggered the run and would attribute the site to a commit it
           # was not built from.
           commit="$(git rev-parse --verify HEAD)"
-          ./abcd site build --out site --tag "${TAG}" --commit "$commit"
+          # --version takes the tag WITHOUT its leading v. The page renders the
+          # stamp as "v" prepended to this value, so passing v0.6.1 yields
+          # "vv0.6.1" on the page, and `site check`'s provenance gate refuses it:
+          # that gate admits a version token matching ^v?\d+(\.\d+)*$ and nothing
+          # else. Measured both ways against a binary built from main — bare
+          # passes every gate, v-prefixed fails two.
+          #
+          # No --date. Its default is the newest dated CHANGELOG heading read from
+          # the TAG this job checked out, which is this release's own date, derived
+          # once by the binary. Injecting a second copy — from the Release's
+          # publishedAt, say — would let the site's stamp disagree with the
+          # CHANGELOG the release was cut from (adr-37 makes that heading the
+          # release date), and there is no third source to break the tie.
+          ./abcd site build --out site \
+            --version "${TAG#v}" \
+            --commit "$commit"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -454,7 +469,6 @@ jobs:
         # The provenance audit: unsourced text, docs-lint over rendered prose, CLI
         # snippet drift, the cross-reference ratchet, the mobile audit (adr-47 3). It
         # runs AFTER the docs build so it sees the whole tree that will be deployed.
-        # DEPENDENCY: same sibling slice as the render step above.
         run: |
           set -euo pipefail
           # The root-listing probe again; see the render step above for why neither
@@ -463,7 +477,7 @@ jobs:
             echo "::error::this binary has no site verb (released before the site slice); refusing — see PR #421"
             exit 1
           }
-          ./abcd site check
+          ./abcd site check --out site
 
       - name: Re-check that the release is still not a pre-release
         # `resolve` read this state minutes ago and the render is slow. A maintainer
@@ -716,13 +730,25 @@ jobs:
       - name: Build the binary from source
         run: go build -o ./abcd ./cmd/abcd
 
-      - name: Render the site with the unreleased build stamp
-        # No --tag: the stamp carries the commit alone, which is what makes the
-        # generator render the "unreleased — main@<short sha>" label from its own
-        # interface strings (adr-48 3). The workflow writes no site text — under
-        # adr-47's single-source rule it may pass numbers and shas, never prose.
-        # DEPENDENCY: the `abcd site` verb family is not in the binary yet; see the
-        # render job's build step for the full note.
+      - name: Render the site from the pushed commit
+        # UNMET REQUIREMENT, recorded here rather than papered over. adr-48 3 wants
+        # this preview to carry an "unreleased — main@<short sha>" label, and the
+        # merged generator cannot express one. `--version` is free text, but the
+        # page renders the stamp as "v" + that value and `site check`'s provenance
+        # gate admits only a token matching ^v?\d+(\.\d+)*$ — so `unreleased`,
+        # `0.6.1-unreleased`, `0.6.1+main` and `0.6.1-main.<sha>` were each measured
+        # against a main-built binary and each fails the gate with 2 findings.
+        #
+        # So the stamp carries the COMMIT, which is the half of the label that does
+        # work: the footer names the exact main commit, which is never a release
+        # commit. The version half falls back to the newest CHANGELOG heading, and
+        # that is the honest gap — a preview built from main says it is the last
+        # release. Closing it belongs in internal/core/site (let the gate accept an
+        # injected stamp verbatim, or render an unreleased word from ui.json), not
+        # in a workflow that can only pass strings the gate already refuses.
+        #
+        # Deliberately NOT worked around by dropping the check step: a preview that
+        # skipped the gates would stop being a preview of anything.
         run: |
           set -euo pipefail
           # Probe before use, as in `render` — same root-listing grep, and see that
@@ -752,7 +778,6 @@ jobs:
       - name: Check the rendered site
         # The preview is held to the same provenance and mobile gates as production —
         # a preview that skipped them would stop being a preview of anything.
-        # DEPENDENCY: as above.
         run: |
           set -euo pipefail
           # The root-listing probe again; see the render job for the full note.
@@ -760,7 +785,7 @@ jobs:
             echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
             exit 1
           }
-          ./abcd site check
+          ./abcd site check --out site
 
       - name: Upload a non-production Worker version
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
