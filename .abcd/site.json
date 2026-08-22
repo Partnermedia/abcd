@@ -58,6 +58,9 @@
       }
     ]
   },
+  "record": {
+    "issue_ledger": true
+  },
   "docs": {
     "index": "docs/README.md",
     "cli": "docs/reference/cli/commands.md"

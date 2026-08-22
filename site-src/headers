@@ -1,0 +1,7 @@
+# Source of the Cloudflare _headers file. Landed as data; nothing copies it
+# into the built site yet — the site build that emits it is a later slice.
+#
+# /install.sh is read before it is run, so it is served as text, never as a
+# download.
+/install.sh
+  Content-Type: text/plain; charset=utf-8
