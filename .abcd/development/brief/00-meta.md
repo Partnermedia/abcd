@@ -2,6 +2,20 @@
 
 This file holds **stable conventions** for the brief itself: directory structure, file-naming rules, and the brief↔lifeboat shape contract. The brief reflects the project's *current* state at all times — not versioned, not archived in this directory; see [adr-5](../decisions/adrs/0005-brief-is-current-state.md). History lives in `git log`; inflection-point rationale lives in [`../decisions/adrs/`](../decisions/adrs).
 
+## The truth rule
+
+Everything in the brief is decided. A section may describe machinery that is
+**shipped** or machinery that is **staged** — a design target a future change
+builds toward — but never an undecided option: the brief records no proposals,
+no alternatives still under consideration, no aspirational maybes. The only
+variance a reader must resolve is shipped vs staged, and a staged claim says so
+explicitly. Unsettled questions live in
+[`03-evidence/03-open-questions.md`](03-evidence/03-open-questions.md) *as
+questions*, never as claims. This follows from
+[adr-5](../decisions/adrs/0005-brief-is-current-state.md): the brief is the
+project's current state, and that state includes what the project has decided
+to build but not yet built.
+
 ## Directory structure
 
 The brief is split across numbered folders rather than a single `README.md`. Reasons:
@@ -21,7 +35,7 @@ The brief is split across numbered folders rather than a single `README.md`. Rea
 
 The brief skeleton is, deliberately, the same shape as a populated lifeboat (see [`04-surfaces/02-disembark.md § 5`](04-surfaces/02-disembark.md#5-output-shape)). This is a design contract:
 
-- **`/abcd:ahoy`** copies an empty version of this skeleton into a fresh repo (so a human fills it in).
+- **`/abcd:ahoy`** scaffolds a managed repo's config (`.abcd/config.json` + `.abcd/rules.json` — see [`04-surfaces/01-ahoy.md`](04-surfaces/01-ahoy.md)), never this skeleton. The **design target** (staged, not shipped) for a fresh repo is the **all-blank coverage state**: every section of this skeleton present as a blank to be filled deliberately, measured by the same three-valued coverage accounting a lifeboat reports (`grounded` / `partial` / `blank`) — not a copied file tree.
 - **`/abcd:disembark`** uses this skeleton's *shape* as a target schema for what lifeboat-composer agents must produce.
 - **`/abcd:embark`** reads a lifeboat (which is structurally a populated brief + audit/provenance extras) and writes a new repo's brief by walking the brief↔lifeboat mapping in reverse — the amended press release becomes the new repo's initial brief.
 
