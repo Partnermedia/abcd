@@ -361,9 +361,21 @@ jobs:
           set -euo pipefail
           # Probe before use. Every tag released before the site slice carries a binary
           # with no `site` verb, and a dispatch can name any tag: without this the job
-          # dies on an unknown-command error two steps into a render. One line, naming
-          # the actual cause.
-          ./abcd site --help >/dev/null 2>&1 || {
+          # dies on a cobra usage dump several steps into a render, reporting the
+          # symptom rather than the cause.
+          #
+          # Grep the ROOT COMMAND LISTING, and note what does not work, because three
+          # obvious probes are silently useless here:
+          #   `abcd site --help`        exit 0 — cobra's root command consumes --help
+          #   `abcd site build --help`  exit 0   before subcommand resolution fails, so
+          #   `abcd help site`          exit 0   all three print the ROOT help and pass
+          #                                      on a binary with no site verb at all.
+          # A bare `abcd site` does exit 2 today, but it would EXECUTE the verb once
+          # the verb exists, so it is not a probe either. The listing is the public
+          # surface, costs nothing, has no side effects, and names `site` exactly when
+          # the verb is registered. Verified in both directions against a binary built
+          # before the site slice.
+          ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (released before the site slice); refusing — see PR #421"
             exit 1
           }
@@ -398,7 +410,9 @@ jobs:
         # DEPENDENCY: same sibling slice as the render step above.
         run: |
           set -euo pipefail
-          ./abcd site --help >/dev/null 2>&1 || {
+          # The root-listing probe again; see the render step above for why neither
+          # `abcd site --help` nor `abcd site build --help` can serve as one.
+          ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (released before the site slice); refusing — see PR #421"
             exit 1
           }
@@ -588,10 +602,11 @@ jobs:
         # render job's build step for the full note.
         run: |
           set -euo pipefail
-          # Probe before use, as in `render`. Here it catches the window between this
-          # workflow merging and the site slice merging, when main itself builds a
-          # binary with no site verb.
-          ./abcd site --help >/dev/null 2>&1 || {
+          # Probe before use, as in the render job — same root-listing grep, and see
+          # that step for why the obvious `--help` forms all pass on a verb-less
+          # binary. Here it catches the window between this workflow merging and the
+          # site slice merging, when main itself builds a binary with no site verb.
+          ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
             exit 1
           }
@@ -617,7 +632,8 @@ jobs:
         # DEPENDENCY: as above.
         run: |
           set -euo pipefail
-          ./abcd site --help >/dev/null 2>&1 || {
+          # The root-listing probe again; see the render job for the full note.
+          ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
             exit 1
           }
