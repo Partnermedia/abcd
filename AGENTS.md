@@ -119,6 +119,22 @@ irreversible; guessing downward costs nothing.**
 - **Never commit or push without being asked.** Substantive work goes on a branch
   and PR; new dependencies need explicit sign-off before `go get`.
 
+## Concurrent sessions
+
+- **The checkout is the unit of isolation, not the branch.** A second
+  concurrent agent session works in its own `git worktree`: one checkout has
+  one working tree, one HEAD, and one index, and a branch switch swaps all
+  three under whoever else is using them. The lint gates read the whole tree,
+  so foreign work-in-progress fails them in both directions.
+- **Scan before mutating git state.** Before a commit, branch switch, stash,
+  or rebase in a checkout that might be shared, check for peer sessions via
+  the harness's session listing, and announce the mutation to any peer found.
+- **A diff you did not make is a peer's work.** Never commit it, revert it,
+  or stash it away silently — coordinate with the session that made it;
+  uncommitted peer work is untouchable. (Mechanical presence detection is
+  seeded as iss-2608220750029993; until it ships, this convention is the
+  gate.)
+
 ## Definition of done
 
 - `make preflight` is clean — the three lint gates (`lint-reviews`,
