@@ -47,8 +47,8 @@ transition; any change to the bare board.
 - `spc-N` — the spec store (`open/closed`), plus its linked intent's ready
   state for the open-spec next move.
 - `adr-N` — filename/front-matter probe over `decisions/adrs/` (files are
-  `NNNN-slug.md` with `id: adr-N` frontmatter; probe by zero-padded prefix
-  `%04d-`, confirm via the frontmatter id).
+  `NNNN-slug.md` with `id: adr-N` frontmatter; probe by the filename's numeric
+  ordinal, padding-agnostic, confirm via the frontmatter id).
 
 **Description shape.** `Description{ID, Family, Title, Status, Path string,
 Links map[string]string, NextMoves []string}` — links carry `spec_id` /
