@@ -396,10 +396,10 @@ func TestBuildPurgesItsOwnOutput(t *testing.T) {
 // TestBuildRefusesADirectoryItDidNotWrite is the other half, and the reason the
 // purge is safe to have at all.
 //
-// Emptying a directory is not an operation to perform on a guess. `--out-dir`
-// takes a path from a person, and the paths people mistype are their own — a
-// source tree, a home directory, the repository root. So the build removes
-// nothing it cannot first prove it wrote, and says so rather than proceeding.
+// Emptying a directory is not an operation to perform on a guess. `--out` takes
+// a path from a person, and the paths people mistype are their own — a source
+// tree, a home directory, the repository root. So the build removes nothing it
+// cannot first prove it wrote, and says so rather than proceeding.
 func TestBuildRefusesADirectoryItDidNotWrite(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
@@ -413,7 +413,7 @@ func TestBuildRefusesADirectoryItDidNotWrite(t *testing.T) {
 	if err == nil {
 		t.Fatal("the build emptied a directory it had never written")
 	}
-	for _, want := range []string{"not written by", "refusing"} {
+	for _, want := range []string{"cannot tell it apart", "refusing"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not say %q: %v", want, err)
 		}

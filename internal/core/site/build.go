@@ -95,12 +95,16 @@ func inspectOutDir(outDir string) (outDirState, error) {
 	}
 }
 
-// errForeignOutDir is the refusal. It names the directory, says why it stopped
-// and says what would make it proceed, because the reader is looking at a build
-// that did nothing and the useful question is which of the two mistakes they
-// made: the wrong path, or a directory whose marker has been removed.
+// errForeignOutDir is the refusal. It names the directory, says why it stopped,
+// and says what would make it proceed — because the reader is looking at a build
+// that did nothing, and the useful question is which case they are in.
+//
+// There are three, and the third is the one worth spelling out: a tree left by a
+// build from before the marker existed is genuinely ours, and neither "use an
+// empty directory" nor "use one an earlier build wrote" tells that reader
+// anything they can act on. Emptying it themselves does.
 func errForeignOutDir(outDir string) error {
-	return fmt.Errorf("site: %s is not empty and was not written by `abcd site build` (it holds no %s); refusing to remove it — build into an empty directory, or one an earlier build wrote",
+	return fmt.Errorf("site: %s is not empty and holds no %s, so this build cannot tell it apart from a directory it did not write; refusing to remove it — point --out at an empty directory, or empty this one yourself if it is an old build's output",
 		outDir, siteMarkerName)
 }
 
