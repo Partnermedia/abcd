@@ -51,12 +51,38 @@ abcd site build              # render into ./site
 abcd site build --out DIR    # render into DIR
 ```
 
-`build` reads the composition manifest, the interface-string allowlist, the
-record (through the record-lint engine's own scan — one parser, not a second),
-one `git log --reverse --name-status` pass, and `CHANGELOG.md`. It writes
-`index.html`, `record.json`, the `_redirects` and `_headers` maps, the
+`build` reads, and reads nothing else:
+
+| Input | What it supplies |
+|---|---|
+| `.abcd/site.json` | the composition: which span of which file becomes which block |
+| `site-src/ui.json` | the closed allowlist of words the generator may add |
+| `.abcd/record-lint.json` | where the record stores are, so the graph scan finds them |
+| `.abcd/site-baseline.json` | the unresolved-reference ratchet the health block counts against (the path is `checks.unresolved_reference_baseline`'s, defaulting to this one) |
+| `.abcd/development/**`, `.abcd/work/issues/**` | the record itself, through the record-lint engine's own scan — one parser, not a second |
+| git history | one `git log --reverse --name-status --diff-merges=first-parent` pass, plus `shortlog` and the `Assisted-by:` trailers |
+| `CHANGELOG.md` | the dated release headings |
+| `docs/**` | the composed pages and their committed assets |
+| `site-src/{site.css,site.js,redirects,headers}` | the static inputs copied into the output tree |
+| `.claude-plugin/plugin.json` | the package's forge URL, licence and author, for links and the footer |
+
+It writes `index.html`, `record.json`, the `_redirects` and `_headers` maps, the
 stylesheet and script, and every referenced raster. Nothing else, nowhere else,
 and no network at any point.
+
+Two of those inputs are **declared deviations** from itd-140's generic-side
+input contract, and are recorded here rather than argued away.
+`.claude-plugin/plugin.json` is this repository's package manifest; a repo
+without one renders without the forge links and the copyright line rather than
+failing. `.abcd/site-baseline.json` is per-repo site configuration, and
+`record.json`'s `health` block counts against it — which is the same opt-in
+shape as `.abcd/site.json` itself, and the reason it is acceptable: the record
+DATA proper stays record-format plus git plus `CHANGELOG.md`, and only the
+health measurement consults a configured ratchet.
+
+The rendered `<title>` and `<meta name="description">` carry Identity-block text
+without a `data-src` attribute, because neither element can hold visible text a
+provenance walk would reach. `abcd site check` special-cases both.
 
 The render is **deterministic**: sorted inputs, a fixed layout seed, coordinates
 published at the precision the chart draws them, and no clock read beyond the

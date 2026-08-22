@@ -9,6 +9,15 @@
  * var(--token, fallback), so the artwork follows the theme with the type.
  */
 
+/* Some rules here are not exercised by the landing page: the `[data-theme]`
+ * blocks (nothing on this page sets the attribute — system preference is what
+ * decides today), `.sr`, and `.on`. They are the lifted prototype's theme and
+ * state system, and they are kept DEFERRED for the record-explorer slice, which
+ * ships the theme toggle, the screen-reader-only labels and the active-nav
+ * state that use them. The convention mirrors the manifest's: a thing carried
+ * for a named later consumer says so, rather than looking like dead code.
+ */
+
 /* ---------- tokens ---------- */
 :root{
   --ground:#f2f4f7; --surface:#ffffff; --surface-2:#e9edf3; --ink:#161a22; --ink-2:#4b5260; --ink-3:#7d8594;

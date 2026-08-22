@@ -43,11 +43,23 @@ nothing and exits `0` whatever it finds.
 "${CLAUDE_PLUGIN_ROOT}/abcd" site build --out site
 ```
 
-reads the manifest, the allowlist, the record, git history and `CHANGELOG.md`,
-and writes the landing page, the record export, the redirect and header maps,
-the stylesheet, the script, and every referenced raster into the output
-directory — and nowhere else. It reaches no network. The default output
-directory is `site`, which the repository does not track.
+reads exactly this set — `.abcd/site.json`, `site-src/ui.json`,
+`.abcd/record-lint.json` (where the record stores are), the record under
+`.abcd/development/` and the opted-in issue ledger, git history,
+`CHANGELOG.md`, the composed pages and assets under `docs/`, the static inputs
+`site-src/{site.css,site.js,redirects,headers}`, `.abcd/site-baseline.json`
+(the ratchet the health block counts against), and `.claude-plugin/plugin.json`
+(the forge URL, licence and author the links and footer use) — and writes the
+landing page, the record export, the redirect and header maps, the stylesheet,
+the script, and every referenced raster into the output directory, and nowhere
+else. It reaches no network. The default output directory is `site`, which the
+repository does not track.
+
+The last two are declared deviations from the generic input contract: a repo
+without a package manifest renders without the forge links rather than failing,
+and the baseline is per-repo site configuration on the same opt-in footing as
+`.abcd/site.json` itself — the record data proper stays record-format, git and
+`CHANGELOG.md`.
 
 Three flags exist so a release build can pin what the footer says rather than
 reading it from the working tree: `--version`, `--commit` and `--date`. Left
