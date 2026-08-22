@@ -137,10 +137,10 @@ type Figure struct {
 	Kind string `json:"kind"`
 	// LabelsFromPage asks that every label in the figure be a phrase on the page
 	// it illustrates, so a diagram cannot drift from the prose beside it.
-	// DEFERRED: consumed by `abcd site check` (spc-37's loop-figure assertion,
-	// ported from the script's closing check). Validated here — it is meaningless
-	// without a figure to check — so a manifest that asks for it and names no
-	// figure is refused today rather than ignored until the check lands.
+	// CONSUMED by `abcd site check`'s loop-figure gate (spc-37, ported from the
+	// script's closing check). Validated here too — it is meaningless without a
+	// figure to check — so a manifest that asks for it and names no figure is
+	// refused at load rather than at render.
 	LabelsFromPage bool `json:"labels-from-page,omitempty"`
 }
 

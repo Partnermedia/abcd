@@ -706,6 +706,18 @@ Render the site into the output directory (writes nothing outside it)
       --version string   version for the footer and the build stamp (default: the newest dated CHANGELOG heading)
 ```
 
+#### `abcd site check`
+
+Gate the built site: provenance, hero drift, banned tokens, snippets, the reference ratchet, mobile and figure labels
+
+**Usage:** `abcd site check [flags]`
+
+**Flags:**
+
+```
+      --out string   built output directory to check (rendered first if absent) (default "site")
+```
+
 ### `abcd spec`
 
 Native spec store; bare invocation is read-only status
