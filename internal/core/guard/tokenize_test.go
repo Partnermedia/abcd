@@ -246,6 +246,16 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:git|push|--force|origin|main"},
 		},
 		{
+			name: "ansi-c quoting decodes short unicode escapes",
+			line: `git push $'\u002d\u002dforce' origin main`,
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "ansi-c quoting decodes long unicode escapes",
+			line: `git push $'\U0000002d\U0000002dforce' origin main`,
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
 			name: "ansi-c quoting glued to a word joins it",
 			line: "gh repo$'' delete owner/repo",
 			want: []string{"0:gh|repo|delete|owner/repo"},

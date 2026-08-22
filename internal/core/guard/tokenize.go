@@ -3,6 +3,7 @@ package guard
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // segment is one command in command position: the tokens of a single simple
@@ -349,6 +350,40 @@ func decodeAnsiCEscape(line string, p int) ([]byte, int) {
 			n++
 		}
 		return []byte{byte(val)}, p + n
+	case 'u', 'U':
+		// bash \uHHHH (up to 4 hex) and \UHHHHHHHH (up to 8 hex): a Unicode code
+		// point, UTF-8 encoded. Without these an ASCII hazard spelled as
+		// `$'--force'` decoded to --force in the shell but not here, so a
+		// Tier-1 blocker missed on the same bytes the \x and octal forms already
+		// close.
+		width := 4
+		if c == 'U' {
+			width = 8
+		}
+		val, n := 0, 0
+		for j := p + 1; j < len(line) && n < width && isHexDigit(line[j]); j++ {
+			val = val*16 + hexValue(line[j])
+			n++
+		}
+		if n == 0 {
+			return []byte{c}, p + 1
+		}
+		r := rune(val)
+		if !utf8.ValidRune(r) {
+			r = utf8.RuneError
+		}
+		return utf8.AppendRune(nil, r), p + 1 + n
+	case 'c':
+		// bash \cX: the control character for X (X with bit 6 cleared, uppercased).
+		// `\c` at end of string is left literal.
+		if p+1 >= len(line) {
+			return []byte{c}, p + 1
+		}
+		x := line[p+1]
+		if x >= 'a' && x <= 'z' {
+			x -= 'a' - 'A'
+		}
+		return []byte{x & 0x1f}, p + 2
 	default:
 		return []byte{'\\', c}, p + 1
 	}
