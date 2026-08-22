@@ -1,16 +1,34 @@
 {
-  // Assets-only worker serving the generated docs site: no script, just the
-  // static output of `mkdocs build` (see mkdocs.yml). The name matches the
-  // host's existing project for this repository. The build commands live in
-  // the host project's settings (dashboard state, recorded here because the
-  // tree is the only durable record):
+  // Assets-only worker serving the generated site: no script, just the static
+  // output of the site build and `mkdocs build` (see mkdocs.yml). The name
+  // matches the host's existing project for this repository.
+  //
+  // Deploys come from GitHub Actions with wrangler, not from the host
+  // (adr-48). The host project's automatic builds are turned OFF — a manual
+  // dashboard setting, recorded here because the tree is the only durable
+  // record:
+  //   automatic production builds:  disabled
+  //   automatic branch builds:      disabled
+  // Actions is the only thing that deploys this Worker, so the dashboard's own
+  // build, deploy and version commands are inert. They are kept below as the
+  // record of what the dashboard ran before the switch, and as the shape any
+  // by-hand deploy has to reproduce:
   //   build command:   pip install -r docs/requirements.txt && mkdocs build
   //   deploy command:  npx wrangler deploy
   //   version command: pip install -r docs/requirements.txt && mkdocs build && npx wrangler versions upload
   // The version command repeats the build DELIBERATELY: non-production branch
-  // builds run the version command without the build command (observed
-  // 2026-08-19 across four builds), so it must be self-contained or every
-  // branch preview fails on a missing ./site.
+  // builds ran the version command without the build command (observed
+  // 2026-08-19 across four builds), so it had to be self-contained or every
+  // branch preview failed on a missing ./site.
+  //
+  // What Actions runs instead (.github/workflows/site.yml):
+  //   production — on the release chain, from the tag, rendered by the released
+  //     checksum-verified binary; `wrangler deploy`, which is what asserts the
+  //     routes below.
+  //   preview — on every push to main, rendered from source with an
+  //     "unreleased" build stamp; `wrangler versions upload`, which publishes a
+  //     version and assigns it no production traffic, so a preview can never
+  //     take the abcdev.app route.
   "name": "abcd",
   "compatibility_date": "2026-08-19",
   // The site's domain is committed config, not dashboard state: the deploy
