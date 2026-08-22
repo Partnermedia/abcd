@@ -81,11 +81,12 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-108` — The plugin installs from the curated release artifact, not the repo, and every cut release reaches users automatically
 - `itd-109` — Acceptance criteria verify themselves; the manual rest renders for a human (`abcd verify`, sha-keyed receipts)
 - `itd-110` — The grill interview renders with clear structure and colour
-- `itd-112` — Generated ferry-style CLI banner from the identity block, for abcd and managed CLIs
 - `itd-113` — The MCP front door opens — abcd's core verbs from any MCP-capable harness (the [adr-39](../../decisions/adrs/0039-host-tier-policy.md) universal floor)
 - `itd-115` — A ready PR merges without ever wedging BEHIND (managed-repo merge queue by default, rung-1 auto-update fallback, strict preserved)
 - `itd-116` — Validated GitHub issues become ledger entries without retyping (capture extension adopts externally filed findings with provenance; mint stays capture-only)
 - `itd-118` — Merged work leaves no residue (post-merge complement of itd-115: delete the PR branch on merge, tidy the stale local branch, tracking ref, and worktree)
+- `itd-134` — Managed-repo banner generator: a managed CLI in any language opens with its own identity, rendered from its identity block (split from itd-112)
+- `itd-139` — The generic record explorer demonstrated on a second, sparse managed instance (held in drafts until the itd-140 fixture gate can be met; carries the reframed generalisation verdict)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

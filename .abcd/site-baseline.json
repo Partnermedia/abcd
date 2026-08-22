@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "unresolved_references": [
+    {"from": "adr-22", "to": "adr-14"},
+    {"from": "adr-22", "to": "adr-15"},
+    {"from": "adr-22", "to": "adr-17"},
+    {"from": "adr-25", "to": "adr-8"},
+    {"from": "adr-27", "to": "adr-16"},
+    {"from": "adr-28", "to": "adr-18"},
+    {"from": "adr-35", "to": "adr-4"},
+    {"from": "itd-3", "to": "spc-1"}
+  ]
+}

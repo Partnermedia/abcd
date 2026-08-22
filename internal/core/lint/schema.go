@@ -66,6 +66,16 @@ var (
 	recordRefFields = []string{"related_adrs", "related_intents", "builds_on", "blocked_by"}
 	// Every field the rule reads handles out of, so the scan parses each once.
 	recordHandleFields = append([]string{"supersedes", "superseded_by"}, recordRefFields...)
+	// recordGraphFields are cross-reference fields the record carries that this
+	// rule does not judge — the intent↔spec pair, whose resolution is the spec
+	// store's own rule — but which the exported record graph (graph.go) must
+	// carry, because they are half the record's typed links. They are parsed by
+	// the same scan so the graph never needs a second parser: reading them here
+	// costs one regexp pass per record and adds no finding.
+	recordGraphFields = []string{"spec_id", "intent"}
+	// recordParsedFields is every field the scan reads handles out of, in a fixed
+	// order so the graph export is deterministic.
+	recordParsedFields = append(append([]string{}, recordHandleFields...), recordGraphFields...)
 )
 
 // recordStore describes one identified record store: where the buckets are, and
@@ -75,6 +85,10 @@ type recordStore struct {
 	prefix string
 	// noun names the record kind in a finding message.
 	noun string
+	// nodeType is the store's name in the exported record graph (graph.go). It
+	// is the store's identity spelled for a consumer rather than for a message,
+	// and it lives here so the graph never re-declares which prefixes exist.
+	nodeType string
 	// buckets are the lifecycle directories the store declares. A nil buckets is
 	// a FLAT store (the ADR store): records sit directly in it.
 	buckets []string
@@ -88,10 +102,10 @@ type recordStore struct {
 // config: which lifecycle states exist is the record's schema, and a config that
 // could add a bucket could also hide one.
 var recordStores = []recordStore{
-	{prefix: "adr", noun: "ADR", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md"},
-	{prefix: "itd", noun: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, filename: "itd-<N>-<slug>.md"},
-	{prefix: "spc", noun: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, filename: "spc-<N>-<slug>.md"},
-	{prefix: "iss", noun: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, filename: "iss-<N>-<slug>.md"},
+	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md"},
+	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, filename: "itd-<N>-<slug>.md"},
+	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, filename: "spc-<N>-<slug>.md"},
+	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, filename: "iss-<N>-<slug>.md"},
 }
 
 // schemaRecord is one record file as the schema rule sees it: which store and
@@ -101,6 +115,11 @@ type schemaRecord struct {
 	store  recordStore
 	num    int
 	bucket string
+	// title is the record's H1, or — for a store whose records carry none, the
+	// issue ledger — its first body line. The schema rule never reads it; it is
+	// read here because the scan already holds the file's lines, and the record
+	// graph (graph.go) would otherwise have to open every record a second time.
+	title  string
 	fields map[string]fmField
 	// refs holds the handles read out of each cross-reference field, parsed once
 	// at scan time so the block-sequence spelling is read in ONE place. Reading
@@ -366,6 +385,7 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					store:  store,
 					num:    num,
 					bucket: bucket,
+					title:  recordTitle(lines),
 					fields: fields,
 					refs:   recordRefsOf(lines, fields),
 				})
@@ -457,8 +477,8 @@ func isAbsentValue(value string) bool {
 // false statement about a record the reader then has to go and disprove. So the
 // block form is folded in at the one place the handles are parsed.
 func recordRefsOf(lines []string, fields map[string]fmField) map[string][]recordRef {
-	refs := make(map[string][]recordRef, len(recordHandleFields))
-	for _, field := range recordHandleFields {
+	refs := make(map[string][]recordRef, len(recordParsedFields))
+	for _, field := range recordParsedFields {
 		f, ok := fields[field]
 		if !ok {
 			continue
@@ -521,6 +541,46 @@ func recordRefsIn(value string) []recordRef {
 		out = append(out, recordRef{prefix: strings.ToLower(m[1]), num: n})
 	}
 	return out
+}
+
+// recordTitle reads a record's human title out of its lines: the first H1, or —
+// for a store whose records carry none, the issue ledger — the first non-blank
+// body line, whitespace-collapsed, which is the same one-line summary the
+// ledger's own promotion path derives. The frontmatter block (and a leading
+// attribution comment before it) is skipped first, so a frontmatter value can
+// never be mistaken for a body line. An empty record yields "", and the caller
+// substitutes the handle.
+func recordTitle(lines []string) string {
+	i := 0
+	for i < len(lines) {
+		t := strings.TrimSpace(lines[i])
+		if t == "" || strings.HasPrefix(t, "<!--") {
+			i++
+			continue
+		}
+		break
+	}
+	if i < len(lines) && strings.TrimSpace(lines[i]) == "---" {
+		i++
+		for i < len(lines) && strings.TrimSpace(lines[i]) != "---" {
+			i++
+		}
+		if i < len(lines) {
+			i++
+		}
+	}
+	first := ""
+	for ; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(lines[i], "# "))
+		}
+		if first == "" {
+			if f := strings.Fields(lines[i]); len(f) > 0 {
+				first = strings.Join(f, " ")
+			}
+		}
+	}
+	return first
 }
 
 // refsContain reports whether a parsed handle set names the given handle.

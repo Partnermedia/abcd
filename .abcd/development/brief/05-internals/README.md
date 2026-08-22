@@ -13,6 +13,7 @@ This directory holds the *plumbing* design for abcd: the agents, adapters, confi
 | 7 | [`07-memory.md`](07-memory.md) | `.abcd/memory/` component — multi-upstream curated knowledge substrate per itd-36; page-class enum; curator role on `principle-distiller`; quotation/licence lints. Karpathy LLM Wiki pattern as prior art. |
 | 8 | [`08-skills.md`](08-skills.md) | Skills-vs-commands boundary: codifies decision criteria for later skill additions. abcd ships zero skills — `/abcd:grill` was originally proposed as one; its **design target** is promotion to `/abcd:intent grill` (mid-session glossary writes are command-shaped), not a shipped sub-verb. |
 | 9 | [`09-provenance-substrate.md`](09-provenance-substrate.md) | Provenance/licence subsystem (used by both itd-36 memory ingest and itd-26 loot OSS-vendor). Licence detection (SPDX), citation generation, source-hash registry, restrictive-licence publish gate (lifeboat consumer, future/inert at launch — adr-18). Separable spec; pulled forward alongside itd-36. |
+| 10 | [`10-site.md`](10-site.md) | The website as a rendered surface of the record (adr-47/adr-48): `abcd site build` and the `record.json` export, the single-source rule, the README migration, the generic/specific boundary (itd-140). The `check` gates, the explorer pages and the deploy workflow are **design targets** marked on the page. |
 
 ## Policy: no skeleton enforcement (deferred)
 

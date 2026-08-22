@@ -1,0 +1,13 @@
+# Source of the Cloudflare _redirects file. `abcd site build` copies it into the
+# output tree as `_redirects`, comments and all.
+#
+# Every published docs path 301s to its home under /docs/, so no URL that has
+# been shared breaks when the docs move off the root. / is absent on purpose:
+# adr-47 gives the site root to the landing page.
+/reference/               /docs/reference/              301
+/reference/terminology/   /docs/reference/terminology/  301
+/reference/cli/           /docs/reference/cli/          301
+/reference/cli/commands/  /docs/reference/cli/commands/ 301
+/tutorials/               /docs/tutorials/              301
+/how-to/                  /docs/how-to/                 301
+/explanation/             /docs/explanation/            301

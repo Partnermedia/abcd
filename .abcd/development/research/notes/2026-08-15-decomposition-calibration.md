@@ -534,3 +534,117 @@ Per hand-run, append:
   iss-2608210934566226/227 before planning). Counts as a graded sample:
   routing prediction correct; shape prediction wrong. Planned same session
   as itd-132/spc-35.
+
+### 2026-08-21 — the visual-identity proposal (itd-133)
+
+- **Proposal:** one visual identity for abcd — a block-pixel duckling mascot,
+  an official logo spelling a-b-c-d in true maritime signal flags, and
+  lifeboat art scoped to the lifeboat verbs — rendered on any CLI and as
+  HTML/SVG (forge README and web). Live session; the artwork was iterated
+  interactively before filing.
+- **Initial routing:** three parts — the identity assets and their
+  multi-surface rendering (capability | this intent, filed as itd-133); the
+  pixel-grid single source of truth with ANSI/SVG generators (plumbing |
+  spec body at planning); the role assignment duckling=mascot /
+  flags=logo / lifeboat=lifeboat-verbs (intent content, not a separate
+  record). Typed link: itd-133 `refines` itd-112 — the banner draft
+  explicitly leaves its "small colour logo — an obvious object" open, and
+  this supplies it. No reversal flags.
+- **Confirmed routing:** adopted unchanged — the maintainer directed the
+  filing ("record it as an intent") after choosing the three assets
+  in-session.
+- **Verdict:** FILE-AS-IS, proposed and confirmed — the initial verdict
+  survived confirmation.
+- **Notes:** first aesthetic/identity capability in the corpus; the
+  stance-shaped part (role assignment) routed *into* the intent rather than
+  to a principle because it is the capability's content, not a standing
+  rule — a data point for the enum's stance boundary. Confirmation preceded
+  the two-reviewer prerequisite (as with itd-132); the planning interview is
+  the final label.
+  **Interview label (2026-08-21, same day):** the two reviews
+  (design/feasibility + record-discipline) overturned the routing in part:
+  the terminal-rendering slice (ANSI, colour detection, fallbacks) was
+  re-routed *out* of itd-133 to itd-112, which already claimed those
+  obligations — so FILE-AS-IS was optimistic; the honest retro-label is
+  SPLIT-at-interview. The role-assignment part additionally graduated to a
+  decision-log entry (the reviewers' RD4: an "official logo" designation
+  needs a durable home beyond the intent), refining the stance-boundary
+  data point above. Typed links held but had to be made machine-visible
+  (frontmatter `related_intents` written; prose-only `refines` was
+  invisible to the lexical pass), and a missed relation to itd-102
+  surfaced. A reversal-adjacent flag the initial table missed: itd-133
+  forecloses itd-112's object-vs-text-logo open question
+  (maintainer-confirmed at interview). Graded: routing prediction partly
+  wrong (scope boundary and one link missed); the interview corrected it.
+  Planned same session.
+### 2026-08-22 — the abcdev.app website proposal
+
+- **Proposal:** "give abcd a website generated from the repository" — the
+  full 2026-08-21 site plan (landing page, record explorer, install.sh,
+  README migration, `site` verb family, deploy pipeline) arriving as one
+  body of investigation.
+- **Initial routing table:** capability — the landing page | intent |
+  itd-135 (umbrella); capability — the record explorer, split further per
+  decompose-before-filing because one press release could not carry both
+  the reading surface and the visual chart | intents | itd-136 (record
+  pages, contributors, references) + itd-137 (relationship chart,
+  genealogy), `builds_on` itd-135; capability — install.sh | intent |
+  itd-138, `builds_on` itd-135; capability (gated) — the generic explorer
+  on a second instance | intent | itd-139, `builds_on` itd-135/136, held
+  in drafts pending its fixture demonstration; trust rules — the
+  single-source rule + the adr-30 amendment ("never bundled, rendered
+  read-only") | ADR | adr-47; trust rule — deploy-from-tag only | ADR |
+  adr-48; stance — the generic/specific boundary (genericity demonstrated,
+  never asserted; working-tier crossing by opt-in) | discipline | itd-140;
+  plumbing — README migration + the `site` verb family | brief |
+  05-internals/10-site.md. Typed links as recorded in the files; no
+  reversal flags (the adr-30 boundary change was routed as an amendment
+  recorded inside adr-47, not a reversal).
+- **Confirmed routing:** the coarse routing (three website intents +
+  plumbing-to-brief + two ADRs) was human-dictated in the facilitation
+  instructions before the run — the label preceded the prediction for
+  those parts. The explorer split (136/137), the discipline, and the gated
+  adoption intent follow the two ideate verdicts
+  (abcdev-site: survives; record-explorer-generalisation: reframed) and
+  await the interview label.
+- **Verdict:** SPLIT (eight parts across four record types), part-confirmed
+  in advance; the session-added parts pending interview confirmation.
+- **Notes:** first hand-run where an ideate reframing minted a discipline
+  (the boundary stance came out of the adversarial leg, not the proposal);
+  the "capability gated on demonstration" part-type (itd-139) is new to
+  the enum — a capability whose filing is confirmed but whose planning is
+  explicitly blocked on evidence.
+
+
+### 2026-08-22 — itd-112 planning interview (post-grill hand-run)
+
+- **Proposal:** itd-112 (the bare-abcd banner), already grilled 2026-08-21
+  (scope split to itd-134 confirmed there), at its planning interview after
+  two adversarial reviews (design/feasibility and record-discipline).
+- **Initial routing:** five parts — the banner capability (this intent);
+  the managed-repo generator (already split to itd-134 at the grill); the
+  emission-discipline trust rules — TTY-only decoration plus the termsafe
+  carve-out, one boundary — (trust rule | one ADR + one brief invariant,
+  adr-49 + invariant 13, not two records); the colour ladder and TTY seam
+  (plumbing, but a shared primitive with a declared second consumer —
+  named in-scope as exported primitives, with itd-110 gaining
+  `builds_on: [itd-112]` rather than minting its own record, per
+  one-canonical-primitive); the identity bake (plumbing | spec). Typed
+  links: itd-112 `builds_on` itd-133, `refines` itd-102; itd-134 carries
+  its own `refines` itd-112 (the coined `refined-by` direction was struck —
+  not in the enum; the corpus records the pair from the child's side).
+- **Confirmed routing:** adopted; the maintainer additionally ruled the
+  slug rename (retire-the-name ban on the old slug) and eight design forks
+  (identity baked at build time; half-blocks on a painted panel; five-row
+  shade-block mono; tagline-below layout; truecolor rung + pinned tables;
+  root-local --no-color; dev-build version render; Windows scoped out by
+  the release matrix).
+- **Verdict:** SPLIT overall (the generator half left at the grill; the
+  trust rules left at the interview) — proposed and confirmed in stages
+  across the two sessions.
+- **Notes:** first hand-run where the reviews moved parts the grill had
+  already settled *in prose* into their record homes — evidence for the
+  "grill settles, interview routes" division of labour. The
+  shared-primitive part (colour ladder) deliberately did NOT get its own
+  record: no user moment, so the routing is an in-scope export plus a
+  dependency edge — a taxonomy data point for plumbing-with-two-consumers.

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "purpose": "Composition manifest for abcdev.app. It names WHERE each block of the site comes from; it carries no prose. Every sentence the site renders is a span of a file in this repository, selected by path and heading.",
+  "identity": {
+    "file": ".abcd/development/brief/01-product/README.md",
+    "heading": "Identity (canonical)"
+  },
+  "ui_strings": "site-src/ui.json",
+  "home": {
+    "hero": {
+      "page": "docs/explanation/rationale.md",
+      "figure": "first-image"
+    },
+    "chapters": [
+      {
+        "letter": "a",
+        "page": "docs/explanation/roles.md",
+        "layout": "cards-from-h2"
+      },
+      {
+        "letter": "b",
+        "page": "docs/explanation/artefacts.md",
+        "layout": "lead-in-cards",
+        "feature": {
+          "kind": "shipped-intent-press-release",
+          "pick": "newest-with-audit-MET",
+          "parts": [
+            "press-release",
+            "first-acceptance-criterion"
+          ]
+        },
+        "icons": "image-before-lead-in",
+        "table_portraits": "roles"
+      },
+      {
+        "letter": "c",
+        "page": "docs/explanation/process.md",
+        "layout": "prose",
+        "figure": {
+          "kind": "first-image",
+          "labels-from-page": true
+        }
+      },
+      {
+        "letter": "d",
+        "page": "docs/how-to/install.md",
+        "layout": "install",
+        "lead": "CLI",
+        "release": {
+          "from": "CHANGELOG.md",
+          "assets": "release.yml"
+        },
+        "after": "Afterwards",
+        "tabs": "left-h2s, then lead-h3s and remaining-h2s as a labelled group",
+        "left": [
+          "Plugin"
+        ]
+      }
+    ]
+  },
+  "record": {
+    "issue_ledger": true
+  },
+  "docs": {
+    "index": "docs/README.md",
+    "cli": "docs/reference/cli/commands.md"
+  },
+  "record_pages": {
+    "contributors": {
+      "policy": {
+        "file": "CONTRIBUTING.md",
+        "heading": "AI assistance and authorship",
+        "part": "first-bullet"
+      }
+    }
+  },
+  "checks": {
+    "every_text_node_has_source": true,
+    "docs_lint_on_rendered_text": true,
+    "command_snippets_pinned_to_cli_reference": true,
+    "unresolved_reference_baseline": ".abcd/site-baseline.json"
+  }
+}

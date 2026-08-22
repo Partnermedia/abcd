@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" width="320" height="220">
+<title>abcd lifeboat</title>
+<rect width="320" height="220" rx="24" fill="#1c1f26"/>
+<g shape-rendering="crispEdges">
+<rect x="150" y="30" width="20" height="20" fill="#9aa0a8"/>
+<rect x="150" y="50" width="20" height="20" fill="#9aa0a8"/>
+<rect x="170" y="50" width="20" height="20" fill="#e8e8e8"/>
+<rect x="190" y="50" width="20" height="20" fill="#e8e8e8"/>
+<rect x="150" y="70" width="20" height="20" fill="#9aa0a8"/>
+<rect x="170" y="70" width="20" height="20" fill="#e8e8e8"/>
+<rect x="190" y="70" width="20" height="20" fill="#e8e8e8"/>
+<rect x="210" y="70" width="20" height="20" fill="#e8e8e8"/>
+<rect x="150" y="90" width="20" height="20" fill="#9aa0a8"/>
+<rect x="170" y="90" width="20" height="20" fill="#e8e8e8"/>
+<rect x="190" y="90" width="20" height="20" fill="#e8e8e8"/>
+<rect x="210" y="90" width="20" height="20" fill="#e8e8e8"/>
+<rect x="230" y="90" width="20" height="20" fill="#e8e8e8"/>
+<rect x="150" y="110" width="20" height="20" fill="#9aa0a8"/>
+<rect x="50" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="70" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="90" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="110" y="130" width="20" height="20" fill="#1c1f26"/>
+<rect x="130" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="150" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="170" y="130" width="20" height="20" fill="#1c1f26"/>
+<rect x="190" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="210" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="230" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="250" y="130" width="20" height="20" fill="#d97757"/>
+<rect x="70" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="90" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="110" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="130" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="150" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="170" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="190" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="210" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="230" y="150" width="20" height="20" fill="#d97757"/>
+<rect x="30" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="50" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="70" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="90" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="110" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="130" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="150" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="170" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="190" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="210" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="230" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="250" y="170" width="20" height="20" fill="#2b7a8c"/>
+<rect x="270" y="170" width="20" height="20" fill="#2b7a8c"/>
+</g>
+</svg>
