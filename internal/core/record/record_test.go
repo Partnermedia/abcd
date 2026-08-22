@@ -304,6 +304,35 @@ func TestDescribeADRIDSpellingsAreOneHandle(t *testing.T) {
 	}
 }
 
+// TestDescribeADRFilenameOrdinalIsPaddingAgnostic pins that the dispatch routes
+// by the filename's numeric ordinal, not a fixed %04d prefix: a five-digit or an
+// unpadded ADR filename — both lint-green and citation-resolvable, since those
+// readers compare numerically — must still be found, not reported absent by the
+// one reader that pinned four-digit padding.
+func TestDescribeADRFilenameOrdinalIsPaddingAgnostic(t *testing.T) {
+	for _, tc := range []struct {
+		name, file string
+		ask        string
+	}{
+		{"five-digit", "00099-overpadded.md", "adr-99"},
+		{"unpadded", "77-bare.md", "adr-77"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			id := "adr-" + strings.TrimPrefix(tc.ask, "adr-")
+			write(t, repo, ".abcd/development/decisions/adrs/"+tc.file,
+				"---\nid: "+id+"\nstatus: accepted\n---\n\n# A decision\n")
+			d, err := Describe(repo, tc.ask)
+			if err != nil {
+				t.Fatalf("Describe(%s) over %s: %v", tc.ask, tc.file, err)
+			}
+			if d.ID != tc.ask || d.Status != "accepted" {
+				t.Errorf("resolved wrong: %+v", d)
+			}
+		})
+	}
+}
+
 func TestDescribeUnknownIDFaults(t *testing.T) {
 	repo := t.TempDir()
 	for _, id := range []string{"iss-9", "itd-9", "spc-9", "adr-9"} {

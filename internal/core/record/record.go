@@ -33,6 +33,13 @@ var IDRe = regexp.MustCompile(`^(iss|itd|spc|adr)-[0-9]+$`)
 // its bare canonical spelling, not a different record.
 var adrHandleRe = regexp.MustCompile(`^([A-Za-z]+)-0*([0-9]+)$`)
 
+// adrFileOrdinalRe pulls the leading numeric ordinal off an ADR filename
+// (`NNNN-slug.md`). The dispatch routes by comparing this number to the asked id,
+// not by a fixed %04d prefix, so a differently-padded ADR file — which record-lint
+// and the citation resolver both already accept (they compare numerically) — is
+// not reported absent by the one reader that pinned four-digit padding.
+var adrFileOrdinalRe = regexp.MustCompile(`^([0-9]+)-`)
+
 // adrsRelDir is where decisions live; files are NNNN-slug.md with an id:
 // adr-N frontmatter line.
 const adrsRelDir = ".abcd/development/decisions/adrs"
@@ -279,12 +286,19 @@ func describeADR(repoRoot, id string) (Description, error) {
 	if err != nil {
 		return Description{}, fmt.Errorf("record: %s not found — no decision record store at %s", canonical, adrsRelDir)
 	}
-	prefix := fmt.Sprintf("%04d-", n)
 	for _, e := range entries {
 		// Regular files only: a symlinked directory entry in a hostile clone
 		// must never reach the read (readRecordHead refuses it again with
 		// O_NOFOLLOW — two independent layers).
-		if !e.Type().IsRegular() || !strings.HasPrefix(e.Name(), prefix) || filepath.Ext(e.Name()) != ".md" {
+		if !e.Type().IsRegular() || filepath.Ext(e.Name()) != ".md" {
+			continue
+		}
+		// Route by the filename's numeric ordinal, padding-agnostic.
+		fm := adrFileOrdinalRe.FindStringSubmatch(e.Name())
+		if fm == nil {
+			continue
+		}
+		if fo, err := strconv.Atoi(fm[1]); err != nil || fo != n {
 			continue
 		}
 		rel := filepath.Join(adrsRelDir, e.Name())

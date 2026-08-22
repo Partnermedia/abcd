@@ -135,6 +135,35 @@ func TestDocsLintMissingConfigCleanError(t *testing.T) {
 	}
 }
 
+// TestDocsLintEngineFaultExitsTwo pins that `docs lint` returns exit 2 — "could
+// not be evaluated" — when the engine cannot run (here, a config whose root
+// escapes the repository), the same tri-state code `abcd lint` and record-lint
+// return. Exit 1 is reserved for a blocker finding, so a CI gate keying on >=2
+// must not read a lint that never ran as an ordinary findings-pass.
+func TestDocsLintEngineFaultExitsTwo(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	cfgDir := filepath.Join(repo, ".abcd")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A root that escapes the repository is a containment refusal the engine
+	// raises before it can scan anything — an engine fault, not a finding.
+	if err := os.WriteFile(filepath.Join(cfgDir, "docs-lint.json"),
+		[]byte(`{"roots":["../outside"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"docs", "lint"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("docs lint engine fault exit = %d, want 2\nstderr: %s", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), repo) {
+		t.Errorf("engine fault message leaked the absolute repo path:\n%s", stderr.String())
+	}
+}
+
 // TestCaptureListOpenRendersIssueFields is itd-4 AC5's characterization gate:
 // given five open captures, `capture list --open --json` must return all five,
 // each carrying the id, slug, severity, and a one-line summary (the captured

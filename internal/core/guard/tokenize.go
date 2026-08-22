@@ -222,6 +222,24 @@ func tokenize(line string) ([]segment, error) {
 			}
 			i = skipRedirectTarget(line, opEnd)
 			lastList = false
+		case c == '&' && i+1 < len(line) && line[i+1] == '>':
+			// bash's `&>` / `&>>`: redirect both stdout and stderr. It has to be
+			// recognised BEFORE the list-operator case below, which would read
+			// the leading `&` as a background/`&&` operator and call
+			// flushSegment -- splitting one simple command into two segments and
+			// dropping the command's own dangerous flags out of command
+			// position, so every blocker missed and the verdict was a silent
+			// allow (`git push &>/dev/null --force origin main`). Unlike `>`/`<`,
+			// a digit before `&>` is NOT an fd prefix in bash (`f 2&>x` passes
+			// `2` to `f` and still redirects both streams), so the preceding word
+			// is a real token and is flushed, never dropped.
+			opEnd := i + 2
+			if opEnd < len(line) && line[opEnd] == '>' {
+				opEnd++
+			}
+			flushToken()
+			i = skipRedirectTarget(line, opEnd)
+			lastList = false
 		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {

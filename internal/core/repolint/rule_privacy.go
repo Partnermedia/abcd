@@ -297,8 +297,8 @@ func isUsersRoot(m string) bool {
 // containment guarantee the leaf-only O_NOFOLLOW could not give). O_NONBLOCK
 // makes opening a FIFO or device return immediately rather than block until a
 // writer appears; the regular-file check then skips it before any read. It reads
-// only regular files and never more than maxScanBytes, so a huge or
-// device-backed file cannot exhaust memory. A file that cannot be opened, is not
+// only regular files and never more than one byte past maxScanBytes, so a huge
+// or device-backed file cannot exhaust memory. A file that cannot be opened, is not
 // a regular file, or exceeds the cap is skipped (ok=false), not a scan failure;
 // oversizeText additionally reports that a skipped file is over the cap yet
 // looks textual, so the caller can say "not scanned" instead of staying silent.
@@ -327,11 +327,23 @@ func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText b
 		}
 		return nil, false, !isBinary(probe[:n])
 	}
-	// LimitReader is a belt-and-suspenders cap in case Size understates (a file
-	// growing during the read): never buffer past the cap.
-	data, err = io.ReadAll(io.LimitReader(f, maxScanBytes))
+	return capRead(f)
+}
+
+// capRead reads everything the scan may see from an already-vetted regular
+// file: one byte past the cap, so a file that grew past maxScanBytes between
+// the fstat and the read is detected rather than silently scanned as a
+// truncated prefix and reported clean — a false "scanned" on a privacy control
+// (the same size TOCTOU the caller's fstat branch handles for a file already
+// over the cap). A grown file is refused whole and reported not-scanned, using
+// the bytes already in hand for the textual probe rather than re-reading.
+func capRead(r io.Reader) (data []byte, ok, oversizeText bool) {
+	data, err := io.ReadAll(io.LimitReader(r, maxScanBytes+1))
 	if err != nil {
 		return nil, false, false
+	}
+	if int64(len(data)) > maxScanBytes {
+		return nil, false, !isBinary(data)
 	}
 	return data, true, false
 }

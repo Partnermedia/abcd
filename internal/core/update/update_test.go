@@ -74,6 +74,41 @@ func TestPlanAcceptsPlainFile(t *testing.T) {
 	}
 }
 
+// TestPlanRefusesUnknownKind pins that an unrecognised target kind fails closed
+// with a named refusal rather than falling through to fetch-and-swap. A mutating
+// verb never proceeds on input it cannot classify.
+func TestPlanRefusesUnknownKind(t *testing.T) {
+	r := Plan(ahoy.UpdateTarget{Path: "/x/abcd", Kind: ahoy.UpdateTargetKind("some-future-kind")})
+	if r == nil {
+		t.Fatal("an unrecognised target kind must refuse, not proceed to swap")
+	}
+	if r.Shape != "unclassified-target" {
+		t.Errorf("shape = %q, want unclassified-target", r.Shape)
+	}
+}
+
+// TestPlanRedactsHomeInRefusalDetail pins that a home-rooted target path is
+// redacted to ~ in the refusal detail — the detail is a rendered success-adjacent
+// envelope the CLI error scrub never touches, and a stock install lives under
+// ~/.local/bin.
+func TestPlanRedactsHomeInRefusalDetail(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home dir resolvable")
+	}
+	abs := filepath.Join(home, ".local", "bin", "abcd")
+	r := Plan(ahoy.UpdateTarget{Path: abs, Kind: ahoy.UpdateTargetPluginRoot})
+	if r == nil {
+		t.Fatal("expected a refusal")
+	}
+	if strings.Contains(r.Detail, home) {
+		t.Errorf("refusal detail leaked the absolute home root: %q", r.Detail)
+	}
+	if !strings.Contains(r.Detail, "~/.local/bin/abcd") {
+		t.Errorf("refusal detail = %q, want the ~-redacted path", r.Detail)
+	}
+}
+
 // --- checksums.txt parsing ---
 
 func TestParseChecksums(t *testing.T) {

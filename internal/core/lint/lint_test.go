@@ -130,6 +130,11 @@ func TestGitMetadataSeesCommentLedFrontmatter(t *testing.T) {
 	// A comment-led record carrying the same banned key.
 	writeFile(t, root, "rec/commented.md",
 		"<!-- Adapted from mattpocock/skills (MIT). -->\n---\nauthor: someone\n---\n\n# Commented\n")
+	// A record whose `---` sits behind a UTF-8 BOM, invisible to TrimSpace.
+	writeFile(t, root, "rec/bom.md", "\ufeff---\nauthor: someone\n---\n\n# BOM\n")
+	// A record led by a multi-line HTML comment.
+	writeFile(t, root, "rec/multiline.md",
+		"<!--\nAdapted from mattpocock/skills (MIT).\n-->\n---\nauthor: someone\n---\n\n# Multiline\n")
 
 	fs, err := Lint(cfg, root)
 	if err != nil {
@@ -137,6 +142,8 @@ func TestGitMetadataSeesCommentLedFrontmatter(t *testing.T) {
 	}
 	var plain, commented int
 	var commentedLine int
+	found := map[string]int{}
+	lineOf := map[string]int{}
 	for _, f := range fs {
 		if f.RuleID != "no_git_metadata" {
 			continue
@@ -147,6 +154,12 @@ func TestGitMetadataSeesCommentLedFrontmatter(t *testing.T) {
 		case strings.HasSuffix(f.File, "commented.md"):
 			commented++
 			commentedLine = f.Line
+		case strings.HasSuffix(f.File, "bom.md"):
+			found["bom"]++
+			lineOf["bom"] = f.Line
+		case strings.HasSuffix(f.File, "multiline.md"):
+			found["multiline"]++
+			lineOf["multiline"] = f.Line
 		}
 	}
 	if plain != 1 {
@@ -157,6 +170,19 @@ func TestGitMetadataSeesCommentLedFrontmatter(t *testing.T) {
 	}
 	if commentedLine != 3 {
 		t.Errorf("comment-led finding line = %d, want 3 (absolute, not offset by the sliced comment)", commentedLine)
+	}
+	// A BOM or a multi-line comment ahead of the `---` must not slip the blocker.
+	if found["bom"] != 1 {
+		t.Errorf("no_git_metadata on the BOM-led record = %d, want 1 (a BOM bypassed the blocker)", found["bom"])
+	}
+	if lineOf["bom"] != 2 {
+		t.Errorf("BOM-led finding line = %d, want 2", lineOf["bom"])
+	}
+	if found["multiline"] != 1 {
+		t.Errorf("no_git_metadata on the multi-line-comment-led record = %d, want 1 (the comment bypassed the blocker)", found["multiline"])
+	}
+	if lineOf["multiline"] != 5 {
+		t.Errorf("multi-line-comment-led finding line = %d, want 5 (absolute)", lineOf["multiline"])
 	}
 }
 

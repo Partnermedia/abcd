@@ -108,3 +108,31 @@ func TestFieldsUnclosedBlockYieldsNoFields(t *testing.T) {
 		t.Fatalf(`a "----" close is not a delimiter; block stays unclosed, got %+v`, got)
 	}
 }
+
+// TestFieldsReadsPastBOM pins that a UTF-8 byte-order mark ahead of the opening
+// `---` does not hide the frontmatter. The BOM is not Unicode White_Space, so an
+// untrimmed mark makes the first line compare unequal to "---" and the whole
+// block reads as body — silently emptying every frontmatter-keyed gate.
+func TestFieldsReadsPastBOM(t *testing.T) {
+	lines := []string{"\ufeff---", "id: itd-7", "---", "# body"}
+	fields := Fields(lines)
+	if got := fields["id"]; got.Value != "itd-7" {
+		t.Fatalf("id must parse under a leading BOM, got %+v (fields=%v)", got, fields)
+	}
+	if got := fields["id"]; got.Line != 2 {
+		t.Errorf("id line under a leading BOM = %d, want 2", got.Line)
+	}
+}
+
+func TestTrimBOM(t *testing.T) {
+	if got := TrimBOM("\ufeff---"); got != "---" {
+		t.Errorf("TrimBOM stripped wrong: %q", got)
+	}
+	if got := TrimBOM("---"); got != "---" {
+		t.Errorf("TrimBOM must leave a BOM-free line unchanged, got %q", got)
+	}
+	// Only a leading mark is stripped; an interior U+FEFF is left alone.
+	if got := TrimBOM("a\ufeffb"); got != "a\ufeffb" {
+		t.Errorf("TrimBOM must not touch an interior mark, got %q", got)
+	}
+}

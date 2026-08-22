@@ -436,7 +436,24 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 	if res.Record.Secrets < 1 {
 		t.Errorf("expected >=1 secret redaction counted, got %d", res.Record.Secrets)
 	}
-	body, err := os.ReadFile(res.Record.Path)
+	// The success envelope's path is home-redacted: it must not carry the
+	// absolute home root (a developer-identity leak in machine output), and it
+	// renders with the ~ shorthand instead.
+	if home, herr := os.UserHomeDir(); herr == nil && home != "" {
+		if strings.Contains(res.Record.Path, home) {
+			t.Errorf("stored path leaked the absolute home root: %q", res.Record.Path)
+		}
+	}
+	if !strings.HasPrefix(res.Record.Path, "~") {
+		t.Errorf("stored path = %q, want a ~-rooted (home-redacted) path", res.Record.Path)
+	}
+	// Expand the ~ shorthand back to an absolute path to read the file — the
+	// shell does this for a user; a programmatic consumer reads by session id.
+	readPath := res.Record.Path
+	if home, herr := os.UserHomeDir(); herr == nil && strings.HasPrefix(readPath, "~/") {
+		readPath = filepath.Join(home, readPath[2:])
+	}
+	body, err := os.ReadFile(readPath)
 	if err != nil {
 		t.Fatalf("stored record unreadable: %v", err)
 	}

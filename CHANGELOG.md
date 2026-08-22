@@ -63,8 +63,73 @@ called out in a **Breaking** section.
   relay the caveat verbatim instead of paraphrasing a reach that CI cannot
   enforce. (iss-362)
 
+### Security
+
+- **The shell guard recognises the `&>` / `&>>` redirection operators.** The
+  guard tokenizer read a leading `&` as a background/`&&` operator, so gluing or
+  spacing bash's both-streams redirection into a command (`git push &>/dev/null
+  --force origin main`) split the simple command in two and dropped its
+  dangerous flag out of command position — a silent allow on every blocker-tier
+  entry. The tokenizer now recognises `&>`/`&>>` as a redirection (whose target
+  is dropped, whose fd digit is preserved as a real argument) before the
+  list-operator split. (iss-2608220131352917)
+- **Record-lint reads frontmatter behind a BOM or a multi-line comment.** The
+  frontmatter scanner anchored on line 0 and `TrimSpace` does not strip a UTF-8
+  byte-order mark, so a record led by a BOM or a multi-line `<!-- … -->` comment
+  yielded an empty field map and slipped the `no_git_metadata` blocker and the
+  `record_schema` id/supersession gates entirely. The shared scanner now strips
+  a leading BOM and the lint/glossary scanners skip a multi-line comment before
+  the `---`. (iss-2608220134344680)
+
 ### Fixed
 
+- **`abcd update` and `abcd history` no longer leak an absolute home path.** The
+  update refusal detail and receipt (`target_path`) and the history record
+  `path` field carried the developer-identity home root raw into their success
+  and `--json` envelopes — which the CLI error scrub never sees — including the
+  documented plugin-session refusal the plugin relays into agent chat. All are
+  now redacted to `~` at the render boundary. (iss-2608220142158516)
+- **`abcd ahoy` recognises a linked worktree or submodule.** Detection tested
+  `.git` for dir-ness, so a worktree or submodule (where `.git` is a gitfile) was
+  misclassified as an unmanaged folder: every gap detector was skipped and
+  `ahoy install` exited 0 with a wrong "not a git repository" reason. It now
+  tests existence, the last `isDir(.git)` holdout after iss-72. (iss-2608220136593438)
+- **`abcd ahoy --json` omits the guard object for an unmanaged folder.** The
+  guard-health field was a value serialised even when never computed, so an
+  unmanaged folder reported four `false` guard facts (a broken guard) beside a
+  resolved plugin root. It is now a pointer omitted for an unmanaged folder,
+  matching the banlist sibling. (iss-2608220136597127)
+- **The privacy scanner refuses a file that grows past the read cap.** The
+  tracked-file reader read exactly the cap, so a file that grew past it between
+  the stat and the read was scanned as a truncated prefix and reported clean; it
+  now reads one byte past the cap and routes a grown file to the same
+  not-scanned warning an over-cap file already takes. (iss-2608220144233519)
+- **`abcd docs lint` exits 2 when the engine cannot run.** An engine or config
+  fault returned a bare error mapped to exit 1 — the code a blocker finding uses
+  — while `abcd lint` and record-lint exit 2 for the same fault; a CI gate keying
+  on `>=2` read a docs lint that never ran as a findings-pass. The engine-fault
+  path now exits 2 with a path-scrubbed message. (iss-2608220145356167)
+- **`abcd update` fails closed on an unrecognised install shape.** The dispatch
+  switch had no default, so a target kind it could not classify fell through to
+  fetch-and-swap; the regular-file case is now explicit and every other kind a
+  named refusal. (iss-2608220142154022)
+- **`abcd adr-N` resolves an ADR file whatever its zero-padding.** Dispatch
+  routed by a fixed four-digit filename prefix, so a differently-padded ADR file
+  — lint-green and citation-resolvable, since those readers compare numerically —
+  was reported not found. It now routes by the filename's numeric ordinal.
+  (iss-2608220148289898)
+- **Empty `--json` collections render as `[]`, not `null`.** `abcd spec`,
+  `abcd intent`, `abcd memory`, and `abcd capture` emitted bare `null` for an
+  empty collection, so a consumer iterating the value errored; they now emit an
+  empty array, the invariant history list already held. (iss-2608220147106835)
+- **Documentation corrections.** `commands/version.md` now notes that
+  `install_mode` is omitted from the JSON when no abcd-owned PATH entry is
+  resolvable; `AGENTS.md` and `CONTRIBUTING.md` record that the CI classifier
+  stands the macOS leg, race lane, `zizmor`, `govulncheck` and smoke jobs down on
+  a docs-only pull request (the merge-queue run still gates the merge with the
+  full set); and `docs/requirements.txt` no longer claims a reproducibility its
+  unpinned transitive dependencies do not deliver. (iss-2608220150154972,
+  iss-2608220150152332, iss-2608220150152535)
 - **The hook binary survives plugin updates.** The checksum-verified release
   artefact is now kept once in the plugin's persistent data directory and each
   fresh plugin root is provisioned from it by a re-verified copy, so a plugin

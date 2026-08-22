@@ -34,8 +34,8 @@ once. Silent over-adoption — pulling in a heavy dependency without the user
 weighing it — is blocked by gate 1. Silent lock-in — building a bespoke thing
 that quietly forecloses ever adopting the better external tool — is blocked by
 gate 3; the default, path 2, is abcd's house pattern (a native floor with an
-easy opt-in to a superior backend, per [adr-22](../decisions) /
-[adr-26](../decisions)), and it is allowed to proceed *because* the seam keeps
+easy opt-in to a superior backend, per [adr-22](../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md) /
+[adr-26](../decisions/adrs/0026-native-spec-layer-ccpm-backend.md)), and it is allowed to proceed *because* the seam keeps
 the field's best answer reachable. The declaration also ages well: maturity is
 rough and dated, so a path-2 intent can be revisited when the SOTA alternative
 matures enough to be worth adopting.

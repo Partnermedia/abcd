@@ -32,6 +32,7 @@ import (
 
 	"github.com/Partnermedia/abcd/internal/core/ahoy"
 	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/Partnermedia/abcd/internal/fsutil"
 	"github.com/Partnermedia/abcd/internal/urlguard"
 )
 
@@ -84,11 +85,17 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 	// A package-manager install is checked on the RESOLVED path first: a brew
 	// install is a symlink into Cellar/, which classifies as a foreign symlink,
 	// so the brew remedy has to win before the generic foreign refusal.
+	// The refusal detail is a rendered success-adjacent envelope, not an error
+	// value the CLI scrub ever sees, so the developer-identity home root in these
+	// paths is redacted to ~ at the point it enters the string (a stock install
+	// puts the target under ~/.local/bin or a ~-rooted plugin root).
+	targetPath := fsutil.RedactHome(t.Path)
+	resolvedPath := fsutil.RedactHome(t.ResolvedPath)
 	for _, p := range brewCellarPrefixes {
 		if t.ResolvedPath != "" && strings.HasPrefix(t.ResolvedPath, p) {
 			return &Refusal{
 				Shape:  "package-manager",
-				Detail: "the binary resolves into " + t.ResolvedPath + ", which Homebrew owns; a self-update there would fight the package manager",
+				Detail: "the binary resolves into " + resolvedPath + ", which Homebrew owns; a self-update there would fight the package manager",
 				Remedy: "run `brew upgrade abcd`",
 			}
 		}
@@ -97,35 +104,46 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 	case ahoy.UpdateTargetPluginRoot:
 		return &Refusal{
 			Shape:  string(t.Kind),
-			Detail: "the binary at " + t.Path + " belongs to the plugin install; the plugin update delivers surface and binary from one release (itd-108), and abcd update never touches a plugin root",
+			Detail: "the binary at " + targetPath + " belongs to the plugin install; the plugin update delivers surface and binary from one release (itd-108), and abcd update never touches a plugin root",
 			Remedy: "take a plugin update in the host (e.g. /plugin update abcd)",
 		}
 	case ahoy.UpdateTargetDevShim:
 		return &Refusal{
 			Shape:  string(t.Kind),
-			Detail: "the entry at " + t.Path + " is the track-latest dev shim: it rebuilds abcd from the source tip on every call, so a release binary would be a downgrade of intent",
+			Detail: "the entry at " + targetPath + " is the track-latest dev shim: it rebuilds abcd from the source tip on every call, so a release binary would be a downgrade of intent",
 			Remedy: "switch modes first: `abcd ahoy install` re-pins the entry",
 		}
 	case ahoy.UpdateTargetDangling:
 		return &Refusal{
 			Shape:  string(t.Kind),
-			Detail: "the entry at " + t.Path + " is an abcd-owned link whose binary is gone (a plugin update strands it)",
+			Detail: "the entry at " + targetPath + " is an abcd-owned link whose binary is gone (a plugin update strands it)",
 			Remedy: "run `abcd ahoy install` — it repoints the entry at the current plugin binary",
 		}
 	case ahoy.UpdateTargetForeign:
-		detail := "the entry at " + t.Path + " is not something abcd owns, and abcd never clobbers a binary it does not own"
+		detail := "the entry at " + targetPath + " is not something abcd owns, and abcd never clobbers a binary it does not own"
 		if t.LaterOwned != "" {
-			detail += "; a working abcd install sits shadowed behind it at " + t.LaterOwned
+			detail += "; a working abcd install sits shadowed behind it at " + fsutil.RedactHome(t.LaterOwned)
 		}
 		return &Refusal{Shape: string(t.Kind), Detail: detail, Remedy: "remove or rename the occupant, or see `abcd ahoy` for the install's health"}
+	case ahoy.UpdateTargetFile:
+		// The one shape abcd may swap: a regular file whose provenance Apply then
+		// verifies against the release checksums. Proceed.
+		return nil
 	case ahoy.UpdateTargetAbsent:
 		return &Refusal{
 			Shape:  string(t.Kind),
 			Detail: "no abcd was found on PATH, so there is nothing to update",
 			Remedy: "install first: `abcd ahoy install` from a plugin session, or the install one-liner in the README",
 		}
+	default:
+		// A mutating verb fails closed on an unrecognised target kind rather than
+		// falling through to fetch-and-swap (unrecognized-input-never-writes).
+		return &Refusal{
+			Shape:  "unclassified-target",
+			Detail: "the entry at " + targetPath + " is an unrecognised install shape (" + string(t.Kind) + "), and abcd update only replaces a target it can classify",
+			Remedy: "see `abcd ahoy` for the install's health",
+		}
 	}
-	return nil
 }
 
 // scrubbedEnv are the transport-override variables the updater refuses to
@@ -277,7 +295,10 @@ func (u *Updater) ResolveTag(requested string) (string, error) {
 // the release whose manifest matches the on-disk bytes — never read from the
 // running binary, which may not be the file being replaced.
 func (u *Updater) Apply(target, tag string, progress io.Writer) (Report, error) {
-	rep := Report{Origin: u.origin, Tag: tag, Asset: u.assetName, TargetPath: target}
+	// TargetPath is rendered in the receipt (text and --json) and relayed by the
+	// plugin into agent chat, so the home root is redacted to ~ — the report is a
+	// success envelope the CLI error scrub never touches.
+	rep := Report{Origin: u.origin, Tag: tag, Asset: u.assetName, TargetPath: fsutil.RedactHome(target)}
 	rep.EnvIgnored = u.envIgnored
 
 	sums, found, err := u.fetchChecksums(tag)
@@ -312,7 +333,7 @@ func (u *Updater) Apply(target, tag string, progress io.Writer) (Report, error) 
 		rep.Action = ActionRefused
 		rep.Refusal = &Refusal{
 			Shape:  "unprovenanced-file",
-			Detail: "the file at " + target + " matches no published release of abcd (digest " + targetHex + "), so abcd will not replace it",
+			Detail: "the file at " + fsutil.RedactHome(target) + " matches no published release of abcd (digest " + targetHex + "), so abcd will not replace it",
 			Remedy: "if this is a stale or hand-built abcd, remove it and reinstall; abcd never clobbers a binary it cannot prove is its own",
 		}
 		return rep, nil
