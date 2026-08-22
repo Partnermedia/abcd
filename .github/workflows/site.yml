@@ -27,11 +27,15 @@ name: site
 #
 # Production renders the site with the RELEASED, checksum-verified binary — the same
 # bytes the README install one-liner hands a user — so abcdev.app is one verifiable
-# statement: this is abcd at that tag (adr-48 1). A site failure can neither block nor
-# taint a release: the isolation is the caller's job dependency (release.yml's `site`
-# job needs `release`), not workflow-file separation, and every production run is
-# idempotent per tag — re-running deploys the same tag over itself, and the release
-# asset upload uses --clobber.
+# statement: this is abcd at that tag (adr-48 1). Every production run is idempotent
+# per tag: re-running deploys the same tag over itself and the release asset upload
+# uses --clobber, so re-running is always the safe response to a failure.
+#
+# A site failure can neither block the release nor change a byte of what it published
+# — the isolation is the caller's job dependency (release.yml's `site` job needs
+# `release`), not workflow-file separation. It does turn the caller's RUN red, because
+# a called workflow's failure is the caller's failure; the Release, its assets and its
+# attestations are already made and are untouched.
 on:
   workflow_call:
     inputs:
@@ -59,9 +63,12 @@ on:
 # One group per deploy target — the tag on the production paths, the branch ref for
 # the main preview. cancel-in-progress is false everywhere: a deploy cancelled between
 # uploading assets and switching the route leaves the site half-moved, which is worse
-# than a queued run, and a production run must never be cancelled by a later push. A
-# dispatch with an empty tag shares the branch group and so queues behind a preview
-# rather than racing it — safe, because nothing here is ever cancelled.
+# than a queued run, and a production run must never be cancelled by a later push.
+#
+# This group alone is NOT enough to serialise production, because a dispatch with an
+# empty tag has no tag to key on yet — it resolves one in `resolve` — and so lands in
+# the branch group. The `production` job carries a second, target-keyed group that
+# closes that gap; see the comment there.
 concurrency:
   group: site-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
