@@ -894,6 +894,13 @@
           "hidden": false
         },
         {
+          "name": "preview",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "version",
           "shorthand": "",
           "type": "string",

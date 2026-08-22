@@ -395,7 +395,14 @@ func (c *composer) footer() string {
 	if c.beta {
 		meta = append(meta, strings.ToLower(c.ui.Beta))
 	}
-	if c.version != "" {
+	// What this build IS. A preview is built from an untagged tree, so it says
+	// so; only a build of a release names one. The Beta badge above is a separate
+	// fact — it reads the newest CHANGELOG major, which is still 0.x whether or
+	// not this particular build was cut from a tag.
+	switch {
+	case c.stamp.Preview:
+		meta = append(meta, c.ui.Unreleased)
+	case c.version != "":
 		meta = append(meta, "v"+c.version)
 	}
 	if c.stamp.Commit != "" {

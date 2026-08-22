@@ -44,6 +44,7 @@ func newSiteCommand(asJSON *bool) *cobra.Command {
 
 	var buildOut string
 	var version, commit, stampDate string
+	var preview bool
 	buildCmd := &cobra.Command{
 		Use:   "build",
 		Short: "Render the site into the output directory (writes nothing outside it)",
@@ -56,7 +57,7 @@ func newSiteCommand(asJSON *bool) *cobra.Command {
 			res, err := site.Build(site.Request{
 				RepoRoot: cwd,
 				OutDir:   buildOut,
-				Stamp:    site.BuildStamp{Version: version, Commit: commit, GeneratedAt: stampDate},
+				Stamp:    site.BuildStamp{Version: version, Commit: commit, GeneratedAt: stampDate, Preview: preview},
 			})
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd site build: " + scrubPaths(err)}
@@ -70,6 +71,8 @@ func newSiteCommand(asJSON *bool) *cobra.Command {
 	buildCmd.Flags().StringVar(&version, "version", "", "version for the footer and the build stamp (default: the newest dated CHANGELOG heading)")
 	buildCmd.Flags().StringVar(&commit, "commit", "", "commit for the footer and the build stamp (default: git HEAD)")
 	buildCmd.Flags().StringVar(&stampDate, "date", "", "date for the build stamp (default: the newest release's date)")
+	buildCmd.Flags().BoolVar(&preview, "preview", false, "stamp the build as unreleased at this commit, for a preview deployment of an untagged tree")
+	buildCmd.MarkFlagsMutuallyExclusive("preview", "version")
 	siteCmd.AddCommand(buildCmd)
 
 	var checkOut string

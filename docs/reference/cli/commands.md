@@ -703,6 +703,7 @@ Render the site into the output directory (writes nothing outside it)
       --commit string    commit for the footer and the build stamp (default: git HEAD)
       --date string      date for the build stamp (default: the newest release's date)
       --out string       directory to render into (default "site")
+      --preview          stamp the build as unreleased at this commit, for a preview deployment of an untagged tree
       --version string   version for the footer and the build stamp (default: the newest dated CHANGELOG heading)
 ```
 

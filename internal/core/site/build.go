@@ -43,6 +43,103 @@ var copiedSources = []struct{ src, dst string }{
 	{"site-src/record.js", "record.js"},
 }
 
+// The marker that makes the output directory identifiable as this build's own.
+//
+// The build REWRITES its output tree rather than adding to it, so it has to
+// empty the directory first — and emptying a directory that a person named on a
+// command line is not something to do on a guess. The marker is the proof: the
+// build clears a directory only when it finds its own marker there, and refuses
+// a non-empty directory without one. That makes deleting somebody else's files
+// structurally impossible rather than merely unlikely.
+//
+// The name begins with a dot so it reads as tooling metadata rather than
+// content. Static-asset hosts conventionally skip dotfiles, but this build does
+// not depend on that and does not assert it: the marker names no path, carries
+// no secret and describes only itself, so a host that did serve it would leak
+// nothing. It is excluded from the header-coverage walk as build metadata, on
+// the same footing as `_headers` and `_redirects`.
+const (
+	siteMarkerName = ".abcd-site-build"
+	siteMarkerBody = "Output of `abcd site build`. This directory is rewritten on every build;" +
+		" the presence of this file is what permits that instead of a refusal.\n"
+)
+
+// outDirState is what the build found where it is about to write.
+type outDirState int
+
+const (
+	outDirAbsent  outDirState = iota // nothing there yet
+	outDirEmpty                      // there, holding nothing
+	outDirOurs                       // there, holding a tree this build wrote
+	outDirForeign                    // there, holding something else entirely
+)
+
+// inspectOutDir reports what is in the output directory, without changing it.
+func inspectOutDir(outDir string) (outDirState, error) {
+	entries, err := os.ReadDir(outDir)
+	switch {
+	case os.IsNotExist(err):
+		return outDirAbsent, nil
+	case err != nil:
+		return 0, err
+	case len(entries) == 0:
+		return outDirEmpty, nil
+	}
+	switch _, err := os.Stat(filepath.Join(outDir, siteMarkerName)); {
+	case err == nil:
+		return outDirOurs, nil
+	case os.IsNotExist(err):
+		return outDirForeign, nil
+	default:
+		return 0, err
+	}
+}
+
+// errForeignOutDir is the refusal. It names the directory, says why it stopped,
+// and says what would make it proceed — because the reader is looking at a build
+// that did nothing, and the useful question is which case they are in.
+//
+// There are three, and the third is the one worth spelling out: a tree left by a
+// build from before the marker existed is genuinely ours, and neither "use an
+// empty directory" nor "use one an earlier build wrote" tells that reader
+// anything they can act on. Emptying it themselves does.
+func errForeignOutDir(outDir string) error {
+	return fmt.Errorf("site: %s is not empty and holds no %s, so this build cannot tell it apart from a directory it did not write; refusing to remove it — point --out at an empty directory, or empty this one yourself if it is an old build's output",
+		outDir, siteMarkerName)
+}
+
+// purgeOutDir clears a directory a previous build wrote, keeping the marker.
+//
+// The ENTRIES go, not the directory: a caller may be sitting in it, it may be a
+// symlink or a mount point, and re-creating it would change what it is.
+//
+// The marker STAYS, and that is the whole subtlety here. `os.ReadDir` returns
+// names in order and `.abcd-site-build` sorts ahead of everything, so removing
+// it like any other entry would remove it first — and a purge interrupted after
+// that point (killed process, full disk, one unremovable file) leaves a
+// non-empty directory carrying no marker, which every later build then refuses.
+// The tool would jam on its own wreckage and need a human with `rm` to get it
+// going again. Keeping the marker costs nothing: the build rewrites it with
+// identical bytes, so it is present at every instant and correct at the end.
+//
+// A symlink among the entries is removed as a LINK; `os.RemoveAll` does not
+// follow it, so nothing outside this directory is reachable from here.
+func purgeOutDir(outDir string) error {
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() == siteMarkerName {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(outDir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // The installer: one committed template, served at one route. It is NOT in
 // copiedSources because it is the one copied file the build adds a byte to —
 // the stamp comment — and a reader is owed the difference being deliberate.
@@ -210,6 +307,26 @@ func Build(req Request) (Result, error) {
 		outDir = abs
 	}
 
+	// The two version instructions are opposites — "stamp exactly this" and
+	// "stamp no version at all" — so a build given both would have to silently
+	// discard one and publish its output under the other's name.
+	if req.Stamp.Preview && req.Stamp.Version != "" {
+		return Result{}, errors.New("site: a preview build carries no version, so --preview and --version cannot be given together")
+	}
+
+	// Refuse EARLY. The render below is minutes of work, and a build that waits
+	// until the writes to discover it may not touch the directory has spent them
+	// for nothing. The PURGE waits, though: it happens at the first write, so a
+	// failure anywhere in between leaves the previous output standing rather than
+	// clearing a good tree in exchange for one that never arrived.
+	outState, err := inspectOutDir(outDir)
+	if err != nil {
+		return Result{}, err
+	}
+	if outState == outDirForeign {
+		return Result{}, errForeignOutDir(outDir)
+	}
+
 	manifest, err := LoadManifest(repoRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -258,7 +375,11 @@ func Build(req Request) (Result, error) {
 	if len(releases) > 0 {
 		version, releaseDate = releases[0].Version, releases[0].Date
 	}
-	if stamp.Version == "" {
+	// A preview takes no version — not the pinned one, and not the changelog
+	// fallback. The fallback is the whole defect: a build of main is ahead of the
+	// newest release, so stamping it with that release's number publishes a
+	// provenance a reader could go and check against a different tree.
+	if !stamp.Preview && stamp.Version == "" {
 		stamp.Version = version
 	}
 	if stamp.GeneratedAt == "" && len(releases) > 0 {
@@ -315,6 +436,15 @@ func Build(req Request) (Result, error) {
 		Commit:     stamp.Commit,
 	}
 
+	// The output tree is a RENDER of this commit, not an accumulation of every
+	// build that ever ran here. A file left by an earlier one is stale the moment
+	// this build does not rewrite it, and it is stale INVISIBLY — it is served,
+	// and it looks exactly like a file that built.
+	if outState == outDirOurs {
+		if err := purgeOutDir(outDir); err != nil {
+			return Result{}, err
+		}
+	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return Result{}, err
 	}
@@ -336,6 +466,14 @@ func Build(req Request) (Result, error) {
 		return nil
 	}
 
+	// FIRST, before anything else in the tree: a build killed halfway must still
+	// leave a directory the next one recognises as its own. With the marker
+	// written last, the wreckage of a failed build would carry none, and every
+	// later build would refuse it — the tool jammed on its own debris, freed only
+	// by hand.
+	if err := write(siteMarkerName, []byte(siteMarkerBody)); err != nil {
+		return Result{}, err
+	}
 	if err := write("index.html", []byte(html)); err != nil {
 		return Result{}, err
 	}
