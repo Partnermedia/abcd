@@ -68,7 +68,8 @@
   var SEV_TONE = { critical: 'critical', major: 'high', minor: 'moderate', nitpick: 'low' };
   var DIRECTED = ['supersedes', 'implements', 'builds_on'];
   var REL_INV = {
-    supersedes: W_.relSupersedes, implements: W_.relImplements, builds_on: W_.relBuildsOn
+    blocked_by: W_.relBlockedBy, supersedes: W_.relSupersedes,
+    implements: W_.relImplements, builds_on: W_.relBuildsOn
   };
   var relWord = function (rel) { return String(rel).replace(/_/g, ' '); };
 
@@ -114,12 +115,25 @@
     });
     var N = nodes.length;
 
+    /* Two records may be joined by more than one relation — a spec that
+       implements an intent and is also related to it. Each neighbour therefore
+       holds a LIST: keeping one entry per pair let the last edge read overwrite
+       every earlier one, and the card silently showed a single relation where
+       the record states two. */
     var adj = nodes.map(function () { return new Map(); });
+    var join = function (from, to, rel, out) {
+      if (!adj[from].has(to)) adj[from].set(to, []);
+      var rels = adj[from].get(to);
+      for (var i = 0; i < rels.length; i++) {
+        if (rels[i].rel === rel && rels[i].out === out) return;
+      }
+      rels.push({ rel: rel, out: out });
+    };
     D.edges.forEach(function (e) {
       var a = index[e.from], b = index[e.to];
       if (a === undefined || b === undefined) return;
-      adj[a].set(b, { rel: e.rel, out: true });
-      adj[b].set(a, { rel: e.rel, out: false });
+      join(a, b, e.rel, true);
+      join(b, a, e.rel, false);
     });
     var madj = nodes.map(function () { return new Set(); });
     (D.mentions || []).forEach(function (e) {
@@ -142,7 +156,11 @@
     var css = function () { return getComputedStyle(document.documentElement); };
     var col = function (v) { return css().getPropertyValue(v).trim(); };
     var on = function (n) { return typeOn[n.type]; };
+    /* A record whose store grades it by neither a lifecycle directory nor a
+       status field declares no state, and is drawn solid because it has none —
+       not faded, which is what "set aside" looks like. */
     var cls = function (n) {
+      if (!n.status) return 'solid';
       return has(SOLID, n.status) ? 'solid' : has(RING, n.status) ? 'ring' : has(DASH, n.status) ? 'dash' : 'fade';
     };
 
@@ -193,8 +211,8 @@
       focus = i; neigh = new Map();
       if (i >= 0 && !nav && hist[hpos] !== i) { hist.splice(hpos + 1); hist.push(i); hpos = hist.length - 1; }
       if (i >= 0) {
-        adj[i].forEach(function (m, j) { neigh.set(j, { rel: m.rel, out: m.out }); });
-        if (useMent) madj[i].forEach(function (j) { if (!neigh.has(j)) neigh.set(j, { rel: 'mention', out: true }); });
+        adj[i].forEach(function (rels, j) { neigh.set(j, rels.slice()); });
+        if (useMent) madj[i].forEach(function (j) { if (!neigh.has(j)) neigh.set(j, [{ rel: 'mention', out: true }]); });
       }
       renderCard(); syncHist();
       nodes.forEach(function (n) {
@@ -257,9 +275,19 @@
       energy = Math.max(energy, Math.abs(bt.x - base.x), Math.abs(bt.y - base.y));
     }
 
+    /* One line is drawn per PAIR however many relations join it, so the line
+       takes a representative: the directed one where there is one, because the
+       arrowhead is the thing the line has to get right. */
+    function pickRel(rels) {
+      for (var i = 0; i < rels.length; i++) {
+        if (has(DIRECTED, rels[i].rel)) return rels[i];
+      }
+      return rels[0];
+    }
     function drawLinks(ctx, f, map, alpha, heads) {
       var ink2 = col('--ink-2'), rule = col('--rule-2'), k = view.k;
-      map.forEach(function (m, j) {
+      map.forEach(function (rels, j) {
+        var m = pickRel(rels);
         var n = nodes[j], dir = heads && has(DIRECTED, m.rel);
         var fx = sx(f.x), fy = sy(f.y), nx = sx(n.x), ny = sy(n.y);
         ctx.strokeStyle = ctx.fillStyle = m.rel === 'mention' ? rule : ink2;
@@ -403,7 +431,7 @@
         var f = nodes[focus];
         label(ctx, f, f.id + ' · ' + fmtShort(f.date), true, sx(f.x) > W * 0.72 ? 'left' : 'right', 1);
         var ns = [];
-        neigh.forEach(function (m, j) { ns.push({ n: nodes[j], m: m }); });
+        neigh.forEach(function (rels, j) { ns.push({ n: nodes[j], rels: rels }); });
         ns.sort(function (a, b) {
           return Math.hypot(a.n.x - f.x, a.n.y - f.y) - Math.hypot(b.n.x - f.x, b.n.y - f.y);
         });
@@ -412,7 +440,7 @@
           label(ctx, e.n, e.n.id, false, sx(e.n.x) < sx(f.x) - 8 ? 'left' : 'right', 0.8);
           var d = Math.hypot(sx(e.n.x) - sx(f.x), sy(e.n.y) - sy(f.y));
           if (d < (f.r * f.s + e.n.r * e.n.s) * k + 50) return;
-          var txt = relWord(e.m.rel);
+          var txt = e.rels.map(function (m) { return relWord(m.rel); }).join(' · ');
           ctx.font = '400 9.5px "IBM Plex Mono", monospace';
           var w = ctx.measureText(txt).width;
           var mx = sx(f.x) + (sx(e.n.x) - sx(f.x)) * 0.55, my = sy(f.y) + (sy(e.n.y) - sy(f.y)) * 0.55;
@@ -586,20 +614,29 @@
       var wasHidden = card.hidden;
       var oldH = wasHidden ? 0 : card.getBoundingClientRect().height;
       var n = nodes[focus];
+      /* One row per RELATION, not per neighbour: a record joined to another by
+         two relations states two facts, and the card says both. */
       var links = [];
-      neigh.forEach(function (m, j) {
-        if (m.rel === 'mention') return;
-        links.push({ n: nodes[j], rel: m.rel, out: m.out });
+      neigh.forEach(function (rels, j) {
+        rels.forEach(function (m) {
+          if (m.rel === 'mention') return;
+          links.push({ n: nodes[j], rel: m.rel, out: m.out });
+        });
       });
       links.sort(function (a, b) {
         return (a.n.date || '').localeCompare(b.n.date || '') ||
-          a.n.id.localeCompare(b.n.id, undefined, { numeric: true });
+          a.n.id.localeCompare(b.n.id, undefined, { numeric: true }) ||
+          a.rel.localeCompare(b.rel);
       });
       var ment = madj[focus].size;
       var mine = stubs[focus] || [];
       card.hidden = false;
 
-      var pills = '<span class="pill type" style="--c:var(' + tok(n.type) + ')"><i></i>' + esc(n.type) + '</span>' +
+      /* The type pill's colour is set through the CSSOM after the markup is in
+         place, never as a style="" attribute built out of data: an attribute is
+         the one thing here a content policy has to make an allowance for, and
+         this is the only one the script would have written. */
+      var pills = '<span class="pill type"><i></i>' + esc(n.type) + '</span>' +
         (n.status ? '<span class="pill ' + STATUS_TONE(n.status) + '">' + esc(n.status) + '</span>' : '') +
         (n.sev ? '<span class="pill ' + (SEV_TONE[n.sev] || 'plain') + '">' + esc(n.sev) + '</span>' : '') +
         (n.kind && n.kind !== 'null' ? '<span class="pill plain">' + esc(n.kind) + '</span>' : '') +
@@ -646,6 +683,8 @@
         '<button class="hb" id="bback" aria-label="' + esc(W_.back) + '" disabled>‹</button>' +
         '<button class="hb" id="bfwd" aria-label="' + esc(W_.forward) + '" disabled>›</button></div></div>';
 
+      var typePill = $('.pill.type', card);
+      if (typePill) typePill.style.setProperty('--c', 'var(' + tok(n.type) + ')');
       $$('li[data-j]', card).forEach(function (li) {
         li.addEventListener('click', function () { setFocus(+li.dataset.j); });
       });

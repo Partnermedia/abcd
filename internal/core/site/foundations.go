@@ -23,8 +23,12 @@ import (
 	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
-// principlesDirName is the record format's own name for the store.
-const principlesDirName = "principles"
+// principlesDirName is the record format's own name for the store, and
+// principleType the store name its records carry.
+const (
+	principlesDirName = "principles"
+	principleType     = "principle"
+)
 
 // disciplinesLifecycle is the bucket an intent sits in when it states a rule
 // that holds across the whole record rather than a change to ship.
@@ -72,9 +76,12 @@ func LoadPrinciples(repoRoot, dir string) ([]lint.RecordNode, error) {
 		if err != nil {
 			return nil, err
 		}
+		// No lifecycle, no status. The store grades its records by neither, and
+		// a word invented here to fill the column would be published as though
+		// the record had declared it.
 		id := strings.TrimSuffix(name, ".md")
 		out = append(out, lint.RecordNode{
-			ID: id, Type: "principle", Lifecycle: "active",
+			ID: id, Type: principleType,
 			Title: firstHeading(rel, string(data), id), Path: rel,
 		})
 	}

@@ -28,6 +28,7 @@
     "spec": "specs",
     "issue": "issues",
     "principle": "principles",
+    "discipline": "disciplines",
     "commits": "commits"
   },
   "record_nav": {
@@ -73,6 +74,7 @@
     "commit_history": "commit history"
   },
   "relations": {
+    "blocked_by": "blocks",
     "supersedes": "superseded by",
     "implements": "implemented by",
     "builds_on": "built on by"

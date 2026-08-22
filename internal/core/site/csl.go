@@ -31,9 +31,12 @@ const CSLRelPath = ".abcd/development/research/references.csl.json"
 // AcknowledgementsRelPath is the file whose numbering the page must agree with.
 const AcknowledgementsRelPath = "ACKNOWLEDGEMENTS.md"
 
-// The two headings the references page takes its own titles from. They are the
-// acknowledgement file's own headings, so the page and the file cannot drift
-// apart in what they call things.
+// The two headings the references page takes its own titles from.
+//
+// These are SEARCH KEYS, never text to render: the page prints the heading as
+// the acknowledgement file spells it, so the two cannot drift apart in what they
+// call things, and a repository that spells them differently gets a refusal
+// rather than a page titled with a literal from in here.
 const (
 	referencesHeading   = "References & sources"
 	inspirationsHeading = "Inspirations"
@@ -143,14 +146,19 @@ func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
 			}
 		}
 	}
-	b := &Bibliography{Entries: entries, Path: cslRel, RefsHeading: referencesHeading, Heading: inspirationsHeading}
+	b := &Bibliography{Entries: entries, Path: cslRel}
 
+	// Every heading this page shows comes OUT OF the acknowledgement file. The
+	// generator holds the two names only as search keys and never as text to
+	// render (adr-47 decision 2): a page that fell back to its own literal would
+	// print a heading the repository never wrote, under which it would then
+	// publish that repository's sources.
 	ack, err := fsutil.ReadGuarded(joinRepo(repoRoot, ackRel), maxBibliographyBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Nothing to disagree with. The page still ships: the sources are
-			// the CSL file's, numbered as the CSL file orders them.
-			return b, nil
+			// No file, no heading, no page. The bibliography is still exported;
+			// it is the rendered page that has nothing to call itself.
+			return nil, nil
 		}
 		return nil, err
 	}
@@ -178,13 +186,28 @@ func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
 			}
 		}
 	}
+	// The file is HERE and it does not carry the heading the sources go under.
+	// That is a fault, not an absence: the bibliography exists, the page has to
+	// title it, and skipping quietly would leave the sources unpublished with
+	// nothing said about why.
+	if b.RefsHeading == "" {
+		return nil, missingHeading(ackRel, referencesHeading, cslRel)
+	}
 	if len(numbered) == 0 {
-		return b, nil
+		return nil, fmt.Errorf("site: %s § %s carries no numbered list, and %s lists %d sources — the record cites these by number, so the numbering has to exist to be agreed with",
+			ackRel, b.RefsHeading, cslRel, len(entries))
 	}
 	if err := checkNumbering(cslRel, ackRel, entries, numbered); err != nil {
 		return nil, err
 	}
 	return b, nil
+}
+
+// missingHeading is the refusal for an acknowledgement file that is present and
+// does not carry a heading the page has to render.
+func missingHeading(ackRel, heading, cslRel string) error {
+	return fmt.Errorf("site: %s carries no '## %s' heading, and %s lists sources to publish under it — the site renders the file's own headings and never a literal of its own",
+		ackRel, heading, cslRel)
 }
 
 // numberedItems collects the text of each entry of a numbered list, joined so a
@@ -353,7 +376,10 @@ func (e *explorer) referencesPage() (string, error) {
 	}
 	out.WriteString(panel("c8", b.RefsHeading, strconv.Itoa(len(b.Entries)), refs.String()))
 
-	if len(b.Inspirations) > 0 {
+	// Rendered only when the acknowledgement file supplied BOTH the heading and
+	// the entries. Without the heading there is nothing to call the panel that
+	// the repository wrote.
+	if len(b.Inspirations) > 0 && b.Heading != "" {
 		r := &Renderer{UI: e.c.ui, Refs: b.AckLinkDefs,
 			Image: func(src, alt string, at Source) (string, error) { return e.c.assets.render(".", src, alt, at) },
 			Link:  func(href string, at Source) string { return e.href(b.Source, href) }}

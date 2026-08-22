@@ -609,7 +609,7 @@ func (e *explorer) foundationsPage() (string, error) {
 		b.WriteString(panel("c12", label, strconv.Itoa(len(nodes)), cards.String()))
 	}
 	deck(e.c.ui.Tiles.Principle, e.principles)
-	deck(disciplinesLifecycle, e.disciplines)
+	deck(e.c.ui.Tiles.Discipline, e.disciplines)
 	b.WriteString(`</div>`)
 	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", e.genLine(), b.String()), nil
 }
@@ -774,8 +774,8 @@ func (e *explorer) href(fromPath, target string) string {
 		return target
 	}
 	file, frag, _ := strings.Cut(target, "#")
+	rel := path.Clean(path.Join(path.Dir(fromPath), file))
 	if strings.HasSuffix(file, ".md") {
-		rel := path.Clean(path.Join(path.Dir(fromPath), file))
 		if n, ok := e.byPath[rel]; ok {
 			out := "/" + RecordRoute(n)
 			if frag != "" {
@@ -783,8 +783,31 @@ func (e *explorer) href(fromPath, target string) string {
 			}
 			return out
 		}
+		return siteHref(path.Dir(fromPath), target, e.c.repo.Repository)
 	}
-	return siteHref(path.Dir(fromPath), target, e.c.repo.Repository)
+	// A relative target that is NOT markdown — a directory, a script, a
+	// configuration file. `siteHref` leaves those exactly as the record wrote
+	// them, which on the landing page is harmless (nothing links one) and on a
+	// record's page is a link relative to `/record/<type>/<id>/` that resolves
+	// to nothing. It resolves against the repository root instead, and points at
+	// the forge's own view of whatever is there.
+	if e.c.repo.Repository == "" || file == "" || !fsutil.ValidRelPath(rel) {
+		return target
+	}
+	kind := "blob"
+	if dir, err := os.Stat(joinRepo(e.c.repoRoot, rel)); err == nil && dir.IsDir() {
+		kind = "tree"
+	} else if err != nil {
+		// The tree does not carry it. The record's own text stands: inventing a
+		// forge URL for a path that is not there trades a broken relative link
+		// for a confident 404.
+		return target
+	}
+	out := e.c.repo.Repository + "/" + kind + "/main/" + rel
+	if frag != "" {
+		out += "#" + frag
+	}
+	return out
 }
 
 // forgeBlob is the record file on the forge, or "" without a known forge.

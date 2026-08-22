@@ -44,6 +44,7 @@ func (e *explorer) graphPage() (string, error) {
 	b.WriteString(` data-fs-on="` + escapeAttr(g.FullScreen) + `"`)
 	b.WriteString(` data-fs-off="` + escapeAttr(g.ExitFullScreen) + `"`)
 	b.WriteString(` data-navlabel="` + escapeAttr(g.History) + `"`)
+	b.WriteString(` data-rel-blocked-by="` + escapeAttr(ui.Relations.BlockedBy) + `"`)
 	b.WriteString(` data-rel-supersedes="` + escapeAttr(ui.Relations.Supersedes) + `"`)
 	b.WriteString(` data-rel-implements="` + escapeAttr(ui.Relations.Implements) + `"`)
 	b.WriteString(` data-rel-builds-on="` + escapeAttr(ui.Relations.BuildsOn) + `"`)
@@ -159,7 +160,15 @@ func (e *explorer) legend() string {
 // lifecycleFill is how a bubble in that state is drawn: solid when the work is
 // settled, a ring while it is in play, dashed while it is a draft, faded once it
 // has been set aside.
+//
+// A record whose store grades it by NEITHER a lifecycle directory nor a status
+// field — a principle — declares no state, and is drawn solid because it has
+// none. Reading a fabricated one would fade every principle on the chart as
+// though it had been set aside.
 func lifecycleFill(state string) string {
+	if state == "" {
+		return "solid"
+	}
 	switch statusTone(state) {
 	case "done":
 		return "solid"
@@ -182,6 +191,13 @@ func containsStr(xs []string, x string) bool {
 	return false
 }
 
+// twinLink renders one relation in the list twin: the relation's word, and the
+// record it names as a link that focuses it in the chart.
+func (e *explorer) twinLink(word, id string) string {
+	return escapeText(word) + ` <a href="/` + escapeAttr(routeGraph) + `?focus=` + escapeAttr(id) + `">` +
+		escapeText(id) + `</a>`
+}
+
 // listTwin is every record and every link the chart shows, as markup. A keyboard
 // visitor and a reader who has asked for no motion both get the whole graph here
 // without the chart ever running.
@@ -202,19 +218,25 @@ func (e *explorer) listTwin() string {
 		b.WriteString(`<li><a class="id" href="/` + escapeAttr(RecordRoute(n)) + `">` + escapeText(n.ID) + `</a>`)
 		b.WriteString(`<span>` + escapeText(shortTitle(n)) + `</span>`)
 		b.WriteString(`<span class="d">` + escapeText(n.Date) + `</span>`)
+		// Each link is a LINK. The twin is the keyboard path through the chart,
+		// and a chart whose edges a keyboard visitor can read but not follow is
+		// only half a twin: every relation named here reaches the record it
+		// names, focused in the chart exactly as tapping the bubble would.
 		var rels []string
 		for _, ed := range e.out[n.ID] {
-			rels = append(rels, relationWord(ed.Rel)+" "+ed.To)
+			rels = append(rels, e.twinLink(relationWord(ed.Rel), ed.To))
 		}
 		for _, ed := range e.in[n.ID] {
-			rels = append(rels, e.c.ui.Relations.Inverse(ed.Rel)+" "+ed.From)
+			rels = append(rels, e.twinLink(e.c.ui.Relations.Inverse(ed.Rel), ed.From))
 		}
 		for _, ed := range e.stubs[n.ID] {
-			rels = append(rels, relationWord(ed.Rel)+" "+ed.To+" ("+e.c.ui.Record.NotInTree+")")
+			// The target has left the tree: named, dashed, and not a link.
+			rels = append(rels, escapeText(relationWord(ed.Rel))+` <span class="stub">`+
+				escapeText(ed.To)+`</span> `+escapeText(e.c.ui.Record.NotInTree))
 		}
 		if len(rels) > 0 {
 			sort.Strings(rels)
-			b.WriteString(`<span class="rel">` + escapeText(strings.Join(rels, " · ")) + `</span>`)
+			b.WriteString(`<span class="rel">` + strings.Join(rels, " · ") + `</span>`)
 		}
 		b.WriteString(`</li>`)
 	}

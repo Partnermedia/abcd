@@ -58,7 +58,12 @@ intents:
   `ACKNOWLEDGEMENTS.md`, with a build check that the two agree entry for entry.
   A reference whose target has left the tree renders as a dashed stub — on the
   record page, in record health and on the genealogy — never as a dead link and
-  never as an arc to an invented position. The Markdown subset carries what the
+  never as an arc to an invented position. A store that carries no frontmatter
+  is marked `derived` in the export, so no page presents a file name or a git
+  date as a field the record declared and no chart reads a lifecycle it never
+  had. Every emitted route matches a `site-src/headers` block carrying a content
+  policy, `nosniff` and a referrer policy, asserted by a build test rather than
+  by review. The Markdown subset carries what the
   record actually writes: nested lists, blockquotes with structure inside them,
   reference links, setext headings, rules, autolinks and CommonMark emphasis;
   anything still outside it is a build failure naming file and line.

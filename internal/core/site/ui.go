@@ -120,6 +120,7 @@ type RecordUI struct {
 
 // Relations names each directed link read from its target's side.
 type Relations struct {
+	BlockedBy  string `json:"blocked_by"`
 	Supersedes string `json:"supersedes"`
 	Implements string `json:"implements"`
 	BuildsOn   string `json:"builds_on"`
@@ -137,6 +138,8 @@ type ContributorsUI struct {
 // undirected relation reads the same from both ends and is returned unchanged.
 func (r Relations) Inverse(rel string) string {
 	switch rel {
+	case "blocked_by":
+		return r.BlockedBy
 	case "supersedes":
 		return r.Supersedes
 	case "implements":
@@ -162,13 +165,14 @@ type Platform struct {
 
 // Tiles captions the record dashboard's counts.
 type Tiles struct {
-	Releases  string `json:"releases"`
-	ADR       string `json:"adr"`
-	Intent    string `json:"intent"`
-	Spec      string `json:"spec"`
-	Issue     string `json:"issue"`
-	Principle string `json:"principle"`
-	Commits   string `json:"commits"`
+	Releases   string `json:"releases"`
+	ADR        string `json:"adr"`
+	Intent     string `json:"intent"`
+	Spec       string `json:"spec"`
+	Issue      string `json:"issue"`
+	Principle  string `json:"principle"`
+	Discipline string `json:"discipline"`
+	Commits    string `json:"commits"`
 }
 
 // ForType captions one record store's count. A store with no caption is named

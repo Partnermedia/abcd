@@ -1,18 +1,25 @@
 # Source of the Cloudflare _headers file. `abcd site build` copies it into the
 # output tree as `_headers`, comments and all.
 #
+# Every route the build emits must match a block here that carries a content
+# policy, `nosniff` and a referrer policy; `TestEveryRouteHasASecurityHeaderBlock`
+# walks the emitted tree and fails on one that does not, so a new route cannot
+# ship unprotected by being forgotten.
+#
 # /install.sh is read before it is run, so it is served as text, never as a
 # download.
 /install.sh
   Content-Type: text/plain; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
 
 # The landing page's content policy. The build already refuses a script or an
 # event handler inside a committed SVG and refuses an executable link scheme, so
 # this is the second lock, not the first: if a way past those is ever found, the
 # injected code still has no origin to run in.
 #
-# It is scoped to the landing page rather than the whole site because /docs/ is
-# rendered by a different generator whose own inline scripts this would break.
+# It is scoped to the generated pages rather than the whole site because /docs/
+# is rendered by a different generator whose own inline scripts this would break.
 #
 # What the page legitimately does: load its own stylesheet and script, the
 # Google Fonts stylesheet and the font files it points at, and its own copied
@@ -22,5 +29,62 @@
 # properties the build writes as style="--stack:22px".
 /
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# The record explorer. One policy for the whole family, directive by directive:
+#
+#   default-src 'none'      nothing not named below may load at all.
+#   script-src 'self'       site.js on every route; record.js on /record/graph/.
+#                           No 'unsafe-inline' and no 'unsafe-eval': every script
+#                           the explorer runs is a file this build wrote.
+#   style-src 'self' …      site.css, plus the Google Fonts stylesheet.
+#   style-src-attr          the build writes per-datum style attributes that no
+#     'unsafe-inline'       stylesheet can carry: a lifecycle bar's segment
+#                           widths (style="width:42.86%") and an assistance bar's
+#                           length are numbers derived per record. The narrowest
+#                           directive that permits them is this one — it governs
+#                           ATTRIBUTES only, so a <style> block and a stylesheet
+#                           from anywhere else both stay refused, and no script
+#                           can be introduced through it. The chart's script
+#                           writes its one custom property through the CSSOM
+#                           instead, so nothing here is built out of data at
+#                           runtime.
+#   font-src                the font files the Google Fonts stylesheet names.
+#   img-src 'self' data:    the build's own copied rasters; inlined SVG is markup
+#                           rather than an image source.
+#   connect-src 'self'      /record/graph/ fetches /record.json, and that is the
+#                           only request the explorer makes. It is granted to the
+#                           whole family rather than to the graph route alone
+#                           because `_headers` has no negation: a block scoped to
+#                           the graph route would overlap the family's, and which
+#                           of two overlapping blocks wins is the host's rule to
+#                           decide, not this file's. Same-origin is what does the
+#                           work here — exfiltration to a third party is refused
+#                           either way — so one unambiguous policy beats a
+#                           tighter one that depends on precedence.
+#   form-action 'none'      the explorer submits nothing.
+#   frame-ancestors 'none'  it may not be framed.
+#   base-uri 'none'         no injected <base> can re-point a relative URL.
+#   object-src 'none'       no plugins.
+/record/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/contributors/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/references/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# The export the chart reads. It is data, and it is served as data: a sniffed
+# content type is the one way a JSON file becomes something a browser executes.
+/record.json
+  Content-Type: application/json; charset=utf-8
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

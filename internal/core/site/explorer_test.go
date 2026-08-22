@@ -9,6 +9,7 @@ package site
 // a supersession whose target has left the tree, and a bibliography.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,10 +91,11 @@ func TestExplorerCoversEveryRecord(t *testing.T) {
 			t.Errorf("the list twin does not reach %s", want)
 		}
 	}
-	// The list twin carries the LINKS as well as the records, so a keyboard
-	// visitor reaches everything the chart draws without the chart running.
-	if !strings.Contains(graph, "implements spc-1") && !strings.Contains(graph, "implemented by spc-1") {
-		t.Error("the list twin does not carry the intent↔spec link")
+	// The list twin carries the LINKS as well as the records, and each one is a
+	// link, so a keyboard visitor traverses the graph without the chart running.
+	implements := `implemented by <a href="/record/graph/?focus=spc-1">spc-1</a>`
+	if !strings.Contains(graph, implements) {
+		t.Errorf("the list twin does not carry the intent↔spec link as a link: want %q", implements)
 	}
 }
 
@@ -129,6 +131,134 @@ func TestRecordPageRendersItsBodyAndLinks(t *testing.T) {
 	spec := outFile(t, out, "record/spec/spc-1/index.html")
 	if !strings.Contains(spec, `implements`) || !strings.Contains(spec, `href="/record/intent/itd-2/"`) {
 		t.Error("the spec's page does not phrase its link from its own side")
+	}
+}
+
+// TestBlockedByReadsBothWays pins a directed relation whose two ends are named
+// by different words. `blocked_by` had no inverse, so the blocker's page said it
+// was "blocked by" the record it is in fact blocking — the relation stated
+// backwards, on the page of the record that is not blocked.
+func TestBlockedByReadsBothWays(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+
+	blocked := outFile(t, out, "record/intent/itd-1/index.html")
+	if !strings.Contains(blocked, "blocked by") {
+		t.Error("the blocked record's page does not say it is blocked by anything")
+	}
+	blocker := outFile(t, out, "record/intent/itd-2/index.html")
+	if !strings.Contains(blocker, ">blocks<") {
+		t.Error("the blocker's page does not say it blocks anything")
+	}
+	if strings.Contains(blocker, "blocked by") {
+		t.Error("the blocker's page states the relation backwards")
+	}
+	// The chart is handed the same word rather than deriving its own.
+	graph := outFile(t, out, "record/graph/index.html")
+	if !strings.Contains(graph, `data-rel-blocked-by="blocks"`) {
+		t.Error("the chart was not given the inverse of blocked_by")
+	}
+}
+
+// TestListTwinLinksItsRelations is what makes the twin a twin: the chart's edges
+// are traversable, so the twin's must be too. Naming a record in a span a
+// keyboard visitor cannot follow reproduces the chart's picture and withholds
+// its one interaction.
+func TestListTwinLinksItsRelations(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+	page := outFile(t, out, "record/graph/index.html")
+
+	for _, want := range []string{
+		`<a href="/record/graph/?focus=spc-1">spc-1</a>`,
+		`<a href="/record/graph/?focus=itd-2">itd-2</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the list twin does not link %q", want)
+		}
+	}
+	// A target that has left the tree is named and dashed, and is not a link.
+	if !strings.Contains(page, `<span class="stub">adr-9</span>`) {
+		t.Error("the list twin does not mark the reference whose target has left the tree")
+	}
+	if strings.Contains(page, `?focus=adr-9"`) {
+		t.Error("the list twin links a record that is not in the tree")
+	}
+}
+
+// TestFrontmatterlessRecordsInventNoMetadata is the rule for a store that grades
+// its records by nothing: whatever the page shows, the record said. A lifecycle
+// word supplied here would be published as though it had been declared, would
+// caption a dashboard tile, and would decide how the chart fills the bubble.
+func TestFrontmatterlessRecordsInventNoMetadata(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+
+	page := outFile(t, out, "record/principle/one-fixture-principle/index.html")
+	if strings.Contains(page, "active") {
+		t.Error("a principle's page carries a lifecycle the record never declared")
+	}
+	if strings.Contains(page, ">Frontmatter<") {
+		t.Error("a frontmatter-less record's page renders a Frontmatter panel")
+	}
+	// What it does have is a file, and the two views of it the forge serves.
+	if !strings.Contains(page, ".abcd/development/principles/one-fixture-principle.md") {
+		t.Error("a principle's page does not name its file")
+	}
+
+	dash := outFile(t, out, "record/index.html")
+	if strings.Contains(dash, "active") {
+		t.Error("the dashboard captions a principle count with an invented lifecycle")
+	}
+	if !strings.Contains(dash, `<span class="l">principles</span>`) {
+		t.Error("the principle tile lost its caption")
+	}
+
+	// And the export says the fields are derived, so no consumer has to infer it
+	// from the store's name.
+	var exp RecordExport
+	if err := json.Unmarshal([]byte(outFile(t, out, "record.json")), &exp); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range exp.Nodes {
+		switch n.Type {
+		case "principle":
+			if !n.Derived {
+				t.Errorf("%s declares no frontmatter and is not marked derived", n.ID)
+			}
+			if n.Lifecycle != "" || n.Status != "" {
+				t.Errorf("%s carries a state it never declared: %q / %q", n.ID, n.Lifecycle, n.Status)
+			}
+		default:
+			if n.Derived {
+				t.Errorf("%s came from the frontmatter scan and is marked derived", n.ID)
+			}
+		}
+	}
+}
+
+// TestRelativeNonMarkdownLinksResolve is the link shape the record writes that
+// nothing rewrote: a directory or a file beside the record. On the landing page
+// nothing links one; on a record's page at `/record/<type>/<id>/` it resolved
+// against a directory three levels from anything, and 404ed.
+func TestRelativeNonMarkdownLinksResolve(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+	page := outFile(t, out, "record/principle/one-fixture-principle/index.html")
+
+	// A path the tree carries points at the forge's own view of it.
+	want := `<a href="https://example.invalid/fixture/repo/tree/main/.abcd/development/decisions">the decisions</a>`
+	if !strings.Contains(page, want) {
+		t.Errorf("a relative directory link was not resolved:\nwant %s", want)
+	}
+	// A path the tree does not carry keeps the record's own text: inventing a
+	// forge URL for it trades a broken link for a confident 404.
+	if !strings.Contains(page, `<a href="../nowhere">a missing thing</a>`) {
+		t.Error("a relative link to a path the tree does not carry was rewritten anyway")
 	}
 }
 
@@ -405,6 +535,163 @@ func TestBibliographyRefusesAnExecutableAddress(t *testing.T) {
 	}
 }
 
+// headerBlock is one path pattern in `_headers` and the headers it sets.
+type headerBlock struct {
+	pattern string
+	headers map[string]string
+}
+
+// parseHeaders reads the emitted `_headers` the way the host reads it: a line at
+// the left margin opens a block, an indented `Name: value` sets a header on it,
+// and a `#` line is a comment.
+func parseHeaders(text string) []headerBlock {
+	var out []headerBlock
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if line[0] != ' ' && line[0] != '\t' {
+			out = append(out, headerBlock{pattern: trimmed, headers: map[string]string{}})
+			continue
+		}
+		if len(out) == 0 {
+			continue
+		}
+		name, value, ok := strings.Cut(trimmed, ":")
+		if !ok {
+			continue
+		}
+		out[len(out)-1].headers[strings.TrimSpace(name)] = strings.TrimSpace(value)
+	}
+	return out
+}
+
+// headerPathMatches is the host's glob: `*` stands for any run of characters.
+func headerPathMatches(pattern, path string) bool {
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return pattern == path
+	}
+	if !strings.HasPrefix(path, parts[0]) {
+		return false
+	}
+	rest := path[len(parts[0]):]
+	for i := 1; i < len(parts)-1; i++ {
+		j := strings.Index(rest, parts[i])
+		if j < 0 {
+			return false
+		}
+		rest = rest[j+len(parts[i]):]
+	}
+	return strings.HasSuffix(rest, parts[len(parts)-1])
+}
+
+// TestEveryRouteHasASecurityHeaderBlock is the rule a new route breaks by
+// existing: `_headers` is a hand-written file and the routes are generated, so
+// nothing but this connects the two.
+//
+// A route that matches no block is served with no content policy, no `nosniff`
+// and no referrer policy — and it is served that way silently, because a missing
+// header looks exactly like a page that works.
+func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	blocks := parseHeaders(outFile(t, out, "_headers"))
+	if len(blocks) == 0 {
+		t.Fatal("the build emitted no _headers blocks")
+	}
+	required := []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"}
+
+	routes := 0
+	for _, name := range res.Files {
+		if !strings.HasSuffix(name, "index.html") {
+			continue
+		}
+		// The served route: the directory the index sits in.
+		route := "/" + strings.TrimSuffix(name, "index.html")
+		routes++
+		found := map[string]bool{}
+		for _, b := range blocks {
+			if !headerPathMatches(b.pattern, route) {
+				continue
+			}
+			for _, h := range required {
+				if b.headers[h] != "" {
+					found[h] = true
+				}
+			}
+		}
+		for _, h := range required {
+			if !found[h] {
+				t.Errorf("route %s matches no _headers block setting %s", route, h)
+			}
+		}
+	}
+	if routes == 0 {
+		t.Fatal("the build emitted no routes, so this proves nothing")
+	}
+
+	// The chart is the one route that fetches, and a policy that forbade it
+	// would leave a blank stage with the failure only visible in a console.
+	graph := false
+	for _, b := range blocks {
+		if headerPathMatches(b.pattern, "/record/graph/") &&
+			strings.Contains(b.headers["Content-Security-Policy"], "connect-src 'self'") {
+			graph = true
+		}
+	}
+	if !graph {
+		t.Error("/record/graph/ has no policy permitting the same-origin fetch of record.json")
+	}
+	// And the file this repository actually ships, held to the same rule. The
+	// fixture proves the mechanism; this proves the committed policy covers the
+	// route families the committed build emits.
+	shipped, err := os.ReadFile(filepath.FromSlash("../../../site-src/headers"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []string{"/", "/record/", "/record/graph/", "/record/timeline/",
+		"/record/foundations/", "/record/adr/adr-1/", "/record/principle/retire-the-name/",
+		"/contributors/", "/references/"} {
+		found := map[string]bool{}
+		for _, b := range parseHeaders(string(shipped)) {
+			if !headerPathMatches(b.pattern, route) {
+				continue
+			}
+			for _, h := range required {
+				if b.headers[h] != "" {
+					found[h] = true
+				}
+			}
+		}
+		for _, h := range required {
+			if !found[h] {
+				t.Errorf("site-src/headers sets no %s for %s", h, route)
+			}
+		}
+	}
+
+	// Nothing anywhere may run inline script or eval.
+	for _, b := range blocks {
+		csp := b.headers["Content-Security-Policy"]
+		if csp == "" {
+			continue
+		}
+		script := ""
+		for _, d := range strings.Split(csp, ";") {
+			if strings.HasPrefix(strings.TrimSpace(d), "script-src") {
+				script = d
+			}
+		}
+		if strings.Contains(script, "unsafe-inline") || strings.Contains(script, "unsafe-eval") {
+			t.Errorf("%s permits inline script: %q", b.pattern, script)
+		}
+	}
+}
+
 // TestReferencesRenderFromCSL pins the in-repo formatter: the sources render in
 // the CSL file's own order, with a DOI or a URL linked, beside the credited
 // inspirations under the acknowledgement file's own heading.
@@ -480,6 +767,61 @@ func TestNumberingDisagreementFailsTheBuild(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestReferencesHeadingsComeFromTheFile is adr-47 decision 2 at the one page
+// that had a fallback: the generator held the two heading names as literals and
+// printed them when the acknowledgement file did not supply them.
+//
+// That is text written for the website, and worse, it is a title invented for
+// somebody else's sources. Present and unmatched is a fault; absent is no page.
+func TestReferencesHeadingsComeFromTheFile(t *testing.T) {
+	t.Run("a present file that does not carry the heading is a fault", func(t *testing.T) {
+		f := newFixture(t)
+		f.write("ACKNOWLEDGEMENTS.md", "# Acknowledgements\n\n## Something else\n\nNot the heading.\n")
+		_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(), Stamp: fixtureStamp})
+		if err == nil {
+			t.Fatal("the sources were published under a heading the repository never wrote")
+		}
+		for _, want := range []string{"ACKNOWLEDGEMENTS.md", "References & sources"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal does not name %q: %v", want, err)
+			}
+		}
+	})
+
+	t.Run("the heading is rendered as the file spells it", func(t *testing.T) {
+		f := newFixture(t)
+		ack := outFile(t, f.Root(), "ACKNOWLEDGEMENTS.md")
+		f.write("ACKNOWLEDGEMENTS.md", strings.Replace(ack,
+			"## References & sources", "## References & Sources", 1))
+		out := t.TempDir()
+		if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp}); err != nil {
+			t.Fatal(err)
+		}
+		page := outFile(t, out, "references/index.html")
+		if !strings.Contains(page, "References &amp; Sources") {
+			t.Error("the page does not use the file's own spelling of the heading")
+		}
+	})
+
+	t.Run("no acknowledgement file omits the page", func(t *testing.T) {
+		f := newFixture(t)
+		if err := os.Remove(filepath.Join(f.Root(), "ACKNOWLEDGEMENTS.md")); err != nil {
+			t.Fatal(err)
+		}
+		out := t.TempDir()
+		res, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp})
+		if err != nil {
+			t.Fatalf("a repository with no acknowledgement file must still build: %v", err)
+		}
+		if containsString(res.Files, "references/index.html") {
+			t.Error("the references page rendered with no heading to title it")
+		}
+		if strings.Contains(outFile(t, out, "record/index.html"), `href="/references/"`) {
+			t.Error("the navigation points at a references page the build did not write")
+		}
+	})
 }
 
 // --- graceful absence -----------------------------------------------------

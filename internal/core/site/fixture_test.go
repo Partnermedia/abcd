@@ -298,7 +298,8 @@ func (f *fixture) writeSources() {
     "linux-amd64": "Linux · amd64"
   },
   "tiles": {"releases": "releases", "adr": "decisions", "intent": "intents", "spec": "specs",
-            "issue": "issues", "principle": "principles", "commits": "commits"},
+            "issue": "issues", "principle": "principles",
+            "discipline": "disciplines", "commits": "commits"},
   "record_nav": {"dashboard": "Dashboard", "graph": "Relationships", "timeline": "Genealogy",
                  "foundations": "Foundations", "contributors": "Contributors"},
   "panels": {"cadence": "Release cadence", "latest": "Latest decisions", "health": "Record health",
@@ -312,7 +313,8 @@ func (f *fixture) writeSources() {
   "record": {"frontmatter": "Frontmatter", "inbound": "Referenced by", "outbound": "References",
              "mentions": "mentions", "not_in_tree": "not in the tree", "open_on_forge": "open on GitHub",
              "commit_history": "commit history"},
-  "relations": {"supersedes": "superseded by", "implements": "implemented by", "builds_on": "built on by"},
+  "relations": {"blocked_by": "blocks", "supersedes": "superseded by",
+                "implements": "implemented by", "builds_on": "built on by"},
   "contributors": {"authors": "Authors of record", "tools": "Bots and tools",
                    "assisted": "commits disclose AI assistance", "trailers": "Assisted-by trailers"},
   "more": "more",
@@ -324,7 +326,41 @@ func (f *fixture) writeSources() {
 `)
 
 	f.write("site-src/redirects", "/old/  /docs/old/  301\n")
-	f.write("site-src/headers", "/install.sh\n  Content-Type: text/plain; charset=utf-8\n")
+	// The same block shape the repository ships, so the coverage check exercises
+	// the mechanism rather than a stub. The policies are abbreviated; what is
+	// under test is that every emitted route matches a block that sets all
+	// three security headers, and that the chart's route may fetch.
+	f.write("site-src/headers", `# fixture headers
+/install.sh
+  Content-Type: text/plain; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/record/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/contributors/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/references/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/record.json
+  Content-Type: application/json; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+`)
 	f.write("site-src/site.css", ":root{--ink:#000}\n")
 	f.write("site-src/site.js", "/* fixture */\n")
 
@@ -522,12 +558,16 @@ related_adrs: [adr-1]
 The second decision's body.
 `)
 
+	// itd-1 is BLOCKED BY itd-2, so the pair exercises a directed relation whose
+	// two ends are named by different words: itd-1 is "blocked by" itd-2, and
+	// itd-2 "blocks" itd-1.
 	f.write(".abcd/development/intents/drafts/itd-1-the-drafted-one.md", `---
 id: itd-1
 slug: the-drafted-one
 spec_id: null
 kind: standalone
 builds_on: []
+blocked_by: [itd-2]
 severity: minor
 impact: additive
 ---
@@ -693,10 +733,15 @@ impact: additive
 	// The principle store: no frontmatter, the file name is the handle, and its
 	// README is the store's index rather than one of its records.
 	f.write(".abcd/development/principles/README.md", "# principles/\n\nThe store's own index.\n")
+	// The links here are the two shapes a record writes at a relative path that
+	// is NOT markdown: a directory that exists in the tree, and a file that does
+	// not. The first has a forge view to point at; the second has nothing, and
+	// the record's own text is what stands.
 	f.write(".abcd/development/principles/one-fixture-principle.md", `# One fixture principle
 
 **The rule.** A principle carries no frontmatter, so the lint scan cannot see
-it and the site reads the store directly.
+it and the site reads the store directly. It sits beside
+[the decisions](../decisions) and is not [a missing thing](../nowhere).
 
 **Why.** It exercises the frontmatter-free path, mentioning adr-1 in passing.
 `)

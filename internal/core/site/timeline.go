@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Partnermedia/abcd/internal/core/changelog"
 )
@@ -501,10 +502,14 @@ func (e *explorer) arcs(x func(string) float64, pos map[string]tlPoint, relTop f
 }
 
 // laneHead labels one lane with its store's caption and its count.
+//
+// The count is placed past the caption by measuring it in RUNES: a caption with
+// an accent or an em-dash is fewer glyphs than it is bytes, and measuring bytes
+// pushes the count away from the label it belongs to.
 func (e *explorer) laneHead(y float64, label, count string) string {
 	return `<text x="` + strconv.Itoa(tlLeft) + `" y="` + f1(y) +
 		`" font-size="11" font-weight="650" fill="var(--ink)">` + escapeText(label) + `</text>` +
-		`<text x="` + f1(float64(tlLeft)+8+float64(len(label))*6.4) + `" y="` + f1(y) +
+		`<text x="` + f1(float64(tlLeft)+8+float64(utf8.RuneCountInString(label))*6.4) + `" y="` + f1(y) +
 		`" font-size="10" fill="var(--ink-3)">` + escapeText(count) + `</text>`
 }
 

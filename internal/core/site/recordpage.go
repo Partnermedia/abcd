@@ -86,7 +86,15 @@ func (e *explorer) recordPage(n ExportNode) (string, error) {
 	b.WriteString(`<div class="dash recgrid">`)
 	b.WriteString(`<div class="panel c8 recbody"` + srcAttr(n.Path, "") + `>` + body + `</div>`)
 	b.WriteString(`<div class="c4 recside">`)
-	b.WriteString(panel("", ui.Record.Frontmatter, n.Path, e.frontmatterTable(n)))
+	if n.Derived {
+		// The store declares no frontmatter, so there is no frontmatter panel to
+		// render. Presenting this record's file name and git dates under that
+		// heading would say the record stated them, which it did not; what it
+		// has is a file, and the file is what the panel shows.
+		b.WriteString(`<div class="panel recfile">` + e.fileLinks(n) + `</div>`)
+	} else {
+		b.WriteString(panel("", ui.Record.Frontmatter, "", e.frontmatterTable(n)))
+	}
 	if links := e.linkPanels(n); links != "" {
 		b.WriteString(links)
 	}
@@ -176,15 +184,29 @@ func (e *explorer) frontmatterTable(n ExportNode) string {
 		b.WriteString(`<tr><th scope="row">` + escapeText(r[0]) + `</th><td>` + escapeText(r[1]) + `</td></tr>`)
 	}
 	b.WriteString(`</tbody></table></div>`)
-	if blob := e.forgeBlob(n.Path); blob != "" {
-		b.WriteString(`<p class="reclinks"><a href="` + escapeAttr(blob) + `">` +
-			escapeText(e.c.ui.Record.OpenOnForge) + ` ↗</a>`)
-		if commits := e.forgeCommits(n.Path); commits != "" && n.Dates.Touched != "" {
-			b.WriteString(` · <a href="` + escapeAttr(commits) + `">` +
-				escapeText(e.c.ui.Record.CommitHistory) + ` ↗</a>`)
-		}
-		b.WriteString(`</p>`)
+	b.WriteString(e.fileLinks(n))
+	return b.String()
+}
+
+// fileLinks names the record's file and offers the two views of it the forge
+// serves: the file itself, and its commit history — which is what makes an
+// amendment traceable from a date rather than merely visible as one.
+//
+// The path is a file name, which the generator may print; everything else here
+// is a ui.json label.
+func (e *explorer) fileLinks(n ExportNode) string {
+	blob := e.forgeBlob(n.Path)
+	if blob == "" {
+		return `<p class="reclinks mono">` + escapeText(n.Path) + `</p>`
 	}
+	var b strings.Builder
+	b.WriteString(`<p class="reclinks"><span class="mono">` + escapeText(n.Path) + `</span><br>`)
+	b.WriteString(`<a href="` + escapeAttr(blob) + `">` + escapeText(e.c.ui.Record.OpenOnForge) + ` ↗</a>`)
+	if commits := e.forgeCommits(n.Path); commits != "" && n.Dates.Touched != "" {
+		b.WriteString(` · <a href="` + escapeAttr(commits) + `">` +
+			escapeText(e.c.ui.Record.CommitHistory) + ` ↗</a>`)
+	}
+	b.WriteString(`</p>`)
 	return b.String()
 }
 

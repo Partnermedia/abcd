@@ -78,6 +78,11 @@ type ExportNode struct {
 	// Date is the record's effective date: its own frontmatter date where it
 	// carries one, else the day its file first appeared in git.
 	Date string `json:"date"`
+	// Derived is true for a record that declares NO frontmatter — its id is its
+	// file name, its title its first heading, its dates git's. A page must not
+	// present those as fields the record stated, and a chart must not read a
+	// lifecycle it never had.
+	Derived bool `json:"derived,omitempty"`
 	// Dates are the file's three git dates.
 	Dates FileDates `json:"dates"`
 	// Degree is the weighted connectedness the chart sizes bubbles by.
@@ -158,12 +163,17 @@ var symmetricRel = map[string]bool{"related": true, "implements": true}
 // and the changelog.
 func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, extra []lint.RecordNode, hist History, stamp BuildStamp, opts RecordOpts) (RecordExport, error) {
 	nodes := graph.Nodes
+	derived := map[string]bool{}
 	if len(extra) > 0 {
 		// The frontmatter-free stores (principles) join the graph here rather
 		// than in the lint scan: they carry no typed references, so they add
 		// nodes and nothing else, and the scan stays the one parser of the
-		// record's typed shape.
+		// record's typed shape. They are MARKED, so a page can tell a field a
+		// record declared from one this build worked out from its file.
 		nodes = append(append(nodes[:0:0], nodes...), extra...)
+		for _, n := range extra {
+			derived[n.ID] = true
+		}
 	}
 	if !opts.IssueLedger {
 		// The issue ledger is working-tier data (adr-32); publishing it is an
@@ -205,7 +215,7 @@ func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, ext
 		exp.Nodes[i] = ExportNode{
 			ID: n.ID, Type: n.Type, Lifecycle: n.Lifecycle, Title: n.Title, Path: n.Path,
 			Status: n.Status, Kind: n.Kind, Severity: n.Severity,
-			Date: date, Dates: hist.Files[n.Path],
+			Date: date, Dates: hist.Files[n.Path], Derived: derived[n.ID],
 		}
 		lay[i] = LayoutNode{Type: n.Type, Date: date, Num: handleNum(n.ID), Touched: hist.Files[n.Path].Touched}
 		exp.Counts.ByType[n.Type]++

@@ -1041,10 +1041,6 @@ func executableScheme(href string) (string, bool) {
 	return "", false
 }
 
-func isAlpha(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
 func isEscapable(c byte) bool {
 	return strings.IndexByte("\\`*_{}[]()#+-.!|<>&\"'~", c) >= 0
 }
@@ -1070,11 +1066,18 @@ func escapeAttr(s string) string {
 
 func quote(s string) string { return `"` + s + `"` }
 
+// clip shortens a fragment for an error message.
+//
+// It counts RUNES, because the record is written in prose that carries
+// em-dashes and accents: slicing by bytes lands mid-character and puts a
+// replacement glyph in the middle of the one message somebody reads to find
+// the line the build refused.
 func clip(s string) string {
 	const max = 40
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > max {
-		return s[:max] + "…"
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max]) + "…"
 	}
 	return s
 }

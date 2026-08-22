@@ -253,7 +253,9 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
-@media (max-width:700px){.panel.cadence{display:none}}
+/* The cadence STRIP is too fine to read on a phone; its table twin is not,
+   so the drawing goes and the numbers stay. */
+@media (max-width:700px){.panel.cadence .cadsvg{display:none}}
 
 .tile{display:block}
 .tile .n,.tile .l,.tile .s{display:block}
@@ -411,7 +413,11 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .continuum .alive{stroke:var(--ink-3);stroke-width:3;stroke-linecap:round;opacity:.55}
 .continuum .tick{stroke:var(--rule-2);stroke-width:1}
 .continuum .tlab{font-family:"IBM Plex Mono",monospace;font-size:8.5px;fill:var(--ink-3);text-anchor:middle}
-.continuum .mark{cursor:help;outline:none}
+/* Focusable, so keyboard and forced-colors users get a real focus ring: an
+   `outline:none` here left the tab stop invisible in exactly the mode a
+   reader turns on because they need to see it. */
+.continuum .mark{cursor:help}
+.continuum .mark:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .continuum .mark .hit{fill:transparent;stroke:none;pointer-events:all}
 .continuum .mark path,.continuum .mark circle:not(.hit){fill:var(--ink);stroke:var(--surface);stroke-width:1.5}
 .continuum .mark.tree circle{fill:var(--ink)}
