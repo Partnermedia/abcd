@@ -1,16 +1,67 @@
 {
-  // Assets-only worker serving the generated docs site: no script, just the
-  // static output of `mkdocs build` (see mkdocs.yml). The name matches the
-  // host's existing project for this repository. The build commands live in
-  // the host project's settings (dashboard state, recorded here because the
-  // tree is the only durable record):
+  // Assets-only worker serving the generated site: no script, just the static
+  // output of the site build and `mkdocs build` (see mkdocs.yml). The name
+  // matches the host's existing project for this repository.
+  //
+  // Deploys come from GitHub Actions with wrangler, not from the host
+  // (adr-48). The host project's automatic builds are turned OFF — a manual
+  // dashboard setting, recorded here because the tree is the only durable
+  // record:
+  //   automatic production builds:  disabled
+  //   automatic branch builds:      disabled
+  // Actions is the only thing that deploys this Worker, so the dashboard's own
+  // build, deploy and version commands are inert. They are kept below as the
+  // record of what the dashboard ran before the switch, and as the shape any
+  // by-hand deploy has to reproduce:
   //   build command:   pip install -r docs/requirements.txt && mkdocs build
   //   deploy command:  npx wrangler deploy
   //   version command: pip install -r docs/requirements.txt && mkdocs build && npx wrangler versions upload
   // The version command repeats the build DELIBERATELY: non-production branch
-  // builds run the version command without the build command (observed
-  // 2026-08-19 across four builds), so it must be self-contained or every
-  // branch preview fails on a missing ./site.
+  // builds ran the version command without the build command (observed
+  // 2026-08-19 across four builds), so it had to be self-contained or every
+  // branch preview failed on a missing ./site.
+  //
+  // What Actions runs instead (.github/workflows/site.yml):
+  //   production — on the release chain, from the tag, rendered by the released
+  //     binary that workflow checksum- AND attestation-verifies; the render job
+  //     holds no credential, and a separate deploy job runs `wrangler deploy`,
+  //     which is what asserts the routes below.
+  //   preview — on every push to main, rendered from source with an
+  //     "unreleased" build stamp; `wrangler versions upload`, which publishes a
+  //     version and assigns it no production traffic, so a preview can never
+  //     take the abcdev.app route.
+  //
+  // Three GitHub Environments gate that workflow, and this is the only durable
+  // record of how they are configured:
+  //   site-render   the render job. NO SECRETS. Deployment policy: branch
+  //                 `main` AND tags `v*`.
+  //   site          the deploy job. Same policy: branch `main` AND tags `v*`;
+  //                 NO required reviewer, so the emergency redeploy is never
+  //                 blocked on a human. Holds CLOUDFLARE_API_TOKEN and
+  //                 CLOUDFLARE_ACCOUNT_ID.
+  //   site-preview  unprotected; the preview deploys on every push to main.
+  //                 Holds CLOUDFLARE_PREVIEW_API_TOKEN and
+  //                 CLOUDFLARE_PREVIEW_ACCOUNT_ID — deliberately DIFFERENT
+  //                 names, so a missing environment cannot fall through to a
+  //                 repo-level secret and hand the preview a production token.
+  //
+  // The {main, v*} policy refuses UNREVIEWED WORKFLOW CONTENT: a dispatch runs
+  // the workflow file as it exists on the ref it was dispatched from, so an
+  // arbitrary branch is refused, while `main` is the reviewed state and a `v*`
+  // tag is immutable. It cannot be `v*` alone: the primary release path runs
+  // with a ref of refs/heads/main, so a tags-only policy would refuse every
+  // ordinary release. Residual, plainly: whoever can merge to main can change
+  // the workflow and have it run with these secrets — the repository's ordinary
+  // review boundary, not a new surface.
+  //
+  // `site-render` holds no secret but is still gated, because the render job
+  // signs artefacts and replaces a release asset; gating it after the fact, at
+  // `site`, would refuse too late to help.
+  //
+  // Both tokens are scoped to this one Worker. Cloudflare cannot scope a token
+  // to a verb, so the preview token could technically run `deploy` against it;
+  // the controls that actually hold are the distinct secret names and the
+  // deployment policy on the production environment, not the token's own scope.
   "name": "abcd",
   "compatibility_date": "2026-08-19",
   // The site's domain is committed config, not dashboard state: the deploy

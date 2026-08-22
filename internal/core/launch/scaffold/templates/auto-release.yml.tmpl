@@ -150,9 +150,17 @@ jobs:
   # CALLED (not triggered by the tag push), github.sha inside release.yml is this
   # run's HEAD = the commit just tagged, so both of release.yml's jobs check out
   # and ship exactly that commit — the same anti-tag-move property the tag-push
-  # entry point has. A called workflow is capped by the caller's grants, so this
-  # job hands down every scope release.yml's jobs need (contents/id-token/
-  # attestations: write).
+  # entry point has.
+<%- if .Abcd %>
+  # A called workflow is capped by the caller's grants, and that cap is
+  # transitive: release.yml in turn calls site.yml (adr-48), so this job hands
+  # down every scope BOTH workflows' jobs need (contents/id-token/attestations:
+  # write). The three happen to be the same set, so the site deploy widens
+  # nothing here.
+<%- else %>
+  # A called workflow is capped by the caller's grants, so this job hands down
+  # every scope release.yml's jobs need (contents: write).
+<%- end %>
   release:
     needs: [detect, tag]
     # Run when a release is needed AND the tag is in place — either the tag job
@@ -168,9 +176,9 @@ jobs:
       && (needs.tag.result == 'success' || needs.tag.result == 'skipped')
     permissions:
 <%- if .Abcd %>
-      contents: write        # release.yml: create the Release + verify the tag
-      id-token: write        # release.yml: OIDC for build-provenance attestation
-      attestations: write    # release.yml: publish + read back the attestations
+      contents: write        # release.yml: create the Release + verify the tag; site.yml: attach site.tar.gz
+      id-token: write        # release.yml + site.yml: OIDC for build-provenance attestation
+      attestations: write    # release.yml: publish + read back the attestations; site.yml: attest site.tar.gz
 <%- else %>
       contents: write        # release.yml: create the Release + verify the tag
 <%- end %>
