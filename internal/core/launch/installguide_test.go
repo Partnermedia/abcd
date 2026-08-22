@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// TestREADMEDocumentsTheInstallAndUpdatePath is the itd-67 acceptance detector
-// for the documented distribution path, run against THIS repository rather than
-// a synthetic fixture.
+// TestInstallGuideDocumentsTheInstallAndUpdatePath is the itd-67 acceptance
+// detector for the documented distribution path, run against THIS repository
+// rather than a synthetic fixture.
 //
 // It is pinned to the real tree because every name in the documented commands is
 // owned by a different file: the marketplace slug by the module path (and so by
@@ -18,16 +18,17 @@ import (
 // .claude-plugin/marketplace.json. Prose repeating those names drifts silently —
 // a renamed marketplace, or an install line naming a repository that is not this
 // one, still reads perfectly while sending users somewhere that does not resolve.
-// Deriving each expected string from its owning file makes the README fail with
+// Deriving each expected string from its owning file makes the page fail with
 // the rename instead of after it.
-func TestREADMEDocumentsTheInstallAndUpdatePath(t *testing.T) {
+func TestInstallGuideDocumentsTheInstallAndUpdatePath(t *testing.T) {
 	root := repoRootForTest(t)
 
-	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	const guide = "docs/how-to/install.md"
+	page, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(guide)))
 	if err != nil {
-		t.Fatalf("read the committed README: %v", err)
+		t.Fatalf("read the committed install guide: %v", err)
 	}
-	prose := string(readme)
+	prose := string(page)
 
 	slug := moduleRepoSlug(t, root)
 	marketplace, plugin := marketplaceNames(t, root)
@@ -43,7 +44,7 @@ func TestREADMEDocumentsTheInstallAndUpdatePath(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !strings.Contains(prose, tc.want) {
-				t.Errorf("README does not document %q", tc.want)
+				t.Errorf("%s does not document %q", guide, tc.want)
 			}
 		})
 	}
