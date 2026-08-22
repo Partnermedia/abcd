@@ -84,6 +84,19 @@ func RedactRoot(s, root, repl string) string {
 	return replaceBareRoot(s, root, repl)
 }
 
+// RedactHome replaces the user's home directory in s with "~" wherever it
+// appears — the home-polarity shortcut over RedactRoot for a success or receipt
+// envelope that carries an absolute path the CLI error scrub (which runs only on
+// the error value) never sees. A home-resolution failure or a root-level home
+// leaves s unchanged, so the primitive is never worse than the raw string.
+func RedactHome(s string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return s
+	}
+	return RedactRoot(s, filepath.Clean(home), "~")
+}
+
 // replaceBareRoot replaces occurrences of root that end at a path boundary (end
 // of string or a character that cannot continue a path segment), leaving a longer
 // path that merely shares this prefix untouched.
