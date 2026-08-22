@@ -22,6 +22,11 @@ func isolatedGit(root string, args ...string) *exec.Cmd {
 	full := append([]string{
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "core.fsmonitor=false",
+		// Emit paths verbatim (UTF-8), not the default C-quoted, double-quoted
+		// form for non-ASCII bytes: a caller that matches a git-reported path
+		// against a filesystem-derived one (site date history) would never match
+		// the quoted key and lose the record's dates.
+		"-c", "core.quotePath=false",
 		"-C", root,
 	}, args...)
 	cmd := exec.Command("git", full...)

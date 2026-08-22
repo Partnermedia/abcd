@@ -15,6 +15,7 @@ package site
 // carried as a separate, weaker relation rather than being promoted into one.
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -170,6 +171,20 @@ func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, ext
 		// nodes and nothing else, and the scan stays the one parser of the
 		// record's typed shape. They are MARKED, so a page can tell a field a
 		// record declared from one this build worked out from its file.
+		existing := make(map[string]bool, len(nodes))
+		for _, n := range nodes {
+			existing[n.ID] = true
+		}
+		for _, n := range extra {
+			// A frontmatter-free store id that collides with a typed record's id
+			// would silently overwrite that record in the export (index/derived are
+			// keyed by id, last write wins), stripping its frontmatter panel and
+			// rerouting every cross-reference. Refuse loudly rather than corrupt
+			// the graph — the fix is to rename the store file.
+			if existing[n.ID] {
+				return RecordExport{}, fmt.Errorf("site: record id %q is claimed by both a typed record and a frontmatter-free store file; rename the store file", n.ID)
+			}
+		}
 		nodes = append(append(nodes[:0:0], nodes...), extra...)
 		for _, n := range extra {
 			derived[n.ID] = true
