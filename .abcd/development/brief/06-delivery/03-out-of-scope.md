@@ -89,6 +89,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-139` — The generic record explorer demonstrated on a second, sparse managed instance (held in drafts until the itd-140 fixture gate can be met; carries the reframed generalisation verdict)
 - `itd-142` — The brief-creation interview: staged elicitation into the brief and a ledger (frontier rounds, options at conjectural questions, hold register, two-output rule per adr-50); spec waits on the collaborating prototype's first run
 - `itd-143` — The framing chapter under 01-product/: the macro-why home, with its brief↔lifeboat mapping row; receives itd-142's committed framing products
+- `itd-141` — docs-lint enforces the writing style guide's machine-checkable punctuation subset (the guide labels those rules review until this ships)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

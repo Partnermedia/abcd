@@ -705,3 +705,27 @@ Per hand-run, append:
 - **Verdict:** FILE-AS-IS (as the routed ADR), proposed and confirmed.
 - **Notes:** both sections optional and unenforced; `enforcement-claims-are-facts`
   keeps the template honest about that.
+### 2026-08-22 — the writing style guide (hand-run at capture)
+
+- **Proposal:** one canonical writing style guide (maintainer request,
+  2026-08-22): consolidate the scattered rules (British/US split, present
+  tense, Diátaxis) plus new punctuation rules (no em dash in list items — use
+  a colon; capital after a colon; lower case after a semicolon), enforce the
+  machine-checkable subset, and record the loader pointer.
+- **Initial routing:** four parts — the docs-lint enforcement of the
+  machine-checkable subset (capability | intent itd-141); the canonical guide
+  page (docs | `docs/reference/writing-style.md`, linked from
+  CONTRIBUTING.md); the loader pointer (config plumbing | a DOCUMENTATION
+  override in `.abcd/rules.json`, the point-don't-copy pattern); the Vale
+  ruling and the adopt-an-open-licensed-guide exploration (SOTA | inside
+  itd-141's SOTA section, per sota-per-intent — no separate record). No new
+  principle: point-don't-copy restates the existing OPINIONS pattern; no ADR:
+  no new rule family (maintainer pre-ruled).
+- **Confirmed routing:** pre-confirmed — the maintainer's 2026-08-22 request
+  arrived already decomposed into these homes, with the Vale ruling and the
+  no-ADR condition explicit; filed as ruled.
+- **Verdict:** SPLIT, proposed and confirmed (all parts filed in one change).
+- **Notes:** first hand-run where the human's proposal arrived pre-routed;
+  the protocol's value here was verifying no part was missing a home, not
+  discovering the split. `enforcement-claims-are-facts` did real work: the
+  guide labels the staged rules `review` until the lint ships.

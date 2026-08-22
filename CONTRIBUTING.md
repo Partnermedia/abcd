@@ -44,7 +44,8 @@ inbound = outbound statement is the whole of it.
   no scopes; short title, body explains why.
 - A **CHANGELOG** entry accompanies any user-facing change.
 - **Docs** are Diátaxis (one type per page, present tense); the design record lives
-  under `.abcd/`, never in `docs/`.
+  under `.abcd/`, never in `docs/`. Prose follows the canonical
+  [writing style guide](docs/reference/writing-style.md).
 - **New dependencies need explicit maintainer sign-off** before they land in
   `go.mod`.
 
