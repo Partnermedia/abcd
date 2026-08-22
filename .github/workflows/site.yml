@@ -12,16 +12,12 @@ name: site
 #                     a `release:` trigger would never fire for this repository's
 #                     releases at all. Being CALLED also removes the race against
 #                     asset uploads: `gh release create` has already returned.
-#   workflow_dispatch the EMERGENCY redeploy. Always from a tag, never from main: an
+#   workflow_dispatch the EMERGENCY redeploy. The SITE always comes from a tag: an
 #                     empty `tag` input resolves the latest PUBLISHED release, so the
 #                     released-bytes invariant survives the emergency (adr-48 4).
-#                     DISPATCH THIS WORKFLOW FROM THE TAG REF, not from a branch. The
-#                     `site` environment is protected by a deployment-tag restriction
-#                     of `v*`, and that restriction is evaluated against the ref the
-#                     RUN is on, not the ref this workflow checks out — so a run
-#                     dispatched from a branch reaches `deploy` and is then refused
-#                     the environment's secrets. That refusal is the control, and it
-#                     is why the restriction is worth more here than a reviewer.
+#                     Dispatch it from `main` or from the tag — both are admitted, and
+#                     an arbitrary branch is not. See THE ENVIRONMENT CONTRACT below
+#                     for what that restriction is actually protecting.
 #   push: [main]      the PREVIEW. main is ahead of every release, so the
 #                     released-bytes rule cannot apply: the preview is built from
 #                     SOURCE, carries the "unreleased" build stamp that discloses
@@ -46,16 +42,40 @@ name: site
 # attestations are already made and are untouched.
 #
 # THE ENVIRONMENT CONTRACT (dashboard state, recorded here because the tree is the
-# only durable record of it):
+# only durable record of it). THREE environments:
 #
-#   `site`          protected by a deployment-tag restriction of `v*`; NO required
-#                   reviewer, deliberately — the emergency dispatch is the 3am path
-#                   and must not wait on a human, while the tag restriction still
-#                   means a branch-dispatched run can never obtain these secrets.
+#   `site-render`   the render job. NO SECRETS AT ALL. Deployment policy: branch
+#                   `main` AND tags `v*`.
+#   `site`          the deploy job. Same policy: branch `main` AND tags `v*`. NO
+#                   required reviewer, deliberately — the emergency redeploy is the
+#                   3am path and must not wait on a human.
 #                   Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
-#   `site-preview`  unprotected — the preview deploys on every push to main.
+#   `site-preview`  the preview job. Unprotected — it runs on every push to main.
 #                   Secrets: CLOUDFLARE_PREVIEW_API_TOKEN,
 #                   CLOUDFLARE_PREVIEW_ACCOUNT_ID.
+#
+# WHY {main, v*} AND NOT `v*` ALONE. What the restriction refuses is UNREVIEWED
+# WORKFLOW CONTENT. A workflow_dispatch runs this file as it exists on the ref it was
+# dispatched from, so a dispatch from an arbitrary branch runs that branch's edited
+# copy — and is refused, because that branch matches neither pattern. `main`'s copy is
+# the reviewed state (the merge queue and the required checks gate every change that
+# reaches it) and a `v*` tag is immutable, so admitting both keeps the control intact.
+# A tags-only policy would not merely be stricter, it would be wrong: the PRIMARY
+# release path is auto-release -> release.yml -> here, and its run ref is
+# refs/heads/main, so `v*` alone refuses every ordinary release and leaves only the
+# emergency path working.
+#
+# The residual, stated plainly: an actor who can merge to main can change this file
+# and then have it run with these secrets. That is the repository's ordinary review
+# boundary — the same one release.yml already rests on — not a new surface.
+#
+# WHY `site-render` EXISTS THOUGH IT HOLDS NO SECRET. render carries contents: write,
+# id-token and attestations: write — it signs artefacts and replaces a release asset.
+# Ungated, a run dispatched from an arbitrary branch would reach it and could attest
+# and attach arbitrary bytes to a real release; `site`'s gate on the job after it
+# refuses too late, because the asset has already been clobbered. The same {main, v*}
+# policy refuses that run before it writes anything. render needs no credential and is
+# given none, so gating it costs nothing and compromising it yields nothing.
 #
 # The preview secrets carry DIFFERENT NAMES from the production ones on purpose. A
 # secret reference that resolves to nothing is empty, not an error, so identically
@@ -218,18 +238,34 @@ jobs:
           # Annotated tags need peeling: auto-release creates them with `git tag -a`,
           # so refs/tags/<tag> points at a TAG OBJECT and .object.sha is that object,
           # not the commit. release.yml peels with `$tag^{commit}`; the API equivalent
-          # is a second lookup through git/tags/<tag-object>.
+          # is a lookup through git/tags/<tag-object> — repeated, because git permits a
+          # tag OF a tag and one hop would stop on the inner tag object. Bounded, so a
+          # cyclic or absurdly nested chain cannot spin here.
           ref_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}")"
           obj_type="$(printf '%s' "$ref_json" | jq -r '.object.type')"
           obj_sha="$(printf '%s' "$ref_json" | jq -r '.object.sha')"
-          if [ "$obj_type" = tag ]; then
-            sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${obj_sha}" --jq '.object.sha')"
-          else
-            sha="$obj_sha"
+          hops=0
+          while [ "$obj_type" = tag ]; do
+            hops=$((hops + 1))
+            if [ "$hops" -gt 10 ]; then
+              echo "refusing '$tag': more than 10 tag objects deep; this is not a release tag" >&2
+              exit 1
+            fi
+            tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${obj_sha}")"
+            obj_type="$(printf '%s' "$tag_json" | jq -r '.object.type')"
+            obj_sha="$(printf '%s' "$tag_json" | jq -r '.object.sha')"
+          done
+          # A tag may point at a tree or a blob, not only a commit. Say what was found
+          # rather than letting a non-commit through to a checkout that would fail
+          # obscurely — and so the refusal below can honestly claim it is about commits.
+          if [ "$obj_type" != commit ]; then
+            echo "refusing '$tag': it resolves to a $obj_type, not a commit" >&2
+            exit 1
           fi
+          sha="$obj_sha"
           sha_re='^[0-9a-f]{40}$'
           if [[ ! $sha =~ $sha_re ]]; then
-            echo "refusing: '$tag' did not resolve to a commit sha (got '$sha')" >&2
+            echo "refusing '$tag': did not resolve to a commit sha (got '$sha')" >&2
             exit 1
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
@@ -273,15 +309,26 @@ jobs:
   # runs third-party build code — `pip install` resolves and executes whatever
   # docs/requirements.txt names, and mkdocs runs its own plugins — and that code must
   # never share a job with the Cloudflare token. So the credentialed job runs no build
-  # code at all, and this job holds no credential: it publishes site.tar.gz as an
-  # attested release asset and hands the same bytes to `deploy` as a workflow
-  # artifact. The bytes that reach abcdev.app are therefore the bytes that were
-  # attested, which is what makes the attestation mean anything to a visitor.
+  # code at all, and this job holds no credential: it publishes site.tar.gz as a
+  # release asset and hands the same bytes to `deploy` as a workflow artifact, so the
+  # bytes that reach abcdev.app are the bytes this job produced.
+  #
+  # Once the repository is PUBLIC those bytes are also attested, and the chain is
+  # complete: a visitor can check that what abcdev.app serves was built here, from
+  # this tag. On a private repo GitHub offers no artifact attestation, so the attest
+  # step below is skipped and what holds today is the checksum floor on the input
+  # binary plus this in-run handover. The structure is what makes the guarantee
+  # available the day visibility flips; it is not one the private repo already has.
   render:
     needs: resolve
     if: ${{ needs.resolve.outputs.deploy == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # NO SECRETS live here, and none are referenced. The environment is a GATE, not a
+    # credential store: it holds this job to the same {main, v*} deployment policy as
+    # `deploy`, so a run dispatched from an arbitrary branch cannot reach a job that
+    # attests artefacts and clobbers a release asset. See THE ENVIRONMENT CONTRACT.
+    environment: site-render
     permissions:
       contents: write       # upload site.tar.gz to the Release (no branch push)
       id-token: write       # mint the OIDC token attest-build-provenance signs with
@@ -460,8 +507,10 @@ jobs:
 
       - name: Hand site.tar.gz to the deploy job
         # The same file, passed in-run rather than re-downloaded, so `deploy` serves
-        # exactly the bytes attested above — no second fetch, no window in which the
-        # release asset could differ from what this job produced.
+        # exactly the bytes this job produced — no second fetch, no window in which the
+        # release asset could differ. On a public repo those are also the bytes the
+        # step above attested; on a private repo that step is skipped and this handover
+        # is what still holds the two jobs to one artefact.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: site-${{ needs.resolve.outputs.tag }}
@@ -471,8 +520,9 @@ jobs:
 
   # Deploy production. The ONLY job that holds a Cloudflare credential, and it runs no
   # build code: it checks out the tagged commit for wrangler.jsonc alone, unpacks the
-  # artefact `render` attested, and calls wrangler. Nothing here resolves a package,
-  # executes a plugin, or reads the rendered content.
+  # artefact `render` handed it (attested too, once the repo is public), and calls
+  # wrangler. Nothing here resolves a package, executes a plugin, or reads the
+  # rendered content.
   deploy:
     needs: [resolve, render]
     if: ${{ needs.resolve.outputs.deploy == 'true' }}
@@ -487,17 +537,33 @@ jobs:
     # cannot cover this case: a dispatch with an empty tag has no tag to key on yet —
     # it resolves one in `resolve` — so it lands in the branch group and would
     # otherwise run concurrently with a release chain deploying a NEWER tag. Two
-    # `wrangler deploy`s then race for one route and the last writer wins, which can
-    # leave abcdev.app on the older release. There is exactly one production route, so
-    # every production deploy shares one group and they queue. Never cancelled, for the
-    # same reason as the workflow-level group.
+    # `wrangler deploy`s then race for one route, and the last writer wins. There is
+    # exactly one production route, so every production deploy shares one group.
+    #
+    # What this gives is MUTUAL EXCLUSION, not ordering, and the difference matters.
+    # A job enters the group when it STARTS, which is after its own render has
+    # finished. Two releases cut close together can therefore serialise in the wrong
+    # order: an older tag whose render was slow can enter the group after a newer
+    # tag's fast render has already deployed, and leave abcdev.app on the older
+    # release. Nothing is corrupted — each deploy serves one coherent, verified tree —
+    # but the site can sit one release behind.
+    #
+    # Tag-aware serialisation is not cheaply expressible here: `concurrency` admits a
+    # string key and no ordering or precedence, so refusing a stale deploy would mean
+    # reading the currently-deployed version back from Cloudflare and comparing
+    # SemVer — a live API read that this job deliberately does not do, and a new
+    # failure mode on the release path. The residual is accepted instead. Recovery is
+    # one action and needs no new machinery: re-run the site job of the newest tag's
+    # release, which is idempotent per tag.
+    #
+    # Never cancelled, for the same reason as the workflow-level group.
     concurrency:
       group: site-production
       cancel-in-progress: false
     # The protected environment holds the Cloudflare credentials for the PRODUCTION
-    # Worker and is the server-side gate on this deploy — a `v*` deployment-tag
-    # restriction, no required reviewer. See THE ENVIRONMENT CONTRACT in the header for
-    # what that buys and what it does not.
+    # Worker and is the server-side gate on this deploy — deployment policy {branch
+    # main, tags v*}, no required reviewer. See THE ENVIRONMENT CONTRACT in the header
+    # for what that buys and what it does not.
     environment: site
     permissions:
       contents: read        # check out wrangler.jsonc; publishes nothing
@@ -520,13 +586,70 @@ jobs:
           name: site-${{ needs.resolve.outputs.tag }}
           path: ${{ runner.temp }}/site-artifact
 
-      - name: Unpack the rendered site
-        # Into ./site, where wrangler.jsonc's assets directory points. The archive is
-        # the one `render` attested, so the bytes served are the bytes signed.
+      - name: Audit the archive's members before extracting anything
+        # tar writes what the archive tells it to. A member named `../wrangler.jsonc`,
+        # an absolute path, or a symlink pointing out of the tree can each write
+        # outside the extraction directory — and the file most worth overwriting here
+        # is wrangler.jsonc itself, which names the routes this job is about to assert.
+        # `render` produces this archive from a `tar -czf` of its own output, so a
+        # hostile member means something upstream is already wrong; that is exactly
+        # when a cheap check earns its place.
+        #
+        # Refuse, rather than rely on tar's own stripping: GNU and BSD tar differ in
+        # what they strip and warn about, and a warning in a log nobody reads is not a
+        # control. Verified against absolute-path, `..`, symlink and hardlink archives.
         run: |
           set -euo pipefail
+          archive="${RUNNER_TEMP}/site-artifact/site.tar.gz"
+          names="$(tar -tzf "$archive")"
+          while IFS= read -r member; do
+            [ -n "$member" ] || continue
+            case "$member" in
+              /*)      echo "::error::refusing site.tar.gz: absolute path '$member'"; exit 1 ;;
+              ..|../*) echo "::error::refusing site.tar.gz: parent traversal '$member'"; exit 1 ;;
+              */../*)  echo "::error::refusing site.tar.gz: parent traversal '$member'"; exit 1 ;;
+              */..)    echo "::error::refusing site.tar.gz: parent traversal '$member'"; exit 1 ;;
+            esac
+          done <<< "$names"
+          # The first character of tar's verbose mode string is the member type. Only
+          # regular files and directories may appear: a symlink or hardlink member is
+          # a write primitive aimed wherever it points.
+          types="$(tar -tvzf "$archive" | awk '{print substr($1,1,1)}' | sort -u)"
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            case "$t" in
+              -|d) ;;
+              *) echo "::error::refusing site.tar.gz: non-regular member (type '$t')"; exit 1 ;;
+            esac
+          done <<< "$types"
+          echo "site.tar.gz holds only regular files and directories, all relative."
+
+      - name: Unpack the rendered site outside the workspace
+        # Extract into RUNNER_TEMP, never into the workspace: wrangler.jsonc lives in
+        # the workspace, and extraction is the one operation that could overwrite it.
+        # Keeping the two under different roots means no archive member — audited or
+        # not — is written anywhere near the config this job trusts.
+        #
+        # The verified tree is then COPIED into ./site, which is where
+        # wrangler.jsonc's assets directory points. Copying named regular files into a
+        # named directory cannot escape it, and the audit above has already excluded
+        # every member type that could redirect a write.
+        run: |
+          set -euo pipefail
+          staging="${RUNNER_TEMP}/site-unpacked"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          tar -xzf "${RUNNER_TEMP}/site-artifact/site.tar.gz" -C "$staging"
+          # Belt and braces: assert on disk what the audit asserted in the manifest.
+          # If anything but a regular file or directory landed, stop before it is
+          # copied next to the config.
+          if find "$staging" -mindepth 1 ! -type f ! -type d | read -r; then
+            echo "::error::the unpacked site holds something that is not a regular file or directory"
+            exit 1
+          fi
+          test -n "$(ls -A "$staging")"
           mkdir -p site
-          tar -xzf "${RUNNER_TEMP}/site-artifact/site.tar.gz" -C site
+          cp -R "$staging/." site/
           test -n "$(ls -A site)"
 
       - name: Deploy to the production Worker
@@ -602,10 +725,10 @@ jobs:
         # render job's build step for the full note.
         run: |
           set -euo pipefail
-          # Probe before use, as in the render job — same root-listing grep, and see
-          # that step for why the obvious `--help` forms all pass on a verb-less
-          # binary. Here it catches the window between this workflow merging and the
-          # site slice merging, when main itself builds a binary with no site verb.
+          # Probe before use, as in `render` — same root-listing grep, and see that
+          # step for why the obvious `--help` forms all pass on a verb-less binary.
+          # Here it catches the window between this workflow merging and the site
+          # slice merging, when main itself builds a binary with no site verb.
           ./abcd --help 2>/dev/null | grep -qE '^[[:space:]]+site[[:space:]]' || {
             echo "::error::this binary has no site verb (built from a commit before the site slice); refusing — see PR #421"
             exit 1
