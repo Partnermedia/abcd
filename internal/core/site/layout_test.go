@@ -144,6 +144,44 @@ func TestArrangementsShape(t *testing.T) {
 	}
 }
 
+// TestArrangementsPlaceDatelessRecordsLast pins what a record with no date
+// does to a chronological picture. The empty string is the smallest string
+// there is, so the naive answer seats an undatable record at the centre of the
+// spiral — the position that means "the first thing that happened" — and
+// publishes a span that begins nowhere.
+func TestArrangementsPlaceDatelessRecordsLast(t *testing.T) {
+	nodes, typed, mentions := synthRecords(40)
+	// Two records git cannot place: one written but not yet committed is the
+	// everyday way this happens.
+	nodes[7].Date = ""
+	nodes[23].Date = ""
+	a := ComputeArrangements(nodes, typed, mentions)
+
+	if got := nodes[a.Order[0]].Date; got == "" {
+		t.Errorf("an undated record took the centre of the coil (order[0] = %d)", a.Order[0])
+	}
+	last := []int{a.Order[len(a.Order)-1], a.Order[len(a.Order)-2]}
+	for _, i := range last {
+		if nodes[i].Date != "" {
+			t.Errorf("a dated record sorted after an undated one (index %d, date %q)", i, nodes[i].Date)
+		}
+	}
+	if a.DateRange[0] == "" {
+		t.Errorf("the published span begins at the empty string: %v", a.DateRange)
+	}
+	if a.DateRange[0] > a.DateRange[1] {
+		t.Errorf("the span runs backwards: %v", a.DateRange)
+	}
+	for _, m := range a.Months {
+		if m.Month == "" {
+			t.Error("an empty month marker was published")
+		}
+	}
+	if a.Overlaps != 0 {
+		t.Errorf("undated records broke the packing: %d overlaps", a.Overlaps)
+	}
+}
+
 // TestArrangementsEmptyCorpus keeps an unpopulated repository a state rather
 // than a panic.
 func TestArrangementsEmptyCorpus(t *testing.T) {

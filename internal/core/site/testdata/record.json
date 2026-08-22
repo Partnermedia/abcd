@@ -37,6 +37,21 @@
       "degree": 1.4
     },
     {
+      "id": "adr-3",
+      "type": "adr",
+      "lifecycle": "",
+      "title": "ADR-3: Settled while merging",
+      "path": ".abcd/development/decisions/adrs/0003-settled-while-merging.md",
+      "status": "accepted",
+      "date": "2026-03-05",
+      "dates": {
+        "created": "2026-03-05",
+        "entered": "2026-03-05",
+        "touched": "2026-03-05"
+      },
+      "degree": 0
+    },
+    {
       "id": "iss-1",
       "type": "issue",
       "lifecycle": "open",
@@ -131,14 +146,14 @@
   ],
   "counts": {
     "by_type": {
-      "adr": 2,
+      "adr": 3,
       "intent": 2,
       "issue": 1,
       "spec": 1
     },
     "by_lifecycle": {
       "adr": {
-        "": 2
+        "": 3
       },
       "intent": {
         "drafts": 1,
@@ -163,24 +178,24 @@
     }
   ],
   "authorship": {
-    "commits": 3,
+    "commits": 5,
     "humans": [
       {
         "name": "Fixture",
-        "commits": 3
+        "commits": 5
       }
     ],
     "bots": [],
     "assisted": 1,
-    "declared_none": 1,
+    "declared_none": 3,
     "undeclared": 1,
     "by_model": [
       {
-        "model": "Assistant:assistant-model-1",
-        "commits": 1
+        "model": "None",
+        "commits": 3
       },
       {
-        "model": "None",
+        "model": "Assistant:assistant-model-1",
         "commits": 1
       }
     ]
@@ -205,6 +220,10 @@
       {
         "x": 0,
         "y": 0.7385
+      },
+      {
+        "x": 0.5544,
+        "y": 0.2779
       },
       {
         "x": 0.5776,
@@ -234,6 +253,10 @@
       },
       {
         "x": 0,
+        "y": 0.97
+      },
+      {
+        "x": 0,
         "y": 0.905
       },
       {
@@ -252,6 +275,7 @@
     "degree": [
       2.7,
       1.4,
+      0,
       0.7,
       1,
       1,
@@ -260,6 +284,7 @@
     "radius": [
       8.392,
       7.0675,
+      3.87,
       3.7312,
       6.622,
       6.622,
@@ -268,34 +293,39 @@
     "order": [
       0,
       1,
-      3,
       4,
       5,
+      6,
+      3,
       2
     ],
     "months": [
       {
         "month": "2026-01",
         "node": 0
+      },
+      {
+        "month": "2026-03",
+        "node": 2
       }
     ],
     "overlaps": 0,
     "coil_radius": 27,
     "ref_scale": 0.86,
-    "isolated": 0,
+    "isolated": 1,
     "islands": [
       3
     ],
     "pairs": 1,
-    "unlinked": 1,
+    "unlinked": 2,
     "date_range": [
       "2026-01-02",
-      "2026-01-05"
+      "2026-03-05"
     ]
   },
   "history": {
     "first_commit": "2026-01-05",
-    "last_commit": "2026-03-02",
-    "commits": 3
+    "last_commit": "2026-03-05",
+    "commits": 5
   }
 }

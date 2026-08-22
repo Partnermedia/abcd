@@ -50,7 +50,61 @@ func newFixture(t *testing.T) *fixture {
 	f.shipTheIntent()
 	f.writeChangelog()
 	f.commitAt("2026-03-02T09:00:00+00:00", "docs: two releases", "None")
+	f.mergeInARecord()
 	return f
+}
+
+// mergeInARecord gives the fixture the history shape a linear one cannot have:
+// a record whose content enters the trunk ONLY as part of a merge commit, the
+// way a conflict resolution or a rename settled while merging does.
+//
+// It is here because a strictly linear fixture cannot see the defect it guards.
+// `git log --name-status` prints no file lines for a merge, so such a record is
+// invisible to the whole history walk and comes out with no dates at all —
+// which then seats it at the centre of a chronological chart.
+func (f *fixture) mergeInARecord() {
+	f.t.Helper()
+	const date = "2026-03-05T09:00:00+00:00"
+	trunk := f.gitOut("rev-parse", "--abbrev-ref", "HEAD")
+
+	f.git(date, "checkout", "-b", "side")
+	f.write("docs/explanation/aside.md", "# An aside\n\nWritten on a branch.\n")
+	f.commitAt(date, "docs: an aside on a branch", "None")
+
+	f.git(date, "checkout", trunk)
+	// Merge without committing, then add the record as part of the resolution,
+	// so its only appearance in history is inside the merge commit itself.
+	f.git(date, "merge", "--no-ff", "--no-commit", "side")
+	f.write(".abcd/development/decisions/adrs/0003-settled-while-merging.md", `---
+id: adr-3
+slug: settled-while-merging
+status: accepted
+date: 2026-03-05
+supersedes: null
+superseded_by: null
+related_intents: []
+related_rfcs: []
+related_adrs: []
+---
+
+# ADR-3: Settled while merging
+
+This decision's file entered the trunk as part of a merge commit.
+`)
+	f.commitAt(date, "merge: side", "None")
+}
+
+// gitOut runs one git command and returns its trimmed stdout.
+func (f *fixture) gitOut(args ...string) string {
+	f.t.Helper()
+	full := append([]string{"-C", f.root}, args...)
+	cmd := exec.Command("git", full...)
+	cmd.Env = f.repo.Env()
+	out, err := cmd.Output()
+	if err != nil {
+		f.t.Fatalf("git %v: %v", args, err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // Root is the repository root.

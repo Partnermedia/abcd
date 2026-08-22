@@ -166,9 +166,16 @@ func ComputeArrangements(nodes []LayoutNode, typed, mentions [][2]int) Arrangeme
 	}
 
 	a.Order = placementOrder(nodes)
-	a.DateRange = [2]string{nodes[a.Order[0]].Date, nodes[a.Order[0]].Date}
+	// A record can carry no date at all — one written but not yet committed, or
+	// one git cannot place. An empty string is the smallest string there is, so
+	// a plain minimum would publish a span starting at "" and would seat that
+	// record at the centre of a chronological spiral, which is the position that
+	// means "first". Dateless records are excluded from the span and placed last.
 	for _, i := range a.Order {
-		if nodes[i].Date < a.DateRange[0] {
+		if nodes[i].Date == "" {
+			continue
+		}
+		if a.DateRange[0] == "" || nodes[i].Date < a.DateRange[0] {
 			a.DateRange[0] = nodes[i].Date
 		}
 		if nodes[i].Date > a.DateRange[1] {
@@ -205,6 +212,11 @@ func placementOrder(nodes []LayoutNode) []int {
 	}
 	sort.SliceStable(order, func(x, y int) bool {
 		a, b := nodes[order[x]], nodes[order[y]]
+		// A record with no date is placed after every dated one rather than
+		// before all of them: "we cannot date this" is not "this came first".
+		if (a.Date == "") != (b.Date == "") {
+			return b.Date == ""
+		}
 		if a.Date != b.Date {
 			return a.Date < b.Date
 		}
@@ -397,6 +409,9 @@ func (a *Arrangements) byLinks(nodes []LayoutNode, typed [][2]int) {
 
 	sort.SliceStable(iso, func(x, y int) bool {
 		p, q := nodes[iso[x]], nodes[iso[y]]
+		if (p.Date == "") != (q.Date == "") {
+			return q.Date == ""
+		}
 		if p.Date != q.Date {
 			return p.Date < q.Date
 		}

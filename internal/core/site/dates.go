@@ -65,8 +65,20 @@ func LoadHistory(repoRoot string) (History, error) {
 	if !gitutil.InRepo(repoRoot) {
 		return h, nil
 	}
+	// `--diff-merges=first-parent` is load-bearing, not a refinement. Without it
+	// git prints NO file lines for a merge commit, so a file whose content
+	// entered the trunk only through a merge — a conflict resolution, a rename
+	// settled while merging — is invisible to the whole walk and comes out with
+	// no dates at all. That is not a rounding error in a published date; it is a
+	// record the site cannot place in time, and this repository has two of them.
+	//
+	// The walk still visits every commit rather than only the trunk, so a file
+	// written on a branch keeps the day it was WRITTEN as its creation date; the
+	// merge then reads as the day it last changed, which is what landing on the
+	// trunk is.
 	out, err := gitutil.RunLimited(repoRoot, maxLogBytes,
-		"log", "--reverse", "--name-status", "-M", "--date=short", "--pretty=format:%x00%ad")
+		"log", "--reverse", "--name-status", "-M", "--diff-merges=first-parent",
+		"--date=short", "--pretty=format:%x00%ad")
 	if err != nil {
 		return History{}, err
 	}

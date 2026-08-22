@@ -189,8 +189,8 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.SchemaVersion != 1 {
 		t.Errorf("schema_version: %d", exp.SchemaVersion)
 	}
-	if len(exp.Nodes) != 6 {
-		t.Fatalf("nodes: %d, want 6 (2 adrs, 2 intents, 1 spec, 1 issue)", len(exp.Nodes))
+	if len(exp.Nodes) != 7 {
+		t.Fatalf("nodes: %d, want 7 (3 adrs, 2 intents, 1 spec, 1 issue)", len(exp.Nodes))
 	}
 	byID := map[string]ExportNode{}
 	for _, n := range exp.Nodes {
@@ -264,7 +264,27 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if len(exp.Releases) != 2 || exp.Releases[0].Version != "0.2.0" || exp.Releases[0].Date != "2026-02-11" {
 		t.Errorf("releases: %+v", exp.Releases)
 	}
-	if exp.Counts.ByType["adr"] != 2 || exp.Counts.ByType["intent"] != 2 ||
+	// A record that entered the trunk only inside a merge commit is dated like
+	// any other. `git log --name-status` prints no file lines for a merge, so
+	// without --diff-merges this record is invisible to the walk entirely and
+	// ships with three empty dates — which then takes the centre of the coil.
+	adr3 := byID["adr-3"]
+	if adr3.Dates.Created == "" || adr3.Dates.Entered == "" || adr3.Dates.Touched == "" {
+		t.Errorf("adr-3 entered the trunk in a merge and the walk did not see it: %+v", adr3.Dates)
+	}
+	if adr3.Dates.Created != "2026-03-05" {
+		t.Errorf("adr-3 created: %q, want 2026-03-05", adr3.Dates.Created)
+	}
+	for _, n := range exp.Nodes {
+		if n.Date == "" {
+			t.Errorf("%s carries no effective date; nothing can place it in time", n.ID)
+		}
+	}
+	if exp.Layout.DateRange[0] == "" {
+		t.Errorf("the published date span begins at the empty string: %v", exp.Layout.DateRange)
+	}
+
+	if exp.Counts.ByType["adr"] != 3 || exp.Counts.ByType["intent"] != 2 ||
 		exp.Counts.ByType["spec"] != 1 || exp.Counts.ByType["issue"] != 1 {
 		t.Errorf("counts: %+v", exp.Counts.ByType)
 	}
@@ -277,8 +297,10 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if exp.Authorship.Assisted != 1 {
 		t.Errorf("assisted commits: %d, want 1", exp.Authorship.Assisted)
 	}
-	if exp.Authorship.DeclaredNone != 1 {
-		t.Errorf("declared-None commits: %d, want 1", exp.Authorship.DeclaredNone)
+	// The changelog commit plus the branch and merge commits of the merge
+	// fixture, each declaring that no tool touched it.
+	if exp.Authorship.DeclaredNone != 3 {
+		t.Errorf("declared-None commits: %d, want 3", exp.Authorship.DeclaredNone)
 	}
 	if len(exp.Authorship.Humans) != 1 || exp.Authorship.Humans[0].Name != "Fixture" {
 		t.Errorf("humans: %+v", exp.Authorship.Humans)
