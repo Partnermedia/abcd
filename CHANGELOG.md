@@ -53,7 +53,8 @@ called out in a **Breaking** section.
   em dash in list items; a capital after a colon; lower case after a
   semicolon) — with every rule labelled machine-enforced (naming its shipped
   docs-lint rule) or review. CONTRIBUTING.md and the DOCUMENTATION rules
-  domain point at it. (itd-141 stages the punctuation lint.)
+  domain point at it; the punctuation rules stay review-labelled until their
+  lint ships.
 
 - **`abcd banlist --json` carries the private layer's `reach` caveat.** The
   private report now includes a `reach` field holding the one-sentence statement
