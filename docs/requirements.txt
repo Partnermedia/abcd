@@ -1,2 +1,6 @@
-# Pinned so every site build renders docs/ identically; mkdocs-material pins mkdocs<2.
+# The direct dependency is pinned; mkdocs-material pins mkdocs<2 but its
+# transitive dependencies (mkdocs, jinja2, markdown, pygments, pymdown-extensions,
+# …) resolve from PyPI at build time and are not frozen here, so two builds of the
+# same commit are not guaranteed byte-identical. Pin the full transitive set
+# (pip-compile --generate-hashes) if reproducible builds are needed.
 mkdocs-material==9.7.7

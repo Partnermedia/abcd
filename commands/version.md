@@ -16,8 +16,11 @@ Run:
 "${CLAUDE_PLUGIN_ROOT}/abcd" version --json
 ```
 
-Then tell the user the `name`, `version`, `install_mode`, `vintage`, and
-`staleness` from the JSON.
+Then tell the user the `name`, `version`, `vintage`, and `staleness` from the
+JSON, plus `install_mode` when it is present — the key is omitted entirely when
+no abcd-owned `PATH` entry is resolvable (nothing installed yet, a foreign or
+dangling entry, or an unresolved plugin root). In that case say abcd is not on
+`PATH` yet and point at `ahoy install` below, rather than inventing a mode.
 
 **Checking for a newer release.** Only when the user explicitly asks whether a
 newer version exists, add `--check`:

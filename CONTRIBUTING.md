@@ -25,7 +25,11 @@ inbound = outbound statement is the whole of it.
   `zizmor`, dependency review, `govulncheck` and the smoke harness.
 - **Merge queue.** Merging goes through the queue ("Merge when ready"): the
   required checks run against the actual merged result, so branches never need
-  manual updating against `main`.
+  manual updating against `main`. A pull request confined to `docs/`,
+  `.abcd/development/`, `.abcd/work/` and the root prose files stands the macOS
+  leg, the race lane and the `zizmor`, `govulncheck` and smoke lanes down while
+  it is in review; the queue run is not a pull-request event, so the full set
+  gates the merge either way.
 - **Publish surface reviews.** Paths listed in
   [`.github/CODEOWNERS`](.github/CODEOWNERS) ship behaviour to installed users
   (plugin hooks and commands, agent prompts, workflows, gates and build

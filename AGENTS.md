@@ -77,7 +77,12 @@ vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
 format gate and the record-lint and docs-lint steps on the Linux leg alone.
 Separate jobs run the reviews-charter check (`scripts/check-reviews.sh`),
 full-history secret scanning (`gitleaks`), a workflow audit (`zizmor`),
-dependency review, `govulncheck`, and the smoke harness (`make smoke`).
+dependency review, `govulncheck`, and the smoke harness (`make smoke`). A
+fail-closed classifier stands the macOS leg, the race lane and the `zizmor`,
+`govulncheck` and smoke jobs down on a pull request confined to `docs/`,
+`.abcd/development/`, `.abcd/work/` and the root prose files; the Linux unit
+lane, the format gate and the record gates always run, and every other event —
+the merge-queue entry that gates the merge included — runs the lot.
 
 ## Working-tree layout (three tiers under `.abcd/`)
 
