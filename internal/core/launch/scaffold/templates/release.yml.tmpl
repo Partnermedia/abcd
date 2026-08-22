@@ -417,9 +417,13 @@ jobs:
   # the site workflow reads: `gh release create` has already returned.
   #
   # NON-GATING, and that isolation is this job dependency rather than a separate
-  # workflow file: `needs: release` means a red site can neither block nor taint a
-  # release that already published, while `!cancelled()` keeps this job from
-  # inheriting a cancellation. It runs only on a SUCCESSFUL release — a site for a
+  # workflow file: `needs: release` means a red site can neither block the release
+  # nor change a byte of what it published, while `!cancelled()` keeps this job from
+  # inheriting a cancellation. Be precise about what "non-gating" does NOT mean: a
+  # called workflow's failure IS the caller's failure, so a red site turns this
+  # whole run red. The Release, its assets and its attestations are already made and
+  # are untouched — a red run with a green `release` job means the website, and the
+  # fix is to re-run this job. It runs only on a SUCCESSFUL release — a site for a
   # release that failed to publish would describe bytes nobody can download; on the
   # rehearsal path `release` is skipped, so this is skipped too and nothing deploys.
   # The called workflow is idempotent per tag, so re-running this job is safe.

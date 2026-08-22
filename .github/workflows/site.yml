@@ -107,10 +107,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            mode=production
-          elif [ -n "$CALL_MODE" ]; then
+          # CALL_MODE is tested FIRST, and that order is load-bearing. Inside a called
+          # workflow EVENT_NAME is the TOP-LEVEL caller's event, so a caller reached
+          # from a dispatch-triggered chain would otherwise have its stated mode
+          # overruled by an event name it did not raise. A mode the caller declared
+          # always outranks an inherited event name.
+          if [ -n "$CALL_MODE" ]; then
             mode="$CALL_MODE"
+          elif [ "$EVENT_NAME" = workflow_dispatch ]; then
+            mode=production
           else
             mode=preview
           fi
@@ -142,10 +147,17 @@ jobs:
           fi
           # Validate the SHAPE before the tag is used anywhere. It is an externally
           # supplied value (the dispatch input), and downstream it becomes a path
-          # component of an API URL and the `ref:` of a checkout — the same reason
-          # release.yml shape-checks its release-gate sha. Anything that is not a
-          # vX.Y.Z release tag is refused rather than resolved.
-          if ! printf '%s' "$tag" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
+          # component of an API URL, the `ref:` of a checkout, and a line written to
+          # $GITHUB_OUTPUT — the same reason release.yml shape-checks its
+          # release-gate sha. Anything that is not a vX.Y.Z release tag is refused
+          # rather than resolved.
+          #
+          # A bash [[ =~ ]] match, deliberately NOT `grep`: grep is line-oriented, so
+          # a tag carrying an embedded newline would satisfy a ^…$ pattern on its
+          # first line and the rest would then be written into $GITHUB_OUTPUT as a
+          # forged second line. [[ =~ ]] matches the whole string, newlines included.
+          tag_re='^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'
+          if [[ ! $tag =~ $tag_re ]]; then
             echo "refusing '$tag': not a vX.Y.Z release tag" >&2
             exit 1
           fi
@@ -164,10 +176,14 @@ jobs:
           # This SKIPS rather than fails: the run is informational, not a gate, and a
           # red site run against a deliberate pre-release would train the maintainer to
           # ignore this workflow.
+          # A SemVer pre-release is a '-' immediately after the version core. Build
+          # metadata ('+…') is not a pre-release and may itself contain hyphens
+          # (v1.2.3+2026-08-22), so a bare *-* test would refuse a real release.
           prerelease=false
-          case "$tag" in
-            *-*) prerelease=true ;;
-          esac
+          pre_re='^v[0-9]+\.[0-9]+\.[0-9]+-'
+          if [[ $tag =~ $pre_re ]]; then
+            prerelease=true
+          fi
           # --repo is required, not optional: this job deliberately does not check out
           # the repository, so gh has no git remote to infer the repo from.
           if [ "$prerelease" = false ]; then
@@ -191,6 +207,17 @@ jobs:
     if: ${{ needs.resolve.outputs.deploy == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A second group, keyed on the TARGET rather than the tag. The workflow-level
+    # group cannot cover this case: a dispatch with an empty tag has no tag to key on
+    # yet — it resolves one in `resolve` — so it lands in the branch group and would
+    # otherwise run concurrently with a release chain deploying a NEWER tag. Two
+    # `wrangler deploy`s then race for one route and the last writer wins, which can
+    # leave abcdev.app on the older release. There is exactly one production route,
+    # so every production deploy shares one group and they queue. Never cancelled,
+    # for the same reason as the workflow-level group.
+    concurrency:
+      group: site-production
+      cancel-in-progress: false
     # The protected environment holds the Cloudflare credentials for the PRODUCTION
     # Worker and is the server-side gate on this deploy. The preview job below uses a
     # separate environment, so the production token is unreachable from any push to
