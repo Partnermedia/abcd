@@ -475,8 +475,8 @@ func bootstrapRepoFile(t *testing.T, rel string) string {
 	return path
 }
 
-// bootstrapReadmeInstruction is the shape the README's one-time PATH setup
-// instruction has to take. The README cannot know the absolute plugin root at
+// bootstrapReadmeInstruction is the shape the install guide's one-time PATH
+// setup instruction has to take. The page cannot know the absolute plugin root at
 // authoring time, so it carries the same INVOCATION with the one part it cannot
 // know left as a placeholder the notice fills in — not a bare `abcd`, which is
 // the name that does not resolve, and not `${CLAUDE_PLUGIN_ROOT}` either, which
@@ -556,28 +556,35 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 		}
 	})
 
-	t.Run("the README carries the same concrete form", func(t *testing.T) {
-		body := mustReadFile(t, bootstrapRepoFile(t, "README.md"))
+	// The prose surface is the install guide, which is where the plugin route is
+	// documented. README is swept too: it is the other committed page a reader
+	// meets first, and the unrunnable form must not reappear on either.
+	t.Run("the install guide carries the same concrete form", func(t *testing.T) {
+		const guide = "docs/how-to/install.md"
+		body := mustReadFile(t, bootstrapRepoFile(t, guide))
 		if !strings.Contains(body, bootstrapReadmeInstruction) {
-			t.Errorf("README.md must give the one-time PATH setup as %q; a bare `abcd ahoy install` cannot be run by the reader it is written for", bootstrapReadmeInstruction)
+			t.Errorf("%s must give the one-time PATH setup as %q; a bare `abcd ahoy install` cannot be run by the reader it is written for", guide, bootstrapReadmeInstruction)
 		}
 		prefix := `'<plugin-root>/abcd' `
-		for _, bad := range bootstrapEveryInvocationIsPathQualified(body, prefix) {
-			t.Errorf("README.md still instructs an `ahoy install` that cannot be run before `abcd` is on PATH: %q", bad)
+		for _, page := range []string{guide, "README.md"} {
+			text := mustReadFile(t, bootstrapRepoFile(t, page))
+			for _, bad := range bootstrapEveryInvocationIsPathQualified(text, prefix) {
+				t.Errorf("%s still instructs an `ahoy install` that cannot be run before `abcd` is on PATH: %q", page, bad)
+			}
 		}
 		// The placeholder has to be instantiable from THIS file. The notice that
 		// prints the path in full prints once per plugin root (every later session
 		// takes the bootstrap's fast path), so a reader who meets this sentence on
 		// day five has no notice on screen — and the plugin root's location cannot
 		// be named here, because abcd's published prose stays host-agnostic and
-		// docs-lint blocks naming a specific harness. So the README owes two
+		// docs-lint blocks naming a specific harness. So the page owes two
 		// things: what the placeholder IS in terms the reader can act on, and a
 		// route that needs no plugin root at all.
 		if !strings.Contains(body, "directory the agent harness unpacked") {
-			t.Error("README.md must say what <plugin-root> is in host-agnostic terms; a placeholder defined only as \"what the notice printed\" cannot be instantiated once the notice has scrolled away")
+			t.Errorf("%s must say what <plugin-root> is in host-agnostic terms; a placeholder defined only as \"what the notice printed\" cannot be instantiated once the notice has scrolled away", guide)
 		}
 		if !strings.Contains(body, "needs no plugin root") {
-			t.Error("README.md must point the reader who cannot instantiate <plugin-root> at the install route that does not need one")
+			t.Errorf("%s must point the reader who cannot instantiate <plugin-root> at the install route that does not need one", guide)
 		}
 	})
 

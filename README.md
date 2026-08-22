@@ -18,232 +18,24 @@
 
 </div>
 
+A single Go binary that carries the why from idea to shipped reality, usable as a plugin in compatible agent harnesses.
 
-# Purpose
-
-AI coding is getting more powerful, yet one important group of people who most need that power — the domain experts, the [product thinkers](https://x.com/signulll/status/2030404483897815089), the people who know *what should be built* — are currently underserved to be able to use AI coding directly. `abcd`'s bet is that a small team of two roles can close that gap: A **product thinker** who holds the *why*, and a **facilitator** who translates the why into work that AI coding agents can act on.
-
-<div align="center">
-  <img src="docs/assets/img/intro.png"/>
-</div>
-
----
-
-<div align="center">
-  <p><a href="#roles">Roles</a> — <a href="#artefacts">Artefacts</a> — <a href="#process">Process</a> — <a href="#install">Install</a> — <a href="#resources">Resources</a></p>
-</div>
-
----
-
-
-# Roles
-
-`abcd` is being developed for a two-person team consisting of a **product thinker** and a **technical facilitator**. While `abcd` is designed for two humans working closely together, the configuration's aim is to automate the role of the facilitator, and thus to allow the product thinker to run the entire process with an AI translator alongside their agentic team of AI-engineers.
-
-## Product thinker
-
-As a **product thinker**, you know who the user is. You know what *done* looks like when you see it. You know which trade-offs are acceptable and which would betray the point of the project. `abcd` is built around two moments where that judgement is decisive. First, at the start of a piece of work (when you set the *why* as an intent), and at the end (when you read the verdict on whether the *why* was delivered).
-
-What happens in between — turning your why into engineering work AI agents can act on — is the facilitator's job.
-
-## Technical facilitator
-
-The **facilitator** is a *translator*, not an engineer-on-the-team in the traditional sense. Their work is to take what you wrote, shape it into plans an AI coding agent can execute well, run the framework's audit and review machinery, and tell you when the work didn't match the promise *(and what to do about it)*.
-
-
-# Artefacts
-
-The product thinker and facilitator collaborate on artefacts that are jointly owned, with others generated and consumed autonomously by the AI-engineering team. Two of them — an initial *briefing* document and a set of articulated *intents* — are familiar territory for product thinkers; `abcd` builds on them, and adds a third, to *carry intent through to delivered reality*.
-
-| | Product thinker | Facilitator |
-|--|--|--|
-| The brief — what is this project about? | bring the substance | shape it into the brief structure |
-| Capturing an intent — *why does this change matter?* | write the press release | sharpen the acceptance criteria |
-| Turning the why into engineering work | — | drive |
-| Cross-cutting concerns the brief implies | — | derive and encode |
-| Reading the verdict when work ships | read; decide what to do next | investigate any *not delivered* findings |
-
-The **brief** *(owned jointly by the product thinker and the facilitator)* answers *what is this whole thing about?* — purpose, scope, the vocabulary the project uses, what "good" looks like. It makes one hard promise: **Everything it says reads true right now.** On day one, when the team has agreed a design but built nothing, most of the brief is ambition — and every ambitious passage is visibly marked as not yet real. As work ships, those markings come off one by one: the change that ships a capability also rewrites its passage in the brief to describe what actually exists (which is rarely word-for-word what was planned). The brief is never re-versioned and keeps no history — version control does that — so it earns its role as the project's living canvas one shipped change at a time.
-
-**Intents** *(user-facing, and thus the product thinker's domain)* answer *why does each user-facing change matter?* Each is a one-page press release written as if the change had already shipped, with a named user feeling the difference, plus acceptance criteria in plain *Given / When / Then* language. Intents are how ambition travels into the brief: An intent is drafted, planned into engineering work, and built — and the same change that ships it updates the brief. Once its acceptance criteria are verifiably met, the intent is filed as shipped and becomes the permanent record of the *why*; the brief carries the *what is*; the engineering spec carries the *how*. Intents are individually portable: Each stands on its own and can be reordered, deferred, bundled, or dropped without rewriting the bigger picture.
-
-**Automated audits** *(run by the AI-engineering team, read by you)* grade delivered reality against the original promise. When work lands, the intent audit reads each acceptance bullet against the actual repository and writes its verdict back onto the intent itself — so the *why* and the *did-we-deliver-it* live side by side, in one file, for as long as the project does.
-
-Some things the project needs aren't user-facing — cross-cutting rules every feature must satisfy *(e.g., a privacy-hygiene lint, an accessibility checklist)*, or background plumbing that enables other capability. Those skip the press-release treatment — a cross-cutting rule is filed as a *discipline* rather than a press release, and plumbing goes straight into the brief — under the same promise: Real, or visibly marked as not yet real. As a product thinker you don't have to recognise or label them — that's your facilitator's job.
-
-
-# Process
-
-**It starts with the brief.** You sit down with your facilitator and whatever discovery material you have — recordings, notes, a shared workspace, a half-finished slide deck, a transcript of yesterday's stakeholder call. Your facilitator works that material into a plain-language draft of your project's brief, and the parts that feel fuzzy you sharpen together in conversation. *(Automating that first pass — a discovery-ingest surface and a Socratic-interview sub-verb of `abcd intent` — is a design target, not yet shipped.)* By the end of the session you have a brief that says — in language a stakeholder would recognise — what this project is about. Much of it is ambition rather than fact at this stage, and that's fine: The brief never bluffs, so those passages are marked accordingly.
-
-## Capturing intents
-
-**Ideas become intents.** From then on, whenever an idea arrives, capturing it is one line:
-
-```bash
-abcd intent "<one-line idea>"
-```
-
-Your facilitator helps sharpen the press release and its acceptance criteria — the criteria are a hard gate, not a suggestion — then turns the intent into engineering work, surfaces the cross-cutting concerns it implies, and lets AI coding agents do the building. You stay in the seat where your judgement matters most: Setting the *why* at the start, and reading the verdict at the end.
-
-**Shipping closes the loop twice.** When the work lands, the *intent auditor* grades each acceptance bullet against the actual repository — the code, the configs, the tests, the docs — and writes the verdict onto the intent. And the same change updates the brief: The passage covering this capability loses its not-yet-real marking and is rewritten to describe what actually shipped. That second half is what keeps the brief honest — the true description of your project, one shipped change at a time, instead of a wish list nobody trusts.
-
-Acceptance criteria for each intent use three words to describe a checkable outcome.
-
-|  | What it pins down |
-|------|-------------------|
-| **Given** | The starting state — what's already true before anything happens. |
-| **When** | The trigger — a single user or system action. |
-| **Then** | The observable outcome — something a human (or the intent auditor) can check by *looking at the result*, not by reading the author's intent. |
-
-The auditor is allowed to fail honestly. If a promise wasn't kept, it says so. If something was delivered but with a wrinkle worth your attention, it flags the wrinkle rather than glossing it. And if it genuinely couldn't tell from the repo, it says *that* — which is different from saying the promise wasn't met, and `abcd` insists on the distinction.
-
-## Capturing issues & thoughts
-
-While intents are at the core of `abcd`, you will sometimes find that a thought that *feels* relevant crosses your mind — a half-formed observation, a question for the team, a doubt about the brief, a behaviour you'd expect a user to notice — and you don't want to lose it. Instead of articulating an intent, `abcd` has a fast hatch for capturing it:
-
-```bash
-abcd capture "<whatever crossed your mind>"
-```
-
-One line, deliberately shaped like intent capture but for un-typed thoughts: `abcd capture` writes one small record into the repo's issue ledger (`.abcd/work/issues/open/`), minted with a collision-proof id (`iss-<yymmddHHMMSS><4 random digits>`) that no parallel agent can duplicate and nothing ever renumbers. Everything else — severity, category, where it was found — has sensible defaults, so you don't have to decide anything beyond the text itself at this stage.
-
-`abcd capture` essentially decouples retention from classification. Intents demand press-release discipline — a named user, acceptance criteria, a *why*. Forcing a half-formed doubt through that discipline either kills the thought (too much ceremony, you let it go) or pollutes the intent corpus (you file something vague to avoid losing it). The *fast hatch* makes retention almost free — seconds, zero decisions — and defers the "*what is this?*" question to someone in the right seat at the right time.
-
-That "someone" is your technical facilitator, who triages those captures later: They sweep the open captures and route each one — a bug gets fixed (finding first, fix after); a feature seed gets promoted into an intent draft; a doubt about the brief becomes a brief correction; a deliberate non-action goes to `wontfix` with the reasoning recorded, so the question never gets re-litigated.
-
+**[abcdev.app](https://abcdev.app)** is the front door: [who abcd is for](docs/explanation/rationale.md), the [roles](docs/explanation/roles.md), the [artefacts](docs/explanation/artefacts.md) and the [process](docs/explanation/process.md), rendered from the pages in [`docs/`](docs/README.md). The [development record](.abcd/development/README.md) — every decision, intent, spec and issue — is rendered there too.
 
 # Install
-
-You can use `abcd` by installing it as a [plugin](#plugin) *(for a compatible agent harness)*, download a command-line app [binary](#cli), or by [building](#build) it directly.
-
-## Plugin
-
-This repository is also its own plugin marketplace, so a compatible agent
-harness can install the `/abcd:*` surface — the commands under
-[`commands/`](commands/), the agents under [`agents/`](agents/) and the hook
-wiring in [`hooks/`](hooks/) — straight from it. Add the marketplace, then
-install the plugin:
-
-```text
-/plugin marketplace add Partnermedia/abcd
-/plugin install abcd@abcd-marketplace
-```
-
-`abcd-marketplace` is the marketplace name declared in
-[`.claude-plugin/`](.claude-plugin/); `abcd` is the single plugin it lists,
-sourced from the repository root. Pull the current state of the marketplace with:
-
-```text
-/plugin update abcd
-```
-
-The marketplace is served from the repository itself, so an install tracks the
-repository rather than a versioned artefact: the manifests here carry no version
-key, and a release publishes the `abcd` binaries and their checksums, alongside
-the source archives GitHub attaches for the tagged tree.
-
-The plugin provisions its own binary; this repository commits none. The
-verified artefact is kept once in the plugin's persistent per-plugin download
-cache (`$CLAUDE_PLUGIN_DATA`), and a plugin update — which lands in a fresh,
-empty plugin root — is provisioned by a re-verified copy out of that cache
-rather than a fresh download. [`hooks/bootstrap.sh`](hooks/bootstrap.sh) runs
-first at session start: when the cache already holds the artefact for the
-resolved release it copies it into the plugin root with no network —
-authenticating the cached hash against the release's published `checksums.txt`
-when online, or noting in its success line that it provisioned from an
-unauthenticated cache when offline. Only an empty, stale, or unavailable cache
-falls back to downloading the release binary and `checksums.txt` and verifying
-the binary's SHA-256 against the manifest. A mismatch, a manifest that doesn't
-list the platform, or a platform outside the released matrix (darwin and linux
-on amd64 and arm64) installs nothing and says why in plain language. A plugin
-root that already holds the binary costs one file test and no network.
-
-Session start is not the only chance. Every other live-session hook that needs
-the binary resolves it the same way the command files do — the plugin root
-first, then an `abcd` on `PATH` — and when the plugin root is empty it first
-attempts the bootstrap itself, silently and at most once per ten-minute window.
-Session end is the deliberate exception: it resolves the plugin root then
-`PATH` but never downloads, because a fetch there would race the host's
-shutdown and lose the very transcript it exists to capture — so it says in one
-line if the transcript was not captured rather than blocking on a bootstrap. A
-session where provisioning cannot succeed degrades loudly rather than noisily:
-each affected hook says in one line what is inactive (the rules loader, the
-shell guard, the transcript capture) and that the [install](#cli) one-liner
-restores it — after which the hooks resolve the `PATH` binary with no session
-restart needed.
-
-That covers the hooks. For the `abcd` command in your own terminal, keep the
-[install](#cli) below, or put the plugin-root binary on your `PATH` by
-running it once by its absolute path — `'<plugin-root>/abcd' ahoy install`.
-The path is absolute because `abcd` is not on your `PATH` yet, which is what
-that one run fixes. `<plugin-root>` is the directory the agent harness unpacked
-the abcd plugin into, with the binary sitting directly inside it as `abcd`; the
-bootstrap's success notice prints that full binary path, so the shortest route
-is to copy the command straight out of the notice. That notice appears once per
-plugin root — later sessions take the fast path and stay silent — so if it has
-scrolled away and you would rather not go looking for the directory, the
-[install](#cli) one-liner below needs no plugin root at all and gets you to
-the same place.
-
-For a stronger root of trust than same-origin checksums, build from source —
-`go build ./cmd/abcd` — and place the binary in the plugin root and on your
-`PATH` yourself. A binary placed there by hand takes the same no-network fast
-path. A plugin root provisioned from the cache carries no root-local
-`.binary-meta`: its provenance lives in the data directory's
-`cache/binary-meta`, and it records whichever release the bootstrap last cached
-— so a hand-built binary reports that release's vintage. Replace or remove the
-cached provenance you control if you want a hand-built binary to stop reporting
-a release it did not come from.
-
-## CLI
-
-One line, checksum-verified, no administrator rights. It detects your
-OS/architecture, downloads the binary and the `checksums.txt` manifest from the
-latest release, verifies the binary's SHA-256 against the manifest (and refuses
-to install on any mismatch — or if the manifest doesn't list the binary at all),
-then installs to `~/.local/bin`, the single-user location:
 
 ```sh
 sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
-If `abcd` isn't found by name afterwards, `~/.local/bin` isn't on your `PATH`.
-Add this line to your shell profile:
+Checksum-verified, no administrator rights, installs to `~/.local/bin`. The plugin route, building from source, and what to do when `abcd` is not found afterwards: [`docs/how-to/install.md`](docs/how-to/install.md).
 
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-```
+# Contributing
 
-The installer prints the same one-line fix when it notices the gap, and
-writes its own `PATH` entry to `~/.local/bin` unless you point it elsewhere
-with `--bin-dir`. abcd never escalates privileges: a
-directory it can't write to is an error, not a prompt for your password.
-
-Already have an `abcd` in a system directory from an earlier install? Delete it
-(`rm /usr/local/bin/abcd`, with whatever rights put it there) — otherwise it
-comes first on `PATH` and keeps answering instead of the new one. `abcd ahoy`
-names it in a gap rather than removing it: abcd does not touch a binary it does
-not own.
-
-Prefer to inspect before running? The command is exactly what it says: two
-downloads from [the latest release](https://github.com/Partnermedia/abcd/releases/latest),
-a checksum verification, and a copy into a directory you own. You can do the
-same by hand — grab the binary for your platform plus `checksums.txt` from the
-releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching
-line, and copy the binary anywhere on your `PATH`. Every release is built and
-published by CI from the exact tagged commit, with the checksums generated
-over the same bytes that are uploaded.
-
-## Build
-
-```bash
-make preflight   # the pre-push gate: lint-reviews, record-lint and docs-lint,
-                 # then build, vet, test and race (internal)
-go run ./cmd/abcd            # bare status board for the current directory
-go run ./cmd/abcd version    # print the version
-make build                   # cross-compile bin/abcd-<goos>-<arch>
-```
+- [`AGENTS.md`](AGENTS.md) — build, test and checks; the working-tree layout; the definition of done.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how changes land, the publish surface, attribution.
+- [`SECURITY.md`](SECURITY.md) — report vulnerabilities privately.
+- [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md) — the ideas, tools and writing abcd stands on.
 
 # Resources
 

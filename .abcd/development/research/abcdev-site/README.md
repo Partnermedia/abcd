@@ -14,9 +14,8 @@ carrying `data-src="path#heading"` provenance) stays in the local tier at
 `.abcd/.work.local/scratch/site-plan/`; see the header of
 [`plan.md`](plan.md) for why it cannot be committed.
 
-The README-migration bundle (docs pages, assets, `.abcd/site.json`,
-`site-src/ui.json`, `MIGRATION.md`, `compose.py` + `build_data.py`) lives
-unpacked in the shared working tier at `.abcd/work/site-plan/readme-migration/`
-— see the header of [`plan.md`](plan.md) for why. Nothing in this cluster is
-rendered or linted as docs; Phase 1 of the build promotes the bundle's files
-to their real paths.
+The README migration is landed: the docs pages and assets sit under `docs/`,
+the composition manifest at `.abcd/site.json` and the interface-string
+allowlist at `site-src/ui.json`. The composition rules' executable spec,
+[`compose.py`](compose.py) and [`build_data.py`](build_data.py), sits here.
+Nothing in this cluster is rendered or linted as docs.

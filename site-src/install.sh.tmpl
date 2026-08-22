@@ -1,0 +1,164 @@
+#!/bin/sh
+# abcd installer. Landed as the committed source of /install.sh; the slice that
+# serves it from abcdev.app comes later, and nothing renders or publishes this
+# file yet.
+#
+# Its behaviour is the README one-liner's: detect the platform, download the
+# released binary and checksums.txt, verify the SHA-256 against the manifest,
+# copy the binary into a directory the user owns. internal/core/site holds the
+# forms to one another by test — same release URLs, same checksum step, same
+# install destination — so none of them can drift alone.
+#
+# Everything between `set -eu` and the last line is a definition. Only the final
+# `main "$@"` runs anything, so a download truncated in transit executes nothing.
+
+set -eu
+
+# usage is the --help text.
+usage() {
+	cat <<'EOT'
+Install abcd, the single binary behind abcdev.app.
+
+  install.sh [--bin-dir DIR]
+
+  --bin-dir DIR   Install into DIR instead of $HOME/.local/bin.
+  -h, --help      Print this message and exit.
+
+The script downloads the binary for this platform along with the release
+checksums.txt, verifies the binary's SHA-256 against that manifest, and copies
+it into the install directory. It never asks for administrator rights.
+EOT
+}
+
+# die prints one plain-language reason and stops. Nothing is installed.
+die() {
+	printf 'abcd install: %s\n' "$1" >&2
+	exit 1
+}
+
+# detect_os prints the released OS name for this machine.
+detect_os() {
+	uname -s | tr '[:upper:]' '[:lower:]'
+}
+
+# detect_arch prints the released architecture name for this machine.
+detect_arch() {
+	arch=$(uname -m)
+	case "$arch" in
+	x86_64) arch=amd64 ;;
+	aarch64) arch=arm64 ;;
+	esac
+	printf '%s' "$arch"
+}
+
+# require_released_platform stops on any platform outside the released matrix,
+# rather than downloading an asset that does not exist or cannot run here. It
+# runs in the main shell, not a substitution, so its die() ends the script.
+require_released_platform() {
+	case "$1-$2" in
+	darwin-amd64 | darwin-arm64 | linux-amd64 | linux-arm64) ;;
+	*)
+		die "there is no released abcd binary for $1-$2. The released platforms are macOS and Linux on amd64 and arm64 — see https://github.com/Partnermedia/abcd/releases for what each release publishes, or build from source with 'go build ./cmd/abcd'."
+		;;
+	esac
+}
+
+# download fetches the binary named by $1 and the release manifest into the
+# working directory. HTTPS is pinned on every hop: a redirect must not be able to
+# downgrade the transport that carries both the payload and the manifest that
+# verifies it.
+download() {
+	command -v curl >/dev/null 2>&1 || die "curl is needed to download the release. Install curl, or download the binary by hand from https://github.com/Partnermedia/abcd/releases"
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$1" ||
+		die "could not download $1 from the latest release. Check the network, or download it by hand from https://github.com/Partnermedia/abcd/releases"
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt" ||
+		die "could not download checksums.txt from the latest release. Nothing is installed without it."
+}
+
+# verify checks the SHA-256 of $1 against the line for it in checksums.txt. A
+# mismatch, a manifest that does not list the binary, and a machine with no
+# hasher all refuse in the same way: nothing is installed.
+verify() {
+	line=$(grep " $1\$" checksums.txt) || line=''
+	[ -n "$line" ] || die "checksums.txt does not list $1, so the download cannot be verified. Nothing is installed."
+	if command -v sha256sum >/dev/null 2>&1; then
+		printf '%s\n' "$line" | sha256sum -c - >/dev/null ||
+			die "the SHA-256 of $1 does not match the release manifest. Nothing is installed."
+	elif command -v shasum >/dev/null 2>&1; then
+		printf '%s\n' "$line" | shasum -a 256 -c - >/dev/null ||
+			die "the SHA-256 of $1 does not match the release manifest. Nothing is installed."
+	else
+		die "neither sha256sum nor shasum is available, so the download cannot be verified. Nothing is installed."
+	fi
+}
+
+# install_binary copies the verified binary $1 into the directory $2. abcd never
+# escalates privileges: a directory it cannot write to is an error, not a prompt
+# for a password.
+install_binary() {
+	mkdir -p "$2" ||
+		die "cannot create $2. abcd never escalates privileges — pick a directory you own with --bin-dir DIR."
+	install -m 0755 "$1" "$2/abcd" ||
+		die "cannot install into $2. abcd never escalates privileges — pick a directory you own with --bin-dir DIR."
+}
+
+# report prints the PATH fix when the install directory is not on PATH, then runs
+# the installed binary so the last line of the install is the version installed.
+report() {
+	case ":$PATH:" in
+	*":$1:"*) ;;
+	*)
+		# shellcheck disable=SC2016 -- the literal $PATH is the line to paste.
+		printf 'abcd install: %s is not on your PATH. Add this line to your shell profile:\n\n    export PATH="%s:$PATH"\n\n' "$1" "$1"
+		;;
+	esac
+	"$1/abcd" version
+}
+
+main() {
+	bin_dir="$HOME/.local/bin"
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--bin-dir)
+			[ "$#" -ge 2 ] || die "--bin-dir needs a directory"
+			bin_dir="$2"
+			shift 2
+			;;
+		--bin-dir=*)
+			bin_dir="${1#--bin-dir=}"
+			shift
+			;;
+		-h | --help)
+			usage
+			return 0
+			;;
+		*)
+			usage >&2
+			die "unknown option: $1"
+			;;
+		esac
+	done
+	[ -n "$bin_dir" ] || die "--bin-dir needs a directory"
+	# Resolved before the cd below, so a relative --bin-dir still means what the
+	# caller meant: a directory beside them, not one inside the scratch dir.
+	case "$bin_dir" in
+	/*) ;;
+	*) bin_dir="$PWD/$bin_dir" ;;
+	esac
+
+	os=$(detect_os)
+	arch=$(detect_arch)
+	require_released_platform "$os" "$arch"
+	binary="abcd-$os-$arch"
+
+	work=$(mktemp -d) || die "cannot create a temporary directory"
+	trap 'rm -rf "$work"' EXIT INT TERM HUP
+	cd "$work" || die "cannot enter the temporary directory"
+
+	download "$binary"
+	verify "$binary"
+	install_binary "$binary" "$bin_dir"
+	report "$bin_dir"
+}
+
+main "$@"
