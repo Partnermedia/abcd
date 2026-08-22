@@ -61,7 +61,7 @@ intents:
   never as an arc to an invented position. A store that carries no frontmatter
   is marked `derived` in the export, so no page presents a file name or a git
   date as a field the record declared and no chart reads a lifecycle it never
-  had. Every file the build emits matches a `site-src/headers` block — a
+  had. Every file the build serves matches a `site-src/headers` block — a
   document carrying a content policy, `nosniff` and a referrer policy, an asset
   carrying the two of those that govern a non-document — asserted over the whole
   emitted tree by a build test rather than by review. The Markdown subset carries what the
