@@ -395,7 +395,7 @@ func Status(repoRoot string) (StatusView, error) {
 		return StatusView{}, err
 	}
 
-	v := StatusView{Buckets: map[string]int{}}
+	v := StatusView{Buckets: map[string]int{}, Linked: []LinkedPair{}}
 	for _, b := range Buckets {
 		v.Buckets[b] = 0
 	}

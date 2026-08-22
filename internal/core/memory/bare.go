@@ -39,7 +39,16 @@ func Bare(repoRoot string) (BareStatus, error) {
 	present := statErr == nil && fi.IsDir()
 
 	infos := barePageInfos(mem)
-	status := BareStatus{StorePresent: present, Pages: len(infos)}
+	// Seed the collections non-nil so an empty or contradiction-free store
+	// marshals them as [] in --json, not bare null (every --json collection is an
+	// empty list, never null; a healthy store keeps an empty contradictions list).
+	status := BareStatus{
+		StorePresent:   present,
+		Pages:          len(infos),
+		ByClass:        []ClassCount{},
+		Contradictions: []string{},
+		Drift:          []string{},
+	}
 
 	counts := map[string]int{}
 	for _, info := range infos {

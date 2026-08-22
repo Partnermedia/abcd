@@ -25,7 +25,9 @@ var mintLockTimeout = 5 * time.Second
 // (soft, mirroring lint's missing-dir behaviour). A present-but-malformed spec
 // file is a hard, loud error.
 func Load(repoRoot string) (Store, error) {
-	var store Store
+	// Seed Specs non-nil so an empty store marshals as [] in --json, not bare
+	// null (every --json collection is an empty list, never null).
+	store := Store{Specs: []Spec{}}
 	for _, bucket := range []string{StatusOpen, StatusClosed} {
 		specs, err := loadBucket(repoRoot, bucket)
 		if err != nil {
