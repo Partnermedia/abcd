@@ -1,14 +1,15 @@
 # The Website — a Rendered Surface of the Record
 
-> **Everything on this page is a design target, not yet shipped.** The site
-> exists today as a design and a plan — the
-> [investigation cluster](../../research/abcdev-site/plan.md), a clickable
-> prototype, and a reference copy of the README-migration bundle — ratified
-> by [adr-47](../../decisions/adrs/0047-abcdev-app-rendered-from-this-repository-alone.md)
-> and [adr-48](../../decisions/adrs/0048-website-deploys-on-release-not-on-merge.md).
-> The generator is not yet real; abcdev.app still serves the MkDocs
-> rendering of `docs/` at the root. The shipping change removes the marks
-> on this page.
+> **The passages marked below are design targets; the rest describes what
+> the binary does.** `abcd site build` renders the landing page and
+> `record.json`. The `check` gates, the record explorer's own pages, and the
+> deploy workflow are designs — abcdev.app serves the MkDocs rendering of
+> `docs/` at its root, and the deploy is what moves it. Both halves rest on
+> [adr-47](../../decisions/adrs/0047-abcdev-app-rendered-from-this-repository-alone.md)
+> and [adr-48](../../decisions/adrs/0048-website-deploys-on-release-not-on-merge.md),
+> with the [investigation cluster](../../research/abcdev-site/plan.md) and the
+> composition rules' executable spec beside them. A shipping change removes
+> the mark it lands.
 
 **abcdev.app is a surface of this repository and of nothing else.** `/` is a
 landing page for product thinkers, `/docs/` the MkDocs rendering of `docs/`
@@ -21,24 +22,40 @@ source. The record is **never bundled, rendered read-only** — the site is
 the third publication surface adr-47 adds to adr-30's two trees, and the
 adr-28 launch boundary is unchanged.
 
-**Plumbing** (design target; per this directory's rule, plumbing lives here
-and not in intents):
+**Plumbing** — per this directory's rule, plumbing lives here and not in
+intents:
 
-- **The `site` verb family** — `abcd site build` (walk `.abcd/site.json`,
-  compose the landing page and record pages from repo text, emit
-  `record.json` with the deduplicated typed links and the two precomputed
-  chart arrangements, inline SVG assets, optimise rasters, write `site/`)
-  and `abcd site check` (the provenance audit, docs-lint over rendered text,
-  CLI-snippet drift, the `.abcd/site-baseline.json` ratchet, the 390 px
-  mobile audit). Transport-agnostic core, front doors per adr-23; the
-  composition rules' executable spec is `compose.py`/`build_data.py` under
-  [`research/abcdev-site/`](../../research/abcdev-site/). The generic/specific boundary of the verb family
-  is governed by the itd-140 discipline: repo-agnostic input contract,
-  genericity demonstrated on a sparse second instance before it is claimed,
-  working-tier ledger publication opt-in only.
-- **The README migration** — README's product narrative moves verbatim to
+- **`abcd site build`** walks `.abcd/site.json`, composes the landing page
+  from repository text, and emits `record.json`: the record graph with each
+  mirrored typed link collapsed once, body mentions deduplicated against it,
+  counts, releases, authorship, the unresolved references measured against
+  `.abcd/site-baseline.json`, and the two precomputed chart arrangements. It
+  inlines committed SVG assets, copies rasters verbatim, and writes into
+  `site/` and nowhere else. The graph comes from the record-lint engine's own
+  scan (`lint.LoadRecordGraph`) and the dates from one
+  `git log --reverse --name-status` pass, so the record has one parser and
+  history one read. The render is deterministic — sorted inputs, a fixed
+  layout seed, coordinates published at drawing precision, no clock read
+  beyond the injected build stamp — which is what lets `record.json` be an
+  artifact nobody commits. Transport-agnostic core, front doors per adr-23;
+  the composition rules' executable spec is `compose.py`/`build_data.py`
+  under [`research/abcdev-site/`](../../research/abcdev-site/), ported rather
+  than reinvented. Raster optimisation is a ledger-recorded dependency
+  decision; the build never draws.
+- **`abcd site check`** (design target) — the provenance audit over every
+  rendered text node, docs-lint's banned tokens over composed text, CLI-
+  snippet drift against the generated reference, the
+  `.abcd/site-baseline.json` ratchet, and the 390 px static mobile checks.
+  The build measures the unresolved references and publishes the count; the
+  ratchet that refuses a larger one is this verb's.
+- **The generic/specific boundary** of the verb family is governed by the
+  itd-140 discipline: repo-agnostic input contract, genericity demonstrated
+  on a sparse second instance before it is claimed, working-tier ledger
+  publication opt-in only. This repository opts in through
+  `.abcd/site.json`'s `record.issue_ledger`.
+- **The README migration** — README's product narrative lives in
   `docs/explanation/{rationale,roles,artefacts,process}.md` and
-  `docs/how-to/install.md`; README becomes a contributor page keeping the
+  `docs/how-to/install.md`, and README is a contributor page keeping the
   universal install one-liner, with a test that the one-liner, the
   `install.sh` script and install.md's per-OS forms agree.
 

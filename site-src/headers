@@ -1,7 +1,26 @@
-# Source of the Cloudflare _headers file. Landed as data; nothing copies it
-# into the built site yet — the site build that emits it is a later slice.
+# Source of the Cloudflare _headers file. `abcd site build` copies it into the
+# output tree as `_headers`, comments and all.
 #
 # /install.sh is read before it is run, so it is served as text, never as a
 # download.
 /install.sh
   Content-Type: text/plain; charset=utf-8
+
+# The landing page's content policy. The build already refuses a script or an
+# event handler inside a committed SVG and refuses an executable link scheme, so
+# this is the second lock, not the first: if a way past those is ever found, the
+# injected code still has no origin to run in.
+#
+# It is scoped to the landing page rather than the whole site because /docs/ is
+# rendered by a different generator whose own inline scripts this would break.
+#
+# What the page legitimately does: load its own stylesheet and script, the
+# Google Fonts stylesheet and the font files it points at, and its own copied
+# rasters. It fetches nothing, embeds nothing, and submits nothing — so
+# connect-src, frame-src and form-action are closed, and default-src 'none'
+# closes everything not named. style-src-attr allows the layout custom
+# properties the build writes as style="--stack:22px".
+/
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

@@ -3,6 +3,7 @@ package gitutil_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Partnermedia/abcd/internal/gitutil"
@@ -146,5 +147,45 @@ func TestIsolationIgnoresInheritedGitDir(t *testing.T) {
 	// is set in the environment.
 	if gitutil.InRepo(t.TempDir()) {
 		t.Error("InRepo(non-repo with inherited GIT_DIR) = true, want false")
+	}
+}
+
+// TestRunCappedRefusesOversizeOutput pins the difference between the two bounded
+// readers. RunLimited degrades — its callers (the lifeboat probe over an
+// archived repo) would rather have a partial answer than none. RunCapped
+// refuses, for callers whose answer is only correct if it is complete: a
+// truncated `git log` is not a shorter history, it is a wrong one, and a caller
+// that cannot tell the two apart publishes the wrong one.
+func TestRunCappedRefusesOversizeOutput(t *testing.T) {
+	repo := newRepo(t, "")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, repo)
+
+	// A cap far below one line of `git log` output.
+	_, err := gitutil.RunCapped(repo, 8, "log", "--pretty=format:%H %s")
+	if err == nil {
+		t.Fatal("RunCapped returned a silently truncated answer")
+	}
+	for _, want := range []string{"8", "log"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+
+	// Under the cap, it is Run with a ceiling.
+	out, err := gitutil.RunCapped(repo, 1<<20, "log", "--pretty=format:%s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "fixture" {
+		t.Errorf("RunCapped = %q, want %q", out, "fixture")
+	}
+
+	// RunLimited keeps its documented degradation, so the two are not the same
+	// function with a different name.
+	if _, err := gitutil.RunLimited(repo, 8, "log", "--pretty=format:%H %s"); err != nil {
+		t.Errorf("RunLimited must still degrade rather than refuse: %v", err)
 	}
 }

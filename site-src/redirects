@@ -1,5 +1,5 @@
-# Source of the Cloudflare _redirects file. Landed as data; nothing copies it
-# into the built site yet — the site build that emits it is a later slice.
+# Source of the Cloudflare _redirects file. `abcd site build` copies it into the
+# output tree as `_redirects`, comments and all.
 #
 # Every published docs path 301s to its home under /docs/, so no URL that has
 # been shared breaks when the docs move off the root. / is absent on purpose:

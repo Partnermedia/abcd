@@ -118,20 +118,25 @@ func scrubGitVar(kv string) bool {
 		strings.HasPrefix(key, "GIT_CONFIG_VALUE_")
 }
 
-// capWriter buffers at most a fixed number of bytes, silently discarding the
-// rest, and never errors — so a git process writing far more than the cap is
-// not blocked (no SIGPIPE) yet cannot grow abcd's memory past the cap.
+// capWriter buffers at most a fixed number of bytes, discarding the rest, and
+// never errors — so a git process writing far more than the cap is not blocked
+// (no SIGPIPE) yet cannot grow abcd's memory past the cap. It RECORDS having
+// discarded anything, so a caller that cannot use a partial answer can tell the
+// difference; a caller that can (the lifeboat probe) ignores the flag.
 type capWriter struct {
 	buf       []byte
 	remaining int
+	// overflowed is true once any byte has been dropped.
+	overflowed bool
 }
 
 func (w *capWriter) Write(p []byte) (int, error) {
-	if w.remaining > 0 {
-		n := len(p)
-		if n > w.remaining {
-			n = w.remaining
-		}
+	n := len(p)
+	if n > w.remaining {
+		n = w.remaining
+		w.overflowed = true
+	}
+	if n > 0 {
 		w.buf = append(w.buf, p[:n]...)
 		w.remaining -= n
 	}
@@ -212,13 +217,41 @@ func withStderr(err error) error {
 // a single probe rather than crashing it). On failure the error carries git's
 // bounded stderr — the reason, not just the exit status.
 func RunLimited(root string, maxBytes int, args ...string) (string, error) {
+	out, _, err := runBounded(root, maxBytes, args...)
+	return out, err
+}
+
+// RunCapped is RunLimited for callers whose answer is only correct if it is
+// COMPLETE. It returns an error rather than a truncated string when git's output
+// exceeds maxBytes.
+//
+// The distinction is the whole reason both exist. A truncated `git log` is not a
+// shorter history; it is a wrong one, and a caller that cannot tell the two
+// apart will publish the wrong one with no sign that anything was dropped.
+// RunLimited's callers (the lifeboat probe over an archived repository) would
+// genuinely rather have a partial answer than none, and keep that behaviour.
+func RunCapped(root string, maxBytes int, args ...string) (string, error) {
+	out, overflowed, err := runBounded(root, maxBytes, args...)
+	if err != nil {
+		return "", err
+	}
+	if overflowed {
+		return "", fmt.Errorf("git %s: output exceeded the %d-byte cap; the answer would be truncated, and a truncated history is a wrong one",
+			strings.Join(args, " "), maxBytes)
+	}
+	return out, nil
+}
+
+// runBounded is the shared body: run git with stdout and stderr bounded, and
+// report whether stdout was cut short.
+func runBounded(root string, maxBytes int, args ...string) (string, bool, error) {
 	cmd := isolatedGit(root, args...)
 	w := &capWriter{remaining: maxBytes}
 	e := &capWriter{remaining: 4096}
 	cmd.Stdout = w
 	cmd.Stderr = e
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
+		return "", w.overflowed, fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
 	}
-	return strings.TrimSpace(string(w.buf)), nil
+	return strings.TrimSpace(string(w.buf)), w.overflowed, nil
 }
