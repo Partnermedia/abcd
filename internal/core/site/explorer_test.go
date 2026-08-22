@@ -659,13 +659,12 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 		t.Fatal("the build emitted no _headers blocks")
 	}
 
-	routes, docs, assets := 0, 0, 0
+	docs, assets := 0, 0
 	for _, name := range res.Files {
 		route, required, served := servedRoute(name)
 		if !served {
 			continue
 		}
-		routes++
 		if len(required) == len(documentHeaders) {
 			docs++
 		} else {
@@ -673,11 +672,12 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 		}
 		assertHeaderCoverage(t, "the emitted _headers", blocks, route, required)
 	}
+	// A walk that found nothing to walk proves nothing, and it proves nothing
+	// twice over if it found only one of the two kinds: the asset rule is the one
+	// this test exists to keep, and a run that saw no assets would pass while
+	// enforcing it on nobody.
 	if docs == 0 || assets == 0 {
 		t.Fatalf("the build emitted %d document routes and %d asset routes; this proves nothing without both", docs, assets)
-	}
-	if routes == 0 {
-		t.Fatal("the build emitted no routes, so this proves nothing")
 	}
 
 	// The chart is the one route that fetches, and a policy that forbade it
@@ -707,8 +707,22 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 		"/contributors/", "/references/"} {
 		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, documentHeaders)
 	}
-	for _, route := range []string{"/site.css", "/site.js", "/record.js", "/record.json",
-		"/install.sh", "/assets/img/logo.png", "/assets/img/loop.svg"} {
+	// The asset routes are DERIVED from the build's own copy list, not restated
+	// here: a source added to `copiedSources` then demands a block in the SHIPPED
+	// policy, rather than only in the fixture's — which a developer can make green
+	// by editing the fixture, leaving the file that is actually served short.
+	//
+	// The three the copy list cannot name are named: the rendered installer, the
+	// record export, and one copied raster standing for the asset root the
+	// manifest's own paths land under. Committed SVGs need no route — the build
+	// inlines them as markup and copies none.
+	assetRoutes := []string{"/" + installScriptName, "/record.json", "/assets/img/logo.png"}
+	for _, cp := range copiedSources {
+		if _, _, served := servedRoute(cp.dst); served {
+			assetRoutes = append(assetRoutes, "/"+cp.dst)
+		}
+	}
+	for _, route := range assetRoutes {
 		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, assetHeaders)
 	}
 

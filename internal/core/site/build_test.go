@@ -189,14 +189,23 @@ func TestBuildRendersTheInstallScript(t *testing.T) {
 
 // TestBuildWithoutAnInstallTemplate is the graceful half: a repository that
 // commits no installer is a repository with no /install.sh, not a failed build.
+//
+// And the page must agree with the tree. Offering a link is the build's promise
+// that the route is there; a repository with no template emits no route, so a
+// link to it would be a dead one — on the single page whose job is to be worth
+// trusting with a command that pipes a download into a shell.
 func TestBuildWithoutAnInstallTemplate(t *testing.T) {
 	f := newFixture(t)
 	if err := os.Remove(filepath.Join(f.Root(), "site-src", "install.sh.tmpl")); err != nil {
 		t.Fatal(err)
 	}
-	res := buildFixture(t, f, t.TempDir())
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
 	if containsString(res.Files, "install.sh") {
 		t.Errorf("the build invented an install.sh with no template: %v", res.Files)
+	}
+	if html := outFile(t, out, "index.html"); strings.Contains(html, "/install.sh") {
+		t.Error("the landing page links /install.sh, which this build did not write")
 	}
 }
 

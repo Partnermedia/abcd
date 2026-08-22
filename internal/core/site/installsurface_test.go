@@ -257,27 +257,28 @@ func loadInstallSurfaces(t *testing.T) []installSurface {
 		},
 	}
 
-	// The FIFTH form, when a build has left one behind: the script this
-	// repository actually serves at /install.sh. `abcd site build` writes it into
-	// the default output directory, which is gitignored — so it is here on a
-	// machine that has built the site and absent in a clean checkout, and this
-	// test covers it whenever it exists rather than requiring a build to run.
+	// The FIFTH form: the script this repository SERVES at /install.sh. It is the
+	// only form a reader of abcdev.app ever executes — the template is what was
+	// reviewed, this is what is downloaded — so holding it to the same rules is
+	// what makes the render's "copy plus a comment" claim checkable rather than
+	// asserted.
 	//
-	// It matters because it is the only form a reader of abcdev.app ever
-	// executes. The template is what was reviewed; the emitted file is what is
-	// downloaded, and holding it to the same rules is what makes the render's
-	// "copy plus a comment" claim checkable rather than asserted.
-	emitted := filepath.Join(repoRoot(), DefaultOutDir, installScriptName)
-	if _, err := os.Stat(emitted); err == nil {
-		surfaces = append(surfaces, installSurface{
-			name:      "emitted-install-sh",
-			source:    filepath.ToSlash(filepath.Join(DefaultOutDir, installScriptName)),
-			script:    readFile(t, emitted),
-			osToken:   "$os",
-			verifiers: []string{verifierGNU, verifierBSD},
-			archMap:   bothArches,
-		})
-	}
+	// It is RENDERED here rather than read off the disk. `abcd site build` writes
+	// it into a gitignored directory, and a test that read that file would make
+	// the suite's answer depend on whether somebody had happened to run a build:
+	// skipped in every clean checkout, including CI, and able to fail red over a
+	// stale artifact that `git status` does not show and no edit to the tree can
+	// fix. So the surface goes through the same function the build calls, and
+	// `TestBuildRendersTheInstallScript` closes the loop by proving that what
+	// `Build` writes to install.sh is exactly what that function returns.
+	surfaces = append(surfaces, installSurface{
+		name:      "emitted-install-sh",
+		source:    "the rendered " + installScriptName,
+		script:    string(renderInstallScript([]byte(readFile(t, templatePath)), fixtureStamp)),
+		osToken:   "$os",
+		verifiers: []string{verifierGNU, verifierBSD},
+		archMap:   bothArches,
+	})
 	return surfaces
 }
 
