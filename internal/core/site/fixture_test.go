@@ -63,7 +63,10 @@ func (f *fixture) shipTheStub() {
 	f.git(date, "mv",
 		".abcd/development/intents/planned/itd-3-the-stubbed-one.md",
 		".abcd/development/intents/shipped/itd-3-the-stubbed-one.md")
-	f.commitAt(date, "feat: ship itd-3", "None")
+	f.git(date, "mv",
+		".abcd/development/intents/planned/itd-4-the-promoted-stub.md",
+		".abcd/development/intents/shipped/itd-4-the-promoted-stub.md")
+	f.commitAt(date, "feat: ship the stubs", "None")
 }
 
 // mergeInARecord gives the fixture the history shape a linear one cannot have:
@@ -574,6 +577,33 @@ impact: additive
 ## Acceptance Criteria
 
 - Given a stub, when it is picked, then the page quotes a template.
+
+## Audit Notes
+
+Acceptance rollup: MET 1 · MET_WITH_CONCERNS 0 · NOT_MET 0 · INCONCLUSIVE 0
+`)
+
+	// The other minted placeholder: an intent promoted from a ledger issue.
+	// Same template, different opening clause and a variable source id.
+	f.write(".abcd/development/intents/planned/itd-4-the-promoted-stub.md", `---
+id: itd-4
+slug: the-promoted-stub
+spec_id: null
+kind: standalone
+builds_on: []
+severity: minor
+impact: additive
+---
+
+# The Promoted Stub
+
+## Press Release
+
+> _Seeded by promotion from iss-1. Expand into the full press-release narrative before planning._
+
+## Acceptance Criteria
+
+- Given a promoted stub, when it is picked, then the page quotes a template.
 
 ## Audit Notes
 

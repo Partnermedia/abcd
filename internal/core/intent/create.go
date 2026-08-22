@@ -261,21 +261,41 @@ func seedDraft(id string, opts DraftOptions) string {
 	return b.String()
 }
 
-// CaptureSeedNote is the Press Release placeholder a quoted-text capture mints:
-// the exact sentence, without its emphasis markers.
+// The two Press Release placeholders this package mints, in their parts: a
+// per-path opening clause and the instruction both of them close with.
+const (
+	captureSeedOpening   = "Seeded from a quoted-text intent capture."
+	promotionSeedOpening = "Seeded by promotion from "
+	seedNoteTail         = "Expand into the full press-release narrative before planning."
+)
+
+// CaptureSeedNote is the placeholder a quoted-text capture mints, whole.
+const CaptureSeedNote = captureSeedOpening + " " + seedNoteTail
+
+// IsSeedNote reports whether a press-release body is still one of the templates
+// this package writes, rather than something somebody wrote.
 //
-// It is exported because a consumer that QUOTES a press release has to be able
-// to tell a written one from an unwritten one, and the only honest way to do
-// that is to compare against the template this package actually writes. A
-// second copy of the sentence elsewhere would drift the moment this one is
-// reworded, and the drift would show up as a placeholder quoted at a reader.
-const CaptureSeedNote = "Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning."
+// It lives HERE, with the templates, because it is the only place that can stay
+// true: a consumer comparing against its own copy of the sentence would keep
+// matching the old wording the moment these are reworded, and the symptom would
+// be a placeholder quoted at a reader as a testimonial. Both minted forms are
+// covered and nothing else is — the promotion form's source id is the only part
+// allowed to vary, and a body with a single written sentence in it fails.
+//
+// The caller passes the body already reduced to its words: quote markers,
+// emphasis markers and whitespace runs removed.
+func IsSeedNote(text string) bool {
+	if text == CaptureSeedNote {
+		return true
+	}
+	return strings.HasPrefix(text, promotionSeedOpening) && strings.HasSuffix(text, seedNoteTail)
+}
 
 // seedNote is the standard Press Release placeholder, honest about which create
 // path seeded the draft.
 func seedNote(opts DraftOptions) string {
 	if opts.PromotedFrom != "" {
-		return "_Seeded by promotion from " + opts.PromotedFrom + ". Expand into the full press-release narrative before planning._"
+		return "_" + promotionSeedOpening + opts.PromotedFrom + ". " + seedNoteTail + "_"
 	}
 	return "_" + CaptureSeedNote + "_"
 }

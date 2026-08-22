@@ -1132,13 +1132,13 @@ func (c *composer) newestMetIntent() (lint.RecordNode, bool) {
 }
 
 // pressReleaseIsUnwritten reports whether an intent's `## Press Release` is
-// still, in its entirety, the placeholder a quoted-text capture mints.
+// still, in its entirety, one of the placeholders the intent store mints.
 //
 // This is the ONE exclusion the derivation carries, and it is mechanical rather
-// than a judgement about quality: the body must equal `intent.CaptureSeedNote`
-// exactly, once the quote markers, emphasis markers and whitespace runs that
-// carry no meaning are removed. An intent that has had a single sentence
-// written into it is a candidate again.
+// than a judgement about quality: the body, reduced to its words, must be a
+// template `intent.IsSeedNote` recognises — the package that writes them owns
+// the predicate, so a reworded template cannot leave the two disagreeing. An
+// intent that has had a single sentence written into it is a candidate again.
 //
 // It exists because the featured quotation is the page's only testimonial, and
 // the record can legitimately hold a shipped, audit-met intent whose press
@@ -1158,7 +1158,7 @@ func (c *composer) pressReleaseIsUnwritten(rel string) bool {
 		if s.Title != "Press Release" {
 			continue
 		}
-		return plainPressReleaseText(s.Body) == intent.CaptureSeedNote
+		return intent.IsSeedNote(plainPressReleaseText(s.Body))
 	}
 	return false
 }
