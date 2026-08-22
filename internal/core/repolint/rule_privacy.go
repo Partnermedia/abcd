@@ -327,11 +327,20 @@ func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText b
 		}
 		return nil, false, !isBinary(probe[:n])
 	}
-	// LimitReader is a belt-and-suspenders cap in case Size understates (a file
-	// growing during the read): never buffer past the cap.
-	data, err = io.ReadAll(io.LimitReader(f, maxScanBytes))
+	// Read one byte past the cap so a file that grew past maxScanBytes between
+	// the fstat and the read is detected rather than silently scanned as a
+	// truncated prefix and reported clean — a false "scanned" on a privacy
+	// control (the same size TOCTOU the oversize branch above handles for a file
+	// that was already over the cap).
+	data, err = io.ReadAll(io.LimitReader(f, maxScanBytes+1))
 	if err != nil {
 		return nil, false, false
+	}
+	if int64(len(data)) > maxScanBytes {
+		// Grew past the cap during the read: refuse whole and report not-scanned,
+		// using the bytes already in hand for the textual probe rather than
+		// re-reading (the file is over the cap now, so this is the oversize case).
+		return nil, false, !isBinary(data)
 	}
 	return data, true, false
 }
