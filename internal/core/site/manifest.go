@@ -39,19 +39,48 @@ const (
 	featurePickNewest  = "newest-with-audit-MET"
 	featurePartPR      = "press-release"
 	featurePartFirstAC = "first-acceptance-criterion"
+	// iconsBeforeLeadIn is the one icon rule the composer implements: an image
+	// on its own line before a bold lead-in paragraph is that card's icon.
+	iconsBeforeLeadIn = "image-before-lead-in"
+	// tabsArrangement is the one tab arrangement the composer implements. The
+	// value is a description rather than an enum, and it is compared exactly for
+	// that reason: a manifest describing a DIFFERENT arrangement is asking for
+	// something this build cannot do, and the honest answer is to say so rather
+	// than to render the only arrangement there is and let the description rot.
+	tabsArrangement = "left-h2s, then lead-h3s and remaining-h2s as a labelled group"
+	// changelogFile is the release record the build reads. A manifest naming a
+	// different `release.from` is pointing the site at a source nothing consults.
+	changelogFile = "CHANGELOG.md"
 )
 
 // Manifest is `.abcd/site.json`.
+//
+// Every field here is either CONSUMED by this build or DEFERRED to a named
+// later slice — and a deferred field is still validated, so a typo in it fails
+// today rather than in three slices' time. Nothing is parsed and quietly
+// dropped: a key the binary reads but never acts on is indistinguishable, to
+// the person who wrote it, from a key that works.
 type Manifest struct {
-	SchemaVersion int          `json:"schema_version"`
-	Purpose       string       `json:"purpose"`
-	Identity      BlockRef     `json:"identity"`
-	UIStrings     string       `json:"ui_strings"`
-	Home          Home         `json:"home"`
-	Record        RecordOpts   `json:"record"`
-	Docs          DocsRefs     `json:"docs"`
-	RecordPages   RecordPages  `json:"record_pages"`
-	Checks        ManifestGate `json:"checks"`
+	SchemaVersion int `json:"schema_version"`
+	// Purpose documents this file for the humans who edit it. It is the one
+	// field with nothing to consume it, by design: it is never rendered, and
+	// the single-source rule would forbid rendering it if it were.
+	Purpose   string     `json:"purpose"`
+	Identity  BlockRef   `json:"identity"`
+	UIStrings string     `json:"ui_strings"`
+	Home      Home       `json:"home"`
+	Record    RecordOpts `json:"record"`
+	// Docs names the documentation pages the site's docs surface renders.
+	// DEFERRED: consumed by the docs-surface slice; validated here as paths.
+	Docs DocsRefs `json:"docs"`
+	// RecordPages carries the record explorer's selectors.
+	// DEFERRED: consumed by spc-38's pages half; validated here as paths.
+	RecordPages RecordPages `json:"record_pages"`
+	// Checks declares which gates this repo arms.
+	// DEFERRED: consumed by `abcd site check` (spc-37, spc-38). The build
+	// MEASURES the unresolved references and publishes the count; the ratchet
+	// that refuses a larger one is that verb's.
+	Checks ManifestGate `json:"checks"`
 }
 
 // BlockRef selects a span of a file by heading.
@@ -74,18 +103,26 @@ type Hero struct {
 
 // Chapter is one lettered section of the landing page.
 type Chapter struct {
-	Letter         string   `json:"letter"`
-	Page           string   `json:"page"`
-	Layout         string   `json:"layout"`
-	Feature        *Feature `json:"feature,omitempty"`
-	Icons          string   `json:"icons,omitempty"`
-	TablePortraits string   `json:"table_portraits,omitempty"`
-	Figure         *Figure  `json:"figure,omitempty"`
-	Lead           string   `json:"lead,omitempty"`
-	Release        *Release `json:"release,omitempty"`
-	After          string   `json:"after,omitempty"`
-	Tabs           string   `json:"tabs,omitempty"`
-	Left           []string `json:"left,omitempty"`
+	Letter  string   `json:"letter"`
+	Page    string   `json:"page"`
+	Layout  string   `json:"layout"`
+	Feature *Feature `json:"feature,omitempty"`
+	// Icons declares how a card gets its picture: an image on its own line
+	// before a bold lead-in paragraph is that card's icon.
+	Icons string `json:"icons,omitempty"`
+	// TablePortraits names the chapter whose sections supply the portraits that
+	// sit above this chapter's table column labels.
+	TablePortraits string  `json:"table_portraits,omitempty"`
+	Figure         *Figure `json:"figure,omitempty"`
+	Lead           string  `json:"lead,omitempty"`
+	// Release names where the chapter's release links read from. The build reads
+	// `from` (the changelog) and links the released asset names, which the
+	// committed install-surface agreement test holds to `assets`.
+	Release *Release `json:"release,omitempty"`
+	After   string   `json:"after,omitempty"`
+	// Tabs describes the arrangement the install layout builds.
+	Tabs string   `json:"tabs,omitempty"`
+	Left []string `json:"left,omitempty"`
 }
 
 // Feature declares the quoted record block a chapter closes with.
@@ -227,6 +264,54 @@ func (m Manifest) validate() error {
 		if ch.Figure != nil && ch.Figure.Kind != figureFirstImage {
 			return bad("%s.figure.kind %q is not a figure rule (want %q)", where, ch.Figure.Kind, figureFirstImage)
 		}
+		if ch.Icons != "" && ch.Icons != iconsBeforeLeadIn {
+			return bad("%s.icons %q is not an icon rule the composer implements (want %q)", where, ch.Icons, iconsBeforeLeadIn)
+		}
+		if ch.Tabs != "" && ch.Tabs != tabsArrangement {
+			return bad("%s.tabs describes %q, but the composer builds one arrangement: %q", where, ch.Tabs, tabsArrangement)
+		}
+		if ch.Release != nil {
+			if ch.Release.From != changelogFile {
+				return bad("%s.release.from is %q, but the build reads releases from %q", where, ch.Release.From, changelogFile)
+			}
+			if ch.Release.Assets == "" {
+				return bad("%s.release.assets is empty; it names the workflow whose published asset names the page links", where)
+			}
+		}
+	}
+	if err := m.validateDeferred(bad); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateDeferred checks the keys this build does not act on yet.
+//
+// They are validated anyway, and that is the point of the rule: a manifest key
+// nobody reads is indistinguishable, to the person who wrote it, from one that
+// works. A path typo in `record_pages` would otherwise sit in the file being
+// silently correct for however many slices it takes to reach its consumer, and
+// then fail in a change that did not cause it.
+func (m Manifest) validateDeferred(bad func(string, ...any) error) error {
+	// DEFERRED to the docs-surface slice.
+	for key, p := range map[string]string{"docs.index": m.Docs.Index, "docs.cli": m.Docs.CLI} {
+		if p != "" && !fsutil.ValidRelPath(p) {
+			return bad("%s %q is not a repo-relative path", key, p)
+		}
+	}
+	// DEFERRED to spc-38's pages half (the contributors page).
+	policy := m.RecordPages.Contributors.Policy
+	if policy.File != "" {
+		if !fsutil.ValidRelPath(policy.File) {
+			return bad("record_pages.contributors.policy.file %q is not a repo-relative path", policy.File)
+		}
+		if policy.Heading == "" {
+			return bad("record_pages.contributors.policy.heading is empty; the page quotes a span selected by heading")
+		}
+	}
+	// DEFERRED to `abcd site check`.
+	if b := m.Checks.UnresolvedReferenceBaseline; b != "" && !fsutil.ValidRelPath(b) {
+		return bad("checks.unresolved_reference_baseline %q is not a repo-relative path", b)
 	}
 	return nil
 }

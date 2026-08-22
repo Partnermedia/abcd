@@ -67,7 +67,10 @@ func (c *composer) loadPage(rel string) (*docPage, error) {
 		return nil, fmt.Errorf("site: composing %s: %w", rel, err)
 	}
 	body, consumed := StripFrontmatter(string(data))
-	secs := Sections(body, consumed)
+	secs, err := Sections(rel, body, consumed)
+	if err != nil {
+		return nil, err
+	}
 	if len(secs) == 0 {
 		return nil, fmt.Errorf("site: %s is empty; the manifest selects it as a source of text", rel)
 	}
@@ -535,6 +538,14 @@ func (c *composer) leadInCards(p *docPage, ch Chapter) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			// The manifest declares whether an image before a lead-in is that
+			// card's icon. Without the declaration the picture stays a picture
+			// in the running text, which is what the source page shows.
+			if ch.Icons != iconsBeforeLeadIn {
+				flush()
+				out.WriteString(`<div class="prose"` + srcAttr(p.Rel, s.Anchor) + `>` + h + `</div>`)
+				continue
+			}
 			icon = unwrapParagraph(h)
 		default:
 			title, rest, ok := leadIn(b.Text)
@@ -618,9 +629,13 @@ func (c *composer) tablePortraits(tableHTML, wanted string) (string, error) {
 			return "", err
 		}
 		img = strings.Replace(unwrapParagraph(img), `<img `, `<img class="th-portrait" `, 1)
+		// `label` is the cell's text AS IT SITS in the rendered table, entities
+		// and all. Re-escaping it here would turn a header like "Research &
+		// design" into `&amp;amp;`, match nothing, and silently drop the
+		// portrait — so it is substituted back exactly as it was taken.
 		tableHTML = strings.Replace(tableHTML,
-			"<th>"+escapeText(label)+"</th>",
-			"<th>"+img+"<span>"+escapeText(label)+"</span></th>", 1)
+			"<th>"+label+"</th>",
+			"<th>"+img+"<span>"+label+"</span></th>", 1)
 	}
 	return tableHTML, nil
 }
@@ -647,8 +662,14 @@ func (c *composer) chapterNamed(name string) (*docPage, error) {
 
 // columnLabelFor finds the table column whose label names the same role as a
 // section title — "Facilitator" and "Technical facilitator" are one role — and
-// returns it. An ambiguous or unmatched label gets no portrait rather than the
-// wrong one.
+// returns the cell EXACTLY as it sits in the rendered table, so the caller can
+// substitute it back. An ambiguous or unmatched label gets no portrait rather
+// than the wrong one.
+//
+// Matching is done on the DECODED text: a header reading "Research & design"
+// renders as `Research &amp; design`, and comparing that against a section title
+// would fail on the entity alone — quietly, with the only symptom a missing
+// picture.
 func columnLabelFor(tableHTML, sectionTitle string) (string, bool) {
 	var labels []string
 	rest := tableHTML
@@ -669,7 +690,7 @@ func columnLabelFor(tableHTML, sectionTitle string) (string, bool) {
 	title := strings.ToLower(sectionTitle)
 	var hits []string
 	for _, l := range labels {
-		low := strings.ToLower(l)
+		low := strings.ToLower(decodeEntities(l))
 		if strings.Contains(title, low) || strings.Contains(low, title) {
 			hits = append(hits, l)
 		}
@@ -678,6 +699,18 @@ func columnLabelFor(tableHTML, sectionTitle string) (string, bool) {
 		return "", false
 	}
 	return hits[0], true
+}
+
+// decodeEntities reverses escapeText for comparison purposes. It is the exact
+// inverse of what the renderer emits — no more — so it cannot resurrect markup
+// that was never there; `&amp;` is undone last, because undoing it first would
+// turn `&amp;lt;` into `<`.
+func decodeEntities(s string) string {
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", `"`)
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	return strings.ReplaceAll(s, "&amp;", "&")
 }
 
 // prose renders a page as running text with its sub-headings, lifting the first
@@ -934,7 +967,10 @@ func (c *composer) featureBlock(f *Feature) (string, error) {
 		return "", err
 	}
 	body, consumed := StripFrontmatter(string(data))
-	secs := Sections(body, consumed)
+	secs, err := Sections(node.Path, body, consumed)
+	if err != nil {
+		return "", err
+	}
 	p := &docPage{Rel: node.Path, Dir: path.Dir(node.Path)}
 	r := c.renderer(p)
 
