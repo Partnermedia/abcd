@@ -232,6 +232,29 @@ func TestTokenizeSegments(t *testing.T) {
 			line: "git push && git push --force origin main",
 			want: []string{"0:git|push", "0:git|push|--force|origin|main"},
 		},
+		{
+			// ANSI-C quoting must not carry the `$` into the word: bash hands
+			// git the same `--force` argv either way, so the token must be
+			// `--force`, never `$--force`.
+			name: "ansi-c quoting yields the bare flag",
+			line: "git push $'--force' origin main",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "ansi-c quoting decodes hex escapes",
+			line: `git push $'\x2d\x2dforce' origin main`,
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "ansi-c quoting glued to a word joins it",
+			line: "gh repo$'' delete owner/repo",
+			want: []string{"0:gh|repo|delete|owner/repo"},
+		},
+		{
+			name: "locale quoting yields the bare flag",
+			line: `git push $"--force" origin main`,
+			want: []string{"0:git|push|--force|origin|main"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
