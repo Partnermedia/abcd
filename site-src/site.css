@@ -460,6 +460,23 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .refs a{word-break:break-word}
 .insp ul{font-size:.92rem;list-style:none;padding:0;margin:0}
 .insp li{padding:6px 0;border-bottom:1px solid var(--rule)}
+/* A bibliography is made of ADDRESSES — DOIs, repository URLs, a manpage path —
+   single tokens with no space in them and no natural break. They are the one
+   kind of text a narrower column cannot make fit: given nowhere to break, the
+   token sets the width of the whole page and the layout scrolls sideways
+   underneath it.
+ *
+ * The lifted prototype broke them in the numbered list (`.refs a` above), and
+ * its inspirations list needed nothing because it held plain strings. This one
+ * renders the acknowledgement file's own credits, autolinks and all, so it needs
+ * the same treatment — `overflow-wrap:anywhere` rather than `break-word`
+ * because only `anywhere` also shrinks the element's min-content width, which is
+ * what lets the track around it give. */
+.refs li,.insp li{overflow-wrap:anywhere}
+/* And the net under both: no link inside a panel may widen the page, whichever
+   list a later change puts it in. Short text is unaffected — a break only
+   happens where the line would otherwise overflow. */
+.panel a{overflow-wrap:anywhere}
 
 /* 390 px: the card becomes a full-width bottom sheet and the chart pans so the
    focused record stays above it. */
