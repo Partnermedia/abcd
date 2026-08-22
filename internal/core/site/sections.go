@@ -98,7 +98,7 @@ func Sections(path, md string, offset int) ([]Section, error) {
 	}
 
 	for i, line := range lines {
-		if strings.HasPrefix(line, "```") {
+		if isFenceLine(line) {
 			fence = !fence
 			if fence {
 				fenceLine = offset + i + 1
@@ -152,6 +152,14 @@ func trimBlankLines(body []string, start int) (string, int) {
 	return strings.Join(body[lo:hi], "\n"), start + lo
 }
 
+// isFenceLine reports whether a line opens or closes a fenced code block. An
+// INDENTED fence counts: the record writes them inside list items, and a walk
+// that only saw the left margin would read the fence's own `#` lines as headings
+// and split the document at them.
+func isFenceLine(line string) bool {
+	return strings.HasPrefix(strings.TrimLeft(line, " \t"), "```")
+}
+
 // Slug renders a heading as its anchor: emphasis and code marks dropped,
 // lower-cased, every other run of non-alphanumerics collapsed to a hyphen.
 func Slug(t string) string {
@@ -176,13 +184,19 @@ func Blocks(md string, start int) []Block {
 		}
 	}
 	for i, line := range strings.Split(md, "\n") {
-		if strings.HasPrefix(line, "```") {
+		if isFenceLine(line) {
 			if !fence && len(buf) == 0 {
 				bufLine = start + i
 			}
 			fence = !fence
 			buf = append(buf, line)
-			if !fence {
+			// A fence at the left margin closes its own block. An INDENTED one
+			// belongs to whatever list item holds it, so the block runs on: the
+			// item's renderer dedents it and reads it as a fence there. Ending
+			// the block here instead would leave the fence's blank lines to
+			// split the code into paragraphs, and its `#` lines to be read as
+			// headings — which is a document silently losing sections.
+			if !fence && indentOf(line) == 0 {
 				flush()
 			}
 			continue
