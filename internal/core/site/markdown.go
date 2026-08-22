@@ -332,8 +332,13 @@ func (r *Renderer) inline(at Source, s string) (string, error) {
 			b.WriteString("<code>" + escapeText(code) + "</code>")
 			i += n + end + n
 		case c == '!' && i+1 < len(s) && s[i+1] == '[':
-			text, href, next, ok := parseLink(s, i+1)
-			if !ok {
+			text, href, next, kind := parseLink(s, i+1)
+			switch kind {
+			case linkLiteral:
+				b.WriteString("!")
+				i++
+				continue
+			case linkRefused:
 				return "", &UnsupportedError{at.Path, at.Line, "image", "only ![alt](src) is rendered, got " + quote(clip(s[i:]))}
 			}
 			html, err := r.Image(href, text, at)
@@ -343,9 +348,22 @@ func (r *Renderer) inline(at Source, s string) (string, error) {
 			b.WriteString(html)
 			i = next
 		case c == '[':
-			text, href, next, ok := parseLink(s, i)
-			if !ok {
-				return "", &UnsupportedError{at.Path, at.Line, "link", "only [text](href) is rendered; reference and footnote links are not in the subset"}
+			text, href, next, kind := parseLink(s, i)
+			switch kind {
+			case linkLiteral:
+				// A bracket that opens no link is a bracket. Refusing it would
+				// blocker-fail the build over prose like "the array [0]", which
+				// every markdown reader renders literally.
+				b.WriteString("[")
+				i++
+				continue
+			case linkRefused:
+				return "", &UnsupportedError{at.Path, at.Line, "link",
+					"only [text](href) is rendered; reference links, footnotes and link titles are not in the subset"}
+			}
+			if scheme, bad := executableScheme(href); bad {
+				return "", &UnsupportedError{at.Path, at.Line, "link scheme",
+					quote(scheme) + " runs code in the reader's browser; the site links to pages and files"}
 			}
 			inner, err := r.inline(at, text)
 			if err != nil {
@@ -404,9 +422,21 @@ func (r *Renderer) inline(at Source, s string) (string, error) {
 	return b.String(), nil
 }
 
-// parseLink reads `[text](href)` starting at the '[' and returns the text, the
-// href, and the index just past the closing paren.
-func parseLink(s string, i int) (text, href string, next int, ok bool) {
+// The three things a '[' can turn out to be.
+const (
+	// linkInline is `[text](href)`: rendered.
+	linkInline = iota
+	// linkRefused is a construct that MEANS a link but is not in the subset — a
+	// reference link, a footnote, a link title. Rendering it literally would
+	// publish the markup; dropping it would lose the destination.
+	linkRefused
+	// linkLiteral is a bracket that opens no link at all. It is text.
+	linkLiteral
+)
+
+// parseLink classifies a '[' at i and, for an inline link, returns its text,
+// its href, and the index just past the closing paren.
+func parseLink(s string, i int) (text, href string, next, kind int) {
 	depth := 0
 	j := i
 	for ; j < len(s); j++ {
@@ -420,8 +450,18 @@ func parseLink(s string, i int) (text, href string, next int, ok bool) {
 			break
 		}
 	}
-	if j >= len(s) || j+1 >= len(s) || s[j+1] != '(' {
-		return "", "", 0, false
+	if j >= len(s) || j+1 >= len(s) {
+		return "", "", 0, linkLiteral
+	}
+	switch s[j+1] {
+	case '(':
+		// An inline link, or an attempt at one.
+	case '[':
+		// `[text][ref]` — a reference link, whose destination is defined
+		// elsewhere in a form this renderer does not read.
+		return "", "", 0, linkRefused
+	default:
+		return "", "", 0, linkLiteral
 	}
 	text = s[i+1 : j]
 	k := j + 2
@@ -437,16 +477,46 @@ func parseLink(s string, i int) (text, href string, next int, ok bool) {
 		}
 	}
 	if k >= len(s) {
-		return "", "", 0, false
+		return "", "", 0, linkRefused
 	}
 	href = strings.TrimSpace(s[j+2 : k])
-	if strings.ContainsAny(href, " \t") {
+	if href == "" || strings.ContainsAny(href, " \t") {
 		// A link title (`[t](u "title")`) is not in the subset: it renders as an
 		// attribute nothing on the site reads, and hiding prose in one would
 		// smuggle unsourced text onto the page.
-		return "", "", 0, false
+		return "", "", 0, linkRefused
 	}
-	return text, href, k + 1, true
+	return text, href, k + 1, linkInline
+}
+
+// executableScheme reports whether an href names a scheme that executes rather
+// than navigates. Escaping an attribute is not enough on its own: a perfectly
+// well-formed `javascript:` href needs no quote to break out of, and the site
+// renders text from a repository whose files an outside contributor can edit.
+// The comparison folds case and strips the whitespace and control characters a
+// browser ignores inside a scheme, because those are exactly what a bypass is
+// written with.
+func executableScheme(href string) (string, bool) {
+	var b strings.Builder
+	for i := 0; i < len(href); i++ {
+		c := href[i]
+		if c == ':' {
+			scheme := strings.ToLower(b.String())
+			switch scheme {
+			case "javascript", "vbscript", "data":
+				return scheme + ":", true
+			}
+			return "", false
+		}
+		if c == '/' || c == '?' || c == '#' {
+			return "", false
+		}
+		if c <= ' ' || c == 0x7f {
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return "", false
 }
 
 // underscoreDelimits reports whether an underscore run at i opens or closes

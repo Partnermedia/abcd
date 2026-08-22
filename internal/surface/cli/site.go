@@ -84,7 +84,7 @@ func renderSiteStatus(w io.Writer, st site.Status) {
 	}
 	fmt.Fprintf(w, "  chapters:     %d\n", st.Chapters)
 	fmt.Fprintf(w, "  issue ledger: %s\n", publishedWord(st.IssueLedge))
-	fmt.Fprintf(w, "  %s\n", mark(st.UIStrings, "interface strings"))
+	fmt.Fprintf(w, "  ui strings:   %s\n", mark(st.UIStrings, termsafe.Sanitize(st.UIPath)))
 	if st.Baseline {
 		fmt.Fprintf(w, "  baseline:     %s (%d unresolved references admitted)\n", site.BaselineRelPath, st.BaselineN)
 	} else {

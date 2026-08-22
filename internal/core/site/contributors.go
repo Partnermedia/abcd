@@ -35,10 +35,17 @@ var (
 )
 
 // Author is one authorship line.
+//
+// The address is deliberately absent. `git shortlog -sne` yields it and the
+// mailmap folds it, so it is read — but the site is published, and republishing
+// a contributor's address on a web page is a harvesting surface the record
+// never asked for. The name is the attribution; the address stays in git.
 type Author struct {
 	Name    string `json:"name"`
-	Email   string `json:"email"`
 	Commits int    `json:"commits"`
+	// email is read so identities fold correctly and sort stably, and is never
+	// exported.
+	email string
 }
 
 // ModelTally is one distinct `Assisted-by:` value and how often it appears.
@@ -78,7 +85,9 @@ const noneDeclaration = "None"
 // LoadAuthorship reads the authorship facts out of git. A directory that is not
 // a repository yields a zero Authorship and no error.
 func LoadAuthorship(repoRoot string) (Authorship, error) {
-	var a Authorship
+	// Empty rather than absent: a page that renders "no bots" from an empty list
+	// and nothing at all from a null is a page with two ways to say one thing.
+	a := Authorship{Humans: []Author{}, Bots: []Author{}, ByModel: []ModelTally{}}
 	if !gitutil.InRepo(repoRoot) {
 		return a, nil
 	}
@@ -141,7 +150,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		if err != nil {
 			continue
 		}
-		au := Author{Name: m[2], Email: m[3], Commits: n}
+		au := Author{Name: m[2], Commits: n, email: m[3]}
 		if botNameRe.MatchString(au.Name) || vendors[au.Name] {
 			a.Bots = append(a.Bots, au)
 			continue
@@ -163,6 +172,6 @@ func sortAuthors(as []Author) {
 		if as[i].Name != as[j].Name {
 			return as[i].Name < as[j].Name
 		}
-		return as[i].Email < as[j].Email
+		return as[i].email < as[j].email
 	})
 }

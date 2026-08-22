@@ -167,11 +167,10 @@
     "humans": [
       {
         "name": "Fixture",
-        "email": "fixture@example.invalid",
         "commits": 3
       }
     ],
-    "bots": null,
+    "bots": [],
     "assisted": 1,
     "declared_none": 1,
     "undeclared": 1,

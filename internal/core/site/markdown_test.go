@@ -45,6 +45,9 @@ func TestRenderSubset(t *testing.T) {
 		{"| a | b |\n|---|---|\n| 1 | 2 |",
 			"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table>"},
 		{"Escaped \\*not emphasis\\*", "<p>Escaped *not emphasis*</p>"},
+		// A bracket that opens no link is text, as every markdown reader agrees.
+		{"the array [0] holds it", "<p>the array [0] holds it</p>"},
+		{"a model named opus-5[1m]", "<p>a model named opus-5[1m]</p>"},
 	}
 	for _, c := range cases {
 		if got := render(t, c.md); got != c.want {
@@ -90,6 +93,13 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 		{"unclosed emphasis", "An *unclosed emphasis.", 1, "unclosed emphasis"},
 		{"unclosed code span", "An `unclosed code span.", 1, "unclosed code span"},
 		{"table without a delimiter", "| a | b |\n| 1 | 2 |", 1, "pipe table"},
+		{"script href", "A [link](javascript:alert(1)) here.", 1, "link scheme"},
+		// A control character inside the scheme is ignored by browsers and is the
+		// shape a bypass takes; whitespace is refused one step earlier, by the
+		// link parser, so this case is what the scheme check itself adds.
+		{"obfuscated script href", "A [link](java\x01script:alert(1)) here.", 1, "link scheme"},
+		{"upper-case script href", "A [link](JavaScript:alert(1)) here.", 1, "link scheme"},
+		{"data href", "A [link](data:text/html;base64,PHNjcmlwdD4=) here.", 1, "link scheme"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -281,6 +281,7 @@ func isPreOne(version string) bool {
 type Status struct {
 	Manifest   bool   `json:"manifest"`
 	UIStrings  bool   `json:"ui_strings"`
+	UIPath     string `json:"ui_strings_path,omitempty"`
 	Baseline   bool   `json:"baseline"`
 	BaselineN  int    `json:"baseline_entries"`
 	OutDir     string `json:"out_dir"`
@@ -304,6 +305,7 @@ func Describe(repoRoot, outDir string) (Status, error) {
 		st.Manifest = true
 		st.Chapters = len(m.Home.Chapters)
 		st.IssueLedge = m.Record.IssueLedger
+		st.UIPath = m.UIStrings
 		if ok, _ := fsutil.Exists(joinRepo(repoRoot, m.UIStrings)); ok {
 			st.UIStrings = true
 		}
