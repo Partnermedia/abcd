@@ -245,11 +245,20 @@ severity: minor          # seeded capture-grain severity of the draft
 ## What's In Scope
 ## What's Out of Scope
 
+## Mechanism                # Optional (adr-51): why the authors expect this to work —
+                            #   a falsifiable "we expect X because Y", not the outcome restated
+## Scope Conditions         # Optional (adr-51): the population/platform/scale/assumptions the
+                            #   claim holds under; reuse outside them is a visible re-decision
+
 ## Acceptance Criteria      # Required (per the itd-1 discipline); Given-When-Then bullets
 
 ## Open Questions
 ## Audit Notes               # populated by `/abcd:intent audit` (manual Role 1 run)
 ```
+
+The two optional sections are unenforced by design — whether either becomes
+required is a deferred discipline question
+([adr-51](../../decisions/adrs/0051-intents-declare-mechanism-and-scope-conditions.md)).
 
 Discipline-kind intents use a different template — see § 1 "Discipline format" above.
 

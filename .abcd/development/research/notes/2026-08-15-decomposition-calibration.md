@@ -649,6 +649,62 @@ Per hand-run, append:
   record: no user moment, so the routing is an in-scope export plus a
   dependency edge — a taxonomy data point for plumbing-with-two-consumers.
 
+### 2026-08-22 — the brief-creation interview (hand-run at capture)
+
+- **Proposal:** the brief-creation interview workstream from the 2026-08-22
+  filing handover: staged elicitation (narrative → frontier rounds → options
+  at conjectural questions → per-item confirm), four question regimes with an
+  escalation rule, a hold register, the two-output rule, and one entry door
+  for brownfield (probe-populated) and greenfield (all-blank coverage).
+- **Initial routing:** four parts — the interview surface (capability |
+  intent itd-142, command-shaped per the `05-internals/08-skills.md`
+  boundary: it mutates state, and abcd ships zero skills); "framing traces
+  are never committed and never visible to automated reviewers" (trust rule |
+  adr-50 + brief invariant 14); "at conjectural questions the tool widens
+  options, never recommends" (stance | principle
+  `widen-options-never-recommend`); provenance stamps + the hold-register
+  store (plumbing | brief, via the itd-142 spec). Typed link: itd-142
+  `refines` itd-90 — the deterministic shortlist over `drafts/` surfaced the
+  existing coverage-blanks interview before minting, so the overlap filed as
+  a typed refinement instead of a duplicate. Open sign-offs (escalation
+  rule; one-vs-three intents at the final round; a held working-principle at
+  the final round) stayed in the intent as Open Questions — routed nowhere.
+- **Confirmed routing:** maintainer confirmed 2026-08-22 (file all homes
+  now; only the spec waits, until the collaborating prototype has run once).
+- **Verdict:** SPLIT, proposed and confirmed.
+- **Notes:** the candidate pass earned its keep — without it this session
+  would have minted a second blanks-interview beside itd-90. The
+  hold-register *home* question deliberately stayed unrouted (open ledger
+  seed iss-2608220750029991 + the evidence chapter's open question), a
+  taxonomy data point: a part whose home is itself the open question routes
+  to a seed, not a record.
+
+### 2026-08-22 — the framing chapter (hand-run at capture)
+
+- **Proposal:** a framing section under `01-product/` — the macro-why home,
+  also the destination for the interview's committed framing products.
+- **Initial routing:** three parts — the framing home + its brief↔lifeboat
+  mapping row (capability | intent itd-143); this repository's own framing
+  content (plumbing | brief, written when the section ships); the
+  glossary-as-deliberate-frame-surface note (docs | `brief/glossary/README.md`,
+  filed in the same change).
+- **Confirmed routing:** maintainer confirmed 2026-08-22.
+- **Verdict:** SPLIT, proposed and confirmed.
+- **Notes:** the mapping row makes this a code-touching intent (mapping.go +
+  round-trip tests), not a docs-only change — the routing caught that early.
+
+### 2026-08-22 — intent-shape additions (hand-run at capture)
+
+- **Proposal:** intents gain a mechanism claim ("we expect this to work
+  because…") and a scope-conditions section.
+- **Initial routing:** two parts — the record-shape change (architecture
+  decision | adr-51 + the `04-surfaces/05-intent.md` template); enforcement
+  (discipline question | explicitly deferred, no record minted — if it
+  comes, it files on the itd-84/itd-1 staged-gate pattern).
+- **Confirmed routing:** maintainer confirmed 2026-08-22 (ADR + page now).
+- **Verdict:** FILE-AS-IS (as the routed ADR), proposed and confirmed.
+- **Notes:** both sections optional and unenforced; `enforcement-claims-are-facts`
+  keeps the template honest about that.
 ### 2026-08-22 — the writing style guide (hand-run at capture)
 
 - **Proposal:** one canonical writing style guide (maintainer request,
