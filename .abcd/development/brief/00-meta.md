@@ -21,7 +21,7 @@ The brief is split across numbered folders rather than a single `README.md`. Rea
 
 The brief skeleton is, deliberately, the same shape as a populated lifeboat (see [`04-surfaces/02-disembark.md § 5`](04-surfaces/02-disembark.md#5-output-shape)). This is a design contract:
 
-- **`/abcd:ahoy`** copies an empty version of this skeleton into a fresh repo (so a human fills it in).
+- **`/abcd:ahoy`** scaffolds a managed repo's config (`.abcd/config.json` + `.abcd/rules.json` — see [`04-surfaces/01-ahoy.md`](04-surfaces/01-ahoy.md)), never this skeleton. The **design target** (staged, not shipped) for a fresh repo is the **all-blank coverage state**: every section of this skeleton present as a blank to be filled deliberately, measured by the same three-valued coverage accounting a lifeboat reports (`grounded` / `partial` / `blank`) — not a copied file tree.
 - **`/abcd:disembark`** uses this skeleton's *shape* as a target schema for what lifeboat-composer agents must produce.
 - **`/abcd:embark`** reads a lifeboat (which is structurally a populated brief + audit/provenance extras) and writes a new repo's brief by walking the brief↔lifeboat mapping in reverse — the amended press release becomes the new repo's initial brief.
 
