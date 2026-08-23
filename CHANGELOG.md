@@ -108,6 +108,14 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`abcd history capture` accepts what the hooks accept.** The verb read
+  its operand through the 8 MiB JSON-operand cap while the SessionEnd path
+  read through the 64 MiB transcript cap, so every transcript between the
+  two was capturable automatically and unrecoverable by hand — the recovery
+  verb bounded eight times tighter than the thing it recovers from, with no
+  stdin workaround. Found refusing an ordinary 11.8 MB session during a
+  backlog recovery. The caps themselves are unchanged and still refuse an
+  over-cap file whole rather than truncating (iss-2608231029040602).
 - **Session transcripts past a couple of megabytes are no longer dropped
   at exit.** `hook session-end` redacted the whole transcript in-line
   before writing, at roughly 0.7s per megabyte, and the host cancels a
