@@ -108,6 +108,26 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **Session transcripts past a couple of megabytes are no longer dropped
+  at exit.** `hook session-end` redacted the whole transcript in-line
+  before writing, at roughly 0.7s per megabyte, and the host cancels a
+  shutdown hook rather than wait for it — so the long, dense sessions most
+  worth keeping were exactly the ones lost, silently, with the store unable
+  to tell an uncaptured session from one that never ended. Capture is now
+  split across the two hooks that can each afford their half: SessionEnd
+  stages the raw transcript in one write, so its cost no longer scales with
+  the transcript, and the next SessionStart redacts and stores it through
+  the same fail-closed path. Nine of this repo's own ended sessions were
+  absent from its store before this (iss-2608230817034768).
+- **A session that ended but was not stored is now visible.** `abcd history
+  staged` lists transcripts awaiting redaction — the outcome the store alone
+  could never report, since an absent record spans "never ended", "ended
+  before the store existed" and "ended and lost" alike. `abcd history drain`
+  finishes a backlog without waiting for another session, and exits non-zero
+  if anything could not be stored. A SessionStart drains a bounded number so
+  it cannot stall the first prompt, and says out loud what it left
+  (iss-2608210934566224).
+
 - **The ideate record grill now sweeps id-less records.** Leg 2 of
   `/abcd:ideate` reads the research notes and the decision log alongside the
   id-bearing families, reporting a hit that rests on one in the `note` field

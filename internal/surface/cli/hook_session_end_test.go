@@ -73,10 +73,27 @@ func endPayload(t *testing.T, session, cwd, transcript string) string {
 	return string(b)
 }
 
+// endThenStart runs the full capture: SessionEnd stages the transcript, the next
+// SessionStart redacts and stores it. Capture is deliberately split across the
+// two hooks (iss-2608230817034768) because redaction at exit loses the race with
+// the host's shutdown cancellation, so no single hook proves the property any
+// more — the pair does. Returns SessionStart's stderr, where a drain reports.
+func endThenStart(t *testing.T, session, repo, transcript string) string {
+	t.Helper()
+	runHook(t, endPayload(t, session, repo, transcript), "hook", "session-end")
+	// Not runHook: SessionStart exits non-zero on purpose when it has something
+	// to say, because that is the only way the host renders a hook's stderr. A
+	// drain failure is exactly such a notice, so the exit code is expected here
+	// rather than a test failure.
+	_, errlog, _ := runSessionStart(startPayload(session+"-next", repo), "hook", "session-start")
+	return errlog
+}
+
 // TestHookSessionEndCapturesTranscript is the milestone: finishing a session
-// leaves a record in the store. Without this hook the transcript corpus never
+// leaves a record in the store. Without this the transcript corpus never
 // accrues, and no later code can recover a session that was not captured while
-// it ran.
+// it ran. The work is split across SessionEnd (stage) and the next SessionStart
+// (redact and store), so the test drives both.
 func TestHookSessionEndCapturesTranscript(t *testing.T) {
 	repo, rootSHA := sessionEndRepo(t)
 	tp := filepath.Join(t.TempDir(), "sess.jsonl")
@@ -84,7 +101,7 @@ func TestHookSessionEndCapturesTranscript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, errlog := runHook(t, endPayload(t, "sess-1", repo, tp), "hook", "session-end")
+	errlog := endThenStart(t, "sess-1", repo, tp)
 
 	recs, err := history.List(rootSHA)
 	if err != nil {
@@ -111,6 +128,7 @@ func TestHookSessionEndIsIdempotent(t *testing.T) {
 
 	runHook(t, in, "hook", "session-end")
 	runHook(t, in, "hook", "session-end")
+	runHook(t, startPayload("sess-2-next", repo), "hook", "session-start")
 
 	recs, err := history.List(rootSHA)
 	if err != nil {
@@ -139,7 +157,7 @@ func TestHookSessionEndOneRecordPerSession(t *testing.T) {
 	if err := os.WriteFile(tp, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runHook(t, endPayload(t, "grown-session", repo, tp), "hook", "session-end")
+	endThenStart(t, "grown-session", repo, tp)
 
 	recs, err := history.List(rootSHA)
 	if err != nil {
@@ -229,7 +247,7 @@ func TestHookSessionEndRedactsOnThisPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runHook(t, endPayload(t, "redacts", repo, tp), "hook", "session-end")
+	endThenStart(t, "redacts", repo, tp)
 
 	recs, err := history.List(rootSHA)
 	if err != nil || len(recs) != 1 {
@@ -410,11 +428,17 @@ func TestHookSessionEndRefusesOverCapTranscript(t *testing.T) {
 }
 
 // TestHookSessionEndRefusesResidualHardFail holds the fail-closed tail of the
-// two-stage redaction on the hook path: if a hard_fail span SURVIVES stage-one
-// masking, the stage-two re-scan refuses the write entirely — no file, reason
-// on stderr, exit 0. The custom pattern is built to survive on purpose: its
-// regex matches both the raw token and the token's masked fingerprint (head 3 +
-// starred middle + tail 2), so redaction cannot clear it.
+// two-stage redaction. If a hard_fail span SURVIVES stage-one masking, the
+// stage-two re-scan refuses the write entirely — no record, reason reported,
+// and neither hook exits non-zero. The custom pattern is built to survive on
+// purpose: its regex matches both the raw token and the token's masked
+// fingerprint (head 3 + starred middle + tail 2), so redaction cannot clear it.
+//
+// The refusal now lands on the DRAIN, not on SessionEnd, because SessionEnd no
+// longer redacts. The guarantee is unchanged and so is its blast radius: what
+// reaches transcripts/ is still redacted or absent. The staged raw copy is kept
+// deliberately — it is the only copy abcd holds, and discarding it would turn a
+// reported refusal into the silent permanent loss staging exists to end.
 func TestHookSessionEndRefusesResidualHardFail(t *testing.T) {
 	repo, rootSHA := sessionEndRepo(t)
 	cfgDir := filepath.Join(repo, ".abcd", "config")
@@ -432,10 +456,10 @@ func TestHookSessionEndRefusesResidualHardFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, errlog := runHook(t, endPayload(t, "residual", repo, tp), "hook", "session-end")
+	errlog := endThenStart(t, "residual", repo, tp)
 
-	if !strings.Contains(errlog, "refusing to write") {
-		t.Errorf("a surviving hard_fail span must refuse the write on stderr, got: %s", errlog)
+	if !strings.Contains(errlog, "could not be stored") {
+		t.Errorf("a surviving hard_fail span must be reported by the drain, got: %s", errlog)
 	}
 	recs, err := history.List(rootSHA)
 	if err != nil {
@@ -443,6 +467,18 @@ func TestHookSessionEndRefusesResidualHardFail(t *testing.T) {
 	}
 	if len(recs) != 0 {
 		t.Errorf("a surviving hard_fail span must write NO file at all, got %d record(s)", len(recs))
+	}
+	// The raw copy survives a refusal, and the notice must name it so the
+	// unredacted bytes are not left silently on disk.
+	staged, err := history.ListStaged(rootSHA)
+	if err != nil {
+		t.Fatalf("history.ListStaged: %v", err)
+	}
+	if len(staged) != 1 || staged[0].SessionID != "residual" {
+		t.Fatalf("a refused capture must keep its staged copy, got %+v", staged)
+	}
+	if !strings.Contains(errlog, "unredacted") {
+		t.Errorf("the notice must say the kept transcript is unredacted, got: %s", errlog)
 	}
 }
 

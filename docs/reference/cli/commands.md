@@ -466,6 +466,12 @@ Redact and store a raw session transcript (reads a file or stdin)
       --session string   session id for the record (default: transcript filename; required for stdin)
 ```
 
+#### `abcd history drain`
+
+Redact and store every staged transcript for this repo
+
+**Usage:** `abcd history drain`
+
 #### `abcd history list`
 
 List stored transcripts for this repo, newest first
@@ -477,6 +483,12 @@ List stored transcripts for this repo, newest first
 Show one stored transcript's metadata and redacted body
 
 **Usage:** `abcd history show <session-id-or-filename>`
+
+#### `abcd history staged`
+
+List transcripts that ended but are not yet redacted into the store
+
+**Usage:** `abcd history staged`
 
 ### `abcd ideate`
 

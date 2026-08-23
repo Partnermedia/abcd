@@ -4,11 +4,27 @@
 redact-on-write archive of raw session transcripts, keyed on the repo's
 **root-commit SHA**. The store lives outside the repo at
 `~/.abcd/history/<root-sha>/transcripts/`, with a per-repo `meta.json`
-(`root_commit`, `name`, `github`, and a corpus block) alongside it. `list` and
-`show` **perform zero writes**; the store has two write paths — the explicit
-`capture` sub-verb and the automatic `abcd hook session-end` entrypoint wired on
-the SessionEnd event (`hooks/hooks.json`) — and both redact on write, so no live
-secret or absolute home path survives capture.
+(`root_commit`, `name`, `github`, and a corpus block) alongside it. `list`,
+`show` and `staged` **perform zero writes**; the store has three write paths —
+the explicit `capture` sub-verb, the `drain` sub-verb, and the automatic
+`abcd hook session-start` drain — and all redact on write, so no live secret or
+absolute home path survives into a record.
+
+Automatic capture is **split across two hooks**. `abcd hook session-end` only
+**stages** the raw transcript beside the store at
+`~/.abcd/history/<root-sha>/staging/`, because redaction costs roughly 0.7s per
+megabyte and the host cancels a shutdown hook rather than wait for it — so
+redacting at exit silently dropped every transcript past a couple of megabytes,
+which is to say the long, dense sessions most worth keeping
+(iss-2608230817034768). `abcd hook session-start` drains staging into the store
+through the same fail-closed `capture` path, where there is a real time budget.
+
+Staging is the one place abcd holds unredacted transcript text on purpose: mode
+`0o700`, files `0o600`, and each file lives only until the next session drains
+it. It is also the **outcome record the store never had** — before it, an absent
+record spanned "never ended", "ended before the store existed" and "ended and
+lost" alike, and nothing could tell them apart, which is why a week of losses
+went unnoticed.
 
 ## Sub-verbs
 
@@ -20,8 +36,10 @@ secret or absolute home path survives capture.
 | Verb | Bucket | Status |
 |---|---|---|
 | `capture` | — | shipped |
+| `drain` | — | shipped |
 | `list` | — | shipped |
 | `show` | — | shipped |
+| `staged` | — | shipped |
 
 
 - **`/abcd:history list`** — list stored transcripts for this repo, newest
@@ -40,6 +58,17 @@ secret or absolute home path survives capture.
   `--kind` (`native` | `specstory-import`, default
   `native`) and `--session` (the record's session id; defaults to the transcript
   filename, and is **required** when reading from stdin).
+- **`/abcd:history staged`** — list transcripts that ended but are not yet
+  redacted into the store. Each entry is one session whose capture is
+  incomplete, reporting `session_id`, `staged_at` and `bytes`. A non-empty list
+  means unredacted transcript text is on disk.
+- **`/abcd:history drain`** — redact and store every staged transcript, then
+  delete the raw copy. A staged file is removed **only** once its transcript is
+  in the store; anything that fails to capture is reported and its raw copy
+  deliberately kept, since it is then the only copy abcd holds. Exits non-zero
+  when anything failed. `session-start` drains a **bounded** number so it cannot
+  stall the first prompt, and reports the remainder rather than dropping it; this
+  verb runs the backlog to completion.
 
 Bare `abcd history` prints command usage — it does **not** render a status board.
 The global `--json` flag emits machine-readable output for every sub-verb.
@@ -51,6 +80,13 @@ store is a durable artefact that may later feed the memory substrate. Every
 transcript is redacted on write (secrets and absolute home paths), the redaction
 counts are recorded on the record, and a redaction failure refuses the write
 rather than storing unredacted content.
+
+Staging does not weaken this. Staged bytes are raw, but staging is **not the
+store**: nothing reads it but `drain`, and what reaches `transcripts/` is still
+redacted or absent. A refused drain keeps the staged copy rather than deleting
+it — discarding the only copy abcd holds would convert a reported refusal into
+exactly the silent permanent loss staging exists to end — and the refusal names
+the kept file as unredacted so it is never left quietly on disk.
 
 ## Composition
 
