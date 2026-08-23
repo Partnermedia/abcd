@@ -313,7 +313,9 @@ go run ./cmd/record-lint --release-gate <content-commit-sha> \
 
 - `<content-commit-sha>` is the **full 40-character** sha of the commit the
   receipts name, which on a correctly shaped release branch is the receipts
-  commit's parent (`git rev-parse HEAD^`). An abbreviated sha is rejected.
+  commit's parent (`git rev-parse HEAD^`). Use the full sha: an abbreviated one
+  is well-formed, finds no receipt, and makes the gate refuse as though the
+  semantic pass had never run.
 - `record-lint` is a repository-local program, not an installed binary. `go run
   ./cmd/record-lint` is the invocation; there is no `record-lint` on `PATH`.
 - The required-gate names come from `release.yml`, which owns that list on
