@@ -1977,3 +1977,4 @@ parallel-agent merge contention bites.
   untouched). (4) The Genealogy release-cadence list is dropped now; a
   commits-per-release-window ridgeline is its candidate replacement, designed
   within the IA-restructure intent seed (iss-2608230752354909).
+- 2026-08-22 — ideate: cli-verb-taxonomy-restructure — verdict reframed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-22-ideate-cli-verb-taxonomy-restructure.md
