@@ -67,8 +67,10 @@ and the baseline is per-repo site configuration on the same opt-in footing as
 Four flags exist so a build can pin what the footer says rather than reading it
 from the working tree: `--version`, `--commit`, `--date` and `--preview` (stamp
 the build as unreleased at this commit, for a preview deployment of an untagged
-tree). Left unset, the version and date come from the newest dated
-`CHANGELOG.md` heading and the commit from git `HEAD`.
+tree). `--preview` and `--version` are mutually exclusive: a preview build is
+stamped unreleased, so pinning a version contradicts it. Left unset, the version
+and date come from the newest dated `CHANGELOG.md` heading and the commit from
+git `HEAD`.
 
 Report the files written, then the five measurements the render prints: the
 page count rendered from the record, the
@@ -116,7 +118,9 @@ one who has. It writes nothing except that render, and reaches no network.
 - `baseline` — an unresolved cross-reference outside the committed ratchet
   fails; a ratchet entry whose reference now resolves is reported as shrinkable
   and fails nothing. Growing is refused, shrinking is invited.
-- `mobile` — over EVERY emitted page, the record rendering included: the viewport
+- `mobile` — over every page this build writes, the record rendering included
+  (the `/docs/` tree is the documentation generator's own output and is dropped
+  before any gate walks it, so no gate here examines it): the viewport
   meta, an overflow container above every table and command block, a max-width
   rule for images in the linked stylesheet (resolved from the served root, which
   is where a root-absolute href points), no picture wider than the content
