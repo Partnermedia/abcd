@@ -61,6 +61,8 @@ const ROUTE_FAMILIES = [
   '/record/graph/',
   '/record/timeline/',
   '/record/foundations/',
+  '/record/development/',
+  '/record/health/',
   '/contributors/',
   '/references/',
 ];

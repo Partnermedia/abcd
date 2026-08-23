@@ -292,7 +292,13 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .sub{border-bottom:1px solid var(--rule);background:var(--surface)}
 .sub .wrap{display:flex;gap:2px;overflow-x:auto;padding-top:6px;scrollbar-width:none}
 .sub .wrap::-webkit-scrollbar{display:none}
-.sub a{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.92rem;color:var(--ink-2);text-decoration:none;padding:10px 14px 12px;border-bottom:2px solid transparent;white-space:nowrap}
+/* position:relative is load-bearing: a glyph tab carries its name in a
+   visually-hidden span, and .sr is absolutely positioned. Without a positioned
+   ancestor that span resolves against the initial containing block, escapes the
+   nav's own overflow-x scroller, and widens the DOCUMENT — a horizontal
+   scrollbar on every page at 390px. */
+.sub a{position:relative;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.92rem;color:var(--ink-2);text-decoration:none;padding:10px 14px 12px;border-bottom:2px solid transparent;white-space:nowrap}
+.sub a.glyph{font-size:1.05rem;padding-left:12px;padding-right:12px}
 .sub a.on{color:var(--ink);border-bottom-color:var(--ink)}
 @media (max-width:700px){.sub .wrap{mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);gap:0}.sub a{padding:10px 10px 12px;font-size:.9rem}}
 

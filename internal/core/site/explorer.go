@@ -38,6 +38,8 @@ const (
 	routeGraph        = "record/graph/"
 	routeTimeline     = "record/timeline/"
 	routeFoundations  = "record/foundations/"
+	routeDevelopment  = "record/development/"
+	routeHealth       = "record/health/"
 	routeContributors = "contributors/"
 	routeReferences   = "references/"
 )
@@ -166,8 +168,18 @@ func (e *explorer) Pages() (map[string]string, error) {
 	if err := add(routeContributors, e.contributorsPage); err != nil {
 		return nil, err
 	}
+	if e.hasHealth() {
+		if err := add(routeHealth, e.healthPage); err != nil {
+			return nil, err
+		}
+	}
 	if e.hasFoundations() {
 		if err := add(routeFoundations, e.foundationsPage); err != nil {
+			return nil, err
+		}
+	}
+	if e.hasDevelopment() {
+		if err := add(routeDevelopment, e.developmentPage); err != nil {
 			return nil, err
 		}
 	}
@@ -218,25 +230,46 @@ func (e *explorer) shell(route, title, script, body string) string {
 // omitted here too, so the strip can never point at a route the build did not
 // write.
 func (e *explorer) subnav(active string) string {
-	type tab struct{ route, label string }
-	tabs := []tab{
-		{routeDashboard, e.c.ui.RecordNav.Dashboard},
-		{routeGraph, e.c.ui.RecordNav.Graph},
-		{routeTimeline, e.c.ui.RecordNav.Timeline},
-	}
+	// The reading order runs from what the record HOLDS to what is wrong with
+	// it: the dashboard, then the two stores read as decks, then how they
+	// connect, then the findings. Contributors and References are about the
+	// record's provenance rather than its content, so they sit apart at the
+	// end as glyphs — interface strings like every other word here, never
+	// image assets (adr-47 decision 2).
+	type tab struct{ route, label, glyph string }
+	tabs := []tab{{routeDashboard, e.c.ui.RecordNav.Dashboard, ""}}
 	if e.hasFoundations() {
-		tabs = append(tabs, tab{routeFoundations, e.c.ui.RecordNav.Foundations})
+		tabs = append(tabs, tab{routeFoundations, e.c.ui.RecordNav.Foundations, ""})
 	}
-	tabs = append(tabs, tab{routeContributors, e.c.ui.RecordNav.Contributors})
+	if e.hasDevelopment() {
+		tabs = append(tabs, tab{routeDevelopment, e.c.ui.RecordNav.Development, ""})
+	}
+	tabs = append(tabs, tab{routeGraph, e.c.ui.RecordNav.Graph, ""})
+	if e.hasHealth() {
+		tabs = append(tabs, tab{routeHealth, e.c.ui.RecordNav.Health, ""})
+	}
+	tabs = append(tabs,
+		tab{routeContributors, e.c.ui.RecordNav.Contributors, e.c.ui.RecordNav.ContributorsGlyph})
 	if e.hasReferences() {
-		tabs = append(tabs, tab{routeReferences, e.c.ui.NavReferences})
+		tabs = append(tabs, tab{routeReferences, e.c.ui.NavReferences, e.c.ui.RecordNav.ReferencesGlyph})
 	}
 	var b strings.Builder
 	b.WriteString(`<nav class="sub" aria-label="` + escapeAttr(e.c.ui.NavRecord) + `"><div class="wrap">`)
 	for _, t := range tabs {
 		cls, cur := "", ""
 		if t.route == active {
-			cls, cur = ` class="on"`, ` aria-current="page"`
+			cls, cur = `on`, ` aria-current="page"`
+		}
+		// A glyph tab shows its mark and keeps its name for the reader who
+		// cannot see one: the accessible name is the label, never the glyph.
+		if t.glyph != "" {
+			b.WriteString(`<a href="/` + t.route + `" class="glyph ` + cls + `"` + cur +
+				` title="` + escapeAttr(t.label) + `"><span aria-hidden="true">` + escapeText(t.glyph) +
+				`</span><span class="sr">` + escapeText(t.label) + `</span></a>`)
+			continue
+		}
+		if cls != "" {
+			cls = ` class="` + cls + `"`
 		}
 		b.WriteString(`<a href="/` + t.route + `"` + cls + cur + `>` + escapeText(t.label) + `</a>`)
 	}
@@ -416,6 +449,10 @@ func (e *explorer) dashboard() (string, error) {
 	}
 	b.WriteString(e.latestDecisions())
 	b.WriteString(e.health())
+	// The genealogy sits here, folded shut: it is how the record got where it
+	// is, which a reader asks for rather than arrives at.
+	b.WriteString(panelDisclosure("c12", ui.RecordNav.Timeline, "",
+		strconv.Itoa(len(e.export.Releases))+" "+ui.Tiles.Releases, e.genealogy()))
 	b.WriteString(`</div>`)
 
 	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", b.String()), nil

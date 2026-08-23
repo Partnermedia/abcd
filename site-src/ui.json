@@ -39,7 +39,11 @@
     "graph": "Relationships",
     "timeline": "Genealogy",
     "foundations": "Foundations",
-    "contributors": "Contributors"
+    "contributors": "Contributors",
+    "development": "Development",
+    "health": "Health",
+    "contributors_glyph": "⚇",
+    "references_glyph": "☷"
   },
   "panels": {
     "cadence": "Release cadence",
@@ -99,5 +103,15 @@
   "matches_system": "matches this computer",
   "read_script": "read the script",
   "unreleased": "unreleased",
-  "beta": "Beta"
+  "beta": "Beta",
+  "health": {
+    "unresolved": "References a record the tree does not hold",
+    "isolated": "Linked to nothing, and nothing links to it",
+    "same_author": "Two author names, one contributor",
+    "undeclared": "Authored commits declaring nothing",
+    "multi_trailer": "Commits declaring more than one model",
+    "not_a_defect": "Not a fault: it is why the trailer count and the commit count differ",
+    "clean": "Nothing to report",
+    "suggestion": "Suggested"
+  }
 }

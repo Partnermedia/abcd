@@ -65,11 +65,13 @@ type UI struct {
 	// the relation's own word from the record; only the inverse needs saying.
 	Relations Relations `json:"relations"`
 	// Contributors labels the attribution page's two rows and two figures.
-	Contributors  ContributorsUI `json:"contributors"`
-	More          string         `json:"more"`
-	Standby       string         `json:"standby"`
-	CLIGroup      string         `json:"cli_group"`
-	MatchesSystem string         `json:"matches_system"`
+	Contributors ContributorsUI `json:"contributors"`
+	// Health labels each family of finding the record is checked for.
+	Health        HealthUI `json:"health"`
+	More          string   `json:"more"`
+	Standby       string   `json:"standby"`
+	CLIGroup      string   `json:"cli_group"`
+	MatchesSystem string   `json:"matches_system"`
 	// ReadScript labels the link beside the install command that opens the
 	// script the command runs. It is an invitation to read before running, so it
 	// says what the reader would do, not what the file is.
@@ -83,11 +85,23 @@ type UI struct {
 
 // RecordNav labels the explorer's sub-navigation.
 type RecordNav struct {
-	Dashboard    string `json:"dashboard"`
-	Graph        string `json:"graph"`
-	Timeline     string `json:"timeline"`
-	Foundations  string `json:"foundations"`
+	Dashboard   string `json:"dashboard"`
+	Graph       string `json:"graph"`
+	Timeline    string `json:"timeline"`
+	Foundations string `json:"foundations"`
+	// Development names the deck of the stores that MOVE — intents, specs and
+	// issues — as Foundations names the ones that hold.
+	Development string `json:"development"`
+	// Health names the page that collects every finding the record can be
+	// checked against itself for.
+	Health       string `json:"health"`
 	Contributors string `json:"contributors"`
+	// The two provenance pages are marked rather than named in the navigation.
+	// A glyph is a character, so it is an interface string like any other word
+	// and never an image the generator drew (adr-47 decision 2). The label
+	// stays as the accessible name and the tooltip.
+	ContributorsGlyph string `json:"contributors_glyph"`
+	ReferencesGlyph   string `json:"references_glyph"`
 }
 
 // Panels captions the dashboard panels.
@@ -141,6 +155,32 @@ type Relations struct {
 	Supersedes string `json:"supersedes"`
 	Implements string `json:"implements"`
 	BuildsOn   string `json:"builds_on"`
+}
+
+// HealthUI labels the health page's finding families. Every one of them is a
+// check the record can be run against ITSELF — nothing here is a judgement, an
+// opinion, or a number a human has to interpret before acting on it.
+type HealthUI struct {
+	// Unresolved is a typed reference whose target no file answers to.
+	Unresolved string `json:"unresolved"`
+	// Isolated is a record nothing links to and which links to nothing.
+	Isolated string `json:"isolated"`
+	// SameAuthor is a candidate duplicate identity: two author names that the
+	// mailmap has not folded but which the evidence says are one person.
+	SameAuthor string `json:"same_author"`
+	// Undeclared is an authored commit carrying no `Assisted-by:` trailer.
+	Undeclared string `json:"undeclared"`
+	// MultiTrailer is a commit declaring more than one assisting model — not a
+	// fault, but the reason a trailer tally and a commit count differ.
+	MultiTrailer string `json:"multi_trailer"`
+	// NotADefect is what the multi-trailer panel says about itself. The family
+	// is the one on the page that reports no fault at all, and a panel sitting
+	// among findings without saying so is read as a fifth finding.
+	NotADefect string `json:"not_a_defect"`
+	// Clean is what the page says when a family has nothing to report.
+	Clean string `json:"clean"`
+	// Suggestion prefixes the line a finding proposes a human confirm.
+	Suggestion string `json:"suggestion"`
 }
 
 // ContributorsUI labels the attribution page.

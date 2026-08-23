@@ -64,6 +64,15 @@ var tlLanes = []tlLane{
 
 // timelinePage renders `/record/timeline/`.
 func (e *explorer) timelinePage() (string, error) {
+	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", e.genealogy()), nil
+}
+
+// genealogy is the whole genealogy — the drawing and the supersessions read as
+// text — as one block. It is rendered into the DASHBOARD, folded shut, because
+// it answers "how did the record get here" rather than "what does it hold": a
+// reader who wants it asks for it, and one who does not is not made to scroll
+// past a full-width chart to reach the counts.
+func (e *explorer) genealogy() string {
 	svg, positions := e.genealogySVG()
 	var b strings.Builder
 	b.WriteString(`<div class="panel tl">` + svg + `</div>`)
@@ -72,7 +81,7 @@ func (e *explorer) timelinePage() (string, error) {
 		b.WriteString(p)
 	}
 	b.WriteString(`</div>`)
-	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", b.String()), nil
+	return b.String()
 }
 
 // tlPoint is where one record's mark ended up, so an arc can find both ends.
