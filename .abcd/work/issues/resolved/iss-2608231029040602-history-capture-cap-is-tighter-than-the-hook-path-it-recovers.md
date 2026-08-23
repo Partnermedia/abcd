@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "transcript backlog recovery 2026-08-23"
 found_at: "internal/surface/cli/cli.go"
+resolution: "history capture now reads through maxTranscriptBytes rather than the 8 MiB JSON-operand cap, via readSourceCapped, so the recovery verb accepts what the hooks accept. The caps themselves are unchanged and still refuse an over-cap file whole. Found in the field: it refused an ordinary 11.8MB session during the backlog recovery, which the fix then unblocked."
+impact: fix
+resolved_by:
+  commit: "2e5a87d"
 ---
 
 `abcd history capture` read its operand through `maxOperandJSONBytes` (8 MiB)

@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "session-end 'Hook cancelled' post-mortem 2026-08-23"
 found_at: "internal/surface/cli/cli.go"
+resolution: "Capture is split across the two hooks: SessionEnd stages the raw transcript in one write, the next SessionStart redacts and stores it through the same fail-closed path. Exit went from scaling with size (3.13s at 4.1MB, 8.89s at 11.8MB) to flat (0.15s-0.41s across the whole range). The store invariant is untouched because staging is not the store, and a staged file is the outcome record the store never had."
+impact: fix
+resolved_by:
+  commit: "bc3e439"
 ---
 
 `hook session-end` redacts the whole transcript in-line before it writes, at

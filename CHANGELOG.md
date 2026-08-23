@@ -10,6 +10,29 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The release preview no longer hides the gate that refuses releases.**
+  `abcd launch --dry-run` listed five gates and omitted `receipt_gate`, so
+  it could report a clean bundle, a clean scan and a green smoke while the
+  semantic-receipt gate that actually blocks the publish went unmentioned —
+  an absent row reading as "no such gate". The preview now carries a
+  `semantic-receipts` row in every state, reporting which receipts are
+  recorded for the candidate commit and pointing at the runbook. It reports
+  presence only and never a pass: `release.yml` owns the required-gates list
+  and judges receipt validity, and a second copy of that decision in the
+  preview would be exactly the false confidence this fixes
+  (iss-2608231226342272).
+- **The launch command page documents the whole release cut.** It described
+  the three-step changelog flow and never mentioned the two host-run
+  semantic passes, the receipts they produce, or the two-commit release
+  branch the gate requires — so following the page end to end produced a
+  release that tagged cleanly and then fail-closed. The ship flow now
+  carries the semantic passes as first-class steps
+  (iss-2608231226274000).
+
+## [0.6.2] - 2026-08-23
+
 ### Added
 
 - **abcdev.app is rendered from this repository alone.** The `abcd site`
@@ -86,7 +109,9 @@ called out in a **Breaking** section.
   the CLI names the number of spans it rewrote, because redaction alters
   what the caller filed. A degraded scanner redacts with the bundled
   defaults and warns rather than blocking every capture in the repo.
-  (iss-2608231025198888)
+  Redaction runs on the free-text inputs before the slug is normalised, so
+  a path in the issue text cannot reach a validator-constrained field and
+  turn a leak into a refused capture. (iss-2608231025198888)
 
 - **The shell guard recognises the `&>` / `&>>` redirection operators.** The
   guard tokenizer read a leading `&` as a background/`&&` operator, so gluing or

@@ -44,6 +44,23 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	if strings.TrimSpace(req.FoundDuring) == "" {
 		return CaptureResult{}, fmt.Errorf("found_during must be a non-empty string")
 	}
+
+	// Redact the free-text INPUTS, before the slug is normalised and before the
+	// record is rendered. Redacting the rendered file instead treats the
+	// structural fields as free text: a home path in the body reaches the
+	// caller-derived slug, redaction rewrites it to a bracketed placeholder, and
+	// the kebab-case check then REFUSES the capture — turning a leak into a lost
+	// finding, which is the outcome this whole path exists to avoid. Normalising
+	// after redaction strips the placeholder's brackets instead.
+	//
+	// Only free text is touched. id, severity, category and source are generated
+	// or enum-constrained, so they carry nothing to redact and must not be
+	// rewritten.
+	var redacted int
+	var degraded string
+	req.Text, req.Slug, req.FoundAt, req.FoundDuring, redacted, degraded =
+		redactCaptureInputs(repoRoot, req.Text, req.Slug, req.FoundAt, req.FoundDuring)
+
 	slugNorm, err := normaliseSlug(req.Slug)
 	if err != nil {
 		return CaptureResult{}, err
@@ -58,18 +75,19 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		return CaptureResult{}, err
 	}
 
-	result, err := commitCapture(repoRoot, issuesRoot, req, issID, slugNorm, placeholder)
+	result, err := commitCapture(issuesRoot, req, issID, slugNorm, placeholder)
 	if err != nil {
 		_ = cancelReservation(placeholder)
 		return CaptureResult{}, err
 	}
+	result.Redacted, result.Degraded = redacted, degraded
 	// Machine output carries a repo-relative locator, never an absolute
 	// developer-identity path (iss-81).
 	result.Path = fsutil.RepoRel(repoRoot, result.Path)
 	return result, nil
 }
 
-func commitCapture(repoRoot, issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", issID},
@@ -116,23 +134,6 @@ func commitCapture(repoRoot, issuesRoot string, req CaptureRequest, issID, slug,
 	if err != nil {
 		return CaptureResult{}, err
 	}
-	// Redact the RENDERED file rather than req.Text alone: found_at and the other
-	// frontmatter values are free text on the same trust footing as the body, and
-	// the leak that prompted this (iss-2608231025198888) could have arrived
-	// through either.
-	content, redacted, degraded := redactLedgerText(repoRoot, content)
-	// Re-validate the REDACTED render. The checks above ran on the field map, and
-	// redaction rewrites the rendered bytes, so without this a rewritten span
-	// could produce a committed record no validator ever saw.
-	if redacted > 0 {
-		rfm, _, perr := parseFrontmatterAndBody(content)
-		if perr != nil {
-			return CaptureResult{}, fmt.Errorf("redaction produced an unparseable record: %w", perr)
-		}
-		if verr := validateStrict(rfm); verr != nil {
-			return CaptureResult{}, fmt.Errorf("redaction produced an invalid record: %w", verr)
-		}
-	}
 
 	// The checksum re-read + fill runs UNDER the ledger lock (iss-102): the orphan
 	// sweep (mutationPreamble) also holds this lock, so a >60s-stalled commit can no
@@ -153,8 +154,7 @@ func commitCapture(repoRoot, issuesRoot string, req CaptureRequest, issID, slug,
 		if werr := fsutil.WriteFileAtomicPreserveMode(placeholder, []byte(content)); werr != nil {
 			return werr
 		}
-		result = CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen,
-			Redacted: redacted, Degraded: degraded}
+		result = CaptureResult{ID: issID, Slug: slug, Path: placeholder, Status: StateOpen}
 		return nil
 	})
 	if err != nil {
@@ -284,7 +284,11 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 		if err != nil {
 			return err
 		}
-		newContent, err := setScalarField(content, field, note)
+		// The note is the only free text a transition adds, so it is what gets
+		// redacted — before it is written into the record, never after, so no
+		// rewritten span can reach a field the validator has already passed.
+		redNote, redacted, degraded := redactLedgerText(rr, note)
+		newContent, err := setScalarField(content, field, redNote)
 		if err != nil {
 			return err
 		}
@@ -298,13 +302,6 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 				return err
 			}
 		}
-
-		// A resolution or wontfix note is free text landing in the same committed
-		// ledger as a capture body, so it goes through the same redactor. It runs
-		// BEFORE the parse-and-validate below, so validation sees exactly the bytes
-		// that get written: redacting afterwards would let a rewritten span produce
-		// a record no validator ever checked.
-		newContent, redacted, degraded := redactLedgerText(rr, newContent)
 
 		dst := filepath.Join(ir, statusDirName[target], filepath.Base(src))
 		fm, _, err := parseFrontmatterAndBody(newContent)
