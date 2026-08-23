@@ -1,22 +1,37 @@
-# ADR-01: Harness Interface Design
+# Harness interface design (Phase 0 research note)
 
 ## Status
 
-Accepted (Phase 0 lock)
+Research note. Not a decision record, and it states no current architecture.
+
+This note records the Phase 0 investigation into a host-agnostic harness
+interface, written against the Python implementation of that era. The Go
+rebuild ([adr-21](../../decisions/adrs/0021-rebuild-in-go.md)) replaced that
+implementation wholesale, and the transport-agnostic core it explores is
+decided in [adr-23](../../decisions/adrs/0023-transport-agnostic-core.md);
+harness portability is carried forward by itd-22 under the host-tier policy of
+[adr-39](../../decisions/adrs/0039-host-tier-policy.md). It is kept as evidence
+of the Phase 0 reasoning, and its Python-era mechanics (`harness.py`, `pluggy`,
+`abc.ABC`, `Protocol`, `anthropic.types.Message`) describe nothing that ships
+today.
+
+ADR-01 is [adr-1](../../decisions/adrs/0001-three-layer-mental-model.md), a
+different document. The `01-` filename prefix here is an undated Phase 0 name
+the [naming convention](README.md) grandfathers, not a record id.
 
 ---
 
 ## Context
 
-abcd runs as a Claude Code plugin.  A later phase (itd-22) targets opencode.
+abcd runs as a Claude Code plugin.  A later phase (itd-22) targets OpenCode.
 Every command (``/abcd:ahoy``, ``/abcd:disembark``, ``/abcd:embark``,
 ``/abcd:launch``, ``/abcd:intent``) and every agent must communicate with its
 host runtime — asking the user questions, dispatching sub-agents, calling MCP
 tools, spawning background processes, scheduling wakeups, and resolving file
 paths relative to the plugin root.
 
-Without a stable, host-agnostic interface for these surfaces, the opencode port requires
-command-layer rewrites.  With one, the opencode port is a second concrete implementation of
+Without a stable, host-agnostic interface for these surfaces, the OpenCode port requires
+command-layer rewrites.  With one, the OpenCode port is a second concrete implementation of
 the same Protocol and the commands need no changes.
 
 This ADR locks the interface contract at Phase 0 so that Phase 1+ command
@@ -59,7 +74,7 @@ delivery mechanism (``abc.ABC`` inheritance, ``PipelineContext`` tight coupling,
 
 **Rationale:**
 
-- Structural subtyping means the second harness (opencode) does not need to
+- Structural subtyping means the second harness (OpenCode) does not need to
   inherit from anything in the abcd package.  It just implements the same
   method signatures and passes the ``isinstance(impl, Harness)`` check at
   runtime (``@runtime_checkable``).
@@ -114,11 +129,11 @@ test stubs heavier, and mirrors the ``DelphiEngine`` god-object anti-pattern
 - abcd's harness calls are I/O-bound but short (user prompt round-trip, MCP
   call, subprocess spawn).  The complexity cost of mandatory async exceeds
   the throughput benefit at current scale.
-- If the opencode harness implementation needs async semantics, it wraps the
+- If the OpenCode harness implementation needs async semantics, it wraps the
   sync harness methods in ``asyncio.to_thread()`` at call sites — a
   well-trodden adapter pattern that does not require changing this interface.
 - practice-scout: "single hardest thing to retrofit" — this is the explicit
-  choice: sync now, async wrapping in the opencode port if needed.
+  choice: sync now, async wrapping in the OpenCode port if needed.
 
 **Alternative rejected: async-first interface.**  Every method declared
 ``async def``.  Rejected because: (a) mandatory event-loop coupling in a
@@ -153,7 +168,7 @@ a routing decision.  Codex calls go through ``AgentDispatch``, not
 ``MCPBridge``.
 
 **Alternative rejected: emit-MCP-intent dispatch via host's tool-use loop.**
-abcd would signal "call this MCP tool" to the host (Claude Code / opencode)
+abcd would signal "call this MCP tool" to the host (Claude Code / OpenCode)
 and wait for the host to route the call.  Rejected because: abcd CLI runs
 outside the host's tool-use loop (invoked from bash wrapper, not from inside
 an agent session).  The host loop is not available at CLI invocation time.
@@ -182,13 +197,13 @@ sets RP presets.
   sites.  If mutation bugs appear in practice, tighten to immutable containers
   at that point.
 - practice-scout: "don't bake Anthropic in" — if ``AgentResult`` returned an
-  ``anthropic.types.Message``, the opencode harness would be forced to
+  ``anthropic.types.Message``, the OpenCode harness would be forced to
   construct ``anthropic.types.Message`` objects, creating a dependency on the
   Anthropic SDK from a non-Anthropic host.
 
 **Alternative rejected: return SDK response objects directly.**  Return
 ``anthropic.types.Message`` from ``dispatch_agent``.  Rejected because it
-leaks the Anthropic SDK type into the Protocol and forces the opencode
+leaks the Anthropic SDK type into the Protocol and forces the OpenCode
 implementation to depend on the Anthropic SDK.
 
 ### 6. Protocol grouping — capability-based over lifecycle or layer
@@ -217,7 +232,7 @@ it needs, no more.
 **pluggy-based plugin registry.** pluggy is designed for large plugin
 ecosystems where third-party plugins need to register hooks without modifying
 the host.  abcd's portability target is exactly two harness implementations
-(Claude Code now, opencode later).  pluggy adds a runtime dependency, a hook
+(Claude Code now, OpenCode later).  pluggy adds a runtime dependency, a hook
 specification ceremony, and a plugin registration layer that serves no purpose
 at this scale.  Rejected: overkill for a 2-backend shim.
 
@@ -228,11 +243,11 @@ a sub-agent, calling an MCP tool, managing background processes.  These are
 completely different concern levels.  Rejected: wrong abstraction layer; also
 conflicts with itd-6 (abcd makes no direct LLM API calls).
 
-**abc.ABC (abstract base class).** Using ``ABCMeta`` forces the opencode port to
+**abc.ABC (abstract base class).** Using ``ABCMeta`` forces the OpenCode port to
 import and inherit from abcd's ``abc.ABC`` class.  That creates a hard
-dependency from the opencode harness implementation on abcd's package — exactly the
+dependency from the OpenCode harness implementation on abcd's package — exactly the
 coupling this shim is designed to eliminate.  ``typing.Protocol`` (PEP 544)
-gives structural subtyping: the opencode port satisfies the Protocol by implementing the right
+gives structural subtyping: the OpenCode port satisfies the Protocol by implementing the right
 methods, without any import from abcd.  Rejected: forced inheritance blocks
 structural typing.
 
@@ -240,7 +255,7 @@ structural typing.
 is synchronous.  Making every harness method ``async def`` would require
 ``asyncio.run()`` or ``asyncio.to_thread()`` wrappers at every call site, with
 no throughput benefit at current scale (harness calls are short I/O-bound
-round-trips).  If the opencode port needs async semantics, the sync methods can be
+round-trips).  If the OpenCode port needs async semantics, the sync methods can be
 wrapped in ``asyncio.to_thread()`` at the call site — a well-trodden adapter
 pattern.  Rejected: complexity cost exceeds benefit at current scale.
 
@@ -313,8 +328,8 @@ place." (practice-scout)
 ### Enables
 
 - **Phase 1+ commands** can be written against the ``Harness`` Protocol without
-  knowing whether the host is Claude Code or opencode.
-- **The opencode port (itd-22, a later phase)** requires only a new concrete ``Harness``
+  knowing whether the host is Claude Code or OpenCode.
+- **The OpenCode port (itd-22, a later phase)** requires only a new concrete ``Harness``
   implementation — no command-layer changes.
 - **Test stubs** are lightweight: implement only the narrow Protocol(s) the
   module under test depends on.
@@ -324,8 +339,8 @@ place." (practice-scout)
 ### Forecloses
 
 - **Async-first harness**: the sync-first choice means any async wrapper
-  for the opencode port must be added at the caller level (``asyncio.to_thread``), not inside
-  the harness.  This is the accepted trade-off (revisit at the opencode port if opencode
+  for the OpenCode port must be added at the caller level (``asyncio.to_thread``), not inside
+  the harness.  This is the accepted trade-off (revisit at the OpenCode port if OpenCode
   benchmarks show contention).
 - **Per-vendor LLM adapters** (abcdSubZero's ``codex_adapter.py``,
   ``gemini_adapter.py`` pattern): itd-6 explicitly prohibits per-vendor adapters.
@@ -334,10 +349,10 @@ place." (practice-scout)
 
 ### Risk
 
-- **Async mismatch at the opencode port**: if opencode's plugin model requires async dispatch,
+- **Async mismatch at the OpenCode port**: if OpenCode's plugin model requires async dispatch,
   the sync harness will need adapter wrappers.  This is explicitly accepted as
-  the opencode port's problem to solve.  The alternative (async-first now) was judged more
-  expensive now than the wrapper cost at the opencode port.
+  the OpenCode port's problem to solve.  The alternative (async-first now) was judged more
+  expensive now than the wrapper cost at the OpenCode port.
 
 ---
 
@@ -347,7 +362,7 @@ place." (practice-scout)
 - ``.abcd/development/intents/planned/itd-6-rp-mcp-only-integration.md``
   — architectural lock: RP is MCP-only
 - ``.abcd/development/intents/drafts/itd-22-harness-portability.md``
-  — opencode portability target that harness.py is designed to serve
+  — OpenCode portability target that harness.py is designed to serve
 - ``.abcd/development/intents/drafts/itd-2-in-session-subagent-dispatch.md``
   — in-session subagent dispatch (one of the three oracle transports)
 - ``.abcd/development/research/phase/0/predecessor-notes.md`` — Task 1 output;
