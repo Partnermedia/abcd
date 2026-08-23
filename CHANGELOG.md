@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-23
+
 ### Added
 
 - **abcdev.app is rendered from this repository alone.** The `abcd site`
