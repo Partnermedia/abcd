@@ -80,22 +80,37 @@ type ModelTally struct {
 type Authorship struct {
 	// Commits is the total number of commits in the history walked.
 	Commits int `json:"commits"`
+	// Authored is Commits less the merges: the commits a person actually wrote,
+	// and the only honest denominator for a disclosure rate.
+	Authored int `json:"authored"`
+	// Merges is what was set aside to get there. It is published rather than
+	// quietly subtracted, because a denominator that changed without saying so
+	// is how the rate went wrong in the first place.
+	Merges int `json:"merges"`
 	// Humans are the authors of record, mailmap-folded, most commits first.
 	Humans []Author `json:"humans"`
 	// Bots are the forge bots and tool-authored commits, kept in a separate row
 	// so a reader never has to guess which lines are people.
 	Bots []Author `json:"bots"`
-	// Assisted is the number of commits declaring assistance.
+	// AssistedCommits is how many AUTHORED commits declare assistance — the
+	// commit-level count, and the numerator of the disclosure rate.
+	AssistedCommits int `json:"assisted_commits"`
+	// Assisted is the number of `Assisted-by:` trailer OCCURRENCES across
+	// authored commits. It is what the per-model tally sums to; it is not a
+	// number of commits, and a commit naming two models counts twice here and
+	// once in AssistedCommits. Rendering this one as a count of commits is the
+	// defect that published a disclosure rate well below the truth.
 	Assisted int `json:"assisted"`
-	// DeclaredNone is the number declaring `Assisted-by: None` — work no tool
-	// touched, saying so.
+	// DeclaredNone is the number of AUTHORED commits declaring
+	// `Assisted-by: None` — work no tool touched, saying so.
 	DeclaredNone int `json:"declared_none"`
-	// Undeclared is the number carrying no trailer at all. It is published
-	// because an absent trailer and a forgotten one are the same bytes, and the
-	// honest number is the one that says how much of the history predates the
-	// convention.
+	// Undeclared is the number of AUTHORED commits carrying no trailer at all.
+	// It is published because an absent trailer and a forgotten one are the
+	// same bytes, and the honest number is the one that says how much of the
+	// history predates the convention. Merges are excluded: nobody wrote them,
+	// so nothing was forgotten.
 	Undeclared int `json:"undeclared"`
-	// ByModel tallies each distinct declared value, most commits first.
+	// ByModel tallies each distinct declared value by OCCURRENCE, most first.
 	ByModel []ModelTally `json:"by_model"`
 }
 
@@ -113,8 +128,12 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		return a, nil
 	}
 
+	// The parent list comes back with the trailers because a MERGE is not a
+	// commit anyone wrote: the forge creates it, no convention asks it to
+	// declare anything, and counting merges as undeclared work buries the real
+	// number under them.
 	trailers, err := gitutil.RunCapped(repoRoot, maxShortlogBytes,
-		"log", "--pretty=format:%x00%(trailers:key=Assisted-by,valueonly,separator=%x1f)")
+		"log", "--pretty=format:%x00%p%x1e%(trailers:key=Assisted-by,valueonly,separator=%x1f)")
 	if err != nil {
 		return Authorship{}, err
 	}
@@ -128,22 +147,36 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 	}
 	for _, rec := range records {
 		a.Commits++
-		declared := false
-		for _, v := range strings.Split(rec, "\x1f") {
+		parents, rest, _ := strings.Cut(rec, "\x1e")
+		if len(strings.Fields(parents)) > 1 {
+			a.Merges++
+			continue
+		}
+		a.Authored++
+		declared, assisted := false, false
+		for _, v := range strings.Split(rest, "\x1f") {
 			v = strings.TrimSpace(v)
 			if v == "" {
 				continue
 			}
 			declared = true
-			tally[v]++
 			if v == noneDeclaration {
-				a.DeclaredNone++
+				// Counted, never charted: a declaration of NO assistance in a
+				// tally of what assisted would make the bars sum past their own
+				// total. It is stated separately, beneath the chart.
 				continue
 			}
+			tally[v]++
 			a.Assisted++
+			assisted = true
 			vendors[strings.SplitN(v, ":", 2)[0]] = true
 		}
-		if !declared {
+		switch {
+		case assisted:
+			a.AssistedCommits++
+		case declared:
+			a.DeclaredNone++
+		default:
 			a.Undeclared++
 		}
 	}

@@ -820,15 +820,24 @@ func TestBuildRecordExportShape(t *testing.T) {
 		t.Errorf("status counts: %+v", exp.Counts.ByStatus)
 	}
 
-	// Attribution: one commit declared a model, one declared None, the rest
-	// declared nothing at all — and the export says so rather than guessing.
+	// Attribution: one commit declared a model, the rest declared None or
+	// nothing at all — and the export says so rather than guessing.
 	if exp.Authorship.Assisted != 1 {
-		t.Errorf("assisted commits: %d, want 1", exp.Authorship.Assisted)
+		t.Errorf("assisted trailer occurrences: %d, want 1", exp.Authorship.Assisted)
 	}
-	// The changelog commit, the merge fixture's branch and merge commits, and the
-	// commit that ships the stub — each declaring that no tool touched it.
-	if exp.Authorship.DeclaredNone != 4 {
-		t.Errorf("declared-None commits: %d, want 4", exp.Authorship.DeclaredNone)
+	// The changelog commit, the merge fixture's BRANCH commit, and the commit
+	// that ships the stub — each declaring that no tool touched it. The merge
+	// commit's own declaration is not among them: a merge is authored by nobody,
+	// so it is counted as a merge and asked to declare nothing.
+	if exp.Authorship.DeclaredNone != 3 {
+		t.Errorf("declared-None authored commits: %d, want 3", exp.Authorship.DeclaredNone)
+	}
+	if exp.Authorship.Merges == 0 {
+		t.Error("no merges counted — the fixture history has one, so the exclusion is untested")
+	}
+	if exp.Authorship.Commits != exp.Authorship.Authored+exp.Authorship.Merges {
+		t.Errorf("commits %d != authored %d + merges %d",
+			exp.Authorship.Commits, exp.Authorship.Authored, exp.Authorship.Merges)
 	}
 	if len(exp.Authorship.Humans) != 1 || exp.Authorship.Humans[0].Name != "Fixture" {
 		t.Errorf("humans: %+v", exp.Authorship.Humans)
@@ -836,8 +845,10 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if len(exp.Authorship.Bots) != 0 {
 		t.Errorf("bots: %+v — the fixture's only author is a person", exp.Authorship.Bots)
 	}
-	if len(exp.Authorship.ByModel) != 2 {
-		t.Errorf("by_model: %+v, want the declared model and the declared None", exp.Authorship.ByModel)
+	// None is a declaration of no assistance, so it is not a row in a tally of
+	// what assisted: the chart would otherwise sum past its own total.
+	if len(exp.Authorship.ByModel) != 1 {
+		t.Errorf("by_model: %+v, want the declared model alone", exp.Authorship.ByModel)
 	}
 }
 
@@ -867,6 +878,22 @@ func TestAuthorshipSeparatesToolsFromPeople(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A merge is nobody's work: it never counts toward the disclosure rate, in
+	// either the numerator or the denominator. A commit declaring two models is
+	// ONE commit and TWO trailer occurrences, and the two quantities are kept
+	// apart — conflating them is what published a disclosure rate 24 points
+	// below the truth.
+	if a.Commits != a.Authored+a.Merges {
+		t.Errorf("commits %d != authored %d + merges %d", a.Commits, a.Authored, a.Merges)
+	}
+	if a.Authored != a.AssistedCommits+a.DeclaredNone+a.Undeclared {
+		t.Errorf("authored %d != assisted %d + none %d + undeclared %d",
+			a.Authored, a.AssistedCommits, a.DeclaredNone, a.Undeclared)
+	}
+	if a.Merges == 0 {
+		t.Fatal("the fixture history has no merge, so the exclusion is untested")
+	}
+
 	// The noreply-derived profile reaches the export; every other author,
 	// whose address is a real mailbox, has none (itd-140: graceful absence).
 	profiles := map[string]string{}

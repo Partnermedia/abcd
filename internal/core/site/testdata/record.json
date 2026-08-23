@@ -302,6 +302,8 @@
   ],
   "authorship": {
     "commits": 6,
+    "authored": 5,
+    "merges": 1,
     "humans": [
       {
         "name": "Fixture",
@@ -309,14 +311,11 @@
       }
     ],
     "bots": [],
+    "assisted_commits": 1,
     "assisted": 1,
-    "declared_none": 4,
+    "declared_none": 3,
     "undeclared": 1,
     "by_model": [
-      {
-        "model": "None",
-        "commits": 4
-      },
       {
         "model": "Assistant:assistant-model-1",
         "commits": 1

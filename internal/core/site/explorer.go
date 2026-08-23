@@ -399,7 +399,11 @@ func (e *explorer) dashboard() (string, error) {
 }
 
 // tile is one stat tile.
-func tile(n, label string, sub []string) string {
+func tile(n, label string, sub []string) string { return tileExtra(n, label, sub, "") }
+
+// tileExtra is a tile with a final pre-rendered line, for the case where a
+// figure needs its number and its words in separate elements.
+func tileExtra(n, label string, sub []string, extra string) string {
 	var b strings.Builder
 	b.WriteString(`<div class="panel c2"><div class="tile">`)
 	b.WriteString(`<span class="n">` + escapeText(n) + `</span>`)
@@ -410,6 +414,7 @@ func tile(n, label string, sub []string) string {
 		}
 		b.WriteString(`<span class="s">` + escapeText(s) + `</span>`)
 	}
+	b.WriteString(extra)
 	b.WriteString(`</div></div>`)
 	return b.String()
 }
@@ -649,10 +654,22 @@ func (e *explorer) contributorsPage() (string, error) {
 	if len(a.Humans) > 0 {
 		b.WriteString(tile(strconv.Itoa(len(a.Humans)), ui.Contributors.Authors, nil))
 	}
-	if a.Commits > 0 {
-		share := strconv.Itoa(a.Assisted*100/a.Commits) + "%"
-		b.WriteString(tile(share, ui.Contributors.Assisted,
-			[]string{strconv.Itoa(a.Assisted) + " / " + strconv.Itoa(a.Commits)}))
+	// The rate is COMMITS that disclose over commits a person WROTE. Merges are
+	// in neither: the forge writes them, no convention asks them to declare
+	// anything, and leaving them in the denominator understated this rate by
+	// more than twenty points. The excluded count is shown, not assumed.
+	if a.Authored > 0 {
+		share := strconv.Itoa(a.AssistedCommits*100/a.Authored) + "%"
+		// The count is its own element rather than part of the sentence: the
+		// provenance walk splits composed text on decorations only, and a
+		// number glued to a phrase is neither a number nor an interface string.
+		var excl string
+		if a.Merges > 0 {
+			excl = `<span class="s"><b class="tnum">` + strconv.Itoa(a.Merges) + `</b> ` +
+				escapeText(ui.Contributors.MergesExcluded) + `</span>`
+		}
+		b.WriteString(tileExtra(share, ui.Contributors.Assisted,
+			[]string{strconv.Itoa(a.AssistedCommits) + " / " + strconv.Itoa(a.Authored)}, excl))
 	}
 
 	if len(a.Humans) > 0 || len(a.Bots) > 0 {
@@ -692,9 +709,19 @@ func (e *explorer) contributorsPage() (string, error) {
 				`<span class="tnum small">` + strconv.Itoa(m.Commits) + `</span>`)
 		}
 		bars.WriteString(`</div>`)
-		// The bar rows are real text — label and count beside each bar — so the
-		// figure needs no table twin.
-		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted), bars.String()))
+		// The chart tallies OCCURRENCES and its note says what the bars sum to.
+		// The two commit-level facts that are not assistance — the human-only
+		// declaration, and the commits carrying no trailer at all — are stated
+		// beneath it rather than folded into a chart they would falsify.
+		var foot strings.Builder
+		foot.WriteString(`<p class="small muted trailerfoot">`)
+		foot.WriteString(escapeText(ui.Contributors.DeclaredNone) + ` <b class="tnum">` +
+			strconv.Itoa(a.DeclaredNone) + `</b>`)
+		foot.WriteString(` · ` + escapeText(ui.Contributors.Undeclared) + ` <b class="tnum">` +
+			strconv.Itoa(a.Undeclared) + `</b>`)
+		foot.WriteString(`</p>`)
+		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted),
+			bars.String()+foot.String()))
 	}
 	b.WriteString(`</div>`)
 

@@ -87,8 +87,11 @@
   "contributors": {
     "authors": "Authors of record",
     "tools": "Bots and tools",
-    "assisted": "commits disclose AI assistance",
-    "trailers": "Assisted-by trailers"
+    "assisted": "of authored commits disclose AI assistance",
+    "trailers": "Assisted-by trailers",
+    "merges_excluded": "merge commits excluded",
+    "declared_none": "declared no assistance",
+    "undeclared": "no declaration"
   },
   "more": "more",
   "standby": "Stand by…",
