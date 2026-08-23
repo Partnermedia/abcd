@@ -93,7 +93,13 @@ table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{text-align:left;padding:.55em .7em;border-bottom:1px solid var(--rule);vertical-align:top}
 th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
 .tablewrap{overflow-x:auto}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Visually hidden, still announced. The second selector is the roles table's
+   column heads: the portrait carries the role's name in its alt text, so the
+   repeated label under it is decoration a reader can see and a screen reader
+   would hear twice — and on a phone it is decoration that sets the column
+   width and squeezes the table's own prose into a ribbon. The picture stays;
+   the words go to the same place every other visually-hidden label goes. */
+.sr,th .th-portrait~span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* ---------- site header ---------- */
 .site-head{background:var(--ground);border-bottom:1px solid var(--rule)}
