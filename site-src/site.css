@@ -202,7 +202,17 @@ h3.subh{font-size:1.5rem;font-weight:650;letter-spacing:-.01em;margin:40px 0 12p
 
 /* ---------- install tabs ---------- */
 .installwrap{max-width:860px}
-.tabs{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+/* All five panels share ONE grid cell under the tab strip, so the box is as
+   tall as the tallest of them whichever tab is selected and the page below
+   stops jumping when the reader compares two. The script still sets `hidden`
+   on the panels that are not selected — that is what keeps them out of the
+   accessibility tree and out of the tab order — so the attribute's display is
+   traded for `visibility:hidden`, which does both of those things too and
+   still occupies its cell. */
+.tabs{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
+.tabs>[role=tablist]{grid-row:1}
+.tabs>[role=tabpanel]{grid-row:2;grid-column:1}
+.tabs>[role=tabpanel][hidden]{display:block;visibility:hidden}
 .tabs [role=tablist]{display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px 0;border-bottom:1px solid var(--rule);background:var(--surface-2);align-items:flex-end}
 .tabs .tabgroup{display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end;margin-left:auto;padding-left:14px;border-left:1px solid var(--rule-2)}
 .tabs .tabgroup .grp{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:12px 4px 13px 0}
@@ -223,7 +233,21 @@ h3.subh{font-size:1.5rem;font-weight:650;letter-spacing:-.01em;margin:40px 0 12p
 .tabprose.after .cmd{margin:8px 0 4px}
 .tabprose details.more summary,.tabbody details.more summary{cursor:pointer;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;color:var(--ink-2);margin:6px 0}
 .tabprose details.more[open] summary,.tabbody details.more[open] summary{margin-bottom:8px}
-@media (max-width:700px){.tabs .tabgroup{margin-left:0;padding-left:0;border-left:0;width:100%;border-top:1px solid var(--rule)}}
+/* On a phone the strip is given a deliberate shape rather than left to wrap:
+   the standalone tab keeps the first row, and the CLI group takes the second
+   as one horizontally scrolling row — the same treatment the site header's
+   navigation gets at this width. Left to wrap, five tabs and a group label
+   break into three ragged rows. */
+@media (max-width:700px){
+  .tabs [role=tablist]{padding:6px 0 0;gap:0}
+  .tabs [role=tablist]>[role=tab]{margin-left:10px}
+  .tabs .tabgroup{margin-left:0;border-left:0;width:100%;border-top:1px solid var(--rule);
+    flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:0;padding:0 10px;
+    mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
+  .tabs .tabgroup::-webkit-scrollbar{display:none}
+  .tabs .tabgroup>*{flex:0 0 auto}
+  .tabs .tabgroup>[role=tab]{margin-bottom:0}
+}
 
 /* The disclosure's open/close is animated only where the reader has not asked
    for stillness; where they have, it simply opens. */
