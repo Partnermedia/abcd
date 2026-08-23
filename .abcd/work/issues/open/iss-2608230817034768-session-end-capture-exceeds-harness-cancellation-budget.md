@@ -73,12 +73,23 @@ bytes (secret and home-path hit density), so size is a proxy for the real
 variable rather than the variable itself. What the data does establish firmly is
 the direction and the steepness: past a few MB, loss is not a risk but the norm.
 
-The consequence is that capture works precisely where it matters least. A short
-session is cheap to redact and gets stored; a long, dense, expensive session —
-the one actually worth keeping — is the one guaranteed to be dropped. Eleven of
-this repo's transcripts are absent from its store, and the store's own listing
-cannot distinguish "never ended" from "ended and lost", which is why the loss
-went unnoticed for a week.
+Those five confounded rows are the sharper finding, and they deserve to be read
+before the timing data rather than as a caveat on it. Five of twenty-four rows
+could not be classified from the store at all, in the one analysis whose entire
+purpose was to count losses. The store records that a transcript is present; it
+has no way to say that a session ended, so "absent" silently spans at least four
+distinct states: never ended, ended before the store existed, ended and captured,
+ended and lost. The timing curve is evidence about a budget. This is evidence
+about the instrument, and it is the stronger of the two, because an instrument
+that cannot distinguish the thing it counts from three other states will
+misreport every future measurement taken with it, including the one that checks
+whether a fix worked.
+
+The consequence for capture is that it works precisely where it matters least. A
+short session is cheap to redact and gets stored; a long, dense, expensive
+session — the one actually worth keeping — is the one guaranteed to be dropped.
+Nine of this repo's ended transcripts are absent from its store, and until the
+outcome gap above is closed, that nine is itself a figure arrived at by hand.
 
 The silence is designed, not accidental, which is what makes this an ADR-shaped
 question rather than a bug report. `session-end`'s own comment block in
@@ -100,3 +111,14 @@ thing away, and choosing between them wants an ADR, not a patch.
 `iss-2608210934566224` (the recovery sweep) is the detector this needs and is
 now the blocking dependency, not a nice-to-have: without it there is no way to
 watch a fix fail.
+
+Adjacent, and deliberately not merged into this one: `iss-2608230752354928`
+records that `source_kind` conflates ingest route with source harness. The two
+look like one issue and are not. That one is a field-vocabulary change on
+records that exist; this one concerns records that do not exist, which no value
+added to a field can describe, because `Capture` is fail-closed and the
+cancellation kills the hook before anything is written. Recording a capture that
+produced nothing needs an artefact written before the redaction runs, with its
+own lifecycle. Merging them would produce a record no single change could close.
+The natural moment to ask whether an outcome axis is owed is a redesign of that
+kind vocabulary, which is why the cross-reference is worth carrying.
