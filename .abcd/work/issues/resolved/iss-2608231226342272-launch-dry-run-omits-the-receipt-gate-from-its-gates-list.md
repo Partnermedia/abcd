@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "v0.6.2 release failure post-mortem 2026-08-23"
 found_at: "internal/core/launch/dryrun.go"
+resolution: "abcd launch --dry-run now carries a semantic-receipts row in every state, reporting which receipts are recorded for the candidate commit and pointing at the runbook. It reports presence only and never a pass, so release.yml stays the sole trust root for the required-gates list."
+impact: fix
+resolved_by:
+  commit: "1ff105b"
 ---
 
 `abcd launch --dry-run` reports a `gates` array built in

@@ -1,0 +1,913 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "6e4d5377de8020df2dbb1ed6b47eccfd20a0cb80"
+    }
+  },
+  "verifier": {
+    "id": "maintainer@release"
+  },
+  "timeVerified": "2026-08-23T14:42:08Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:6b4a388e596e159a04f73417af8c2d08699968dd01031b9c08aeac65596d8064",
+    "briefVersion": "0.6.2"
+  },
+  "categories": {
+    "false-claim": 64,
+    "undocumented-surface": 48,
+    "fictional-layout": 11,
+    "stale-count": 21,
+    "criterion-violation": 3
+  },
+  "failing": [
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:26-29",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:179-188, 361-370",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:34-37, 410-417",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:61-72",
+      "class": "fictional-layout",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:93-95",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:121-230 (detection-pass steps 0-11) and 232-241 (gap-category table)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:199-204",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:48-49, 110, 447-454",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/02-disembark.md:108",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/02-disembark.md:28-35",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/02-disembark.md:75-100",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/03-embark.md:44",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/03-embark.md:116",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/03-embark.md:78",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:22",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:182",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:20",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/04-launch.md:184",
+      "class": "criterion-violation",
+      "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:210",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:196",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:201",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:13",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:223",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:230",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:327",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:336",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:323",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/05-intent.md:60",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:52",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:107",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:45",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:22",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:36",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:1",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:26",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:124",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/06-capture.md:47",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:3",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:118 (also :56-57 and :125)",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:21 (and :23, :89)",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:23",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/07-memory.md:24 (and :91)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:82-87",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:9-13",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:26-28",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:22-28",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/09-reflect.md:31-32",
+      "class": "fictional-layout",
+      "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/09-reflect.md:9, 42, 96",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/09-reflect.md:95-96",
+      "class": "fictional-layout",
+      "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/09-reflect.md:121-122",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/10-docs.md:40-43",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/10-docs.md:49-52",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/10-docs.md:64-66",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/10-docs.md:74-78",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": "commands/history.md:~78 (Capture section)",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/11-history.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:18-19",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/12-version.md:26-28",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": "commands/version.md:11",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/12-version.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/13-consult.md:44-55 (## Guard wiring)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/13-consult.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/13-consult.md:16-17",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/13-consult.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/13-consult.md:57 (no ## Acceptance section anywhere in the file)",
+      "class": "criterion-violation",
+      "item": ".abcd/development/brief/04-surfaces/13-consult.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/14-ingest.md:35",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/14-ingest.md:25-29 (step 2, \"Decide class and key\")",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/14-ingest.md:42-44 (Confidentiality contract)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/14-ingest.md:32-34 and :51-54 (step 4 / acceptance 1)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": "commands/ingest.md:59 (vs .abcd/development/brief/04-surfaces/14-ingest.md:67-70)",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:21 (adjacent \u2014 the sentence that classifies `/abcd:ingest`)",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:31-32 (also :53, :30-32 \"Adopts the conventions\")",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:54-56 (\"install the attribution hook (opt-in)\"), :32 (\"AI-attribution hooks are opt-in only\")",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:14-16 (also :52-53 \"the one write the binary makes here\")",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:16",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/16-lint.md:34",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/16-lint.md:52",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/16-lint.md:60",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/16-lint.md:48",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/17-guard.md:44",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/17-guard.md:60",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/17-guard.md:136-137",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/17-guard.md:138",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/17-guard.md:143",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/18-ideate.md:65-77",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/18-ideate.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/19-identity.md:53-57",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/19-identity.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/19-identity.md:70",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/19-identity.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/19-identity.md:68-70",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/19-identity.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/01-product/README.md:6-8",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/19-identity.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/20-banlist.md:231-236",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/20-banlist.md:239-241",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/20-banlist.md:238-239",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/20-banlist.md:21-25",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/20-banlist.md:127-130",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:10 and :37",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:21-25",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:15 (synopsis) and :3-5",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:29-32",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:30-31",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/21-update.md:8-10",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/21-update.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:54 (and :6)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:49-55 (Behaviour block)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:50,54",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:124-126",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:134-142 (The markdown subset)",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:64-79 (inputs table, esp. :72)",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/22-site.md:36-38",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/04-surfaces/22-site.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "false-claim",
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "stale-count",
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17",
+      "class": "undocumented-surface",
+      "item": ".abcd/development/brief/05-internals/08-skills.md",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:55",
+      "class": "false-claim",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:103, :122 and 06-delivery/02-verification-matrix.md:22, :23, :24",
+      "class": "fictional-layout",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:38",
+      "class": "fictional-layout",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "class": "fictional-layout",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:78-87",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17 and .abcd/development/brief/04-surfaces/README.md:34",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:34",
+      "class": "false-claim",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:17 (row 11)",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:16 (row 10)",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:51",
+      "class": "false-claim",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:25",
+      "class": "fictional-layout",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:94",
+      "class": "criterion-violation",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:94",
+      "class": "false-claim",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "class": "fictional-layout",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:17 (row 11)",
+      "class": "stale-count",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:16 (row 10)",
+      "class": "stale-count",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:1-40",
+      "class": "undocumented-surface",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:30",
+      "class": "false-claim",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/01-agents.md:82-91",
+      "class": "undocumented-surface",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/01-agents.md:3 and :90",
+      "class": "fictional-layout",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:3, :9, :11",
+      "class": "false-claim",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:9",
+      "class": "fictional-layout",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:5",
+      "class": "false-claim",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:20 (and the acceptance list at :29-31, :35)",
+      "class": "false-claim",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:18",
+      "class": "stale-count",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:77-79",
+      "class": "stale-count",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:3",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:368",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:367",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:373",
+      "class": "stale-count",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:200",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md (table) / .abcd/development/brief/04-surfaces/",
+      "class": "undocumented-surface",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": "hooks/hooks.json (SessionStart entry) vs .abcd/development/brief/04-surfaces/01-ahoy.md:190-206 and 05-internals/03-configuration.md:369-372",
+      "class": "undocumented-surface",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "class": "fictional-layout",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:55",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/02-constraints/04-naming.md:10",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/glossary/core/spec.md:42",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/glossary/core/oracle.md:42",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/glossary/README.md:218",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    }
+  ],
+  "_reviewProvenance": "Host-run full-tier crosscheck at the release-content commit, 28 checkers over the 23 pinned brief docs (Direction A) and 5 real surfaces (Direction B), inputs pinned by the committed manifest. PROMOTE with dispositions, ruled by the maintainer on the SET with its composition known, not finding by finding \u2014 every entry carries the same disposition because the ruling is genuinely uniform: exactly one earlier finding touched a file the release bundle carries (commands/memory.md, fixed before this commit), and the remainder are .abcd/development/brief/**, which ships in no release artefact, so no installed surface is affected. The drift itself is not accepted, only deferred: it is tracked as iss-2608231346137587 with the maintainer-confirmed decomposition for an intent that makes the brief's shape claims derived rather than hand-authored. CAVEAT ON THE COUNT: this detector's findings are not reproducible in number or class. Three full-tier runs this day returned 125, 126 and the 147 recorded here. Runs 2 and 3 are a CONTROLLED comparison: the brief is byte-identical between their commits, so the detector's whole subject was held constant and it still returned 17% more findings, with false-claim moving 48 -> 64 and per-file swings from 0 -> 5 up to 3 -> 0. The count recorded here is one run's observation, not a measurement, and must not be compared against another run's or against v0.6.1's 37; see iss-2608231409595789."
+}

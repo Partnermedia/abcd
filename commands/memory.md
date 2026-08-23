@@ -21,8 +21,11 @@ render never rebuilds or mutates the coverage index.
 
 ## Ingest a source
 
-Distil an external source (PDF / transcript / article / URL) into typed,
-cited memory pages. **You** are the distiller: read the source, produce the
+Distil an external source (transcript / article / URL) into typed, cited
+memory pages. PDF is a later-phase seam: the binary rejects a PDF source with a
+clear error, because no text-extraction dependency is wired.
+
+**You** are the distiller: read the source, produce the
 `DistilledPage` JSON array, and pass it to the binary via `--pages-json`
 (a file, or `-` for stdin). The binary computes the provenance, licence, and
 content hash, validates every page, and writes atomically.
@@ -46,8 +49,9 @@ Deterministic retrieval over the store, then a cited answer:
 
 The default answer is the deterministic citation-renderer over the top-ranked
 pages; every citation references `source_class`, `citation`, and `source_hash`.
-Optionally file the answer back as a new page with `--file-back --page-json
-<file|->` (one `DistilledPage` object you produce from the retrieved matches).
+`--top-n` sets the retrieval depth; `0` uses the pinned default. Optionally
+file the answer back as a new page with `--file-back --page-json <file|->` (one
+`DistilledPage` object you produce from the retrieved matches).
 Report the `answer` and, if present, the `file_back` result.
 
 ## Lint
