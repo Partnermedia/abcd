@@ -10,6 +10,38 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The release chain's site deploy receives its credentials.** `release.yml`
+  invokes `site.yml` as a reusable workflow, and a called workflow receives no
+  secrets unless the caller passes them: declaring `environment:` on the
+  callee's job gates the job but leaves `secrets.*` empty inside it. So the
+  first production deploy reached wrangler with no `CLOUDFLARE_API_TOKEN` and
+  failed at the last step of a release whose binaries were already published.
+  The secrets were correct and correctly scoped throughout. `secrets: inherit`
+  is added to the call and to the scaffold template it is regenerated from, so
+  a managed repo does not inherit the defect (iss-2608231912566984).
+
+### Changed
+
+- **The README speaks to the person holding the intent.** It opens with what
+  abcd is for and who for, then why the project's own public record is the
+  demonstration rather than a claim, and it names the plugin's one-harness
+  limit plainly instead of implying wider support. Installing as a plugin is
+  now two copy-pasteable commands with a check afterwards, and the difference
+  between updating a plugin and reloading one is stated: reloading re-reads
+  what is on disk, so it refreshes commands and skills while leaving the
+  binary as it was.
+- **`/abcd:launch` explains release day to whoever is doing it.** The page
+  described the verbs and not the day, so nothing told a reader that the
+  release stops and waits for a human approval, where to click for it, or that
+  a merge landing between the release merge and the tag invalidates the
+  receipts. It now carries the seven steps, the approval gate in detail, what
+  to check afterwards, and the three failure modes that look like something
+  else. It also documents proving the release gate locally before merging,
+  which is what turns a receipt refusal into a branch-local failure rather
+  than a consumed version.
+
 ## [0.6.2] - 2026-08-23
 
 ### Added
