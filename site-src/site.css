@@ -93,7 +93,16 @@ table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{text-align:left;padding:.55em .7em;border-bottom:1px solid var(--rule);vertical-align:top}
 th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
 .tablewrap{overflow-x:auto}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Visually hidden, still announced. The second selector is the roles table's
+   column heads: the portrait already carries the role's name in its alt text,
+   so the label repeated under it adds nothing a reader needs to SEE — while on
+   a phone it is what sets the column's width and squeezes the table's own
+   prose into a ribbon. The picture stays and the words go where every other
+   visually-hidden label goes.
+   This changes what is drawn, not what is announced: the head's accessible
+   name is the alt text followed by the label, before and after alike. Removing
+   that duplication would mean changing the markup, not this rule. */
+.sr,th .th-portrait~span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* ---------- site header ---------- */
 .site-head{background:var(--ground);border-bottom:1px solid var(--rule)}
@@ -141,6 +150,30 @@ th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem
 .letter.a{color:var(--la)}.letter.b{color:var(--lb)}.letter.c{color:var(--lc)}.letter.d{color:var(--ld)}
 @media (max-width:700px){.chapter .head{grid-template-columns:minmax(0,1fr)}.letter{display:none}.chapter .body{padding-left:0}}
 
+/* The rail that carries a to b to c to d: a thin line running down the letter
+   column, entering each chapter in the previous chapter's colour and leaving
+   it in its own, so the four letters read as one continuous descent rather
+   than four separate sections. Two pseudo-elements per chapter — `::after`
+   above the letter, `::before` below it — leave the letter itself in the gap.
+   The first chapter has nothing above it and the last nothing below, so those
+   two ends are switched off. Below the letter's own breakpoint the rail has no
+   column to run down, and goes with it. */
+.chapter::before,.chapter::after{content:"";position:absolute;left:calc(50% - 513px);width:2px;opacity:.32;pointer-events:none;border-radius:2px}
+.chapter::after{top:0;height:58px}
+.chapter::before{top:150px;bottom:0}
+.chapter#roles::after,.chapter#install::before{display:none}
+.chapter#roles::before{background:linear-gradient(var(--la),var(--lb))}
+.chapter#artefacts::after{background:var(--lb)}.chapter#artefacts::before{background:linear-gradient(var(--lb),var(--lc))}
+.chapter#process::after{background:var(--lc)}.chapter#process::before{background:linear-gradient(var(--lc),var(--ld))}
+.chapter#install::after{background:var(--ld)}
+/* `calc(50% - 513px)` tracks the letter column only while `.wrap` is still
+   centring, which stops at its own max-width — 1120px, padding included, since
+   the sheet is border-box throughout. Below that the wrap is flush left and the
+   column sits at a fixed 24px + 23px. The two expressions meet at exactly
+   1120px, so the seam is continuous. */
+@media (max-width:1120px){.chapter::before,.chapter::after{left:47px}}
+@media (max-width:700px){.chapter::before,.chapter::after{display:none}}
+
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
 .cards.two{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
@@ -183,7 +216,17 @@ h3.subh{font-size:1.5rem;font-weight:650;letter-spacing:-.01em;margin:40px 0 12p
 
 /* ---------- install tabs ---------- */
 .installwrap{max-width:860px}
-.tabs{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+/* All five panels share ONE grid cell under the tab strip, so the box is as
+   tall as the tallest of them whichever tab is selected and the page below
+   stops jumping when the reader compares two. The script still sets `hidden`
+   on the panels that are not selected — that is what keeps them out of the
+   accessibility tree and out of the tab order — so the attribute's display is
+   traded for `visibility:hidden`, which does both of those things too and
+   still occupies its cell. */
+.tabs{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
+.tabs>[role=tablist]{grid-row:1}
+.tabs>[role=tabpanel]{grid-row:2;grid-column:1}
+.tabs>[role=tabpanel][hidden]{display:block;visibility:hidden}
 .tabs [role=tablist]{display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px 0;border-bottom:1px solid var(--rule);background:var(--surface-2);align-items:flex-end}
 .tabs .tabgroup{display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end;margin-left:auto;padding-left:14px;border-left:1px solid var(--rule-2)}
 .tabs .tabgroup .grp{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:12px 4px 13px 0}
@@ -204,7 +247,21 @@ h3.subh{font-size:1.5rem;font-weight:650;letter-spacing:-.01em;margin:40px 0 12p
 .tabprose.after .cmd{margin:8px 0 4px}
 .tabprose details.more summary,.tabbody details.more summary{cursor:pointer;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;color:var(--ink-2);margin:6px 0}
 .tabprose details.more[open] summary,.tabbody details.more[open] summary{margin-bottom:8px}
-@media (max-width:700px){.tabs .tabgroup{margin-left:0;padding-left:0;border-left:0;width:100%;border-top:1px solid var(--rule)}}
+/* On a phone the strip is given a deliberate shape rather than left to wrap:
+   the standalone tab keeps the first row, and the CLI group takes the second
+   as one horizontally scrolling row — the same treatment the site header's
+   navigation gets at this width. Left to wrap, five tabs and a group label
+   break into three ragged rows. */
+@media (max-width:700px){
+  .tabs [role=tablist]{padding:6px 0 0;gap:0}
+  .tabs [role=tablist]>[role=tab]{margin-left:10px}
+  .tabs .tabgroup{margin-left:0;border-left:0;width:100%;border-top:1px solid var(--rule);
+    flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:0;padding:0 10px;
+    mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
+  .tabs .tabgroup::-webkit-scrollbar{display:none}
+  .tabs .tabgroup>*{flex:0 0 auto}
+  .tabs .tabgroup>[role=tab]{margin-bottom:0}
+}
 
 /* The disclosure's open/close is animated only where the reader has not asked
    for stillness; where they have, it simply opens. */
@@ -244,11 +301,16 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .recpills{margin-top:14px}
 
 /* the dashboard grid */
-.dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;margin-top:22px;align-items:start}
+.dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;margin-top:22px}
 .panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);min-width:0}
 .panel h3{font-size:1rem;margin-bottom:10px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .panel h3 span{font-family:"IBM Plex Mono",monospace;font-weight:400;font-size:.72rem;color:var(--ink-3)}
+/* Panels stacked in one column — the record page's sidebar — carry their own
+   gap. Panels laid out BY the dashboard grid already have `gap`, so the same
+   margin there pushes every panel after the first 14px down its own row and the
+   tiles stop lining up. The grid is the one context that must not inherit it. */
 .panel+.panel{margin-top:14px}
+.dash>.panel+.panel{margin-top:0}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
@@ -455,8 +517,14 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 
 /* references */
 .refs{counter-reset:ref;list-style:none;margin:0;padding:0}
-.refs li{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;padding:10px 0;border-bottom:1px solid var(--rule);font-size:.98rem;line-height:1.45}
-.refs li::before{counter-increment:ref;content:"[" counter(ref) "]";font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink-2);padding-top:.25em}
+/* A citation is one run of MIXED INLINE content — plain text, an italic
+   journal title, a link — not a row of cells. A grid container would make each
+   of those a grid item in its own right, italics and link included, and lay the
+   citation out as a column of fragments instead of a sentence. The number is
+   placed out of the flow beside the text it numbers, and the text stays one
+   flowing block. */
+.refs li{position:relative;padding:10px 0 10px 50px;border-bottom:1px solid var(--rule);font-size:.98rem;line-height:1.45}
+.refs li::before{position:absolute;left:0;top:10px;counter-increment:ref;content:"[" counter(ref) "]";font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--ink-2);padding-top:.25em}
 .refs a{word-break:break-word}
 .insp ul{font-size:.92rem;list-style:none;padding:0;margin:0}
 .insp li{padding:6px 0;border-bottom:1px solid var(--rule)}
@@ -496,4 +564,64 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 @media (prefers-reduced-motion:reduce){
   .bstandby{display:none;animation:none}
   .bstandby .spin{animation:none}
+}
+
+/* ---------- print ----------
+ *
+ * A first pass, and an honest one: paper gets the words. Controls that exist
+ * only to be operated go, the disclosures give up what they are hiding as far
+ * as an engine allows, and the pagination is told which blocks read as one
+ * thing and which are free to run over a fold.
+ */
+@media print{
+  /* Chrome with nothing to say on paper: the site's navigation, the copy
+     buttons, and the whole of the relationship chart's control furniture —
+     the by-date/by-links switch, the filter button and its panel, the search
+     field and its results, the zoom and fullscreen corner, the loading
+     placeholder. */
+  .site-nav,.cmd .copy,
+  .brow2,.bseg,.bfilters,.bfilters-btn,.bcorner,.bfs,.bzoom,.bsearch,.bhits,.bstandby{display:none!important}
+
+  /* A command block reserves a gutter on its right for the copy button that
+     sits in it. The button is gone from the page above, so the gutter is a
+     stripe of empty ink-dark paper; the block gets its ordinary padding back. */
+  .tabs .tabbody pre,.tabs .tabprose pre,.recbody pre{padding-right:16px}
+
+  /* On screen the install panels are stacked so the box cannot jump. On paper
+     there is nothing to jump, and a reader wants the selected panel followed
+     by the next section, not by the blank column the tallest panel reserves. */
+  .tabs>[role=tabpanel][hidden]{display:none}
+
+  /* A disclosure that hides part of the DOCUMENT gives it up: the install
+     page's asides, and the tables that carry in words what the segmented bars
+     draw. `::details-content` is what makes a CLOSED `details` do that, and it
+     is a Chromium feature — elsewhere a closed disclosure still prints as its
+     summary alone, and in every engine the marker beside it still points
+     closed, because CSS cannot set the `open` attribute. That residue is real
+     and needs script or markup, not this stylesheet.
+
+     The relationship chart's list twin is deliberately left closed. It is not
+     hidden prose but a way to walk 772 records with a keyboard, and opening it
+     turns one printed page into ninety. */
+  details.more::details-content,details.twin::details-content{content-visibility:visible;display:block}
+  details.more>*:not(summary){animation:none}
+
+  /* The genealogy is one scalable drawing kept behind a scrolling window on a
+     narrow screen. Paper has no scroll, so the window is opened and the
+     drawing is allowed to fit the sheet instead of being cut off at it. */
+  .tl{overflow:visible}
+  .tlsvg{min-width:0}
+
+  /* Blocks that read as one thing are kept on one sheet. Panels are NOT among
+     them, and the omission is the point: a dashboard panel is long enough that
+     refusing to break it pushes the whole panel to the next sheet and leaves
+     the one before it blank. A panel breaks; the cards inside it do not. */
+  .card,.fcard,.tile,.quote,.cmd,.comic{break-inside:avoid}
+  .panel{break-inside:auto}
+
+  /* Trailing padding is what tips a footer onto a sheet of its own, and a
+     footer that splits down the middle guarantees one. Both are taken away;
+     what CSS cannot do is pull a footer back onto a full page. */
+  .record,.chapter,.hero{padding-bottom:0}
+  .site-foot{padding:12px 0 0;break-inside:avoid}
 }
