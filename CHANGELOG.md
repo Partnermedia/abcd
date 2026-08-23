@@ -76,6 +76,18 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **The issue ledger redacts on write.** `abcd capture`, `abcd capture
+  resolve` and `abcd capture wontfix` now pass the rendered record through
+  the same detector the launch bundler and the transcript store use, so an
+  absolute home path or identity span in free text is rewritten before it
+  reaches a committed file. Redaction runs before validation, so the
+  validator sees the bytes that get written. It redacts and reports rather
+  than refusing — a ledger that rejects writes stops being written to — and
+  the CLI names the number of spans it rewrote, because redaction alters
+  what the caller filed. A degraded scanner redacts with the bundled
+  defaults and warns rather than blocking every capture in the repo.
+  (iss-2608231025198888)
+
 - **The shell guard recognises the `&>` / `&>>` redirection operators.** The
   guard tokenizer read a leading `&` as a background/`&&` operator, so gluing or
   spacing bash's both-streams redirection into a command (`git push &>/dev/null
