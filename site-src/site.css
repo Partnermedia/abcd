@@ -579,6 +579,11 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
   .site-nav,.cmd .copy,
   .brow2,.bseg,.bfilters,.bfilters-btn,.bcorner,.bfs,.bzoom,.bsearch,.bhits,.bstandby{display:none!important}
 
+  /* A command block reserves a gutter on its right for the copy button that
+     sits in it. The button is gone from the page above, so the gutter is a
+     stripe of empty ink-dark paper; the block gets its ordinary padding back. */
+  .tabs .tabbody pre,.tabs .tabprose pre,.recbody pre{padding-right:16px}
+
   /* On screen the install panels are stacked so the box cannot jump. On paper
      there is nothing to jump, and a reader wants the selected panel followed
      by the next section, not by the blank column the tallest panel reserves. */
