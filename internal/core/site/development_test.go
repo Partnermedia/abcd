@@ -53,12 +53,12 @@ func TestDevelopmentPageDealsEveryMovingStore(t *testing.T) {
 	if strings.Contains(page, ">itd-5<") {
 		t.Error("the development page deals a discipline, which Foundations holds")
 	}
-	// A settled bucket is folded rather than listed; an unsettled one is not.
-	if !strings.Contains(page, `<details class="panel fold"><summary><h3>superseded`) {
-		t.Error("the superseded deck is not folded away")
-	}
-	if strings.Contains(page, `<details class="panel fold"><summary><h3>drafts`) {
-		t.Error("the drafts deck — work in flight — was folded away")
+	// EVERY bucket folds: a store here holds hundreds of records, so a page
+	// that opened one would bury the store beside it.
+	for _, bucket := range []string{"superseded", "drafts"} {
+		if !strings.Contains(page, `<details class="panel fold"><summary><h3>`+bucket) {
+			t.Errorf("the %s bucket is not folded away", bucket)
+		}
 	}
 	// The navigation reaches the page it wrote.
 	if !strings.Contains(outFile(t, out, "record/index.html"), `href="/record/development/"`) {
@@ -79,9 +79,9 @@ func TestDevelopmentCardsLinkRealRecordRoutes(t *testing.T) {
 	for _, name := range res.Files {
 		written[name] = true
 	}
-	cards := regexp.MustCompile(`<a class="fcard" href="/([^"]+)"`).FindAllStringSubmatch(page, -1)
+	cards := regexp.MustCompile(`<li><span class="id"><a href="/([^"]+)"`).FindAllStringSubmatch(page, -1)
 	if len(cards) == 0 {
-		t.Fatal("the development page dealt no cards at all")
+		t.Fatal("the development page listed no records at all")
 	}
 	for _, m := range cards {
 		if !written[m[1]+"index.html"] {
@@ -168,8 +168,8 @@ func TestDevelopmentCapStatesTheTrueTotal(t *testing.T) {
 	}
 	body := (&explorer{}).developmentStorePanel(nodes)
 
-	if n := strings.Count(body, `<a class="fcard"`); n != developmentDeckCap {
-		t.Errorf("the deck drew %d cards, not the %d the cap allows", n, developmentDeckCap)
+	if n := strings.Count(body, `<li><span class="id">`); n != developmentDeckCap {
+		t.Errorf("the list drew %d rows, not the %d the cap allows", n, developmentDeckCap)
 	}
 	want := strconv.Itoa(developmentDeckCap) + " / " + strconv.Itoa(held)
 	if !strings.Contains(body, ">"+want+"<") {

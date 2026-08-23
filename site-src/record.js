@@ -458,17 +458,57 @@
       ctx.globalAlpha = 1;
     }
 
-    var first = true;
+    /* standby: the one piece of feedback a reader gets while the chart is
+       working, raised for every relayout they wait on and not the first alone.
+       It is the element the page was served with, so it comes down by the class
+       the first paint has always used, and is hidden rather than removed.
+
+       Raising it and doing the work in the same task paints nothing: the frame
+       callbacks run before the paint, so the loop would draw the new layout
+       before the browser ever showed the indicator. `raise` therefore hands the
+       work to the second of two animation frames, which leaves the browser a
+       whole frame in which to put the indicator on screen. Work that must stay
+       inside the gesture that asked for it — a full-screen request, which the
+       browser grants to a live user gesture only — is passed no work function
+       and runs at the call site; there the transition is itself the wait.
+
+       It comes down on the first frame drawn after the bubbles stop moving, or
+       at HOLD, whichever is sooner. The cap is what makes the promise keepable:
+       an arrangement whose published homes overlap never falls under the idle
+       threshold at all — the glide home and the collision push trade places
+       forever — and an indicator that waited for a stillness that never comes
+       would sit over the chart for the rest of the session. The floor is the
+       same clock read the other way: before it, a drawn frame takes the
+       indicator down at once, which is how the first paint clears it. */
+    var HOLD = 1000;
+    var sb = document.getElementById('bstandby');
+    var standby = true, held = 0;
+    function raise(work) {
+      if (sb) sb.classList.remove('done');
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          standby = true;
+          held = performance.now() + HOLD;
+          /* a relayout the loop sleeps through — a stage that resized to the
+             same size — draws no frame to come down on */
+          setTimeout(function () { lower(true); }, HOLD);
+          if (work) work();
+        });
+      });
+    }
+    function lower(over) {
+      if (!standby) return;
+      if (!over && performance.now() < held) return;
+      standby = false;
+      if (sb) sb.classList.add('done');
+    }
+
     function frame() {
       if (!canvas.isConnected) return;
       if (need || energy > 0.02) {
         step(); draw();
         need = energy > 0.02;
-        if (first) {
-          first = false;
-          var sb = document.getElementById('bstandby');
-          if (sb) { sb.classList.add('done'); setTimeout(function () { sb.remove(); }, 350); }
-        }
+        lower(!need);
       }
       G.raf = requestAnimationFrame(frame);
     }
@@ -727,9 +767,9 @@
     /* the explicit two-state arrangement control */
     $$('#barr button').forEach(function (b) {
       b.addEventListener('click', function () {
-        arr = b.dataset.arr;
         $$('#barr button').forEach(function (x) { x.setAttribute('aria-checked', String(x === b)); });
-        need = true;
+        /* every bubble leaves for a new home, so this is the long wait */
+        raise(function () { arr = b.dataset.arr; need = true; });
       });
     });
 
@@ -762,6 +802,10 @@
     var fsb = $('#bfs');
     var fsOn = function () { return document.fullscreenElement === stage || stage.classList.contains('fs'); };
     function setFs(want) {
+      /* the stage changes size under every bubble, so the chart re-settles
+         either way in and out; the request itself stays in this task, because
+         the browser grants full screen to a live gesture only */
+      raise();
       if (want) {
         if (stage.requestFullscreen) stage.requestFullscreen().catch(function () { stage.classList.add('fs'); });
         else stage.classList.add('fs');
@@ -778,7 +822,8 @@
       document.documentElement.classList.toggle('bfs-open', o);
     }
     fsb.addEventListener('click', function () { setFs(!fsOn()); setTimeout(syncFs, 50); });
-    document.addEventListener('fullscreenchange', syncFs);
+    /* the browser's own way out of full screen never passes through setFs */
+    document.addEventListener('fullscreenchange', function () { raise(); syncFs(); });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && stage.classList.contains('fs')) { setFs(false); syncFs(); }
     });

@@ -380,7 +380,10 @@ func (c *composer) footer() string {
 		year = ""
 	}
 	if year != "" && c.repo.AuthorName != "" && c.repo.License != "" {
-		b.WriteString(`<span>© ` + escapeText(year) + " " + escapeText(c.repo.AuthorName) + " · " + escapeText(c.repo.License) + `</span>`)
+		// Two facts, spaced rather than punctuated: a dot between them reads as
+		// a full stop that is not one, and the licence is the quieter of the two.
+		b.WriteString(`<span>© ` + escapeText(year) + " " + escapeText(c.repo.AuthorName) +
+			` <span class="quiet">` + escapeText(c.repo.License) + `</span></span>`)
 	}
 	if c.repo.Repository != "" {
 		for _, f := range []string{"SECURITY.md", "ACKNOWLEDGEMENTS.md", "CITATION.cff", "CHANGELOG.md"} {
@@ -409,7 +412,13 @@ func (c *composer) footer() string {
 		meta = append(meta, c.stamp.Commit)
 	}
 	if len(meta) > 0 {
-		b.WriteString(`<span class="mono small foot-meta">` + escapeText(strings.Join(meta, " · ")) + `</span>`)
+		// The build stamp is three independent facts, so they are set apart by
+		// space and weight rather than strung together on dots.
+		b.WriteString(`<span class="mono small foot-meta">`)
+		for _, m := range meta {
+			b.WriteString(`<span>` + escapeText(m) + `</span>`)
+		}
+		b.WriteString(`</span>`)
 	}
 	b.WriteString(`</div></footer>`)
 	return b.String()

@@ -38,12 +38,10 @@
     "dashboard": "Dashboard",
     "graph": "Relationships",
     "timeline": "Genealogy",
-    "foundations": "Foundations",
+    "foundations": "Foundation",
     "contributors": "Contributors",
-    "development": "Development",
-    "health": "Health",
-    "contributors_glyph": "⚇",
-    "references_glyph": "☷"
+    "development": "Work",
+    "health": "Health"
   },
   "panels": {
     "cadence": "Release cadence",

@@ -95,38 +95,63 @@ func TestUIMissingNamesABlankMapValue(t *testing.T) {
 	}
 }
 
-// cadenceDates pins the collision branch in both directions: releases far
-// apart each keep their date, and releases days apart do not print two dates
-// over each other. The fixture's own two releases sit a third of the chart
-// apart, so only this test can see the suppression.
-func TestCadenceSuppressesOnlyACollidingDate(t *testing.T) {
-	dates := func(rel []changelog.DatedRelease) (versions, printed int) {
+// The cadence ridgeline draws one band per release over the commits made in
+// that release's own window. It replaced a tick strip whose date labels
+// collided when two releases fell days apart; a band carries its own label
+// column, so crowding is no longer expressible.
+func TestCadenceDrawsABandPerRelease(t *testing.T) {
+	build := func(rel []changelog.DatedRelease, days map[string]int) string {
 		e := &explorer{c: &composer{ui: UI{Panels: Panels{Cadence: "Release cadence"},
 			Tiles: Tiles{Releases: "releases"}}}}
 		e.export.Releases = rel
-		out := e.cadence()
-		return strings.Count(out, `font-size="10"`), strings.Count(out, `font-size="8"`)
+		e.export.History.Days = days
+		return e.cadence()
 	}
-	// Two months apart: both dates fit.
-	spread := []changelog.DatedRelease{{Version: "0.2.0", Date: "2026-03-01"}, {Version: "0.1.0", Date: "2026-01-01"}}
-	if v, d := dates(spread); v != 2 || d != 2 {
-		t.Errorf("well-spaced releases printed %d versions and %d dates, want 2 and 2", v, d)
+	rel := []changelog.DatedRelease{
+		{Version: "0.3.0", Date: "2026-01-20"},
+		{Version: "0.2.0", Date: "2026-01-10"},
+		{Version: "0.1.0", Date: "2026-01-05"},
 	}
-	// A cluster inside a long span — the shape that collides, since the chart
-	// normalises to the span and a week of releases on its own simply spreads
-	// to full width. Three of these land on the same side of the axis with the
-	// last two ~38 units apart, inside a date label's own width.
-	tight := []changelog.DatedRelease{
-		{Version: "0.5.0", Date: "2026-02-13"}, {Version: "0.4.0", Date: "2026-02-11"},
-		{Version: "0.3.0", Date: "2026-02-10"}, {Version: "0.2.0", Date: "2026-01-21"},
-		{Version: "0.1.0", Date: "2026-01-01"},
+	days := map[string]int{
+		"2026-01-02": 3, "2026-01-04": 1, // before the first release
+		"2026-01-07": 9, "2026-01-09": 2, // the second release's window
+		"2026-01-15": 4, "2026-01-20": 1, // the third's
 	}
-	v, d := dates(tight)
-	if v != 5 {
-		t.Errorf("a crowded chart printed %d versions, want 5 — a version is never suppressed", v)
+	out := build(rel, days)
+
+	// Every release is a row, labelled with its version and its date, and the
+	// commits of its own window are totalled beside it.
+	for _, want := range []string{">v0.1.0<", ">v0.2.0<", ">v0.3.0<",
+		">2026-01-05<", ">2026-01-10<", ">2026-01-20<"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the ridgeline does not label %s", want)
+		}
 	}
-	if d >= v {
-		t.Errorf("a crowded chart printed %d dates against %d versions; a colliding date must be given up", d, v)
+	if n := strings.Count(out, `<g class="tick">`); n != len(rel) {
+		t.Errorf("the ridgeline drew %d bands for %d releases", n, len(rel))
+	}
+	// One filled band per release whose window holds commits.
+	if n := strings.Count(out, `<path d="M `); n != len(rel) {
+		t.Errorf("the ridgeline drew %d shapes for %d releases", n, len(rel))
+	}
+	// The oldest release owns everything before it, so the four commits that
+	// led to v0.1.0 are drawn rather than dropped.
+	if !strings.Contains(out, ">4<") {
+		t.Error("the first release's window does not carry the work that preceded it")
+	}
+	// The narrow-screen list stands in for the drawing and carries every row.
+	if n := strings.Count(out, `<li><span class="id">v`); n != len(rel) {
+		t.Errorf("the narrow-screen list drew %d rows for %d releases", n, len(rel))
+	}
+
+	// Without a commit history there is nothing to draw a shape from, and the
+	// panel is omitted rather than rendered empty (itd-140: graceful absence).
+	if got := build(rel, nil); got != "" {
+		t.Errorf("a repository with no dated history still drew a ridgeline: %q", got)
+	}
+	// One release is not a cadence.
+	if got := build(rel[:1], days); got != "" {
+		t.Errorf("a single release drew a cadence: %q", got)
 	}
 }
 

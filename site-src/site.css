@@ -292,13 +292,7 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .sub{border-bottom:1px solid var(--rule);background:var(--surface)}
 .sub .wrap{display:flex;gap:2px;overflow-x:auto;padding-top:6px;scrollbar-width:none}
 .sub .wrap::-webkit-scrollbar{display:none}
-/* position:relative is load-bearing: a glyph tab carries its name in a
-   visually-hidden span, and .sr is absolutely positioned. Without a positioned
-   ancestor that span resolves against the initial containing block, escapes the
-   nav's own overflow-x scroller, and widens the DOCUMENT — a horizontal
-   scrollbar on every page at 390px. */
 .sub a{position:relative;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.92rem;color:var(--ink-2);text-decoration:none;padding:10px 14px 12px;border-bottom:2px solid transparent;white-space:nowrap}
-.sub a.glyph{font-size:1.05rem;padding-left:12px;padding-right:12px}
 .sub a.on{color:var(--ink);border-bottom-color:var(--ink)}
 @media (max-width:700px){.sub .wrap{mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);gap:0}.sub a{padding:10px 10px 12px;font-size:.9rem}}
 
@@ -346,6 +340,14 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 @media (max-width:700px){.panel.cadence .cadsvg{display:none}.panel.cadence .cadlist{display:block}}
 
 .tile{display:block}
+/* A tile that leads somewhere says so before it is clicked: the whole tile is
+   the target, and the frame is what tells a reader the number is a way in. An
+   inert tile keeps the plain surface, so the two are never confused. */
+a.tile.lead{color:inherit;text-decoration:none;border-radius:var(--radius);outline-offset:3px;
+  transition:box-shadow .12s ease,border-color .12s ease}
+a.tile.lead:hover,a.tile.lead:focus-visible{box-shadow:0 0 0 2px var(--accent) inset}
+a.tile.lead:hover .l{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+@media (prefers-reduced-motion:reduce){a.tile.lead{transition:none}}
 .tile .n,.tile .l,.tile .s{display:block}
 .tile .n{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:2.3rem;line-height:1;letter-spacing:-.02em}
 .tile .l{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.92rem;margin-top:6px}
@@ -642,6 +644,13 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
      drawing is allowed to fit the sheet instead of being cut off at it. */
   .tl{overflow:visible}
   .tlsvg{min-width:0}
+
+  /* A scroll window has no meaning on paper: the record list would print the
+     first screenful and slice the entry at its edge. The cap comes off, and
+     the whole record prints — a long document, which is what an archival print
+     of a record is. */
+  .nodelist{max-height:none;overflow:visible}
+  .nodelist li{break-inside:avoid}
 
   /* The chart is a CANVAS whose bitmap was drawn for the viewport's width; a
      printed page is narrower, and stretching that bitmap to fill the box

@@ -96,12 +96,6 @@ type RecordNav struct {
 	// checked against itself for.
 	Health       string `json:"health"`
 	Contributors string `json:"contributors"`
-	// The two provenance pages are marked rather than named in the navigation.
-	// A glyph is a character, so it is an interface string like any other word
-	// and never an image the generator drew (adr-47 decision 2). The label
-	// stays as the accessible name and the tooltip.
-	ContributorsGlyph string `json:"contributors_glyph"`
-	ReferencesGlyph   string `json:"references_glyph"`
 }
 
 // Panels captions the dashboard panels.

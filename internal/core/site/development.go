@@ -4,14 +4,15 @@ package site
 //
 // Foundations reads the stores that HOLD: principles, and the intents that
 // state a rule rather than ship a change. This reads the stores that MOVE —
-// decisions, intents, specs and issues — as the same deck of linked cards, so
-// the two pages are one shape read twice. A card carries a record's id and its
-// title and links that record's own page; it never explains, exactly as its
-// sibling never does.
+// decisions, intents, specs and issues. Where Foundations deals cards, this
+// deals LISTS: its stores hold hundreds rather than tens, and a card grid of
+// them is a wall to scan instead of an index to read down. A row carries a
+// record's id, its date and its title and links that record's own page; it
+// never explains, exactly as its sibling never does.
 //
-// # Why it is grouped and folded rather than listed
+// # Why it is grouped and folded
 //
-// Foundations can list a store flat because a repository keeps tens of
+// Foundations can deal a store flat because a repository keeps tens of
 // principles. This repository keeps ~138 intents, ~40 specs and ~525 issues, and
 // a flat deck of 525 cards is a scroll, not a page. The structure that follows
 // from the record's own shape is therefore:
@@ -20,12 +21,11 @@ package site
 //   - inside it the lifecycle bar, whose legend names EVERY bucket with its true
 //     count — so the page states the whole store as text before it shows one
 //     card;
-//   - then one deck per lifecycle bucket, in `lifecycleRank` order. A bucket the
-//     work has not settled yet (drafts, proposed, open, planned) is a panel a
-//     reader sees; a settled one (shipped, accepted, closed, resolved,
-//     superseded, wontfix) is folded behind `panelDisclosure`, because it is the
-//     larger half and the one a reader chooses to open rather than reads on the
-//     way past.
+//   - then one list per lifecycle bucket, in `lifecycleRank` order, EVERY one of
+//     them folded behind `panelDisclosure`. A store here holds hundreds of
+//     records, so a page that opened even one bucket would bury the store below
+//     it; folded, the page opens as a column of named, counted headings that
+//     states what each store holds before asking anyone to scroll.
 //
 // The bucket a record is graded by is its own — the directory the store moves it
 // between, or the frontmatter status where the store is flat. That is the same
@@ -35,13 +35,13 @@ package site
 //
 // # The cap, and why it cannot be silent
 //
-// A deck is capped at `developmentDeckCap` cards. A cap that hid what it cut
+// A list is capped at `developmentDeckCap` rows. A cap that hid what it cut
 // would publish a partial store as a whole one, so a capped panel's note states
-// BOTH figures — how many cards are shown and how many the bucket holds — and
-// the bar's legend above it states every bucket's true count whether its deck is
+// BOTH figures — how many rows are shown and how many the bucket holds — and
+// the bar's legend above it states every bucket's true count whether its list is
 // capped or not. Nothing on this page is a number a reader has to trust.
 //
-// Cards run newest first, by the record's effective date and then by its handle,
+// Rows run newest first, by the record's effective date and then by its handle,
 // so the cut is always the oldest tail of a bucket and is the same on every
 // build.
 //
@@ -64,11 +64,6 @@ import (
 // data limit: what it cuts is stated beside what it shows, and the whole store
 // is reachable from the relationship chart and from every card's own page.
 const developmentDeckCap = 48
-
-// settledRank is the first `lifecycleRank` whose deck is folded away. Ranks
-// below it are work in flight; ranks at or above it are work the store has
-// settled — the larger half, and the one a reader opens on purpose.
-const settledRank = 3
 
 // developmentStore is every record of one store that MOVES.
 //
@@ -119,8 +114,12 @@ func (e *explorer) developmentPage() (string, error) {
 		if len(nodes) == 0 {
 			continue
 		}
+		// The store's own name is its anchor, so a dashboard tile can land on
+		// the store it counts rather than at the top of the page.
+		b.WriteString(`<div id="` + escapeAttr(typ) + `" class="c12">`)
 		b.WriteString(panel("c12", e.c.ui.Tiles.ForType(typ), strconv.Itoa(len(nodes)),
 			e.developmentStorePanel(nodes)))
+		b.WriteString(`</div>`)
 	}
 	b.WriteString(`</div>`)
 	return e.shell(routeDevelopment, e.c.ui.RecordNav.Development, "", b.String()), nil
@@ -162,17 +161,18 @@ func (e *explorer) developmentStorePanel(nodes []ExportNode) string {
 			note = strconv.Itoa(len(shown)) + " / " + strconv.Itoa(len(group))
 		}
 		deck := developmentDeck(shown)
-		switch {
-		case seg.Label == "":
+		// EVERY bucket folds, settled or not. A store here holds hundreds of
+		// records: opening even one bucket by default buries the store beside
+		// it, and a page that opens as a column of named, counted headings
+		// tells a reader what the store holds before asking them to scroll.
+		if seg.Label == "" {
 			// A record its store grades by neither directory nor status. It is
 			// listed under the store's own heading rather than under a bucket
 			// name invented for it here.
 			b.WriteString(deck)
-		case seg.Rank >= settledRank:
-			b.WriteString(panelDisclosure("", seg.Label, "", note, deck))
-		default:
-			b.WriteString(panel("", seg.Label, note, deck))
+			continue
 		}
+		b.WriteString(panelDisclosure("", seg.Label, "", note, deck))
 	}
 	return b.String()
 }
@@ -193,14 +193,22 @@ func sortDevelopmentNodes(nodes []ExportNode) {
 
 // developmentDeck is a deck of linked record cards — the same card Foundations
 // deals: a title, an id, and a link to the record's own page.
+// developmentDeck renders one bucket as a LIST, not a deck of cards. Cards
+// suit Foundations, where a store holds a couple of dozen records a reader
+// browses; a store here holds hundreds, and a card grid of them is a wall to
+// scan rather than a list to read down. The id leads and the title follows, so
+// the column of ids reads as an index.
 func developmentDeck(nodes []ExportNode) string {
 	var b strings.Builder
-	b.WriteString(`<div class="fcards">`)
+	b.WriteString(`<ul class="list reclist">`)
 	for _, n := range nodes {
-		b.WriteString(`<a class="fcard" href="/` + escapeAttr(RecordRoute(n)) + `">` +
-			`<span class="t">` + escapeText(shortTitle(n)) + `</span>` +
-			`<span class="id">` + escapeText(n.ID) + `</span></a>`)
+		b.WriteString(`<li><span class="id"><a href="/` + escapeAttr(RecordRoute(n)) + `">` +
+			escapeText(n.ID) + `</a>`)
+		if n.Date != "" {
+			b.WriteString(`<span class="d">` + escapeText(n.Date) + `</span>`)
+		}
+		b.WriteString(`</span><span>` + escapeText(shortTitle(n)) + `</span></li>`)
 	}
-	b.WriteString(`</div>`)
+	b.WriteString(`</ul>`)
 	return b.String()
 }

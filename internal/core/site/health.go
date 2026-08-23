@@ -51,8 +51,36 @@ func (e *explorer) healthPage() (string, error) {
 	// and their bodies are wildly different lengths, and a stretched row draws a
 	// folded panel as a tall empty box, which reads as a rendering fault rather
 	// than as a list a reader has not opened yet.
+	// The counts first, as the dashboard states its stores: a reader sees what
+	// each check found before opening anything, and a row of zeroes is itself
+	// the answer. The lists below are folded, so the page opens as a summary.
+	b.WriteString(`<div class="dash">`)
+	ui := e.c.ui
+	a := e.export.Authorship
+	tiles := []struct {
+		n     int
+		label string
+	}{
+		{len(e.export.Health.Unresolved), ui.Health.Unresolved},
+		{len(e.isolatedRecords()), ui.Health.Isolated},
+		{len(e.sameAuthorCandidates()), ui.Health.SameAuthor},
+		{a.Undeclared, ui.Health.Undeclared},
+		{a.Assisted - a.AssistedCommits, ui.Health.MultiTrailer},
+	}
+	for _, t := range tiles {
+		b.WriteString(tile(strconv.Itoa(t.n), t.label, nil))
+	}
+	b.WriteString(`</div>`)
+
 	b.WriteString(`<div class="dash reading">`)
 	b.WriteString(e.healthUnresolved())
+	// Supersessions read as text. They sat beside the genealogy drawing, where
+	// they answered a question nobody asked of a picture; here they are what
+	// they are — which records replaced which, and which replacements point at
+	// something the tree no longer holds.
+	if s := e.supersessions(); s != "" {
+		b.WriteString(s)
+	}
 	b.WriteString(e.healthIsolated())
 	b.WriteString(e.healthSameAuthor())
 	b.WriteString(e.healthUndeclared())
@@ -75,7 +103,7 @@ func (e *explorer) healthUnresolved() string {
 	ui := e.c.ui
 	found := e.export.Health.Unresolved
 	if len(found) == 0 {
-		return panel("c6", ui.Health.Unresolved, "0", e.healthClean())
+		return panelDisclosure("c12", ui.Health.Unresolved, "", "0", e.healthClean())
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="health">`)
@@ -83,10 +111,10 @@ func (e *explorer) healthUnresolved() string {
 		b.WriteString(`<div class="hitem"><span class="hfact"><span class="w">!</span> <a href="/` +
 			escapeAttr(e.routeOf(ed.From)) + `">` + escapeText(ed.From) + `</a> → <b class="stub">` +
 			escapeText(ed.To) + `</b></span><span class="hwhy">` +
-			escapeText(relationWord(ed.Rel)) + ` · ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
+			escapeText(relationWord(ed.Rel)) + ` ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
 	}
 	b.WriteString(`</div>`)
-	return panel("c6", ui.Health.Unresolved, strconv.Itoa(len(found)), b.String())
+	return panelDisclosure("c12", ui.Health.Unresolved, "", strconv.Itoa(len(found)), b.String())
 }
 
 // --- 2. isolated records ---------------------------------------------------
@@ -120,7 +148,7 @@ func (e *explorer) healthIsolated() string {
 	ui := e.c.ui
 	iso := e.isolatedRecords()
 	if len(iso) == 0 {
-		return panelDisclosure("c6", ui.Health.Isolated, "", "0", e.healthClean())
+		return panelDisclosure("c12", ui.Health.Isolated, "", "0", e.healthClean())
 	}
 	shown := iso
 	if len(shown) > isolatedListCap {
@@ -139,7 +167,7 @@ func (e *explorer) healthIsolated() string {
 		b.WriteString(`<div class="health"><div class="hsum"><b class="tnum">` + strconv.Itoa(rest) +
 			`</b> ` + escapeText(ui.More) + `</div></div>`)
 	}
-	return panelDisclosure("c6", ui.Health.Isolated, "", strconv.Itoa(len(iso)), b.String())
+	return panelDisclosure("c12", ui.Health.Isolated, "", strconv.Itoa(len(iso)), b.String())
 }
 
 // --- 3. author identity candidates ----------------------------------------
@@ -237,7 +265,7 @@ func (e *explorer) healthSameAuthor() string {
 	ui := e.c.ui
 	pairs := e.sameAuthorCandidates()
 	if len(pairs) == 0 {
-		return panel("c6", ui.Health.SameAuthor, "0", e.healthClean())
+		return panelDisclosure("c12", ui.Health.SameAuthor, "", "0", e.healthClean())
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="health">`)
@@ -248,7 +276,7 @@ func (e *explorer) healthSameAuthor() string {
 			escapeText(p.mailmapLine()) + `</code></span></div>`)
 	}
 	b.WriteString(`</div>`)
-	return panel("c6", ui.Health.SameAuthor, strconv.Itoa(len(pairs)), b.String())
+	return panelDisclosure("c12", ui.Health.SameAuthor, "", strconv.Itoa(len(pairs)), b.String())
 }
 
 // --- 4. authored commits declaring nothing --------------------------------
@@ -265,7 +293,7 @@ func (e *explorer) healthUndeclared() string {
 	ui := e.c.ui
 	a := e.export.Authorship
 	if a.Undeclared == 0 {
-		return panel("c6", ui.Health.Undeclared, "0", e.healthClean())
+		return panelDisclosure("c12", ui.Health.Undeclared, "", "0", e.healthClean())
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="health"><div class="hsum">`)
@@ -280,7 +308,7 @@ func (e *explorer) healthUndeclared() string {
 			escapeText(ui.Contributors.MergesExcluded))
 	}
 	b.WriteString(`</div></div>`)
-	return panel("c6", ui.Health.Undeclared, strconv.Itoa(a.Undeclared), b.String())
+	return panelDisclosure("c12", ui.Health.Undeclared, "", strconv.Itoa(a.Undeclared), b.String())
 }
 
 // --- 5. commits declaring more than one model -----------------------------
@@ -311,5 +339,5 @@ func (e *explorer) healthMultiTrailer() string {
 	}
 	b.WriteString(`<div class="hwhy">` + escapeText(ui.Health.NotADefect) + `</div>`)
 	b.WriteString(`</div>`)
-	return panel("c6", ui.Health.MultiTrailer, strconv.Itoa(gap), b.String())
+	return panelDisclosure("c12", ui.Health.MultiTrailer, "", strconv.Itoa(gap), b.String())
 }

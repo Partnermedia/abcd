@@ -81,7 +81,7 @@ func TestHealthCleanFamiliesSaySo(t *testing.T) {
 
 	page := outFile(t, out, "record/health/index.html")
 	// The identity-candidate panel: headed, noted zero, and saying so.
-	if !strings.Contains(page, `Two author names, one contributor<span>0</span></h3>`+
+	if !strings.Contains(page, `<summary><h3>Two author names, one contributor<span>0</span></h3></summary>`+
 		`<div class="health"><div class="hsum">Nothing to report</div></div>`) {
 		t.Error("the identity-candidate family does not render its clean state")
 	}
@@ -168,11 +168,11 @@ func TestHealthIsolatedCapStatesTheTrueTotal(t *testing.T) {
 		t.Fatalf("the fixture must overrun the cap for this test to mean anything: %d isolated", total)
 	}
 
-	if want := "Linked to nothing, and nothing links to it<span>" + strconv.Itoa(total) + "</span>"; !strings.Contains(page, want) {
+	if want := "<summary><h3>Linked to nothing, and nothing links to it<span>" + strconv.Itoa(total) + "</span>"; !strings.Contains(page, want) {
 		t.Errorf("the isolated panel does not note the true total %d", total)
 	}
 	// The list itself is bounded, and the remainder is stated.
-	drawn := strings.Count(sliceBetween(page, "Linked to nothing", "</details>"), "<li>")
+	drawn := strings.Count(sliceBetween(page, "<summary><h3>Linked to nothing", "</details>"), "<li>")
 	if drawn != isolatedListCap {
 		t.Errorf("the isolated list drew %d entries; the cap is %d", drawn, isolatedListCap)
 	}

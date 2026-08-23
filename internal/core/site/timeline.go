@@ -73,15 +73,17 @@ func (e *explorer) timelinePage() (string, error) {
 // reader who wants it asks for it, and one who does not is not made to scroll
 // past a full-width chart to reach the counts.
 func (e *explorer) genealogy() string {
-	svg, positions := e.genealogySVG()
-	var b strings.Builder
-	b.WriteString(`<div class="panel tl">` + svg + `</div>`)
-	b.WriteString(`<div class="dash tlside">`)
-	if p := e.supersessionList(positions); p != "" {
-		b.WriteString(p)
-	}
-	b.WriteString(`</div>`)
-	return b.String()
+	svg, _ := e.genealogySVG()
+	return `<div class="panel tl">` + svg + `</div>`
+}
+
+// supersessions is the arcs and the stubs read as text. It belongs with the
+// findings rather than beside the drawing: a supersession the tree cannot
+// resolve is a health finding, and one it can is a fact about two records that
+// their own pages already carry.
+func (e *explorer) supersessions() string {
+	_, positions := e.genealogySVG()
+	return e.supersessionList(positions)
 }
 
 // tlPoint is where one record's mark ended up, so an arc can find both ends.

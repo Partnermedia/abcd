@@ -354,7 +354,7 @@ func TestPreviewStampSaysUnreleased(t *testing.T) {
 	}
 
 	// The landing page's footer stamp.
-	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span>`)
+	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span></span>`)
 	if foot == "" {
 		t.Fatal("the landing page has no build stamp")
 	}

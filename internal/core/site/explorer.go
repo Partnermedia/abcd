@@ -231,45 +231,32 @@ func (e *explorer) shell(route, title, script, body string) string {
 // write.
 func (e *explorer) subnav(active string) string {
 	// The reading order runs from what the record HOLDS to what is wrong with
-	// it: the dashboard, then the two stores read as decks, then how they
-	// connect, then the findings. Contributors and References are about the
-	// record's provenance rather than its content, so they sit apart at the
-	// end as glyphs — interface strings like every other word here, never
-	// image assets (adr-47 decision 2).
-	type tab struct{ route, label, glyph string }
-	tabs := []tab{{routeDashboard, e.c.ui.RecordNav.Dashboard, ""}}
+	// it: the dashboard, the two stores read as decks, how they connect, then
+	// the findings. Contributors and References are about the record's
+	// provenance rather than its content, so they sit apart at the end — named,
+	// not marked. A glyph was tried in their place and read as decoration.
+	type tab struct{ route, label string }
+	tabs := []tab{{routeDashboard, e.c.ui.RecordNav.Dashboard}}
 	if e.hasFoundations() {
-		tabs = append(tabs, tab{routeFoundations, e.c.ui.RecordNav.Foundations, ""})
+		tabs = append(tabs, tab{routeFoundations, e.c.ui.RecordNav.Foundations})
 	}
 	if e.hasDevelopment() {
-		tabs = append(tabs, tab{routeDevelopment, e.c.ui.RecordNav.Development, ""})
+		tabs = append(tabs, tab{routeDevelopment, e.c.ui.RecordNav.Development})
 	}
-	tabs = append(tabs, tab{routeGraph, e.c.ui.RecordNav.Graph, ""})
+	tabs = append(tabs, tab{routeGraph, e.c.ui.RecordNav.Graph})
 	if e.hasHealth() {
-		tabs = append(tabs, tab{routeHealth, e.c.ui.RecordNav.Health, ""})
+		tabs = append(tabs, tab{routeHealth, e.c.ui.RecordNav.Health})
 	}
-	tabs = append(tabs,
-		tab{routeContributors, e.c.ui.RecordNav.Contributors, e.c.ui.RecordNav.ContributorsGlyph})
+	tabs = append(tabs, tab{routeContributors, e.c.ui.RecordNav.Contributors})
 	if e.hasReferences() {
-		tabs = append(tabs, tab{routeReferences, e.c.ui.NavReferences, e.c.ui.RecordNav.ReferencesGlyph})
+		tabs = append(tabs, tab{routeReferences, e.c.ui.NavReferences})
 	}
 	var b strings.Builder
 	b.WriteString(`<nav class="sub" aria-label="` + escapeAttr(e.c.ui.NavRecord) + `"><div class="wrap">`)
 	for _, t := range tabs {
 		cls, cur := "", ""
 		if t.route == active {
-			cls, cur = `on`, ` aria-current="page"`
-		}
-		// A glyph tab shows its mark and keeps its name for the reader who
-		// cannot see one: the accessible name is the label, never the glyph.
-		if t.glyph != "" {
-			b.WriteString(`<a href="/` + t.route + `" class="glyph ` + cls + `"` + cur +
-				` title="` + escapeAttr(t.label) + `"><span aria-hidden="true">` + escapeText(t.glyph) +
-				`</span><span class="sr">` + escapeText(t.label) + `</span></a>`)
-			continue
-		}
-		if cls != "" {
-			cls = ` class="` + cls + `"`
+			cls, cur = ` class="on"`, ` aria-current="page"`
 		}
 		b.WriteString(`<a href="/` + t.route + `"` + cls + cur + `>` + escapeText(t.label) + `</a>`)
 	}
@@ -431,8 +418,13 @@ func (e *explorer) dashboard() (string, error) {
 		if len(sub) > 2 {
 			sub = sub[:2]
 		}
-		b.WriteString(tile(strconv.Itoa(n), ui.Tiles.ForType(typ), sub))
+		b.WriteString(tileLinked(e.tileHref(typ), strconv.Itoa(n), ui.Tiles.ForType(typ), sub, ""))
 	}
+
+	// The genealogy sits directly under the counts, folded shut: it is how the
+	// record got where it is, which a reader asks for rather than arrives at.
+	b.WriteString(panelDisclosure("c12", ui.RecordNav.Timeline, "",
+		strconv.Itoa(len(e.export.Releases))+" "+ui.Tiles.Releases, e.genealogy()))
 
 	// State bars, one per store that grades its records at all.
 	for _, typ := range e.storeOrder() {
@@ -449,10 +441,6 @@ func (e *explorer) dashboard() (string, error) {
 	}
 	b.WriteString(e.latestDecisions())
 	b.WriteString(e.health())
-	// The genealogy sits here, folded shut: it is how the record got where it
-	// is, which a reader asks for rather than arrives at.
-	b.WriteString(panelDisclosure("c12", ui.RecordNav.Timeline, "",
-		strconv.Itoa(len(e.export.Releases))+" "+ui.Tiles.Releases, e.genealogy()))
 	b.WriteString(`</div>`)
 
 	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", b.String()), nil
@@ -461,11 +449,41 @@ func (e *explorer) dashboard() (string, error) {
 // tile is one stat tile.
 func tile(n, label string, sub []string) string { return tileExtra(n, label, sub, "") }
 
+// tileHref is where a store's count leads: the page that reads that store,
+// anchored at the store itself. A number a reader cannot follow is a dead end,
+// and the destinations are DERIVED from which pages the build actually wrote —
+// a store whose page is omitted gets an unlinked tile rather than a dead link
+// (itd-140: graceful absence).
+func (e *explorer) tileHref(typ string) string {
+	switch typ {
+	case "principle":
+		if e.hasFoundations() {
+			return "/" + routeFoundations + "#principle"
+		}
+	case "adr", "intent", "spec", "issue":
+		if e.hasDevelopment() {
+			return "/" + routeDevelopment + "#" + typ
+		}
+	}
+	return ""
+}
+
 // tileExtra is a tile with a final pre-rendered line, for the case where a
 // figure needs its number and its words in separate elements.
 func tileExtra(n, label string, sub []string, extra string) string {
+	return tileLinked("", n, label, sub, extra)
+}
+
+// tileLinked is a tile that leads somewhere. The whole tile is the target, so
+// the number and its label are one thing to click rather than a label with a
+// link hidden in it; an href of "" renders the same tile, inert.
+func tileLinked(href, n, label string, sub []string, extra string) string {
 	var b strings.Builder
-	b.WriteString(`<div class="panel c2"><div class="tile">`)
+	open, close := `<div class="tile">`, `</div>`
+	if href != "" {
+		open, close = `<a class="tile lead" href="`+escapeAttr(href)+`">`, `</a>`
+	}
+	b.WriteString(`<div class="panel c2">` + open)
 	b.WriteString(`<span class="n">` + escapeText(n) + `</span>`)
 	b.WriteString(`<span class="l">` + escapeText(label) + `</span>`)
 	for _, s := range sub {
@@ -475,7 +493,7 @@ func tileExtra(n, label string, sub []string, extra string) string {
 		b.WriteString(`<span class="s">` + escapeText(s) + `</span>`)
 	}
 	b.WriteString(extra)
-	b.WriteString(`</div></div>`)
+	b.WriteString(close + `</div>`)
 	return b.String()
 }
 
@@ -495,69 +513,118 @@ func (e *explorer) storeOrder() []string {
 	return types
 }
 
-// cadence renders the release strip: one tick per release, alternating above and
-// below the axis, each labelled with its version and its date — the chart
-// carries its own numbers as text, so it needs no table twin.
+// cadence renders the release history as a RIDGELINE: one band per release,
+// each band the shape of the commits made inside that release's own window.
+//
+// A tick strip said only WHEN a release happened, and the gap between two ticks
+// is a number the row already carries. The shape says what a gap cannot —
+// whether a release followed a fortnight of steady work or two days of it — and
+// it is drawn from the history the rest of the page already reads, so it adds
+// no input the generic side did not have (itd-140).
+//
+// Bands run newest first, the order every other list on the site runs in. A
+// release whose window holds no commits still draws its row: a release is a
+// fact whether or not the walk placed work under it.
 func (e *explorer) cadence() string {
 	rel := e.export.Releases
 	if len(rel) < 2 {
 		return ""
 	}
-	// The export lists releases newest first; the axis runs the other way.
-	asc := make([]int, len(rel))
-	for i := range rel {
-		asc[i] = len(rel) - 1 - i
+	days := e.export.History.Days
+	if len(days) == 0 {
+		return ""
 	}
-	first, last := dayNumber(rel[len(rel)-1].Date), dayNumber(rel[0].Date)
-	span := float64(last - first)
-	if span <= 0 {
-		span = 1
-	}
-	// dateLabelWidth is what `2026-08-16` occupies at font-size 8, and
-	// lastDateX is where a date was last drawn on each side of the axis. Two
-	// releases days apart put their labels in the same place, and two dates
-	// printed over each other are worse than one: the crowded one keeps its
-	// version and gives up its date, which the tick's own title still carries
-	// and which the narrow-screen list below prints in full.
-	const dateLabelWidth = 46.0
-	lastDateX := [2]float64{-1e9, -1e9}
-	var ticks strings.Builder
-	for k, i := range asc {
-		r := rel[i]
-		x := 24 + float64(dayNumber(r.Date)-first)/span*552
-		side := k % 2
-		y1, y2, ty, dy := 33, 47, 17, 27
-		if side == 1 {
-			y1, y2, ty, dy = 47, 61, 73, 83
+	// Commit counts keyed by day number, so a window is a range rather than a
+	// set of strings to parse again.
+	byDay := make(map[int]int, len(days))
+	oldest := 0
+	for d, n := range days {
+		dn := dayNumber(d)
+		byDay[dn] = n
+		if oldest == 0 || dn < oldest {
+			oldest = dn
 		}
-		xs := strconv.FormatFloat(x, 'f', 1, 64)
-		ticks.WriteString(`<g class="tick"><title>v` + escapeText(r.Version) + ` — ` + escapeText(r.Date) + `</title>`)
-		ticks.WriteString(`<line x1="` + xs + `" y1="` + strconv.Itoa(y1) + `" x2="` + xs + `" y2="` + strconv.Itoa(y2) +
-			`" stroke="var(--s-adr)" stroke-width="2"/>`)
-		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(ty) +
-			`" font-size="10" text-anchor="middle" fill="var(--ink-2)">v` + escapeText(r.Version) + `</text>`)
-		if x-lastDateX[side] >= dateLabelWidth {
-			ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(dy) +
-				`" font-size="8" text-anchor="middle" fill="var(--ink-3)">` + escapeText(r.Date) + `</text>`)
-			lastDateX[side] = x
-		}
-		ticks.WriteString(`</g>`)
 	}
-	svg := `<svg viewBox="0 0 600 90" class="cadsvg" role="img" aria-label="` +
-		escapeAttr(e.c.ui.Panels.Cadence+" · "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">` +
-		`<line x1="8" y1="47" x2="592" y2="47" class="axis"/>` + ticks.String() + `</svg>`
-	// The phone rendering: the strip is too fine below 700px, so CSS swaps it
-	// for this list. Exactly one of the two is ever visible — the list is the
-	// narrow-screen form of the chart, not a twin beside it.
+
+	type band struct {
+		version, date string
+		counts        []int
+		total         int
+	}
+	// Each release owns the days after the release before it, up to its own. The
+	// oldest release owns everything before it, so the work that led to the first
+	// release is drawn rather than dropped.
+	bands := make([]band, 0, len(rel))
+	peak := 0
+	for i, r := range rel {
+		to := dayNumber(r.Date)
+		from := oldest
+		if i+1 < len(rel) {
+			from = dayNumber(rel[i+1].Date) + 1
+		}
+		bd := band{version: r.Version, date: r.Date}
+		for dn := from; dn <= to; dn++ {
+			n := byDay[dn]
+			bd.counts = append(bd.counts, n)
+			bd.total += n
+			if n > peak {
+				peak = n
+			}
+		}
+		bands = append(bands, bd)
+	}
+	if peak == 0 {
+		return ""
+	}
+
+	const (
+		bandH  = 24.0
+		labelW = 120.0
+		plotW  = 600.0 - labelW - 8
+		riseH  = 15.0
+	)
+	height := int(float64(len(bands))*bandH) + 12
+	var b strings.Builder
+	b.WriteString(`<svg viewBox="0 0 600 ` + strconv.Itoa(height) + `" class="cadsvg" role="img" aria-label="` +
+		escapeAttr(e.c.ui.Panels.Cadence+" "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">`)
+	for i, bd := range bands {
+		base := float64(i)*bandH + bandH - 4
+		b.WriteString(`<g class="tick"><title>v` + escapeText(bd.version) + " " + escapeText(bd.date) +
+			" " + strconv.Itoa(bd.total) + `</title>`)
+		b.WriteString(`<text x="0" y="` + f1(base) + `" font-size="10" fill="var(--ink-2)">v` +
+			escapeText(bd.version) + `</text>`)
+		b.WriteString(`<text x="58" y="` + f1(base) + `" font-size="8" fill="var(--ink-3)">` +
+			escapeText(bd.date) + `</text>`)
+		if len(bd.counts) > 0 {
+			step := plotW / float64(len(bd.counts))
+			var d strings.Builder
+			d.WriteString("M " + f1(labelW) + " " + f1(base))
+			for j, n := range bd.counts {
+				x := labelW + float64(j)*step + step/2
+				d.WriteString(" L " + f1(x) + " " + f1(base-float64(n)/float64(peak)*riseH))
+			}
+			d.WriteString(" L " + f1(labelW+plotW) + " " + f1(base) + " Z")
+			b.WriteString(`<path d="` + d.String() + `" fill="var(--seq-1)" stroke="var(--seq-3)" stroke-width="1"/>`)
+		}
+		b.WriteString(`<text x="592" y="` + f1(base) + `" font-size="8" text-anchor="end" fill="var(--ink-3)">` +
+			strconv.Itoa(bd.total) + `</text>`)
+		b.WriteString(`</g>`)
+	}
+	b.WriteString(`</svg>`)
+
+	// The phone rendering: the ridgeline is too fine below 700px, so CSS swaps
+	// it for this list. Exactly one of the two is ever visible.
 	var list strings.Builder
 	list.WriteString(`<ul class="list cadlist">`)
-	for _, r := range rel {
-		list.WriteString(`<li><span class="id">v` + escapeText(r.Version) +
-			`<span class="d">` + escapeText(r.Date) + `</span></span></li>`)
+	for _, bd := range bands {
+		list.WriteString(`<li><span class="id">v` + escapeText(bd.version) +
+			`<span class="d">` + escapeText(bd.date) + `</span></span>` +
+			`<span class="small muted tnum">` + strconv.Itoa(bd.total) + `</span></li>`)
 	}
 	list.WriteString(`</ul>`)
+
 	note := strconv.Itoa(len(rel)) + " " + e.c.ui.Tiles.Releases
-	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, svg+list.String())
+	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, b.String()+list.String())
 }
 
 // latestDecisions lists the newest ratified decisions by their own dates. It is
@@ -605,13 +672,13 @@ func (e *explorer) health() string {
 		b.WriteString(`<div class="hitem"><span class="hfact"><span class="w">!</span> <a href="/` +
 			escapeAttr(e.routeOf(u.From)) + `">` + escapeText(u.From) + `</a> → <b class="stub">` +
 			escapeText(u.To) + `</b></span><span class="hwhy">` +
-			escapeText(relationWord(u.Rel)) + ` · ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
+			escapeText(relationWord(u.Rel)) + ` ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
 	}
 	// Every summary number carries its word; three bare numbers read as a
 	// rendering fault.
 	b.WriteString(`<div class="hsum">` + strconv.Itoa(len(h.Unresolved)) + ` ` + escapeText(ui.Panels.Unresolved) +
 		` / ` + strconv.Itoa(h.BaselineCount) + ` ` + escapeText(ui.Panels.Baseline) +
-		` · ` + strconv.Itoa(e.export.Layout.Isolated) + ` ` + escapeText(ui.Panels.Isolated) + `</div>`)
+		` ` + strconv.Itoa(e.export.Layout.Isolated) + ` ` + escapeText(ui.Panels.Isolated) + `</div>`)
 	b.WriteString(`</div>`)
 	return panel("c4", ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
 }
@@ -672,7 +739,7 @@ func dayNumber(date string) int {
 func (e *explorer) foundationsPage() (string, error) {
 	var b strings.Builder
 	b.WriteString(`<div class="dash">`)
-	deck := func(label string, nodes []ExportNode) {
+	deck := func(anchor, label string, nodes []ExportNode) {
 		if len(nodes) == 0 {
 			return
 		}
@@ -684,10 +751,14 @@ func (e *explorer) foundationsPage() (string, error) {
 				`<span class="id">` + escapeText(n.ID) + `</span></a>`)
 		}
 		cards.WriteString(`</div>`)
+		// The deck's own name is its anchor, so a dashboard tile can land on the
+		// store it counts rather than at the top of the page.
+		b.WriteString(`<div id="` + escapeAttr(anchor) + `" class="c12">`)
 		b.WriteString(panel("c12", label, strconv.Itoa(len(nodes)), cards.String()))
+		b.WriteString(`</div>`)
 	}
-	deck(e.c.ui.Tiles.Principle, e.principles)
-	deck(e.c.ui.Tiles.Discipline, e.disciplines)
+	deck("principle", e.c.ui.Tiles.Principle, e.principles)
+	deck("discipline", e.c.ui.Tiles.Discipline, e.disciplines)
 	b.WriteString(`</div>`)
 	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", b.String()), nil
 }
@@ -708,30 +779,11 @@ func (e *explorer) contributorsPage() (string, error) {
 	var b strings.Builder
 	b.WriteString(`<div class="dash">`)
 
-	if a.Commits > 0 {
-		b.WriteString(tile(strconv.Itoa(a.Commits), ui.Tiles.Commits, []string{e.export.History.FirstCommit}))
-	}
-	if len(a.Humans) > 0 {
-		b.WriteString(tile(strconv.Itoa(len(a.Humans)), ui.Contributors.Authors, nil))
-	}
-	// The rate is COMMITS that disclose over commits a person WROTE. Merges are
-	// in neither: the forge writes them, no convention asks them to declare
-	// anything, and leaving them in the denominator understated this rate by
-	// more than twenty points. The excluded count is shown, not assumed.
-	if a.Authored > 0 {
-		share := strconv.Itoa(a.AssistedCommits*100/a.Authored) + "%"
-		// The count is its own element rather than part of the sentence: the
-		// provenance walk splits composed text on decorations only, and a
-		// number glued to a phrase is neither a number nor an interface string.
-		var excl string
-		if a.Merges > 0 {
-			excl = `<span class="s"><b class="tnum">` + strconv.Itoa(a.Merges) + `</b> ` +
-				escapeText(ui.Contributors.MergesExcluded) + `</span>`
-		}
-		b.WriteString(tileExtra(share, ui.Contributors.Assisted,
-			[]string{strconv.Itoa(a.AssistedCommits) + " / " + strconv.Itoa(a.Authored)}, excl))
-	}
-
+	// The page carries two things and nothing else: who authored the history,
+	// and what assisted. The stat tiles that stood above them repeated numbers
+	// the two panels already hold — the authors table has the commit counts, the
+	// trailers figure has its own total — and the disclosure rate belongs with
+	// the other findings, on the health page.
 	if len(a.Humans) > 0 || len(a.Bots) > 0 {
 		var rows strings.Builder
 		rows.WriteString(`<thead><tr><th>` + escapeText(ui.Contributors.Authors) + `</th><th class="tnum">` +
@@ -755,7 +807,8 @@ func (e *explorer) contributorsPage() (string, error) {
 			return "", err
 		}
 		body := `<div class="tablewrap"><table>` + rows.String() + `</table></div>` + policy
-		b.WriteString(panel("c6", ui.Contributors.Authors, "", body))
+		b.WriteString(panelDisclosure("c12", ui.Contributors.Authors, "",
+			strconv.Itoa(len(a.Humans)), body))
 	}
 
 	if len(a.ByModel) > 0 {
@@ -777,11 +830,11 @@ func (e *explorer) contributorsPage() (string, error) {
 		foot.WriteString(`<p class="small muted trailerfoot">`)
 		foot.WriteString(escapeText(ui.Contributors.DeclaredNone) + ` <b class="tnum">` +
 			strconv.Itoa(a.DeclaredNone) + `</b>`)
-		foot.WriteString(` · ` + escapeText(ui.Contributors.Undeclared) + ` <b class="tnum">` +
+		foot.WriteString(`</p><p class="small muted trailerfoot">` + escapeText(ui.Contributors.Undeclared) + ` <b class="tnum">` +
 			strconv.Itoa(a.Undeclared) + `</b>`)
 		foot.WriteString(`</p>`)
-		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted),
-			bars.String()+foot.String()))
+		b.WriteString(panelDisclosure("c12", ui.Contributors.Trailers, "",
+			strconv.Itoa(a.Assisted), bars.String()+foot.String()))
 	}
 	b.WriteString(`</div>`)
 
