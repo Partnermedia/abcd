@@ -47,7 +47,7 @@ Every memory page declares its source class via typed `source:` frontmatter. The
 
 | `source.class` | Upstream | Mutability |
 |---|---|---|
-| `session_memory` | Vendor session memory (Claude / OpenCode / future), distilled by the `internal/core/memory` adapter via `dev-sync memory` | Re-distilled on each sync; lossy upstream |
+| `session_memory` | Vendor session memory (Claude / opencode / future), distilled by the `internal/core/memory` adapter via `dev-sync memory` | Re-distilled on each sync; lossy upstream |
 | `external_pdf` | User-ingested PDF via `/abcd:memory ingest <path>` | Immutable post-ingest (original NOT stored unless `--keep-original`) |
 | `external_transcript` | User-ingested transcript via `/abcd:memory ingest <path>` | Immutable post-ingest |
 | `external_article` | User-ingested article (URL or local) via `/abcd:memory ingest <path-or-url>` | Immutable post-ingest |
@@ -149,7 +149,7 @@ total_source_coverage_pct(source_hash) =
 | Input | Source | Behaviour |
 |---|---|---|
 | Existing memory pages | `.abcd/memory/<type>_<domain>_<slug>.md` | Read for cross-source dedup (topic-hash) |
-| Vendor session memory | `internal/core/memory` adapter (Claude / OpenCode) | Distill into `session_memory` pages (existing behaviour, unchanged) |
+| Vendor session memory | `internal/core/memory` adapter (Claude / opencode) | Distill into `session_memory` pages (existing behaviour, unchanged) |
 | External sources (new at itd-36) | `/abcd:memory ingest` invocations | Distill into typed `external_*` pages with citation frontmatter |
 | `spec_modification_grammar` (new at itd-37) | A spec's `## Modification Grammar` section at spec completion | Append per-spec page; run domain-curator pass to update `modification_grammar_<domain>.md` |
 | `dredge_synthesis` (itd-25, a later phase) | `/abcd:dredge synth` runs | Write synthesised entries to memory with `source.class: dredge_synthesis` |

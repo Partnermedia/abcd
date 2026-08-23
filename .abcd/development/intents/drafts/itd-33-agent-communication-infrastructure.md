@@ -24,7 +24,7 @@ abcd is on a trajectory to host **multiple concurrent agents in the same repo**:
 
 1. **Same human, multiple terminals** — alex opens Claude Code in terminal 1, walks away, opens terminal 2 and reruns the same command. The most common collision pattern in practice.
 2. **Autonomous runs** (the pluggable run seam, contextualised by itd-29) — long-running agents that the user kicks off and walks away from. They share a working tree with whatever the user does next.
-3. **Multiple harnesses** — Claude Code today, OpenCode (itd-22); the same project may be opened by a user in one harness while another agent runs in another.
+3. **Multiple harnesses** — Claude Code today, opencode (itd-22); the same project may be opened by a user in one harness while another agent runs in another.
 4. **In-session subagent dispatch** (itd-2) — the parent session spawns subagents whose work is *part of* the parent's progress, not a parallel actor (subagents inherit the parent's `agent_id`; they do not hold their own claims).
 
 Today, coordination between these is **emergent at best**:
@@ -100,7 +100,7 @@ This intent moves from `drafts/` to `planned/` when ANY of the following happens
 1. **First duplicate-work incident** — two agents independently begin work on the same intent or spec, producing competing artefacts.
 2. **First user reports stranded work** — an agent edited files but the user couldn't reconstruct who, when, or why.
 3. **itd-2 ships and is used in anger** — once in-session subagent dispatch is real and frequent, the parent/child overlap window becomes observable. (Subagents inherit parent identity per this intent's contract; the trigger is whether *parent-level* multi-agent collisions become real.)
-4. **OpenCode harness ships (itd-22)** — multi-harness operation makes coordination's value concrete and surfaces the cross-harness contract requirements.
+4. **opencode harness ships (itd-22)** — multi-harness operation makes coordination's value concrete and surfaces the cross-harness contract requirements.
 5. **Two consecutive successful multi-agent runs** — proves the substrate works enough that the absence of coordination becomes the next bottleneck.
 
 The first user to hit (1)–(2) is asked to record the texture in the `.abcd/work/issues/` ledger so the design proceeds against real evidence, not guesses.
@@ -117,6 +117,6 @@ _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
 
 ## References
 
-- Adjacent intents: itd-2 (in-session subagent dispatch — subagents inherit parent identity per this intent's contract), itd-22 (OpenCode portability — first cross-harness consumer), itd-29 (autonomous-run resilience — three-state claim interlocks with pause/resume/rewind), itd-15 (self-dogfooded SOTA audit — must remain coordination-aware), itd-20 (top-level `/abcd` dispatcher — owns the human-facing render and resolve verbs that consume itd-33's three contract functions), itd-18 (permission templates — adjacent but distinct concern).
+- Adjacent intents: itd-2 (in-session subagent dispatch — subagents inherit parent identity per this intent's contract), itd-22 (opencode portability — first cross-harness consumer), itd-29 (autonomous-run resilience — three-state claim interlocks with pause/resume/rewind), itd-15 (self-dogfooded SOTA audit — must remain coordination-aware), itd-20 (top-level `/abcd` dispatcher — owns the human-facing render and resolve verbs that consume itd-33's three contract functions), itd-18 (permission templates — adjacent but distinct concern).
 - Brief contracts: glossary entries for `work_item.type`, claim primitives, escalation choices, `release.outcome`, `claim.status` registered in `02-constraints/04-naming.md` (Reserved vocabulary table); audit-log path canonicalised in `05-internals/04-universal-patterns.md`.
 - Methodological precedents: file locks (`flock`/`fcntl`); the actor model (Erlang/OTP); the autonomous run-seam pattern (single-agent today, multi-agent scaling tomorrow). The earlier draft's reference to LangGraph / CrewAI / AutoGen as substrate candidates has been dropped — the narrowed scope needs none of them.
