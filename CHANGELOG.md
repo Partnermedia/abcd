@@ -86,7 +86,9 @@ called out in a **Breaking** section.
   the CLI names the number of spans it rewrote, because redaction alters
   what the caller filed. A degraded scanner redacts with the bundled
   defaults and warns rather than blocking every capture in the repo.
-  (iss-2608231025198888)
+  Redaction runs on the free-text inputs before the slug is normalised, so
+  a path in the issue text cannot reach a validator-constrained field and
+  turn a leak into a refused capture. (iss-2608231025198888)
 
 - **The shell guard recognises the `&>` / `&>>` redirection operators.** The
   guard tokenizer read a leading `&` as a background/`&&` operator, so gluing or

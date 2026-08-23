@@ -44,3 +44,36 @@ func redactLedgerText(repoRoot, text string) (redacted string, count int, degrad
 	out, _ := scanner.Redact(text, findings)
 	return out, len(findings), degraded
 }
+
+// redactCaptureInputs sanitises the four free-text members of a capture request
+// and reports how many spans it rewrote.
+//
+// It exists because redaction must run on the INPUTS, not on the rendered
+// record. The slug a caller supplies is derived from the issue text, so a home
+// path in the text reaches the slug; rewriting the rendered file then produces a
+// bracketed placeholder inside the slug and the kebab-case check refuses the
+// whole capture. Redacting first and normalising afterwards strips the brackets
+// instead, so a finding is never lost to the guard meant to protect it.
+//
+// The structural members (id, severity, category, source) are generated or
+// enum-constrained. They carry nothing to redact and are deliberately not passed
+// through here: rewriting a field a validator constrains is how the refusal
+// above happened.
+func redactCaptureInputs(repoRoot, text, slug, foundAt, foundDuring string) (
+	rText, rSlug, rFoundAt, rFoundDuring string, count int, degraded string) {
+	total := 0
+	worst := ""
+	red := func(in string) string {
+		out, n, deg := redactLedgerText(repoRoot, in)
+		total += n
+		if deg != "" {
+			worst = deg
+		}
+		return out
+	}
+	rText = red(text)
+	rSlug = red(slug)
+	rFoundAt = red(foundAt)
+	rFoundDuring = red(foundDuring)
+	return rText, rSlug, rFoundAt, rFoundDuring, total, worst
+}
