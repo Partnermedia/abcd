@@ -346,3 +346,57 @@ func TestCaptureResolveProvenanceJSON(t *testing.T) {
 		t.Fatalf("resolved_by members wrong: %+v", r.ResolvedBy)
 	}
 }
+
+// iss-2608221328552172: the same lone-token hole on the capture create path.
+// `abcd capture nosuchthing` is not near any sub-verb, so the did-you-mean
+// guard never fired and the token was filed as an issue at exit 0.
+
+// TestCaptureLoneWordNeverWrites is the headline: a single bare word must be
+// refused, and must file no issue.
+func TestCaptureLoneWordNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "capture", "nosuchthing")
+	if err == nil {
+		t.Fatalf("expected an error for the lone unknown token, got success:\n%s", out)
+	}
+	if n := ledgerIssueCount(t, repo); n != 0 {
+		t.Fatalf("a lone unknown token filed %d issue(s); it must write nothing", n)
+	}
+}
+
+// TestCaptureLoneRecordIDNeverWrites: `abcd capture iss-1` (a forgotten
+// sub-verb) must not become an issue titled with a record id.
+func TestCaptureLoneRecordIDNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "capture", "iss-1")
+	if err == nil {
+		t.Fatalf("expected an error for the lone record id, got success:\n%s", out)
+	}
+	if n := ledgerIssueCount(t, repo); n != 0 {
+		t.Fatalf("a lone record id filed %d issue(s); it must write nothing", n)
+	}
+}
+
+// TestCaptureEmptyTextNeverWrites: `abcd capture ""` — a script whose variable
+// expanded to nothing — is the degenerate lone token. Core already refused it
+// ("slug normalises to empty", exit 1); the guard now names it for what it is,
+// at the usage code. Either way nothing is written, which is the part that binds.
+func TestCaptureEmptyTextNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "capture", "")
+	if err == nil {
+		t.Fatalf("expected an error for empty capture text, got success:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("expected the error to name the text as empty, got: %v", err)
+	}
+	if n := ledgerIssueCount(t, repo); n != 0 {
+		t.Fatalf("empty capture text filed %d issue(s); it must write nothing", n)
+	}
+}

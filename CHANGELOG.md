@@ -115,6 +115,26 @@ called out in a **Breaking** section.
   verdict recorded in a research note was invisible to the leg that exists
   to prevent re-litigation (iss-2608230748418054; the root-cause decision on
   record-bearing ids for notes stays parked in that issue).
+- **A mistyped `abcd intent` or `abcd capture` no longer files a record.**
+  Both verbs take free text as their canonical create path, so `abcd intent
+  nosuchthing` was swallowed as a draft title and `abcd capture nosuchthing` as
+  issue text — each printing a created id and exiting 0, each leaving a durable
+  file behind and, on the intent side, burning an id under the `max+1` allocator
+  and leaving a record-lint `index_drift` blocker until the stray was noticed.
+  The did-you-mean guard only ever caught a NEAR-miss of a real sub-verb, so a
+  token resembling nothing fell straight through it. A lone bare word — one
+  whitespace-free positional — is now refused on both verbs at exit 2 with
+  nothing written, because `capture nosuchthing` and `capture resolve` are the
+  same invocation shape and only the second happens to reach the dispatcher
+  first. Prose is untouched: quoted text arrives as one argument carrying
+  whitespace, an unquoted title as several, and both still file. The tree-wide
+  sweep that asserts every parent refuses an unknown sub-verb at exit 2 had
+  `capture` and `intent` on an exemption list — that exemption was the defect
+  recorded as a design choice, and it is gone, so the two verbs are now held by
+  the same detector as the rest of the tree. This closes the gap the
+  unrecognised-input-never-writes principle was written about: its founding
+  evidence is a misspelled `capture` sub-verb filing an issue when the user asked
+  to resolve one, in the 2026-07-08 review. (iss-2608221328552172)
 - **`abcd site build` and `abcd site check` agree on what a page may carry, and
   gate every page.** The build inlined an SVG's XML prolog, comment or CDATA
   verbatim while the emitted-page reader refused all three, so a normal exporter
