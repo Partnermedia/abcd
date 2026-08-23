@@ -151,8 +151,8 @@ called out in a **Breaking** section.
   scanner faults on HTML comments, which the documentation theme emits, so
   `docs/**` never parsed — and before the gate was made fail-closed those pages
   dropped out of every check silently. The tree is excluded at the walk, which
-  is the scope the gate already declared, and the gate's own report now says
-  what a green result does and does not cover.
+  is the scope the gate already declared, and its `--json` report lists exactly
+  the pages it examined.
 - **A whole family of declared interface strings was invisible to the
   provenance gate**, which walked structs and strings but not maps, so the gate
   refused words `site-src/ui.json` plainly permits.
@@ -447,7 +447,7 @@ called out in a **Breaking** section.
   rootSHA was told it must be a 40-char SHA though the validator also accepts a
   64-char SHA-256 root; the message is now a shared const beside the regex naming
   both widths. (iss-2608211432384430)
-- **Three user-facing docs corrected.** The README overstated that every
+- **Three user-facing docs corrected.** The install guide overstated that every
   non-start hook self-bootstraps, when SessionEnd deliberately never downloads
   (a fetch there would race shutdown and lose the transcript); `commands/memory.md`
   named the citation field `source.class` where the JSON key is `source_class`;
@@ -498,7 +498,7 @@ called out in a **Breaking** section.
 - **The lifeboat probe refuses a file that grows past its read cap.** The read
   sized with an fstat then read exactly the cap, so a file that grew in between
   was silently truncated to a prefix rather than refused. (iss-2608211850074600)
-- **The README describes the persistent provisioning cache.** The provisioning
+- **The install guide describes the persistent provisioning cache.** The provisioning
   section still described a download on every plugin update and a `.binary-meta`
   remedy that is a no-op on a cache-provisioned root; both now describe the
   shipped persistent per-plugin cache. (iss-2608211849580624)
