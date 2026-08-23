@@ -52,6 +52,44 @@ func TestProfileURL(t *testing.T) {
 	}
 }
 
+// uiStrings walks MAPS as well as fields. The provenance gate holds every
+// rendered word to this list, so a family of declared interface strings the
+// walk cannot see is refused on the page that renders it — which is how the
+// forge names were refused when the walk knew only structs and strings.
+func TestUIStringsIncludeMapValues(t *testing.T) {
+	ui := UI{ForgeNames: map[string]string{"github.com": "GitHub"}}
+	var found bool
+	for _, s := range uiStrings(ui) {
+		if s == "GitHub" {
+			found = true
+		}
+		if s == "github.com" {
+			t.Error("a map KEY reached the allowlist; only the values are rendered")
+		}
+	}
+	if !found {
+		t.Error("a declared forge name is not in the interface-string allowlist")
+	}
+}
+
+// A key declared blank is named, so it cannot pass for a repository that
+// simply chose not to declare it.
+func TestUIMissingNamesABlankMapValue(t *testing.T) {
+	ui := UI{ForgeNames: map[string]string{"github.com": "  "}}
+	var named bool
+	for _, m := range ui.missing() {
+		if m == "forge_names.github.com" {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("a blank forge name went unnamed: %v", ui.missing())
+	}
+	if len(UI{ForgeNames: map[string]string{}}.missing()) != len(UI{}.missing()) {
+		t.Error("an empty map was treated as a missing declaration")
+	}
+}
+
 // forgeHost strips exactly the scheme and path; a bare or schemeless value
 // still yields its host.
 func TestForgeHost(t *testing.T) {

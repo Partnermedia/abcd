@@ -243,6 +243,17 @@ func (ui UI) missing() []string {
 			switch f.Type.Kind() {
 			case reflect.Struct:
 				walk(v.Field(i), f.Type)
+			case reflect.Map:
+				// An ABSENT key is a declaration the repository chose not to
+				// make, and the renderer degrades by absence. A key declared
+				// BLANK is a mistake of the same kind an empty field is, and
+				// the walk names it rather than letting it read as a choice.
+				iter := v.Field(i).MapRange()
+				for iter.Next() {
+					if iter.Value().Kind() == reflect.String && strings.TrimSpace(iter.Value().String()) == "" {
+						out = append(out, name+"."+iter.Key().String())
+					}
+				}
 			case reflect.String:
 				// `_purpose` documents the file for its human readers and is
 				// never rendered, so it is the one field with nothing to say.

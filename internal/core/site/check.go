@@ -393,6 +393,14 @@ func (c *checker) readPages() error {
 		if rerr != nil {
 			return rerr
 		}
+		// `docs/` is MkDocs' own tree, not this build's output: its pages carry
+		// HTML comments the generator's grammar refuses, and every rule here
+		// was written for generator output. It is excluded from the walk — the
+		// declared scope above — rather than parsed into findings; its words
+		// are gated at the source by docs-lint.
+		if strings.HasPrefix(filepath.ToSlash(rel), docsRoutePrefix) {
+			return nil
+		}
 		rels = append(rels, filepath.ToSlash(rel))
 		return nil
 	})
@@ -872,6 +880,18 @@ func uiStrings(ui UI) []string {
 			switch f.Type.Kind() {
 			case reflect.Struct:
 				walk(v.Field(i), f.Type)
+			case reflect.Map:
+				// A keyed group of interface strings — the forge names. Only the
+				// VALUES are rendered; a key is a lookup term (a host), never a
+				// word on a page. Reflection has to walk maps as well as fields,
+				// or a whole family of declared words goes unrecognised and the
+				// walk refuses text the allowlist plainly permits.
+				iter := v.Field(i).MapRange()
+				for iter.Next() {
+					if iter.Value().Kind() == reflect.String {
+						out = append(out, iter.Value().String())
+					}
+				}
 			case reflect.String:
 				// `_purpose` documents the file for its readers and is never
 				// rendered, so it is not a word the generator may add.
