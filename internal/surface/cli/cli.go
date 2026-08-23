@@ -1424,7 +1424,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 						return &exitError{Code: 2, Msg: "abcd intent: the draft title is empty (nothing created)"}
 					}
 					return &exitError{Code: 2, Msg: fmt.Sprintf(
-						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; quote a sentence to file a draft)",
+						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; a draft title must contain a space, so write the whole sentence)",
 						args[0])}
 				}
 				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
@@ -2170,7 +2170,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					return &exitError{Code: 2, Msg: "abcd capture: the issue text is empty (nothing captured)"}
 				}
 				return &exitError{Code: 2, Msg: fmt.Sprintf(
-					"unknown capture subcommand %q (nothing captured — a lone word is read as a sub-verb, never as issue text; quote a sentence to file an issue)",
+					"unknown capture subcommand %q (nothing captured — a lone word is read as a sub-verb, never as issue text; issue text must contain a space, so write the whole sentence)",
 					args[0])}
 			}
 			// Fast path: append a structured issue from the free-form text.

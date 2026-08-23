@@ -85,7 +85,7 @@ called out in a **Breaking** section.
   reaches a committed file. Redaction runs before validation, so the
   validator sees the bytes that get written. It redacts and reports rather
   than refusing — a ledger that rejects writes stops being written to — and
-  the CLI names the number of spans it rewrote, because redaction alters
+  `abcd capture` names the number of spans it rewrote in its render, and all three report it as `redacted` in `--json`, because redaction alters
   what the caller filed. A degraded scanner redacts with the bundled
   defaults and warns rather than blocking every capture in the repo.
   Redaction runs on the free-text inputs before the slug is normalised, so

@@ -47,6 +47,9 @@ on). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
 too whenever it is non-zero: it counts the spans rewritten before the text was
 written, and the user needs to know their wording was changed.
 
+A single whitespace-free word is refused (exit 2, nothing written): a lone
+token reads as a mistyped sub-verb, never as issue text.
+
 Priority is **derived, never stored**: an issue is ranked lower while any of its
 `--blocked-by` targets is still open, and `blocked_by` records the dependency in
 one direction only (the inverse is computed).
@@ -73,7 +76,10 @@ blocked by an open dependency are demoted and annotated `[blocked-by iss-N,…]`
 ```
 
 Each moves the issue out of `open/` and records the note; report the `id` and
-the `from_status -> to_status` transition from the JSON.
+the `from_status -> to_status` transition from the JSON. Report `redacted` too
+whenever it is non-zero: these paths redact the note exactly as `capture` does,
+but their human render stays silent, so the caller learns their wording was
+rewritten only if you relay it.
 
 `resolve` requires `--impact`: a resolved issue is in the release set, so it
 carries the product judgement the version derivation reads (`additive`,

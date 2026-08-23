@@ -70,7 +70,8 @@ the build as unreleased at this commit, for a preview deployment of an untagged
 tree). Left unset, the version and date come from the newest dated
 `CHANGELOG.md` heading and the commit from git `HEAD`.
 
-Report the files written, then the four measurements the render prints: the
+Report the files written, then the five measurements the render prints: the
+page count rendered from the record, the
 record's size (records, links, mentions), the unresolved references against the
 committed baseline, the chart packing's overlap count (which is zero or the
 picture is wrong), and the version and commit stamped into the footer. An

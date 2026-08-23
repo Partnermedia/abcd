@@ -25,12 +25,8 @@ before mining it** — the whole value of this run is that it is evidence.
 ## What the corpus already says
 
 124 of 125 findings resolve to a blaming commit via `git blame` on their
-`file:line`. The dates are the finding:
-
-    2026-07  66
-    2026-08  58
-
-Evenly spread, in every class. So this is not one bad merge that outran its
+`file:line`. The dates are the finding: 66 of them were last written in
+2026-07 and 58 in 2026-08 — evenly spread, in every class. So this is not one bad merge that outran its
 record; it is a steady rate. Roughly half the false claims were written in July
 and survived four releases — v0.4.2, v0.5.1, v0.6.0, v0.6.1 — each of which
 recorded a PROMOTE receipt against this same detector, at 26, 28 and 37 findings
