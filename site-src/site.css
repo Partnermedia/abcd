@@ -245,11 +245,16 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .recpills{margin-top:14px}
 
 /* the dashboard grid */
-.dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;margin-top:22px;align-items:start}
+.dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;margin-top:22px}
 .panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);min-width:0}
 .panel h3{font-size:1rem;margin-bottom:10px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .panel h3 span{font-family:"IBM Plex Mono",monospace;font-weight:400;font-size:.72rem;color:var(--ink-3)}
+/* Panels stacked in one column — the record page's sidebar — carry their own
+   gap. Panels laid out BY the dashboard grid already have `gap`, so the same
+   margin there pushes every panel after the first 14px down its own row and the
+   tiles stop lining up. The grid is the one context that must not inherit it. */
 .panel+.panel{margin-top:14px}
+.dash>.panel+.panel{margin-top:0}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
