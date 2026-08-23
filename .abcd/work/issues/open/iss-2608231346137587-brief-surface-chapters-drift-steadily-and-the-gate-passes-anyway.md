@@ -16,6 +16,13 @@ file the release bundle carries (`commands/memory.md`, fixed in this cut); the
 other 124 are `.abcd/development/brief/`, which ships in no release (adr-28), so
 no installer is misled. Contributors reading the record are.
 
+**The class counts above are one run's observation, not a measurement.** A
+second full-tier run hours later, on a tree differing only by seven shipped-doc
+fixes, returned 126 findings with false-claim at 48 and undocumented-surface at
+50 — the same chapters, redistributed. See iss-2608231409595789. What is
+reproducible is WHICH chapters drift (29 of 33 files common to both runs); the
+counts and classes are not. Scope the intent on the stable half.
+
 The corpus is preserved at
 `.abcd/.work.local/scratch/brief-drift-2026-08-23/crosscheck-findings.json` with
 the run's content commit, manifest hash and tier. It earns promotion to a dated
