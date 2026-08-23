@@ -6,10 +6,11 @@ package site
 // referenced from a docs page like any other image, and **the build never
 // draws**. So this file does two things and refuses a third. An SVG is INLINED,
 // because its colours are written as `var(--token, fallback)` and inlining is
-// what lets them follow the reader's theme; its width and height attributes are
-// stripped so the stylesheet sizes it. A raster is COPIED VERBATIM into the
-// output tree and referenced — no re-encoding, because optimisation would mean a
-// dependency and a decision nobody has made yet.
+// what lets them follow the reader's theme; the width and height of its ROOT
+// element are stripped so the stylesheet sizes it, and every inner element's
+// size is left alone, because that size is the drawing. A raster is COPIED
+// VERBATIM into the output tree and referenced — no re-encoding, because
+// optimisation would mean a dependency and a decision nobody has made yet.
 //
 // An image the page names but the repository does not carry is a build error.
 // The alternative is a broken image on a published page, which nobody notices
@@ -69,8 +70,59 @@ var pictureExts = map[string]bool{
 	".gif": true, ".webp": true, ".avif": true,
 }
 
-// svgSizeRe matches the width/height attributes the stylesheet replaces.
+// svgSizeRe matches the width/height attributes the stylesheet replaces. It is
+// applied to the ROOT <svg> start tag alone (stripRootSize) — never to the
+// document, where the same two attribute names mean something entirely
+// different. `stroke-width` and `markerWidth` are not matched: the leading
+// `\s` is what keeps a hyphenated or prefixed name out.
+//
+// The value stays `\d+` — the form every committed drawing writes. A wider
+// class would match across a single-quoted attribute value holding a stray
+// `"`, taking the value's closing quote from the NEXT attribute and rewriting
+// the tag; digits cannot contain a quote, so this class cannot.
 var svgSizeRe = regexp.MustCompile(`\s(width|height)="\d+"`)
+
+// stripRootSize removes the ROOT <svg> element's width and height, so the
+// stylesheet sizes the drawing, and leaves every other element's alone.
+//
+// On any other element those two attributes ARE the drawing, not its page size.
+// A <rect> is a box of that size and collapses to nothing without it; an
+// <image> panel is a raster framed to that size and clipped to it, and without
+// it falls back to the intrinsic pixel size of the raster it embeds, bursting
+// out of the clip path that framed it; a <use>, <pattern>, <mask> or <symbol>
+// establishes a region of that size.
+//
+// The span of the root start tag comes from the same decoder that vetted the
+// document, rather than from a search for the first `>` — an attribute value
+// may contain one, and a size stripped out of the wrong span is exactly the
+// class of bug this function exists to end. A document that does not parse
+// (which checkInlinableSVG has already refused) is returned untouched.
+func stripRootSize(svg string) string {
+	dec := xml.NewDecoder(strings.NewReader(svg))
+	dec.Strict = true
+	dec.Entity = map[string]string{}
+	for {
+		// InputOffset is the boundary between the token just returned and the
+		// next, so reading it on both sides of Token() brackets exactly the token
+		// it returned — and nothing before it. Bracketing matters rather than
+		// merely reading tidily: anything the decoder passed over on the way to
+		// the root would otherwise be inside the replaced region, and a drawing
+		// may carry text before its root element.
+		start := int(dec.InputOffset())
+		tok, err := dec.Token()
+		if err != nil {
+			return svg
+		}
+		if _, ok := tok.(xml.StartElement); !ok {
+			continue
+		}
+		end := int(dec.InputOffset())
+		if start < 0 || end > len(svg) || start >= end {
+			return svg
+		}
+		return svg[:start] + svgSizeRe.ReplaceAllString(svg[start:end], "") + svg[end:]
+	}
+}
 
 // svgElements is what a drawing is made of: shapes, the scaffolding that
 // positions and paints them, and text. Anything else — a script, a stylesheet,
@@ -251,7 +303,7 @@ func (a *assetPipe) render(pageDir, src, alt string, at Source) (string, error) 
 		if err := checkInlinableSVG(string(data), rel); err != nil {
 			return "", fmt.Errorf("%s:%d: %w", at.Path, at.Line, err)
 		}
-		svg := svgSizeRe.ReplaceAllString(string(data), "")
+		svg := stripRootSize(string(data))
 		stem := strings.TrimSuffix(name, ".svg")
 		return `<span class="svgasset ` + escapeAttr(stem) + `" data-asset="` + escapeAttr(rel) + `">` + svg + `</span>`, nil
 	}
