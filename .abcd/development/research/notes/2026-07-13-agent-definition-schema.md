@@ -78,14 +78,14 @@ evidence-contradicting design and is out of scope for any abcd schema.
 Field-level comparison of twelve agent-definition formats — Claude Code subagents,
 Agent Skills/`SKILL.md`, OpenAI Agents SDK, Google ADK `LlmAgent`, GitHub Copilot
 `*.agent.md`, crewAI, LangChain/LangGraph, AutoGen, Bedrock Classic, Bedrock AgentCore
-harness, OpenCode, and the A2A `AgentCard`.
+harness, opencode, and the A2A `AgentCard`.
 
 Five fields are near-universal:
 
 | Field | Present in | Note |
 |---|---|---|
 | `name` | 12/12 | sometimes defaulted from filename |
-| **routing description** | 9/12 | required in Claude Code, Skills, Copilot, OpenCode, A2A |
+| **routing description** | 9/12 | required in Claude Code, Skills, Copilot, opencode, A2A |
 | instructions | 11/12 | A2A alone omits it, deliberately |
 | tool grant | 11/12 | allowlist of names; MCP as the extension mechanism |
 | model selector | 11/12 | increasingly with an `inherit` default |
