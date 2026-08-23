@@ -163,7 +163,12 @@ th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem
 .chapter#artefacts::after{background:var(--lb)}.chapter#artefacts::before{background:linear-gradient(var(--lb),var(--lc))}
 .chapter#process::after{background:var(--lc)}.chapter#process::before{background:linear-gradient(var(--lc),var(--ld))}
 .chapter#install::after{background:var(--ld)}
-@media (max-width:1168px){.chapter::before,.chapter::after{left:47px}}
+/* `calc(50% - 513px)` tracks the letter column only while `.wrap` is still
+   centring, which stops at its own max-width — 1120px, padding included, since
+   the sheet is border-box throughout. Below that the wrap is flush left and the
+   column sits at a fixed 24px + 23px. The two expressions meet at exactly
+   1120px, so the seam is continuous. */
+@media (max-width:1120px){.chapter::before,.chapter::after{left:47px}}
 @media (max-width:700px){.chapter::before,.chapter::after{display:none}}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
