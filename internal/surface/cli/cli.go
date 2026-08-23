@@ -2782,10 +2782,30 @@ const maxOperandJSONBytes = 8 << 20
 // capture path, where a truncated transcript would be stored under a sha256
 // idempotency key computed over the prefix (spc-4's refuse-whole invariant).
 func readSource(cmd *cobra.Command, spec string) ([]byte, error) {
+	return readSourceCapped(cmd, spec, maxOperandJSONBytes)
+}
+
+// readSourceCapped is readSource with the cap named by the caller, because the
+// right bound depends on what is being read and there is more than one answer.
+//
+// maxOperandJSONBytes is a JSON-operand cap — the registry/graveyard payload
+// size — and applying it to a transcript was a wrong-constant bug
+// (iss-2608231029040602). It made `history capture` refuse at 8 MiB while the
+// SessionEnd path accepted 64 MiB, so a transcript the hooks would store
+// automatically could not be recovered by hand: the recovery verb was bounded
+// eight times tighter than the thing it exists to recover from. Real sessions
+// in this repo reach 11.8 MB, so that was not a pathology guard but a
+// functional limit on ordinary work.
+//
+// The caps themselves stay. Both transports read whole into memory before the
+// scanner walks them, and both refuse an over-cap file WHOLE rather than
+// truncating, because a severed prefix would be stored under a sha256
+// idempotency key computed over the prefix (spc-4's refuse-whole invariant).
+func readSourceCapped(cmd *cobra.Command, spec string, limit int64) ([]byte, error) {
 	if spec == "-" {
-		return readCappedStdin(cmd, maxOperandJSONBytes)
+		return readCappedStdin(cmd, limit)
 	}
-	return readGuardedOperand(spec, maxOperandJSONBytes)
+	return readGuardedOperand(spec, limit)
 }
 
 // newHistoryCommand builds the `history` sub-tree over internal/core/history —
@@ -2818,7 +2838,9 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if len(args) == 1 {
 				src = args[0]
 			}
-			raw, err := readSource(cmd, src)
+			// The transcript cap, not the JSON-operand cap: this verb recovers
+			// what the hooks store, so it must accept what they accept.
+			raw, err := readSourceCapped(cmd, src, maxTranscriptBytes)
 			if err != nil {
 				return fmt.Errorf("history capture: cannot read transcript: %w", err)
 			}
