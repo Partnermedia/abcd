@@ -280,6 +280,29 @@ func panelSourced(span, heading, headingSrc, note, body string) string {
 	return b.String()
 }
 
+// panelDisclosure is a panel a reader opens: the heading is the summary, and
+// the body is folded away until they ask for it. It is the shape the
+// relationship chart's list already uses, for the case where a page offers two
+// long bodies a reader chooses BETWEEN rather than reads side by side.
+func panelDisclosure(span, heading, headingSrc, note, body string) string {
+	cls := "panel fold"
+	if span != "" {
+		cls += " " + span
+	}
+	src := ""
+	if headingSrc != "" {
+		rel, anchor, _ := strings.Cut(headingSrc, "#")
+		src = srcAttr(rel, anchor)
+	}
+	var b strings.Builder
+	b.WriteString(`<details class="` + escapeAttr(cls) + `"><summary><h3` + src + `>` + escapeText(heading))
+	if note != "" {
+		b.WriteString(`<span>` + escapeText(note) + `</span>`)
+	}
+	b.WriteString(`</h3></summary>` + body + `</details>`)
+	return b.String()
+}
+
 // segment is one slice of a lifecycle bar.
 type segment struct {
 	Label string

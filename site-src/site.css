@@ -314,6 +314,23 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 /* Cards in a row share a height; columns of prose do not — see the note in
    the references page's own renderer. */
 .dash.reading{align-items:start}
+/* A panel a reader opens. The summary carries the panel's own heading, so the
+   marker sits beside it rather than above it, and the closed state is the
+   heading alone — the shape the relationship chart's list uses. */
+.panel.fold>summary{cursor:pointer;list-style:none;display:block}
+.panel.fold>summary::-webkit-details-marker{display:none}
+/* The marker is a pseudo-element and therefore a flex item of its own, so
+   space-between would push the heading into the middle of the row. The items
+   run from the start and the count alone is pushed to the far end. */
+.panel.fold>summary h3{margin:0;display:flex;justify-content:flex-start;gap:8px;align-items:baseline}
+.panel.fold>summary h3>span{margin-left:auto}
+/* The marker is decoration, and a pseudo-element cannot carry aria-hidden, so
+   its glyph would be read out as part of the panel's name — "▸ References &
+   sources 28". The alt-text form of `content` gives it an EMPTY alternative,
+   which is the one way to draw it and leave the accessible name alone. */
+.panel.fold>summary h3::before{content:"▸" / "";color:var(--ink-3);font-size:.8em;margin-right:.5em}
+.panel.fold[open]>summary h3::before{content:"▾" / ""}
+.panel.fold[open]>summary{margin-bottom:10px}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
@@ -605,14 +622,28 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
      The relationship chart's list twin is deliberately left closed. It is not
      hidden prose but a way to walk 772 records with a keyboard, and opening it
      turns one printed page into ninety. */
-  details.more::details-content{content-visibility:visible;display:block}
-  details.more>*:not(summary){animation:none}
+  details.more::details-content,.panel.fold::details-content{content-visibility:visible;display:block}
+  details.more>*:not(summary),.panel.fold>*:not(summary){animation:none}
+  /* A folded panel is the PAGE's content, not an aside: printing /references/
+     as two headings and no bibliography would be a worse document than the
+     one this stylesheet replaced. The marker still points closed, and outside
+     Chromium the residue above applies — that is the same limit named there,
+     not a new one. */
+  .panel.fold>summary h3::before{content:"" / ""}
 
   /* The genealogy is one scalable drawing kept behind a scrolling window on a
      narrow screen. Paper has no scroll, so the window is opened and the
      drawing is allowed to fit the sheet instead of being cut off at it. */
   .tl{overflow:visible}
   .tlsvg{min-width:0}
+
+  /* The chart is a CANVAS whose bitmap was drawn for the viewport's width; a
+     printed page is narrower, and stretching that bitmap to fill the box
+     squashes the drawing. Letterboxing it inside the box keeps the circles
+     round, and the stage takes the page's own proportions rather than a
+     viewport height that means nothing on paper. */
+  .bstage{height:auto;aspect-ratio:4/3;min-height:0}
+  .bstage canvas{object-fit:contain}
 
   /* Blocks that read as one thing are kept on one sheet. Panels are NOT among
      them, and the omission is the point: a dashboard panel is long enough that
