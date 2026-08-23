@@ -65,6 +65,10 @@ Files `drafts/itd-N-<slug>.md` seeded from the text. Report the new `id` and
 placeholder that must be replaced with real Given-When-Then bullets — via the
 planning interview below — before the draft can be planned.
 
+A single whitespace-free word is refused (exit 2, nothing written): a lone
+token reads as a mistyped sub-verb, never as a draft title. A near-miss of a
+real sub-verb is refused the same way, with the correction named.
+
 `--impact` is optional: a draft is "not judged yet", so an unset impact writes
 no field. When you do set it, the value is validated (one of `additive`,
 `breaking`, `fix` — never `internal`, since an intent is user-facing by

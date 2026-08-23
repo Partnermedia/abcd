@@ -152,3 +152,4 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 | [adr-49](0049-terminal-emission-discipline.md) | Terminal emission discipline — decoration only on interactive TTYs, machine streams undecorated, untrusted text always sanitised | accepted | 2026-08-22 |
 | [adr-50](0050-framing-traces-never-enter-the-record.md) | Framing traces never enter the record, and automated reviewers never read them | accepted | 2026-08-22 |
 | [adr-51](0051-intents-declare-mechanism-and-scope-conditions.md) | An intent can declare its mechanism claim and its scope conditions — optional sections, enforcement deferred | accepted | 2026-08-22 |
+| [adr-52](0052-the-semantic-gate-sits-on-the-wrong-side-of-the-tag.md) | The semantic release gate runs after tagging, so a refusal consumes the version rather than blocking it — problem and options recorded, no decision | proposed | 2026-08-23 |

@@ -32,7 +32,14 @@ Then summarise the JSON for the user:
 - `smoke.ok` — whether the payload would install: both plugin manifests parse,
   the marketplace source resolves, and every declared command, agent, skill and
   hook path is carried. `smoke.findings` names any path that is not.
-- `would_publish` — whether every gate passes.
+- `gates` — every release gate and its disposition. Report the whole array,
+  not a summary: `ran` gates carry their measurement, `not_implemented` ones name
+  what is deferred, and `semantic-receipts` (`host-run`) reports which semantic
+  receipts are recorded for the candidate commit. That row is the one a release
+  fails on most expensively, so never omit it.
+- `would_publish` — **always `false`** in a dry-run: this command previews and
+  never publishes, and two gates are Phase-5 deferred, so it is not a verdict on
+  the release. Read `gates` and `would_refuse_on` for that.
 - `would_refuse_on` — if non-empty, the gates that would refuse, so the user
   knows what to fix before a real launch.
 

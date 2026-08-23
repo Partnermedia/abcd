@@ -761,6 +761,30 @@ Per hand-run, append:
 
 
 
+### 2026-08-23 — the brief's surface chapters drift (hand-run at capture)
+
+- **Proposal:** the brief's surface chapters become a generated reflection of
+  the shipped surface, so shape claims cannot drift. Prompted by a full-tier
+  `iss35-brief-surface-crosscheck` returning 125 discrepancies at the 0.6.2
+  release gate (iss-2608231346137587).
+- **Initial routing:** four parts — the generated chapters (capability |
+  intent); shape claims are derived, never hand-authored (trust rule | ADR +
+  brief invariant); the underlying stance (stance | none new,
+  `one-canonical-primitive` already says it, so this is an application rather
+  than a new rule); the generation mechanism and its seam (plumbing | brief).
+- **Confirmed routing:** maintainer confirmed 2026-08-23, with the intent to be
+  filed after the 0.6.2 cut rather than during it.
+- **Verdict:** SPLIT, confirmed.
+- **Notes:** the stance leg is the interesting one — the hand-run's first
+  instinct was to mint a principle, and the four-piece table is what caught
+  that `one-canonical-primitive` already covers it. Recording "none new, this is
+  an application" is a routing outcome the table should keep making easy, since
+  a fifth principle restating a fourth is the failure mode a stance leg invites.
+  Evidence base preserved out-of-tree at
+  `.abcd/.work.local/scratch/brief-drift-2026-08-23/`; it earns promotion to a
+  dated research note when the intent is filed, and the issue says explicitly
+  not to fix the 124 by hand before mining it.
+
 ### 2026-08-22 — the CLI verb taxonomy — EXCLUDED from the corpus
 
 - **Excluded from the calibration count:** the routing was confirmed before the
