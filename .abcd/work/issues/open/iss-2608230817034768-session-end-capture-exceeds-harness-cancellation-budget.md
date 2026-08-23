@@ -12,10 +12,20 @@ found_at: "internal/surface/cli/cli.go"
 `hook session-end` redacts the whole transcript in-line before it writes, at
 roughly 0.7 s per MB, and the host cancels a SessionEnd hook during shutdown
 rather than wait for it. Every session whose transcript is big enough to push
-that work past the cancellation budget is therefore dropped — silently, and
-permanently, since the capture is the only chance the transcript ever gets.
-Field hit 2026-08-23: session `7d884491` exited with `SessionEnd hook [...]
-failed: Hook cancelled` and never reached the store.
+that work past the cancellation budget is therefore dropped, silently. Field hit
+2026-08-23: session `7d884491` exited with `SessionEnd hook [...] failed: Hook
+cancelled` and never reached the store.
+
+Dropped, but not yet destroyed, and the earlier wording here overstated it. Only
+abcd's redacted copy is lost; the host's own raw transcript stays on disk, and
+`abcd history capture` ingests retroactively, so a missed session is recoverable
+by hand for as long as that file survives. The loss becomes irreversible only
+when the host prunes its transcript, which it does on its own schedule and
+without telling anyone. So the real exposure is a race nobody is watching:
+a bounded, unannounced recovery window opened by a failure that reports nothing.
+That is worse than a clean permanent loss in one respect — a permanent loss is
+at least a fact, whereas this is a fact with an unknown expiry, and every day it
+goes unnoticed is a day of the window spent.
 
 This is **not** iss-2608210934566223 recurring. That was the blocking bootstrap
 download at exit, fixed in `baf0551`; on the field-hit machine the plugin-root
