@@ -36,9 +36,9 @@ refused to honour.
 **Expect a refusal in a plugin session, and relay it as the answer, not an
 error.** Every refusal is a named shape with a remedy in `refusal`:
 
-- `plugin-root` — the binary belongs to the plugin install; the plugin
-  update delivers surface and binary from one release. Tell the user to take
-  a plugin update in the host.
+- `plugin-root` — the binary belongs to the plugin install, and `abcd update`
+  never touches a plugin root. Tell the user to take a plugin update in the
+  host.
 - `dev-shim` — the PATH entry is the track-latest dev shim; `abcd ahoy
   install` switches modes first.
 - `owned-dangling` — a plugin update stranded the entry; `abcd ahoy install`

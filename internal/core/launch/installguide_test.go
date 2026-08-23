@@ -23,12 +23,12 @@ import (
 func TestInstallGuideDocumentsTheInstallAndUpdatePath(t *testing.T) {
 	root := repoRootForTest(t)
 
-	const guide = "docs/how-to/install.md"
-	page, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(guide)))
-	if err != nil {
-		t.Fatalf("read the committed install guide: %v", err)
-	}
-	prose := string(page)
+	// Every page that repeats these names, not just the guide. The README carries
+	// the same three commands as the plugin route's headline, and prose repeating
+	// a name it does not own is exactly the silent drift this detector exists to
+	// catch — pinning one page while leaving the most-read one unpinned would make
+	// that page the one that rots.
+	guides := []string{"docs/how-to/install.md", "README.md"}
 
 	slug := moduleRepoSlug(t, root)
 	marketplace, plugin := marketplaceNames(t, root)
@@ -41,12 +41,19 @@ func TestInstallGuideDocumentsTheInstallAndUpdatePath(t *testing.T) {
 		{"install names the plugin in its marketplace", "/plugin install " + plugin + "@" + marketplace},
 		{"update names the plugin", "/plugin update " + plugin},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if !strings.Contains(prose, tc.want) {
-				t.Errorf("%s does not document %q", guide, tc.want)
-			}
-		})
+	for _, guide := range guides {
+		page, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(guide)))
+		if err != nil {
+			t.Fatalf("read %s: %v", guide, err)
+		}
+		prose := string(page)
+		for _, tc := range cases {
+			t.Run(guide+"/"+tc.name, func(t *testing.T) {
+				if !strings.Contains(prose, tc.want) {
+					t.Errorf("%s does not document %q", guide, tc.want)
+				}
+			})
+		}
 	}
 }
 

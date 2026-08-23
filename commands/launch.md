@@ -75,8 +75,9 @@ What you are approving: building four platform binaries stamped with the tag,
 checksumming exactly those bytes, signing a provenance attestation, publishing a
 GitHub Release with the binaries attached, and deploying the website from the
 tag. That is why it is gated — it is the step that puts bytes in front of the
-public, and it is deliberately outside the repository so no change to a workflow
-file can remove it.
+public. The reviewer requirement itself lives in the repository's environment
+settings rather than in a workflow file, and the scaffold-parity test fails any
+edit that drops the `environment:` binding from the job.
 
 **If the banner does not appear**, the run has not reached that job yet. The
 checks before it (`verify`) take a few minutes: they build, test and lint the
@@ -136,6 +137,9 @@ Then summarise the JSON for the user:
 - `would_publish` — **always `false`** in a dry-run: this command previews and
   never publishes, and two gates are Phase-5 deferred, so it is not a verdict on
   the release. Read `gates` and `would_refuse_on` for that.
+- `lockstep` and `retention` — the manifest-lockstep result and the release
+  retention plan. Both feed `would_refuse_on`, so a lockstep drift or a
+  retention refusal is invisible to anyone who reads only the gate list.
 - `would_refuse_on` — if non-empty, the gates that would refuse, so the user
   knows what to fix before a real launch.
 

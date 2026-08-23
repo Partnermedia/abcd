@@ -56,7 +56,7 @@ The first registers this repository as a plugin marketplace; the second installs
 /abcd:version
 ```
 
-Later, `/plugin update abcd` fetches a newer release. It tracks published releases rather than the main branch, so a change lands for you when it ships, not when it merges. Reloading plugins is not the same thing: that re-reads what is already on disk, so it refreshes the commands and skills while leaving the binary as it was.
+Later, `/plugin update abcd` pulls the marketplace's current state. Two things move at different speeds: the plugin surface tracks this repository, and the binary it provisions tracks the latest published release. Reloading plugins is not the same thing: that re-reads what is already on disk, so it refreshes the commands while leaving the binary as it was.
 
 Support for other harnesses will follow.
 
