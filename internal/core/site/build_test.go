@@ -857,10 +857,27 @@ func TestAuthorshipSeparatesToolsFromPeople(t *testing.T) {
 	f.git("2026-03-04T09:00:00+00:00",
 		"-c", "user.name=Assistant", "-c", "user.email=noreply@example.invalid",
 		"commit", "-m", "chore: written before the trailer convention")
+	f.write("human.txt", "a commit from a forge noreply address\n")
+	f.git("2026-03-05T09:00:00+00:00", "add", "-A")
+	f.git("2026-03-05T09:00:00+00:00",
+		"-c", "user.name=Casey", "-c", "user.email=1234+casey@users.noreply.github.com",
+		"commit", "-m", "docs: a change by a person")
 
 	a, err := LoadAuthorship(f.Root())
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The noreply-derived profile reaches the export; every other author,
+	// whose address is a real mailbox, has none (itd-140: graceful absence).
+	profiles := map[string]string{}
+	for _, h := range a.Humans {
+		profiles[h.Name] = h.Profile
+	}
+	if profiles["Casey"] != "https://github.com/casey" {
+		t.Errorf("the noreply author's profile is %q, want the forge page", profiles["Casey"])
+	}
+	if profiles["Fixture"] != "" {
+		t.Errorf("a real mailbox derived a profile: %q", profiles["Fixture"])
 	}
 	names := map[string]bool{}
 	for _, b := range a.Bots {

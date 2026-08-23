@@ -43,9 +43,30 @@ var (
 type Author struct {
 	Name    string `json:"name"`
 	Commits int    `json:"commits"`
+	// Profile is the author's forge profile URL, derived only from a forge
+	// noreply address — which carries no real mailbox, only the public
+	// username — so exporting it republishes nothing the rule above protects.
+	// An author whose address is not a noreply simply has none.
+	Profile string `json:"profile,omitempty"`
 	// email is read so identities fold correctly and sort stably, and is never
 	// exported.
 	email string
+}
+
+// noreplyRe matches GitHub's noreply commit addresses, both forms:
+// `77722411+user@users.noreply.github.com` and the older
+// `user@users.noreply.github.com`. The pattern itself names the forge, so the
+// derivation needs no forge configuration and degrades by absence everywhere
+// else (itd-140).
+var noreplyRe = regexp.MustCompile(`(?i)^(?:\d+\+)?([a-z\d](?:[a-z\d-]*[a-z\d])?)@users\.noreply\.github\.com$`)
+
+// profileURL is the forge profile a noreply address names, or "".
+func profileURL(email string) string {
+	m := noreplyRe.FindStringSubmatch(email)
+	if m == nil {
+		return ""
+	}
+	return "https://github.com/" + m[1]
 }
 
 // ModelTally is one distinct `Assisted-by:` value and how often it appears.
@@ -150,7 +171,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		if err != nil {
 			continue
 		}
-		au := Author{Name: m[2], Commits: n, email: m[3]}
+		au := Author{Name: m[2], Commits: n, Profile: profileURL(m[3]), email: m[3]}
 		if botNameRe.MatchString(au.Name) || vendors[au.Name] {
 			a.Bots = append(a.Bots, au)
 			continue

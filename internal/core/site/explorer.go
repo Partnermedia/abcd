@@ -647,7 +647,13 @@ func (e *explorer) contributorsPage() (string, error) {
 		rows.WriteString(`<thead><tr><th>` + escapeText(ui.Contributors.Authors) + `</th><th class="tnum">` +
 			escapeText(ui.Tiles.Commits) + `</th></tr></thead><tbody>`)
 		for _, h := range a.Humans {
-			rows.WriteString(`<tr><td>` + escapeText(h.Name) + `</td><td class="tnum">` + strconv.Itoa(h.Commits) + `</td></tr>`)
+			name := escapeText(h.Name)
+			// A noreply-derived profile links the author's own page; an author
+			// without one stays plain text (itd-140: graceful absence).
+			if h.Profile != "" {
+				name = `<a href="` + escapeAttr(h.Profile) + `">` + name + `</a>`
+			}
+			rows.WriteString(`<tr><td>` + name + `</td><td class="tnum">` + strconv.Itoa(h.Commits) + `</td></tr>`)
 		}
 		for _, t := range a.Bots {
 			rows.WriteString(`<tr class="muted"><td>` + escapeText(t.Name) + ` <span class="rel">` +
