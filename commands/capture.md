@@ -48,7 +48,9 @@ too whenever it is non-zero: it counts the spans rewritten before the text was
 written, and the user needs to know their wording was changed.
 
 A single whitespace-free word is refused (exit 2, nothing written): a lone
-token reads as a mistyped sub-verb, never as issue text.
+token reads as a mistyped sub-verb, never as issue text. A near-miss of a real
+sub-verb is refused the same way, with the correction named, so a two-word input
+containing a space is not automatically safe.
 
 Priority is **derived, never stored**: an issue is ranked lower while any of its
 `--blocked-by` targets is still open, and `blocked_by` records the dependency in
