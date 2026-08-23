@@ -10,7 +10,20 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-23
+
 ### Fixed
+
+- **The plugin's two halves are described separately, because they move at
+  different speeds.** The surface tracks this repository and the binary tracks
+  the latest published release, and prose in the README, in
+  `/abcd:update`'s page, and in a refusal string `abcd update` prints had all
+  said they arrive together from one release. That is the behaviour a planned
+  intent wants and not the behaviour that ships, so three surfaces stated a
+  future in the present tense (iss-2608231346137587 records the wider class).
+  The install commands the README repeats are now pinned by the same detector
+  that already pinned the install guide, so a renamed marketplace fails a test
+  rather than misdirecting a reader.
 
 - **The release chain's site deploy receives its credentials.** `release.yml`
   invokes `site.yml` as a reusable workflow, and a called workflow receives no
@@ -30,8 +43,8 @@ called out in a **Breaking** section.
   limit plainly instead of implying wider support. Installing as a plugin is
   now two copy-pasteable commands with a check afterwards, and the difference
   between updating a plugin and reloading one is stated: reloading re-reads
-  what is on disk, so it refreshes commands and skills while leaving the
-  binary as it was.
+  what is on disk, so it refreshes the commands while leaving the binary as it
+  was.
 - **`/abcd:launch` explains release day to whoever is doing it.** The page
   described the verbs and not the day, so nothing told a reader that the
   release stops and waits for a human approval, where to click for it, or that

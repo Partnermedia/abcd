@@ -104,7 +104,7 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 	case ahoy.UpdateTargetPluginRoot:
 		return &Refusal{
 			Shape:  string(t.Kind),
-			Detail: "the binary at " + targetPath + " belongs to the plugin install; the plugin update delivers surface and binary from one release (itd-108), and abcd update never touches a plugin root",
+			Detail: "the binary at " + targetPath + " belongs to the plugin install; abcd update never touches a plugin root; take a plugin update in the host",
 			Remedy: "take a plugin update in the host (e.g. /plugin update abcd)",
 		}
 	case ahoy.UpdateTargetDevShim:
