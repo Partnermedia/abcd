@@ -465,6 +465,24 @@ jobs:
       # Explicit, never defaulted: site.yml refuses any other value, so its production
       # path can only be reached by a caller that asked for it by name.
       mode: production
+    # A called workflow receives NO secrets unless the caller passes them. Declaring
+    # `environment:` on the callee's job is not enough: the environment gates the job
+    # and its secrets still resolve empty, so the production deploy reached wrangler
+    # with no CLOUDFLARE_API_TOKEN and failed at the last step of a release whose
+    # binaries were already published (iss-2608231912566984). The sibling jobs that
+    # reach production through this same call pass because they reference no secret —
+    # site.yml's render job says so in as many words. The preview path never hit it:
+    # it is triggered by push rather than called, so its secrets resolve normally.
+    #
+    # `inherit` rather than a named `secrets:` block because the named form cannot
+    # work here: a job that calls a reusable workflow may not declare `environment:`,
+    # so this caller can never resolve an environment secret in order to pass it on.
+    # The blast radius is what `inherit` actually conveys, and this repository holds
+    # NO repository-scoped and no organization secrets — every Cloudflare credential
+    # is scoped to the `site` / `site-preview` environments, which the callee's own
+    # jobs gate on. What inherit restores is the callee's ability to resolve those
+    # environment secrets at all, not a pile of ambient ones to leak.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 <%- end %>
 
   # The manual rehearsal (workflow_dispatch). It arms the full gate against a

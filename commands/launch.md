@@ -16,6 +16,102 @@ Two flows over the abcd binary, kept apart on purpose:
 Neither flow publishes. Tagging is `.github/workflows/auto-release.yml`'s job, and
 it reads the dated heading `ship` writes.
 
+## Release day: what a human actually does
+
+The rest of this page describes the verbs. This section describes the **day** —
+what you click, what runs on its own, and where it stops and waits for you. Read
+it if you are cutting a release and are not the person who built the machinery.
+
+Nothing here publishes by accident. The release stops and asks for a human twice:
+once when you merge, and once at a deployment gate that no merge can bypass.
+
+### The shape of it
+
+| # | Step | Who |
+| --- | --- | --- |
+| 1 | Run the two semantic passes; record their receipts | you, with the agent |
+| 2 | Prove the release gate locally | you, one command |
+| 3 | Open the release PR, wait for green, merge | you, in GitHub |
+| 4 | Tag the release | automatic |
+| 5 | Build, checksum, attest, publish | **stops and waits for your approval** |
+| 6 | Deploy the website from the tag | automatic, after step 5 |
+| 7 | Update your plugin and check what you got | you, locally |
+
+Steps 4-6 are one GitHub Actions run. You do not visit Cloudflare: the site
+deploy is invoked by the release workflow, so approving step 5 releases step 6
+with it.
+
+### Step 3 — merging, and the one hazard
+
+Merge the release PR the normal way, from the PR page's **Merge pull request**
+button (or the merge queue if the repository uses one).
+
+**Then let nothing else merge until the tag exists.** This is the only part of
+release day with a trap in it. The release workflow works out which commit the
+reviewers actually read by walking back from the merge, so another PR landing in
+the gap makes it read the wrong commit, and the receipts you just recorded no
+longer match. The window is a minute or two. Tell anyone else working in the
+repository to hold.
+
+### Step 5 — the approval gate, in detail
+
+A minute or two after the merge, the release pauses. **It will not continue
+until you approve it**, and nothing tells you unless you look.
+
+Where to look, easiest first:
+
+1. **Your GitHub notifications.** You are a named reviewer on the `release`
+   environment, so GitHub emails you and shows a notification when a deployment
+   needs review.
+2. **The repository's Actions tab** — `https://github.com/<owner>/<repo>/actions`.
+   The top run shows a yellow **Waiting** badge.
+3. **The run page itself**, `https://github.com/<owner>/<repo>/actions/runs/<run-id>`.
+
+On the run page a banner appears at the top: **"Review pending deployments"**.
+Click it, tick the **release** environment, optionally leave a comment, and click
+**Approve and deploy**.
+
+What you are approving: building four platform binaries stamped with the tag,
+checksumming exactly those bytes, signing a provenance attestation, publishing a
+GitHub Release with the binaries attached, and deploying the website from the
+tag. That is why it is gated — it is the step that puts bytes in front of the
+public, and it is deliberately outside the repository so no change to a workflow
+file can remove it.
+
+**If the banner does not appear**, the run has not reached that job yet. The
+checks before it (`verify`) take a few minutes: they build, test and lint the
+tagged commit. Wait for `verify` to go green.
+
+### Step 7 — afterwards, check what you actually got
+
+Publishing does not change the copy of abcd on your machine. Take a plugin
+update in your agent harness (in Claude Code: `/plugin`, then update the abcd
+plugin), then start a new session and check:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" version
+```
+
+It should report the version you just released. If it still reports `dev` or the
+previous version, the update has not taken effect — the plugin's binary tracks
+the newest **published release**, and its provisioning skips the check when a
+binary is already in place, so it needs the plugin update to fetch a new one.
+
+### When it goes wrong
+
+Three failures are worth recognising, because each looks like something else.
+
+- **The run says `Waiting` for a long time and nothing happens.** That is the
+  approval gate, not a hang. Approve it.
+- **The release job fails on `Semantic-gate receipts`.** The receipts do not
+  match the commit the workflow derived. The tag exists by then and the workflow
+  never moves a tag, so the version is consumed: it needs the tag deleted and the
+  release re-cut. Step 2 exists to catch this before the merge — run it.
+- **A new release never starts, and an older run sits `Waiting` forever.**
+  Release runs are serialised, so one parked run blocks every later one. Cancel
+  the stale run from its page (**Cancel workflow**), and the queued one starts.
+  Cancel it *after* your release PR has merged, never before.
+
 ## Preview (`dry-run`)
 
 Run:
@@ -193,6 +289,34 @@ A receipt is bound to its gate by its `policy.detector` value, not its filename,
 and a mismatched, malformed, HOLD, model-less or wrong-detector receipt blocks.
 Report a HOLD to the user and stop: a HOLD is a result, not an obstacle to route
 around, and the receipts cannot be hand-written to unblock a release.
+
+### Prove the gate before you merge
+
+`receipt_gate` runs inside the release job, which is **after** the tag is
+created. A refusal there does not block the release, it consumes the version: the
+workflow never moves a tag, and its recovery path rebuilds from the tagged
+commit, whose tree can never gain the missing receipts. Recovering means deleting
+a tag the machinery treats as immutable (recorded as `adr-52`, undecided).
+
+So reproduce the gate's verdict locally, on the release branch, while nothing is
+tagged. From the repository root:
+
+```bash
+go run ./cmd/record-lint --release-gate <content-commit-sha> \
+  --require-gate docs-currency-reviewer \
+  --require-gate iss35-brief-surface-crosscheck
+```
+
+- `<content-commit-sha>` is the **full 40-character** sha of the commit the
+  receipts name, which on a correctly shaped release branch is the receipts
+  commit's parent (`git rev-parse HEAD^`). An abbreviated sha is rejected.
+- `record-lint` is a repository-local program, not an installed binary. `go run
+  ./cmd/record-lint` is the invocation; there is no `record-lint` on `PATH`.
+- The required-gate names come from `release.yml`, which owns that list on
+  purpose. If they diverge, the workflow is right and this command is stale.
+
+**Exit 0 means the release will pass the gate.** A non-zero exit names what is
+missing, and costs nothing to fix, because no tag exists yet.
 
 ## Scaffold — the release-gate scaffolder
 
