@@ -159,8 +159,87 @@ func TestAssetsAcceptDrawings(t *testing.T) {
 	if !strings.Contains(out, "var(--ink, #000)") {
 		t.Error("the token colours did not survive inlining")
 	}
-	if strings.Contains(out, `width="10"`) {
-		t.Error("the stylesheet must size the drawing; its own width survived")
+	// The root is sized by the stylesheet; the clip path's rect is not, and
+	// TestAssetsStripOnlyTheRootDrawingSize is where that split is pinned.
+	if strings.Contains(out, `viewBox="0 0 10 10" width="10"`) {
+		t.Error("the stylesheet must size the drawing; the root's own width survived")
+	}
+}
+
+// TestAssetsStripOnlyTheRootDrawingSize pins the one attribute pair the build
+// is allowed to take away, and the elements it must not take it away from.
+//
+// The ROOT <svg> is sized by the stylesheet, so its width and height go. Every
+// other element's width and height ARE the drawing: a <rect> is a box of that
+// size, an <image> panel is a raster framed to that size and clipped to it, and
+// a <use>, <pattern>, <mask> or <symbol> establishes a region of that size.
+// Dropping those does not resize a drawing, it destroys it — an <image> falls
+// back to its raster's intrinsic pixel size and bursts out of the clip path it
+// was framed by, and a <rect> collapses to nothing at all.
+func TestAssetsStripOnlyTheRootDrawingSize(t *testing.T) {
+	svg := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+<defs><clipPath id="cp"><circle cx="21" cy="21" r="21"/></clipPath>
+<pattern id="pt" width="8" height="8" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="8" y2="8"/></pattern>
+<mask id="mk" width="30" height="30"><rect width="30" height="30" fill="#fff"/></mask>
+<symbol id="sy" width="12" height="12"><rect width="12" height="12"/></symbol></defs>
+<rect x="4" y="4" width="92" height="34" rx="7" fill="var(--surface, #fff)"/>
+<image href="data:image/webp;base64,AAAA" x="10" y="10" width="42" height="42" clip-path="url(#cp)" preserveAspectRatio="xMidYMid slice"/>
+<use href="#sy" x="60" y="60" width="12" height="12"/></svg>`
+	root := assetFixture(t, map[string]string{"docs/assets/img/x.svg": svg})
+	pipe := newAssetPipe(root)
+	out, err := pipe.render("docs/explanation", "../assets/img/x.svg", "", Source{Path: "p.md", Line: 1})
+	if err != nil {
+		t.Fatalf("a drawing was refused: %v", err)
+	}
+
+	// The root, and only the root, loses its size.
+	rootTag := out[strings.Index(out, "<svg"):]
+	rootTag = rootTag[:strings.Index(rootTag, ">")+1]
+	if strings.Contains(rootTag, "width=") || strings.Contains(rootTag, "height=") {
+		t.Errorf("the stylesheet must size the drawing; the root kept its own size: %s", rootTag)
+	}
+	if !strings.Contains(rootTag, `viewBox="0 0 100 100"`) {
+		t.Errorf("the root lost its viewBox, which is the coordinate system: %s", rootTag)
+	}
+
+	// Every other element keeps the size that IS the drawing.
+	for _, want := range []string{
+		`<pattern id="pt" width="8" height="8"`,
+		`<mask id="mk" width="30" height="30"`,
+		`<symbol id="sy" width="12" height="12"`,
+		`<rect width="30" height="30" fill="#fff"/>`,
+		`<rect width="12" height="12"/>`,
+		`<rect x="4" y="4" width="92" height="34"`,
+		`x="10" y="10" width="42" height="42" clip-path="url(#cp)"`,
+		`<use href="#sy" x="60" y="60" width="12" height="12"/>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the inlined drawing lost a size that is part of it: want %s", want)
+		}
+	}
+}
+
+// TestAssetsStripTouchesTheRootTagAlone pins the boundary of the replaced
+// region itself. The size strip is a text substitution, so the bytes it is
+// allowed to see are the whole of its correctness: given the document rather
+// than the root start tag, it edits whatever else happens to read like a size —
+// which is the shape of the bug it was written to end, one level up.
+func TestAssetsStripTouchesTheRootTagAlone(t *testing.T) {
+	svg := `keep width="1" me<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4" width="4" height="4"><rect width="2" height="2"/></svg>`
+	root := assetFixture(t, map[string]string{"docs/assets/img/x.svg": svg})
+	pipe := newAssetPipe(root)
+	out, err := pipe.render("docs/explanation", "../assets/img/x.svg", "", Source{Path: "p.md", Line: 1})
+	if err != nil {
+		t.Fatalf("a drawing was refused: %v", err)
+	}
+	if !strings.Contains(out, `keep width="1" me`) {
+		t.Errorf("the strip reached past the root start tag, into what precedes it:\n%s", out)
+	}
+	if !strings.Contains(out, `<rect width="2" height="2"/>`) {
+		t.Errorf("the strip reached past the root start tag, into the drawing:\n%s", out)
+	}
+	if strings.Contains(out, `viewBox="0 0 4 4" width="4"`) {
+		t.Errorf("the root kept its own size:\n%s", out)
 	}
 }
 
