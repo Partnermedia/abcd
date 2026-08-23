@@ -404,7 +404,7 @@ func (e *explorer) referencesPage() (string, error) {
 			strconv.Itoa(countListItems(b.Inspirations)), body))
 	}
 	out.WriteString(`</div>`)
-	return e.shell(routeReferences, e.c.ui.NavReferences, "", e.genLine(), out.String()), nil
+	return e.shell(routeReferences, e.c.ui.NavReferences, "", out.String()), nil
 }
 
 // countListItems counts the bullets across a run of list blocks.

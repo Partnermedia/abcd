@@ -368,16 +368,11 @@ func TestPreviewStampSaysUnreleased(t *testing.T) {
 		t.Errorf("the preview footer stamp claims a released version: %q", foot)
 	}
 
-	// The explorer's stamp, which is a different renderer over the same fact.
-	gen := sectionBetween(outFile(t, out, "record/index.html"), `<p class="gen">`, `</p>`)
-	if gen == "" {
-		t.Fatal("the explorer dashboard has no generated line")
-	}
-	if !strings.Contains(gen, "unreleased") {
-		t.Errorf("the explorer's preview stamp does not say unreleased: %q", gen)
-	}
-	if strings.Contains(gen, "v"+fixtureStamp.Version) {
-		t.Errorf("the explorer's preview stamp claims a released version: %q", gen)
+	// The explorer pages carry no dateline of their own: the header pill and
+	// the footer stamp are the two renderers of the build fact, and a third
+	// under every page title was the same numbers a third time.
+	if strings.Contains(outFile(t, out, "record/index.html"), `<p class="gen">`) {
+		t.Error("the explorer dashboard still renders a gen dateline under its title")
 	}
 
 	// And the export the chart reads.

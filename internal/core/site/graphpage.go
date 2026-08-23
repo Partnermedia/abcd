@@ -108,7 +108,7 @@ func (e *explorer) graphPage() (string, error) {
 	b.WriteString(`</details>`)
 	b.WriteString(`</div>`)
 
-	return e.shell(routeGraph, ui.RecordNav.Graph, "/record.js", e.genLine(), b.String()), nil
+	return e.shell(routeGraph, ui.RecordNav.Graph, "/record.js", b.String()), nil
 }
 
 // legend names what the chart's fills and arrowheads mean, in the record's own

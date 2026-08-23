@@ -192,7 +192,9 @@ func RecordRoute(n ExportNode) string { return "record/" + n.Type + "/" + n.ID +
 // --- the shell ------------------------------------------------------------
 
 // shell wraps one explorer page in the shared header, sub-navigation and footer.
-func (e *explorer) shell(route, title, script, gen, body string) string {
+// The build fact renders twice already — the header pill and the footer stamp —
+// so the page heading carries no dateline of its own.
+func (e *explorer) shell(route, title, script, body string) string {
 	var b strings.Builder
 	b.WriteString(e.c.headWith(title, script))
 	b.WriteString(e.c.headerFor("/record/"))
@@ -204,9 +206,6 @@ func (e *explorer) shell(route, title, script, gen, body string) string {
 		b.WriteString(`<p class="eyebrow"` + e.eyebrowSrc + `>` + escapeText(e.eyebrow) + `</p>`)
 	}
 	b.WriteString(`<h1 class="pagetitle">` + escapeText(title) + `</h1>`)
-	if gen != "" {
-		b.WriteString(`<p class="gen">` + escapeText(gen) + `</p>`)
-	}
 	b.WriteString(`</div>`)
 	b.WriteString(body)
 	b.WriteString(`</div></div></main>`)
@@ -243,36 +242,6 @@ func (e *explorer) subnav(active string) string {
 	}
 	b.WriteString(`</div></nav>`)
 	return b.String()
-}
-
-// genLine is the derived line under every explorer heading.
-//
-// It carries what adr-47 decision 2 lets the generator add on its own and
-// nothing else: numbers, dates and ids. Anything that would need a word to
-// explain it belongs in a labelled tile instead.
-func (e *explorer) genLine(parts ...string) string {
-	var kept []string
-	for _, p := range parts {
-		if p != "" {
-			kept = append(kept, p)
-		}
-	}
-	if d := e.export.Build.GeneratedAt; d != "" {
-		kept = append(kept, d)
-	}
-	// The same rule the footer follows: a preview names no release, because it is
-	// not one. The word is an interface string, so the provenance walk accounts
-	// for it exactly as it accounts for every other word the generator adds.
-	switch {
-	case e.export.Build.Preview:
-		kept = append(kept, e.c.ui.Unreleased)
-	case e.export.Build.Version != "":
-		kept = append(kept, "v"+e.export.Build.Version)
-	}
-	if cm := e.export.Build.Commit; cm != "" {
-		kept = append(kept, cm)
-	}
-	return strings.Join(kept, " · ")
 }
 
 // --- shared pieces --------------------------------------------------------
@@ -436,7 +405,7 @@ func (e *explorer) dashboard() (string, error) {
 	b.WriteString(e.health())
 	b.WriteString(`</div>`)
 
-	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", e.genLine(), b.String()), nil
+	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", b.String()), nil
 }
 
 // tile is one stat tile.
@@ -635,7 +604,7 @@ func (e *explorer) foundationsPage() (string, error) {
 	deck(e.c.ui.Tiles.Principle, e.principles)
 	deck(e.c.ui.Tiles.Discipline, e.disciplines)
 	b.WriteString(`</div>`)
-	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", e.genLine(), b.String()), nil
+	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", b.String()), nil
 }
 
 // --- contributors ---------------------------------------------------------
@@ -703,7 +672,7 @@ func (e *explorer) contributorsPage() (string, error) {
 	}
 	b.WriteString(`</div>`)
 
-	return e.shell(routeContributors, ui.RecordNav.Contributors, "", e.genLine(), b.String()), nil
+	return e.shell(routeContributors, ui.RecordNav.Contributors, "", b.String()), nil
 }
 
 // policyQuote renders the attribution policy the manifest selects, verbatim,

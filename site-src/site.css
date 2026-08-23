@@ -241,7 +241,6 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 
 .record{padding:32px 0 64px}
 .rechead h1.pagetitle{font-size:clamp(1.9rem,4vw,2.2rem)}
-.gen{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--ink-3);margin-top:8px}
 .recpills{margin-top:14px}
 
 /* the dashboard grid */

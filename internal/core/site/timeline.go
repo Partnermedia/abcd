@@ -75,7 +75,7 @@ func (e *explorer) timelinePage() (string, error) {
 		b.WriteString(p)
 	}
 	b.WriteString(`</div>`)
-	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", e.genLine(), b.String()), nil
+	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", b.String()), nil
 }
 
 // tlPoint is where one record's mark ended up, so an arc can find both ends.

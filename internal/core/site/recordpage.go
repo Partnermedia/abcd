@@ -101,7 +101,7 @@ func (e *explorer) recordPage(n ExportNode) (string, error) {
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
-	return e.shell(RecordRoute(n), shortTitle(n), "", e.genLine(), b.String()), nil
+	return e.shell(RecordRoute(n), shortTitle(n), "", b.String()), nil
 }
 
 // recordBody renders the record's Markdown.
