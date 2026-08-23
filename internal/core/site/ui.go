@@ -29,24 +29,29 @@ var ErrUIInvalid = errors.New("site: interface strings are invalid")
 
 // UI is the interface-string allowlist.
 type UI struct {
-	Purpose       string   `json:"_purpose"`
-	NavStory      string   `json:"nav_story"`
-	NavInstall    string   `json:"nav_install"`
-	NavDocs       string   `json:"nav_docs"`
-	NavRecord     string   `json:"nav_record"`
-	NavReferences string   `json:"nav_references"`
-	CTARoles      string   `json:"cta_roles"`
-	CTAInstall    string   `json:"cta_install"`
-	CTADocs       string   `json:"cta_docs"`
-	RecordLink    string   `json:"record_link"`
-	FromTheRecord string   `json:"from_the_record"`
-	LatestRelease string   `json:"latest_release"`
-	AllReleases   string   `json:"all_releases"`
-	Copy          string   `json:"copy"`
-	Copied        string   `json:"copied"`
-	SearchDocs    string   `json:"search_docs"`
-	Platform      Platform `json:"platform"`
-	Tiles         Tiles    `json:"tiles"`
+	Purpose       string `json:"_purpose"`
+	NavStory      string `json:"nav_story"`
+	NavInstall    string `json:"nav_install"`
+	NavDocs       string `json:"nav_docs"`
+	NavRecord     string `json:"nav_record"`
+	NavReferences string `json:"nav_references"`
+	CTARoles      string `json:"cta_roles"`
+	CTAInstall    string `json:"cta_install"`
+	CTADocs       string `json:"cta_docs"`
+	RecordLink    string `json:"record_link"`
+	FromTheRecord string `json:"from_the_record"`
+	LatestRelease string `json:"latest_release"`
+	AllReleases   string `json:"all_releases"`
+	Copy          string `json:"copy"`
+	Copied        string `json:"copied"`
+	SearchDocs    string `json:"search_docs"`
+	// ForgeNames names each forge host the header and footer links may label —
+	// "GitHub" for github.com. A host the map does not name keeps the owner/name
+	// handle, so the generic explorer never assumes a forge. The map may be
+	// empty; the missing-string check walks only declared strings.
+	ForgeNames map[string]string `json:"forge_names"`
+	Platform   Platform          `json:"platform"`
+	Tiles      Tiles             `json:"tiles"`
 	// RecordNav labels the explorer's sub-navigation; each label is also that
 	// page's own heading, so a page and the tab that reaches it cannot drift.
 	RecordNav RecordNav `json:"record_nav"`

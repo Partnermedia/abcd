@@ -15,6 +15,9 @@
   "copy": "copy",
   "copied": "copied",
   "search_docs": "Search the docs",
+  "forge_names": {
+    "github.com": "GitHub"
+  },
   "platform": {
     "darwin-arm64": "macOS · Apple silicon",
     "darwin-amd64": "macOS · Intel",

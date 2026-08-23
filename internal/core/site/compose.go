@@ -324,7 +324,7 @@ func (c *composer) headerFor(active string) string {
 	b.WriteString(`<a href="/docs/">` + escapeText(c.ui.NavDocs) + `</a>`)
 	b.WriteString(`<a href="/record/"` + on("/record/") + `>` + escapeText(c.ui.NavRecord) + `</a>`)
 	if c.repo.Repository != "" {
-		b.WriteString(`<a class="gh" href="` + escapeAttr(c.repo.Repository) + `">` + escapeText(repoHandle(c.repo.Repository)) + ` ↗</a>`)
+		b.WriteString(`<a class="gh" href="` + escapeAttr(c.repo.Repository) + `">` + escapeText(c.forgeLabel()) + ` ↗</a>`)
 	}
 	b.WriteString(`</nav>`)
 	if c.version != "" && c.repo.Repository != "" {
@@ -389,7 +389,7 @@ func (c *composer) footer() string {
 			}
 			b.WriteString(`<a href="` + escapeAttr(c.repo.Repository+"/blob/main/"+f) + `">` + escapeText(f) + `</a>`)
 		}
-		b.WriteString(`<a href="` + escapeAttr(c.repo.Repository) + `">` + escapeText(repoHandle(c.repo.Repository)) + `</a>`)
+		b.WriteString(`<a href="` + escapeAttr(c.repo.Repository) + `">` + escapeText(c.forgeLabel()) + `</a>`)
 	}
 	var meta []string
 	if c.beta {
@@ -413,6 +413,31 @@ func (c *composer) footer() string {
 	}
 	b.WriteString(`</div></footer>`)
 	return b.String()
+}
+
+// forgeLabel names the header and footer forge links: the interface string
+// declared for the repository's forge host, or the owner/name handle where no
+// name is declared — the generic fallback a fixture forge exercises. The name
+// comes from ui.json's closed allowlist, never from code, so the generic
+// explorer carries no forge assumption.
+func (c *composer) forgeLabel() string {
+	if h := forgeHost(c.repo.Repository); h != "" {
+		if name, ok := c.ui.ForgeNames[h]; ok && strings.TrimSpace(name) != "" {
+			return name
+		}
+	}
+	return repoHandle(c.repo.Repository)
+}
+
+// forgeHost is the host of a forge URL: the scheme stripped, the path cut.
+func forgeHost(u string) string {
+	if i := strings.Index(u, "://"); i >= 0 {
+		u = u[i+3:]
+	}
+	if i := strings.IndexByte(u, '/'); i >= 0 {
+		u = u[:i]
+	}
+	return u
 }
 
 // repoHandle is the owner/name of a forge URL — a name, not a sentence.
