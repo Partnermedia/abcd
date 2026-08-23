@@ -517,18 +517,24 @@ func (e *explorer) latestDecisions() string {
 // tree cannot resolve, measured against the committed ratchet.
 func (e *explorer) health() string {
 	h := e.export.Health
+	ui := e.c.ui
 	var b strings.Builder
 	b.WriteString(`<div class="health">`)
+	// Two lines per finding: the fact, then its explanation — a flowing line
+	// wrapped mid-phrase in the narrow panel.
 	for _, u := range h.Unresolved {
-		b.WriteString(`<div><span class="w">!</span> <a href="/` + escapeAttr(e.routeOf(u.From)) + `">` +
-			escapeText(u.From) + `</a> → <b class="stub">` + escapeText(u.To) + `</b> <span class="muted">` +
-			escapeText(relationWord(u.Rel)) + ` · ` + escapeText(e.c.ui.Record.NotInTree) + `</span></div>`)
+		b.WriteString(`<div class="hitem"><span class="hfact"><span class="w">!</span> <a href="/` +
+			escapeAttr(e.routeOf(u.From)) + `">` + escapeText(u.From) + `</a> → <b class="stub">` +
+			escapeText(u.To) + `</b></span><span class="hwhy">` +
+			escapeText(relationWord(u.Rel)) + ` · ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
 	}
-	b.WriteString(`<div class="hsum">` + escapeText(strconv.Itoa(len(h.Unresolved))) + ` / ` +
-		escapeText(strconv.Itoa(h.BaselineCount)) + ` · ` +
-		escapeText(strconv.Itoa(e.export.Layout.Isolated)) + `</div>`)
+	// Every summary number carries its word; three bare numbers read as a
+	// rendering fault.
+	b.WriteString(`<div class="hsum">` + strconv.Itoa(len(h.Unresolved)) + ` ` + escapeText(ui.Panels.Unresolved) +
+		` / ` + strconv.Itoa(h.BaselineCount) + ` ` + escapeText(ui.Panels.Baseline) +
+		` · ` + strconv.Itoa(e.export.Layout.Isolated) + ` ` + escapeText(ui.Panels.Isolated) + `</div>`)
 	b.WriteString(`</div>`)
-	return panel("c4", e.c.ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
+	return panel("c4", ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
 }
 
 // routeOf is a record's page, or "" where no file answers to the id.

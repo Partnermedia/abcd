@@ -283,6 +283,9 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .health .w{color:var(--hazard-ink);background:var(--hazard-soft);padding:0 .3em;border-radius:3px}
 .health .hsum{margin-top:8px;color:var(--ink-2)}
 .health div{overflow-wrap:anywhere}
+.health .hitem{margin-bottom:6px}
+.health .hfact,.health .hwhy{display:block}
+.health .hwhy{margin-left:26px;color:var(--ink-2);font-size:.72rem}
 /* A record that has left the tree: shown as the absence it is, never linked. */
 .stub{font-family:"IBM Plex Mono",monospace;font-weight:400;color:var(--hazard-ink);border-bottom:1px dashed var(--hazard);padding-bottom:1px}
 

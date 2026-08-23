@@ -96,6 +96,11 @@ type Panels struct {
 	Latest    string `json:"latest"`
 	Health    string `json:"health"`
 	TableView string `json:"table_view"`
+	// Unresolved, Baseline and Isolated label the health summary's three
+	// numbers; unlabelled they read as a rendering fault.
+	Unresolved string `json:"unresolved"`
+	Baseline   string `json:"baseline"`
+	Isolated   string `json:"isolated"`
 }
 
 // GraphUI labels the relationship chart's controls.
