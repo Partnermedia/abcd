@@ -1905,6 +1905,27 @@ parallel-agent merge contention bites.
   future upgrade path; adopting an open-licensed guide — Google / Microsoft /
   GitLab / errata-ai styles — explored at the intent's SOTA pass). No ADR
   unless a new rule family emerges.
+- 2026-08-22 — All-dimensions bug-hunt round 7 (branch `bughunt-b/round-7`).
+  Fixed 11 substantive and 4 nitpick findings across five hunt dimensions, each
+  adversarially refuted before fixing and each behaviour change pinned by a
+  watched-fail test. Security/code: the guard tokenizer now recognises `$'...'`
+  ANSI-C and `$"..."` locale quoting (a Tier-1 blocker bypass); the hard-fail
+  `local_username` redaction matcher folds case; five site-generator fixes
+  (SVG prolog/comment/CDATA build-vs-check disagreement, unparsed-page gate
+  masking, unscreened repository `href` scheme, record-id collision, non-ASCII
+  path dates); the launch scaffold's symlink path leak and its `./internal/...`
+  race leg that wedged a bare adopter; a capture `skipped[].error` absolute-path
+  leak. Infra/docs/record: CODEOWNERS now covers `site-src/` and
+  `docs/requirements.txt`; the shipped `abcd site check` is called shipped in the
+  brief and pinned in the release-gate manifest; the site-build read set, the
+  writing-style escape scope, the invariants and evidence-chapter banners, and
+  several doc/string nitpicks corrected. The guard brace-expansion bypass
+  (`{--force,}`) is recorded open (iss-2608221457227161) as a distinct
+  expansion-not-quoting follow-up. Refuted/out of scope this round: the site.md
+  "runs in CI" claim (in-flight PR #436), the iss-315 guard-warn citation, the
+  install-surface transport-pin and `-q` deltas (defence-in-depth, no reachable
+  attack), the record-lint job-name and prepare-this-repo template path (prior
+  art iss-304/iss-87).
 - 2026-08-22 — Website build rulings, from the slice reviews (the interview's
   nine rulings stand; these refine them): the featured-quote derivation skips
   a press release that is one of the two minted placeholder templates —
@@ -1945,3 +1966,14 @@ parallel-agent merge contention bites.
   records its review verdicts inline, without which the revisit condition is
   undetectable. Repairs applied to the protocol note and both survey notes.
 - 2026-08-23 — ideate: abcd-research-verb — verdict killed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-23-ideate-abcd-research-verb.md
+
+- 2026-08-23 — Manual-test triage rulings (maintainer): (1) spc-38's "every
+  visual has a table twin" is amended — a twin is dropped wherever the visual
+  already carries the same labels and numbers as text; the relationship
+  chart's list twin stays (spc-39 AC 4). (2) spc-39's reduced-motion
+  behaviour (list in place of the chart) is re-confirmed as ruled — not a
+  defect. (3) Record sub-nav iconography uses text glyphs as ui.json
+  interface strings, never image assets (keeps adr-47's picture rule
+  untouched). (4) The Genealogy release-cadence list is dropped now; a
+  commits-per-release-window ridgeline is its candidate replacement, designed
+  within the IA-restructure intent seed (iss-2608230752354909).

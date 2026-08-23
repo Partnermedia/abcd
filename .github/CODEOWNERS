@@ -17,3 +17,8 @@
 /.abcd/record-lint.json @REPPL
 /mkdocs.yml @REPPL
 /wrangler.jsonc @REPPL
+# site-src/ is the site build's static input, including install.sh.tmpl — the
+# byte-for-byte source of the /install.sh the site serves to installing users;
+# docs/requirements.txt is the pip input to the deployed site build.
+/site-src/ @REPPL
+/docs/requirements.txt @REPPL

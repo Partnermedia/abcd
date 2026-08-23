@@ -137,9 +137,18 @@ jobs:
 
       - name: Test
         run: go test ./...
+<%- if .Abcd %>
 
       - name: Test (race, internal)
         run: go test -race ./internal/...
+<%- else %>
+
+      # A generic module may have no internal tree, so the race leg runs over the
+      # whole module; a package-scoped pattern would fail every run with a
+      # "no such file or directory" and wedge the release.
+      - name: Test (race)
+        run: go test -race ./...
+<%- end %>
 <%- range .ExtraGates %>
 
       - name: <% .Name %>

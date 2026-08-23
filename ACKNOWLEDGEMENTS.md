@@ -19,6 +19,19 @@ and fit for the project. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Ideas and methodologies that shaped the design — not code abcd depends on.
 
+- **The International Code of Signals (International Maritime Organization)** —
+  the maritime flag alphabet whose Alfa, Bravo, Charlie and Delta are encoded
+  pixel-for-pixel as abcd's logo (itd-133, `internal/livery`): the halved
+  white-and-blue swallowtail, the all-red swallowtail, the five-stripe and the
+  three-band flags. The full-size logo is held to the standard's geometry by
+  test; the compact variant declares itself an approximation rather than
+  claiming a fidelity three rows cannot carry.
+- **The NO_COLOR convention (<https://no-color.org>)** — the environment
+  variable that asks a program to emit no colour, and specifically its rule
+  that the variable counts when *present and not empty*, whatever its value.
+  That rule is what abcd's colour ladder implements (itd-112,
+  `internal/term`), and the precedence test pins the empty-string case that a
+  presence-only reading would get wrong.
 - **"20 Must-Know Agentic AI Terms" (Andreas Horn, LinkedIn, 2026)** — the
   practitioner term list whose assessment seeded the terminology crosswalk
   (itd-100, `docs/reference/terminology.md`). Credited as the prompt, not a

@@ -653,3 +653,32 @@ func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
 		}
 	}
 }
+
+// TestListSkippedErrorIsPathFree proves a ledger file that fails to read surfaces
+// in the skipped list with no absolute developer-identity path in its Error — the
+// skipped list rides an exit-0 success envelope the CLI's error scrubber never
+// sees, so it must be scrubbed at the source (iss-81).
+func TestListSkippedErrorIsPathFree(t *testing.T) {
+	repo, ir := ledger(t)
+	if err := ensureLedgerDirs(ir); err != nil {
+		t.Fatal(err)
+	}
+	// A dangling symlink named like a record: os.ReadFile fails, and the raw
+	// *os.PathError carries the absolute path.
+	link := filepath.Join(ir, "open", "iss-1-broken.md")
+	if err := os.Symlink(filepath.Join(ir, "open", "nowhere.md"), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	res, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Skipped) == 0 {
+		t.Fatal("the unreadable record did not surface in the skipped list")
+	}
+	for _, s := range res.Skipped {
+		if strings.Contains(s.Error, repo) {
+			t.Errorf("skipped error leaks the absolute path: %q", s.Error)
+		}
+	}
+}

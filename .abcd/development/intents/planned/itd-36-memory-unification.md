@@ -21,7 +21,7 @@ severity: major
 
 ## Why This Matters
 
-Today's `.abcd/memory/` is the receiving end of a single upstream — vendor session memory (Claude / OpenCode), distilled by the memory writer into domain-grouped principle pages. That's the per-project compounding-curated agent-experience layer. Useful, but narrow.
+Today's `.abcd/memory/` is the receiving end of a single upstream — vendor session memory (Claude / opencode), distilled by the memory writer into domain-grouped principle pages. That's the per-project compounding-curated agent-experience layer. Useful, but narrow.
 
 There's a real gap: **per-project durable knowledge has multiple legitimate upstreams, not just session memory.** Research-shaped projects ingest external papers; mixed-licence projects ingest internal notes alongside paywalled academic sources; long-running projects accumulate patterns from oracle reviews and the issue ledger. Today the user has no abcd surface for any of this — they paste context into chat, lose it at session end, and re-derive it next session. RAG patterns help but re-derive synthesis on every query. The Karpathy LLM Wiki pattern (April 2026, gist 5k+ stars) names a different shape: synthesis happens at ingest, not query — cross-references pre-built, contradictions flagged during maintenance.
 

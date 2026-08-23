@@ -103,6 +103,20 @@ func TestAssetsRefuseExecutableSVG(t *testing.T) {
 		{"doctype entity",
 			`<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><desc>&x;</desc></svg>`,
 			""},
+		// A prolog, a comment or a CDATA section is inlined verbatim and the
+		// emitted page's reader (htmlscan) refuses all three — so the build must
+		// refuse them at the asset, not leave the page to fail the check with a
+		// message that names no file. Every mainstream SVG exporter writes a prolog
+		// and a generator comment.
+		{"xml prolog",
+			`<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>`,
+			"processing instruction"},
+		{"generator comment",
+			`<svg xmlns="http://www.w3.org/2000/svg"><!-- Generator: Adobe Illustrator --><rect width="1" height="1"/></svg>`,
+			"comment"},
+		{"cdata section",
+			`<svg xmlns="http://www.w3.org/2000/svg"><title><![CDATA[x]]></title><rect width="1" height="1"/></svg>`,
+			"cdata"},
 	}
 	at := Source{Path: "docs/explanation/page.md", Line: 5}
 	for _, c := range cases {

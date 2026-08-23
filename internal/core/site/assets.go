@@ -111,6 +111,14 @@ func checkInlinableSVG(svg, rel string) error {
 		return fmt.Errorf("%s: %s — an inlined drawing becomes markup in the published page, so it is held to the elements and attributes a drawing is made of",
 			rel, fmt.Sprintf(format, args...))
 	}
+	// A CDATA section is CharData to the decoder, indistinguishable from ordinary
+	// text, so it is caught on the raw bytes before the token walk. Like a comment
+	// and a processing instruction, it is inlined verbatim and the emitted page's
+	// reader (htmlscan) refuses it — the build must refuse it here, at the asset,
+	// rather than let the page fail the check with a message that names no file.
+	if strings.Contains(svg, "<![CDATA[") {
+		return bad("carries a CDATA section")
+	}
 	dec := xml.NewDecoder(strings.NewReader(svg))
 	// Entity expansion is how an XML parser is made to read files it was never
 	// given. A drawing needs no custom entity, so the map stays empty and any
@@ -127,10 +135,14 @@ func checkInlinableSVG(svg, rel string) error {
 		}
 		switch t := tok.(type) {
 		case xml.ProcInst:
-			if strings.EqualFold(t.Target, "xml") {
-				continue // the XML declaration itself
-			}
-			return bad("carries a processing instruction (<?%s?>)", t.Target)
+			// Including the `<?xml … ?>` declaration every SVG exporter writes: it
+			// is inlined verbatim, and the emitted page carries no processing
+			// instruction (htmlscan refuses one). Strip the prolog from the drawing.
+			return bad("carries a processing instruction (<?%s?>); strip the XML prolog, as the inlined drawing becomes part of the page", t.Target)
+		case xml.Comment:
+			// Inlined verbatim, and the page carries no comment (htmlscan refuses
+			// one, where unreviewed text would hide). Strip it from the drawing.
+			return bad("carries a comment; strip it, as the inlined drawing becomes part of the page")
 		case xml.Directive:
 			// `<!DOCTYPE … [<!ENTITY x SYSTEM "file:///etc/passwd">]>` is the
 			// classic external-entity read, and no drawing has a doctype.
