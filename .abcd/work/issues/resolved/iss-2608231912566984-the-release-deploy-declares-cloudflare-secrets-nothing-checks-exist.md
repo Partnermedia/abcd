@@ -7,6 +7,10 @@ category: "drift"
 source: "user-observation"
 found_during: "v0.6.2 release 2026-08-23"
 found_at: ".github/workflows/site.yml"
+resolution: "release.yml now passes secrets: inherit to the site.yml call, so the callee's deploy job can resolve the site environment's Cloudflare credentials. The named-secrets alternative is structurally unavailable: a job calling a reusable workflow may not declare an environment, so the caller can never resolve one to pass on. Fixed in the workflow and in the scaffold template it is regenerated from, with the reasoning beside the zizmor suppression. The production deploy path is verified empirically by the 0.6.3 release this resolution enables — v0.6.2 was its first attempt and it failed there."
+impact: fix
+resolved_by:
+  commit: "0eb69ac5"
 ---
 
 The v0.6.2 release published its binaries, checksums and attestation, then
