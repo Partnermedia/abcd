@@ -1921,3 +1921,27 @@ parallel-agent merge contention bites.
   spc-40's "same change that first serves the script" as the deploy, so the
   docs never name an endpoint that 404s. Build order is fixed: `site build`
   first, `mkdocs -d site/docs` second — the purge makes the reverse loud.
+- 2026-08-22 — SOTA research protocol captured, no /abcd:research verb minted
+  (session assessment; adoption is the maintainer's gate). Three research runs
+  (context-window management ×2 passes, local MLX models) followed the same
+  shape — parallel research pass, dated *-sota.md synthesis with per-technique
+  fit challenges, lint gates, fresh-context adversarial reviewers with disjoint
+  lenses (source fidelity / repo fidelity), every finding applied. Assessment:
+  /abcd:ideate does NOT cover SOTA research (idea-with-verdict vs
+  question-with-survey; a survey is ideate's leg-1 feeder, not its overlap);
+  /abcd:consult + /abcd:ingest cover the sources-corpus side; execution stays
+  host-delegated. Rejected alternative: minting a research-record validator verb
+  now — fails script-first-mvp (thin genre corpus, tier vocabulary still
+  moving). Protocol + revisit condition recorded in
+  .abcd/development/research/notes/2026-08-22-sota-research-protocol.md.
+- 2026-08-23 — SOTA-protocol proposal adversarially reviewed (two fresh-context
+  reviewers, disjoint lenses, authorship stripped): verdict REFRAME — the
+  no-verb deferral stands, but on script-first-mvp's actual trigger (contract
+  uncertainty) alone. Withdrawn: the thin-corpus argument (the genre corpus is
+  ~13 notes, and ideate's own validator was minted after three manual runs, so
+  corpus size is not the criterion). Repaired: reviewer yields reclassified as
+  session testimony; feeder claim downgraded to expectation (no ideate run has
+  consumed a *-sota.md note yet); protocol gains step 6 — every survey note
+  records its review verdicts inline, without which the revisit condition is
+  undetectable. Repairs applied to the protocol note and both survey notes.
+- 2026-08-23 — ideate: abcd-research-verb — verdict killed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-23-ideate-abcd-research-verb.md
