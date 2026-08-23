@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"github.com/Partnermedia/abcd/internal/adapter/scanner"
 	"github.com/Partnermedia/abcd/internal/core"
@@ -1364,6 +1365,18 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 						"unknown intent subcommand %q; did you mean %q? (nothing created — reword the text if you meant to file a draft)",
 						args[0], sug)}
 				}
+				// Guard: a lone bare word near NO sub-verb fell through the
+				// did-you-mean above and was filed as a draft title
+				// (iss-2608221328552172). A one-word positional is a sub-verb by
+				// shape; only prose is a draft title.
+				if loneBareToken(args) {
+					if args[0] == "" {
+						return &exitError{Code: 2, Msg: "abcd intent: the draft title is empty (nothing created)"}
+					}
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; quote a sentence to file a draft)",
+						args[0])}
+				}
 				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
 			}
 			v, err := intent.Status(cwd)
@@ -2098,6 +2111,18 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					"unknown capture subcommand %q; did you mean %q? (nothing captured — reword the text if you meant to file it)",
 					args[0], sug)}
 			}
+			// Guard: a lone bare word near NO sub-verb fell through the
+			// did-you-mean above and was filed as an issue
+			// (iss-2608221328552172). A one-word positional is a sub-verb by
+			// shape; only prose is issue text.
+			if loneBareToken(args) {
+				if args[0] == "" {
+					return &exitError{Code: 2, Msg: "abcd capture: the issue text is empty (nothing captured)"}
+				}
+				return &exitError{Code: 2, Msg: fmt.Sprintf(
+					"unknown capture subcommand %q (nothing captured — a lone word is read as a sub-verb, never as issue text; quote a sentence to file an issue)",
+					args[0])}
+			}
 			// Fast path: append a structured issue from the free-form text.
 			text := strings.Join(args, " ")
 			sl := slug
@@ -2384,6 +2409,31 @@ func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bo
 		}
 	}
 	return best, best != ""
+}
+
+// loneBareToken reports whether the positional is one whitespace-free word — the
+// single invocation shape a free-text create verb cannot tell apart from a
+// sub-verb call. `abcd capture nosuchthing` and `abcd capture resolve` are the
+// same shape; only the second happens to reach cobra's dispatcher first, so the
+// first was swallowed as issue text and minted a durable record at exit 0
+// (iss-2608221328552172). suspectedTypoedSubcommand catches a lone token NEAR a
+// real sub-verb (edit distance 1–2); this catches every other lone token, which
+// is the half that had no guard at all.
+//
+// Prose is unambiguous and still files. The canonical create path passes ONE
+// argument carrying whitespace — the shell has already eaten the quotes around
+// `abcd intent "widen the public api"` — and an unquoted title arrives as
+// several arguments. What is refused is a one-word record title, and a one-word
+// title is neither a press release nor an issue report. An empty positional
+// (`abcd capture ""` — a script whose variable expanded to nothing) is caught by
+// the same rule. Core refused that one too, but two layers down as "slug
+// normalises to empty" and at exit 1, so the callers name it here instead: an
+// empty text is not an unknown sub-verb, and a usage refusal is exit 2.
+//
+// unicode.IsSpace rather than an ASCII test, so a non-breaking space between two
+// words of a genuine title is read as the whitespace it is.
+func loneBareToken(args []string) bool {
+	return len(args) == 1 && strings.IndexFunc(args[0], unicode.IsSpace) < 0
 }
 
 // isSubverbOf reports whether token names a registered sub-command of parent's

@@ -9,10 +9,17 @@ import (
 )
 
 // freeTextParents are the parents whose positional is prose by design: `abcd
-// capture "…"` files an issue and `abcd intent "…"` files a draft, so an
-// unrecognised token is text, not a typo. They are cobra.ArbitraryArgs on
-// purpose and carry their own suspectedTypoedSubcommand guard instead, which has
-// its own tests. Every other parent must refuse.
+// capture "…"` files an issue and `abcd intent "…"` files a draft. They are
+// cobra.ArbitraryArgs on purpose and guard the door in RunE instead — a
+// did-you-mean for a near-miss sub-verb, and a flat refusal of any lone bare
+// word (iss-2608221328552172).
+//
+// They are NO LONGER exempt from the sweep below. The exemption existed because
+// a lone unknown token was swallowed as create text and minted a durable record
+// at exit 0 — the very defect that issue reports — so the list that was meant to
+// describe a design choice was in fact holding the sweep off the two verbs where
+// an unwanted write costs the most. The list survives only to pin the other half:
+// prose still files.
 var freeTextParents = []string{"capture", "intent"}
 
 // TestEveryParentRefusesAnUnknownSubverb is the iss-266 sweep, stated
@@ -53,9 +60,13 @@ func TestEveryParentRefusesAnUnknownSubverb(t *testing.T) {
 // structural check above guarantees the Args validator RUNS; this proves it
 // actually refuses, and refuses with the exit code the CHANGELOG promises — a
 // parent that regressed to exit 1 would be a different, worse contract. The list
-// is DERIVED from the live tree minus freeTextParents, so a parent added later is
-// exercised without anyone remembering to add it. Runs in a scratch cwd so a
-// regression that does reach a write path cannot dirty the repository under test.
+// is DERIVED from the live tree, so a parent added later is exercised without
+// anyone remembering to add it. Runs in a scratch cwd so a regression that does
+// reach a write path cannot dirty the repository under test.
+//
+// `capture` and `intent` are in the sweep: a lone bare token is refused there too
+// (iss-2608221328552172), so this is the tree-wide detector for that defect —
+// nothing verb-specific has to be remembered for it to stay closed.
 //
 // hookPlaneParents are excluded and covered by
 // TestHookPlaneParentsFailOpenOnUnknownSubverb instead, under a STRONGER
@@ -67,7 +78,7 @@ func TestParentsRefuseAnUnknownSubverbAtExitTwo(t *testing.T) {
 	t.Chdir(t.TempDir())
 	for _, p := range parents(t, NewRootCommand()) {
 		name := strings.Join(p.path, " ")
-		if slices.Contains(freeTextParents, name) || slices.Contains(hookPlaneParents, name) {
+		if slices.Contains(hookPlaneParents, name) {
 			continue
 		}
 		t.Run(strings.Join(p.path, "_"), func(t *testing.T) {
@@ -81,23 +92,30 @@ func TestParentsRefuseAnUnknownSubverbAtExitTwo(t *testing.T) {
 	}
 }
 
-// TestFreeTextParentsAreStillExempt pins the exemption list to reality. A name
-// left in freeTextParents after that verb stopped taking free text would silently
-// drop a parent out of the sweep above — the exemption has to keep earning itself.
-func TestFreeTextParentsAreStillExempt(t *testing.T) {
+// TestFreeTextParentsStillFileProse is the counterweight to putting `capture` and
+// `intent` into the sweep above. The sweep only proves they refuse; a guard that
+// refused everything would pass it and break the product. This proves the create
+// path still works, through the same front door (`Run`, quoted prose as one
+// argument) the sweep uses to prove the refusal — so the pair together state the
+// whole contract: a lone bare word never writes, prose always does.
+func TestFreeTextParentsStillFileProse(t *testing.T) {
 	byName := map[string]*cobra.Command{}
 	for _, p := range parents(t, NewRootCommand()) {
 		byName[strings.Join(p.path, " ")] = p.cmd
 	}
 	for _, name := range freeTextParents {
-		cmd, ok := byName[name]
-		if !ok {
+		if _, ok := byName[name]; !ok {
 			t.Errorf("freeTextParents names %q, which is not a parent in the command tree", name)
 			continue
 		}
-		if err := cmd.Args(cmd, []string{"some prose"}); err != nil {
-			t.Errorf("%q is exempt as a free-text verb but its Args validator refuses prose: %v", name, err)
-		}
+		t.Run(name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			var out, errOut strings.Builder
+			if code := Run([]string{name, "widen the public api for downstream callers"}, &out, &errOut); code != 0 {
+				t.Fatalf("abcd %s \"<prose>\" exited %d, want 0 (a genuine title must still file).\nstdout:\n%s\nstderr:\n%s",
+					name, code, out.String(), errOut.String())
+			}
+		})
 	}
 }
 

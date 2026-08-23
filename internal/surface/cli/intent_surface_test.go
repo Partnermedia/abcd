@@ -153,3 +153,71 @@ func TestIntentAuditRenameCleanBreak(t *testing.T) {
 		t.Fatalf("intent audit must be registered, got: %v", err)
 	}
 }
+
+// iss-2608221328552172 acceptance corpus. The typo guard above only catches a
+// NEAR-MISS of a real sub-verb; a lone token that resembles nothing —
+// `abcd intent nosuchthing` — fell straight through it into the create path and
+// minted a durable draft at exit 0. A one-word positional is ambiguous with a
+// sub-verb call by construction, so the create path takes prose only.
+
+// TestIntentLoneWordNeverWrites is the headline: a single bare word that is not
+// a sub-verb and is not near one must be refused, and must file no draft.
+func TestIntentLoneWordNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "intent", "nosuchthing")
+	if err == nil {
+		t.Fatalf("expected an error for the lone unknown token, got success:\n%s", out)
+	}
+	if n := intentDraftCount(t, repo); n != 0 {
+		t.Fatalf("a lone unknown token filed %d draft(s); it must write nothing", n)
+	}
+}
+
+// TestIntentLoneRecordIDNeverWrites covers the other lone-token shape a user
+// actually types: `abcd intent itd-5` (a forgotten sub-verb) must not become a
+// draft whose title is a record id.
+func TestIntentLoneRecordIDNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "intent", "itd-5")
+	if err == nil {
+		t.Fatalf("expected an error for the lone record id, got success:\n%s", out)
+	}
+	if n := intentDraftCount(t, repo); n != 0 {
+		t.Fatalf("a lone record id filed %d draft(s); it must write nothing", n)
+	}
+}
+
+// TestIntentQuotedProseStillWritesAsOneArg pins the other half: the canonical
+// create path passes ONE argument carrying whitespace (the shell has eaten the
+// quotes), and it must still file. A fix that refused every single-argument
+// invocation would break the documented create path, and this catches it.
+func TestIntentQuotedProseStillWritesAsOneArg(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	runCLI(t, "intent", "widen the public api")
+	if n := intentDraftCount(t, repo); n != 1 {
+		t.Fatalf("quoted prose wrote %d draft(s), want 1", n)
+	}
+}
+
+// TestIntentEmptyTextNeverWrites is the intent half of the empty-positional case.
+func TestIntentEmptyTextNeverWrites(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "intent", "")
+	if err == nil {
+		t.Fatalf("expected an error for an empty draft title, got success:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Fatalf("expected the error to name the title as empty, got: %v", err)
+	}
+	if n := intentDraftCount(t, repo); n != 0 {
+		t.Fatalf("an empty draft title filed %d draft(s); it must write nothing", n)
+	}
+}
