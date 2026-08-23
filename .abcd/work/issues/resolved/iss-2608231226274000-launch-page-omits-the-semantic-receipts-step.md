@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "v0.6.2 release failure post-mortem 2026-08-23"
 found_at: "commands/launch.md"
+resolution: "commands/launch.md now carries a Semantic receipts section as part of the ship flow: the two host-run passes, the two-commit release-branch shape, where receipts live, and that a HOLD stops the release. The brief's launch surface page matches."
+impact: fix
+resolved_by:
+  commit: "1ff105b"
 ---
 
 `commands/launch.md` documents the release cut as three steps over two Go entry
