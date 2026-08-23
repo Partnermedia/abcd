@@ -12,8 +12,15 @@ Session-end transcript capture is best-effort and its loss is silent: a cancelle
 
 Raised minor -> major on 2026-08-23. The sweep was seeded as a nicety against
 rare events — update-then-quit, crash, SIGKILL. `iss-2608230817034768` shows the
-loss is not rare but systematic: redaction cost puts every transcript past
-roughly 2 MB beyond the host's shutdown budget, and eleven of this one repo's
-transcripts are already missing from its store. That also makes this the
-detector the capture fix has to land against, since no fix to the budget can be
-watched fail without it.
+loss is not rare but systematic: redaction cost rises at roughly 0.7 s per MB
+against a shutdown budget somewhere near 1.5 s, so past a few MB loss is the
+norm rather than a risk. Nine of this one repo's ended transcripts are already
+absent from its store.
+
+That also makes this the detector the capture fix has to land against, since no
+fix to the budget can be watched fail without it — and the sweep is what would
+pin the budget itself, which observational data cannot. Distinguishing "never
+ended" from "ended and lost" is the whole difficulty: three of that repo's
+apparent absences were simply sessions still running, and two more predate the
+store's first record, which is exactly the ambiguity a sweep has to resolve
+before it can report anything trustworthy.
