@@ -100,9 +100,8 @@ type RecordNav struct {
 
 // Panels captions the dashboard panels.
 type Panels struct {
-	Cadence string `json:"cadence"`
-	Latest  string `json:"latest"`
-	Health  string `json:"health"`
+	Latest string `json:"latest"`
+	Health string `json:"health"`
 	// Unresolved, Baseline and Isolated label the health summary's three
 	// numbers; unlabelled they read as a rendering fault.
 	Unresolved string `json:"unresolved"`
@@ -128,8 +127,12 @@ type GraphUI struct {
 	Back           string `json:"back"`
 	Forward        string `json:"forward"`
 	History        string `json:"history"`
-	Linked         string `json:"linked"`
-	NoLinks        string `json:"no_links"`
+	// LegendStores and LegendStates head the chart legend's two halves: what a
+	// bubble's colour means, and what its border means.
+	LegendStores string `json:"legend_stores"`
+	LegendStates string `json:"legend_states"`
+	Linked       string `json:"linked"`
+	NoLinks      string `json:"no_links"`
 }
 
 // RecordUI labels a per-record page's sections.
@@ -171,6 +174,9 @@ type HealthUI struct {
 	// is the one on the page that reports no fault at all, and a panel sitting
 	// among findings without saying so is read as a fifth finding.
 	NotADefect string `json:"not_a_defect"`
+	// SupersedesLead says what a supersession row means, and that the family
+	// reports no fault: the left record replaced the right one.
+	SupersedesLead string `json:"supersedes_lead"`
 	// Clean is what the page says when a family has nothing to report.
 	Clean string `json:"clean"`
 	// Suggestion prefixes the line a finding proposes a human confirm.

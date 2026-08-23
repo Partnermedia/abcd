@@ -44,7 +44,6 @@
     "health": "Health"
   },
   "panels": {
-    "cadence": "Release cadence",
     "latest": "Latest decisions",
     "health": "Record health",
     "unresolved": "unresolved",
@@ -69,7 +68,9 @@
     "forward": "Forward",
     "history": "History of records looked at",
     "linked": "linked records",
-    "no_links": "no typed cross-references"
+    "no_links": "no typed cross-references",
+    "legend_stores": "Colour: what kind of record",
+    "legend_states": "Border: what state it is in"
   },
   "record": {
     "frontmatter": "Frontmatter",
@@ -110,6 +111,7 @@
     "multi_trailer": "Commits declaring more than one model",
     "not_a_defect": "Not a fault: it is why the trailer count and the commit count differ",
     "clean": "Nothing to report",
-    "suggestion": "Suggested"
+    "suggestion": "Suggested",
+    "supersedes_lead": "Not a fault: the record on the left replaced the one on the right"
   }
 }

@@ -128,33 +128,69 @@ func (e *explorer) legend() string {
 		}
 		return `<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" ` + style + `/></svg>`
 	}
+	// TWO encodings, read separately. Colour is the store a record belongs to;
+	// border is the state its store grades it in. Run together in one wrapping
+	// row they read as one list, and a lifecycle word wraps under a store name
+	// as though it belonged to it — "closed" under "specs", which says something
+	// the chart never meant.
 	var b strings.Builder
 	b.WriteString(`<div class="glegend">`)
+
+	b.WriteString(`<p class="glhead">` + escapeText(e.c.ui.Graph.LegendStores) + `</p><div class="glrow">`)
 	for _, typ := range e.storeOrder() {
 		if e.export.Counts.ByType[typ] == 0 {
 			continue
 		}
 		b.WriteString(`<span>` + swatch(typ, "solid") + escapeText(e.c.ui.Tiles.ForType(typ)) + `</span>`)
 	}
+	// Disciplines are filed under intents by the record and drawn in their own
+	// colour by the chart, so the legend names them in their own right: to a
+	// reader a discipline is a kind of record, not a state of an intent.
+	if e.hasDisciplineNodes() {
+		b.WriteString(`<span>` + swatch(disciplinesLifecycle, "solid") +
+			escapeText(e.c.ui.Tiles.Discipline) + `</span>`)
+	}
+	b.WriteString(`</div>`)
+
 	// One row per fill, labelled with the lifecycle words the record actually
-	// uses for that state.
+	// uses for that state. The swatch is drawn in a neutral colour: the shape is
+	// what this half of the legend is about, and colouring it would say the state
+	// belongs to one store.
 	fills := map[string][]string{}
 	for _, n := range e.export.Nodes {
 		f := lifecycleFill(n.Lifecycle)
-		if !containsStr(fills[f], n.Lifecycle) && n.Lifecycle != "" {
+		if !containsStr(fills[f], n.Lifecycle) && n.Lifecycle != "" && n.Lifecycle != disciplinesLifecycle {
 			fills[f] = append(fills[f], n.Lifecycle)
 		}
 	}
+	var states strings.Builder
 	for _, f := range []string{"solid", "ring", "dash", "fade"} {
 		words := fills[f]
 		if len(words) == 0 {
 			continue
 		}
 		sort.Strings(words)
-		b.WriteString(`<span>` + swatch("principle", f) + escapeText(strings.Join(words, " · ")) + `</span>`)
+		for _, w := range words {
+			states.WriteString(`<span>` + swatch("", f) + escapeText(w) + `</span>`)
+		}
+	}
+	if states.Len() > 0 {
+		b.WriteString(`<p class="glhead">` + escapeText(e.c.ui.Graph.LegendStates) + `</p><div class="glrow">`)
+		b.WriteString(states.String())
+		b.WriteString(`</div>`)
 	}
 	b.WriteString(`</div>`)
 	return b.String()
+}
+
+// hasDisciplineNodes reports whether any record is filed as a discipline.
+func (e *explorer) hasDisciplineNodes() bool {
+	for _, n := range e.export.Nodes {
+		if n.Lifecycle == disciplinesLifecycle {
+			return true
+		}
+	}
+	return false
 }
 
 // lifecycleFill is how a bubble in that state is drawn: solid when the work is

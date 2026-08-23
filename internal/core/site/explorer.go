@@ -305,6 +305,12 @@ func panelSourced(span, heading, headingSrc, note, body string) string {
 // relationship chart's list already uses, for the case where a page offers two
 // long bodies a reader chooses BETWEEN rather than reads side by side.
 func panelDisclosure(span, heading, headingSrc, note, body string) string {
+	return panelFold(span, heading, headingSrc, note, body, false)
+}
+
+// panelFold is panelDisclosure with the open state named. A deck a reader
+// arrives to read opens; one they choose between stays shut.
+func panelFold(span, heading, headingSrc, note, body string, open bool) string {
 	cls := "panel fold"
 	if span != "" {
 		cls += " " + span
@@ -315,7 +321,11 @@ func panelDisclosure(span, heading, headingSrc, note, body string) string {
 		src = srcAttr(rel, anchor)
 	}
 	var b strings.Builder
-	b.WriteString(`<details class="` + escapeAttr(cls) + `"><summary><h3` + src + `>` + escapeText(heading))
+	att := `<details class="` + escapeAttr(cls) + `"`
+	if open {
+		att += ` open`
+	}
+	b.WriteString(att + `><summary><h3` + src + `>` + escapeText(heading))
 	if note != "" {
 		b.WriteString(`<span>` + escapeText(note) + `</span>`)
 	}
@@ -436,9 +446,6 @@ func (e *explorer) dashboard() (string, error) {
 		b.WriteString(panel("c6", caption, strconv.Itoa(e.export.Counts.ByType[typ]), e.segBar(segs)))
 	}
 
-	if cad := e.cadence(); cad != "" {
-		b.WriteString(cad)
-	}
 	b.WriteString(e.latestDecisions())
 	b.WriteString(e.health())
 	b.WriteString(`</div>`)
@@ -511,120 +518,6 @@ func (e *explorer) storeOrder() []string {
 		return types[i] < types[j]
 	})
 	return types
-}
-
-// cadence renders the release history as a RIDGELINE: one band per release,
-// each band the shape of the commits made inside that release's own window.
-//
-// A tick strip said only WHEN a release happened, and the gap between two ticks
-// is a number the row already carries. The shape says what a gap cannot —
-// whether a release followed a fortnight of steady work or two days of it — and
-// it is drawn from the history the rest of the page already reads, so it adds
-// no input the generic side did not have (itd-140).
-//
-// Bands run newest first, the order every other list on the site runs in. A
-// release whose window holds no commits still draws its row: a release is a
-// fact whether or not the walk placed work under it.
-func (e *explorer) cadence() string {
-	rel := e.export.Releases
-	if len(rel) < 2 {
-		return ""
-	}
-	days := e.export.History.Days
-	if len(days) == 0 {
-		return ""
-	}
-	// Commit counts keyed by day number, so a window is a range rather than a
-	// set of strings to parse again.
-	byDay := make(map[int]int, len(days))
-	oldest := 0
-	for d, n := range days {
-		dn := dayNumber(d)
-		byDay[dn] = n
-		if oldest == 0 || dn < oldest {
-			oldest = dn
-		}
-	}
-
-	type band struct {
-		version, date string
-		counts        []int
-		total         int
-	}
-	// Each release owns the days after the release before it, up to its own. The
-	// oldest release owns everything before it, so the work that led to the first
-	// release is drawn rather than dropped.
-	bands := make([]band, 0, len(rel))
-	peak := 0
-	for i, r := range rel {
-		to := dayNumber(r.Date)
-		from := oldest
-		if i+1 < len(rel) {
-			from = dayNumber(rel[i+1].Date) + 1
-		}
-		bd := band{version: r.Version, date: r.Date}
-		for dn := from; dn <= to; dn++ {
-			n := byDay[dn]
-			bd.counts = append(bd.counts, n)
-			bd.total += n
-			if n > peak {
-				peak = n
-			}
-		}
-		bands = append(bands, bd)
-	}
-	if peak == 0 {
-		return ""
-	}
-
-	const (
-		bandH  = 24.0
-		labelW = 120.0
-		plotW  = 600.0 - labelW - 8
-		riseH  = 15.0
-	)
-	height := int(float64(len(bands))*bandH) + 12
-	var b strings.Builder
-	b.WriteString(`<svg viewBox="0 0 600 ` + strconv.Itoa(height) + `" class="cadsvg" role="img" aria-label="` +
-		escapeAttr(e.c.ui.Panels.Cadence+" "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">`)
-	for i, bd := range bands {
-		base := float64(i)*bandH + bandH - 4
-		b.WriteString(`<g class="tick"><title>v` + escapeText(bd.version) + " " + escapeText(bd.date) +
-			" " + strconv.Itoa(bd.total) + `</title>`)
-		b.WriteString(`<text x="0" y="` + f1(base) + `" font-size="10" fill="var(--ink-2)">v` +
-			escapeText(bd.version) + `</text>`)
-		b.WriteString(`<text x="58" y="` + f1(base) + `" font-size="8" fill="var(--ink-3)">` +
-			escapeText(bd.date) + `</text>`)
-		if len(bd.counts) > 0 {
-			step := plotW / float64(len(bd.counts))
-			var d strings.Builder
-			d.WriteString("M " + f1(labelW) + " " + f1(base))
-			for j, n := range bd.counts {
-				x := labelW + float64(j)*step + step/2
-				d.WriteString(" L " + f1(x) + " " + f1(base-float64(n)/float64(peak)*riseH))
-			}
-			d.WriteString(" L " + f1(labelW+plotW) + " " + f1(base) + " Z")
-			b.WriteString(`<path d="` + d.String() + `" fill="var(--seq-1)" stroke="var(--seq-3)" stroke-width="1"/>`)
-		}
-		b.WriteString(`<text x="592" y="` + f1(base) + `" font-size="8" text-anchor="end" fill="var(--ink-3)">` +
-			strconv.Itoa(bd.total) + `</text>`)
-		b.WriteString(`</g>`)
-	}
-	b.WriteString(`</svg>`)
-
-	// The phone rendering: the ridgeline is too fine below 700px, so CSS swaps
-	// it for this list. Exactly one of the two is ever visible.
-	var list strings.Builder
-	list.WriteString(`<ul class="list cadlist">`)
-	for _, bd := range bands {
-		list.WriteString(`<li><span class="id">v` + escapeText(bd.version) +
-			`<span class="d">` + escapeText(bd.date) + `</span></span>` +
-			`<span class="small muted tnum">` + strconv.Itoa(bd.total) + `</span></li>`)
-	}
-	list.WriteString(`</ul>`)
-
-	note := strconv.Itoa(len(rel)) + " " + e.c.ui.Tiles.Releases
-	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, b.String()+list.String())
 }
 
 // latestDecisions lists the newest ratified decisions by their own dates. It is
@@ -754,7 +647,7 @@ func (e *explorer) foundationsPage() (string, error) {
 		// The deck's own name is its anchor, so a dashboard tile can land on the
 		// store it counts rather than at the top of the page.
 		b.WriteString(`<div id="` + escapeAttr(anchor) + `" class="c12">`)
-		b.WriteString(panel("c12", label, strconv.Itoa(len(nodes)), cards.String()))
+		b.WriteString(panelFold("c12", label, "", strconv.Itoa(len(nodes)), cards.String(), true))
 		b.WriteString(`</div>`)
 	}
 	deck("principle", e.c.ui.Tiles.Principle, e.principles)

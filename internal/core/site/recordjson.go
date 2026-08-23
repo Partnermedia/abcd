@@ -147,10 +147,6 @@ type HistoryMeta struct {
 	FirstCommit string `json:"first_commit"`
 	LastCommit  string `json:"last_commit"`
 	Commits     int    `json:"commits"`
-	// Days counts the commits of each day, keyed by date. It is what the
-	// cadence ridgeline is drawn from: the shape of the effort behind each
-	// release, rather than only the gap between one release and the next.
-	Days map[string]int `json:"days,omitempty"`
 }
 
 // relationOf maps a frontmatter field to the relation it declares, and to
@@ -239,7 +235,7 @@ func BuildRecordExport(repoRoot, baselineRel string, graph lint.RecordGraph, ext
 		Mentions:      mentions,
 		Counts: Counts{ByType: map[string]int{}, ByLifecycle: map[string]map[string]int{},
 			ByStatus: map[string]map[string]int{}},
-		History: HistoryMeta{FirstCommit: hist.First, LastCommit: hist.Last, Commits: hist.Commits, Days: hist.Days},
+		History: HistoryMeta{FirstCommit: hist.First, LastCommit: hist.Last, Commits: hist.Commits},
 	}
 	for i, n := range nodes {
 		date := hist.EffectiveDate(n.Path, n.Date)

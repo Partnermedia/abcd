@@ -74,19 +74,30 @@ func (e *explorer) healthPage() (string, error) {
 
 	b.WriteString(`<div class="dash reading">`)
 	b.WriteString(e.healthUnresolved())
-	// Supersessions read as text. They sat beside the genealogy drawing, where
-	// they answered a question nobody asked of a picture; here they are what
-	// they are — which records replaced which, and which replacements point at
-	// something the tree no longer holds.
-	if s := e.supersessions(); s != "" {
-		b.WriteString(s)
-	}
 	b.WriteString(e.healthIsolated())
 	b.WriteString(e.healthSameAuthor())
 	b.WriteString(e.healthUndeclared())
 	b.WriteString(e.healthMultiTrailer())
+	b.WriteString(e.healthSupersedes())
 	b.WriteString(`</div>`)
 	return e.shell(routeHealth, e.c.ui.RecordNav.Health, "", b.String()), nil
+}
+
+// healthSupersedes reads the supersession edges as text: which record replaced
+// which, and which replacement points at something the tree no longer holds.
+//
+// It sits LAST because it is the one family that is not a fault — a
+// supersession is the record working — and it carries a line saying so, for the
+// same reason the multi-trailer family does: a panel among findings that says
+// nothing about itself is read as another finding.
+func (e *explorer) healthSupersedes() string {
+	ui := e.c.ui
+	body, n := e.supersessions()
+	lead := `<p class="small muted foldlead">` + escapeText(ui.Health.SupersedesLead) + `</p>`
+	if n == 0 {
+		return panelDisclosure("c12", relationWord("supersedes"), "", "0", lead+e.healthClean())
+	}
+	return panelDisclosure("c12", relationWord("supersedes"), "", strconv.Itoa(n), lead+body)
 }
 
 // healthClean is the body of a family with nothing to report.

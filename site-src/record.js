@@ -52,7 +52,15 @@
      takes ink, because a fourth categorical hue stops being distinguishable
      under colour-vision deficiency in an all-pairs chart. */
   var TYPE_TOKEN = { adr: '--s-adr', intent: '--s-intent', spec: '--s-spec', issue: '--s-issue' };
-  var tok = function (t) { return TYPE_TOKEN[t] || '--s-neutral'; };
+  /* A discipline is filed under intents by the record and is its own KIND of
+     thing to a reader — a rule that holds rather than a change that ships — so
+     it is drawn in its own colour and the legend names it in its own right.
+     The lifecycle wins over the type, because that is where the record says so. */
+  var DISCIPLINE = 'disciplines';
+  var tok = function (t, state) {
+    if (state === DISCIPLINE) return '--s-discipline';
+    return TYPE_TOKEN[t] || '--s-neutral';
+  };
   /* GitHub's state palette: green in play, purple done, grey draft or set aside. */
   var SOLID = ['accepted', 'shipped', 'closed', 'resolved', 'active'];
   var RING = ['planned', 'open', 'proposed', 'disciplines'];
@@ -262,7 +270,13 @@
               var v = bucket[c];
               if (v.i <= u.i) continue;
               var dx = v.x - u.x, dy = v.y - u.y, d = Math.hypot(dx, dy);
-              var min = u.r * u.s + v.r * v.s + 1.5;
+              /* The LAYOUT owns spacing; this only stops a true overlap. The
+                 extra padding that used to sit here was the renderer asking
+                 for more room than the published positions give, so on an
+                 arrangement packed tighter than that padding every frame
+                 pushed bubbles apart and every frame pulled them home — a
+                 loop that never idled and never stopped drawing. */
+              var min = u.r * u.s + v.r * v.s;
               if (d >= min) continue;
               if (d < 0.01) { dx = 0.1; dy = 0.1; d = 0.14; }
               var push = (min - d) / d * 0.5;
@@ -395,7 +409,7 @@
       for (var q = 0; q < N; q++) {
         var n = nodes[q];
         if (n.a < 0.02) continue;
-        var c = col(tok(n.type)), st = cls(n);
+        var c = col(tok(n.type, n.status)), st = cls(n);
         var r = n.r * n.s * k, x = sx(n.x), y = sy(n.y);
         if (x < -r || y < -r || x > W + r || y > H + r) continue;
         ctx.globalAlpha = n.a * (st === 'fade' ? 0.5 : 1);
@@ -724,7 +738,7 @@
         '<button class="hb" id="bfwd" aria-label="' + esc(W_.forward) + '" disabled>›</button></div></div>';
 
       var typePill = $('.pill.type', card);
-      if (typePill) typePill.style.setProperty('--c', 'var(' + tok(n.type) + ')');
+      if (typePill) typePill.style.setProperty('--c', 'var(' + tok(n.type, n.status) + ')');
       $$('li[data-j]', card).forEach(function (li) {
         li.addEventListener('click', function () { setFocus(+li.dataset.j); });
       });
@@ -850,8 +864,21 @@
     size();
     base = baseTarget(); view.tx = base.x; view.ty = base.y;
     nodes.forEach(function (n) { n.x = n.hx[arr]; n.y = n.hy[arr]; });
+    /* A stage that changes size by a LOT has been thrown into or out of full
+       screen, and the chart re-settles either way. Raising here rather than only
+       at the click covers every route out — the button, Escape, the browser's
+       own chrome — and it covers the LEAVING transition, where the browser's
+       animation runs first and a hold started at the click has already expired
+       by the time the chart begins to move. A drag of the window edge changes
+       the size by a little and is left alone, so the indicator never strobes. */
+    var lastW = 0, lastH = 0;
     var ro = new ResizeObserver(function () {
       if (!canvas.isConnected) { ro.disconnect(); return; }
+      var r = stage.getBoundingClientRect();
+      var big = lastW > 0 && (Math.abs(r.width - lastW) > lastW * 0.25 ||
+        Math.abs(r.height - lastH) > lastH * 0.25);
+      lastW = r.width; lastH = r.height;
+      if (big) raise();
       size();
     });
     ro.observe(stage); G.ro = ro;

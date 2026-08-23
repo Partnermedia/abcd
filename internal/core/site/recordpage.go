@@ -299,6 +299,11 @@ func sortEdgesByTarget(edges []ExportEdge, key func(ExportEdge) string) {
 // deficiency in an all-pairs chart.
 func typeColourToken(typ string) string {
 	switch typ {
+	case disciplinesLifecycle:
+		// A discipline is filed under intents by the record and is its own kind
+		// of thing to a reader, so it carries its own colour rather than an
+		// intent's. The chart agrees: `record.js` reads the same rule.
+		return "--s-discipline"
 	case "adr":
 		return "--s-adr"
 	case "intent":

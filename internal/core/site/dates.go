@@ -46,10 +46,6 @@ type History struct {
 	Last  string
 	// Commits is the number of commits the walk saw.
 	Commits int
-	// Days counts the commits of each day the walk saw. It is what a cadence
-	// picture is drawn from, and it costs nothing extra: the walk already reads
-	// every commit's date to place the files that commit touched.
-	Days map[string]int
 }
 
 // fileHist is a path's biography while the walk is still replaying it.
@@ -65,7 +61,7 @@ type fileHist struct {
 // dates. A directory that is not a git repository yields an empty history and no
 // error: an unversioned tree is a state the site renders around, not a fault.
 func LoadHistory(repoRoot string) (History, error) {
-	h := History{Files: map[string]FileDates{}, Days: map[string]int{}}
+	h := History{Files: map[string]FileDates{}}
 	if !gitutil.InRepo(repoRoot) {
 		return h, nil
 	}
@@ -100,7 +96,6 @@ func LoadHistory(repoRoot string) (History, error) {
 			}
 			h.Last = date
 			h.Commits++
-			h.Days[date]++
 			continue
 		}
 		if line == "" || date == "" {

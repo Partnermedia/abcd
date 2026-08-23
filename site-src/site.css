@@ -24,7 +24,7 @@
   --la:#2b5fae; --lb:#c63e3b; --lc:#e39a2e; --ld:#3e9a45;
   --hazard:#e0a83a; --hazard-ink:#5a3d05; --hazard-soft:#fbf0d6;
   --code-bg:#1b1f27; --code-ink:#e9edf3; --code-accent:#9cc4ff;
-  --s-adr:#2a78d6; --s-intent:#eb6834; --s-spec:#1baf7a; --s-issue:#b4bac5; --s-neutral:#161a22;
+  --s-adr:#2a78d6; --s-intent:#eb6834; --s-spec:#1baf7a; --s-issue:#b4bac5; --s-neutral:#161a22; --s-discipline:#8256c4;
   --seq-1:#86b6ef; --seq-2:#3987e5; --seq-3:#1c5cab;
   --gh-open:#1a7f37; --gh-done:#8250df; --gh-muted:#59636e; --gh-critical:#cf222e; --gh-high:#bc4c00; --gh-moderate:#9a6700;
   --good:#0ca30c;
@@ -40,7 +40,7 @@
     --la:#6f9de6; --lb:#e4706c; --lc:#ecb557; --ld:#6fc276;
     --hazard:#d9a23a; --hazard-ink:#f6e3b4; --hazard-soft:#2e2612;
     --code-bg:#0b0d12; --code-ink:#e9edf3; --code-accent:#9cc4ff;
-    --s-adr:#3987e5; --s-intent:#d95926; --s-spec:#199e70; --s-issue:#4a515e; --s-neutral:#edeff3;
+    --s-adr:#3987e5; --s-intent:#d95926; --s-spec:#199e70; --s-issue:#4a515e; --s-neutral:#edeff3; --s-discipline:#a684e0;
     --seq-1:#1c5cab; --seq-2:#3987e5; --seq-3:#86b6ef;
     --gh-open:#3fb950; --gh-done:#a371f7; --gh-muted:#9198a1; --gh-critical:#f85149; --gh-high:#db6d28; --gh-moderate:#d29922;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
@@ -54,7 +54,7 @@
   --la:#6f9de6; --lb:#e4706c; --lc:#ecb557; --ld:#6fc276;
   --hazard:#d9a23a; --hazard-ink:#f6e3b4; --hazard-soft:#2e2612;
   --code-bg:#0b0d12; --code-ink:#e9edf3; --code-accent:#9cc4ff;
-  --s-adr:#3987e5; --s-intent:#d95926; --s-spec:#199e70; --s-issue:#4a515e; --s-neutral:#edeff3;
+  --s-adr:#3987e5; --s-intent:#d95926; --s-spec:#199e70; --s-issue:#4a515e; --s-neutral:#edeff3; --s-discipline:#a684e0;
   --seq-1:#1c5cab; --seq-2:#3987e5; --seq-3:#86b6ef;
   --gh-open:#3fb950; --gh-done:#a371f7; --gh-muted:#9198a1; --gh-critical:#f85149; --gh-high:#db6d28; --gh-moderate:#d29922;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
@@ -334,19 +334,19 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
-/* The cadence STRIP is too fine to read on a phone, so below 700px the list
-   stands in for it. Exactly one of the two renders at any width. */
-.panel.cadence .cadlist{display:none}
-@media (max-width:700px){.panel.cadence .cadsvg{display:none}.panel.cadence .cadlist{display:block}}
 
 .tile{display:block}
 /* A tile that leads somewhere says so before it is clicked: the whole tile is
    the target, and the frame is what tells a reader the number is a way in. An
    inert tile keeps the plain surface, so the two are never confused. */
-a.tile.lead{color:inherit;text-decoration:none;border-radius:var(--radius);outline-offset:3px;
-  transition:box-shadow .12s ease,border-color .12s ease}
-a.tile.lead:hover,a.tile.lead:focus-visible{box-shadow:0 0 0 2px var(--accent) inset}
-a.tile.lead:hover .l{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+/* The WHOLE tile lights up, not a line of it: the tile is the target, so the
+   tile is what changes. The panel's own padding is taken over by the anchor so
+   the fill reaches the tile's edges rather than leaving a border of untouched
+   surface around it. */
+.panel.c2:has(>a.tile.lead){padding:0}
+a.tile.lead{display:block;color:inherit;text-decoration:none;border-radius:var(--radius);
+  padding:16px 18px;border:2px solid transparent;transition:background .12s ease,border-color .12s ease}
+a.tile.lead:hover,a.tile.lead:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){a.tile.lead{transition:none}}
 .tile .n,.tile .l,.tile .s{display:block}
 .tile .n{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:2.3rem;line-height:1;letter-spacing:-.02em}
@@ -357,10 +357,13 @@ a.tile.lead:hover .l{text-decoration:underline;text-decoration-thickness:1px;tex
 .seg{display:flex;gap:2px;height:16px;border-radius:3px;overflow:hidden;background:var(--surface-2)}
 .seg i{display:block;height:100%}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-family:"Bricolage Grotesque",sans-serif;font-size:.84rem;color:var(--ink-2);margin-top:8px}
+/* One rhythm down a store: the gap from the legend to the first bucket is the
+   gap between buckets. Without this the first one sits tighter than the rest,
+   because .panel+.panel only fires between two panels. */
+.legend+.panel{margin-top:14px}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .legend .tnum{color:var(--ink)}
-.cadsvg{width:100%;height:auto}
 
 .list{list-style:none;margin:0;padding:0;font-size:.92rem}
 .list li{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);align-items:baseline}
@@ -384,8 +387,12 @@ svg text{font-family:"Bricolage Grotesque",sans-serif}
 
 /* foundations */
 .fcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
-.fcard{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--rule);border-radius:var(--radius);background:var(--ground);text-decoration:none;color:var(--ink)}
-.fcard:hover{border-color:var(--accent)}
+/* A card and a leading tile are the same affordance at two sizes, so they
+   answer a pointer the same way: the whole surface lights, inside a border
+   thick enough to read as a state rather than as a hairline. */
+.fcard{display:flex;flex-direction:column;gap:4px;padding:11px 13px;border:2px solid var(--rule);border-radius:var(--radius);background:var(--ground);text-decoration:none;color:var(--ink);transition:background .12s ease,border-color .12s ease}
+.fcard:hover,.fcard:focus-visible{border-color:var(--accent);background:var(--accent-soft)}
+@media (prefers-reduced-motion:reduce){.fcard{transition:none}}
 .fcard .t{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.95rem;line-height:1.25}
 .fcard .id{font-family:"IBM Plex Mono",monospace;font-size:.7rem;color:var(--ink-3);word-break:break-word}
 
@@ -520,6 +527,11 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .continuum .mark:hover text,.continuum .mark:focus text{opacity:1}
 .continuum .mark:hover path,.continuum .mark:hover circle:not(.hit),.continuum .mark:focus path,.continuum .mark:focus circle:not(.hit){stroke:var(--accent)}
 
+
+/* The legend is two encodings, each with its own heading and its own row. */
+.glegend .glhead{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-top:10px}
+.glegend .glhead:first-child{margin-top:0}
+.glegend .glrow{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px}
 /* the list twin: the keyboard path, and what replaces the chart at rest */
 .blist{margin-top:12px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:10px 14px}
 .blist summary{cursor:pointer;font-weight:600;font-size:.92rem}

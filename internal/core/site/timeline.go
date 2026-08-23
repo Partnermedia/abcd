@@ -81,9 +81,22 @@ func (e *explorer) genealogy() string {
 // findings rather than beside the drawing: a supersession the tree cannot
 // resolve is a health finding, and one it can is a fact about two records that
 // their own pages already carry.
-func (e *explorer) supersessions() string {
+func (e *explorer) supersessions() (body string, n int) {
 	_, positions := e.genealogySVG()
-	return e.supersessionList(positions)
+	body = e.supersessionList(positions)
+	for _, ed := range e.export.Edges {
+		if ed.Rel == "supersedes" {
+			if _, ok := e.byID[ed.To]; ok {
+				n++
+			}
+		}
+	}
+	for _, u := range e.export.Health.Unresolved {
+		if u.Rel == "supersedes" {
+			n++
+		}
+	}
+	return body, n
 }
 
 // tlPoint is where one record's mark ended up, so an arc can find both ends.
@@ -559,7 +572,7 @@ func (e *explorer) supersessionList(pos map[string]tlPoint) string {
 	if n == 0 {
 		return ""
 	}
-	return panel("c6", relationWord("supersedes"), strconv.Itoa(n), `<ul class="list">`+rows.String()+`</ul>`)
+	return `<ul class="list">` + rows.String() + `</ul>`
 }
 
 // --- small numeric helpers -------------------------------------------------
