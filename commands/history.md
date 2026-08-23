@@ -1,16 +1,23 @@
 ---
 name: history
-description: Manage the native session-transcript store for this repo by invoking the abcd binary. list and show are read-only; capture is the redacting write path. The store is keyed on the repo's root-commit SHA and every stored transcript is redacted on write.
-argument-hint: "list | show <session-id-or-filename> | capture <transcript-file>"
+description: Manage the native session-transcript store for this repo by invoking the abcd binary. list, show and staged are read-only; capture and drain are the redacting write paths. The store is keyed on the repo's root-commit SHA and every stored transcript is redacted on write.
+argument-hint: "list | show <session-id-or-filename> | staged | drain | capture <transcript-file>"
 ---
 
 # `/abcd:history` — session-transcript store
 
 The native session-transcript store at
 `~/.abcd/history/<root-sha>/transcripts/`, keyed on this repo's root-commit
-SHA. `list` and `show` **perform zero writes**; `capture` is the only path that
-writes, and it redacts on write — no live secret or absolute home path can
-survive capture.
+SHA. `list`, `show` and `staged` **perform zero writes**; `capture` and `drain`
+are the write paths, and both redact on write — no live secret or absolute home
+path can survive into a record.
+
+Capture of a live session is split across two hooks. SessionEnd only **stages**
+the raw transcript, because redacting at exit costs roughly 0.7s per MB and the
+host cancels a shutdown hook rather than wait, which silently dropped every
+transcript past a couple of megabytes. The next SessionStart drains staging into
+the store. `staged` shows what has ended but is not yet stored; `drain` finishes
+it without waiting for another session.
 
 ## List
 
@@ -31,6 +38,32 @@ no transcripts are stored for this repo yet.
 Fetch one record's metadata and its full redacted `body`, matched by session id
 (newest when a session has several records) or by the record filename. Present
 the metadata and, if the user wants it, the body.
+
+## Staged
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" history staged --json
+```
+
+List transcripts that ended but are not yet redacted into the store. Each entry
+is one session that ended with its capture incomplete — the outcome the store
+alone cannot report, since an absent record otherwise spans "never ended",
+"ended before the store existed" and "ended and lost" alike. Report
+`session_id`, `staged_at` and `bytes`. **Staged files hold UNREDACTED
+transcript text** until drained, so say so whenever the list is non-empty.
+
+## Drain
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" history drain --json
+```
+
+Redact every staged transcript and store it, then delete the raw copy. A
+SessionStart drains a bounded number so it cannot stall the first prompt; this
+verb runs the backlog to completion. A staged file is removed **only** once its
+transcript is in the store: anything that fails to capture is reported in
+`failed` and its raw copy is deliberately kept, because it is then the only copy
+abcd holds. Exits non-zero when anything failed.
 
 ## Capture
 

@@ -1159,17 +1159,21 @@ func newHookCommand() *cobra.Command {
 			if err != nil {
 				return warn("%v; capturing nothing", err)
 			}
-			res, err := history.Capture(captureRoot(cwd), det.RootSHA, in.SessionID, raw, "native")
+			// Stage, do NOT capture. Redaction costs ~0.7s/MB and the host cancels
+			// a shutdown hook rather than wait, so capturing here dropped every
+			// transcript past a couple of MB — silently, and precisely the long,
+			// dense sessions most worth keeping (iss-2608230817034768). Staging is
+			// one write, so this hook's cost no longer scales with the transcript;
+			// the next SessionStart drains it through the same fail-closed Capture.
+			res, err := history.Stage(det.RootSHA, in.SessionID, raw)
 			if err != nil {
-				// Includes a hostile session id and a redaction hard-fail: both
-				// write nothing, by design in internal/core/history.
-				return warn("capture failed (%v)", err)
+				return warn("staging failed (%v); this session was not captured", err)
 			}
 			if !res.Wrote {
-				return warn("session %s already stored (no-op)", res.Record.SessionID)
+				return warn("session %s already staged (no-op)", res.Staged.SessionID)
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: stored %s; redacted secrets=%d home=%d\n",
-				res.Record.SessionID, res.Record.Secrets, res.Record.HomePaths)
+			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: staged %s (%d bytes); the next session redacts and stores it\n",
+				res.Staged.SessionID, res.Staged.Bytes)
 			return nil
 		},
 	})
@@ -1202,6 +1206,34 @@ func newHookCommand() *cobra.Command {
 				}
 			}
 			var notices []string
+			// Drain first: SessionEnd only stages the raw transcript, because
+			// redaction at exit loses the race with the host's shutdown
+			// cancellation (iss-2608230817034768). This is where the previous
+			// session's transcript actually becomes a record, and it is the one
+			// hook with a time budget to do it in.
+			//
+			// The budget bounds an interactive stall: a repo with a backlog would
+			// otherwise redact all of it before the user's first prompt. Whatever
+			// it leaves is said out loud rather than dropped, so a partial pass
+			// never reads as a complete one.
+			if det, err := ahoy.Detect(cwd); err == nil && det.RootSHA != "" {
+				if dr, err := history.Drain(captureRoot(cwd), det.RootSHA, sessionStartDrainBudget); err == nil {
+					for _, f := range dr.Failed {
+						notices = append(notices, fmt.Sprintf(
+							"abcd: session %s ended but could not be stored (%s). Its raw transcript is kept at %s — capture it by hand or delete it; it is unredacted.",
+							termsafe.Sanitize(f.SessionID), termsafe.Sanitize(f.Err), termsafe.Sanitize(fsutil.RedactHome(f.Path))))
+					}
+					if dr.Remaining > 0 {
+						notices = append(notices, fmt.Sprintf(
+							"abcd: %d earlier session(s) are still awaiting capture — run `abcd history drain` to finish, or start another session.",
+							dr.Remaining))
+					}
+				} else {
+					notices = append(notices, fmt.Sprintf(
+						"abcd: could not drain staged transcripts (%s); previously ended sessions are not yet stored.",
+						termsafe.Sanitize(err.Error())))
+				}
+			}
 			// history.transcripts_missing is emitted only when cwd is a git repo
 			// (a root SHA resolved) AND this repo's transcripts dir is absent —
 			// exactly the state in which session-end would silently capture
@@ -1256,6 +1288,15 @@ func newHookCommand() *cobra.Command {
 // session log, and bounded so a pathological file cannot stall the Stop hook
 // while the scanner walks it.
 const maxTranscriptBytes = 64 << 20 // 64 MiB
+
+// sessionStartDrainBudget bounds how many staged transcripts one SessionStart
+// redacts before handing control back to the user. Redaction runs at roughly
+// 0.7s per MB, so an unbounded drain of a backlog would stall the first prompt
+// by however long the backlog happens to be. Four is a compromise: enough that a
+// normal one-session-behind case always clears in a single start, small enough
+// that the worst case stays a few seconds. Anything left is reported, never
+// dropped — `abcd history drain` finishes it without waiting for a new session.
+const sessionStartDrainBudget = 4
 
 // readTranscript reads the file named by the Stop payload's transcript_path.
 //
@@ -2846,6 +2887,99 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 						r.CapturedAt.Format("2006-01-02T15:04:05Z"), termsafe.Sanitize(r.SessionID), termsafe.Sanitize(r.SourceKind), r.Secrets, r.HomePaths)
 				}
 			})
+		},
+	})
+
+	// staged — what ended but is not yet stored. This is the outcome axis the
+	// store never had: before staging existed, "absent from the store" spanned
+	// never-ended, ended-before-the-store-existed and ended-and-lost, and nothing
+	// could tell them apart. A staged entry says exactly one thing.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "staged",
+		Short: "List transcripts that ended but are not yet redacted into the store",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			staged, err := history.ListStaged(rootSHA)
+			if err != nil {
+				return err
+			}
+			if staged == nil {
+				staged = []history.Staged{}
+			}
+			for k := range staged {
+				staged[k].Path = fsutil.RedactHome(staged[k].Path)
+			}
+			return render(cmd.OutOrStdout(), *asJSON, staged, func(w io.Writer) {
+				if len(staged) == 0 {
+					fmt.Fprintln(w, "abcd history — nothing staged; every ended session is stored")
+					return
+				}
+				for _, s := range staged {
+					fmt.Fprintf(w, "%s  %s  %d bytes  awaiting redaction\n",
+						s.StagedAt.Format("2006-01-02T15:04:05Z"), termsafe.Sanitize(s.SessionID), s.Bytes)
+				}
+				fmt.Fprintf(w, "\n%d staged transcript(s) hold UNREDACTED text until drained; run `abcd history drain`.\n", len(staged))
+			})
+		},
+	})
+
+	// drain — finish the capture SessionStart bounded. Unbudgeted by design: the
+	// interactive budget exists to protect a session start, and this verb is the
+	// explicit ask, so it runs the backlog to completion.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "drain",
+		Short: "Redact and store every staged transcript for this repo",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := history.Drain(captureRoot(cwd), rootSHA, 0)
+			if err != nil {
+				return err
+			}
+			if res.Captured == nil {
+				res.Captured = []history.Record{}
+			}
+			for k := range res.Captured {
+				res.Captured[k].Path = fsutil.RedactHome(res.Captured[k].Path)
+			}
+			for k := range res.Failed {
+				res.Failed[k].Path = fsutil.RedactHome(res.Failed[k].Path)
+			}
+			renderErr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				if len(res.Captured) == 0 && len(res.Failed) == 0 {
+					fmt.Fprintln(w, "abcd history — nothing staged; nothing to drain")
+					return
+				}
+				for _, r := range res.Captured {
+					fmt.Fprintf(w, "stored  %s  redacted secrets=%d home=%d\n",
+						termsafe.Sanitize(r.SessionID), r.Secrets, r.HomePaths)
+				}
+				for _, f := range res.Failed {
+					fmt.Fprintf(w, "FAILED  %s  %s\n  raw transcript kept (unredacted): %s\n",
+						termsafe.Sanitize(f.SessionID), termsafe.Sanitize(f.Err), termsafe.Sanitize(f.Path))
+				}
+			})
+			if renderErr != nil {
+				return renderErr
+			}
+			// A drain that could not store something must not exit 0: this verb is
+			// the remedy the SessionStart notice points at, and a silent success
+			// here would leave the user believing the backlog cleared.
+			if len(res.Failed) > 0 {
+				return fmt.Errorf("history: %d staged transcript(s) could not be stored", len(res.Failed))
+			}
+			return nil
 		},
 	})
 
