@@ -10,6 +10,8 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-23
+
 ### Fixed
 
 - **The release chain's site deploy receives its credentials.** `release.yml`
