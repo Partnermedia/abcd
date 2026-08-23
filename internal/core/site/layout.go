@@ -169,7 +169,13 @@ func ComputeArrangements(nodes []LayoutNode, typed, mentions [][2]int) Arrangeme
 		if nd.Type == "issue" {
 			base, step = 3.0, 1.6
 		}
-		a.Radius[i] = (base + math.Min(math.Sqrt(a.Degree[i]), 4)*step) * refScale
+		// The cap is what keeps a handful of hubs from swallowing the chart, and
+		// the square root already compresses hard: at 4 it flattened everything
+		// past sixteen links into one size, so the record's true hubs read the
+		// same as a record with a middling few. At 7 they keep growing to about
+		// fifty links, which is where this record's connectedness actually runs
+		// out, and the hubs are visible as hubs.
+		a.Radius[i] = (base + math.Min(math.Sqrt(a.Degree[i]), 7)*step) * refScale
 		if a.Degree[i] == 0 {
 			a.Isolated++
 		}

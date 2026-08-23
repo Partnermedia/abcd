@@ -68,8 +68,12 @@ the generator as repo-agnostic (itd-140 rule 3).
 
 - **Dashboard `/record/`**: stat tiles (releases, decisions, intents,
   specs, issues, principles), lifecycle bars, release cadence, latest
-  decisions, record health — counts, dates, ids and titles only; every
-  visual has a table twin.
+  decisions, record health — counts, dates, ids and titles only. A visual
+  whose labels and numbers already render as text (a bar with its legend, a
+  chart with labelled ticks) carries no table twin; a twin accompanies only
+  a visual that is the sole carrier of its numbers. The cadence chart
+  labels every tick with version and date, and below 700px a plain list
+  stands in for the strip — exactly one of the two renders at any width.
 - **Per-record pages**: frontmatter, the body rendered verbatim through the
   Markdown renderer, inbound and outbound typed links, an open-on-GitHub
   link. Retired ADR ids render as dashed baseline stubs — no tombstone
@@ -101,7 +105,8 @@ the generator as repo-agnostic (itd-140 rule 3).
 ## Acceptance-criteria mapping
 
 - AC 1 (counts derived at build into an uncommitted `record.json`;
-  double-build diff; table twins) → export + determinism gate + dashboard.
+  double-build diff; visuals carry their numbers as text) → export +
+  determinism gate + dashboard.
 - AC 2 (every record a page with frontmatter, body, typed links, GitHub
   link) → per-record pages.
 - AC 3 (baseline ratchet) → baseline check, seeded with the eight.

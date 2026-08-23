@@ -22,7 +22,6 @@ import (
 var explorerGoldens = []struct{ route, golden string }{
 	{"record/index.html", "record-dashboard.html"},
 	{"record/graph/index.html", "record-graph.html"},
-	{"record/timeline/index.html", "record-timeline.html"},
 	{"record/foundations/index.html", "record-foundations.html"},
 	{"contributors/index.html", "contributors.html"},
 	{"references/index.html", "references.html"},
@@ -291,7 +290,9 @@ func TestTimelineIsDeterministicStaticSVG(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
 	buildFixture(t, f, out)
-	page := outFile(t, out, "record/timeline/index.html")
+	// The genealogy renders inside the dashboard, folded; there is no page of
+	// its own for it any more.
+	page := outFile(t, out, "record/index.html")
 
 	for _, want := range []string{
 		`<svg viewBox="0 0 1000 `,
@@ -315,22 +316,42 @@ func TestTimelineIsDeterministicStaticSVG(t *testing.T) {
 	}
 }
 
-// TestDashboardVisualsHaveTableTwins is the assistive-technology rule: every
-// picture on the dashboard is accompanied by the same numbers in a table.
-func TestDashboardVisualsHaveTableTwins(t *testing.T) {
+// TestDashboardVisualsCarryTheirNumbersAsText is the assistive-technology
+// rule as amended (spc-38): every visual renders its labels and numbers as
+// real text — a legend beside each bar, a version and a date on each cadence
+// tick — and no separate table twin repeats them. Below 700px a plain list
+// stands in for the cadence strip, so exactly one form renders at any width.
+func TestDashboardVisualsCarryTheirNumbersAsText(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
 	buildFixture(t, f, out)
 	page := outFile(t, out, "record/index.html")
 
 	bars := strings.Count(page, `<div class="seg" role="presentation">`)
-	svgs := strings.Count(page, `class="cadsvg"`)
-	twins := strings.Count(page, `<details class="twin">`)
+	legends := strings.Count(page, `<div class="legend">`)
 	if bars == 0 {
 		t.Fatal("the dashboard drew no lifecycle bars")
 	}
-	if twins != bars+svgs {
-		t.Errorf("%d visuals, %d table twins — every visual needs one", bars+svgs, twins)
+	if legends != bars {
+		t.Errorf("%d bars, %d legends — every bar carries its numbers as text", bars, legends)
+	}
+	if strings.Contains(page, `class="cadsvg"`) {
+		for _, want := range []string{`>v0.1.0</text>`, `>2026-01-06</text>`, `>v0.2.0</text>`, `>2026-02-11</text>`} {
+			if !strings.Contains(page, want) {
+				t.Errorf("the cadence chart does not label %s as text", want)
+			}
+		}
+		// Every tick keeps its version; a date is given up only where it would
+		// print over the one before it on the same side of the axis.
+		if v, d := strings.Count(page, `font-size="10"`), strings.Count(page, `font-size="8"`); d > v {
+			t.Errorf("%d dates against %d versions — a date outran its tick", d, v)
+		}
+		if !strings.Contains(page, `class="list cadlist"`) {
+			t.Error("the cadence panel has no narrow-screen list to stand in for the strip")
+		}
+	}
+	if strings.Contains(page, `<details class="twin">`) {
+		t.Error("a table twin remains beside a visual that already carries its numbers as text")
 	}
 }
 
@@ -711,7 +732,7 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	shippedBlocks := parseHeaders(string(shipped))
-	for _, route := range []string{"/", "/record/", "/record/graph/", "/record/timeline/",
+	for _, route := range []string{"/", "/record/", "/record/graph/",
 		"/record/foundations/", "/record/adr/adr-1/", "/record/principle/retire-the-name/",
 		"/contributors/", "/references/"} {
 		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, documentHeaders)
@@ -952,19 +973,15 @@ func TestExplorerWithoutChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := t.TempDir()
-	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
-		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}})
-	if err != nil {
+	if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
+		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}}); err != nil {
 		t.Fatalf("a repository with no changelog must still build its explorer: %v", err)
 	}
-	if !containsString(res.Files, "record/timeline/index.html") {
+	dash := outFile(t, out, "record/index.html")
+	if !strings.Contains(dash, `class="tlsvg"`) {
 		t.Fatal("the genealogy vanished with the changelog")
 	}
-	dash := outFile(t, out, "record/index.html")
-	if strings.Contains(dash, "Release cadence") {
-		t.Error("the cadence panel rendered with no releases")
-	}
-	tl := outFile(t, out, "record/timeline/index.html")
+	tl := dash
 	if strings.Contains(tl, "releases/tag/") {
 		t.Error("the genealogy drew a release lane with no releases")
 	}

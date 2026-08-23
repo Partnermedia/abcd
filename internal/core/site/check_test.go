@@ -885,3 +885,33 @@ Nothing else is required.
 		"### `abcd capture`\n\nCapture an issue\n\n**Usage:** `abcd capture [text] [flags]`\n\n" +
 		"**Flags:**\n\n```\n      --impact string   the impact class\n```\n",
 }
+
+// TestCheckSkipsTheDocsTree pins the declared scope: `docs/` is MkDocs' own
+// output, not this build's, so its pages are excluded from the walk — never
+// parsed against the generator's strict grammar (mkdocs emits HTML comments),
+// never examined by gates whose rules were written for generator output. Its
+// words are gated at the source by docs-lint.
+func TestCheckSkipsTheDocsTree(t *testing.T) {
+	r := newCheckRepo(t)
+	r.build()
+	docs := filepath.Join(r.out, "docs")
+	if err := os.MkdirAll(docs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	page := "<!doctype html>\n<html><head><title>d</title></head>" +
+		"<body><!-- mkdocs writes comments --><p>docs text</p></body></html>\n"
+	if err := os.WriteFile(filepath.Join(docs, "index.html"), []byte(page), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := r.check()
+	for _, f := range res.Findings {
+		if strings.HasPrefix(f.Where, "docs/") {
+			t.Errorf("a gate examined the docs tree: %s — %s", f.Where, f.Detail)
+		}
+	}
+	for _, p := range res.Pages {
+		if strings.HasPrefix(p, "docs/") {
+			t.Errorf("the docs tree entered the page list: %s", p)
+		}
+	}
+}

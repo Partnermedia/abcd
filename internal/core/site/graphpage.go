@@ -81,13 +81,22 @@ func (e *explorer) graphPage() (string, error) {
 
 	b.WriteString(`<div class="bfilters" id="bfilters" hidden><div class="chips" id="typechips">`)
 	for _, typ := range e.storeOrder() {
-		n := e.export.Counts.ByType[typ]
+		// A chip counts the records it actually filters. Disciplines are filed
+		// under intents by the record and are their own KIND to a reader — their
+		// own colour, their own chip — so they are counted out of the intents
+		// chip rather than sitting inside it under a different colour.
+		n := e.export.Counts.ByType[typ] - e.disciplineCount(typ)
 		if n == 0 {
 			continue
 		}
 		b.WriteString(`<button class="chip on" data-t="` + escapeAttr(typ) + `"><i style="background:var(` +
 			typeColourToken(typ) + `)"></i>` + escapeText(e.c.ui.Tiles.ForType(typ)) +
 			` <span class="tnum muted">` + itoaLen(n) + `</span></button>`)
+	}
+	if d := e.disciplineCount(""); d > 0 {
+		b.WriteString(`<button class="chip on" data-t="` + escapeAttr(disciplinesLifecycle) + `"><i style="background:var(` +
+			typeColourToken(disciplinesLifecycle) + `)"></i>` + escapeText(e.c.ui.Tiles.Discipline) +
+			` <span class="tnum muted">` + itoaLen(d) + `</span></button>`)
 	}
 	b.WriteString(`</div><label class="sans small"><input type="checkbox" id="gmentions"> ` +
 		escapeText(g.Mentions) + `</label>`)
@@ -108,7 +117,7 @@ func (e *explorer) graphPage() (string, error) {
 	b.WriteString(`</details>`)
 	b.WriteString(`</div>`)
 
-	return e.shell(routeGraph, ui.RecordNav.Graph, "/record.js", e.genLine(), b.String()), nil
+	return e.shell(routeGraph, ui.RecordNav.Graph, "/record.js", b.String()), nil
 }
 
 // legend names what the chart's fills and arrowheads mean, in the record's own
@@ -128,33 +137,84 @@ func (e *explorer) legend() string {
 		}
 		return `<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" ` + style + `/></svg>`
 	}
+	// TWO encodings, in two blocks. Colour is the store a record belongs to;
+	// border is the state its store grades it in. Run together in one wrapping
+	// row they read as one list, and a lifecycle word wraps under a store name
+	// as though it belonged to it — "closed" under "specs", which says something
+	// the chart never meant. The blocks carry no headings: a swatch beside a
+	// word is already the whole of what either half says, and a sentence
+	// explaining a legend is a sentence the single-source rule would have to
+	// find a home for.
 	var b strings.Builder
 	b.WriteString(`<div class="glegend">`)
+
+	b.WriteString(`<div class="glrow">`)
 	for _, typ := range e.storeOrder() {
 		if e.export.Counts.ByType[typ] == 0 {
 			continue
 		}
 		b.WriteString(`<span>` + swatch(typ, "solid") + escapeText(e.c.ui.Tiles.ForType(typ)) + `</span>`)
 	}
+	// Disciplines are filed under intents by the record and drawn in their own
+	// colour by the chart, so the legend names them in their own right: to a
+	// reader a discipline is a kind of record, not a state of an intent.
+	if e.hasDisciplineNodes() {
+		b.WriteString(`<span>` + swatch(disciplinesLifecycle, "solid") +
+			escapeText(e.c.ui.Tiles.Discipline) + `</span>`)
+	}
+	b.WriteString(`</div>`)
+
 	// One row per fill, labelled with the lifecycle words the record actually
-	// uses for that state.
+	// uses for that state. The swatch is drawn in a neutral colour: the shape is
+	// what this half of the legend is about, and colouring it would say the state
+	// belongs to one store.
 	fills := map[string][]string{}
 	for _, n := range e.export.Nodes {
 		f := lifecycleFill(n.Lifecycle)
-		if !containsStr(fills[f], n.Lifecycle) && n.Lifecycle != "" {
+		if !containsStr(fills[f], n.Lifecycle) && n.Lifecycle != "" && n.Lifecycle != disciplinesLifecycle {
 			fills[f] = append(fills[f], n.Lifecycle)
 		}
 	}
+	var states strings.Builder
 	for _, f := range []string{"solid", "ring", "dash", "fade"} {
 		words := fills[f]
 		if len(words) == 0 {
 			continue
 		}
 		sort.Strings(words)
-		b.WriteString(`<span>` + swatch("principle", f) + escapeText(strings.Join(words, " · ")) + `</span>`)
+		for _, w := range words {
+			states.WriteString(`<span>` + swatch("", f) + escapeText(w) + `</span>`)
+		}
+	}
+	if states.Len() > 0 {
+		b.WriteString(`<div class="glrow glstates">`)
+		b.WriteString(states.String())
+		b.WriteString(`</div>`)
 	}
 	b.WriteString(`</div>`)
 	return b.String()
+}
+
+// disciplineCount is how many records of one store are filed as disciplines; an
+// empty store name counts them across the whole record.
+func (e *explorer) disciplineCount(typ string) int {
+	n := 0
+	for _, nd := range e.export.Nodes {
+		if nd.Lifecycle == disciplinesLifecycle && (typ == "" || nd.Type == typ) {
+			n++
+		}
+	}
+	return n
+}
+
+// hasDisciplineNodes reports whether any record is filed as a discipline.
+func (e *explorer) hasDisciplineNodes() bool {
+	for _, n := range e.export.Nodes {
+		if n.Lifecycle == disciplinesLifecycle {
+			return true
+		}
+	}
+	return false
 }
 
 // lifecycleFill is how a bubble in that state is drawn: solid when the work is

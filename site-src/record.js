@@ -52,7 +52,20 @@
      takes ink, because a fourth categorical hue stops being distinguishable
      under colour-vision deficiency in an all-pairs chart. */
   var TYPE_TOKEN = { adr: '--s-adr', intent: '--s-intent', spec: '--s-spec', issue: '--s-issue' };
-  var tok = function (t) { return TYPE_TOKEN[t] || '--s-neutral'; };
+  /* A discipline is filed under intents by the record and is its own KIND of
+     thing to a reader — a rule that holds rather than a change that ships — so
+     it is drawn in its own colour and the legend names it in its own right.
+     The lifecycle wins over the type, because that is where the record says so. */
+  var DISCIPLINE = 'disciplines';
+  /* A record's KIND is what the chart colours it by, filters it by and names it
+     in the card — one answer, used everywhere, so a purple bubble is never
+     labelled 'intent' and never hides behind an 'intents' chip. A discipline is
+     filed under intents by the record and is its own kind to a reader. */
+  var kindOf = function (n) { return n.status === DISCIPLINE ? DISCIPLINE : n.type; };
+  var tok = function (t, state) {
+    if (state === DISCIPLINE) return '--s-discipline';
+    return TYPE_TOKEN[t] || '--s-neutral';
+  };
   /* GitHub's state palette: green in play, purple done, grey draft or set aside. */
   var SOLID = ['accepted', 'shipped', 'closed', 'resolved', 'active'];
   var RING = ['planned', 'open', 'proposed', 'disciplines'];
@@ -150,12 +163,12 @@
     });
 
     var typeOn = {};
-    nodes.forEach(function (n) { typeOn[n.type] = true; });
+    nodes.forEach(function (n) { typeOn[kindOf(n)] = true; });
     var arr = 'date', useMent = false, focus = -1, hover = -1;
     var W = 0, H = 0, dpr = 1, narrow = false, need = true, energy = 1;
     var css = function () { return getComputedStyle(document.documentElement); };
     var col = function (v) { return css().getPropertyValue(v).trim(); };
-    var on = function (n) { return typeOn[n.type]; };
+    var on = function (n) { return typeOn[kindOf(n)]; };
     /* A record whose store grades it by neither a lifecycle directory nor a
        status field declares no state, and is drawn solid because it has none —
        not faded, which is what "set aside" looks like. */
@@ -262,7 +275,13 @@
               var v = bucket[c];
               if (v.i <= u.i) continue;
               var dx = v.x - u.x, dy = v.y - u.y, d = Math.hypot(dx, dy);
-              var min = u.r * u.s + v.r * v.s + 1.5;
+              /* The LAYOUT owns spacing; this only stops a true overlap. The
+                 extra padding that used to sit here was the renderer asking
+                 for more room than the published positions give, so on an
+                 arrangement packed tighter than that padding every frame
+                 pushed bubbles apart and every frame pulled them home — a
+                 loop that never idled and never stopped drawing. */
+              var min = u.r * u.s + v.r * v.s;
               if (d >= min) continue;
               if (d < 0.01) { dx = 0.1; dy = 0.1; d = 0.14; }
               var push = (min - d) / d * 0.5;
@@ -395,7 +414,7 @@
       for (var q = 0; q < N; q++) {
         var n = nodes[q];
         if (n.a < 0.02) continue;
-        var c = col(tok(n.type)), st = cls(n);
+        var c = col(tok(n.type, n.status)), st = cls(n);
         var r = n.r * n.s * k, x = sx(n.x), y = sy(n.y);
         if (x < -r || y < -r || x > W + r || y > H + r) continue;
         ctx.globalAlpha = n.a * (st === 'fade' ? 0.5 : 1);
@@ -458,17 +477,57 @@
       ctx.globalAlpha = 1;
     }
 
-    var first = true;
+    /* standby: the one piece of feedback a reader gets while the chart is
+       working, raised for every relayout they wait on and not the first alone.
+       It is the element the page was served with, so it comes down by the class
+       the first paint has always used, and is hidden rather than removed.
+
+       Raising it and doing the work in the same task paints nothing: the frame
+       callbacks run before the paint, so the loop would draw the new layout
+       before the browser ever showed the indicator. `raise` therefore hands the
+       work to the second of two animation frames, which leaves the browser a
+       whole frame in which to put the indicator on screen. Work that must stay
+       inside the gesture that asked for it — a full-screen request, which the
+       browser grants to a live user gesture only — is passed no work function
+       and runs at the call site; there the transition is itself the wait.
+
+       It comes down on the first frame drawn after the bubbles stop moving, or
+       at HOLD, whichever is sooner. The cap is what makes the promise keepable:
+       an arrangement whose published homes overlap never falls under the idle
+       threshold at all — the glide home and the collision push trade places
+       forever — and an indicator that waited for a stillness that never comes
+       would sit over the chart for the rest of the session. The floor is the
+       same clock read the other way: before it, a drawn frame takes the
+       indicator down at once, which is how the first paint clears it. */
+    var HOLD = 1000;
+    var sb = document.getElementById('bstandby');
+    var standby = true, held = 0;
+    function raise(work) {
+      if (sb) sb.classList.remove('done');
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          standby = true;
+          held = performance.now() + HOLD;
+          /* a relayout the loop sleeps through — a stage that resized to the
+             same size — draws no frame to come down on */
+          setTimeout(function () { lower(true); }, HOLD);
+          if (work) work();
+        });
+      });
+    }
+    function lower(over) {
+      if (!standby) return;
+      if (!over && performance.now() < held) return;
+      standby = false;
+      if (sb) sb.classList.add('done');
+    }
+
     function frame() {
       if (!canvas.isConnected) return;
       if (need || energy > 0.02) {
         step(); draw();
         need = energy > 0.02;
-        if (first) {
-          first = false;
-          var sb = document.getElementById('bstandby');
-          if (sb) { sb.classList.add('done'); setTimeout(function () { sb.remove(); }, 350); }
-        }
+        lower(!need);
       }
       G.raf = requestAnimationFrame(frame);
     }
@@ -636,7 +695,7 @@
          place, never as a style="" attribute built out of data: an attribute is
          the one thing here a content policy has to make an allowance for, and
          this is the only one the script would have written. */
-      var pills = '<span class="pill type"><i></i>' + esc(n.type) + '</span>' +
+      var pills = '<span class="pill type"><i></i>' + esc(kindOf(n)) + '</span>' +
         (n.status ? '<span class="pill ' + STATUS_TONE(n.status) + '">' + esc(n.status) + '</span>' : '') +
         (n.sev ? '<span class="pill ' + (SEV_TONE[n.sev] || 'plain') + '">' + esc(n.sev) + '</span>' : '') +
         (n.kind && n.kind !== 'null' ? '<span class="pill plain">' + esc(n.kind) + '</span>' : '') +
@@ -684,7 +743,7 @@
         '<button class="hb" id="bfwd" aria-label="' + esc(W_.forward) + '" disabled>›</button></div></div>';
 
       var typePill = $('.pill.type', card);
-      if (typePill) typePill.style.setProperty('--c', 'var(' + tok(n.type) + ')');
+      if (typePill) typePill.style.setProperty('--c', 'var(' + tok(n.type, n.status) + ')');
       $$('li[data-j]', card).forEach(function (li) {
         li.addEventListener('click', function () { setFocus(+li.dataset.j); });
       });
@@ -727,9 +786,9 @@
     /* the explicit two-state arrangement control */
     $$('#barr button').forEach(function (b) {
       b.addEventListener('click', function () {
-        arr = b.dataset.arr;
         $$('#barr button').forEach(function (x) { x.setAttribute('aria-checked', String(x === b)); });
-        need = true;
+        /* every bubble leaves for a new home, so this is the long wait */
+        raise(function () { arr = b.dataset.arr; need = true; });
       });
     });
 
@@ -762,6 +821,10 @@
     var fsb = $('#bfs');
     var fsOn = function () { return document.fullscreenElement === stage || stage.classList.contains('fs'); };
     function setFs(want) {
+      /* the stage changes size under every bubble, so the chart re-settles
+         either way in and out; the request itself stays in this task, because
+         the browser grants full screen to a live gesture only */
+      raise();
       if (want) {
         if (stage.requestFullscreen) stage.requestFullscreen().catch(function () { stage.classList.add('fs'); });
         else stage.classList.add('fs');
@@ -778,7 +841,8 @@
       document.documentElement.classList.toggle('bfs-open', o);
     }
     fsb.addEventListener('click', function () { setFs(!fsOn()); setTimeout(syncFs, 50); });
-    document.addEventListener('fullscreenchange', syncFs);
+    /* the browser's own way out of full screen never passes through setFs */
+    document.addEventListener('fullscreenchange', function () { raise(); syncFs(); });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && stage.classList.contains('fs')) { setFs(false); syncFs(); }
     });
@@ -805,8 +869,21 @@
     size();
     base = baseTarget(); view.tx = base.x; view.ty = base.y;
     nodes.forEach(function (n) { n.x = n.hx[arr]; n.y = n.hy[arr]; });
+    /* A stage that changes size by a LOT has been thrown into or out of full
+       screen, and the chart re-settles either way. Raising here rather than only
+       at the click covers every route out — the button, Escape, the browser's
+       own chrome — and it covers the LEAVING transition, where the browser's
+       animation runs first and a hold started at the click has already expired
+       by the time the chart begins to move. A drag of the window edge changes
+       the size by a little and is left alone, so the indicator never strobes. */
+    var lastW = 0, lastH = 0;
     var ro = new ResizeObserver(function () {
       if (!canvas.isConnected) { ro.disconnect(); return; }
+      var r = stage.getBoundingClientRect();
+      var big = lastW > 0 && (Math.abs(r.width - lastW) > lastW * 0.25 ||
+        Math.abs(r.height - lastH) > lastH * 0.25);
+      lastW = r.width; lastH = r.height;
+      if (big) raise();
       size();
     });
     ro.observe(stage); G.ro = ro;

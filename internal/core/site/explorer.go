@@ -38,6 +38,8 @@ const (
 	routeGraph        = "record/graph/"
 	routeTimeline     = "record/timeline/"
 	routeFoundations  = "record/foundations/"
+	routeDevelopment  = "record/development/"
+	routeHealth       = "record/health/"
 	routeContributors = "contributors/"
 	routeReferences   = "references/"
 )
@@ -160,14 +162,21 @@ func (e *explorer) Pages() (map[string]string, error) {
 	if err := add(routeGraph, e.graphPage); err != nil {
 		return nil, err
 	}
-	if err := add(routeTimeline, e.timelinePage); err != nil {
-		return nil, err
-	}
 	if err := add(routeContributors, e.contributorsPage); err != nil {
 		return nil, err
 	}
+	if e.hasHealth() {
+		if err := add(routeHealth, e.healthPage); err != nil {
+			return nil, err
+		}
+	}
 	if e.hasFoundations() {
 		if err := add(routeFoundations, e.foundationsPage); err != nil {
+			return nil, err
+		}
+	}
+	if e.hasDevelopment() {
+		if err := add(routeDevelopment, e.developmentPage); err != nil {
 			return nil, err
 		}
 	}
@@ -192,7 +201,9 @@ func RecordRoute(n ExportNode) string { return "record/" + n.Type + "/" + n.ID +
 // --- the shell ------------------------------------------------------------
 
 // shell wraps one explorer page in the shared header, sub-navigation and footer.
-func (e *explorer) shell(route, title, script, gen, body string) string {
+// The build fact renders twice already — the header pill and the footer stamp —
+// so the page heading carries no dateline of its own.
+func (e *explorer) shell(route, title, script, body string) string {
 	var b strings.Builder
 	b.WriteString(e.c.headWith(title, script))
 	b.WriteString(e.c.headerFor("/record/"))
@@ -204,9 +215,6 @@ func (e *explorer) shell(route, title, script, gen, body string) string {
 		b.WriteString(`<p class="eyebrow"` + e.eyebrowSrc + `>` + escapeText(e.eyebrow) + `</p>`)
 	}
 	b.WriteString(`<h1 class="pagetitle">` + escapeText(title) + `</h1>`)
-	if gen != "" {
-		b.WriteString(`<p class="gen">` + escapeText(gen) + `</p>`)
-	}
 	b.WriteString(`</div>`)
 	b.WriteString(body)
 	b.WriteString(`</div></div></main>`)
@@ -219,14 +227,22 @@ func (e *explorer) shell(route, title, script, gen, body string) string {
 // omitted here too, so the strip can never point at a route the build did not
 // write.
 func (e *explorer) subnav(active string) string {
+	// The reading order runs from what the record HOLDS to what is wrong with
+	// it: the dashboard, the two stores read as decks, how they connect, then
+	// the findings. Contributors and References are about the record's
+	// provenance rather than its content, so they sit apart at the end — named,
+	// not marked. A glyph was tried in their place and read as decoration.
 	type tab struct{ route, label string }
-	tabs := []tab{
-		{routeDashboard, e.c.ui.RecordNav.Dashboard},
-		{routeGraph, e.c.ui.RecordNav.Graph},
-		{routeTimeline, e.c.ui.RecordNav.Timeline},
-	}
+	tabs := []tab{{routeDashboard, e.c.ui.RecordNav.Dashboard}}
 	if e.hasFoundations() {
 		tabs = append(tabs, tab{routeFoundations, e.c.ui.RecordNav.Foundations})
+	}
+	if e.hasDevelopment() {
+		tabs = append(tabs, tab{routeDevelopment, e.c.ui.RecordNav.Development})
+	}
+	tabs = append(tabs, tab{routeGraph, e.c.ui.RecordNav.Graph})
+	if e.hasHealth() {
+		tabs = append(tabs, tab{routeHealth, e.c.ui.RecordNav.Health})
 	}
 	tabs = append(tabs, tab{routeContributors, e.c.ui.RecordNav.Contributors})
 	if e.hasReferences() {
@@ -243,36 +259,6 @@ func (e *explorer) subnav(active string) string {
 	}
 	b.WriteString(`</div></nav>`)
 	return b.String()
-}
-
-// genLine is the derived line under every explorer heading.
-//
-// It carries what adr-47 decision 2 lets the generator add on its own and
-// nothing else: numbers, dates and ids. Anything that would need a word to
-// explain it belongs in a labelled tile instead.
-func (e *explorer) genLine(parts ...string) string {
-	var kept []string
-	for _, p := range parts {
-		if p != "" {
-			kept = append(kept, p)
-		}
-	}
-	if d := e.export.Build.GeneratedAt; d != "" {
-		kept = append(kept, d)
-	}
-	// The same rule the footer follows: a preview names no release, because it is
-	// not one. The word is an interface string, so the provenance walk accounts
-	// for it exactly as it accounts for every other word the generator adds.
-	switch {
-	case e.export.Build.Preview:
-		kept = append(kept, e.c.ui.Unreleased)
-	case e.export.Build.Version != "":
-		kept = append(kept, "v"+e.export.Build.Version)
-	}
-	if cm := e.export.Build.Commit; cm != "" {
-		kept = append(kept, cm)
-	}
-	return strings.Join(kept, " · ")
 }
 
 // --- shared pieces --------------------------------------------------------
@@ -308,6 +294,39 @@ func panelSourced(span, heading, headingSrc, note, body string) string {
 		b.WriteString(`<span>` + escapeText(note) + `</span>`)
 	}
 	b.WriteString(`</h3>` + body + `</div>`)
+	return b.String()
+}
+
+// panelDisclosure is a panel a reader opens: the heading is the summary, and
+// the body is folded away until they ask for it. It is the shape the
+// relationship chart's list already uses, for the case where a page offers two
+// long bodies a reader chooses BETWEEN rather than reads side by side.
+func panelDisclosure(span, heading, headingSrc, note, body string) string {
+	return panelFold(span, heading, headingSrc, note, body, false)
+}
+
+// panelFold is panelDisclosure with the open state named. A deck a reader
+// arrives to read opens; one they choose between stays shut.
+func panelFold(span, heading, headingSrc, note, body string, open bool) string {
+	cls := "panel fold"
+	if span != "" {
+		cls += " " + span
+	}
+	src := ""
+	if headingSrc != "" {
+		rel, anchor, _ := strings.Cut(headingSrc, "#")
+		src = srcAttr(rel, anchor)
+	}
+	var b strings.Builder
+	att := `<details class="` + escapeAttr(cls) + `"`
+	if open {
+		att += ` open`
+	}
+	b.WriteString(att + `><summary><h3` + src + `>` + escapeText(heading))
+	if note != "" {
+		b.WriteString(`<span>` + escapeText(note) + `</span>`)
+	}
+	b.WriteString(`</h3></summary>` + body + `</details>`)
 	return b.String()
 }
 
@@ -354,10 +373,10 @@ func segments(byLifecycle map[string]int) []segment {
 	return out
 }
 
-// segBar renders a lifecycle bar with its legend and its table twin. Every
-// visual on the dashboard carries one: the bar is the picture, the table is the
-// same numbers in a form a screen reader can read out.
-func (e *explorer) segBar(caption string, segs []segment) string {
+// segBar renders a lifecycle bar with its legend. The legend is real text
+// carrying every label and count, so the bar needs no table twin — a twin
+// only accompanies a visual whose numbers render nowhere else as text.
+func (e *explorer) segBar(segs []segment) string {
 	total := 0
 	for _, s := range segs {
 		total += s.N
@@ -365,7 +384,7 @@ func (e *explorer) segBar(caption string, segs []segment) string {
 	if total == 0 {
 		return ""
 	}
-	var bar, leg, rows strings.Builder
+	var bar, leg strings.Builder
 	for _, s := range segs {
 		colour := lifecycleRamp[s.Rank]
 		pct := strconv.FormatFloat(float64(s.N)/float64(total)*100, 'f', 2, 64)
@@ -373,19 +392,9 @@ func (e *explorer) segBar(caption string, segs []segment) string {
 			escapeAttr(s.Label) + `: ` + strconv.Itoa(s.N) + `"></i>`)
 		leg.WriteString(`<span><i style="background:` + colour + `"></i>` + escapeText(s.Label) +
 			` <b class="tnum">` + strconv.Itoa(s.N) + `</b></span>`)
-		rows.WriteString(`<tr><td>` + escapeText(s.Label) + `</td><td class="tnum">` + strconv.Itoa(s.N) + `</td></tr>`)
 	}
 	return `<div class="seg" role="presentation">` + bar.String() + `</div>` +
-		`<div class="legend">` + leg.String() + `</div>` +
-		e.tableTwin(caption, `<tbody>`+rows.String()+`</tbody>`)
-}
-
-// tableTwin folds a visual's own numbers away behind a disclosure, so every
-// picture on the page has a form that can be read out and copied.
-func (e *explorer) tableTwin(caption, body string) string {
-	return `<details class="twin"><summary>` + escapeText(e.c.ui.Panels.TableView) +
-		`</summary><div class="tablewrap"><table><caption class="sr">` + escapeText(caption) +
-		`</caption>` + body + `</table></div></details>`
+		`<div class="legend">` + leg.String() + `</div>`
 }
 
 // --- the dashboard --------------------------------------------------------
@@ -416,8 +425,13 @@ func (e *explorer) dashboard() (string, error) {
 		if len(sub) > 2 {
 			sub = sub[:2]
 		}
-		b.WriteString(tile(strconv.Itoa(n), ui.Tiles.ForType(typ), sub))
+		b.WriteString(tileLinked(e.tileHref(typ), strconv.Itoa(n), ui.Tiles.ForType(typ), sub, ""))
 	}
+
+	// The genealogy sits directly under the counts, folded shut: it is how the
+	// record got where it is, which a reader asks for rather than arrives at.
+	b.WriteString(panelDisclosure("c12", ui.RecordNav.Timeline, "",
+		strconv.Itoa(len(e.export.Releases))+" "+ui.Tiles.Releases, e.genealogy()))
 
 	// State bars, one per store that grades its records at all.
 	for _, typ := range e.storeOrder() {
@@ -426,23 +440,54 @@ func (e *explorer) dashboard() (string, error) {
 			continue
 		}
 		caption := ui.Tiles.ForType(typ)
-		b.WriteString(panel("c6", caption, strconv.Itoa(e.export.Counts.ByType[typ]), e.segBar(caption, segs)))
+		b.WriteString(panel("c6", caption, strconv.Itoa(e.export.Counts.ByType[typ]), e.segBar(segs)))
 	}
 
-	if cad := e.cadence(); cad != "" {
-		b.WriteString(cad)
-	}
 	b.WriteString(e.latestDecisions())
 	b.WriteString(e.health())
 	b.WriteString(`</div>`)
 
-	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", e.genLine(), b.String()), nil
+	return e.shell(routeDashboard, ui.RecordNav.Dashboard, "", b.String()), nil
 }
 
 // tile is one stat tile.
-func tile(n, label string, sub []string) string {
+func tile(n, label string, sub []string) string { return tileExtra(n, label, sub, "") }
+
+// tileHref is where a store's count leads: the page that reads that store,
+// anchored at the store itself. A number a reader cannot follow is a dead end,
+// and the destinations are DERIVED from which pages the build actually wrote —
+// a store whose page is omitted gets an unlinked tile rather than a dead link
+// (itd-140: graceful absence).
+func (e *explorer) tileHref(typ string) string {
+	switch typ {
+	case "principle":
+		if e.hasFoundations() {
+			return "/" + routeFoundations + "#principle"
+		}
+	case "adr", "intent", "spec", "issue":
+		if e.hasDevelopment() {
+			return "/" + routeDevelopment + "#" + typ
+		}
+	}
+	return ""
+}
+
+// tileExtra is a tile with a final pre-rendered line, for the case where a
+// figure needs its number and its words in separate elements.
+func tileExtra(n, label string, sub []string, extra string) string {
+	return tileLinked("", n, label, sub, extra)
+}
+
+// tileLinked is a tile that leads somewhere. The whole tile is the target, so
+// the number and its label are one thing to click rather than a label with a
+// link hidden in it; an href of "" renders the same tile, inert.
+func tileLinked(href, n, label string, sub []string, extra string) string {
 	var b strings.Builder
-	b.WriteString(`<div class="panel c2"><div class="tile">`)
+	open, close := `<div class="tile">`, `</div>`
+	if href != "" {
+		open, close = `<a class="tile lead" href="`+escapeAttr(href)+`">`, `</a>`
+	}
+	b.WriteString(`<div class="panel c2">` + open)
 	b.WriteString(`<span class="n">` + escapeText(n) + `</span>`)
 	b.WriteString(`<span class="l">` + escapeText(label) + `</span>`)
 	for _, s := range sub {
@@ -451,7 +496,8 @@ func tile(n, label string, sub []string) string {
 		}
 		b.WriteString(`<span class="s">` + escapeText(s) + `</span>`)
 	}
-	b.WriteString(`</div></div>`)
+	b.WriteString(extra)
+	b.WriteString(close + `</div>`)
 	return b.String()
 }
 
@@ -469,47 +515,6 @@ func (e *explorer) storeOrder() []string {
 		return types[i] < types[j]
 	})
 	return types
-}
-
-// cadence renders the release strip: one tick per release, alternating above and
-// below the axis, with the same versions and dates in its table twin.
-func (e *explorer) cadence() string {
-	rel := e.export.Releases
-	if len(rel) < 2 {
-		return ""
-	}
-	// The export lists releases newest first; the axis runs the other way.
-	asc := make([]int, len(rel))
-	for i := range rel {
-		asc[i] = len(rel) - 1 - i
-	}
-	first, last := dayNumber(rel[len(rel)-1].Date), dayNumber(rel[0].Date)
-	span := float64(last - first)
-	if span <= 0 {
-		span = 1
-	}
-	var ticks, rows strings.Builder
-	for k, i := range asc {
-		r := rel[i]
-		x := 24 + float64(dayNumber(r.Date)-first)/span*552
-		y1, y2, ty := 26, 40, 18
-		if k%2 == 1 {
-			y1, y2, ty = 40, 54, 66
-		}
-		xs := strconv.FormatFloat(x, 'f', 1, 64)
-		ticks.WriteString(`<g class="tick"><title>v` + escapeText(r.Version) + ` — ` + escapeText(r.Date) + `</title>`)
-		ticks.WriteString(`<line x1="` + xs + `" y1="` + strconv.Itoa(y1) + `" x2="` + xs + `" y2="` + strconv.Itoa(y2) +
-			`" stroke="var(--s-adr)" stroke-width="2"/>`)
-		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(ty) +
-			`" font-size="10" text-anchor="middle" fill="var(--ink-2)">v` + escapeText(r.Version) + `</text></g>`)
-		rows.WriteString(`<tr><td>v` + escapeText(r.Version) + `</td><td>` + escapeText(r.Date) + `</td></tr>`)
-	}
-	svg := `<svg viewBox="0 0 600 70" class="cadsvg" role="img" aria-label="` +
-		escapeAttr(e.c.ui.Panels.Cadence+" · "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">` +
-		`<line x1="8" y1="40" x2="592" y2="40" class="axis"/>` + ticks.String() + `</svg>`
-	body := svg + e.tableTwin(e.c.ui.Panels.Cadence, `<tbody>`+rows.String()+`</tbody>`)
-	note := strconv.Itoa(len(rel)) + " " + e.c.ui.Tiles.Releases
-	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, body)
 }
 
 // latestDecisions lists the newest ratified decisions by their own dates. It is
@@ -548,18 +553,36 @@ func (e *explorer) latestDecisions() string {
 // tree cannot resolve, measured against the committed ratchet.
 func (e *explorer) health() string {
 	h := e.export.Health
+	ui := e.c.ui
 	var b strings.Builder
 	b.WriteString(`<div class="health">`)
+	// Two lines per finding: the fact, then its explanation — a flowing line
+	// wrapped mid-phrase in the narrow panel.
 	for _, u := range h.Unresolved {
-		b.WriteString(`<div><span class="w">!</span> <a href="/` + escapeAttr(e.routeOf(u.From)) + `">` +
-			escapeText(u.From) + `</a> → <b class="stub">` + escapeText(u.To) + `</b> <span class="muted">` +
-			escapeText(relationWord(u.Rel)) + ` · ` + escapeText(e.c.ui.Record.NotInTree) + `</span></div>`)
+		b.WriteString(`<div class="hitem"><span class="hfact"><span class="w">!</span> <a href="/` +
+			escapeAttr(e.routeOf(u.From)) + `">` + escapeText(u.From) + `</a> → <b class="stub">` +
+			escapeText(u.To) + `</b></span><span class="hwhy">` +
+			escapeText(relationWord(u.Rel)) + ` ` + escapeText(ui.Record.NotInTree) + `</span></div>`)
 	}
-	b.WriteString(`<div class="hsum">` + escapeText(strconv.Itoa(len(h.Unresolved))) + ` / ` +
-		escapeText(strconv.Itoa(h.BaselineCount)) + ` · ` +
-		escapeText(strconv.Itoa(e.export.Layout.Isolated)) + `</div>`)
+	// Every summary number carries its word; three bare numbers read as a
+	// rendering fault.
+	// Each figure is its own element: a number glued to a word is neither a
+	// number nor an interface string to the provenance walk, and three of them
+	// run together read as one sentence that says nothing.
+	b.WriteString(`<div class="hsum">`)
+	for _, f := range []struct {
+		n     int
+		label string
+	}{
+		{len(h.Unresolved), ui.Panels.Unresolved},
+		{h.BaselineCount, ui.Panels.Baseline},
+		{e.export.Layout.Isolated, ui.Panels.Isolated},
+	} {
+		b.WriteString(`<span><b class="tnum">` + strconv.Itoa(f.n) + `</b> ` + escapeText(f.label) + `</span>`)
+	}
 	b.WriteString(`</div>`)
-	return panel("c4", e.c.ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
+	b.WriteString(`</div>`)
+	return panel("c4", ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
 }
 
 // routeOf is a record's page, or "" where no file answers to the id.
@@ -618,7 +641,7 @@ func dayNumber(date string) int {
 func (e *explorer) foundationsPage() (string, error) {
 	var b strings.Builder
 	b.WriteString(`<div class="dash">`)
-	deck := func(label string, nodes []ExportNode) {
+	deck := func(anchor, label string, nodes []ExportNode) {
 		if len(nodes) == 0 {
 			return
 		}
@@ -630,12 +653,16 @@ func (e *explorer) foundationsPage() (string, error) {
 				`<span class="id">` + escapeText(n.ID) + `</span></a>`)
 		}
 		cards.WriteString(`</div>`)
-		b.WriteString(panel("c12", label, strconv.Itoa(len(nodes)), cards.String()))
+		// The deck's own name is its anchor, so a dashboard tile can land on the
+		// store it counts rather than at the top of the page.
+		b.WriteString(`<div id="` + escapeAttr(anchor) + `" class="c12">`)
+		b.WriteString(panelFold("c12", label, "", strconv.Itoa(len(nodes)), cards.String(), true))
+		b.WriteString(`</div>`)
 	}
-	deck(e.c.ui.Tiles.Principle, e.principles)
-	deck(e.c.ui.Tiles.Discipline, e.disciplines)
+	deck("principle", e.c.ui.Tiles.Principle, e.principles)
+	deck("discipline", e.c.ui.Tiles.Discipline, e.disciplines)
 	b.WriteString(`</div>`)
-	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", e.genLine(), b.String()), nil
+	return e.shell(routeFoundations, e.c.ui.RecordNav.Foundations, "", b.String()), nil
 }
 
 // --- contributors ---------------------------------------------------------
@@ -654,24 +681,23 @@ func (e *explorer) contributorsPage() (string, error) {
 	var b strings.Builder
 	b.WriteString(`<div class="dash">`)
 
-	if a.Commits > 0 {
-		b.WriteString(tile(strconv.Itoa(a.Commits), ui.Tiles.Commits, []string{e.export.History.FirstCommit}))
-	}
-	if len(a.Humans) > 0 {
-		b.WriteString(tile(strconv.Itoa(len(a.Humans)), ui.Contributors.Authors, nil))
-	}
-	if a.Commits > 0 {
-		share := strconv.Itoa(a.Assisted*100/a.Commits) + "%"
-		b.WriteString(tile(share, ui.Contributors.Assisted,
-			[]string{strconv.Itoa(a.Assisted) + " / " + strconv.Itoa(a.Commits)}))
-	}
-
+	// The page carries two things and nothing else: who authored the history,
+	// and what assisted. The stat tiles that stood above them repeated numbers
+	// the two panels already hold — the authors table has the commit counts, the
+	// trailers figure has its own total — and the disclosure rate belongs with
+	// the other findings, on the health page.
 	if len(a.Humans) > 0 || len(a.Bots) > 0 {
 		var rows strings.Builder
 		rows.WriteString(`<thead><tr><th>` + escapeText(ui.Contributors.Authors) + `</th><th class="tnum">` +
 			escapeText(ui.Tiles.Commits) + `</th></tr></thead><tbody>`)
 		for _, h := range a.Humans {
-			rows.WriteString(`<tr><td>` + escapeText(h.Name) + `</td><td class="tnum">` + strconv.Itoa(h.Commits) + `</td></tr>`)
+			name := escapeText(h.Name)
+			// A noreply-derived profile links the author's own page; an author
+			// without one stays plain text (itd-140: graceful absence).
+			if h.Profile != "" {
+				name = `<a href="` + escapeAttr(h.Profile) + `">` + name + `</a>`
+			}
+			rows.WriteString(`<tr><td>` + name + `</td><td class="tnum">` + strconv.Itoa(h.Commits) + `</td></tr>`)
 		}
 		for _, t := range a.Bots {
 			rows.WriteString(`<tr class="muted"><td>` + escapeText(t.Name) + ` <span class="rel">` +
@@ -683,27 +709,38 @@ func (e *explorer) contributorsPage() (string, error) {
 			return "", err
 		}
 		body := `<div class="tablewrap"><table>` + rows.String() + `</table></div>` + policy
-		b.WriteString(panel("c6", ui.Contributors.Authors, "", body))
+		b.WriteString(panelDisclosure("c12", ui.Contributors.Authors, "",
+			strconv.Itoa(len(a.Humans)), body))
 	}
 
 	if len(a.ByModel) > 0 {
 		maxN := a.ByModel[0].Commits
-		var bars, rows strings.Builder
+		var bars strings.Builder
 		bars.WriteString(`<div class="bars">`)
 		for _, m := range a.ByModel {
 			pct := strconv.FormatFloat(float64(m.Commits)/float64(maxN)*100, 'f', 1, 64)
 			bars.WriteString(`<span class="lab">` + escapeText(m.Model) + `</span>` +
 				`<span class="bar"><i style="width:` + pct + `%"></i></span>` +
 				`<span class="tnum small">` + strconv.Itoa(m.Commits) + `</span>`)
-			rows.WriteString(`<tr><td>` + escapeText(m.Model) + `</td><td class="tnum">` + strconv.Itoa(m.Commits) + `</td></tr>`)
 		}
 		bars.WriteString(`</div>`)
-		body := bars.String() + e.tableTwin(ui.Contributors.Trailers, `<tbody>`+rows.String()+`</tbody>`)
-		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted), body))
+		// The chart tallies OCCURRENCES and its note says what the bars sum to.
+		// The two commit-level facts that are not assistance — the human-only
+		// declaration, and the commits carrying no trailer at all — are stated
+		// beneath it rather than folded into a chart they would falsify.
+		var foot strings.Builder
+		foot.WriteString(`<p class="small muted trailerfoot">`)
+		foot.WriteString(escapeText(ui.Contributors.DeclaredNone) + ` <b class="tnum">` +
+			strconv.Itoa(a.DeclaredNone) + `</b>`)
+		foot.WriteString(`</p><p class="small muted trailerfoot">` + escapeText(ui.Contributors.Undeclared) + ` <b class="tnum">` +
+			strconv.Itoa(a.Undeclared) + `</b>`)
+		foot.WriteString(`</p>`)
+		b.WriteString(panelDisclosure("c12", ui.Contributors.Trailers, "",
+			strconv.Itoa(a.Assisted), bars.String()+foot.String()))
 	}
 	b.WriteString(`</div>`)
 
-	return e.shell(routeContributors, ui.RecordNav.Contributors, "", e.genLine(), b.String()), nil
+	return e.shell(routeContributors, ui.RecordNav.Contributors, "", b.String()), nil
 }
 
 // policyQuote renders the attribution policy the manifest selects, verbatim,

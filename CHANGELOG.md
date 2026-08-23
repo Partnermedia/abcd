@@ -10,6 +10,90 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Added
+
+- **The record explorer gains two pages: `/record/development/` and
+  `/record/health/`.** Development reads the stores that MOVE — decisions,
+  intents, specs, issues — as Foundation reads the ones that hold: a lifecycle
+  bar over a folded list per bucket, each bucket stating its own true total.
+  Health collects every check the record can be run against itself: unresolved
+  typed references, records nothing reaches, candidate duplicate contributor
+  identities with the `.mailmap` line that would fold them, authored commits
+  declaring nothing, commits declaring more than one model, and the
+  supersessions. A family with nothing to report says so, so a reader can tell
+  a check that passed from one that never ran.
+- **A print stylesheet.** The record's pages print without their interactive
+  chrome, card decks fragment across sheets instead of jumping whole to the
+  next one, and the relationship chart keeps its proportions on paper.
+
+### Changed
+
+- **The record's navigation reads in one order** — Dashboard, Foundation, Work,
+  Relationships, Health — with Contributors and References at the end.
+  `Foundations` is now `Foundation`, and the genealogy moves into the
+  dashboard, folded, rather than holding a page of its own.
+- **The dashboard's counts lead somewhere.** Each tile links the page that
+  reads that store, anchored at the store itself; a store whose page the build
+  did not write keeps an inert tile rather than a dead link.
+- **The release-cadence panel is removed**, and the per-day commit history that
+  fed it with it.
+- **The relationship chart tells its two encodings apart**: colour is what kind
+  of record, border is what state it is in, and each is listed in its own
+  block. Disciplines carry their own colour, their own filter chip and their
+  own word on a record card, rather than being coloured as one thing and
+  labelled as another.
+
+### Fixed
+
+- **The published AI-assistance disclosure rate was wrong by twenty-four
+  points.** The site reported that 71% of commits disclose assistance; the
+  figure is 95%. The numerator counted `Assisted-by:` trailer OCCURRENCES, so a
+  commit naming two models counted twice; the denominator counted merge
+  commits, which the forge writes and no convention asks to declare anything;
+  and the residue was then presented as a disclosure gap. `Authorship` gains
+  `authored`, `merges`, `assisted_commits` and `multi_trailer_commits`
+  additively, so `record.json`'s `schema_version` is unchanged, and the
+  excluded merge count is shown rather than silently subtracted.
+- **`abcd site check` refused every page the documentation build writes.** The
+  scanner faults on HTML comments, which the documentation theme emits, so
+  `docs/**` never parsed — and before the gate was made fail-closed those pages
+  dropped out of every check silently. The tree is excluded at the walk, which
+  is the scope the gate already declared, and the gate's own report now says
+  what a green result does and does not cover.
+- **A whole family of declared interface strings was invisible to the
+  provenance gate**, which walked structs and strings but not maps, so the gate
+  refused words `site-src/ui.json` plainly permits.
+- **Inlined drawings lost their embedded images' dimensions.** The optimiser
+  stripped `width` and `height` from every element rather than the root, so a
+  drawing's embedded pictures rendered at their intrinsic size and were clipped
+  to slivers.
+- Citations on the references page rendered one character per line; the
+  landing page's chapter rail, the roles table on a phone, the install tabs'
+  jumping height and broken narrow-width strip, and uneven panel heights across
+  every dashboard grid are all repaired. Contributor rows link forge profiles
+  where a noreply address names one.
+
+### Fixed
+
+- **The release preview no longer hides the gate that refuses releases.**
+  `abcd launch --dry-run` listed five gates and omitted `receipt_gate`, so
+  it could report a clean bundle, a clean scan and a green smoke while the
+  semantic-receipt gate that actually blocks the publish went unmentioned —
+  an absent row reading as "no such gate". The preview now carries a
+  `semantic-receipts` row in every state, reporting which receipts are
+  recorded for the candidate commit and pointing at the runbook. It reports
+  presence only and never a pass: `release.yml` owns the required-gates list
+  and judges receipt validity, and a second copy of that decision in the
+  preview would be exactly the false confidence this fixes
+  (iss-2608231226342272).
+- **The launch command page documents the whole release cut.** It described
+  the three-step changelog flow and never mentioned the two host-run
+  semantic passes, the receipts they produce, or the two-commit release
+  branch the gate requires — so following the page end to end produced a
+  release that tagged cleanly and then fail-closed. The ship flow now
+  carries the semantic passes as first-class steps
+  (iss-2608231226274000).
+
 ## [0.6.2] - 2026-08-23
 
 ### Added

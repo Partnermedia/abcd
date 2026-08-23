@@ -66,8 +66,16 @@ func (e *explorer) recordPage(n ExportNode) (string, error) {
 
 	var b strings.Builder
 	b.WriteString(`<div class="pills recpills">`)
-	b.WriteString(`<span class="pill type" style="--c:var(` + typeColourToken(n.Type) + `)"><i></i>` +
-		escapeText(n.Type) + `</span>`)
+	// The pill's WORD and its COLOUR say the same thing. A discipline is filed
+	// under intents by the record and drawn in its own colour by the chart, so a
+	// pill reading "intent" in the discipline colour would have the label and
+	// the swatch disagreeing on one badge.
+	kind := n.Type
+	if n.Lifecycle == disciplinesLifecycle {
+		kind = disciplineWord
+	}
+	b.WriteString(`<span class="pill type" style="--c:var(` + typeColourToken(kind) + `)"><i></i>` +
+		escapeText(kind) + `</span>`)
 	if state := n.Lifecycle; state != "" {
 		b.WriteString(`<span class="pill ` + statusTone(state) + `">` + escapeText(state) + `</span>`)
 	}
@@ -101,7 +109,7 @@ func (e *explorer) recordPage(n ExportNode) (string, error) {
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
-	return e.shell(RecordRoute(n), shortTitle(n), "", e.genLine(), b.String()), nil
+	return e.shell(RecordRoute(n), shortTitle(n), "", b.String()), nil
 }
 
 // recordBody renders the record's Markdown.
@@ -297,8 +305,17 @@ func sortEdgesByTarget(edges []ExportEdge, key func(ExportEdge) string) {
 // Colour names only the durable types; everything else is neutral, because a
 // fourth categorical hue stops being distinguishable under colour-vision
 // deficiency in an all-pairs chart.
+// disciplineWord is the singular a badge uses: the record's directory is
+// plural, and a badge names one record.
+const disciplineWord = "discipline"
+
 func typeColourToken(typ string) string {
 	switch typ {
+	case disciplinesLifecycle, disciplineWord:
+		// A discipline is filed under intents by the record and is its own kind
+		// of thing to a reader, so it carries its own colour rather than an
+		// intent's. The chart agrees: `record.js` reads the same rule.
+		return "--s-discipline"
 	case "adr":
 		return "--s-adr"
 	case "intent":

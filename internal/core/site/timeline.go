@@ -64,18 +64,39 @@ var tlLanes = []tlLane{
 
 // timelinePage renders `/record/timeline/`.
 func (e *explorer) timelinePage() (string, error) {
-	svg, positions := e.genealogySVG()
-	var b strings.Builder
-	b.WriteString(`<div class="panel tl">` + svg + `</div>`)
-	b.WriteString(`<div class="dash tlside">`)
-	if p := e.releaseList(); p != "" {
-		b.WriteString(p)
+	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", e.genealogy()), nil
+}
+
+// genealogy is the whole genealogy — the drawing and the supersessions read as
+// text — as one block. It is rendered into the DASHBOARD, folded shut, because
+// it answers "how did the record get here" rather than "what does it hold": a
+// reader who wants it asks for it, and one who does not is not made to scroll
+// past a full-width chart to reach the counts.
+func (e *explorer) genealogy() string {
+	svg, _ := e.genealogySVG()
+	return `<div class="panel tl">` + svg + `</div>`
+}
+
+// supersessions is the arcs and the stubs read as text. It belongs with the
+// findings rather than beside the drawing: a supersession the tree cannot
+// resolve is a health finding, and one it can is a fact about two records that
+// their own pages already carry.
+func (e *explorer) supersessions() (body string, n int) {
+	_, positions := e.genealogySVG()
+	body = e.supersessionList(positions)
+	for _, ed := range e.export.Edges {
+		if ed.Rel == "supersedes" {
+			if _, ok := e.byID[ed.To]; ok {
+				n++
+			}
+		}
 	}
-	if p := e.supersessionList(positions); p != "" {
-		b.WriteString(p)
+	for _, u := range e.export.Health.Unresolved {
+		if u.Rel == "supersedes" {
+			n++
+		}
 	}
-	b.WriteString(`</div>`)
-	return e.shell(routeTimeline, e.c.ui.RecordNav.Timeline, "", e.genLine(), b.String()), nil
+	return body, n
 }
 
 // tlPoint is where one record's mark ended up, so an arc can find both ends.
@@ -513,32 +534,6 @@ func (e *explorer) laneHead(y float64, label, count string) string {
 		`" font-size="10" fill="var(--ink-3)">` + escapeText(count) + `</text>`
 }
 
-// releaseList is the cadence as a table twin of the release lane: every version,
-// its date, and the days since the one before it.
-func (e *explorer) releaseList() string {
-	rel := e.export.Releases
-	if len(rel) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(`<ul class="list">`)
-	for i, r := range rel {
-		gap := ""
-		if i+1 < len(rel) {
-			gap = strconv.Itoa(dayNumber(r.Date)-dayNumber(rel[i+1].Date)) + "d"
-		}
-		href := e.releaseHref(r.Version)
-		id := `<span class="id">v` + escapeText(r.Version) + `<span class="d">` + escapeText(r.Date) + `</span></span>`
-		if href != "" {
-			id = `<span class="id"><a href="` + escapeAttr(href) + `">v` + escapeText(r.Version) + `</a>` +
-				`<span class="d">` + escapeText(r.Date) + `</span></span>`
-		}
-		b.WriteString(`<li>` + id + `<span class="small muted">` + escapeText(gap) + `</span></li>`)
-	}
-	b.WriteString(`</ul>`)
-	return panel("c6", e.c.ui.Panels.Cadence, strconv.Itoa(len(rel)), b.String())
-}
-
 // supersessionList is the arcs and the stubs as text — the accessible twin of
 // the drawing, and the only place the stubs can be read out.
 func (e *explorer) supersessionList(pos map[string]tlPoint) string {
@@ -577,7 +572,7 @@ func (e *explorer) supersessionList(pos map[string]tlPoint) string {
 	if n == 0 {
 		return ""
 	}
-	return panel("c6", relationWord("supersedes"), strconv.Itoa(n), `<ul class="list">`+rows.String()+`</ul>`)
+	return `<ul class="list">` + rows.String() + `</ul>`
 }
 
 // --- small numeric helpers -------------------------------------------------

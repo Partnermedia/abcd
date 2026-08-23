@@ -364,7 +364,12 @@ func (e CSLEntry) link() string {
 func (e *explorer) referencesPage() (string, error) {
 	b := e.bib
 	var out strings.Builder
-	out.WriteString(`<div class="dash">`)
+	// Two bibliographies of very different length read badly as parallel
+	// columns, and evening their heights only trades the ragged pair for a
+	// screen of blank paper. They are stacked full-width instead, each folded
+	// behind its own heading — the shape the relationship chart's list already
+	// uses — so the page opens as two closed headings a reader chooses between.
+	out.WriteString(`<div class="dash reading">`)
 
 	// Every block on this page names the repository span it was lifted from, the
 	// same way a composed chapter does. The sources are the CSL file's own
@@ -380,7 +385,7 @@ func (e *explorer) referencesPage() (string, error) {
 		refs.WriteString(`<p class="small muted"` + srcAttr(b.Path, "") + `><a href="` +
 			escapeAttr(e.c.repo.Repository+"/blob/main/"+b.Path) + `">` + escapeText(b.Path) + `</a></p>`)
 	}
-	out.WriteString(panelSourced("c8", b.RefsHeading, b.Source+"#"+b.RefsAnchor,
+	out.WriteString(panelDisclosure("c12", b.RefsHeading, b.Source+"#"+b.RefsAnchor,
 		strconv.Itoa(len(b.Entries)), refs.String()))
 
 	// Rendered only when the acknowledgement file supplied BOTH the heading and
@@ -400,11 +405,11 @@ func (e *explorer) referencesPage() (string, error) {
 		}
 		body := `<div class="prose small"` + srcAttr(b.Source, b.InspAnchor) + `>` + lead + `</div>` +
 			`<div class="insp"` + srcAttr(b.Source, b.InspAnchor) + `>` + items + `</div>`
-		out.WriteString(panelSourced("c4", b.Heading, b.Source+"#"+b.InspAnchor,
+		out.WriteString(panelDisclosure("c12", b.Heading, b.Source+"#"+b.InspAnchor,
 			strconv.Itoa(countListItems(b.Inspirations)), body))
 	}
 	out.WriteString(`</div>`)
-	return e.shell(routeReferences, e.c.ui.NavReferences, "", e.genLine(), out.String()), nil
+	return e.shell(routeReferences, e.c.ui.NavReferences, "", out.String()), nil
 }
 
 // countListItems counts the bullets across a run of list blocks.

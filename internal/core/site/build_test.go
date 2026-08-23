@@ -354,7 +354,7 @@ func TestPreviewStampSaysUnreleased(t *testing.T) {
 	}
 
 	// The landing page's footer stamp.
-	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span>`)
+	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span></span>`)
 	if foot == "" {
 		t.Fatal("the landing page has no build stamp")
 	}
@@ -368,16 +368,11 @@ func TestPreviewStampSaysUnreleased(t *testing.T) {
 		t.Errorf("the preview footer stamp claims a released version: %q", foot)
 	}
 
-	// The explorer's stamp, which is a different renderer over the same fact.
-	gen := sectionBetween(outFile(t, out, "record/index.html"), `<p class="gen">`, `</p>`)
-	if gen == "" {
-		t.Fatal("the explorer dashboard has no generated line")
-	}
-	if !strings.Contains(gen, "unreleased") {
-		t.Errorf("the explorer's preview stamp does not say unreleased: %q", gen)
-	}
-	if strings.Contains(gen, "v"+fixtureStamp.Version) {
-		t.Errorf("the explorer's preview stamp claims a released version: %q", gen)
+	// The explorer pages carry no dateline of their own: the header pill and
+	// the footer stamp are the two renderers of the build fact, and a third
+	// under every page title was the same numbers a third time.
+	if strings.Contains(outFile(t, out, "record/index.html"), `<p class="gen">`) {
+		t.Error("the explorer dashboard still renders a gen dateline under its title")
 	}
 
 	// And the export the chart reads.
@@ -825,15 +820,24 @@ func TestBuildRecordExportShape(t *testing.T) {
 		t.Errorf("status counts: %+v", exp.Counts.ByStatus)
 	}
 
-	// Attribution: one commit declared a model, one declared None, the rest
-	// declared nothing at all — and the export says so rather than guessing.
+	// Attribution: one commit declared a model, the rest declared None or
+	// nothing at all — and the export says so rather than guessing.
 	if exp.Authorship.Assisted != 1 {
-		t.Errorf("assisted commits: %d, want 1", exp.Authorship.Assisted)
+		t.Errorf("assisted trailer occurrences: %d, want 1", exp.Authorship.Assisted)
 	}
-	// The changelog commit, the merge fixture's branch and merge commits, and the
-	// commit that ships the stub — each declaring that no tool touched it.
-	if exp.Authorship.DeclaredNone != 4 {
-		t.Errorf("declared-None commits: %d, want 4", exp.Authorship.DeclaredNone)
+	// The changelog commit, the merge fixture's BRANCH commit, and the commit
+	// that ships the stub — each declaring that no tool touched it. The merge
+	// commit's own declaration is not among them: a merge is authored by nobody,
+	// so it is counted as a merge and asked to declare nothing.
+	if exp.Authorship.DeclaredNone != 3 {
+		t.Errorf("declared-None authored commits: %d, want 3", exp.Authorship.DeclaredNone)
+	}
+	if exp.Authorship.Merges == 0 {
+		t.Error("no merges counted — the fixture history has one, so the exclusion is untested")
+	}
+	if exp.Authorship.Commits != exp.Authorship.Authored+exp.Authorship.Merges {
+		t.Errorf("commits %d != authored %d + merges %d",
+			exp.Authorship.Commits, exp.Authorship.Authored, exp.Authorship.Merges)
 	}
 	if len(exp.Authorship.Humans) != 1 || exp.Authorship.Humans[0].Name != "Fixture" {
 		t.Errorf("humans: %+v", exp.Authorship.Humans)
@@ -841,8 +845,10 @@ func TestBuildRecordExportShape(t *testing.T) {
 	if len(exp.Authorship.Bots) != 0 {
 		t.Errorf("bots: %+v — the fixture's only author is a person", exp.Authorship.Bots)
 	}
-	if len(exp.Authorship.ByModel) != 2 {
-		t.Errorf("by_model: %+v, want the declared model and the declared None", exp.Authorship.ByModel)
+	// None is a declaration of no assistance, so it is not a row in a tally of
+	// what assisted: the chart would otherwise sum past its own total.
+	if len(exp.Authorship.ByModel) != 1 {
+		t.Errorf("by_model: %+v, want the declared model alone", exp.Authorship.ByModel)
 	}
 }
 
@@ -862,10 +868,43 @@ func TestAuthorshipSeparatesToolsFromPeople(t *testing.T) {
 	f.git("2026-03-04T09:00:00+00:00",
 		"-c", "user.name=Assistant", "-c", "user.email=noreply@example.invalid",
 		"commit", "-m", "chore: written before the trailer convention")
+	f.write("human.txt", "a commit from a forge noreply address\n")
+	f.git("2026-03-05T09:00:00+00:00", "add", "-A")
+	f.git("2026-03-05T09:00:00+00:00",
+		"-c", "user.name=Casey", "-c", "user.email=1234+casey@users.noreply.github.com",
+		"commit", "-m", "docs: a change by a person")
 
 	a, err := LoadAuthorship(f.Root())
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A merge is nobody's work: it never counts toward the disclosure rate, in
+	// either the numerator or the denominator. A commit declaring two models is
+	// ONE commit and TWO trailer occurrences, and the two quantities are kept
+	// apart — conflating them is what published a disclosure rate 24 points
+	// below the truth.
+	if a.Commits != a.Authored+a.Merges {
+		t.Errorf("commits %d != authored %d + merges %d", a.Commits, a.Authored, a.Merges)
+	}
+	if a.Authored != a.AssistedCommits+a.DeclaredNone+a.Undeclared {
+		t.Errorf("authored %d != assisted %d + none %d + undeclared %d",
+			a.Authored, a.AssistedCommits, a.DeclaredNone, a.Undeclared)
+	}
+	if a.Merges == 0 {
+		t.Fatal("the fixture history has no merge, so the exclusion is untested")
+	}
+
+	// The noreply-derived profile reaches the export; every other author,
+	// whose address is a real mailbox, has none (itd-140: graceful absence).
+	profiles := map[string]string{}
+	for _, h := range a.Humans {
+		profiles[h.Name] = h.Profile
+	}
+	if profiles["Casey"] != "https://github.com/casey" {
+		t.Errorf("the noreply author's profile is %q, want the forge page", profiles["Casey"])
+	}
+	if profiles["Fixture"] != "" {
+		t.Errorf("a real mailbox derived a profile: %q", profiles["Fixture"])
 	}
 	names := map[string]bool{}
 	for _, b := range a.Bots {

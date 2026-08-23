@@ -43,9 +43,30 @@ var (
 type Author struct {
 	Name    string `json:"name"`
 	Commits int    `json:"commits"`
+	// Profile is the author's forge profile URL, derived only from a forge
+	// noreply address — which carries no real mailbox, only the public
+	// username — so exporting it republishes nothing the rule above protects.
+	// An author whose address is not a noreply simply has none.
+	Profile string `json:"profile,omitempty"`
 	// email is read so identities fold correctly and sort stably, and is never
 	// exported.
 	email string
+}
+
+// noreplyRe matches GitHub's noreply commit addresses, both forms:
+// `77722411+user@users.noreply.github.com` and the older
+// `user@users.noreply.github.com`. The pattern itself names the forge, so the
+// derivation needs no forge configuration and degrades by absence everywhere
+// else (itd-140).
+var noreplyRe = regexp.MustCompile(`(?i)^(?:\d+\+)?([a-z\d](?:[a-z\d-]*[a-z\d])?)@users\.noreply\.github\.com$`)
+
+// profileURL is the forge profile a noreply address names, or "".
+func profileURL(email string) string {
+	m := noreplyRe.FindStringSubmatch(email)
+	if m == nil {
+		return ""
+	}
+	return "https://github.com/" + m[1]
 }
 
 // ModelTally is one distinct `Assisted-by:` value and how often it appears.
@@ -59,22 +80,44 @@ type ModelTally struct {
 type Authorship struct {
 	// Commits is the total number of commits in the history walked.
 	Commits int `json:"commits"`
+	// Authored is Commits less the merges: the commits a person actually wrote,
+	// and the only honest denominator for a disclosure rate.
+	Authored int `json:"authored"`
+	// Merges is what was set aside to get there. It is published rather than
+	// quietly subtracted, because a denominator that changed without saying so
+	// is how the rate went wrong in the first place.
+	Merges int `json:"merges"`
 	// Humans are the authors of record, mailmap-folded, most commits first.
 	Humans []Author `json:"humans"`
 	// Bots are the forge bots and tool-authored commits, kept in a separate row
 	// so a reader never has to guess which lines are people.
 	Bots []Author `json:"bots"`
-	// Assisted is the number of commits declaring assistance.
+	// AssistedCommits is how many AUTHORED commits declare assistance — the
+	// commit-level count, and the numerator of the disclosure rate.
+	AssistedCommits int `json:"assisted_commits"`
+	// Assisted is the number of `Assisted-by:` trailer OCCURRENCES across
+	// authored commits. It is what the per-model tally sums to; it is not a
+	// number of commits, and a commit naming two models counts twice here and
+	// once in AssistedCommits. Rendering this one as a count of commits is the
+	// defect that published a disclosure rate well below the truth.
 	Assisted int `json:"assisted"`
-	// DeclaredNone is the number declaring `Assisted-by: None` — work no tool
-	// touched, saying so.
+	// MultiTrailerCommits is how many AUTHORED commits declare more than one
+	// model. It is counted per COMMIT rather than derived as Assisted minus
+	// AssistedCommits: that subtraction is a surplus of occurrences, and a
+	// single commit naming three models would report two — publishing an
+	// occurrence figure under a label that says commits, which is the exact
+	// conflation this type exists to keep apart.
+	MultiTrailerCommits int `json:"multi_trailer_commits"`
+	// DeclaredNone is the number of AUTHORED commits declaring
+	// `Assisted-by: None` — work no tool touched, saying so.
 	DeclaredNone int `json:"declared_none"`
-	// Undeclared is the number carrying no trailer at all. It is published
-	// because an absent trailer and a forgotten one are the same bytes, and the
-	// honest number is the one that says how much of the history predates the
-	// convention.
+	// Undeclared is the number of AUTHORED commits carrying no trailer at all.
+	// It is published because an absent trailer and a forgotten one are the
+	// same bytes, and the honest number is the one that says how much of the
+	// history predates the convention. Merges are excluded: nobody wrote them,
+	// so nothing was forgotten.
 	Undeclared int `json:"undeclared"`
-	// ByModel tallies each distinct declared value, most commits first.
+	// ByModel tallies each distinct declared value by OCCURRENCE, most first.
 	ByModel []ModelTally `json:"by_model"`
 }
 
@@ -92,8 +135,12 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		return a, nil
 	}
 
+	// The parent list comes back with the trailers because a MERGE is not a
+	// commit anyone wrote: the forge creates it, no convention asks it to
+	// declare anything, and counting merges as undeclared work buries the real
+	// number under them.
 	trailers, err := gitutil.RunCapped(repoRoot, maxShortlogBytes,
-		"log", "--pretty=format:%x00%(trailers:key=Assisted-by,valueonly,separator=%x1f)")
+		"log", "--pretty=format:%x00%p%x1e%(trailers:key=Assisted-by,valueonly,separator=%x1f)")
 	if err != nil {
 		return Authorship{}, err
 	}
@@ -107,22 +154,40 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 	}
 	for _, rec := range records {
 		a.Commits++
-		declared := false
-		for _, v := range strings.Split(rec, "\x1f") {
+		parents, rest, _ := strings.Cut(rec, "\x1e")
+		if len(strings.Fields(parents)) > 1 {
+			a.Merges++
+			continue
+		}
+		a.Authored++
+		declared, assisted, models := false, false, 0
+		for _, v := range strings.Split(rest, "\x1f") {
 			v = strings.TrimSpace(v)
 			if v == "" {
 				continue
 			}
 			declared = true
-			tally[v]++
 			if v == noneDeclaration {
-				a.DeclaredNone++
+				// Counted, never charted: a declaration of NO assistance in a
+				// tally of what assisted would make the bars sum past their own
+				// total. It is stated separately, beneath the chart.
 				continue
 			}
+			tally[v]++
 			a.Assisted++
+			assisted = true
+			models++
 			vendors[strings.SplitN(v, ":", 2)[0]] = true
 		}
-		if !declared {
+		if models > 1 {
+			a.MultiTrailerCommits++
+		}
+		switch {
+		case assisted:
+			a.AssistedCommits++
+		case declared:
+			a.DeclaredNone++
+		default:
 			a.Undeclared++
 		}
 	}
@@ -150,7 +215,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 		if err != nil {
 			continue
 		}
-		au := Author{Name: m[2], Commits: n, email: m[3]}
+		au := Author{Name: m[2], Commits: n, Profile: profileURL(m[3]), email: m[3]}
 		if botNameRe.MatchString(au.Name) || vendors[au.Name] {
 			a.Bots = append(a.Bots, au)
 			continue

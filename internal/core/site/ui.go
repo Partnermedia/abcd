@@ -29,24 +29,29 @@ var ErrUIInvalid = errors.New("site: interface strings are invalid")
 
 // UI is the interface-string allowlist.
 type UI struct {
-	Purpose       string   `json:"_purpose"`
-	NavStory      string   `json:"nav_story"`
-	NavInstall    string   `json:"nav_install"`
-	NavDocs       string   `json:"nav_docs"`
-	NavRecord     string   `json:"nav_record"`
-	NavReferences string   `json:"nav_references"`
-	CTARoles      string   `json:"cta_roles"`
-	CTAInstall    string   `json:"cta_install"`
-	CTADocs       string   `json:"cta_docs"`
-	RecordLink    string   `json:"record_link"`
-	FromTheRecord string   `json:"from_the_record"`
-	LatestRelease string   `json:"latest_release"`
-	AllReleases   string   `json:"all_releases"`
-	Copy          string   `json:"copy"`
-	Copied        string   `json:"copied"`
-	SearchDocs    string   `json:"search_docs"`
-	Platform      Platform `json:"platform"`
-	Tiles         Tiles    `json:"tiles"`
+	Purpose       string `json:"_purpose"`
+	NavStory      string `json:"nav_story"`
+	NavInstall    string `json:"nav_install"`
+	NavDocs       string `json:"nav_docs"`
+	NavRecord     string `json:"nav_record"`
+	NavReferences string `json:"nav_references"`
+	CTARoles      string `json:"cta_roles"`
+	CTAInstall    string `json:"cta_install"`
+	CTADocs       string `json:"cta_docs"`
+	RecordLink    string `json:"record_link"`
+	FromTheRecord string `json:"from_the_record"`
+	LatestRelease string `json:"latest_release"`
+	AllReleases   string `json:"all_releases"`
+	Copy          string `json:"copy"`
+	Copied        string `json:"copied"`
+	SearchDocs    string `json:"search_docs"`
+	// ForgeNames names each forge host the header and footer links may label —
+	// "GitHub" for github.com. A host the map does not name keeps the owner/name
+	// handle, so the generic explorer never assumes a forge. The map may be
+	// empty; the missing-string check walks only declared strings.
+	ForgeNames map[string]string `json:"forge_names"`
+	Platform   Platform          `json:"platform"`
+	Tiles      Tiles             `json:"tiles"`
 	// RecordNav labels the explorer's sub-navigation; each label is also that
 	// page's own heading, so a page and the tab that reaches it cannot drift.
 	RecordNav RecordNav `json:"record_nav"`
@@ -60,11 +65,13 @@ type UI struct {
 	// the relation's own word from the record; only the inverse needs saying.
 	Relations Relations `json:"relations"`
 	// Contributors labels the attribution page's two rows and two figures.
-	Contributors  ContributorsUI `json:"contributors"`
-	More          string         `json:"more"`
-	Standby       string         `json:"standby"`
-	CLIGroup      string         `json:"cli_group"`
-	MatchesSystem string         `json:"matches_system"`
+	Contributors ContributorsUI `json:"contributors"`
+	// Health labels each family of finding the record is checked for.
+	Health        HealthUI `json:"health"`
+	More          string   `json:"more"`
+	Standby       string   `json:"standby"`
+	CLIGroup      string   `json:"cli_group"`
+	MatchesSystem string   `json:"matches_system"`
 	// ReadScript labels the link beside the install command that opens the
 	// script the command runs. It is an invitation to read before running, so it
 	// says what the reader would do, not what the file is.
@@ -78,19 +85,28 @@ type UI struct {
 
 // RecordNav labels the explorer's sub-navigation.
 type RecordNav struct {
-	Dashboard    string `json:"dashboard"`
-	Graph        string `json:"graph"`
-	Timeline     string `json:"timeline"`
-	Foundations  string `json:"foundations"`
+	Dashboard   string `json:"dashboard"`
+	Graph       string `json:"graph"`
+	Timeline    string `json:"timeline"`
+	Foundations string `json:"foundations"`
+	// Development names the deck of the stores that MOVE — intents, specs and
+	// issues — as Foundations names the ones that hold.
+	Development string `json:"development"`
+	// Health names the page that collects every finding the record can be
+	// checked against itself for.
+	Health       string `json:"health"`
 	Contributors string `json:"contributors"`
 }
 
 // Panels captions the dashboard panels.
 type Panels struct {
-	Cadence   string `json:"cadence"`
-	Latest    string `json:"latest"`
-	Health    string `json:"health"`
-	TableView string `json:"table_view"`
+	Latest string `json:"latest"`
+	Health string `json:"health"`
+	// Unresolved, Baseline and Isolated label the health summary's three
+	// numbers; unlabelled they read as a rendering fault.
+	Unresolved string `json:"unresolved"`
+	Baseline   string `json:"baseline"`
+	Isolated   string `json:"isolated"`
 }
 
 // GraphUI labels the relationship chart's controls.
@@ -134,12 +150,48 @@ type Relations struct {
 	BuildsOn   string `json:"builds_on"`
 }
 
+// HealthUI labels the health page's finding families. Every one of them is a
+// check the record can be run against ITSELF — nothing here is a judgement, an
+// opinion, or a number a human has to interpret before acting on it.
+type HealthUI struct {
+	// Unresolved is a typed reference whose target no file answers to.
+	Unresolved string `json:"unresolved"`
+	// Isolated is a record nothing links to and which links to nothing.
+	Isolated string `json:"isolated"`
+	// SameAuthor is a candidate duplicate identity: two author names that the
+	// mailmap has not folded but which the evidence says are one person.
+	SameAuthor string `json:"same_author"`
+	// Undeclared is an authored commit carrying no `Assisted-by:` trailer.
+	Undeclared string `json:"undeclared"`
+	// MultiTrailer is a commit declaring more than one assisting model — not a
+	// fault, but the reason a trailer tally and a commit count differ.
+	MultiTrailer string `json:"multi_trailer"`
+	// NotADefect is what the multi-trailer panel says about itself. The family
+	// is the one on the page that reports no fault at all, and a panel sitting
+	// among findings without saying so is read as a fifth finding.
+	NotADefect string `json:"not_a_defect"`
+	// SupersedesLead says what a supersession row means, and that the family
+	// reports no fault: the left record replaced the right one.
+	SupersedesLead string `json:"supersedes_lead"`
+	// Clean is what the page says when a family has nothing to report.
+	Clean string `json:"clean"`
+	// Suggestion prefixes the line a finding proposes a human confirm.
+	Suggestion string `json:"suggestion"`
+}
+
 // ContributorsUI labels the attribution page.
 type ContributorsUI struct {
 	Authors  string `json:"authors"`
 	Tools    string `json:"tools"`
 	Assisted string `json:"assisted"`
 	Trailers string `json:"trailers"`
+	// MergesExcluded names what the disclosure rate leaves out, so the
+	// denominator is never a silent choice.
+	MergesExcluded string `json:"merges_excluded"`
+	// DeclaredNone and Undeclared label the two commit-level facts stated
+	// beneath the occurrence chart rather than drawn inside it.
+	DeclaredNone string `json:"declared_none"`
+	Undeclared   string `json:"undeclared"`
 }
 
 // Inverse names a directed relation read from the record it points at. An
@@ -234,6 +286,17 @@ func (ui UI) missing() []string {
 			switch f.Type.Kind() {
 			case reflect.Struct:
 				walk(v.Field(i), f.Type)
+			case reflect.Map:
+				// An ABSENT key is a declaration the repository chose not to
+				// make, and the renderer degrades by absence. A key declared
+				// BLANK is a mistake of the same kind an empty field is, and
+				// the walk names it rather than letting it read as a choice.
+				iter := v.Field(i).MapRange()
+				for iter.Next() {
+					if iter.Value().Kind() == reflect.String && strings.TrimSpace(iter.Value().String()) == "" {
+						out = append(out, name+"."+iter.Key().String())
+					}
+				}
 			case reflect.String:
 				// `_purpose` documents the file for its human readers and is
 				// never rendered, so it is the one field with nothing to say.
