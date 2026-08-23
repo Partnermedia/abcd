@@ -596,8 +596,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
   .tabs>[role=tabpanel][hidden]{display:none}
 
   /* A disclosure that hides part of the DOCUMENT gives it up: the install
-     page's asides, and the tables that carry in words what the segmented bars
-     draw. `::details-content` is what makes a CLOSED `details` do that, and it
+     page's asides. `::details-content` is what makes a CLOSED `details` do that, and it
      is a Chromium feature — elsewhere a closed disclosure still prints as its
      summary alone, and in every engine the marker beside it still points
      closed, because CSS cannot set the `open` attribute. That residue is real

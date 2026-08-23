@@ -1,6 +1,11 @@
 package site
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/Partnermedia/abcd/internal/core/changelog"
+)
 
 // The header and footer forge links are labelled with the forge's declared
 // interface name, not the owner/repo handle — a reader who has never heard of
@@ -87,6 +92,41 @@ func TestUIMissingNamesABlankMapValue(t *testing.T) {
 	}
 	if len(UI{ForgeNames: map[string]string{}}.missing()) != len(UI{}.missing()) {
 		t.Error("an empty map was treated as a missing declaration")
+	}
+}
+
+// cadenceDates pins the collision branch in both directions: releases far
+// apart each keep their date, and releases days apart do not print two dates
+// over each other. The fixture's own two releases sit a third of the chart
+// apart, so only this test can see the suppression.
+func TestCadenceSuppressesOnlyACollidingDate(t *testing.T) {
+	dates := func(rel []changelog.DatedRelease) (versions, printed int) {
+		e := &explorer{c: &composer{ui: UI{Panels: Panels{Cadence: "Release cadence"},
+			Tiles: Tiles{Releases: "releases"}}}}
+		e.export.Releases = rel
+		out := e.cadence()
+		return strings.Count(out, `font-size="10"`), strings.Count(out, `font-size="8"`)
+	}
+	// Two months apart: both dates fit.
+	spread := []changelog.DatedRelease{{Version: "0.2.0", Date: "2026-03-01"}, {Version: "0.1.0", Date: "2026-01-01"}}
+	if v, d := dates(spread); v != 2 || d != 2 {
+		t.Errorf("well-spaced releases printed %d versions and %d dates, want 2 and 2", v, d)
+	}
+	// A cluster inside a long span — the shape that collides, since the chart
+	// normalises to the span and a week of releases on its own simply spreads
+	// to full width. Three of these land on the same side of the axis with the
+	// last two ~38 units apart, inside a date label's own width.
+	tight := []changelog.DatedRelease{
+		{Version: "0.5.0", Date: "2026-02-13"}, {Version: "0.4.0", Date: "2026-02-11"},
+		{Version: "0.3.0", Date: "2026-02-10"}, {Version: "0.2.0", Date: "2026-01-21"},
+		{Version: "0.1.0", Date: "2026-01-01"},
+	}
+	v, d := dates(tight)
+	if v != 5 {
+		t.Errorf("a crowded chart printed %d versions, want 5 — a version is never suppressed", v)
+	}
+	if d >= v {
+		t.Errorf("a crowded chart printed %d dates against %d versions; a colliding date must be given up", d, v)
 	}
 }
 

@@ -32,10 +32,15 @@ package site
 // `.abcd/site.json`, whichever tree the span came from. The verbatim record
 // rendering under `/record/**` is EXEMPT: the record legitimately contains
 // change-narration and tool names, and rewriting it to read better on the site
-// is the thing that ADR forbids. `/docs/` is MkDocs' own tree and is not this
-// build's output at all. The static mobile checks are the exception that covers
-// EVERYTHING emitted, record pages included: a table that scrolls off a phone
-// does so whatever tree its words came from.
+// is the thing that ADR forbids. The static mobile checks are the exception
+// that covers everything THIS BUILD writes, record pages included: a table that
+// scrolls off a phone does so whatever tree its words came from.
+//
+// `/docs/` is MkDocs' own tree and is not this build's output at all, so it is
+// excluded from the page walk before any gate sees it — including the mobile
+// checks, which therefore say nothing about it. Its words are gated at the
+// source by docs-lint, and its layout is the SSG's own responsibility. A green
+// report here is a statement about the pages abcd renders, and about no others.
 //
 // The explorer's two non-record pages — `/contributors/` and `/references/` —
 // are held to the composed rules. `/contributors/` plainly is one: it quotes the
@@ -1411,9 +1416,12 @@ func (c *checker) checkBaseline() error {
 // whatever the stylesheet says.
 const maxInlineWidthPx = 390
 
-// checkMobile runs the static half of AC 7 over EVERY emitted page, the record
-// rendering included: a table that scrolls off a phone does so whatever tree its
-// words came from. The rendered-overflow audit needs a browser and is CI's.
+// checkMobile runs the static half of AC 7 over every page THIS BUILD writes,
+// the record rendering included: a table that scrolls off a phone does so
+// whatever tree its words came from. `docs/` is not among them — it is the
+// SSG's own output and is excluded from the walk entirely, so no gate here
+// examines it. The rendered-overflow audit needs a browser and is CI's; it
+// draws its routes from this build's own pages and excludes `docs/` too.
 func (c *checker) checkMobile() {
 	for _, page := range c.res.Pages {
 		doc := c.pages[page]
