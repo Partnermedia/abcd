@@ -557,3 +557,58 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
   .bstandby{display:none;animation:none}
   .bstandby .spin{animation:none}
 }
+
+/* ---------- print ----------
+ *
+ * A first pass, and an honest one: paper gets the words. Controls that exist
+ * only to be operated go, the disclosures give up what they are hiding as far
+ * as an engine allows, and the pagination is told which blocks read as one
+ * thing and which are free to run over a fold.
+ */
+@media print{
+  /* Chrome with nothing to say on paper: the site's navigation, the copy
+     buttons, and the whole of the relationship chart's control furniture —
+     the by-date/by-links switch, the filter button and its panel, the search
+     field and its results, the zoom and fullscreen corner, the loading
+     placeholder. */
+  .site-nav,.cmd .copy,
+  .brow2,.bseg,.bfilters,.bfilters-btn,.bcorner,.bfs,.bzoom,.bsearch,.bhits,.bstandby{display:none!important}
+
+  /* On screen the install panels are stacked so the box cannot jump. On paper
+     there is nothing to jump, and a reader wants the selected panel followed
+     by the next section, not by the blank column the tallest panel reserves. */
+  .tabs>[role=tabpanel][hidden]{display:none}
+
+  /* A disclosure that hides part of the DOCUMENT gives it up: the install
+     page's asides, and the tables that carry in words what the segmented bars
+     draw. `::details-content` is what makes a CLOSED `details` do that, and it
+     is a Chromium feature — elsewhere a closed disclosure still prints as its
+     summary alone, and in every engine the marker beside it still points
+     closed, because CSS cannot set the `open` attribute. That residue is real
+     and needs script or markup, not this stylesheet.
+
+     The relationship chart's list twin is deliberately left closed. It is not
+     hidden prose but a way to walk 772 records with a keyboard, and opening it
+     turns one printed page into ninety. */
+  details.more::details-content,details.twin::details-content{content-visibility:visible;display:block}
+  details.more>*:not(summary){animation:none}
+
+  /* The genealogy is one scalable drawing kept behind a scrolling window on a
+     narrow screen. Paper has no scroll, so the window is opened and the
+     drawing is allowed to fit the sheet instead of being cut off at it. */
+  .tl{overflow:visible}
+  .tlsvg{min-width:0}
+
+  /* Blocks that read as one thing are kept on one sheet. Panels are NOT among
+     them, and the omission is the point: a dashboard panel is long enough that
+     refusing to break it pushes the whole panel to the next sheet and leaves
+     the one before it blank. A panel breaks; the cards inside it do not. */
+  .card,.fcard,.tile,.quote,.cmd,.comic{break-inside:avoid}
+  .panel{break-inside:auto}
+
+  /* Trailing padding is what tips a footer onto a sheet of its own, and a
+     footer that splits down the middle guarantees one. Both are taken away;
+     what CSS cannot do is pull a footer back onto a full page. */
+  .record,.chapter,.hero{padding-bottom:0}
+  .site-foot{padding:12px 0 0;break-inside:avoid}
+}
