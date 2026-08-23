@@ -1,0 +1,30 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "7341c574095b34f47274dd3b67af3fc8af189d81"
+    }
+  },
+  "verifier": {
+    "id": "maintainer@release"
+  },
+  "timeVerified": "2026-08-23T17:54:25Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.2"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [],
+  "_reviewProvenance": "Host-run agent-harness semantic review of the shipped surface at the release-content commit: docs/, commands/*.md, the root prose files, and the 0.6.2 CHANGELOG section. Ground truth was the binary built from this commit and exercised, not source reading. This is the fourth run of the gate for this release. Run 1 (7a4ee00) HELD on a false help string plus five omissions; run 2 (a2c77e5) HELD on two blockers, one of them a site-render regression the previous fix commit had introduced into a published issue record; run 3 (6286d44) PROMOTEd with three omissions; this run confirms all of them closed and finds zero discrepancies in every category. Corroborating deterministic gates at this commit: make docs-lint 0 blockers, make record-lint exit 0, the generated-reference drift test green, and abcd site build + site check green over 833 files with all seven gates passing. The reviewer also swept the in-scope docs for prompt-injection payloads, identified the fixture canary, and did not act on it. Manifest-era fields are carried because the gate applies those procedural checks to every required gate, though the pinned manifest describes the sibling crosscheck detector rather than this one."
+}
