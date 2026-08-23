@@ -125,9 +125,9 @@ greens.
 What did catch them is deliberately not claimed here. The tempting stronger
 version, that a peer caught every one, does not survive its own standard: it
 reads as more assurance than the evidence supports, which is the failure this
-record is about. It is recorded separately, with its qualifications about thin
-independence, catches that were record recall rather than review, and at least
-one that was luck. Whatever is catching these, it is not yet a property of the
+record is about. It is recorded separately as iss-2608230847432287, with its
+qualifications about thin independence, catches that were record recall rather
+than review, and at least one that was luck. Whatever is catching these, it is not yet a property of the
 system, and this record claims only that no instrument is.
 
 Routing is left open deliberately. The paragraph is the cheapest rung, but
