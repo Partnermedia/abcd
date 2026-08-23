@@ -25,28 +25,53 @@ two failures share a symptom and a cancellation mechanism, and nothing else —
 `baf0551` removed one source of slowness at exit but left the budget itself
 unguarded.
 
-Measured over one repo's harness transcripts, replaying each through
-`hook session-end` and checking it against `abcd history list`:
+Measured over every one of one repo's harness transcripts — all 24, not a
+sample — replaying each through `hook session-end` and checking it against
+`abcd history list`:
 
-| transcript | size | redaction | captured |
-| --- | --- | --- | --- |
-| `8db3dbd6` | 0.01 MB | 0.22 s | yes |
-| `6802420c` | 0.69 MB | 0.68 s | yes |
-| `38ab27e8` | 1.25 MB | 1.12 s | yes |
-| `f1a5692a` | 1.98 MB | 1.53 s | yes |
-| `134e647f` | 3.33 MB | 2.75 s | no |
-| `51fc2a94` | 3.96 MB | 2.93 s | no |
-| `7d884491` | 4.11 MB | 3.02 s | no |
-| `cc5a634b` | 5.10 MB | 3.77 s | no |
-| `093cd456` | 6.35 MB | 4.78 s | no |
-| `4fbbb0a3` | 8.10 MB | 5.65 s | no |
-| `9c89b576` | 11.80 MB | — | no |
+| transcript | size | redaction | in store | note |
+| --- | --- | --- | --- | --- |
+| `f6c93513` | 0.00 MB | 0.13 s | yes | |
+| `81e39450` | 0.01 MB | 0.15 s | yes | |
+| `8db3dbd6` | 0.01 MB | 0.16 s | yes | |
+| `d4c9d65e` | 0.25 MB | 0.31 s | yes | |
+| `75f8641e` | 0.23 MB | 0.32 s | yes | |
+| `e5c69120` | 0.40 MB | 0.40 s | no | pre-bootstrap |
+| `b7fa33b3` | 0.71 MB | 0.65 s | no | still running |
+| `6802420c` | 0.69 MB | 0.66 s | yes | |
+| `5263dd84` | 1.18 MB | 0.98 s | no | still running |
+| `38ab27e8` | 1.25 MB | 1.03 s | yes | |
+| `e7c58f16` | 1.94 MB | 1.43 s | yes | |
+| `f1a5692a` | 1.98 MB | 1.47 s | yes | |
+| `18c908e9` | 1.88 MB | 1.51 s | yes | |
+| `484ea221` | 1.85 MB | 1.52 s | no | **counterexample** |
+| `c43de2e1` | 2.54 MB | 1.95 s | no | still running |
+| `f050596a` | 3.78 MB | 2.77 s | no | pre-bootstrap |
+| `134e647f` | 3.33 MB | 2.78 s | no | |
+| `51fc2a94` | 3.96 MB | 3.01 s | no | |
+| `7d884491` | 4.11 MB | 3.13 s | no | the field hit |
+| `cc5a634b` | 5.10 MB | 3.60 s | no | |
+| `6ceee26b` | 6.11 MB | 4.57 s | no | |
+| `093cd456` | 6.35 MB | 5.80 s | no | |
+| `4fbbb0a3` | 8.10 MB | 6.05 s | no | |
+| `9c89b576` | 11.80 MB | 8.89 s | no | |
 
-The split is clean and monotone: everything at or under 1.53 s was stored,
-everything at or over 2.75 s was dropped, and the cliff sits somewhere in
-between — call the budget two seconds until it is measured directly. Cost
-tracks content as well as bytes (secret and home-path hit density), so size is
-a proxy for the real variable, not the variable itself.
+Read this table carefully, because it says less than it first appears to. Cost
+scales cleanly with size at roughly 0.7 s per MB, and every ended transcript
+costing over 1.6 s is absent from the store while every ended transcript under
+1.5 s is present. But the boundary is **not** pinned: `484ea221` at 1.52 s was
+dropped and `18c908e9` at 1.51 s was kept, so two samples of near-identical cost
+fall on opposite sides. Three of the absences are sessions still running, and
+two more (`e5c69120`, `f050596a`) precede the first record the store ever holds,
+so they are plausibly pre-bootstrap rather than lost — plausibly, not provably.
+
+So the honest reading is that a budget somewhere near 1.5 s is the best current
+estimate from observational data with real confounders, not a measured constant.
+Pinning it needs a controlled run that ends actual sessions at chosen transcript
+sizes, which is the recovery sweep's job. Cost also tracks content as well as
+bytes (secret and home-path hit density), so size is a proxy for the real
+variable rather than the variable itself. What the data does establish firmly is
+the direction and the steepness: past a few MB, loss is not a risk but the norm.
 
 The consequence is that capture works precisely where it matters least. A short
 session is cheap to redact and gets stored; a long, dense, expensive session —
@@ -54,6 +79,17 @@ the one actually worth keeping — is the one guaranteed to be dropped. Eleven o
 this repo's transcripts are absent from its store, and the store's own listing
 cannot distinguish "never ended" from "ended and lost", which is why the loss
 went unnoticed for a week.
+
+The silence is designed, not accidental, which is what makes this an ADR-shaped
+question rather than a bug report. `session-end`'s own comment block in
+`internal/surface/cli/cli.go` reasons about precisely this failure and accepts
+it: "It is the only irreversible thing abcd does. A session that ends without
+being captured is gone... a missed capture is permanent, a failed capture is
+merely a lost session — is why every path here degrades to log and exit 0 rather
+than surfacing an error to the host." That trade is defensible for a hook that
+fails occasionally. It is not defensible once the failure is systematic and
+correlated with value, because the degradation mode chosen cannot report itself
+— which is exactly why a week passed before anyone noticed.
 
 Directions, none of them taken here, and none to be taken before a detector is
 armed: move the write ahead of the redaction and redact in place afterwards, so
