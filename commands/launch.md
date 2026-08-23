@@ -44,6 +44,13 @@ A release cut is **three steps over two Go entry points**, with a host-run agent
 the middle. It is the `disembark` synthesis shape: a deterministic step, a
 delegated composition, a validating ingest.
 
+Those three steps write the CHANGELOG heading. They do **not** finish the
+release. Two host-run semantic passes must also run and record receipts, and the
+release branch has to carry them in a second commit — see *Semantic receipts*
+below. A branch that skips them merges and tags cleanly and then fails at
+`release.yml`'s fail-closed receipt gate, which is the most expensive place to
+find out: the tag is already created by then, and the workflow never moves a tag.
+
 ### 1. Emit the cut (deterministic, writes nothing)
 
 ```bash
@@ -136,6 +143,49 @@ Exit codes, same shape as step 1:
 
 Then show the user the written heading and the diff, so a human reviews the release
 record before it is committed. This command never commits, tags, or publishes.
+
+## Semantic receipts — the second half of the cut
+
+`release.yml` arms `receipt_gate` fail-closed against the release **content**
+commit. It refuses unless every required gate has a PROMOTE receipt naming that
+exact commit, pinning a judge model, and declaring the matching detector. CI
+cannot produce these: they spawn LLM agents, so they are host-run, and an un-run
+pass is never a silent pass.
+
+**The release branch is exactly two commits.** A receipt names the commit its
+reviewer read and must live in a LATER commit — it can never sit in the tree of
+the commit it names, because adding it would change that commit's sha. So:
+
+1. **The CHANGELOG roll** — the release-content commit, written by the three
+   steps above. This is what the reviewers read.
+2. **The receipts** — a commit recording the semantic verdicts that name commit 1.
+
+On merge, `release.yml` derives the content commit as `<merge>^2^` and finds its
+receipts in the released tree. A one-commit branch breaks this: the single commit
+is taken as the receipts commit, the gate arms against whatever preceded it, and
+no receipt names that commit.
+
+### Running the passes
+
+Run both in the agent harness against commit 1, then commit their receipts:
+
+- **`docs-currency-reviewer`** — verifies every user-facing claim still matches
+  the code. The agent is `agents/docs-currency-reviewer.md`.
+- **`iss35-brief-surface-crosscheck`** — the brief's surface prose against the
+  shipped binary's actual behaviour. Its scope, depth and prompt are pinned by
+  [`.abcd/development/release-gate/manifest.json`](../.abcd/development/release-gate/manifest.json),
+  and a receipt echoes that file's sha256 as `manifestHash`.
+
+Receipts live at `.abcd/work/reviews/<content-sha>/<gate>.json`. The shape is
+[`.abcd/development/release-gate/receipt.example.json`](../.abcd/development/release-gate/receipt.example.json);
+the full procedure, including the tiered depth a release's impact class requires,
+is the adr-37 runbook at
+[`.abcd/development/release-gate/README.md`](../.abcd/development/release-gate/README.md).
+
+A receipt is bound to its gate by its `policy.detector` value, not its filename,
+and a mismatched, malformed, HOLD, model-less or wrong-detector receipt blocks.
+Report a HOLD to the user and stop: a HOLD is a result, not an obstacle to route
+around, and the receipts cannot be hand-written to unblock a release.
 
 ## Scaffold — the release-gate scaffolder
 
