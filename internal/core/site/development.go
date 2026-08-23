@@ -152,15 +152,22 @@ func (e *explorer) developmentStorePanel(nodes []ExportNode) string {
 		group := byBucket[seg.Label]
 		sortDevelopmentNodes(group)
 		shown := group
-		note := strconv.Itoa(len(group))
 		if len(shown) > developmentDeckCap {
 			shown = shown[:developmentDeckCap]
-			// Both figures, each its own number: what is drawn, and what the
-			// bucket actually holds. A cap that stated only one of them would be
-			// the silent truncation this page must not perform.
-			note = strconv.Itoa(len(shown)) + " / " + strconv.Itoa(len(group))
 		}
+		// The heading carries the bucket's TRUE total and nothing else. It used
+		// to read "48 / 272" — the cap beside the total — and with every bucket
+		// capped at the same number two headings read "48 / 272" and "48 / 299",
+		// which looks like one number failing to change rather than two lists
+		// being the same length. What was cut is said at the foot of the list
+		// instead, where a reader is already looking at the rows it cut, in the
+		// same shape the health page states its own remainder.
 		deck := developmentDeck(shown)
+		if rest := len(group) - len(shown); rest > 0 {
+			deck += `<p class="small muted listrest"><b class="tnum">` + strconv.Itoa(rest) +
+				`</b> ` + escapeText(e.c.ui.More) + `</p>`
+		}
+		note := strconv.Itoa(len(group))
 		// EVERY bucket folds, settled or not. A store here holds hundreds of
 		// records: opening even one bucket by default buries the store beside
 		// it, and a page that opens as a column of named, counted headings

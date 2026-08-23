@@ -529,9 +529,8 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 
 
 /* The legend is two encodings, each with its own heading and its own row. */
-.glegend .glhead{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-top:10px}
-.glegend .glhead:first-child{margin-top:0}
-.glegend .glrow{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px}
+.glegend .glrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}
+.glegend .glrow.glstates{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
 /* the list twin: the keyboard path, and what replaces the chart at rest */
 .blist{margin-top:12px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:10px 14px}
 .blist summary{cursor:pointer;font-weight:600;font-size:.92rem}

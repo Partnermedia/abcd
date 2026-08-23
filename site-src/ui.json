@@ -68,9 +68,7 @@
     "forward": "Forward",
     "history": "History of records looked at",
     "linked": "linked records",
-    "no_links": "no typed cross-references",
-    "legend_stores": "Colour: what kind of record",
-    "legend_states": "Border: what state it is in"
+    "no_links": "no typed cross-references"
   },
   "record": {
     "frontmatter": "Frontmatter",

@@ -317,7 +317,7 @@ func (f *fixture) writeSources() {
             "zoom_in": "Zoom in", "zoom_out": "Zoom out", "reset_view": "Reset view",
             "full_screen": "Full screen", "exit_full_screen": "Exit full screen", "close": "Close",
             "back": "Back", "forward": "Forward", "history": "History of records looked at",
-            "legend_stores": "Colour: what kind of record", "legend_states": "Border: what state it is in", "linked": "linked records", "no_links": "no typed cross-references"},
+            "linked": "linked records", "no_links": "no typed cross-references"},
   "record": {"frontmatter": "Frontmatter", "inbound": "Referenced by", "outbound": "References",
              "mentions": "mentions", "not_in_tree": "not in the tree", "open_on_forge": "open on GitHub",
              "commit_history": "commit history"},

@@ -127,12 +127,8 @@ type GraphUI struct {
 	Back           string `json:"back"`
 	Forward        string `json:"forward"`
 	History        string `json:"history"`
-	// LegendStores and LegendStates head the chart legend's two halves: what a
-	// bubble's colour means, and what its border means.
-	LegendStores string `json:"legend_stores"`
-	LegendStates string `json:"legend_states"`
-	Linked       string `json:"linked"`
-	NoLinks      string `json:"no_links"`
+	Linked         string `json:"linked"`
+	NoLinks        string `json:"no_links"`
 }
 
 // RecordUI labels a per-record page's sections.

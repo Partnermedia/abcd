@@ -128,15 +128,18 @@ func (e *explorer) legend() string {
 		}
 		return `<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" ` + style + `/></svg>`
 	}
-	// TWO encodings, read separately. Colour is the store a record belongs to;
+	// TWO encodings, in two blocks. Colour is the store a record belongs to;
 	// border is the state its store grades it in. Run together in one wrapping
 	// row they read as one list, and a lifecycle word wraps under a store name
 	// as though it belonged to it — "closed" under "specs", which says something
-	// the chart never meant.
+	// the chart never meant. The blocks carry no headings: a swatch beside a
+	// word is already the whole of what either half says, and a sentence
+	// explaining a legend is a sentence the single-source rule would have to
+	// find a home for.
 	var b strings.Builder
 	b.WriteString(`<div class="glegend">`)
 
-	b.WriteString(`<p class="glhead">` + escapeText(e.c.ui.Graph.LegendStores) + `</p><div class="glrow">`)
+	b.WriteString(`<div class="glrow">`)
 	for _, typ := range e.storeOrder() {
 		if e.export.Counts.ByType[typ] == 0 {
 			continue
@@ -175,7 +178,7 @@ func (e *explorer) legend() string {
 		}
 	}
 	if states.Len() > 0 {
-		b.WriteString(`<p class="glhead">` + escapeText(e.c.ui.Graph.LegendStates) + `</p><div class="glrow">`)
+		b.WriteString(`<div class="glrow glstates">`)
 		b.WriteString(states.String())
 		b.WriteString(`</div>`)
 	}

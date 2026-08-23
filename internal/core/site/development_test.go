@@ -153,11 +153,13 @@ func TestBuildWithoutDevelopment(t *testing.T) {
 	}
 }
 
-// TestDevelopmentCapStatesTheTrueTotal: a deck longer than the cap is cut, and a
-// cut that did not say so would publish part of a store as the whole of it. Both
-// figures are stated on the panel, and the bar's legend above states the bucket's
-// true count whether the deck was cut or not.
+// TestDevelopmentCapStatesTheTrueTotal: a list longer than the cap is cut, and
+// a cut that did not say so would publish part of a store as the whole of it.
+// The heading carries the bucket's TRUE total — never the cap, which repeated
+// across two buckets reads as one number failing to change — and what was cut
+// is counted at the foot of the rows it cut.
 func TestDevelopmentCapStatesTheTrueTotal(t *testing.T) {
+	e := &explorer{c: &composer{ui: UI{More: "more"}}}
 	const held = developmentDeckCap + 12
 	var nodes []ExportNode
 	for i := 1; i <= held; i++ {
@@ -166,25 +168,32 @@ func TestDevelopmentCapStatesTheTrueTotal(t *testing.T) {
 			Title: "issue " + strconv.Itoa(i), Path: ".abcd/work/issues/open/" + id + ".md",
 			Date: "2026-01-01"})
 	}
-	body := (&explorer{}).developmentStorePanel(nodes)
+	body := e.developmentStorePanel(nodes)
 
 	if n := strings.Count(body, `<li><span class="id">`); n != developmentDeckCap {
 		t.Errorf("the list drew %d rows, not the %d the cap allows", n, developmentDeckCap)
 	}
-	want := strconv.Itoa(developmentDeckCap) + " / " + strconv.Itoa(held)
-	if !strings.Contains(body, ">"+want+"<") {
-		t.Errorf("a cut deck does not state %q — it publishes part of a store as the whole of it", want)
+	// The heading is the bucket's own size, not the cap.
+	if !strings.Contains(body, ">"+strconv.Itoa(held)+"<") {
+		t.Errorf("the heading does not state the bucket's true total of %d", held)
+	}
+	if strings.Contains(body, ">"+strconv.Itoa(developmentDeckCap)+" / ") {
+		t.Error("the heading still carries the cap, which reads as one number across two buckets")
+	}
+	// What was cut is counted, in its own element, at the foot of the list.
+	if want := `<b class="tnum">12</b> more`; !strings.Contains(body, want) {
+		t.Errorf("a cut list does not count what it did not draw: want %q", want)
 	}
 	// The legend states the bucket's true count as text, beside its own name.
 	if !strings.Contains(body, `open <b class="tnum">`+strconv.Itoa(held)+`</b>`) {
 		t.Errorf("the lifecycle legend does not state the bucket's true total of %d", held)
 	}
-	// An uncut deck states one figure, and it is the whole of the bucket.
-	small := (&explorer{}).developmentStorePanel(nodes[:3])
+	// An uncut list states its count and claims no remainder.
+	small := e.developmentStorePanel(nodes[:3])
 	if !strings.Contains(small, ">3<") {
-		t.Error("an uncut deck does not state its count")
+		t.Error("an uncut list does not state its count")
 	}
-	if strings.Contains(small, " / ") {
-		t.Error("an uncut deck claims to have been cut")
+	if strings.Contains(small, "more") {
+		t.Error("an uncut list claims to have been cut")
 	}
 }
