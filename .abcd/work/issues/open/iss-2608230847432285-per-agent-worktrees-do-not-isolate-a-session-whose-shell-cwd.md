@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-2608230847432285"
+slug: "per-agent-worktrees-do-not-isolate-a-session-whose-shell-cwd"
+severity: "major"
+category: "process"
+source: "user-observation"
+found_during: "concurrent-session-coordination-2026-08-23"
+found_at: "AGENTS.md"
+---
+
+Per-agent worktrees do not isolate a session whose shell cwd reverts to the shared checkout, so the mitigation iss-213 recommended has a hole. This refines iss-213, which recorded several agents sharing one git worktree silently invalidating a verification result, and whose recommended direction was to give each agent its own worktree so the whole class disappears. That direction is now in force via the AGENTS.md Concurrent sessions section, and on 2026-08-23 three concurrent sessions demonstrated it does not hold. A session's shell cwd can be silently reset from its worktree back to the primary working directory, and the notice arrives on the tool result AFTER the command that caused it, so the contamination lands on the NEXT command. It fails toward the shared tree, which is the wrong direction: two sessions wrote into the main checkout while believing they were in their own worktree. One appended to two Go test files, the other filed a capture and edited three record files, and both discovered it only when a third session read git status in the main checkout and asked who owned the diffs. Nobody lost work, because the convention that a diff you did not make is a peer's work held and the owners were asked rather than the files committed. The isolation property did not hold; the coordination convention compensated for it. The mechanical mitigation is to address the tree explicitly on every git invocation, git -C <abs-path>, rather than relying on a persisted cd, because the cwd is the thing that silently moves. AGENTS.md states that the checkout is the unit of isolation without saying what makes a session stay in its checkout, and that gap is what let three sessions make the same mistake in one day. Decide the routing: an AGENTS.md line under Concurrent sessions is the cheapest rung and matches how the sequential-id caveat was handled, while the durable form is whatever makes a session's tree unambiguous rather than remembered.
