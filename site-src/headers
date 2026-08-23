@@ -16,8 +16,12 @@
 #                or a JSON export loads nothing — so it would be a directive
 #                with no subject, not a tighter lock.
 #
-# `_headers` and `_redirects` are the host's own configuration. It reads them and
-# serves neither, so neither is a route and neither has a block.
+# Three emitted files are not routes and have no block. `_headers` and
+# `_redirects` are the host's own configuration: it reads them and serves
+# neither. `.abcd-site-build` is the build's own marker — it is what lets a
+# rebuild clear this directory instead of refusing it, and it describes nothing
+# but itself. The walk excludes those three by name rather than by a pattern, so
+# a new file cannot slip past the check by resembling one of them.
 #
 # /install.sh is read before it is run, so it is served as text, never as a
 # download.

@@ -600,11 +600,20 @@ var (
 )
 
 // servedRoute maps one emitted file to the path a reader requests and the
-// headers that path must carry. `_headers` and `_redirects` are the host's own
-// control files — it consumes them and serves neither — so they are not routes.
+// headers that path must carry.
+//
+// Three files are not routes. `_headers` and `_redirects` are the host's own
+// control files: it consumes them and serves neither. The build marker is this
+// tool's own metadata — it exists so a rebuild may clear the directory, and it
+// describes nothing but itself.
+//
+// They are excluded BY NAME, not by a rule like "skip dotfiles" or "skip files
+// starting with an underscore". A pattern would quietly exempt every future file
+// that happened to match it, and the whole job of this walk is to notice files
+// nobody thought about.
 func servedRoute(name string) (route string, required []string, served bool) {
 	switch name {
-	case "_headers", "_redirects":
+	case "_headers", "_redirects", siteMarkerName:
 		return "", nil, false
 	}
 	if strings.HasSuffix(name, "index.html") {

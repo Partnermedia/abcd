@@ -50,7 +50,16 @@ build never draws.
 abcd site                    # what is declared, and what the last build left; exit 0
 abcd site build              # render into ./site
 abcd site build --out DIR    # render into DIR
+abcd site build --preview    # stamp the render as unreleased · <commit>
+abcd site check --out DIR    # gate an already-rendered tree; exit 1 on findings
 ```
+
+`--preview` is for a build of an untagged tree: the stamp renders the
+`ui.json` word `unreleased` with the commit in place of a version,
+`record.json` carries `"preview": true`, and pinning `--version` alongside it
+refuses. A build into a non-empty directory purges it only when the tree
+carries the `.abcd-site-build` marker a previous build wrote, and refuses
+loudly otherwise: the build cannot remove a directory it did not write.
 
 `build` reads, and reads nothing else:
 
@@ -68,9 +77,29 @@ abcd site build --out DIR    # render into DIR
 | `CONTRIBUTING.md`, `ACKNOWLEDGEMENTS.md` | the credit sources the contributors and references pages render (the footer also probes `SECURITY.md` and `CITATION.cff` for their existence) |
 | `.claude-plugin/plugin.json` | the package's forge URL, licence and author, for links and the footer |
 
-It writes `index.html`, `record.json`, the `_redirects` and `_headers` maps, the
-stylesheet, the two scripts, `install.sh`, and every referenced raster. Nothing
-else, nowhere else, and no network at any point.
+It writes the landing page, the explorer's pages, `record.json`,
+`install.sh` (the committed template plus one build-stamp comment), the
+`_redirects` and `_headers` maps, the stylesheets and scripts, every
+referenced raster, and the `.abcd-site-build` marker. Nothing else, nowhere
+else, and no network at any point.
+
+## The gates
+
+`abcd site check` runs seven independent checks over a rendered tree and
+reports every failure, not the first: the provenance walk (each visible text
+node sits in a resolvable `data-src` span or matches the allowlist of
+interface strings, numbers, dates, file and asset names), the hero against
+the Identity block, docs-lint's banned tokens over composed text, `abcd …`
+snippets against the generated CLI reference, the unresolved-reference
+ratchet (growing fails, shrinking is invited), the static mobile checks over
+every page, and the loop-figure labels against their page. Scope follows
+adr-47 decision 3 exactly: composed surfaces are `/` and every
+manifest-selected span, the verbatim record rendering under `/record/` is
+exempt, and the attribution escape is a verification — a name on
+`/contributors/` must match a trailer or contributor git actually carries.
+The rendered-overflow screenshot audit is CI's optional, non-gating job; the
+static gates here are what a browserless binary can assert, and the two are
+complementary by design.
 
 Two of those inputs are **declared deviations** from itd-140's generic-side
 input contract, and are recorded here rather than argued away.
@@ -104,8 +133,10 @@ carry the page stay.
 
 ## The markdown subset
 
-The renderer carries ATX headings, paragraphs, bold/italic/code spans, links,
-images, fenced code, pipe tables, blockquotes and flat lists. Anything else is a
+The renderer carries what the record actually writes: ATX and setext
+headings, paragraphs, CommonMark emphasis and code spans, links (inline,
+reference and autolink), images, fenced code, pipe tables, thematic breaks,
+nested lists, and blockquotes with structure inside them. Anything else is a
 build error naming file and line. Passing an unknown construct through
 unrendered publishes raw markdown to readers; dropping it publishes a hole. A
 build that stops and says which line is the only outcome anybody can act on.

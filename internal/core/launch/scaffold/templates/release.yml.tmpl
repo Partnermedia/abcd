@@ -416,6 +416,56 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+<%- if .Abcd %>
+
+  # Deploy abcdev.app for this tag (adr-48). Invoked here, from the release chain,
+  # because GitHub fires no `release:` event for a Release created with the workflow's
+  # own GITHUB_TOKEN — the same semantic auto-release.yml's header documents — so a
+  # `release: published` trigger on site.yml would never fire for this repository's
+  # releases. Running after `release` also removes the race against the asset uploads
+  # the site workflow reads: `gh release create` has already returned.
+  #
+  # NON-GATING, and that isolation is this job dependency rather than a separate
+  # workflow file: `needs: release` means a red site can neither block the release
+  # nor change a byte of what it published, while `!cancelled()` keeps this job from
+  # inheriting a cancellation. Be precise about what "non-gating" does NOT mean: a
+  # called workflow's failure IS the caller's failure, so a red site turns this
+  # whole run red. The Release, its assets and its attestations are already made and
+  # are untouched — a red run with a green `release` job means the website, and the
+  # fix is to re-run this job.
+  #
+  # The job dependency isolates RUNTIME failures, and only those. The input contract
+  # below is resolved at PARSE time: a `with:` block that does not match site.yml's
+  # declared workflow_call inputs fails the whole run before any job starts, and no
+  # `needs:` can contain that. So the contract is pinned by a test instead —
+  # TestSiteWorkflowInputContract, in internal/core/site — and a drift fails CI on the
+  # pull request rather than on release day.
+  #
+  # It runs only on a SUCCESSFUL release — a site for a
+  # release that failed to publish would describe bytes nobody can download; on the
+  # rehearsal path `release` is skipped, so this is skipped too and nothing deploys.
+  # The called workflow is idempotent per tag, so re-running this job is safe.
+  #
+  # It sits BEFORE the rehearsal job, not at the end of the file: `rehearsal` must
+  # stay the last job, because the AC6 property test slices it from its key to EOF
+  # to prove it holds no publish verb. abcd-cli only — a managed repo scaffolded
+  # from this template has no website and receives no site.yml.
+  site:
+    needs: release
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    permissions:
+      contents: write       # site.yml: attach site.tar.gz to the Release (no branch push)
+      id-token: write       # site.yml: OIDC for the site.tar.gz build-provenance attestation
+      attestations: write   # site.yml: publish that attestation (public repo)
+    uses: ./.github/workflows/site.yml
+    with:
+      # The same expression the workflow-level TAG env uses: inputs.tag on the
+      # workflow_call path, the pushed tag ref name on the tag-push path.
+      tag: ${{ inputs.tag || github.ref_name }}
+      # Explicit, never defaulted: site.yml refuses any other value, so its production
+      # path can only be reached by a caller that asked for it by name.
+      mode: production
+<%- end %>
 
   # The manual rehearsal (workflow_dispatch). It arms the full gate against a
   # SIMULATED changelog roll and reviewed-content commit — reproducing the

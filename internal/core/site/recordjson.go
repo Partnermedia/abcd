@@ -64,6 +64,18 @@ type BuildStamp struct {
 	Version     string `json:"version"`
 	Commit      string `json:"commit"`
 	GeneratedAt string `json:"generated_at"`
+	// Preview marks a build of an untagged tree — main, typically, rendered to a
+	// preview deployment. Such a build has no version, and saying so is the point
+	// of the field: with the version falling back to the newest CHANGELOG
+	// heading, a preview would otherwise stamp itself with a release it is not,
+	// and a reader could go and verify that release against a different tree.
+	//
+	// The version field stays PRESENT and empty on a preview rather than being
+	// omitted. A reader of the export, and a test comparing two builds, both get
+	// one shape to think about instead of two, and "version": "" beside
+	// "preview": true says the absence is deliberate — where a missing key looks
+	// like an older export or a dropped field.
+	Preview bool `json:"preview,omitempty"`
 }
 
 // ExportNode is one record.

@@ -171,6 +171,39 @@ func TestCheckPassesAWellFormedRender(t *testing.T) {
 	}
 }
 
+// TestCheckPassesAPreviewRender is the constraint that keeps preview mode
+// honest without loosening anything.
+//
+// The stamp is the one place the build writes words that are not a span of a
+// repository file, so a new word there is exactly the kind of thing the
+// provenance gate exists to catch. "unreleased" passes because it is a ui.json
+// interface string, and the short sha passes because a commit is already
+// something the generator may add — the same two routes every other stamp word
+// takes. Nothing about the gate changes for a preview, and this test is what
+// says so: if a future stamp rendered a word from neither source, this fails.
+func TestCheckPassesAPreviewRender(t *testing.T) {
+	r := newCheckRepo(t)
+	if _, err := Build(Request{RepoRoot: r.root, OutDir: r.out,
+		Stamp: BuildStamp{Commit: "abc1234", GeneratedAt: "2026-01-02", Preview: true}}); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	res := r.check()
+	if !res.OK() {
+		t.Fatalf("a preview render failed the gates: %+v", res.Findings)
+	}
+	wantClean(t, res, CheckProvenance)
+
+	// And it really is the preview that was checked, not a release build.
+	page, err := os.ReadFile(filepath.Join(r.out, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "unreleased") {
+		t.Error("the checked render is not a preview")
+	}
+}
+
 // TestCheckBuildsWhenTheOutputIsAbsent asserts the verb answers the same
 // question for a caller who has not rendered yet.
 func TestCheckBuildsWhenTheOutputIsAbsent(t *testing.T) {

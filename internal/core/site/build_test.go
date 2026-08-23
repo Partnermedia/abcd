@@ -330,10 +330,344 @@ func TestBuildLayoutDoesNotOverlap(t *testing.T) {
 	}
 }
 
+// previewStamp is a preview build's metadata: a commit and a date, and no
+// version, because that is the whole point of the mode.
+var previewStamp = BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11", Preview: true}
+
+// TestPreviewStampSaysUnreleased is adr-48 decision 3's honesty requirement.
+//
+// A preview is built from main, which is ahead of the newest release. With the
+// version falling back to the CHANGELOG heading, every preview stamped itself
+// with a release it is not — a build claiming a provenance that belongs to a
+// tagged commit somebody could go and verify. The preview says what it actually
+// is: unreleased, at this commit.
+func TestPreviewStampSaysUnreleased(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: previewStamp})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if res.Version != "" {
+		t.Errorf("a preview build reports version %q, want none", res.Version)
+	}
+
+	// The landing page's footer stamp.
+	foot := sectionBetween(outFile(t, out, "index.html"), `<span class="mono small foot-meta">`, `</span>`)
+	if foot == "" {
+		t.Fatal("the landing page has no build stamp")
+	}
+	if !strings.Contains(foot, "unreleased") {
+		t.Errorf("the preview footer stamp does not say unreleased: %q", foot)
+	}
+	if !strings.Contains(foot, previewStamp.Commit) {
+		t.Errorf("the preview footer stamp does not carry the commit: %q", foot)
+	}
+	if strings.Contains(foot, "v"+fixtureStamp.Version) {
+		t.Errorf("the preview footer stamp claims a released version: %q", foot)
+	}
+
+	// The explorer's stamp, which is a different renderer over the same fact.
+	gen := sectionBetween(outFile(t, out, "record/index.html"), `<p class="gen">`, `</p>`)
+	if gen == "" {
+		t.Fatal("the explorer dashboard has no generated line")
+	}
+	if !strings.Contains(gen, "unreleased") {
+		t.Errorf("the explorer's preview stamp does not say unreleased: %q", gen)
+	}
+	if strings.Contains(gen, "v"+fixtureStamp.Version) {
+		t.Errorf("the explorer's preview stamp claims a released version: %q", gen)
+	}
+
+	// And the export the chart reads.
+	var export struct {
+		Build BuildStamp `json:"build"`
+	}
+	if err := json.Unmarshal([]byte(outFile(t, out, "record.json")), &export); err != nil {
+		t.Fatal(err)
+	}
+	if !export.Build.Preview {
+		t.Error("record.json does not mark the build as a preview")
+	}
+	if export.Build.Version != "" {
+		t.Errorf("record.json carries version %q on a preview build", export.Build.Version)
+	}
+	if export.Build.Commit != previewStamp.Commit {
+		t.Errorf("record.json carries commit %q, want %q", export.Build.Commit, previewStamp.Commit)
+	}
+}
+
+// TestPreviewRefusesAPinnedVersion holds the two flags apart. They are opposite
+// instructions — "stamp this exact version" and "stamp no version at all" — and
+// a build that silently honoured one would produce the other's output under the
+// other's name. The refusal is the only honest answer.
+func TestPreviewRefusesAPinnedVersion(t *testing.T) {
+	f := newFixture(t)
+	_, err := Build(Request{RepoRoot: f.Root(), OutDir: t.TempDir(),
+		Stamp: BuildStamp{Version: "9.9.9", Commit: "abcdef1", Preview: true}})
+	if err == nil {
+		t.Fatal("a preview build accepted a pinned version")
+	}
+	for _, want := range []string{"preview", "version"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
+	}
+}
+
+// TestPreviewBuildIsDeterministic keeps the preview on the same footing as every
+// other build: the shape chosen for the export — an empty version field beside
+// `preview: true`, rather than an omitted one — must render the same bytes twice.
+func TestPreviewBuildIsDeterministic(t *testing.T) {
+	f := newFixture(t)
+	a, b := t.TempDir(), t.TempDir()
+	for _, out := range []string{a, b} {
+		if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: previewStamp}); err != nil {
+			t.Fatalf("build: %v", err)
+		}
+	}
+	for _, name := range []string{"index.html", "record.json", "record/index.html"} {
+		if outFile(t, a, name) != outFile(t, b, name) {
+			t.Errorf("%s differs between two preview builds of the same tree", name)
+		}
+	}
+}
+
 // TestBuildIsDeterministic builds the same tree twice into two directories and
 // diffs every byte. It is the property the published site rests on: production
 // is rendered from a tag, and a build that is not a function of its input cannot
 // be checked against the tree it claims to describe.
+// TestBuildPurgesItsOwnOutput is the bug this file's marker exists to close.
+//
+// The output directory is a RENDER of the tree, not an accumulation of them. A
+// build that writes into a directory an older build left behind produces a tree
+// that is partly this commit and partly some previous one, and every check that
+// follows — the header walk, the agreement test, a reader verifying the served
+// install.sh against the repository — is then run against a mixture. The stale
+// file is served, and nothing says so: it looks exactly like a file that built.
+func TestBuildPurgesItsOwnOutput(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	buildFixture(t, f, out)
+
+	// A file from an "earlier build" that this build has no reason to write.
+	stale := filepath.Join(out, "record", "adr", "adr-99", "index.html")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("<!-- a record that no longer exists -->"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staleRoot := filepath.Join(out, "install.sh")
+	if err := os.WriteFile(staleRoot, []byte("#!/bin/sh\n# an older stamp\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := buildFixture(t, f, out)
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("a record page from an earlier build survived into the new tree: %s", stale)
+	}
+	// The rebuilt install.sh must be this build's, not the one left lying there.
+	if got := outFile(t, out, "install.sh"); strings.Contains(got, "an older stamp") {
+		t.Error("the stale install.sh survived the rebuild")
+	}
+	// And what is on disk is exactly what the build says it wrote.
+	var onDisk []string
+	err := filepath.Walk(out, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(out, p)
+		if err != nil {
+			return err
+		}
+		onDisk = append(onDisk, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(onDisk) != len(res.Files) {
+		t.Errorf("the tree holds %d files but the build reported writing %d", len(onDisk), len(res.Files))
+	}
+}
+
+// TestBuildRefusesADirectoryItDidNotWrite is the other half, and the reason the
+// purge is safe to have at all.
+//
+// Emptying a directory is not an operation to perform on a guess. `--out` takes
+// a path from a person, and the paths people mistype are their own — a source
+// tree, a home directory, the repository root. So the build removes nothing it
+// cannot first prove it wrote, and says so rather than proceeding.
+func TestBuildRefusesADirectoryItDidNotWrite(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+
+	precious := filepath.Join(out, "not-ours.txt")
+	if err := os.WriteFile(precious, []byte("someone else's work"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(Request{RepoRoot: f.Root(), OutDir: out, Stamp: fixtureStamp})
+	if err == nil {
+		t.Fatal("the build emptied a directory it had never written")
+	}
+	for _, want := range []string{"cannot tell it apart", "refusing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not say %q: %v", want, err)
+		}
+	}
+	if !strings.Contains(err.Error(), siteMarkerName) {
+		t.Errorf("the refusal does not name the marker it looked for: %v", err)
+	}
+	// Refusing means refusing: nothing was touched.
+	got, err := os.ReadFile(precious)
+	if err != nil || string(got) != "someone else's work" {
+		t.Errorf("the refused build damaged the directory anyway: %q, %v", got, err)
+	}
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("the refused build left %d entries behind, want the 1 that was there", len(entries))
+	}
+}
+
+// TestBuildMarksItsOutput pins the marker itself: it is written, and it says
+// what it is for. A marker whose text did not explain itself would be a stray
+// dotfile in somebody's build output, and the first reasonable thing to do with
+// one of those is delete it — which is precisely what turns the next build into
+// a refusal.
+//
+// That it is written FIRST is not asserted here, because `Result.Files` is
+// sorted and the marker sorts to the front regardless: an assertion on it would
+// pin the alphabet, not the order of writes. The reason for the order is in
+// build.go, where the write happens.
+func TestBuildMarksItsOutput(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
+
+	if !containsString(res.Files, siteMarkerName) {
+		t.Errorf("the build did not report writing %s: %v", siteMarkerName, res.Files)
+	}
+	if body := outFile(t, out, siteMarkerName); body != siteMarkerBody {
+		t.Errorf("the marker reads %q, want %q", body, siteMarkerBody)
+	}
+}
+
+// TestBuildClearsTheWreckageOfAFailedBuild is the property the write ORDER buys.
+//
+// A build that dies partway leaves a non-empty directory. If the marker were
+// written at the end, that directory would carry no marker, and every later
+// build would refuse it — the tool would have jammed itself on its own debris
+// and could only be freed by hand. Writing the marker first means a half-written
+// tree is still recognisably ours.
+func TestBuildClearsTheWreckageOfAFailedBuild(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+
+	// The wreckage a killed build leaves: the marker, and some of the tree.
+	if err := os.WriteFile(filepath.Join(out, siteMarkerName), []byte(siteMarkerBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "index.html"), []byte("<!-- half a page"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := buildFixture(t, f, out)
+	if got := outFile(t, out, "index.html"); strings.Contains(got, "half a page") {
+		t.Error("the half-written page survived the next build")
+	}
+	if !containsString(res.Files, siteMarkerName) {
+		t.Error("the rebuild did not leave the marker in place")
+	}
+}
+
+// TestPurgeKeepsTheMarker closes a window the purge would otherwise open.
+//
+// `os.ReadDir` returns names in order, and `.abcd-site-build` sorts before
+// everything else — so a purge that removed the marker like any other entry
+// would remove it FIRST. Interrupted anywhere after that (a killed process, a
+// full disk, a permission error partway through), it leaves a non-empty
+// directory that no longer identifies itself, and every later build refuses it.
+// The tool would jam on its own wreckage, and the only way out would be to
+// delete the directory by hand — the exact outcome the marker exists to prevent.
+//
+// So the marker survives the purge and is rewritten in place with identical
+// bytes. It is present at every instant.
+func TestPurgeKeepsTheMarker(t *testing.T) {
+	out := t.TempDir()
+	for _, name := range []string{siteMarkerName, "index.html", "site.css"} {
+		if err := os.WriteFile(filepath.Join(out, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(out, "record", "adr"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := purgeOutDir(out); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != siteMarkerName {
+		var got []string
+		for _, e := range entries {
+			got = append(got, e.Name())
+		}
+		t.Errorf("after the purge the directory holds %v, want just %s", got, siteMarkerName)
+	}
+
+	// And the directory still reads as ours, at every point in between.
+	state, err := inspectOutDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != outDirOurs {
+		t.Errorf("a purged directory no longer identifies itself as ours: state %d", state)
+	}
+}
+
+// TestRebuildingInPlaceIsByteIdentical is determinism's other half. The existing
+// determinism test builds into two fresh directories; this one builds twice into
+// ONE, which is what a person actually does, and is the case the purge changes.
+func TestRebuildingInPlaceIsByteIdentical(t *testing.T) {
+	f := newFixture(t)
+	out := t.TempDir()
+
+	first := buildFixture(t, f, out)
+	snapshot := map[string]string{}
+	for _, name := range first.Files {
+		snapshot[name] = outFile(t, out, name)
+	}
+
+	second := buildFixture(t, f, out)
+	if len(second.Files) != len(first.Files) {
+		t.Fatalf("rebuilding in place wrote %d files, the first build wrote %d", len(second.Files), len(first.Files))
+	}
+	for _, name := range second.Files {
+		was, ok := snapshot[name]
+		if !ok {
+			t.Errorf("rebuilding in place invented %s", name)
+			continue
+		}
+		if now := outFile(t, out, name); now != was {
+			t.Errorf("%s differs between two builds into the same directory", name)
+		}
+	}
+}
+
 func TestBuildIsDeterministic(t *testing.T) {
 	f := newFixture(t)
 	a, b := t.TempDir(), t.TempDir()

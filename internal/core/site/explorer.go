@@ -260,8 +260,14 @@ func (e *explorer) genLine(parts ...string) string {
 	if d := e.export.Build.GeneratedAt; d != "" {
 		kept = append(kept, d)
 	}
-	if v := e.export.Build.Version; v != "" {
-		kept = append(kept, "v"+v)
+	// The same rule the footer follows: a preview names no release, because it is
+	// not one. The word is an interface string, so the provenance walk accounts
+	// for it exactly as it accounts for every other word the generator adds.
+	switch {
+	case e.export.Build.Preview:
+		kept = append(kept, e.c.ui.Unreleased)
+	case e.export.Build.Version != "":
+		kept = append(kept, "v"+e.export.Build.Version)
 	}
 	if cm := e.export.Build.Commit; cm != "" {
 		kept = append(kept, cm)
