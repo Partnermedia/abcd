@@ -108,6 +108,13 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The ideate record grill now sweeps id-less records.** Leg 2 of
+  `/abcd:ideate` reads the research notes and the decision log alongside the
+  id-bearing families, reporting a hit that rests on one in the `note` field
+  of the nearest citable record — closing the blind spot where a standing
+  verdict recorded in a research note was invisible to the leg that exists
+  to prevent re-litigation (iss-2608230748418054; the root-cause decision on
+  record-bearing ids for notes stays parked in that issue).
 - **`abcd site build` and `abcd site check` agree on what a page may carry, and
   gate every page.** The build inlined an SVG's XML prolog, comment or CDATA
   verbatim while the emitted-page reader refused all three, so a normal exporter
