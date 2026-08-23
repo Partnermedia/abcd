@@ -141,6 +141,25 @@ th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem
 .letter.a{color:var(--la)}.letter.b{color:var(--lb)}.letter.c{color:var(--lc)}.letter.d{color:var(--ld)}
 @media (max-width:700px){.chapter .head{grid-template-columns:minmax(0,1fr)}.letter{display:none}.chapter .body{padding-left:0}}
 
+/* The rail that carries a to b to c to d: a thin line running down the letter
+   column, entering each chapter in the previous chapter's colour and leaving
+   it in its own, so the four letters read as one continuous descent rather
+   than four separate sections. Two pseudo-elements per chapter — `::after`
+   above the letter, `::before` below it — leave the letter itself in the gap.
+   The first chapter has nothing above it and the last nothing below, so those
+   two ends are switched off. Below the letter's own breakpoint the rail has no
+   column to run down, and goes with it. */
+.chapter::before,.chapter::after{content:"";position:absolute;left:calc(50% - 513px);width:2px;opacity:.32;pointer-events:none;border-radius:2px}
+.chapter::after{top:0;height:58px}
+.chapter::before{top:150px;bottom:0}
+.chapter#roles::after,.chapter#install::before{display:none}
+.chapter#roles::before{background:linear-gradient(var(--la),var(--lb))}
+.chapter#artefacts::after{background:var(--lb)}.chapter#artefacts::before{background:linear-gradient(var(--lb),var(--lc))}
+.chapter#process::after{background:var(--lc)}.chapter#process::before{background:linear-gradient(var(--lc),var(--ld))}
+.chapter#install::after{background:var(--ld)}
+@media (max-width:1168px){.chapter::before,.chapter::after{left:47px}}
+@media (max-width:700px){.chapter::before,.chapter::after{display:none}}
+
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
 .cards.two{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
