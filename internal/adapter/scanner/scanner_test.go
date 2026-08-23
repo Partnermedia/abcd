@@ -700,6 +700,30 @@ func TestIdentityLocalUsernameSystemPathSuppressed(t *testing.T) {
 	}
 }
 
+// TestIdentityLocalUsernameCaseInsensitive proves the hard_fail local_username
+// matcher folds case like its home-path sibling: a case variant of the caller's
+// own login (the natural prose spelling in a transcript) must still be flagged so
+// redaction fires, while the iss-31 system-directory suppression keeps holding
+// under a mixed-case spelling.
+func TestIdentityLocalUsernameCaseInsensitive(t *testing.T) {
+	id := Identity{HomeUser: "alice"} // abcd-audit:allow
+	pats := DefaultPatterns()
+	sev := DefaultIdentitySeverities()
+
+	for _, spelling := range []string{"ALICE", "Alice"} { // abcd-audit:allow
+		line := "last commit authored by " + spelling
+		if got := ScanText(line, id, pats, sev, "f"); !hasKind(got, kindLocalUser) {
+			t.Errorf("case variant %q of the login not flagged (redaction would leak it): %+v", spelling, got)
+		}
+	}
+	// iss-31 stays closed under folding: a mixed-case system path is still not a
+	// username leak.
+	sysID := Identity{HomeUser: "dev"}
+	if got := ScanText(`run something 2>/DEV/null || true`, sysID, pats, sev, "scripts/x.sh"); hasKind(got, kindLocalUser) {
+		t.Errorf("mixed-case system path /DEV/null wrongly flagged as local username: %+v", got)
+	}
+}
+
 // TestSerializedShortMultibyteIdentityFullyStarred guards B15: a short non-ASCII
 // identity value that is under 16 RUNES but at or over 16 BYTES must be fully
 // starred in the sealed snippet, consistent with maskSecret's rune-based policy.

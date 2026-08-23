@@ -410,6 +410,14 @@ func (c *checker) readPages() error {
 			var f *htmlFault
 			if errors.As(err, &f) {
 				c.fail(CheckProvenance, rel, "", "%s", f.Reason)
+				// A page that did not parse never enters c.pages, so every gate
+				// that walks the page list would silently skip it and, finding
+				// nothing, print `ok` — the report telling a reader a gate held
+				// when it never examined the page. Deny each page-walking gate that
+				// pass, so a genuine finding on an unparsed page cannot disappear.
+				for _, name := range []string{CheckHero, CheckBannedTokens, CheckSnippets, CheckMobile, CheckFigureLabels} {
+					c.fail(name, rel, "", "this page did not parse, so this gate could not examine it")
+				}
 				continue
 			}
 			return err

@@ -104,9 +104,8 @@ sh -c 'set -eu; cd "$(mktemp -d)"; arch=$(uname -m); case "$arch" in x86_64) arc
 
 ### Windows
 
-Not yet. The released matrix is darwin and linux on amd64 and arm64; a Windows
-build is planned, and this page will carry its command when it ships. Until
-then, Windows users can run the Linux command inside WSL.
+Not yet. The released matrix is darwin and linux on amd64 and arm64. Windows
+users can run the Linux command inside WSL.
 
 ### Afterwards
 

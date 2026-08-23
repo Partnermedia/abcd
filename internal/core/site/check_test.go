@@ -371,6 +371,20 @@ func TestCheckRefusesAnUnparseablePage(t *testing.T) {
 	wantFinding(t, r.check(), CheckProvenance, "comment")
 }
 
+// TestCheckUnparseablePageDeniesEveryGateAPass proves a page that fails to parse
+// cannot silently drop out of the other gates: each page-walking gate raises a
+// finding naming the page rather than printing ok having examined nothing, so a
+// real finding on that page cannot disappear behind the parse fault.
+func TestCheckUnparseablePageDeniesEveryGateAPass(t *testing.T) {
+	r := newCheckRepo(t)
+	r.build()
+	r.breakOutput(`<footer class="site-foot">`, `<footer class="site-foot"><!-- smuggled -->`)
+	res := r.check()
+	for _, gate := range []string{CheckHero, CheckBannedTokens, CheckSnippets, CheckMobile, CheckFigureLabels} {
+		wantFinding(t, res, gate, "index.html")
+	}
+}
+
 // --- 2. hero-vs-identity ---------------------------------------------------
 
 // TestCheckRefusesADriftedHero is itd-135 AC 1: the rendered hero is compared

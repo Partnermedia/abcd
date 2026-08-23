@@ -91,9 +91,52 @@ called out in a **Breaking** section.
   `record_schema` id/supersession gates entirely. The shared scanner now strips
   a leading BOM and the lint/glossary scanners skip a multi-line comment before
   the `---`. (iss-2608220134344680)
+- **The shell guard recognises ANSI-C and locale quoting.** The tokenizer
+  implemented single, double and backslash quoting but not bash's `$'...'` /
+  `$"..."` forms, so the leading `$` prefixed the token (`$'--force'` →
+  `$--force`) and a blocker-tier entry missed while bash handed the child
+  byte-identical argv — a silent allow. The tokenizer now decodes `$'...'`
+  (ANSI-C escapes included, so an encoded spelling resolves to the same bytes)
+  and reads `$"..."` as a plain double-quoted word. (iss-2608221456463223)
+- **The `local_username` redaction matcher folds case.** The hard-fail matcher
+  for the caller's own login was built without the `(?i)` its home-path sibling
+  carries, though the login is the last segment of that same home path, so on a
+  case-folding filesystem a case variant of the login was neither redacted nor
+  caught by the blocking residual scan and survived into the stored transcript.
+  It now folds case; the system-directory exemption is lower-cased so the iss-31
+  suppression still holds. (iss-2608221456469938)
 
 ### Fixed
 
+- **`abcd site build` and `abcd site check` agree on what a page may carry, and
+  gate every page.** The build inlined an SVG's XML prolog, comment or CDATA
+  verbatim while the emitted-page reader refused all three, so a normal exporter
+  drawing made the build pass and the check refuse a page whose message named no
+  asset; and a page that failed to parse dropped out of the page-walking gates,
+  which then printed `ok` for a page they never examined, masking a real finding
+  behind the parse fault. The build now refuses the prolog/comment/CDATA at the
+  asset, and an unparsed page fails every gate. `LoadRepoMeta` also screens the
+  repository address for an executable scheme (a `javascript:` address reached
+  an `href` on every page), and the record export refuses a store id that
+  collides with a typed record id. (iss-2608221456462677, iss-2608221456469558,
+  iss-2608221456466438, iss-2608221457123924)
+- **The adopter release scaffold no longer wedges a repo with no `internal/`
+  tree.** The race leg hardcoded `go test -race ./internal/...` outside the
+  abcd-only guard, so a bare adopter module failed every release verify run with
+  `lstat ./internal/: no such file or directory`. The bare profile now runs the
+  race leg over the whole module. The scaffold also folds a symlinked target
+  leaf (an `ELOOP`, not `ErrNotRegular`) into the path-free non-regular reason,
+  so its `--dry-run --json` no longer embeds an absolute path.
+  (iss-2608221456597173, iss-2608221456599559)
+- **`abcd capture list`/`status --json` no longer leak an absolute path in a
+  skipped record's error.** The `skipped[].error` string carried the raw path
+  beside the deliberately-relativised `skipped[].path`, in an exit-0 envelope
+  the CLI error scrub never sees; it is now scrubbed at the same choke point.
+  (iss-2608221456599229)
+- **The history date walk reads non-ASCII record paths.** `git log` emitted a
+  C-quoted, double-quoted path for a non-ASCII byte, so its key never matched
+  the filesystem path and the record lost its dates; the isolated git
+  invocation now sets `core.quotePath=false`. (iss-2608221457123924)
 - **`abcd update` and `abcd history` no longer leak an absolute home path.** The
   update refusal detail and receipt (`target_path`) and the history record
   `path` field carried the developer-identity home root raw into their success

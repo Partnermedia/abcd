@@ -103,14 +103,16 @@ func TestBareRenderOmitsAbcdMachinery(t *testing.T) {
 		"record-lint", "docs-currency-reviewer", "iss35-brief-surface-crosscheck",
 		"check-reviews.sh", "make smoke", "make build", "abcd docs lint",
 		"semantic-release-gate", "Cross-compile the four binaries",
+		"./internal/...",
 	} {
 		if strings.Contains(rel, needle) {
 			t.Errorf("bare release.yml must not contain abcd-specific %q", needle)
 		}
 	}
-	// The generic build + deterministic gates + rehearsal must be present.
+	// The generic build + deterministic gates + rehearsal must be present. The
+	// race leg runs over the whole module, not the abcd-specific internal/ tree.
 	for _, needle := range []string{
-		"go build ./...", "go-version: '1.23'", "gofmt -l .",
+		"go build ./...", "go test -race ./...", "go-version: '1.23'", "gofmt -l .",
 		"workflow_dispatch:", "rehearsal:", "gh release create",
 	} {
 		if !strings.Contains(rel, needle) {
@@ -137,10 +139,15 @@ func TestBareRunbookGateListMatchesWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	book := string(rendered.Runbook)
-	for _, g := range []string{"1. Format (gofmt)", "5. Test (race, internal)"} {
+	for _, g := range []string{"1. Format (gofmt)", "5. Test (race)"} {
 		if !strings.Contains(book, g) {
 			t.Errorf("bare runbook must list deterministic gate %q", g)
 		}
+	}
+	// The bare race leg runs over the whole module, never the abcd-specific
+	// internal/ package pattern (a generic adopter may have no internal/ tree).
+	if strings.Contains(book, "Test (race, internal)") {
+		t.Error("bare runbook must not name the abcd-specific internal race leg")
 	}
 	if strings.Contains(book, "6. ") {
 		t.Error("bare runbook must not number a sixth gate (no extra gates configured)")
@@ -496,5 +503,27 @@ func TestDeriveRepoFactsResolvesWorktreeGitfile(t *testing.T) {
 	}
 	if b, _ := DeriveRepoFacts(wt); b != "feature" {
 		t.Errorf("worktree HEAD branch = %q, want %q", b, "feature")
+	}
+}
+
+// TestClassifySymlinkLeafIsPathFree proves a symlinked target leaf is refused
+// with the path-free non-regular reason (folding ELOOP), never the generic
+// fallback that would embed a developer-identity absolute path in the scaffold
+// report and its --json.
+func TestClassifySymlinkLeafIsPathFree(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "release.yml")
+	if err := os.Symlink(filepath.Join(dir, "elsewhere"), target); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	disp, reason := classify(target, []byte("machinery"))
+	if disp != dispDiffers {
+		t.Fatalf("symlink leaf classified %v, want dispDiffers", disp)
+	}
+	if !strings.Contains(reason, "not a regular file") {
+		t.Errorf("reason is not the non-regular message: %q", reason)
+	}
+	if strings.Contains(reason, dir) {
+		t.Errorf("reason leaks the absolute path: %q", reason)
 	}
 }

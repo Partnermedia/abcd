@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/Partnermedia/abcd/internal/fsutil"
 )
@@ -195,18 +196,35 @@ func classify(abs string, want []byte) (disposition, string) {
 		if os.IsNotExist(err) {
 			return dispAbsent, ""
 		}
-		if errors.Is(err, fsutil.ErrNotRegular) {
+		// A symlink leaf fails the O_NOFOLLOW open with ELOOP before ReadGuarded
+		// can classify it as non-regular, so fold it in here — otherwise the
+		// symlink case (named first in this function's contract) falls through to
+		// the generic branch below and leaks a developer-identity path.
+		if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP) {
 			return dispDiffers, "existing path is not a regular file (a symlink or non-regular leaf is never written through)"
 		}
 		if errors.Is(err, fsutil.ErrTooBig) {
 			return dispDiffers, "existing file exceeds the size cap; this is not machinery abcd wrote"
 		}
-		return dispDiffers, "existing file is unreadable: " + err.Error()
+		// Path-free: this reason reaches the --dry-run report and its --json, a
+		// success envelope the CLI's error-path scrubber never sees (iss-81).
+		return dispDiffers, "existing file is unreadable: " + pathFreeReason(err)
 	}
 	if string(got) == string(want) {
 		return dispCurrent, ""
 	}
 	return dispDiffers, "existing file differs from the current machinery (hand-edited or stale)"
+}
+
+// pathFreeReason renders a filesystem error without the absolute path it was
+// raised against — the scaffold report and its --json must never carry a
+// developer-identity path (iss-81).
+func pathFreeReason(err error) string {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return pe.Op + ": " + pe.Err.Error()
+	}
+	return err.Error()
 }
 
 // goVersionRe matches a major.minor[.patch] Go version — the only shape allowed
