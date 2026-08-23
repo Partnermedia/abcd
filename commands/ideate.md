@@ -46,14 +46,19 @@ refuses a claim that names none.
 
 Read the existing record before anything else is decided — the brief, the
 intents in **every** bucket (`drafts/`, `planned/`, `shipped/`, `disciplines/`,
-`superseded/`), the ADRs, and the principles. Answer one question: does an entry
-already **cover**, **contradict**, or **supersede** this idea?
+`superseded/`), the ADRs, the principles, the research notes under
+`.abcd/development/research/notes/`, and the decision log
+`.abcd/work/DECISIONS.md`. Answer one question: does an entry already
+**cover**, **contradict**, or **supersede** this idea?
 
 Every hit is **cited by record id** (`itd-N`, `spc-N`, `iss-N`, `adr-N`), and
 `abcd ideate record` refuses the whole verdict if an id does not resolve in this
-repository. Check the id before you write it down. The brief and the principles
-carry no per-entry id, so a hit that rests on one goes in the `note` field of
-the nearest citable record.
+repository. Check the id before you write it down. The brief, the principles,
+the research notes, and the decision log carry no per-entry id, so a hit that
+rests on one goes in the `note` field of the nearest citable record. A standing
+verdict on the submitted idea — recorded in a research note or a decision
+line — is precisely the hit this leg exists to surface; missing it re-opens a
+decided question.
 
 Finding **nothing** is a legitimate and common outcome — say so; do not
 manufacture a hit.

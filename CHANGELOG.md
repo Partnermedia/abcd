@@ -94,6 +94,13 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **The ideate record grill now sweeps id-less records.** Leg 2 of
+  `/abcd:ideate` reads the research notes and the decision log alongside the
+  id-bearing families, reporting a hit that rests on one in the `note` field
+  of the nearest citable record — closing the blind spot where a standing
+  verdict recorded in a research note was invisible to the leg that exists
+  to prevent re-litigation (iss-2608230748418054; the root-cause decision on
+  record-bearing ids for notes stays parked in that issue).
 - **`abcd update` and `abcd history` no longer leak an absolute home path.** The
   update refusal detail and receipt (`target_path`) and the history record
   `path` field carried the developer-identity home root raw into their success
