@@ -127,6 +127,12 @@ type CaptureResult struct {
 	Slug   string `json:"slug"`
 	Path   string `json:"path"`
 	Status State  `json:"status"` // always "open"
+	// Redacted counts the spans the ledger redactor rewrote on write, and
+	// Degraded is non-empty when it ran with a weakened pattern set. Both exist
+	// so a surface can SAY the text was altered: redacting in silence would edit
+	// a finding's content without telling whoever filed it (loud-staging).
+	Redacted int    `json:"redacted,omitempty"`
+	Degraded string `json:"redaction_degraded,omitempty"`
 }
 
 // ResolveRequest moves an open issue to resolved/.
@@ -166,6 +172,11 @@ type TransitionResult struct {
 	FromStatus State       `json:"from_status"`
 	ToStatus   State       `json:"to_status"`
 	ResolvedBy *ResolvedBy `json:"resolved_by,omitempty"`
+	// Redacted / Degraded mirror CaptureResult: a resolution or wontfix note is
+	// free text written to the same committed ledger, so it goes through the
+	// same redactor and reports the same way.
+	Redacted int    `json:"redacted,omitempty"`
+	Degraded string `json:"redaction_degraded,omitempty"`
 }
 
 // ListRequest queries one state (or "all").
