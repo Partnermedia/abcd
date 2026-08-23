@@ -162,9 +162,6 @@ func (e *explorer) Pages() (map[string]string, error) {
 	if err := add(routeGraph, e.graphPage); err != nil {
 		return nil, err
 	}
-	if err := add(routeTimeline, e.timelinePage); err != nil {
-		return nil, err
-	}
 	if err := add(routeContributors, e.contributorsPage); err != nil {
 		return nil, err
 	}
@@ -569,9 +566,21 @@ func (e *explorer) health() string {
 	}
 	// Every summary number carries its word; three bare numbers read as a
 	// rendering fault.
-	b.WriteString(`<div class="hsum">` + strconv.Itoa(len(h.Unresolved)) + ` ` + escapeText(ui.Panels.Unresolved) +
-		` / ` + strconv.Itoa(h.BaselineCount) + ` ` + escapeText(ui.Panels.Baseline) +
-		` ` + strconv.Itoa(e.export.Layout.Isolated) + ` ` + escapeText(ui.Panels.Isolated) + `</div>`)
+	// Each figure is its own element: a number glued to a word is neither a
+	// number nor an interface string to the provenance walk, and three of them
+	// run together read as one sentence that says nothing.
+	b.WriteString(`<div class="hsum">`)
+	for _, f := range []struct {
+		n     int
+		label string
+	}{
+		{len(h.Unresolved), ui.Panels.Unresolved},
+		{h.BaselineCount, ui.Panels.Baseline},
+		{e.export.Layout.Isolated, ui.Panels.Isolated},
+	} {
+		b.WriteString(`<span><b class="tnum">` + strconv.Itoa(f.n) + `</b> ` + escapeText(f.label) + `</span>`)
+	}
+	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 	return panel("c4", ui.Panels.Health, strconv.Itoa(h.BaselineCount), b.String())
 }

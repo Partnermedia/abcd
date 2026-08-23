@@ -81,13 +81,22 @@ func (e *explorer) graphPage() (string, error) {
 
 	b.WriteString(`<div class="bfilters" id="bfilters" hidden><div class="chips" id="typechips">`)
 	for _, typ := range e.storeOrder() {
-		n := e.export.Counts.ByType[typ]
+		// A chip counts the records it actually filters. Disciplines are filed
+		// under intents by the record and are their own KIND to a reader — their
+		// own colour, their own chip — so they are counted out of the intents
+		// chip rather than sitting inside it under a different colour.
+		n := e.export.Counts.ByType[typ] - e.disciplineCount(typ)
 		if n == 0 {
 			continue
 		}
 		b.WriteString(`<button class="chip on" data-t="` + escapeAttr(typ) + `"><i style="background:var(` +
 			typeColourToken(typ) + `)"></i>` + escapeText(e.c.ui.Tiles.ForType(typ)) +
 			` <span class="tnum muted">` + itoaLen(n) + `</span></button>`)
+	}
+	if d := e.disciplineCount(""); d > 0 {
+		b.WriteString(`<button class="chip on" data-t="` + escapeAttr(disciplinesLifecycle) + `"><i style="background:var(` +
+			typeColourToken(disciplinesLifecycle) + `)"></i>` + escapeText(e.c.ui.Tiles.Discipline) +
+			` <span class="tnum muted">` + itoaLen(d) + `</span></button>`)
 	}
 	b.WriteString(`</div><label class="sans small"><input type="checkbox" id="gmentions"> ` +
 		escapeText(g.Mentions) + `</label>`)
@@ -184,6 +193,18 @@ func (e *explorer) legend() string {
 	}
 	b.WriteString(`</div>`)
 	return b.String()
+}
+
+// disciplineCount is how many records of one store are filed as disciplines; an
+// empty store name counts them across the whole record.
+func (e *explorer) disciplineCount(typ string) int {
+	n := 0
+	for _, nd := range e.export.Nodes {
+		if nd.Lifecycle == disciplinesLifecycle && (typ == "" || nd.Type == typ) {
+			n++
+		}
+	}
+	return n
 }
 
 // hasDisciplineNodes reports whether any record is filed as a discipline.

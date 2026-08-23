@@ -65,7 +65,7 @@ func (e *explorer) healthPage() (string, error) {
 		{len(e.isolatedRecords()), ui.Health.Isolated},
 		{len(e.sameAuthorCandidates()), ui.Health.SameAuthor},
 		{a.Undeclared, ui.Health.Undeclared},
-		{a.Assisted - a.AssistedCommits, ui.Health.MultiTrailer},
+		{a.MultiTrailerCommits, ui.Health.MultiTrailer},
 	}
 	for _, t := range tiles {
 		b.WriteString(tile(strconv.Itoa(t.n), t.label, nil))
@@ -335,20 +335,20 @@ func (e *explorer) healthUndeclared() string {
 func (e *explorer) healthMultiTrailer() string {
 	ui := e.c.ui
 	a := e.export.Authorship
-	gap := a.Assisted - a.AssistedCommits
-	if gap < 0 {
-		gap = 0
-	}
+	// The COMMIT count decides whether the family has anything to report; the
+	// trailer and commit totals below are the two figures that differ because
+	// of it, and the separator between them goes the way the others did.
+	n := a.MultiTrailerCommits
 	var b strings.Builder
 	b.WriteString(`<div class="health">`)
-	if gap == 0 {
+	if n == 0 {
 		b.WriteString(`<div class="hsum">` + escapeText(ui.Health.Clean) + `</div>`)
 	} else {
 		b.WriteString(`<div class="hsum"><b class="tnum">` + strconv.Itoa(a.Assisted) + `</b> ` +
-			escapeText(ui.Contributors.Trailers) + ` · <b class="tnum">` +
+			escapeText(ui.Contributors.Trailers) + ` <b class="tnum">` +
 			strconv.Itoa(a.AssistedCommits) + `</b> ` + escapeText(ui.Tiles.Commits) + `</div>`)
 	}
 	b.WriteString(`<div class="hwhy">` + escapeText(ui.Health.NotADefect) + `</div>`)
 	b.WriteString(`</div>`)
-	return panelDisclosure("c12", ui.Health.MultiTrailer, "", strconv.Itoa(gap), b.String())
+	return panelDisclosure("c12", ui.Health.MultiTrailer, "", strconv.Itoa(n), b.String())
 }

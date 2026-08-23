@@ -22,7 +22,6 @@ import (
 var explorerGoldens = []struct{ route, golden string }{
 	{"record/index.html", "record-dashboard.html"},
 	{"record/graph/index.html", "record-graph.html"},
-	{"record/timeline/index.html", "record-timeline.html"},
 	{"record/foundations/index.html", "record-foundations.html"},
 	{"contributors/index.html", "contributors.html"},
 	{"references/index.html", "references.html"},
@@ -291,7 +290,9 @@ func TestTimelineIsDeterministicStaticSVG(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
 	buildFixture(t, f, out)
-	page := outFile(t, out, "record/timeline/index.html")
+	// The genealogy renders inside the dashboard, folded; there is no page of
+	// its own for it any more.
+	page := outFile(t, out, "record/index.html")
 
 	for _, want := range []string{
 		`<svg viewBox="0 0 1000 `,
@@ -731,7 +732,7 @@ func TestEveryRouteHasASecurityHeaderBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	shippedBlocks := parseHeaders(string(shipped))
-	for _, route := range []string{"/", "/record/", "/record/graph/", "/record/timeline/",
+	for _, route := range []string{"/", "/record/", "/record/graph/",
 		"/record/foundations/", "/record/adr/adr-1/", "/record/principle/retire-the-name/",
 		"/contributors/", "/references/"} {
 		assertHeaderCoverage(t, "site-src/headers", shippedBlocks, route, documentHeaders)
@@ -972,19 +973,15 @@ func TestExplorerWithoutChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := t.TempDir()
-	res, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
-		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}})
-	if err != nil {
+	if _, err := Build(Request{RepoRoot: f.Root(), OutDir: out,
+		Stamp: BuildStamp{Commit: "abcdef1", GeneratedAt: "2026-02-11"}}); err != nil {
 		t.Fatalf("a repository with no changelog must still build its explorer: %v", err)
 	}
-	if !containsString(res.Files, "record/timeline/index.html") {
+	dash := outFile(t, out, "record/index.html")
+	if !strings.Contains(dash, `class="tlsvg"`) {
 		t.Fatal("the genealogy vanished with the changelog")
 	}
-	dash := outFile(t, out, "record/index.html")
-	if strings.Contains(dash, "Release cadence") {
-		t.Error("the cadence panel rendered with no releases")
-	}
-	tl := outFile(t, out, "record/timeline/index.html")
+	tl := dash
 	if strings.Contains(tl, "releases/tag/") {
 		t.Error("the genealogy drew a release lane with no releases")
 	}

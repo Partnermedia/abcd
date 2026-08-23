@@ -57,6 +57,11 @@
      it is drawn in its own colour and the legend names it in its own right.
      The lifecycle wins over the type, because that is where the record says so. */
   var DISCIPLINE = 'disciplines';
+  /* A record's KIND is what the chart colours it by, filters it by and names it
+     in the card — one answer, used everywhere, so a purple bubble is never
+     labelled 'intent' and never hides behind an 'intents' chip. A discipline is
+     filed under intents by the record and is its own kind to a reader. */
+  var kindOf = function (n) { return n.status === DISCIPLINE ? DISCIPLINE : n.type; };
   var tok = function (t, state) {
     if (state === DISCIPLINE) return '--s-discipline';
     return TYPE_TOKEN[t] || '--s-neutral';
@@ -158,12 +163,12 @@
     });
 
     var typeOn = {};
-    nodes.forEach(function (n) { typeOn[n.type] = true; });
+    nodes.forEach(function (n) { typeOn[kindOf(n)] = true; });
     var arr = 'date', useMent = false, focus = -1, hover = -1;
     var W = 0, H = 0, dpr = 1, narrow = false, need = true, energy = 1;
     var css = function () { return getComputedStyle(document.documentElement); };
     var col = function (v) { return css().getPropertyValue(v).trim(); };
-    var on = function (n) { return typeOn[n.type]; };
+    var on = function (n) { return typeOn[kindOf(n)]; };
     /* A record whose store grades it by neither a lifecycle directory nor a
        status field declares no state, and is drawn solid because it has none —
        not faded, which is what "set aside" looks like. */
@@ -690,7 +695,7 @@
          place, never as a style="" attribute built out of data: an attribute is
          the one thing here a content policy has to make an allowance for, and
          this is the only one the script would have written. */
-      var pills = '<span class="pill type"><i></i>' + esc(n.type) + '</span>' +
+      var pills = '<span class="pill type"><i></i>' + esc(kindOf(n)) + '</span>' +
         (n.status ? '<span class="pill ' + STATUS_TONE(n.status) + '">' + esc(n.status) + '</span>' : '') +
         (n.sev ? '<span class="pill ' + (SEV_TONE[n.sev] || 'plain') + '">' + esc(n.sev) + '</span>' : '') +
         (n.kind && n.kind !== 'null' ? '<span class="pill plain">' + esc(n.kind) + '</span>' : '') +

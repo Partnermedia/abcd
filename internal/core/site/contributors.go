@@ -101,6 +101,13 @@ type Authorship struct {
 	// once in AssistedCommits. Rendering this one as a count of commits is the
 	// defect that published a disclosure rate well below the truth.
 	Assisted int `json:"assisted"`
+	// MultiTrailerCommits is how many AUTHORED commits declare more than one
+	// model. It is counted per COMMIT rather than derived as Assisted minus
+	// AssistedCommits: that subtraction is a surplus of occurrences, and a
+	// single commit naming three models would report two — publishing an
+	// occurrence figure under a label that says commits, which is the exact
+	// conflation this type exists to keep apart.
+	MultiTrailerCommits int `json:"multi_trailer_commits"`
 	// DeclaredNone is the number of AUTHORED commits declaring
 	// `Assisted-by: None` — work no tool touched, saying so.
 	DeclaredNone int `json:"declared_none"`
@@ -153,7 +160,7 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 			continue
 		}
 		a.Authored++
-		declared, assisted := false, false
+		declared, assisted, models := false, false, 0
 		for _, v := range strings.Split(rest, "\x1f") {
 			v = strings.TrimSpace(v)
 			if v == "" {
@@ -169,7 +176,11 @@ func LoadAuthorship(repoRoot string) (Authorship, error) {
 			tally[v]++
 			a.Assisted++
 			assisted = true
+			models++
 			vendors[strings.SplitN(v, ":", 2)[0]] = true
+		}
+		if models > 1 {
+			a.MultiTrailerCommits++
 		}
 		switch {
 		case assisted:

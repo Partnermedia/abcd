@@ -275,6 +275,11 @@ h3.subh{font-size:1.5rem;font-weight:650;letter-spacing:-.01em;margin:40px 0 12p
 .site-foot .wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
 .site-foot a{color:var(--ink-2)}
 .site-foot .foot-meta{margin-left:auto}
+/* The separators went; the SPACE they carried has to come from somewhere, or
+   three facts render as one token. Weight does the rest: the licence and the
+   build stamp are quieter than the name and the version beside them. */
+.site-foot .foot-meta{display:inline-flex;gap:10px}
+.quiet{color:var(--ink-3)}
 
 /* ---------- record explorer ----------
  *
@@ -344,8 +349,9 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
    the fill reaches the tile's edges rather than leaving a border of untouched
    surface around it. */
 .panel.c2:has(>a.tile.lead){padding:0}
-a.tile.lead{display:block;color:inherit;text-decoration:none;border-radius:var(--radius);
-  padding:16px 18px;border:2px solid transparent;transition:background .12s ease,border-color .12s ease}
+a.tile.lead{display:flex;flex-direction:column;height:100%;color:inherit;text-decoration:none;
+  border-radius:var(--radius);padding:16px 18px;border:2px solid transparent;
+  transition:background .12s ease,border-color .12s ease}
 a.tile.lead:hover,a.tile.lead:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){a.tile.lead{transition:none}}
 .tile .n,.tile .l,.tile .s{display:block}
@@ -372,7 +378,7 @@ a.tile.lead:hover,a.tile.lead:focus-visible{background:var(--accent-soft);border
 .list .d{font-family:"IBM Plex Mono",monospace;font-size:.74rem;color:var(--ink-3);margin-left:6px}
 .health{font-family:"IBM Plex Mono",monospace;font-size:.78rem;line-height:1.6}
 .health .w{color:var(--hazard-ink);background:var(--hazard-soft);padding:0 .3em;border-radius:3px}
-.health .hsum{margin-top:8px;color:var(--ink-2)}
+.health .hsum{margin-top:8px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 14px}
 .health div{overflow-wrap:anywhere}
 .health .hitem{margin-bottom:6px}
 .health .hfact,.health .hwhy{display:block}
@@ -465,7 +471,11 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 .chip i{width:9px;height:9px;border-radius:50%;display:inline-block}
 .chip.on{color:var(--ink);border-color:var(--ink)}
 .chip.off{opacity:.45;text-decoration:line-through}
-.glegend{font-family:"Bricolage Grotesque",sans-serif;font-size:.8rem;color:var(--ink-2);display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:10px}
+/* Two BLOCKS, one under the other: what a colour means, then what a border
+   means. Each block lists its own items in two columns. The container is a
+   plain block — as a grid it laid the two blocks side by side and they ran
+   into each other. */
+.glegend{font-family:"Bricolage Grotesque",sans-serif;font-size:.8rem;color:var(--ink-2);margin-top:10px}
 .glegend span{display:inline-flex;align-items:center;gap:6px}
 .glegend svg{width:14px;height:14px;flex:0 0 auto}
 
@@ -531,6 +541,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
 /* The legend is two encodings, each with its own heading and its own row. */
 .glegend .glrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 14px}
 .glegend .glrow.glstates{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
+.glegend .glrow>span{min-width:0}
 /* the list twin: the keyboard path, and what replaces the chart at rest */
 .blist{margin-top:12px;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:10px 14px}
 .blist summary{cursor:pointer;font-weight:600;font-size:.92rem}
@@ -595,7 +606,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
   .brow2{top:8px;left:8px}
   .bcorner{right:8px;top:8px;bottom:auto}
   .bzoom{display:none}
-  .glegend{grid-template-columns:1fr}
+  .glegend .glrow{grid-template-columns:1fr}
 }
 
 /* Where the reader has asked for stillness, nothing moves and the list is

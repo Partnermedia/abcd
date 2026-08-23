@@ -313,6 +313,7 @@
     "bots": [],
     "assisted_commits": 1,
     "assisted": 1,
+    "multi_trailer_commits": 0,
     "declared_none": 3,
     "undeclared": 1,
     "by_model": [
