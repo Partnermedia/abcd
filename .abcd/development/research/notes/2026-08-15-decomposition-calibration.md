@@ -758,3 +758,52 @@ Per hand-run, append:
   through incidents. The closed typed-link enum had no value for a
   same-shape-different-subject sibling; recorded here rather than inventing a
   fifth link type.
+
+
+
+### 2026-08-22 — the CLI verb taxonomy — EXCLUDED from the corpus
+
+- **Excluded from the calibration count:** the routing was confirmed before the
+  adversarial gate ran, and the gate then changed the payload the routing had
+  been confirmed over. The prediction and the label therefore describe two
+  different proposals, and grading the verdict enum across that break would
+  book a correct prediction from a run whose content did not survive. Recorded
+  for the protocol's history, not as a sample toward the ~50-capture threshold.
+- **Proposal:** the top-level verb list keeps growing and risks becoming
+  unmanageable, so regroup the verbs into a noun-verb hierarchy (`abcd quality
+  banlist`; `memory` as a category), with the CLI tree decoupled from the flat
+  plugin command surface.
+- **Initial routing:** four parts, plus one held. The SOTA finding and the
+  verdict (research | a dated note). The shippable capability, read at the time
+  as grouped help *plus hiding the operator-internal verbs* (capability | one
+  intent). Folding `changelog` under `launch` (plumbing | a capture). The
+  design-time test for new verbs (stance | a capture). HELD: the
+  CLI-as-engine-API ruling (structural rule | ADR), not filed because the
+  maintainer had not ruled and an ADR records a ratified choice.
+- **Confirmed routing:** the human confirmed the four homes as proposed, with
+  the ADR left held. **Edits at the second confirmation, after leg 3:** the
+  hiding half of part 2 was struck, leaving grouped help alone as the intent
+  (filed as itd-146); part 3 was struck entirely, `changelog` surviving only as
+  an open question inside itd-146; part 4 was confirmed unchanged (filed as
+  iss-2608221310142705); part 1 was confirmed unchanged. No home changed at
+  either confirmation. A fifth part was added at the second confirmation, not
+  present in the initial table: an intent for review-finding disposition.
+- **Verdict:** SPLIT, proposed and confirmed. Ungraded, per the exclusion above.
+- **Notes: the routing was right and the payload was wrong, and the protocol
+  measures only the first.** Every home held across both confirmations, which
+  under the itd-81 recipe reads as a clean hit. What the table never saw is that
+  two of the five parts were later withdrawn outright: the fifth part's central
+  evidence was falsified by a second adversarial pass, and part 3 rested on a
+  claim about a pending breaking cut that `iss-284` disproved. A protocol that
+  grades destination and never content will score a run like this as a success.
+- **Second note, on ordering:** the protocol has no step that re-opens a
+  confirmed routing when a later gate changes what there is to file. Routing
+  confirmed on a pre-adversarial proposal is provisional, and saying so at
+  confirmation time is cheaper than discovering it at filing time.
+- **Third note, on what the grill bought:** `iss-284` showed the adr-40 renames
+  had already shipped in v0.6.0, which falsified the justification the
+  `changelog`-folding alternative rested on. The citation-proving step forced
+  that check. The limit of that same step is recorded in the verdict note's
+  errata: it proves a cited id resolves and proves nothing about whether the
+  claim beside it is true, and a claim marked `verified` in leg 1 of that run
+  was false.
