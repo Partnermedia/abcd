@@ -448,12 +448,21 @@ func (e *explorer) cadence() string {
 	if span <= 0 {
 		span = 1
 	}
+	// dateLabelWidth is what `2026-08-16` occupies at font-size 8, and
+	// lastDateX is where a date was last drawn on each side of the axis. Two
+	// releases days apart put their labels in the same place, and two dates
+	// printed over each other are worse than one: the crowded one keeps its
+	// version and gives up its date, which the tick's own title still carries
+	// and which the narrow-screen list below prints in full.
+	const dateLabelWidth = 46.0
+	lastDateX := [2]float64{-1e9, -1e9}
 	var ticks strings.Builder
 	for k, i := range asc {
 		r := rel[i]
 		x := 24 + float64(dayNumber(r.Date)-first)/span*552
+		side := k % 2
 		y1, y2, ty, dy := 33, 47, 17, 27
-		if k%2 == 1 {
+		if side == 1 {
 			y1, y2, ty, dy = 47, 61, 73, 83
 		}
 		xs := strconv.FormatFloat(x, 'f', 1, 64)
@@ -462,8 +471,12 @@ func (e *explorer) cadence() string {
 			`" stroke="var(--s-adr)" stroke-width="2"/>`)
 		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(ty) +
 			`" font-size="10" text-anchor="middle" fill="var(--ink-2)">v` + escapeText(r.Version) + `</text>`)
-		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(dy) +
-			`" font-size="8" text-anchor="middle" fill="var(--ink-3)">` + escapeText(r.Date) + `</text></g>`)
+		if x-lastDateX[side] >= dateLabelWidth {
+			ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(dy) +
+				`" font-size="8" text-anchor="middle" fill="var(--ink-3)">` + escapeText(r.Date) + `</text>`)
+			lastDateX[side] = x
+		}
+		ticks.WriteString(`</g>`)
 	}
 	svg := `<svg viewBox="0 0 600 90" class="cadsvg" role="img" aria-label="` +
 		escapeAttr(e.c.ui.Panels.Cadence+" · "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">` +

@@ -340,6 +340,11 @@ func TestDashboardVisualsCarryTheirNumbersAsText(t *testing.T) {
 				t.Errorf("the cadence chart does not label %s as text", want)
 			}
 		}
+		// Every tick keeps its version; a date is given up only where it would
+		// print over the one before it on the same side of the axis.
+		if v, d := strings.Count(page, `font-size="10"`), strings.Count(page, `font-size="8"`); d > v {
+			t.Errorf("%d dates against %d versions — a date outran its tick", d, v)
+		}
 		if !strings.Contains(page, `class="list cadlist"`) {
 			t.Error("the cadence panel has no narrow-screen list to stand in for the strip")
 		}

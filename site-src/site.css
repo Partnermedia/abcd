@@ -311,6 +311,9 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
    tiles stop lining up. The grid is the one context that must not inherit it. */
 .panel+.panel{margin-top:14px}
 .dash>.panel+.panel{margin-top:0}
+/* Cards in a row share a height; columns of prose do not — see the note in
+   the references page's own renderer. */
+.dash.reading{align-items:start}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
@@ -603,7 +606,7 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
      The relationship chart's list twin is deliberately left closed. It is not
      hidden prose but a way to walk 772 records with a keyboard, and opening it
      turns one printed page into ninety. */
-  details.more::details-content,details.twin::details-content{content-visibility:visible;display:block}
+  details.more::details-content{content-visibility:visible;display:block}
   details.more>*:not(summary){animation:none}
 
   /* The genealogy is one scalable drawing kept behind a scrolling window on a

@@ -364,7 +364,12 @@ func (e CSLEntry) link() string {
 func (e *explorer) referencesPage() (string, error) {
 	b := e.bib
 	var out strings.Builder
-	out.WriteString(`<div class="dash">`)
+	// `reading` opts this grid out of the equal-height rule the dashboard's
+	// cards follow. Two bibliographies of unequal length are columns of prose,
+	// not cards in a row: stretching the shorter one to the taller one's depth
+	// buys a matched pair of borders and a screen of blank paper under the
+	// last citation.
+	out.WriteString(`<div class="dash reading">`)
 
 	// Every block on this page names the repository span it was lifted from, the
 	// same way a composed chapter does. The sources are the CSL file's own
