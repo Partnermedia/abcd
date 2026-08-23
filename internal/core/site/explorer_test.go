@@ -315,22 +315,37 @@ func TestTimelineIsDeterministicStaticSVG(t *testing.T) {
 	}
 }
 
-// TestDashboardVisualsHaveTableTwins is the assistive-technology rule: every
-// picture on the dashboard is accompanied by the same numbers in a table.
-func TestDashboardVisualsHaveTableTwins(t *testing.T) {
+// TestDashboardVisualsCarryTheirNumbersAsText is the assistive-technology
+// rule as amended (spc-38): every visual renders its labels and numbers as
+// real text — a legend beside each bar, a version and a date on each cadence
+// tick — and no separate table twin repeats them. Below 700px a plain list
+// stands in for the cadence strip, so exactly one form renders at any width.
+func TestDashboardVisualsCarryTheirNumbersAsText(t *testing.T) {
 	f := newFixture(t)
 	out := t.TempDir()
 	buildFixture(t, f, out)
 	page := outFile(t, out, "record/index.html")
 
 	bars := strings.Count(page, `<div class="seg" role="presentation">`)
-	svgs := strings.Count(page, `class="cadsvg"`)
-	twins := strings.Count(page, `<details class="twin">`)
+	legends := strings.Count(page, `<div class="legend">`)
 	if bars == 0 {
 		t.Fatal("the dashboard drew no lifecycle bars")
 	}
-	if twins != bars+svgs {
-		t.Errorf("%d visuals, %d table twins — every visual needs one", bars+svgs, twins)
+	if legends != bars {
+		t.Errorf("%d bars, %d legends — every bar carries its numbers as text", bars, legends)
+	}
+	if strings.Contains(page, `class="cadsvg"`) {
+		for _, want := range []string{`>v0.1.0</text>`, `>2026-01-06</text>`, `>v0.2.0</text>`, `>2026-02-11</text>`} {
+			if !strings.Contains(page, want) {
+				t.Errorf("the cadence chart does not label %s as text", want)
+			}
+		}
+		if !strings.Contains(page, `class="list cadlist"`) {
+			t.Error("the cadence panel has no narrow-screen list to stand in for the strip")
+		}
+	}
+	if strings.Contains(page, `<details class="twin">`) {
+		t.Error("a table twin remains beside a visual that already carries its numbers as text")
 	}
 }
 

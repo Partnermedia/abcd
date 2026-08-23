@@ -252,9 +252,10 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .c12{grid-column:span 12}.c8{grid-column:span 8}.c6{grid-column:span 6}.c4{grid-column:span 4}.c3{grid-column:span 3}.c2{grid-column:span 2}
 @media (max-width:900px){.c8,.c6,.c4,.c3{grid-column:span 12}.c2{grid-column:span 4}}
 @media (max-width:520px){.c2{grid-column:span 6}.c2 .tile .n{font-size:1.9rem}}
-/* The cadence STRIP is too fine to read on a phone; its table twin is not,
-   so the drawing goes and the numbers stay. */
-@media (max-width:700px){.panel.cadence .cadsvg{display:none}}
+/* The cadence STRIP is too fine to read on a phone, so below 700px the list
+   stands in for it. Exactly one of the two renders at any width. */
+.panel.cadence .cadlist{display:none}
+@media (max-width:700px){.panel.cadence .cadsvg{display:none}.panel.cadence .cadlist{display:block}}
 
 .tile{display:block}
 .tile .n,.tile .l,.tile .s{display:block}
@@ -269,9 +270,6 @@ hr{border:0;border-top:1px solid var(--rule);margin:1.4em 0}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .legend .tnum{color:var(--ink)}
-.twin{margin-top:10px}
-.twin summary{cursor:pointer;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:.82rem;color:var(--ink-3)}
-.twin table{font-size:.86rem;margin-top:6px}
 .cadsvg{width:100%;height:auto}
 
 .list{list-style:none;margin:0;padding:0;font-size:.92rem}

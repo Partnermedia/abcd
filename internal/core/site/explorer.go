@@ -323,10 +323,10 @@ func segments(byLifecycle map[string]int) []segment {
 	return out
 }
 
-// segBar renders a lifecycle bar with its legend and its table twin. Every
-// visual on the dashboard carries one: the bar is the picture, the table is the
-// same numbers in a form a screen reader can read out.
-func (e *explorer) segBar(caption string, segs []segment) string {
+// segBar renders a lifecycle bar with its legend. The legend is real text
+// carrying every label and count, so the bar needs no table twin — a twin
+// only accompanies a visual whose numbers render nowhere else as text.
+func (e *explorer) segBar(segs []segment) string {
 	total := 0
 	for _, s := range segs {
 		total += s.N
@@ -334,7 +334,7 @@ func (e *explorer) segBar(caption string, segs []segment) string {
 	if total == 0 {
 		return ""
 	}
-	var bar, leg, rows strings.Builder
+	var bar, leg strings.Builder
 	for _, s := range segs {
 		colour := lifecycleRamp[s.Rank]
 		pct := strconv.FormatFloat(float64(s.N)/float64(total)*100, 'f', 2, 64)
@@ -342,19 +342,9 @@ func (e *explorer) segBar(caption string, segs []segment) string {
 			escapeAttr(s.Label) + `: ` + strconv.Itoa(s.N) + `"></i>`)
 		leg.WriteString(`<span><i style="background:` + colour + `"></i>` + escapeText(s.Label) +
 			` <b class="tnum">` + strconv.Itoa(s.N) + `</b></span>`)
-		rows.WriteString(`<tr><td>` + escapeText(s.Label) + `</td><td class="tnum">` + strconv.Itoa(s.N) + `</td></tr>`)
 	}
 	return `<div class="seg" role="presentation">` + bar.String() + `</div>` +
-		`<div class="legend">` + leg.String() + `</div>` +
-		e.tableTwin(caption, `<tbody>`+rows.String()+`</tbody>`)
-}
-
-// tableTwin folds a visual's own numbers away behind a disclosure, so every
-// picture on the page has a form that can be read out and copied.
-func (e *explorer) tableTwin(caption, body string) string {
-	return `<details class="twin"><summary>` + escapeText(e.c.ui.Panels.TableView) +
-		`</summary><div class="tablewrap"><table><caption class="sr">` + escapeText(caption) +
-		`</caption>` + body + `</table></div></details>`
+		`<div class="legend">` + leg.String() + `</div>`
 }
 
 // --- the dashboard --------------------------------------------------------
@@ -395,7 +385,7 @@ func (e *explorer) dashboard() (string, error) {
 			continue
 		}
 		caption := ui.Tiles.ForType(typ)
-		b.WriteString(panel("c6", caption, strconv.Itoa(e.export.Counts.ByType[typ]), e.segBar(caption, segs)))
+		b.WriteString(panel("c6", caption, strconv.Itoa(e.export.Counts.ByType[typ]), e.segBar(segs)))
 	}
 
 	if cad := e.cadence(); cad != "" {
@@ -441,7 +431,8 @@ func (e *explorer) storeOrder() []string {
 }
 
 // cadence renders the release strip: one tick per release, alternating above and
-// below the axis, with the same versions and dates in its table twin.
+// below the axis, each labelled with its version and its date — the chart
+// carries its own numbers as text, so it needs no table twin.
 func (e *explorer) cadence() string {
 	rel := e.export.Releases
 	if len(rel) < 2 {
@@ -457,28 +448,38 @@ func (e *explorer) cadence() string {
 	if span <= 0 {
 		span = 1
 	}
-	var ticks, rows strings.Builder
+	var ticks strings.Builder
 	for k, i := range asc {
 		r := rel[i]
 		x := 24 + float64(dayNumber(r.Date)-first)/span*552
-		y1, y2, ty := 26, 40, 18
+		y1, y2, ty, dy := 33, 47, 17, 27
 		if k%2 == 1 {
-			y1, y2, ty = 40, 54, 66
+			y1, y2, ty, dy = 47, 61, 73, 83
 		}
 		xs := strconv.FormatFloat(x, 'f', 1, 64)
 		ticks.WriteString(`<g class="tick"><title>v` + escapeText(r.Version) + ` — ` + escapeText(r.Date) + `</title>`)
 		ticks.WriteString(`<line x1="` + xs + `" y1="` + strconv.Itoa(y1) + `" x2="` + xs + `" y2="` + strconv.Itoa(y2) +
 			`" stroke="var(--s-adr)" stroke-width="2"/>`)
 		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(ty) +
-			`" font-size="10" text-anchor="middle" fill="var(--ink-2)">v` + escapeText(r.Version) + `</text></g>`)
-		rows.WriteString(`<tr><td>v` + escapeText(r.Version) + `</td><td>` + escapeText(r.Date) + `</td></tr>`)
+			`" font-size="10" text-anchor="middle" fill="var(--ink-2)">v` + escapeText(r.Version) + `</text>`)
+		ticks.WriteString(`<text x="` + xs + `" y="` + strconv.Itoa(dy) +
+			`" font-size="8" text-anchor="middle" fill="var(--ink-3)">` + escapeText(r.Date) + `</text></g>`)
 	}
-	svg := `<svg viewBox="0 0 600 70" class="cadsvg" role="img" aria-label="` +
+	svg := `<svg viewBox="0 0 600 90" class="cadsvg" role="img" aria-label="` +
 		escapeAttr(e.c.ui.Panels.Cadence+" · "+rel[len(rel)-1].Date+" – "+rel[0].Date) + `">` +
-		`<line x1="8" y1="40" x2="592" y2="40" class="axis"/>` + ticks.String() + `</svg>`
-	body := svg + e.tableTwin(e.c.ui.Panels.Cadence, `<tbody>`+rows.String()+`</tbody>`)
+		`<line x1="8" y1="47" x2="592" y2="47" class="axis"/>` + ticks.String() + `</svg>`
+	// The phone rendering: the strip is too fine below 700px, so CSS swaps it
+	// for this list. Exactly one of the two is ever visible — the list is the
+	// narrow-screen form of the chart, not a twin beside it.
+	var list strings.Builder
+	list.WriteString(`<ul class="list cadlist">`)
+	for _, r := range rel {
+		list.WriteString(`<li><span class="id">v` + escapeText(r.Version) +
+			`<span class="d">` + escapeText(r.Date) + `</span></span></li>`)
+	}
+	list.WriteString(`</ul>`)
 	note := strconv.Itoa(len(rel)) + " " + e.c.ui.Tiles.Releases
-	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, body)
+	return panel("c12 cadence", e.c.ui.Panels.Cadence, note, svg+list.String())
 }
 
 // latestDecisions lists the newest ratified decisions by their own dates. It is
@@ -663,18 +664,18 @@ func (e *explorer) contributorsPage() (string, error) {
 
 	if len(a.ByModel) > 0 {
 		maxN := a.ByModel[0].Commits
-		var bars, rows strings.Builder
+		var bars strings.Builder
 		bars.WriteString(`<div class="bars">`)
 		for _, m := range a.ByModel {
 			pct := strconv.FormatFloat(float64(m.Commits)/float64(maxN)*100, 'f', 1, 64)
 			bars.WriteString(`<span class="lab">` + escapeText(m.Model) + `</span>` +
 				`<span class="bar"><i style="width:` + pct + `%"></i></span>` +
 				`<span class="tnum small">` + strconv.Itoa(m.Commits) + `</span>`)
-			rows.WriteString(`<tr><td>` + escapeText(m.Model) + `</td><td class="tnum">` + strconv.Itoa(m.Commits) + `</td></tr>`)
 		}
 		bars.WriteString(`</div>`)
-		body := bars.String() + e.tableTwin(ui.Contributors.Trailers, `<tbody>`+rows.String()+`</tbody>`)
-		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted), body))
+		// The bar rows are real text — label and count beside each bar — so the
+		// figure needs no table twin.
+		b.WriteString(panel("c6", ui.Contributors.Trailers, strconv.Itoa(a.Assisted), bars.String()))
 	}
 	b.WriteString(`</div>`)
 

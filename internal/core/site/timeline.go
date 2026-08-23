@@ -68,9 +68,6 @@ func (e *explorer) timelinePage() (string, error) {
 	var b strings.Builder
 	b.WriteString(`<div class="panel tl">` + svg + `</div>`)
 	b.WriteString(`<div class="dash tlside">`)
-	if p := e.releaseList(); p != "" {
-		b.WriteString(p)
-	}
 	if p := e.supersessionList(positions); p != "" {
 		b.WriteString(p)
 	}
@@ -511,32 +508,6 @@ func (e *explorer) laneHead(y float64, label, count string) string {
 		`" font-size="11" font-weight="650" fill="var(--ink)">` + escapeText(label) + `</text>` +
 		`<text x="` + f1(float64(tlLeft)+8+float64(utf8.RuneCountInString(label))*6.4) + `" y="` + f1(y) +
 		`" font-size="10" fill="var(--ink-3)">` + escapeText(count) + `</text>`
-}
-
-// releaseList is the cadence as a table twin of the release lane: every version,
-// its date, and the days since the one before it.
-func (e *explorer) releaseList() string {
-	rel := e.export.Releases
-	if len(rel) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(`<ul class="list">`)
-	for i, r := range rel {
-		gap := ""
-		if i+1 < len(rel) {
-			gap = strconv.Itoa(dayNumber(r.Date)-dayNumber(rel[i+1].Date)) + "d"
-		}
-		href := e.releaseHref(r.Version)
-		id := `<span class="id">v` + escapeText(r.Version) + `<span class="d">` + escapeText(r.Date) + `</span></span>`
-		if href != "" {
-			id = `<span class="id"><a href="` + escapeAttr(href) + `">v` + escapeText(r.Version) + `</a>` +
-				`<span class="d">` + escapeText(r.Date) + `</span></span>`
-		}
-		b.WriteString(`<li>` + id + `<span class="small muted">` + escapeText(gap) + `</span></li>`)
-	}
-	b.WriteString(`</ul>`)
-	return panel("c6", e.c.ui.Panels.Cadence, strconv.Itoa(len(rel)), b.String())
 }
 
 // supersessionList is the arcs and the stubs as text — the accessible twin of

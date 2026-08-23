@@ -92,10 +92,9 @@ type RecordNav struct {
 
 // Panels captions the dashboard panels.
 type Panels struct {
-	Cadence   string `json:"cadence"`
-	Latest    string `json:"latest"`
-	Health    string `json:"health"`
-	TableView string `json:"table_view"`
+	Cadence string `json:"cadence"`
+	Latest  string `json:"latest"`
+	Health  string `json:"health"`
 	// Unresolved, Baseline and Isolated label the health summary's three
 	// numbers; unlabelled they read as a rendering fault.
 	Unresolved string `json:"unresolved"`
