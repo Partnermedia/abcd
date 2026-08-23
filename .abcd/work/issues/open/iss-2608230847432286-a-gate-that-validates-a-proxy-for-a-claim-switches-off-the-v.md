@@ -122,19 +122,13 @@ problem, and the one gate that ran on shape 2 reported success. That is the
 defensible statement, and it says where to look: not at the failures, at the
 greens.
 
-The tempting stronger version, that a peer caught every one, does not survive
-its own standard and is recorded here with its caveats rather than as a finding.
-The independence is thin: four concurrent sessions of one model, in one
-repository, with the same rules loaded, is not the independence
-`evaluator-outside-the-loop` asks for, and a blind spot shared across them would
-have been invisible to all four. Two of the catches were a peer naming an
-existing record the author had not read, which is distributed record knowledge
-rather than review, and argues for better recall as much as for peer contact.
-At least one was luck: a contaminated checkout found by a `git status` run for an
-unrelated reason. And at least one came from neither a peer nor a reviewer but
-from a user asking what a phrase in a record meant, which exposed a claim that
-had already merged and that contradicted a sibling record. Whatever is catching
-these, it is not yet a property of the system.
+What did catch them is deliberately not claimed here. The tempting stronger
+version, that a peer caught every one, does not survive its own standard: it
+reads as more assurance than the evidence supports, which is the failure this
+record is about. It is recorded separately, with its qualifications about thin
+independence, catches that were record recall rather than review, and at least
+one that was luck. Whatever is catching these, it is not yet a property of the
+system, and this record claims only that no instrument is.
 
 Routing is left open deliberately. The paragraph is the cheapest rung, but
 whether the class also warrants detectors is a maintainer call, and so is
