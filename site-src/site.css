@@ -94,11 +94,14 @@ th,td{text-align:left;padding:.55em .7em;border-bottom:1px solid var(--rule);ver
 th{font-family:"Bricolage Grotesque",sans-serif;font-weight:650;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
 .tablewrap{overflow-x:auto}
 /* Visually hidden, still announced. The second selector is the roles table's
-   column heads: the portrait carries the role's name in its alt text, so the
-   repeated label under it is decoration a reader can see and a screen reader
-   would hear twice — and on a phone it is decoration that sets the column
-   width and squeezes the table's own prose into a ribbon. The picture stays;
-   the words go to the same place every other visually-hidden label goes. */
+   column heads: the portrait already carries the role's name in its alt text,
+   so the label repeated under it adds nothing a reader needs to SEE — while on
+   a phone it is what sets the column's width and squeezes the table's own
+   prose into a ribbon. The picture stays and the words go where every other
+   visually-hidden label goes.
+   This changes what is drawn, not what is announced: the head's accessible
+   name is the alt text followed by the label, before and after alike. Removing
+   that duplication would mean changing the markup, not this rule. */
 .sr,th .th-portrait~span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* ---------- site header ---------- */
