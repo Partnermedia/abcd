@@ -51,7 +51,7 @@ func TestOrphanSweepDoesNotDeleteCommittedFile(t *testing.T) {
 	result := make(chan error, 1)
 	go func() {
 		<-trigger
-		_, err := commitCapture(ir, req, "iss-1", "stall", placeholder)
+		_, err := commitCapture(repo, ir, req, "iss-1", "stall", placeholder)
 		result <- err
 	}()
 

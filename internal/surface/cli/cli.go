@@ -2191,6 +2191,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, res.Path)
+				// Redaction alters what the caller filed, so it is never silent: the
+				// text on disk differs from the text handed in, and only the caller
+				// can judge whether the redacted record still says what they meant.
+				if res.Redacted > 0 {
+					fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", res.Redacted)
+				}
+				if res.Degraded != "" {
+					fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(res.Degraded))
+				}
 			})
 		},
 	}
