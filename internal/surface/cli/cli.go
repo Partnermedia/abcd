@@ -290,6 +290,13 @@ func NewRootCommand() *cobra.Command {
 					if g.Name == "citation-baseline" && g.Status == "ran" {
 						fmt.Fprintf(w, "  citations:      %s\n", termsafe.Sanitize(g.Detail))
 					}
+					// The semantic-receipt gate refuses releases and CI cannot run it,
+					// so the plain render must not stay silent about it either: a row
+					// only --json shows is invisible to everyone who does not know to
+					// ask (iss-2608231226342272).
+					if g.Name == "semantic-receipts" {
+						fmt.Fprintf(w, "  receipts:       %s\n", termsafe.Sanitize(g.Detail))
+					}
 				}
 				fmt.Fprintf(w, "  would publish:  %v\n", rep.WouldPublish)
 				for _, reason := range rep.WouldRefuseOn {
@@ -1130,7 +1137,7 @@ func newHookCommand() *cobra.Command {
 	// and exit 0" rather than surfacing an error to the host.
 	hookCmd.AddCommand(&cobra.Command{
 		Use:   "session-end",
-		Short: "SessionEnd: redact and store the session transcript",
+		Short: "SessionEnd: stage the raw transcript for the next session to redact and store",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Diagnostics go to stderr, out of band; stdout stays empty, since a
@@ -1194,7 +1201,7 @@ func newHookCommand() *cobra.Command {
 	// installed gap that was otherwise silent.
 	hookCmd.AddCommand(&cobra.Command{
 		Use:   "session-start",
-		Short: "SessionStart: warn about an unbootstrapped store or a stale binary",
+		Short: "SessionStart: drain staged transcripts into the store, and warn about an unbootstrapped store or a stale binary",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			in, err := readHookInput(cmd)

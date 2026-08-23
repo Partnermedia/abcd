@@ -64,10 +64,11 @@ and the baseline is per-repo site configuration on the same opt-in footing as
 `.abcd/site.json` itself — the record data proper stays record-format, git and
 `CHANGELOG.md`.
 
-Three flags exist so a release build can pin what the footer says rather than
-reading it from the working tree: `--version`, `--commit` and `--date`. Left
-unset, the version and date come from the newest dated `CHANGELOG.md` heading
-and the commit from git `HEAD`.
+Four flags exist so a build can pin what the footer says rather than reading it
+from the working tree: `--version`, `--commit`, `--date` and `--preview` (stamp
+the build as unreleased at this commit, for a preview deployment of an untagged
+tree). Left unset, the version and date come from the newest dated
+`CHANGELOG.md` heading and the commit from git `HEAD`.
 
 Report the files written, then the four measurements the render prints: the
 record's size (records, links, mentions), the unresolved references against the

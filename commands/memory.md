@@ -21,8 +21,9 @@ render never rebuilds or mutates the coverage index.
 
 ## Ingest a source
 
-Distil an external source (PDF / transcript / article / URL) into typed,
-cited memory pages. **You** are the distiller: read the source, produce the
+Distil an external source (transcript / article / URL) into typed, cited
+memory pages. PDF is a later-phase seam: the binary rejects a PDF source with a
+clear error, because no text-extraction dependency is wired. **You** are the distiller: read the source, produce the
 `DistilledPage` JSON array, and pass it to the binary via `--pages-json`
 (a file, or `-` for stdin). The binary computes the provenance, licence, and
 content hash, validates every page, and writes atomically.

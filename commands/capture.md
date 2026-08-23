@@ -43,7 +43,9 @@ default): `--severity` (`nitpick|minor|major|critical`, default `minor`),
 `--found-during` (session/command context, default `manual-capture`),
 `--found-at` (optional repo-relative path), `--slug` (overrides the slug derived
 from the text), `--blocked-by` (comma-separated `iss-N` ids this issue depends
-on). Report the new `id`, `status`, and `path` from the JSON.
+on). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
+too whenever it is non-zero: it counts the spans rewritten before the text was
+written, and the user needs to know their wording was changed.
 
 Priority is **derived, never stored**: an issue is ranked lower while any of its
 `--blocked-by` targets is still open, and `blocked_by` records the dependency in
