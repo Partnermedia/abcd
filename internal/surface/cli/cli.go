@@ -276,6 +276,8 @@ func NewRootCommand() *cobra.Command {
 				// imports launch for its semver — so the measurement is taken
 				// HERE, where both are already in scope, and handed in as data.
 				Citations: citationPreflight(cwd),
+				// Same reason, same shape: measured here, handed in as data.
+				Receipts: receiptPreflight(cwd),
 			})
 			if err != nil {
 				return err

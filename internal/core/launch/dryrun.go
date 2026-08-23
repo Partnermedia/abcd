@@ -25,12 +25,18 @@ type DryRunRequest struct {
 	// rather than this package reaching back. Nil means the repo has not armed
 	// the citation gate.
 	Citations *CitationPreflight
+	// Receipts is the semantic-pass receipts' state, MEASURED by the caller for
+	// the same reason as Citations: it needs a git rev-parse and a directory
+	// read, and this package does not reach back through the front door. Nil
+	// means the measurement was not taken, which the gate reports as such rather
+	// than as an absence of receipts.
+	Receipts *ReceiptPreflight
 }
 
 // GateSummary records one gate's dry-run disposition.
 type GateSummary struct {
 	Name   string `json:"name"`
-	Status string `json:"status"` // "ran" | "not_implemented"
+	Status string `json:"status"` // "ran" | "not_implemented" | "host-run"
 	Detail string `json:"detail"`
 }
 
@@ -88,6 +94,9 @@ func DryRun(req DryRunRequest) (DryRunReport, error) {
 		{Name: "installability-smoke", Status: "ran", Detail: smokeDetail(smoke)},
 		{Name: "documentation-auditor", Status: "not_implemented", Detail: "Phase-5 deferred"},
 		citationGate(req.Citations),
+		// Reporting-only: the semantic passes are host-run and release.yml owns
+		// the required-gates list, so this row never feeds WouldRefuseOn.
+		receiptGate(req.Receipts),
 	}
 
 	report.WouldRefuseOn = append(
