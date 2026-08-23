@@ -622,6 +622,15 @@ table.fm td{font-family:"IBM Plex Mono",monospace;font-size:.78rem}
   .card,.fcard,.tile,.quote,.cmd,.comic{break-inside:avoid}
   .panel{break-inside:auto}
 
+  /* A panel that breaks is only half the story: its card DECKS are grids, and
+     a grid container does not fragment across sheets — the whole deck moves to
+     the next one and leaves the sheet that carries its heading empty, which is
+     what made the foundations page open on a blank sheet. Multi-column layout
+     does fragment, so the decks become columns for print; the cards keep their
+     no-break rule and now flow from one sheet to the next. */
+  .fcards,.cards{display:block;column-count:2;column-gap:12px}
+  .fcard,.card{margin-bottom:12px}
+
   /* Trailing padding is what tips a footer onto a sheet of its own, and a
      footer that splits down the middle guarantees one. Both are taken away;
      what CSS cannot do is pull a footer back onto a full page. */
