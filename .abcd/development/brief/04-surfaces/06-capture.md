@@ -77,6 +77,24 @@ resolved_by:               # optional structured pointer to what resolved it
 Enum values above mirror the issue ledger schema in `internal/core`
 exactly; the schema is the single source of truth.
 
+**Verify a `--commit` stamp is reachable before writing it.** The flag is
+shape-checked and nothing more: `^[0-9a-f]{7,64}$` proves the value looks
+like a sha, not that the commit exists or that it is reachable from the
+default branch. A stamp that points at nothing is indistinguishable from a
+good one when read, so the check belongs at write time:
+
+```sh
+git merge-base --is-ancestor <sha> origin/main
+```
+
+The reason to check rather than assume is that whether a branch's own shas
+survive a merge depends on the merge method, and that is a repository
+setting which can change without announcement. A habit resting on either
+answer is correct only until the setting moves; the command above is
+correct under both. Where a merge produces two reachable candidates, prefer
+the commit that carries the change over the merge commit, whose diff is the
+whole pull request rather than the fix.
+
 Body is free-form: details, suggested fix, links to context.
 
 ## 3. Legacy scratch migration

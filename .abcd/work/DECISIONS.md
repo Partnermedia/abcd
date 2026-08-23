@@ -1955,3 +1955,39 @@ parallel-agent merge contention bites.
   states the boundary the overflow audit already draws. The cost is recorded
   honestly in the gate's own scope comment: a green report describes the pages
   abcd renders and no others, and `docs/` layout stays the SSG's own concern.
+- 2026-08-22 — SOTA research protocol captured, no /abcd:research verb minted
+  (session assessment; adoption is the maintainer's gate). Three research runs
+  (context-window management ×2 passes, local MLX models) followed the same
+  shape — parallel research pass, dated *-sota.md synthesis with per-technique
+  fit challenges, lint gates, fresh-context adversarial reviewers with disjoint
+  lenses (source fidelity / repo fidelity), every finding applied. Assessment:
+  /abcd:ideate does NOT cover SOTA research (idea-with-verdict vs
+  question-with-survey; a survey is ideate's leg-1 feeder, not its overlap);
+  /abcd:consult + /abcd:ingest cover the sources-corpus side; execution stays
+  host-delegated. Rejected alternative: minting a research-record validator verb
+  now — fails script-first-mvp (thin genre corpus, tier vocabulary still
+  moving). Protocol + revisit condition recorded in
+  .abcd/development/research/notes/2026-08-22-sota-research-protocol.md.
+- 2026-08-23 — SOTA-protocol proposal adversarially reviewed (two fresh-context
+  reviewers, disjoint lenses, authorship stripped): verdict REFRAME — the
+  no-verb deferral stands, but on script-first-mvp's actual trigger (contract
+  uncertainty) alone. Withdrawn: the thin-corpus argument (the genre corpus is
+  ~13 notes, and ideate's own validator was minted after three manual runs, so
+  corpus size is not the criterion). Repaired: reviewer yields reclassified as
+  session testimony; feeder claim downgraded to expectation (no ideate run has
+  consumed a *-sota.md note yet); protocol gains step 6 — every survey note
+  records its review verdicts inline, without which the revisit condition is
+  undetectable. Repairs applied to the protocol note and both survey notes.
+- 2026-08-23 — ideate: abcd-research-verb — verdict killed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-23-ideate-abcd-research-verb.md
+
+- 2026-08-23 — Manual-test triage rulings (maintainer): (1) spc-38's "every
+  visual has a table twin" is amended — a twin is dropped wherever the visual
+  already carries the same labels and numbers as text; the relationship
+  chart's list twin stays (spc-39 AC 4). (2) spc-39's reduced-motion
+  behaviour (list in place of the chart) is re-confirmed as ruled — not a
+  defect. (3) Record sub-nav iconography uses text glyphs as ui.json
+  interface strings, never image assets (keeps adr-47's picture rule
+  untouched). (4) The Genealogy release-cadence list is dropped now; a
+  commits-per-release-window ridgeline is its candidate replacement, designed
+  within the IA-restructure intent seed (iss-2608230752354909).
+- 2026-08-22 — ideate: cli-verb-taxonomy-restructure — verdict reframed. The idea, the three legs, and the rejected alternatives: .abcd/development/research/notes/2026-08-22-ideate-cli-verb-taxonomy-restructure.md

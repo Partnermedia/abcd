@@ -76,6 +76,18 @@ called out in a **Breaking** section.
 
 ### Security
 
+- **The issue ledger redacts on write.** `abcd capture`, `abcd capture
+  resolve` and `abcd capture wontfix` now pass the rendered record through
+  the same detector the launch bundler and the transcript store use, so an
+  absolute home path or identity span in free text is rewritten before it
+  reaches a committed file. Redaction runs before validation, so the
+  validator sees the bytes that get written. It redacts and reports rather
+  than refusing — a ledger that rejects writes stops being written to — and
+  the CLI names the number of spans it rewrote, because redaction alters
+  what the caller filed. A degraded scanner redacts with the bundled
+  defaults and warns rather than blocking every capture in the repo.
+  (iss-2608231025198888)
+
 - **The shell guard recognises the `&>` / `&>>` redirection operators.** The
   guard tokenizer read a leading `&` as a background/`&&` operator, so gluing or
   spacing bash's both-streams redirection into a command (`git push &>/dev/null
@@ -108,6 +120,61 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **`abcd history capture` accepts what the hooks accept.** The verb read
+  its operand through the 8 MiB JSON-operand cap while the SessionEnd path
+  read through the 64 MiB transcript cap, so every transcript between the
+  two was capturable automatically and unrecoverable by hand — the recovery
+  verb bounded eight times tighter than the thing it recovers from, with no
+  stdin workaround. Found refusing an ordinary 11.8 MB session during a
+  backlog recovery. The caps themselves are unchanged and still refuse an
+  over-cap file whole rather than truncating (iss-2608231029040602).
+- **Session transcripts past a couple of megabytes are no longer dropped
+  at exit.** `hook session-end` redacted the whole transcript in-line
+  before writing, at roughly 0.7s per megabyte, and the host cancels a
+  shutdown hook rather than wait for it — so the long, dense sessions most
+  worth keeping were exactly the ones lost, silently, with the store unable
+  to tell an uncaptured session from one that never ended. Capture is now
+  split across the two hooks that can each afford their half: SessionEnd
+  stages the raw transcript in one write, so its cost no longer scales with
+  the transcript, and the next SessionStart redacts and stores it through
+  the same fail-closed path. Nine of this repo's own ended sessions were
+  absent from its store before this (iss-2608230817034768).
+- **A session that ended but was not stored is now visible.** `abcd history
+  staged` lists transcripts awaiting redaction — the outcome the store alone
+  could never report, since an absent record spans "never ended", "ended
+  before the store existed" and "ended and lost" alike. `abcd history drain`
+  finishes a backlog without waiting for another session, and exits non-zero
+  if anything could not be stored. A SessionStart drains a bounded number so
+  it cannot stall the first prompt, and says out loud what it left
+  (iss-2608210934566224).
+
+- **The ideate record grill now sweeps id-less records.** Leg 2 of
+  `/abcd:ideate` reads the research notes and the decision log alongside the
+  id-bearing families, reporting a hit that rests on one in the `note` field
+  of the nearest citable record — closing the blind spot where a standing
+  verdict recorded in a research note was invisible to the leg that exists
+  to prevent re-litigation (iss-2608230748418054; the root-cause decision on
+  record-bearing ids for notes stays parked in that issue).
+- **A mistyped `abcd intent` or `abcd capture` no longer files a record.**
+  Both verbs take free text as their canonical create path, so `abcd intent
+  nosuchthing` was swallowed as a draft title and `abcd capture nosuchthing` as
+  issue text — each printing a created id and exiting 0, each leaving a durable
+  file behind and, on the intent side, burning an id under the `max+1` allocator
+  and leaving a record-lint `index_drift` blocker until the stray was noticed.
+  The did-you-mean guard only ever caught a NEAR-miss of a real sub-verb, so a
+  token resembling nothing fell straight through it. A lone bare word — one
+  whitespace-free positional — is now refused on both verbs at exit 2 with
+  nothing written, because `capture nosuchthing` and `capture resolve` are the
+  same invocation shape and only the second happens to reach the dispatcher
+  first. Prose is untouched: quoted text arrives as one argument carrying
+  whitespace, an unquoted title as several, and both still file. The tree-wide
+  sweep that asserts every parent refuses an unknown sub-verb at exit 2 had
+  `capture` and `intent` on an exemption list — that exemption was the defect
+  recorded as a design choice, and it is gone, so the two verbs are now held by
+  the same detector as the rest of the tree. This closes the gap the
+  unrecognised-input-never-writes principle was written about: its founding
+  evidence is a misspelled `capture` sub-verb filing an issue when the user asked
+  to resolve one, in the 2026-07-08 review. (iss-2608221328552172)
 - **`abcd site build` and `abcd site check` agree on what a page may carry, and
   gate every page.** The build inlined an SVG's XML prolog, comment or CDATA
   verbatim while the emitted-page reader refused all three, so a normal exporter

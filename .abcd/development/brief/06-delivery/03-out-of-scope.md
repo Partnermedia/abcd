@@ -92,6 +92,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-141` — docs-lint enforces the writing style guide's machine-checkable punctuation subset (the guide labels those rules review until this ships)
 - `itd-144` — Every livery mark has a surface: the lifeboat on disembark and mirrored on embark, the duckling as the harness mascot, the flag icon for the website (settles itd-112's deferred forge/web logo question)
 - `itd-145` — The acknowledgement convention arms itself: a record citing an external source, standard, or tool without its ACKNOWLEDGEMENTS entry fails the record gate
+- `itd-146` — abcd's help renders in labelled command groups, gated by a group field in the surface snapshot and an ungrouped-verb test (the reframed survivor of the verb-taxonomy ideate verdict; no verb renamed, moved or hidden)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

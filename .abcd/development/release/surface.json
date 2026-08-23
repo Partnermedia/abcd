@@ -580,12 +580,22 @@
       ]
     },
     {
+      "path": "abcd history drain",
+      "hidden": false,
+      "flags": []
+    },
+    {
       "path": "abcd history list",
       "hidden": false,
       "flags": []
     },
     {
       "path": "abcd history show",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd history staged",
       "hidden": false,
       "flags": []
     },

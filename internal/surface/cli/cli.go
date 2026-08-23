@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"github.com/Partnermedia/abcd/internal/adapter/scanner"
 	"github.com/Partnermedia/abcd/internal/core"
@@ -1158,17 +1159,21 @@ func newHookCommand() *cobra.Command {
 			if err != nil {
 				return warn("%v; capturing nothing", err)
 			}
-			res, err := history.Capture(captureRoot(cwd), det.RootSHA, in.SessionID, raw, "native")
+			// Stage, do NOT capture. Redaction costs ~0.7s/MB and the host cancels
+			// a shutdown hook rather than wait, so capturing here dropped every
+			// transcript past a couple of MB — silently, and precisely the long,
+			// dense sessions most worth keeping (iss-2608230817034768). Staging is
+			// one write, so this hook's cost no longer scales with the transcript;
+			// the next SessionStart drains it through the same fail-closed Capture.
+			res, err := history.Stage(det.RootSHA, in.SessionID, raw)
 			if err != nil {
-				// Includes a hostile session id and a redaction hard-fail: both
-				// write nothing, by design in internal/core/history.
-				return warn("capture failed (%v)", err)
+				return warn("staging failed (%v); this session was not captured", err)
 			}
 			if !res.Wrote {
-				return warn("session %s already stored (no-op)", res.Record.SessionID)
+				return warn("session %s already staged (no-op)", res.Staged.SessionID)
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: stored %s; redacted secrets=%d home=%d\n",
-				res.Record.SessionID, res.Record.Secrets, res.Record.HomePaths)
+			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: staged %s (%d bytes); the next session redacts and stores it\n",
+				res.Staged.SessionID, res.Staged.Bytes)
 			return nil
 		},
 	})
@@ -1201,6 +1206,34 @@ func newHookCommand() *cobra.Command {
 				}
 			}
 			var notices []string
+			// Drain first: SessionEnd only stages the raw transcript, because
+			// redaction at exit loses the race with the host's shutdown
+			// cancellation (iss-2608230817034768). This is where the previous
+			// session's transcript actually becomes a record, and it is the one
+			// hook with a time budget to do it in.
+			//
+			// The budget bounds an interactive stall: a repo with a backlog would
+			// otherwise redact all of it before the user's first prompt. Whatever
+			// it leaves is said out loud rather than dropped, so a partial pass
+			// never reads as a complete one.
+			if det, err := ahoy.Detect(cwd); err == nil && det.RootSHA != "" {
+				if dr, err := history.Drain(captureRoot(cwd), det.RootSHA, sessionStartDrainBudget); err == nil {
+					for _, f := range dr.Failed {
+						notices = append(notices, fmt.Sprintf(
+							"abcd: session %s ended but could not be stored (%s). Its raw transcript is kept at %s — capture it by hand or delete it; it is unredacted.",
+							termsafe.Sanitize(f.SessionID), termsafe.Sanitize(f.Err), termsafe.Sanitize(fsutil.RedactHome(f.Path))))
+					}
+					if dr.Remaining > 0 {
+						notices = append(notices, fmt.Sprintf(
+							"abcd: %d earlier session(s) are still awaiting capture — run `abcd history drain` to finish, or start another session.",
+							dr.Remaining))
+					}
+				} else {
+					notices = append(notices, fmt.Sprintf(
+						"abcd: could not drain staged transcripts (%s); previously ended sessions are not yet stored.",
+						termsafe.Sanitize(err.Error())))
+				}
+			}
 			// history.transcripts_missing is emitted only when cwd is a git repo
 			// (a root SHA resolved) AND this repo's transcripts dir is absent —
 			// exactly the state in which session-end would silently capture
@@ -1255,6 +1288,15 @@ func newHookCommand() *cobra.Command {
 // session log, and bounded so a pathological file cannot stall the Stop hook
 // while the scanner walks it.
 const maxTranscriptBytes = 64 << 20 // 64 MiB
+
+// sessionStartDrainBudget bounds how many staged transcripts one SessionStart
+// redacts before handing control back to the user. Redaction runs at roughly
+// 0.7s per MB, so an unbounded drain of a backlog would stall the first prompt
+// by however long the backlog happens to be. Four is a compromise: enough that a
+// normal one-session-behind case always clears in a single start, small enough
+// that the worst case stays a few seconds. Anything left is reported, never
+// dropped — `abcd history drain` finishes it without waiting for a new session.
+const sessionStartDrainBudget = 4
 
 // readTranscript reads the file named by the Stop payload's transcript_path.
 //
@@ -1363,6 +1405,18 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					return &exitError{Code: 2, Msg: fmt.Sprintf(
 						"unknown intent subcommand %q; did you mean %q? (nothing created — reword the text if you meant to file a draft)",
 						args[0], sug)}
+				}
+				// Guard: a lone bare word near NO sub-verb fell through the
+				// did-you-mean above and was filed as a draft title
+				// (iss-2608221328552172). A one-word positional is a sub-verb by
+				// shape; only prose is a draft title.
+				if loneBareToken(args) {
+					if args[0] == "" {
+						return &exitError{Code: 2, Msg: "abcd intent: the draft title is empty (nothing created)"}
+					}
+					return &exitError{Code: 2, Msg: fmt.Sprintf(
+						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; quote a sentence to file a draft)",
+						args[0])}
 				}
 				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
 			}
@@ -2098,6 +2152,18 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					"unknown capture subcommand %q; did you mean %q? (nothing captured — reword the text if you meant to file it)",
 					args[0], sug)}
 			}
+			// Guard: a lone bare word near NO sub-verb fell through the
+			// did-you-mean above and was filed as an issue
+			// (iss-2608221328552172). A one-word positional is a sub-verb by
+			// shape; only prose is issue text.
+			if loneBareToken(args) {
+				if args[0] == "" {
+					return &exitError{Code: 2, Msg: "abcd capture: the issue text is empty (nothing captured)"}
+				}
+				return &exitError{Code: 2, Msg: fmt.Sprintf(
+					"unknown capture subcommand %q (nothing captured — a lone word is read as a sub-verb, never as issue text; quote a sentence to file an issue)",
+					args[0])}
+			}
 			// Fast path: append a structured issue from the free-form text.
 			text := strings.Join(args, " ")
 			sl := slug
@@ -2125,6 +2191,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, res.Path)
+				// Redaction alters what the caller filed, so it is never silent: the
+				// text on disk differs from the text handed in, and only the caller
+				// can judge whether the redacted record still says what they meant.
+				if res.Redacted > 0 {
+					fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", res.Redacted)
+				}
+				if res.Degraded != "" {
+					fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(res.Degraded))
+				}
 			})
 		},
 	}
@@ -2384,6 +2459,31 @@ func suspectedTypoedSubcommand(parent *cobra.Command, args []string) (string, bo
 		}
 	}
 	return best, best != ""
+}
+
+// loneBareToken reports whether the positional is one whitespace-free word — the
+// single invocation shape a free-text create verb cannot tell apart from a
+// sub-verb call. `abcd capture nosuchthing` and `abcd capture resolve` are the
+// same shape; only the second happens to reach cobra's dispatcher first, so the
+// first was swallowed as issue text and minted a durable record at exit 0
+// (iss-2608221328552172). suspectedTypoedSubcommand catches a lone token NEAR a
+// real sub-verb (edit distance 1–2); this catches every other lone token, which
+// is the half that had no guard at all.
+//
+// Prose is unambiguous and still files. The canonical create path passes ONE
+// argument carrying whitespace — the shell has already eaten the quotes around
+// `abcd intent "widen the public api"` — and an unquoted title arrives as
+// several arguments. What is refused is a one-word record title, and a one-word
+// title is neither a press release nor an issue report. An empty positional
+// (`abcd capture ""` — a script whose variable expanded to nothing) is caught by
+// the same rule. Core refused that one too, but two layers down as "slug
+// normalises to empty" and at exit 1, so the callers name it here instead: an
+// empty text is not an unknown sub-verb, and a usage refusal is exit 2.
+//
+// unicode.IsSpace rather than an ASCII test, so a non-breaking space between two
+// words of a genuine title is read as the whitespace it is.
+func loneBareToken(args []string) bool {
+	return len(args) == 1 && strings.IndexFunc(args[0], unicode.IsSpace) < 0
 }
 
 // isSubverbOf reports whether token names a registered sub-command of parent's
@@ -2682,10 +2782,30 @@ const maxOperandJSONBytes = 8 << 20
 // capture path, where a truncated transcript would be stored under a sha256
 // idempotency key computed over the prefix (spc-4's refuse-whole invariant).
 func readSource(cmd *cobra.Command, spec string) ([]byte, error) {
+	return readSourceCapped(cmd, spec, maxOperandJSONBytes)
+}
+
+// readSourceCapped is readSource with the cap named by the caller, because the
+// right bound depends on what is being read and there is more than one answer.
+//
+// maxOperandJSONBytes is a JSON-operand cap — the registry/graveyard payload
+// size — and applying it to a transcript was a wrong-constant bug
+// (iss-2608231029040602). It made `history capture` refuse at 8 MiB while the
+// SessionEnd path accepted 64 MiB, so a transcript the hooks would store
+// automatically could not be recovered by hand: the recovery verb was bounded
+// eight times tighter than the thing it exists to recover from. Real sessions
+// in this repo reach 11.8 MB, so that was not a pathology guard but a
+// functional limit on ordinary work.
+//
+// The caps themselves stay. Both transports read whole into memory before the
+// scanner walks them, and both refuse an over-cap file WHOLE rather than
+// truncating, because a severed prefix would be stored under a sha256
+// idempotency key computed over the prefix (spc-4's refuse-whole invariant).
+func readSourceCapped(cmd *cobra.Command, spec string, limit int64) ([]byte, error) {
 	if spec == "-" {
-		return readCappedStdin(cmd, maxOperandJSONBytes)
+		return readCappedStdin(cmd, limit)
 	}
-	return readGuardedOperand(spec, maxOperandJSONBytes)
+	return readGuardedOperand(spec, limit)
 }
 
 // newHistoryCommand builds the `history` sub-tree over internal/core/history —
@@ -2718,7 +2838,9 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 			if len(args) == 1 {
 				src = args[0]
 			}
-			raw, err := readSource(cmd, src)
+			// The transcript cap, not the JSON-operand cap: this verb recovers
+			// what the hooks store, so it must accept what they accept.
+			raw, err := readSourceCapped(cmd, src, maxTranscriptBytes)
 			if err != nil {
 				return fmt.Errorf("history capture: cannot read transcript: %w", err)
 			}
@@ -2796,6 +2918,99 @@ func newHistoryCommand(asJSON *bool) *cobra.Command {
 						r.CapturedAt.Format("2006-01-02T15:04:05Z"), termsafe.Sanitize(r.SessionID), termsafe.Sanitize(r.SourceKind), r.Secrets, r.HomePaths)
 				}
 			})
+		},
+	})
+
+	// staged — what ended but is not yet stored. This is the outcome axis the
+	// store never had: before staging existed, "absent from the store" spanned
+	// never-ended, ended-before-the-store-existed and ended-and-lost, and nothing
+	// could tell them apart. A staged entry says exactly one thing.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "staged",
+		Short: "List transcripts that ended but are not yet redacted into the store",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			staged, err := history.ListStaged(rootSHA)
+			if err != nil {
+				return err
+			}
+			if staged == nil {
+				staged = []history.Staged{}
+			}
+			for k := range staged {
+				staged[k].Path = fsutil.RedactHome(staged[k].Path)
+			}
+			return render(cmd.OutOrStdout(), *asJSON, staged, func(w io.Writer) {
+				if len(staged) == 0 {
+					fmt.Fprintln(w, "abcd history — nothing staged; every ended session is stored")
+					return
+				}
+				for _, s := range staged {
+					fmt.Fprintf(w, "%s  %s  %d bytes  awaiting redaction\n",
+						s.StagedAt.Format("2006-01-02T15:04:05Z"), termsafe.Sanitize(s.SessionID), s.Bytes)
+				}
+				fmt.Fprintf(w, "\n%d staged transcript(s) hold UNREDACTED text until drained; run `abcd history drain`.\n", len(staged))
+			})
+		},
+	})
+
+	// drain — finish the capture SessionStart bounded. Unbudgeted by design: the
+	// interactive budget exists to protect a session start, and this verb is the
+	// explicit ask, so it runs the backlog to completion.
+	historyCmd.AddCommand(&cobra.Command{
+		Use:   "drain",
+		Short: "Redact and store every staged transcript for this repo",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			rootSHA, err := repoRootSHA()
+			if err != nil {
+				return err
+			}
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := history.Drain(captureRoot(cwd), rootSHA, 0)
+			if err != nil {
+				return err
+			}
+			if res.Captured == nil {
+				res.Captured = []history.Record{}
+			}
+			for k := range res.Captured {
+				res.Captured[k].Path = fsutil.RedactHome(res.Captured[k].Path)
+			}
+			for k := range res.Failed {
+				res.Failed[k].Path = fsutil.RedactHome(res.Failed[k].Path)
+			}
+			renderErr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				if len(res.Captured) == 0 && len(res.Failed) == 0 {
+					fmt.Fprintln(w, "abcd history — nothing staged; nothing to drain")
+					return
+				}
+				for _, r := range res.Captured {
+					fmt.Fprintf(w, "stored  %s  redacted secrets=%d home=%d\n",
+						termsafe.Sanitize(r.SessionID), r.Secrets, r.HomePaths)
+				}
+				for _, f := range res.Failed {
+					fmt.Fprintf(w, "FAILED  %s  %s\n  raw transcript kept (unredacted): %s\n",
+						termsafe.Sanitize(f.SessionID), termsafe.Sanitize(f.Err), termsafe.Sanitize(f.Path))
+				}
+			})
+			if renderErr != nil {
+				return renderErr
+			}
+			// A drain that could not store something must not exit 0: this verb is
+			// the remedy the SessionStart notice points at, and a silent success
+			// here would leave the user believing the backlog cleared.
+			if len(res.Failed) > 0 {
+				return fmt.Errorf("history: %d staged transcript(s) could not be stored", len(res.Failed))
+			}
+			return nil
 		},
 	})
 
