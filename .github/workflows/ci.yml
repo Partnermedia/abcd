@@ -266,6 +266,16 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go run ./cmd/abcd docs lint
 
+      # Site-render gate (iss-2608241845109280): the site renders the record as
+      # well as docs/, and the renderer refuses markdown outside its supported
+      # subset. This lane always runs — the changes classifier never stands the
+      # Linux leg down — so a records-only pull request is covered here, which
+      # site-screenshots.yml's path filter does not cover. Build only; the
+      # screenshot audit stays where it is.
+      - name: Site-render gate
+        if: matrix.os == 'ubuntu-latest'
+        run: go run ./cmd/abcd site build --out "$RUNNER_TEMP/site-render-check"
+
   # Secrets never land in history: full-history scan on every push/PR. Run as a
   # pinned, checksum-verified CLI (no PR-comment / SARIF GitHub-API integration),
   # so it works on a private repo and survives the private->public flip. A

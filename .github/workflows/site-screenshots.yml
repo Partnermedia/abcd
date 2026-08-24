@@ -33,10 +33,17 @@ name: site-screenshots
 # two are complementary, not redundant.
 on:
   pull_request:
-    # Only what can change the rendered page: the generator, the committed
-    # sources it copies and composes, the docs prose the site renders, and the
+    # The inputs whose change can move the rendered LAYOUT: the generator, the
+    # committed sources it copies and composes, the docs prose, and the
     # composition manifest. A change to this workflow or its audit script runs it
     # too — a guard whose own edits are unexercised is a guard nobody trusts.
+    #
+    # This filter is deliberately narrower than the set of site INPUTS. The site
+    # also renders the record under .abcd/, which is not listed here, because a
+    # record edit moves page content without moving the layout this audit
+    # measures. That whole class is covered by ci.yml's Site-render gate, which
+    # runs on every pull request and fails when the renderer refuses a record
+    # (iss-2608241845109280).
     paths:
       - 'internal/core/site/**'
       - 'site-src/**'

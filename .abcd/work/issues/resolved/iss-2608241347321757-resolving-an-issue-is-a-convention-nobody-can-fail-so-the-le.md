@@ -49,9 +49,11 @@ provenance is already in git and is derivable under every merge method,
 because it is read from `main`'s own history rather than from a branch.
 Verified on iss-97, which stores no `resolved_by` at all:
 
-    git log --diff-filter=A -- .abcd/work/issues/resolved/iss-97-*.md
-      -> 51566371 fix: guard ahoy.Detect marker/config reads against FIFO and
-         huge files (iss-97), merged by 94fac3ef (#105)
+```
+git log --diff-filter=A -- .abcd/work/issues/resolved/iss-97-*.md
+  -> 51566371 fix: guard ahoy.Detect marker/config reads against FIFO and
+     huge files (iss-97), merged by 94fac3ef (#105)
+```
 
 Storing the sha is what makes the step unschedulable; deriving it removes the
 ordering problem rather than automating around it.
