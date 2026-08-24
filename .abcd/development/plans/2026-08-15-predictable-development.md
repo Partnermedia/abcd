@@ -52,7 +52,7 @@ subprocess/environment handling.
 
 ## Workstream B — the loop stops fighting itself
 
-1. **[iss-219](../../work/issues/open/iss-219-dev-install-tests-read-host-path.md)**
+1. **[iss-219](../../work/issues/resolved/iss-219-dev-install-tests-read-host-path.md)**
    (minor, outsized friction) — the ahoy dev-install tests read the host
    PATH, so four tests fail on any machine with abcd installed and every push
    from this machine needs a PATH-stripping workaround. Isolating PATH in
@@ -77,12 +77,12 @@ subprocess/environment handling.
 
 ## Workstream C — the record cannot drift silently
 
-5. **[iss-192](../../work/issues/open/iss-192-brief-surface-drift-v042-release-gate.md)**
+5. **[iss-192](../../work/issues/resolved/iss-192-brief-surface-drift-v042-release-gate.md)**
    (major) — the v0.4.2 crosscheck found 26 brief-surface discrepancies; the
    brief lags the shipped surface. Fix the drift *and* note which sentences
    only the periodic crosscheck guards, per CONTEXT.md's trust-the-binary
    sharp edge.
-6. **[iss-180](../../work/issues/open/iss-180-itd-85-shipped-but-undelivered.md)**
+6. **[iss-180](../../work/issues/wontfix/iss-180-itd-85-shipped-but-undelivered.md)**
    (major, process) —
    [itd-85](../intents/drafts/itd-85-audit-verb.md) shipped whole but still
    sits in `drafts/`; the lifecycle move is the fix, and whatever let a
@@ -104,7 +104,7 @@ subprocess/environment handling.
     door (a `decompose` subverb versus a check inside `intent ready`) and
     whether it runs in preflight — itd-84's own open question. Human-paired
     design, then a normal TDD arc. Collision:
-    [iss-210](../../work/issues/open/iss-210-lone-token-subverb-guess-writes-a-record.md)
+    [iss-210](../../work/issues/resolved/iss-210-lone-token-subverb-guess-writes-a-record.md)
     lives in exactly this verb-family parsing — fix it first or in the same
     arc, never around it.
 

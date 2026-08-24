@@ -43,7 +43,7 @@ collision); everything else is *human-paired*.
 
 The install-experience plan's Cut B (B1 payload asset, B2 plugin-source
 repoint, B3 skew-notice retirement resolving
-[iss-206](../../work/issues/open/iss-206-the-version-skew-notice-promised-by-itd-105-given-an-install.md),
+[iss-206](../../work/issues/wontfix/iss-206-the-version-skew-notice-promised-by-itd-105-given-an-install.md),
 B4 record consequences) is this plan's opening workstream. Its §4 manual
 verification gate remains the prerequisite; its collision notes and the
 itd-108 precedence rule apply unchanged. Nothing is re-specified here —
@@ -71,14 +71,14 @@ once. Human-paired (the §4 gate is manual by design).
    in `commandOf`/`skipWrapperArgs`; no nested re-tokenising). The prior
    attempt's first-attempt BLOCK stands as the review bar: all three spellings
    or nothing.
-2. **[iss-202](../../work/issues/open/iss-202-scanner-pii-config-unguarded-read.md)**
+2. **[iss-202](../../work/issues/resolved/iss-202-scanner-pii-config-unguarded-read.md)**
    (critical) — `scanner.New` reads `pii.json` unguarded. Autonomous-eligible.
 3. **[iss-203](../../work/issues/open/iss-203-audit-privacy-degraded-scanner-silent.md)**
    (major) — audit silently degrades when `scanner.New` fails. Same seam as
    iss-202; land with or immediately after it, never in parallel.
 4. **[iss-201](../../work/issues/resolved/iss-201-guard-hook-stdin-overflow-fail-open.md)**
    (major) — guard hook fails open past 1 MiB of stdin. Autonomous-eligible.
-5. **[iss-210](../../work/issues/open/iss-210-lone-token-subverb-guess-writes-a-record.md)**
+5. **[iss-210](../../work/issues/resolved/iss-210-lone-token-subverb-guess-writes-a-record.md)**
    (major) — a lone mistyped token writes a ledger record. Autonomous-eligible.
 6. **[iss-195](../../work/issues/open/iss-195-scanner-openended-heuristic-cost-regression-on-network-patterns.md)**
    (minor) — the rigid/open-ended heuristic sends every IPv4/IPv6 match through
@@ -101,7 +101,7 @@ unless its body says otherwise:
 [iss-33](../../work/issues/open/iss-33-ahoy-verb-hygiene.md) (unvalidated
 interactive answers persisted),
 [iss-221](../../work/issues/open/iss-221-refounding-lineage-prompt-is-a-one-shot.md),
-[iss-222](../../work/issues/open/iss-222-install-dev-silent-noop-over-unowned-wrapper.md),
+[iss-222](../../work/issues/resolved/iss-222-install-dev-silent-noop-over-unowned-wrapper.md),
 [iss-227](../../work/issues/open/iss-227-installdevshim-silently-swallows-failures-the-os-remove-mkdi.md),
 [iss-228](../../work/issues/open/iss-228-the-plugin-root-binary-repo-root-abcd-bin-abcd-darwin-arm64.md).
 
