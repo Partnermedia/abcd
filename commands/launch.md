@@ -104,6 +104,19 @@ Three failures are worth recognising, because each looks like something else.
 
 - **The run says `Waiting` for a long time and nothing happens.** That is the
   approval gate, not a hang. Approve it.
+- **The release succeeded but `site / deploy` failed.** Known, recorded as
+  iss-2608231912566984, and not a release failure: the binaries, checksums and
+  attestation are published and correct, and only the website is behind. Deploy
+  it with one command, which is the dispatch path `site.yml` documents as its
+  emergency redeploy and treats as production by definition:
+
+  ```bash
+  gh workflow run site.yml
+  ```
+
+  With no tag input it resolves the newest published release. It succeeds where
+  the release chain's own call fails, because a workflow reached by dispatch
+  resolves its environment secrets and one reached by `workflow_call` does not.
 - **The release job fails on `Semantic-gate receipts`.** The receipts do not
   match the commit the workflow derived. The tag exists by then and the workflow
   never moves a tag, so the version is consumed: it needs the tag deleted and the
