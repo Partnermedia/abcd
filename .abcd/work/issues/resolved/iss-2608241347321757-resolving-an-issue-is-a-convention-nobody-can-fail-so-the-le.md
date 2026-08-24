@@ -7,6 +7,10 @@ category: "architectural-insight"
 source: "user-observation"
 found_during: "post-merge-provenance-review"
 found_at: "internal/core/capture/workflow.go:162,scripts/"
+resolution: "Closed by the lint-issues gate (scripts/check-issue-resolution.sh): RS001 refuses a Resolves: iss-N trailer whose record does not leave open/ in the same diff, so resolution lands inside the fix and no post-merge step exists to forget; RS002/RS003 check that a resolved_by.commit stamp names a commit that is actually reachable, which the shape-only --commit validation never did. Wired into make preflight and the CI record-lint job, with a cases script proving each rule can fail. The open question the capture left to a maintainer — whether resolved_by.commit should be written at all or computed on demand — is deliberately NOT settled here: the stamp stays optional and is now merely verified when present."
+impact: internal
+resolved_by:
+  commit: "2852c095"
 ---
 `abcd capture resolve` exists and works. Nothing anywhere can fail when it is
 not run, so an issue that has in fact been fixed stays in `open/` until a human
