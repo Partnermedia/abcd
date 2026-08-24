@@ -10,7 +10,7 @@ found_at: "internal/core/capture/workflow.go"
 details: "The redaction scanner was wired into launch (dryrun, ship), repolint (rule_privacy) and history (Capture) only. abcd capture rendered free text straight to the committed issue ledger with no detector between, so an absolute home path naming the operator's account reached a committed record with record-lint, docs-lint and lint-reviews all green. history.Capture refuses fail-closed on exactly this span class (home_path_self) while the ledger write path did not look."
 suggested_fix: "Route both ledger write paths through the same detector: the capture render and the resolve/wontfix transition render. Redact and report rather than refuse, because refusing to record a finding loses the finding, and report the count so the caller knows the text was altered."
 related_issues: ["iss-2608230847432286", "iss-2608230957104179"]
-resolution: "capture redacts free-text inputs through the scanner BEFORE rendering (redactCaptureInputs) and gates ledger writes; blocking residuals refuse the write like history.Capture"
+resolution: "capture redacts free-text inputs through the scanner BEFORE rendering (redactCaptureInputs) on both ledger write paths, the capture render and the resolve/wontfix transition, and reports the altered-span count. It REDACTS AND REPORTS and never refuses, unlike history.Capture: the asymmetry is deliberate (redact.go), because refusing to record a finding loses the finding itself"
 impact: fix
 resolved_by:
   commit: "2a4f4f2348ac02fa67758c807fc558968e5c8708"
