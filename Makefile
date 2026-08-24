@@ -77,6 +77,24 @@ lint-issues:
 docs-lint:
 	@go run ./cmd/abcd docs lint
 
+# Site-render gate (iss-2608241845109280). The site renders the RECORD as well as
+# docs/ — 852 records at the 0.6.4 cut — and the renderer supports a fixed
+# markdown subset, refusing anything it would otherwise pass through unrendered.
+# So a record is a site input, and a malformed one breaks the render. Nothing
+# caught that before this target existed: the four lint gates read records but
+# never render them, and site-screenshots.yml is path-filtered to the generator
+# and docs/, so a records-only pull request changed the rendered page and
+# triggered no audit. It reached a release, where `release.yml`'s site job failed
+# AFTER the binaries had published.
+#
+# Builds into a throwaway directory and keeps nothing: this asks "does it render"
+# and nothing else. Roughly ten seconds, almost all of it writing files.
+site-render:
+	@rm -rf .abcd/.work.local/scratch/site-render-check
+	@go run ./cmd/abcd site build --out .abcd/.work.local/scratch/site-render-check >/dev/null
+	@rm -rf .abcd/.work.local/scratch/site-render-check
+	@echo "site-render: the record and docs render"
+
 # Propagate the pinned action refs in the committed release workflows back into
 # the scaffold templates they were rendered from (iss-209). Dependabot only ever
 # edits the rendered workflow, which breaks the self-scaffold parity test; this
@@ -94,13 +112,13 @@ scaffold-sync-check:
 	@go run ./cmd/scaffold-sync -check
 
 # Pre-push gate (invoked by .githooks/pre-push): the four lint gates
-# (lint-reviews, lint-issues, record-lint, docs-lint) as prerequisites, then
-# build, vet, test,
+# (lint-reviews, lint-issues, record-lint, docs-lint) plus the site-render gate
+# as prerequisites, then build, vet, test,
 # and race-enabled internal tests natively. CI's check job runs those same four
 # Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
 # separately before pushing. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews lint-issues record-lint docs-lint
+preflight: lint-reviews lint-issues record-lint docs-lint site-render
 	go build ./...
 	go vet ./...
 	go test ./...
