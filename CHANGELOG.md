@@ -10,6 +10,16 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-08-24
+
+### Changed
+
+- **The install one-liner, the marketplace-add command, the badges and the citation metadata name the current organisation.** `go.mod`'s module path and the import lines in 226 Go files move with them, along with `README.md`, `docs/how-to/install.md` and two docs READMEs, `CITATION.cff`, `SECURITY.md`, the Makefile ldflags that stamp the version symbol, `mkdocs.yml`, and `site-src/install.sh.tmpl` — the script the site serves, whose URLs are what a curl install fetches. `TestInstallGuideDocumentsTheInstallAndUpdatePath` derives the documented marketplace slug from the module path, so `go.mod`, the README and the install guide move in one change or the gate fails. Changing the module path breaks any Go importer, judged near-zero cost because abcd is a CLI rather than a library and is pre-1.0. The CHANGELOG entry for the earlier transfer and the historical records under `.abcd/` keep the old name, because they state facts about the past. (iss-2608241959573830)
+
+### Fixed
+
+- **A record whose markdown the site renderer refuses fails before it reaches the default branch.** `abcd site build` renders the issue ledger as well as `docs/` against a fixed markdown subset and never passes text through unrendered, so one four-space indented code block in a committed issue record fails the render — and nothing caught it, because the four lint gates read records without rendering them, the screenshot workflow is path-filtered, and the CI changes classifier stands its optional jobs down for a pull request confined to `.abcd/`. The block is fenced; `make site-render` builds the whole site into a throwaway directory and keeps nothing, `preflight` depends on it so the pre-push hook catches it, and a site-render gate runs on ci.yml's Linux lane, which the classifier never stands down, so a records-only pull request is covered. It matters at this level because the production site renders the tagged commit's tree with that release's own binary: a content defect in a released tree waits for the next release rather than for a later commit. (iss-2608241845109280)
+
 ## [0.6.4] - 2026-08-24
 
 ### Added

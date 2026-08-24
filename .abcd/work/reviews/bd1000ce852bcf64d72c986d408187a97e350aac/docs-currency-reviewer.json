@@ -1,0 +1,37 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "bd1000ce852bcf64d72c986d408187a97e350aac"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-24T20:49:00Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.4"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 1
+  },
+  "failing": [
+    {
+      "where": "AGENTS.md:65 and AGENTS.md:154",
+      "class": "stale-count",
+      "item": "AGENTS.md",
+      "disposition": "out of scope and non-blocking, on the reviewer's own classification: AGENTS.md is development material rather than user-facing prose by this project's taxonomy, and the declared scope is README.md, docs/, commands/ and the two newest CHANGELOG sections. Nothing a user reads is falsified. Carried forward deliberately, and the carry is the interesting part: line 65 has said three gates since 3af40463 and line 154 said four, so the file contradicts both the recipe and itself. iss-2608242043243131 bounds this class at three hand-restatements; these are a fourth and fifth, which means a detector built to that record's stated corpus would pass while the class survived. The record's acceptance corpus is widened to include both lines before the detector is written \u2014 an incomplete corpus is the failure mode fix-the-detector's lifecycle section names explicitly."
+    }
+  ],
+  "_reviewProvenance": "PROMOTE on the second run of this gate against this cut. Run 1 (6465ef53) returned HOLD on one finding: docs/how-to/install.md enumerated four lint gates while this cut's own site-render prerequisite made preflight five \u2014 the same defect v0.6.4 corrected (three to four) and this release re-introduced one cut later. The install guide, CONTRIBUTING.md and the Makefile .PHONY list are corrected, and the recurrence is captured as iss-2608242043243131 with both instances as the detector's acceptance corpus. This run diffed HEAD against run 1's tree and found exactly four changed files \u2014 the new issue record, CONTRIBUTING.md, the Makefile .PHONY line and the install guide \u2014 so no surface run 1 cleared could have regressed, and the rename and site-render entries were not re-litigated. Claims were exercised rather than read: `make site-render` ran green and left no directory, confirming the changelog's 'throwaway directory and keeps nothing'; .githooks/pre-push invokes preflight, confirming the pre-push coupling; ci.yml's Site-render gate is guarded only on the Linux matrix leg with no inert condition, confirming 'never stood down'; the prebuilt binary's help tree matches the generated CLI reference and its drift test passes. The rename's restraint claim was checked exhaustively: a tracked-file grep for the old organisation returns only the CHANGELOG's earlier-transfer entry and historical records under .abcd/. Run 1 also verified the release notes' strongest assertion against .github/workflows/site.yml directly \u2014 resolve peels the tag to an immutable sha, render checks out that sha and downloads the binary from that release, and push:[main] reaches only the non-production preview \u2014 so a content defect in a released tree does wait for the next release, which is why this cut exists. Not covered: the network install one-liners and a real marketplace add, the race lane, the smoke harness, the Playwright mobile audit, CHANGELOG sections below 0.6.4, and the sources corpus outside this repository. The judge is the release session's pinned harness model."
+}
