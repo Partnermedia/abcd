@@ -158,13 +158,20 @@ func TestAbandonedAcceptedADRWithUppercaseNullIsNotReported(t *testing.T) {
 	// `superseded_by: NULL` as its evidence. The status is not-superseded and
 	// case-folded, so only the null literal decides the finding.
 	//
-	// This walks the full iss #290 matrix on the lifeboat path. gvSupersededADRs
-	// calls gvUnquote(superseded_by) BEFORE frontmatter.IsNull, so a *quoted*
-	// null (`"NULL"`, `'Null'`) is unquoted to a bare null literal here and must
-	// also read as absent — the matrix marks quoted "NULL" ❌ "gvUnquote strips
-	// the quotes first". A real record handle (`adr-9`) is the positive control:
-	// widening the null set must not suppress a genuine superseding pointer.
-	nulls := []string{"NULL", "Null", "null", "~", `"NULL"`, `'Null'`}
+	// This walks the bare-spelling matrix on the lifeboat path: only the four
+	// UNQUOTED YAML nulls decide the finding here. A *quoted* null (`"NULL"`,
+	// `'Null'`) is deliberately NOT in this table: per YAML scalar semantics a
+	// quoted value is a string, and frontmatter.IsNull — which sees what Fields
+	// captured, quotes intact — must keep reading it as non-null (asserted by
+	// TestIsNull's negative controls). gvSupersededADRs currently calls
+	// gvUnquote BEFORE IsNull, so in the lifeboat path alone a quoted null
+	// happens to read as absent today; that is quote-insensitive sentinel
+	// behaviour of gvUnquote, not YAML null semantics, and it is an open
+	// heuristic decision for lifeboat supersession handling tracked separately —
+	// this regression pins only the unquoted spellings. A real record handle
+	// (`adr-9`) is the positive control: widening the null set must not
+	// suppress a genuine superseding pointer.
+	nulls := []string{"NULL", "Null", "null", "~"}
 	for _, nul := range nulls {
 		dir, write := abandonedWriter(t)
 		write(".abcd/development/decisions/adrs/0035-live.md",
