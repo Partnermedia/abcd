@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/vintage"
 )
 
 // TestMain defaults the ahoy build-vintage seam to a fresh, determinable,

@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 // knownFields is the additionalProperties:false allow-list from

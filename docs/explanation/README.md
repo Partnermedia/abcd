@@ -4,7 +4,7 @@ Understanding-oriented documentation — the why and the how-it-hangs-together: 
 mental model, the transport-agnostic core, the host-delegated design, the abstraction
 boundary. Discursive and reflective; it illuminates rather than instructs. Deeper
 design rationale for a *decision* lives in an ADR under
-[`../../.abcd/development/decisions/adrs/`](https://github.com/Partnermedia/abcd/tree/main/.abcd/development/decisions/adrs/).
+[`../../.abcd/development/decisions/adrs/`](https://github.com/intentdriven/abcd/tree/main/.abcd/development/decisions/adrs/).
 
 - [`rationale.md`](rationale.md) — who abcd is for, and the bet it makes.
 - [`roles.md`](roles.md) — the product thinker and the technical facilitator.

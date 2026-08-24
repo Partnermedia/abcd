@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/livery"
+	"github.com/intentdriven/abcd/internal/livery"
 )
 
 const outDir = "../../docs/assets/img/livery"

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/positioning"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/positioning"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 const idBrief = `## Identity (canonical)

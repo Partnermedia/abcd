@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/history"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/history"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // sessionEndRepo builds an isolated git repo with one commit (so it has a

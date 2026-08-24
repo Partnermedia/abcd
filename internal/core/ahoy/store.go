@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core"
+	"github.com/intentdriven/abcd/internal/core"
 )
 
 // pluginVersion is the version ahoy stamps into config.json["meta"] and

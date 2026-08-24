@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/update"
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/term"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/update"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/term"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // newUpdater is the seam through which `abcd update` reaches the network — a

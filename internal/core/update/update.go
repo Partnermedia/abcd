@@ -30,10 +30,10 @@ import (
 
 	"github.com/minio/selfupdate"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/vintage"
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/urlguard"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/vintage"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/urlguard"
 )
 
 // Action is the outcome class a Report carries.
@@ -169,7 +169,7 @@ const (
 
 // Updater fetches and applies releases from one pinned origin.
 type Updater struct {
-	origin       string // e.g. https://github.com/Partnermedia/abcd — no trailing slash
+	origin       string // e.g. https://github.com/intentdriven/abcd — no trailing slash
 	assetName    string // abcd-<goos>-<arch>
 	allowHTTP    bool   // test seam: the shipping constructor never sets it
 	client       *http.Client
@@ -181,7 +181,7 @@ type Updater struct {
 
 // releaseOrigin is the one place releases come from — the same origin
 // `version --check` and hooks/bootstrap.sh resolve against, deliberately.
-const releaseOrigin = "https://github.com/Partnermedia/abcd"
+const releaseOrigin = "https://github.com/intentdriven/abcd"
 
 // NewGitHubUpdater builds the updater as it ships: the pinned origin, the
 // full urlguard policy, and GitHub's own asset hosts as the only legal

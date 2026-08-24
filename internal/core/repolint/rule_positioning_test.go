@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/Partnermedia/abcd/internal/core/repolint"
+	"github.com/intentdriven/abcd/internal/core/repolint"
 )
 
 const positioningBrief = `## Identity (canonical)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestRunGitIgnoresInheritedGitDir proves an inherited GIT_DIR cannot redirect

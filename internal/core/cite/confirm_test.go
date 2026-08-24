@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // TestConfirmWritesADatedManualReceipt is AC 4's floor: a human clears one queue

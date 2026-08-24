@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // The explorer's routes. They are directories with an index.html, so the served

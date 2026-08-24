@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/vintage"
+	"github.com/intentdriven/abcd/internal/core/vintage"
 )
 
 // TestMain defaults the build-vintage seam to a fresh, determinable, non-dogfood

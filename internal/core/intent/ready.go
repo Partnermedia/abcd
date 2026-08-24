@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
-	"github.com/Partnermedia/abcd/internal/core/spec"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
 // Check names, in the fixed order Ready always reports them.

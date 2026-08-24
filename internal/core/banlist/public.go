@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // docsLintAllowEscape is the per-line escape every entry in the family declares —

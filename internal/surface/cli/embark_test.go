@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lifeboat"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/lifeboat"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // embarkSourceRepo builds a one-commit git repo carrying an embarkable record (an

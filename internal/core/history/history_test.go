@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 const testRootSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

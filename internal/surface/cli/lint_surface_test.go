@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // auditRepo builds a git repo at t.TempDir with the given layout knobs and

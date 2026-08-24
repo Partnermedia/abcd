@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/repolint"
+	"github.com/intentdriven/abcd/internal/core/repolint"
 )
 
 // fakeRule is a test double: it declares meta and returns canned findings, so

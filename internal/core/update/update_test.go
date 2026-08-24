@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
 )
 
 // --- Plan: every non-file shape is a named refusal (spc-32 dispatch) ---

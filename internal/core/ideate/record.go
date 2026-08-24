@@ -30,9 +30,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/recordid"
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // SlugError is the refusal for an idea slug that cannot safely become a filename.

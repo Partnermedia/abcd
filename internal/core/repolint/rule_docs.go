@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // docsCurrency reuses the docs-lint engine to surface documentation drift —

@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // CSLRelPath is where the record keeps its bibliography.

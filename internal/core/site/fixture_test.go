@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // onePixelPNG is a 1×1 PNG. The build reads its IHDR for the width and height it

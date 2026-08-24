@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // RepoRelPath is the per-repo override file, relative to the repo worktree. It

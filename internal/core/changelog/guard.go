@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/surface"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // SurfaceGuardStatus is the guardrail's verdict on a cut. Three states, kept

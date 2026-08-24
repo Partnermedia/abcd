@@ -59,7 +59,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // pluginManifestFile is the plugin's own manifest. Unlike the VERSION location

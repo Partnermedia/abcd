@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/surface"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 const (

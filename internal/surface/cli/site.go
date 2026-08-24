@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Partnermedia/abcd/internal/core/site"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/core/site"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // newSiteCommand builds the `site` verb family: the website as a rendered

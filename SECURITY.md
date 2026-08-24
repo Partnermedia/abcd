@@ -4,7 +4,7 @@
 
 Report vulnerabilities privately through GitHub's private vulnerability
 reporting: [Security → Report a
-vulnerability](https://github.com/Partnermedia/abcd/security/advisories/new).
+vulnerability](https://github.com/intentdriven/abcd/security/advisories/new).
 Never open a public issue or pull request for a security finding — the report
 stays private while it is triaged and fixed.
 

@@ -3,8 +3,8 @@ package repolint
 import (
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // threeTierLayout checks the committed three-tier .abcd/ layout: the durable

@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/guard"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/guard"
+	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

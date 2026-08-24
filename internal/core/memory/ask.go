@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // ask.go — deterministic native recall (fn-38 .6). Retrieval (QueryPages) is

@@ -3,7 +3,7 @@ package changelog
 import (
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/core/launch"
 )
 
 // Derivation is the deterministic outcome of a release cut: what the next

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // runCLIPipedStdin executes the command tree with stdin bound to a REAL pipe —

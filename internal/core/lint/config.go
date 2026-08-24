@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxLintConfigBytes caps the docs-lint/record-lint config read (trust

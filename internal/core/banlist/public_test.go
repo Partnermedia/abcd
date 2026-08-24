@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // realConfig copies this repo's own committed docs-lint config into a temp repo.

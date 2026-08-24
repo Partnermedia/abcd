@@ -7,8 +7,8 @@
   <p>A host-agnostic configuration layer for intent-driven development.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
-  <a href="https://github.com/Partnermedia/abcd/releases"><img src="https://img.shields.io/github/v/release/Partnermedia/abcd?cacheSeconds=300" alt="Release"></a>
-  <img src="https://img.shields.io/github/last-commit/Partnermedia/abcd?cacheSeconds=300" alt="Last commit">
+  <a href="https://github.com/intentdriven/abcd/releases"><img src="https://img.shields.io/github/v/release/intentdriven/abcd?cacheSeconds=300" alt="Release"></a>
+  <img src="https://img.shields.io/github/last-commit/intentdriven/abcd?cacheSeconds=300" alt="Last commit">
   <br />
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-3B5CE7?logo=anthropic&logoColor=white" alt="Built with Claude Code"></a> <!-- docs-lint: allow -->
@@ -46,7 +46,7 @@ The easiest route to get started is to install `abcd` as a [Claude Code](https:/
 Run these two, in order, from a session in that harness:
 
 ```
-/plugin marketplace add Partnermedia/abcd
+/plugin marketplace add intentdriven/abcd
 /plugin install abcd@abcd-marketplace
 ```
 
@@ -65,7 +65,7 @@ Support for other harnesses will follow.
 If your harness isn't supported yet, `abcd` runs from a terminal in any repository, with no harness involved:
 
 ```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+sh -c 'set -eu; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
 Checksum-verified, no administrator rights, installs to `~/.local/bin`. The [install guide](docs/how-to/install.md) covers building from source and what to do when `abcd` isn't found afterwards. Consult the [verb reference](docs/reference/cli/commands.md) for what `abcd` can do.

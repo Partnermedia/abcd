@@ -45,7 +45,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxAssetBytes bounds one asset read.

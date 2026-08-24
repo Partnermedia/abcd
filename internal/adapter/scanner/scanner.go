@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"unicode/utf8"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // BundleFile is the minimal descriptor ScanBundle needs. It is defined here

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 const fakeSecret = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab"

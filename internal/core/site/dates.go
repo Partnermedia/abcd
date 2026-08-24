@@ -18,7 +18,7 @@ package site
 import (
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // maxLogBytes bounds the history read. The walk is one process over the whole

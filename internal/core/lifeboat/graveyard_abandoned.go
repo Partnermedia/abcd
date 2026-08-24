@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/capture"
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
-	"github.com/Partnermedia/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/intent"
 )
 
 // graveyard_abandoned.go — Layer 2 of the graveyard: what the project itself

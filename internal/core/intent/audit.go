@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // audit.go — the intent-audit outbox+inbox (itd-80 phase 4; renamed from

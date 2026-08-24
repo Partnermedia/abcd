@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/intent"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // PromoteRequest is the input to Promote: graduate an issue into an intent.

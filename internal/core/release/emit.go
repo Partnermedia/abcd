@@ -20,9 +20,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/surface"
 )
 
 // The record trees a cut reasons about, repo-relative. The terminal folders the

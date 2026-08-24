@@ -43,7 +43,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // reviewArtefactDir is where the verdict artefact lives; legacyReviewDir is the

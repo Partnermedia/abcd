@@ -135,9 +135,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/core/positioning"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/positioning"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // The check names, as they appear in a finding and in the JSON envelope.

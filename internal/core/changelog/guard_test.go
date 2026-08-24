@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/core/surface"
 )
 
 // The fixture constructors keep the taxonomy table readable.

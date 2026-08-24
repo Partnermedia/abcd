@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/intent"
 )
 
 // promoteFixture captures one issue into a fresh ledger and returns the roots

@@ -59,7 +59,7 @@ require_released_platform() {
 	case "$1-$2" in
 	darwin-amd64 | darwin-arm64 | linux-amd64 | linux-arm64) ;;
 	*)
-		die "there is no released abcd binary for $1-$2. The released platforms are macOS and Linux on amd64 and arm64 — see https://github.com/Partnermedia/abcd/releases for what each release publishes, or build from source with 'go build ./cmd/abcd'."
+		die "there is no released abcd binary for $1-$2. The released platforms are macOS and Linux on amd64 and arm64 — see https://github.com/intentdriven/abcd/releases for what each release publishes, or build from source with 'go build ./cmd/abcd'."
 		;;
 	esac
 }
@@ -69,10 +69,10 @@ require_released_platform() {
 # downgrade the transport that carries both the payload and the manifest that
 # verifies it.
 download() {
-	command -v curl >/dev/null 2>&1 || die "curl is needed to download the release. Install curl, or download the binary by hand from https://github.com/Partnermedia/abcd/releases"
-	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$1" ||
-		die "could not download $1 from the latest release. Check the network, or download it by hand from https://github.com/Partnermedia/abcd/releases"
-	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt" ||
+	command -v curl >/dev/null 2>&1 || die "curl is needed to download the release. Install curl, or download the binary by hand from https://github.com/intentdriven/abcd/releases"
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$1" ||
+		die "could not download $1 from the latest release. Check the network, or download it by hand from https://github.com/intentdriven/abcd/releases"
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt" ||
 		die "could not download checksums.txt from the latest release. Nothing is installed without it."
 }
 

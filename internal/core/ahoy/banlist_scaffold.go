@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/banlist"
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/core/banlist"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // The committed guard's two halves, repo-relative and slash-separated (they are

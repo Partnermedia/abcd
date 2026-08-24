@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxUIBytes bounds the allowlist read.

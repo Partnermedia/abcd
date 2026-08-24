@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/term"
+	"github.com/intentdriven/abcd/internal/term"
 )
 
 // TestAnsiTableParity holds every ANSI table's key set to the palette: a key

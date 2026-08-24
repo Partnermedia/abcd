@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // detectCitations renders the baseline's coverage and age as one line, or "" when

@@ -19,8 +19,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // principlesDirName is the record format's own name for the store, and

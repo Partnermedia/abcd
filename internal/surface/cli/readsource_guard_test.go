@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Partnermedia/abcd/internal/core/ideate"
-	"github.com/Partnermedia/abcd/internal/core/lifeboat"
+	"github.com/intentdriven/abcd/internal/core/ideate"
+	"github.com/intentdriven/abcd/internal/core/lifeboat"
 )
 
 // TestReadSourceRefusesSymlinkAndOversize is the attack-input test for the

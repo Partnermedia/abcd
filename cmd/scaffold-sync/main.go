@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/launch/scaffold"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/core/launch/scaffold"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 func main() {

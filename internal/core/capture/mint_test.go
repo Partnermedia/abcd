@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // setMinter swaps the package mint seam for the test and restores it after.

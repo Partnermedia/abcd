@@ -20,9 +20,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxRecordBodyBytes bounds one record read for the mentions pass.

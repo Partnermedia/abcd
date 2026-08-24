@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // locateHook finds the committed .githooks/pre-commit by walking up from the

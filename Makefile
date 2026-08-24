@@ -8,7 +8,7 @@ VERSION ?=
 # -trimpath (in the build recipe) rewrites absolute source paths to module paths
 # so no local filesystem path is embedded — a smaller, path-clean binary suitable
 # for public distribution.
-LDFLAGS := -s -w$(if $(VERSION), -X github.com/Partnermedia/abcd/internal/core.Version=$(VERSION),)
+LDFLAGS := -s -w$(if $(VERSION), -X github.com/intentdriven/abcd/internal/core.Version=$(VERSION),)
 
 .PHONY: build test vet clean preflight lint-reviews lint-issues record-lint docs-lint smoke \
 	check-attribution scaffold-sync scaffold-sync-check

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ideate"
+	"github.com/intentdriven/abcd/internal/core/ideate"
 )
 
 // ideateRepo lays out the minimum an `ideate record` run needs, so the surface

@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/identity"
+	"github.com/intentdriven/abcd/internal/core/identity"
 )
 
 // Install runs detect + apply over the approved categories. It is idempotent:

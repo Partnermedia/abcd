@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // Coverage is one repository's probe result: which brief sections a lifeboat

@@ -3,8 +3,8 @@ package cli
 //go:generate go run ../../../cmd/abcd-gen-surface
 
 import (
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/surface"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

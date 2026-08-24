@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
 )
 
 // TestGuardHealthLineNeverAssertsWhatItCannotKnow pins the human half of the

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/term"
+	"github.com/intentdriven/abcd/internal/term"
 )
 
 // The terminal side of the livery: the same palette keys mapped onto the

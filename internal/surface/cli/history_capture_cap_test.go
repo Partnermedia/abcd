@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/history"
+	"github.com/intentdriven/abcd/internal/core/history"
 )
 
 // TestHistoryCaptureAcceptsWhatTheHooksAccept is the recovery-path guarantee.

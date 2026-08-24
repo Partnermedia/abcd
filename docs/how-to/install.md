@@ -6,17 +6,17 @@ You can use `abcd` by installing it as a [plugin](#plugin) *(for a compatible ag
 
 This repository is also its own plugin marketplace, so a compatible agent
 harness can install the `/abcd:*` surface — the commands under
-[`commands/`](https://github.com/Partnermedia/abcd/tree/main/commands/), the agents under [`agents/`](https://github.com/Partnermedia/abcd/tree/main/agents/) and the hook
-wiring in [`hooks/`](https://github.com/Partnermedia/abcd/tree/main/hooks/) — straight from it. Add the marketplace, then
+[`commands/`](https://github.com/intentdriven/abcd/tree/main/commands/), the agents under [`agents/`](https://github.com/intentdriven/abcd/tree/main/agents/) and the hook
+wiring in [`hooks/`](https://github.com/intentdriven/abcd/tree/main/hooks/) — straight from it. Add the marketplace, then
 install the plugin:
 
 ```text
-/plugin marketplace add Partnermedia/abcd
+/plugin marketplace add intentdriven/abcd
 /plugin install abcd@abcd-marketplace
 ```
 
 `abcd-marketplace` is the marketplace name declared in
-[`.claude-plugin/`](https://github.com/Partnermedia/abcd/tree/main/.claude-plugin/); `abcd` is the single plugin it lists,
+[`.claude-plugin/`](https://github.com/intentdriven/abcd/tree/main/.claude-plugin/); `abcd` is the single plugin it lists,
 sourced from the repository root. Pull the current state of the marketplace with:
 
 ```text
@@ -32,7 +32,7 @@ The plugin provisions its own binary; this repository commits none. The
 verified artefact is kept once in the plugin's persistent per-plugin download
 cache (`$CLAUDE_PLUGIN_DATA`), and a plugin update — which lands in a fresh,
 empty plugin root — is provisioned by a re-verified copy out of that cache
-rather than a fresh download. [`hooks/bootstrap.sh`](https://github.com/Partnermedia/abcd/blob/main/hooks/bootstrap.sh) runs
+rather than a fresh download. [`hooks/bootstrap.sh`](https://github.com/intentdriven/abcd/blob/main/hooks/bootstrap.sh) runs
 first at session start: when the cache already holds the artefact for the
 resolved release it copies it into the plugin root with no network —
 authenticating the cached hash against the release's published `checksums.txt`
@@ -93,13 +93,13 @@ single-user location.
 ### macOS
 
 ```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; esac; b="abcd-darwin-$arch"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | shasum -a 256 -c -; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+sh -c 'set -eu; cd "$(mktemp -d)"; arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; esac; b="abcd-darwin-$arch"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | shasum -a 256 -c -; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
 ### Linux
 
 ```sh
-sh -c 'set -eu; cd "$(mktemp -d)"; arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-linux-$arch"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/Partnermedia/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | sha256sum -c -; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
+sh -c 'set -eu; cd "$(mktemp -d)"; arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-linux-$arch"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$b"; curl -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | sha256sum -c -; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
 ### Windows
@@ -128,7 +128,7 @@ names it in a gap rather than removing it: abcd does not touch a binary it does
 not own.
 
 Prefer to inspect before running? The command is exactly what it says: two
-downloads from [the latest release](https://github.com/Partnermedia/abcd/releases/latest),
+downloads from [the latest release](https://github.com/intentdriven/abcd/releases/latest),
 a checksum verification, and a copy into a directory you own. You can do the
 same by hand — grab the binary for your platform plus `checksums.txt` from the
 releases page, run `shasum -a 256 -c` (or `sha256sum -c`) against the matching

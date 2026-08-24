@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // stagedSuffix marks a staged raw transcript. The extension is deliberately not

@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // DefaultBlockLocation is where a repo's identity block lands when onboarding

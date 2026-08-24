@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // statusTone maps a lifecycle or status word onto the state palette the pills

@@ -18,10 +18,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
-	"github.com/Partnermedia/abcd/internal/core/launch"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // Finding is one lint violation. File is repo-relative; Line is 1-based (0 when

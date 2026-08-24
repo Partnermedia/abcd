@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/launch"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // MaxChangelogBytes caps the guarded CHANGELOG read. The file is a few hundred

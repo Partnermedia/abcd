@@ -10,12 +10,12 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/capture"
-	"github.com/Partnermedia/abcd/internal/core/changelog"
-	"github.com/Partnermedia/abcd/internal/core/lint"
-	"github.com/Partnermedia/abcd/internal/core/record"
-	"github.com/Partnermedia/abcd/internal/core/recordid"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/record"
+	"github.com/intentdriven/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 var reNative = regexp.MustCompile(`^iss-[0-9]{16}$`)

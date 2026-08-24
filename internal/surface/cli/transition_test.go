@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core"
+	"github.com/intentdriven/abcd/internal/core"
 )
 
 // TestSessionStartReportsVersionTransition proves AC6: when the running binary's

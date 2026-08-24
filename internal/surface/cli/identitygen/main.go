@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Partnermedia/abcd/internal/core/positioning"
-	"github.com/Partnermedia/abcd/internal/surface/cli"
+	"github.com/intentdriven/abcd/internal/core/positioning"
+	"github.com/intentdriven/abcd/internal/surface/cli"
 )
 
 const (

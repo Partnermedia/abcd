@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // repoRoot returns the abcd-cli repo root from this test file's on-disk location

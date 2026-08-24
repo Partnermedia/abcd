@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/Partnermedia/abcd/internal/core/launch/scaffold"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/core/launch/scaffold"
+	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 

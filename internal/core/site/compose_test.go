@@ -13,14 +13,14 @@ func TestForgeLabel(t *testing.T) {
 		names map[string]string
 		want  string
 	}{
-		{"declared forge name wins", "https://github.com/Partnermedia/abcd",
+		{"declared forge name wins", "https://github.com/intentdriven/abcd",
 			map[string]string{"github.com": "GitHub"}, "GitHub"},
 		{"undeclared forge falls back to the handle", "https://example.invalid/fixture/repo",
 			map[string]string{"github.com": "GitHub"}, "fixture/repo"},
-		{"no map at all falls back to the handle", "https://github.com/Partnermedia/abcd",
-			nil, "Partnermedia/abcd"},
-		{"blank declared name falls back to the handle", "https://github.com/Partnermedia/abcd",
-			map[string]string{"github.com": "  "}, "Partnermedia/abcd"},
+		{"no map at all falls back to the handle", "https://github.com/intentdriven/abcd",
+			nil, "intentdriven/abcd"},
+		{"blank declared name falls back to the handle", "https://github.com/intentdriven/abcd",
+			map[string]string{"github.com": "  "}, "intentdriven/abcd"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/vintage"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/vintage"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 func TestVintageFromDogfoodCheckout(t *testing.T) {

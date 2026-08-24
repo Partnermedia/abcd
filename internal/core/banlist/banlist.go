@@ -33,7 +33,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // PrivateRelPath is the gitignored per-machine private banlist, repo-relative. It

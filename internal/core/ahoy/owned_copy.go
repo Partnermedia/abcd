@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // The PATH entry as an abcd-owned regular file (spc-35). A symlink into the

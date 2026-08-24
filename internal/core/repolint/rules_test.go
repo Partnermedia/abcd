@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/repolint"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/repolint"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // --- fixture repo builder ---------------------------------------------------

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
-	"github.com/Partnermedia/abcd/internal/core/banlist"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/core/banlist"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestInstallScaffoldsTheBanlistArtefacts is spc-20 AC5 at the install seam: a repo

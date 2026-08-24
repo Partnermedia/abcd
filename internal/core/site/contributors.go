@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // maxShortlogBytes bounds the authorship reads.
