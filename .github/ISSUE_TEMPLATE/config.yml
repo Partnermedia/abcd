@@ -2,5 +2,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability
-    url: https://github.com/Partnermedia/abcd/security/advisories/new
+    url: https://github.com/intentdriven/abcd/security/advisories/new
     about: Private vulnerability reporting — never a public issue.

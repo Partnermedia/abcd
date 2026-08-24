@@ -41,9 +41,9 @@ data_dir="${CLAUDE_PLUGIN_DATA:-}"
 # redirect downgrade), so the seam is REMOVED rather than narrowed a third time.
 # The tests rewrite these two literals in a throwaway COPY of this file; nothing
 # in the shipped script consults the environment to decide where to fetch from.
-repo_url="https://github.com/Partnermedia/abcd"
+repo_url="https://github.com/intentdriven/abcd"
 releases_url="$repo_url/releases"
-api_url="https://api.github.com/repos/Partnermedia/abcd"
+api_url="https://api.github.com/repos/intentdriven/abcd"
 
 # Every fetch below is HTTPS-only, redirects included, unconditionally: there is
 # no toggle and no code path that clears it. Without the pin a redirect could
