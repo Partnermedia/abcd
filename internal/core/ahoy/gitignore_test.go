@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/banlist"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/banlist"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestVisibilityEntriesMatchBrief pins the abcd-managed entry set per visibility

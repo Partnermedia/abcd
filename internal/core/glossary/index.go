@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 const (

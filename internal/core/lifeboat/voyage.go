@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // rootSHARe is the operator-store key: a lowercase hex commit SHA, 40 chars for

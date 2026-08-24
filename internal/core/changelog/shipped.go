@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/frontmatter"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // The two record families a release is cut from. Directory-as-truth is the

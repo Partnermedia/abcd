@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // gitRepoNoStore builds an isolated git repo with one commit and a hermetic HOME

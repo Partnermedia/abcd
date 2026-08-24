@@ -2,7 +2,7 @@
 
 User-facing documentation, organised by [Diátaxis](https://diataxis.fr/) — each page
 is exactly one type. Development records (brief, intents, ADRs, plans, research) live
-under [`../.abcd/development/`](https://github.com/Partnermedia/abcd/tree/main/.abcd/development/), not here.
+under [`../.abcd/development/`](https://github.com/intentdriven/abcd/tree/main/.abcd/development/), not here.
 
 | Directory | Diátaxis type | For |
 |-----------|---------------|-----|

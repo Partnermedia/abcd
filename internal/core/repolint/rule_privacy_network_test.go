@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/repolint"
+	"github.com/intentdriven/abcd/internal/core/repolint"
 )
 
 // Flaggable specimens are assembled at runtime (see the scanner's network

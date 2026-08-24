@@ -13,7 +13,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // provenance.go — the provenance/licence substrate (09-provenance-substrate.md):

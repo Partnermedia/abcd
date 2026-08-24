@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // TestTransitionSerializesOnLedgerLock (iss-71 C4) proves a status transition

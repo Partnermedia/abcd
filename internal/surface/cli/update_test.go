@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/update"
+	"github.com/intentdriven/abcd/internal/core/update"
 )
 
 // runUpdateHermetic drives `abcd update` in a hermetic PATH/HOME with the

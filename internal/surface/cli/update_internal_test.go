@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/update"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/update"
 )
 
 // TestRefusalReportRedactsHomeInTargetPath pins that the dispatch-refusal

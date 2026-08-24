@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/core/intent"
-	"github.com/Partnermedia/abcd/internal/core/spec"
+	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
 // This file is the shared record-id existence probe (spc-25): both

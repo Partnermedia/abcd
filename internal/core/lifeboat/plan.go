@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
 )
 
 // PlannedFile is one file the packer would write into a lifeboat, produced

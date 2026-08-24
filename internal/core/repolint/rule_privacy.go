@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // maxScanBytes caps how much of a tracked file privacy-hygiene will read. A

@@ -5,10 +5,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 	"sort"
 
-	"github.com/Partnermedia/abcd/internal/core/identity"
+	"github.com/intentdriven/abcd/internal/core/identity"
 )
 
 // Enumerations for config-value validation.

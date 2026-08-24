@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 const reviewsDir = ".abcd/.work.local/reviews"

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/positioning"
-	"github.com/Partnermedia/abcd/internal/term"
+	"github.com/intentdriven/abcd/internal/core/positioning"
+	"github.com/intentdriven/abcd/internal/term"
 )
 
 func colourEnv(k string) string {

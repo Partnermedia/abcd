@@ -12,7 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // IngestLessons validates host-produced lesson JSON against a PACKED lifeboat and

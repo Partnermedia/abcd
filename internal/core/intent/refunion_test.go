@@ -3,7 +3,7 @@ package intent
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestCreateFromTextMintsPastACommittedBranch reproduces the parallel-branch

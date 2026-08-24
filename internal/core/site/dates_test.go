@@ -3,7 +3,7 @@ package site
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestLoadHistoryDatesNonASCIIPath proves the git history walk reads paths

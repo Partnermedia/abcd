@@ -1,4 +1,4 @@
-module github.com/Partnermedia/abcd
+module github.com/intentdriven/abcd
 
 go 1.26.7
 

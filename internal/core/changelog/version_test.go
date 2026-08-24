@@ -3,7 +3,7 @@ package changelog
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/core/launch"
 )
 
 func mustSemver(t *testing.T, v string) launch.Semver {

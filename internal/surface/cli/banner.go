@@ -13,9 +13,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/Partnermedia/abcd/internal/core"
-	"github.com/Partnermedia/abcd/internal/livery"
-	"github.com/Partnermedia/abcd/internal/term"
+	"github.com/intentdriven/abcd/internal/core"
+	"github.com/intentdriven/abcd/internal/livery"
+	"github.com/intentdriven/abcd/internal/term"
 )
 
 // bannerTTY is the emission seam: under test cmd.OutOrStdout() is a buffer,

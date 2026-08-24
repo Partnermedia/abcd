@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // now is the clock every refresh test runs against, so a dated record is a

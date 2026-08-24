@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/surface/cli"
+	"github.com/intentdriven/abcd/internal/surface/cli"
 	"github.com/spf13/cobra"
 )
 

@@ -3,7 +3,7 @@ package repolint
 import (
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // conventionsRouter checks that an AGENTS.md conventions router is present at the

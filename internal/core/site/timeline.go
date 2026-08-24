@@ -22,7 +22,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Partnermedia/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/changelog"
 )
 
 // The drawing's fixed geometry, in SVG user units.

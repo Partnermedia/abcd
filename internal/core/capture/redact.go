@@ -3,7 +3,7 @@ package capture
 import (
 	"fmt"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 // redactLedgerText sanitises prose bound for the committed issue ledger through

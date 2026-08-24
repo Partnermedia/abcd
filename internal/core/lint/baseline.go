@@ -28,8 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // BaselineSchemaVersion is the only baseline schema this build understands. A

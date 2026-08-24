@@ -1,6 +1,6 @@
 package vintage
 
-import "github.com/Partnermedia/abcd/internal/gitutil"
+import "github.com/intentdriven/abcd/internal/gitutil"
 
 // checkoutTipProvider is the dogfood disk provider: the expected vintage is the
 // tip of the source checkout the binary was built from.

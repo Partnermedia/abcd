@@ -32,9 +32,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Partnermedia/abcd/internal/urlguard"
+	"github.com/intentdriven/abcd/internal/urlguard"
 
-	"github.com/Partnermedia/abcd/internal/termsafe"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // maxRedirects bounds the hops one citation may take before the chain is called

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/guard"
+	"github.com/intentdriven/abcd/internal/core/guard"
 )
 
 // preToolUse builds the host's PreToolUse payload for a Bash tool call. The

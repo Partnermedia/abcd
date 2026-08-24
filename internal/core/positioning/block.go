@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxBlockFileBytes caps a guarded read of the block's host file. The block

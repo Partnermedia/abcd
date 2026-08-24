@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/core/ideate"
+	"github.com/intentdriven/abcd/internal/core/ideate"
 	"github.com/spf13/cobra"
 )
 

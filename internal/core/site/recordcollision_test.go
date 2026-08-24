@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
 // TestBuildRecordExportRefusesIDCollision proves a frontmatter-free store file

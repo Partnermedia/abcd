@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/repolint"
+	"github.com/intentdriven/abcd/internal/core/repolint"
 )
 
 // TestRenderAuditHumanSanitizesUntrustedFields proves the human audit report

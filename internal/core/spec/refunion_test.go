@@ -3,7 +3,7 @@ package spec
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestCreateMintsPastACommittedBranch reproduces the parallel-branch id-minting

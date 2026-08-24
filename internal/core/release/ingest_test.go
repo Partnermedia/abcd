@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // baseChangelog is the post-cutover state outcome 7 leaves behind: an EMPTY

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/lifeboat"
+	"github.com/intentdriven/abcd/internal/core/lifeboat"
 	"github.com/spf13/cobra"
 )
 

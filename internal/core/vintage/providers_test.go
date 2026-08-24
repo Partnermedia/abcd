@@ -3,7 +3,7 @@ package vintage
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 func TestCheckoutTipProvider(t *testing.T) {

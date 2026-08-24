@@ -6,5 +6,5 @@ abstract: "Agent-Based Configuration for Development — a host-agnostic configu
 authors:
   - family-names: "Reppel"
     given-names: "Alex"
-repository-code: "https://github.com/Partnermedia/abcd"
+repository-code: "https://github.com/intentdriven/abcd"
 license: MIT

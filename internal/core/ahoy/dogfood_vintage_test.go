@@ -3,8 +3,8 @@ package ahoy
 import (
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/vintage"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/vintage"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 func TestDogfoodStalenessFrom(t *testing.T) {

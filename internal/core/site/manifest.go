@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // ManifestRelPath is the committed composition manifest.

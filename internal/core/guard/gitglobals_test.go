@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gittest"
 	"slices"
 	"strings"
 	"testing"

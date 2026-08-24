@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/launch"
-	"github.com/Partnermedia/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // shipRenderableRepo is shipReadyRepo plus the two config artefacts a payload

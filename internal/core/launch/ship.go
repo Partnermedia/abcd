@@ -4,7 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/adapter/scanner"
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 // ShipRequest is the input to a ship run.

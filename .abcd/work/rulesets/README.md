@@ -17,7 +17,7 @@ documents has a source of truth in the tree rather than only a web console.
 Refresh after any settings change (ids: 19969675, 21045110):
 
 ```sh
-gh api repos/Partnermedia/abcd/rulesets/<id> \
+gh api repos/intentdriven/abcd/rulesets/<id> \
   | jq -S '{name, target, enforcement, conditions, bypass_actors, rules}'
 ```
 

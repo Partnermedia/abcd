@@ -26,8 +26,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // maxProvenanceBytes caps the _provenance.json read (its own manifest header).

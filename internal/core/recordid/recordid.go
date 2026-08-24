@@ -36,7 +36,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // refScanMaxBytes caps the stdout buffered from a single git query. A hostile or

@@ -3,8 +3,8 @@ package repolint
 import (
 	"path/filepath"
 
-	"github.com/Partnermedia/abcd/internal/fsutil"
-	"github.com/Partnermedia/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // decisionDurability checks that architectural decisions are recorded where they

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Partnermedia/abcd/internal/core/ahoy"
-	"github.com/Partnermedia/abcd/internal/core/capture"
-	"github.com/Partnermedia/abcd/internal/core/intent"
-	"github.com/Partnermedia/abcd/internal/core/spec"
+	"github.com/intentdriven/abcd/internal/core/ahoy"
+	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
 // ---------------------------------------------------------------------------
