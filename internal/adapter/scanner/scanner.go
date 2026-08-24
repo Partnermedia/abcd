@@ -2,13 +2,17 @@ package scanner
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"unicode/utf8"
+
+	"github.com/Partnermedia/abcd/internal/fsutil"
 )
 
 // BundleFile is the minimal descriptor ScanBundle needs. It is defined here
@@ -83,6 +87,12 @@ var (
 	repoConfigRelPath    = filepath.Join(".abcd", "config", "pii.json")
 )
 
+// maxScannerConfigBytes caps the per-repo pii.json override (trust boundary).
+// It matches the cap guard.Load applies to its own committed override: both are
+// short, hand-written JSON documents, and the cap exists to bound a planted file
+// rather than to fit a real one.
+const maxScannerConfigBytes = 256 * 1024
+
 // New builds a Scanner for repoRoot: it starts from the built-in secret set and
 // identity floors, merges the per-repo .abcd/config/pii.json override when
 // present (enforcing the severity floor), and probes identity. If the per-repo
@@ -99,14 +109,44 @@ func New(repoRoot string) (*Scanner, error) {
 		skipFragments:  append([]string(nil), defaultSkipFragments...),
 	}
 
+	// The override lives in the repo working tree, so untrusted content can put
+	// something that is not a regular file at this path — and New is reached
+	// automatically by the SessionEnd hook's history capture, which holds the
+	// history repo lock across the call. A bare os.ReadFile here blocks forever
+	// on a FIFO and reads unbounded through a symlink to an endless device,
+	// wedging transcript capture for the repo (iss-202). Every sibling
+	// trust-boundary config reader — guard.Load, the banlist private store,
+	// lint's config — goes through fsutil.ReadGuarded; this one is now no
+	// different.
+	//
+	// The ancestor check comes first because O_NOFOLLOW applies to the final
+	// path component only: a swapped .abcd directory redirects the read out of
+	// the tree without the leaf guard ever seeing a symlink. guard.Load makes
+	// the same two-step check for the same reason.
+	if di, err := os.Lstat(filepath.Join(repoRoot, ".abcd")); err == nil && di.Mode()&os.ModeSymlink != 0 {
+		s.unavailable = true
+		s.unavailReason = "per-repo scanner config unreadable: .abcd is a symlink (refusing to follow)"
+		return s, nil
+	}
 	cfgPath := filepath.Join(repoRoot, repoConfigRelPath)
-	data, err := os.ReadFile(cfgPath)
+	data, err := fsutil.ReadGuarded(cfgPath, maxScannerConfigBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return s, nil // no override — built-in defaults stand
 		}
+		// Every remaining failure is fail-closed, but the reason is specific:
+		// a degraded scanner that cannot say WHY is the defect iss-203 tracks.
+		switch {
+		case errors.Is(err, syscall.ELOOP):
+			s.unavailReason = "per-repo scanner config is a symlink (refusing to follow): " + repoConfigRelPath
+		case errors.Is(err, fsutil.ErrNotRegular):
+			s.unavailReason = "per-repo scanner config is not a regular file: " + repoConfigRelPath
+		case errors.Is(err, fsutil.ErrTooBig):
+			s.unavailReason = "per-repo scanner config exceeds the " + strconv.Itoa(maxScannerConfigBytes) + "-byte cap: " + repoConfigRelPath
+		default:
+			s.unavailReason = "per-repo scanner config unreadable: " + repoConfigRelPath
+		}
 		s.unavailable = true
-		s.unavailReason = "per-repo scanner config unreadable: " + repoConfigRelPath
 		return s, nil
 	}
 	var cfg Config

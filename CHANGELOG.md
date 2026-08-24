@@ -12,6 +12,23 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **A planted per-repo scanner config can no longer hang or exhaust the process,
+  and it was reachable with no human in the loop.** `scanner.New` read
+  `.abcd/config/pii.json` with a bare `os.ReadFile` — no `O_NOFOLLOW`, no size
+  cap, no regular-file check — while every sibling trust-boundary config reader
+  (`guard.Load`, the banlist private store, lint's config) already went through
+  `fsutil.ReadGuarded`. The path sits in the working tree, so a FIFO or a
+  symlink to an endless device is plantable by a hostile clone or a pull
+  request as git mode 120000, needing no local write access; the SessionEnd
+  hook's history capture then builds a scanner automatically and holds the
+  history repo lock across the read, so a hang wedged transcript capture for
+  that repository rather than one command. The read is now guarded and capped,
+  and a symlinked `.abcd` ancestor is refused before the leaf is touched,
+  because `O_NOFOLLOW` covers the final component only. The scanner still fails
+  closed exactly as before, but now says which of the four refusals it hit
+  instead of one flat "unreadable". Same bug class as iss-97, fixed once for
+  `ahoy.Detect` and left standing here (iss-202).
+
 - **The 0.6.3 claim that the release chain's site deploy receives its
   credentials was wrong, and the record now says so.** `secrets: inherit` was
   necessary and not sufficient: a called workflow's job does not resolve
