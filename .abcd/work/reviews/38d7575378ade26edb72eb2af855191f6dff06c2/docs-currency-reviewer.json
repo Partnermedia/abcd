@@ -1,0 +1,30 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "38d7575378ade26edb72eb2af855191f6dff06c2"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-24T18:38:41Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.3"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [],
+  "_reviewProvenance": "PROMOTE with ZERO findings, reached on the fourth run of this gate against this cut. The three refused predecessors are part of the provenance and are recorded here rather than discarded. Run 1 (713c8044) HOLD, 7 findings: iss-98's line credited `evidence/what-didnt` with covering abandonment by deletion when the graveyard adapter does that and what-didnt grounds on reverts alone; iss-98 dated v0.6.2 against a v0.2.0 mechanism; iss-222 dated v0.4.1, the release that shipped the DEFECT, against a v0.5.0 fix (b4f42079); and iss-2608231025198888 claimed a blocking residual refuses the write, a fail-closed guarantee the code does not provide and which that record's own resolution field asserted (corrected in 00c74760). Run 2 (b04442d7) HOLD, 1: `make preflight` gained a fourth prerequisite when 2852c095 added lint-issues, untagged and so this release's own work, and that commit updated AGENTS.md alone while the install guide, CONTRIBUTING.md and the Makefile's own comment still enumerated three gates. Run 3 (19a32c81) HOLD, 2: the open-questions line said the marker scan reads 'tracked' files when it consults git nowhere, and named three markers where five are recognised; the same run measured the artefacts (11.50-12.85 MiB) and ruled the '~11 MB' figure NOT false, so it stands unchanged. This run verified the corrected line by execution rather than reading: a throwaway repository carrying a tracked `TODO:`, an untracked `FIXME(`, a gitignored bare `XXX`, a bare `HACK`, a delimiter-less `TODO` and a node_modules `TODO` reported 4 work markers across 4 files, citing the untracked and gitignored files, skipping node_modules, and skipping the bare `TODO` \u2014 which confirms both 'walks the repository's files' and the five-marker set with its delimiter rule. It also ran `abcd docs lint` and `--release-gate` (0 blockers, one standing advisory on the generated commands.md), record-lint (0 blockers), the full internal and cmd test suites including TestInstallGuideDocumentsTheInstallAndUpdatePath, and re-ran `go generate ./internal/surface/cli` to prove docs/reference/cli/commands.md regenerates byte-identically. Four findings are captured rather than fixed and were confirmed unchanged and not worsened: iss-2608241740093740 (commands/launch.md presents the release-day site deploy as automatic when it fails through the release chain, and says 'Three failures' above four bullets), iss-2608241740100762 (docs/explanation/process.md calls the minted id collision-proof where mint.go provides a ~1e-4 same-second residue), iss-2608241115201044 (hooks.json SessionStart exits non-zero with notices), and iss-2608241828356533 (the marker scan reads untracked and gitignored files, so a packed lifeboat can cite work kept out of git \u2014 a behaviour defect the changelog no longer misdescribes). Not covered: dated-record directories, CHANGELOG sections below 0.6.3, network-touching paths (`version --check`, `update`, `docs cite refresh`), the site build and deploy chain end to end, and the plugin install flow inside a live harness. The judge is the release session's pinned harness model."
+}
