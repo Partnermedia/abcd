@@ -38,8 +38,8 @@ const (
 // bootstrapFixtureScript) rather than driving a redirection seam that would
 // then also exist in production.
 const (
-	bootstrapReleaseOrigin = "https://github.com/Partnermedia/abcd"
-	bootstrapAPIOrigin     = "https://api.github.com/repos/Partnermedia/abcd"
+	bootstrapReleaseOrigin = "https://github.com/intentdriven/abcd"
+	bootstrapAPIOrigin     = "https://api.github.com/repos/intentdriven/abcd"
 )
 
 // bootstrapTrustScrub is the shipped script's line that removes curl's CA-override
@@ -1327,7 +1327,7 @@ func TestBootstrapFetchOriginsAreConstants(t *testing.T) {
 // The fragments below are not the shipped script and never run; they are the
 // shapes the allowlist must and must not report, fed to it directly.
 func TestBootstrapEnvAllowlistTaintsReferenceChains(t *testing.T) {
-	const origin = `"https://github.com/Partnermedia/abcd"`
+	const origin = `"https://github.com/intentdriven/abcd"`
 	cases := []struct {
 		name string
 		body string
@@ -1404,9 +1404,9 @@ func TestBootstrapEnvAllowlistTaintsReferenceChains(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		const constant = "repo_url=" + `"https://github.com/Partnermedia/abcd"`
+		const constant = "repo_url=" + `"https://github.com/intentdriven/abcd"`
 		planted := strings.Replace(string(src), constant,
-			"gh_default="+`"https://github.com/Partnermedia/abcd"`+"\nrepo_url=\"${GH_MIRROR:-$gh_default}\"\nGH_MIRROR=\"$repo_url\"", 1)
+			"gh_default="+`"https://github.com/intentdriven/abcd"`+"\nrepo_url=\"${GH_MIRROR:-$gh_default}\"\nGH_MIRROR=\"$repo_url\"", 1)
 		if planted == string(src) {
 			t.Fatalf("the planted bypass could not be spliced in: %q no longer appears in the script, so this detector is testing nothing", constant)
 		}
