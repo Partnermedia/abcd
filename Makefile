@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/intentdriven/abcd/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews lint-issues record-lint docs-lint smoke \
+.PHONY: build test vet clean preflight lint-reviews lint-issues record-lint docs-lint site-render smoke \
 	check-attribution scaffold-sync scaffold-sync-check
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
