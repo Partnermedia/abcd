@@ -10,6 +10,20 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 0.6.3 claim that the release chain's site deploy receives its
+  credentials was wrong, and the record now says so.** `secrets: inherit` was
+  necessary and not sufficient: a called workflow's job does not resolve
+  environment secrets even when it declares the environment, because `inherit`
+  conveys only the caller's secrets and a job that calls a reusable workflow
+  may not declare an environment of its own. Established by running it rather
+  than reading it — the identical deploy job fails through the release chain's
+  call and succeeds through `workflow_dispatch` on `site.yml`. The site is
+  deployed by that dispatch until the underlying choice is made, and
+  `/abcd:launch` documents the one command. iss-2608231912566984 is reopened
+  with the evidence and the three candidate fixes, none of them taken.
+
 ## [0.6.3] - 2026-08-23
 
 ### Fixed

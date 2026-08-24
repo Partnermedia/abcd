@@ -465,14 +465,19 @@ jobs:
       # Explicit, never defaulted: site.yml refuses any other value, so its production
       # path can only be reached by a caller that asked for it by name.
       mode: production
-    # A called workflow receives NO secrets unless the caller passes them. Declaring
-    # `environment:` on the callee's job is not enough: the environment gates the job
-    # and its secrets still resolve empty, so the production deploy reached wrangler
-    # with no CLOUDFLARE_API_TOKEN and failed at the last step of a release whose
-    # binaries were already published (iss-2608231912566984). The sibling jobs that
-    # reach production through this same call pass because they reference no secret —
-    # site.yml's render job says so in as many words. The preview path never hit it:
-    # it is triggered by push rather than called, so its secrets resolve normally.
+    # NOTE: this does NOT make the production site deploy work, and the record of
+    # that is iss-2608231912566984 (reopened). A called workflow's job does not
+    # resolve ENVIRONMENT secrets even when it declares the environment and the
+    # caller inherits: `inherit` conveys the caller's secrets, a job that uses
+    # `uses:` may not declare `environment:`, and this repository holds no
+    # repository-scoped secrets — so the inherited set is empty. Proven by running
+    # it rather than by reading it: the identical deploy job fails through this call
+    # (v0.6.2, v0.6.3) and succeeds through `workflow_dispatch` on site.yml, which
+    # is the documented emergency redeploy and is production by definition.
+    #
+    # The line is kept because it is harmless and plausibly necessary in any fix
+    # that lands, not because it is sufficient. Until iss-2608231912566984 is
+    # decided, the site is deployed by dispatch after a release.
     #
     # `inherit` rather than a named `secrets:` block because the named form cannot
     # work here: a job that calls a reusable workflow may not declare `environment:`,
