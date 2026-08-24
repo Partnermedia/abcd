@@ -1,9 +1,8 @@
 # Shipped
 
-Capabilities built in Go. This directory is empty until the Go build ships
-capabilities into it (Phase 1 onward).
+Capabilities built in Go, moved here as their linked specs close.
 
-An intent moves here when its linked spec closes and `intent-fidelity-reviewer`
+An intent moves here when its linked spec closes and `intent-auditor`
 has run: each file's "Audit Notes" section carries the per-criterion verdicts and
 three-bucket prose audit comparing delivered reality to the press release.
 Bundle members move here together when their shared spec closes.
