@@ -337,6 +337,31 @@ jobs:
       - name: Reviews-charter discipline (RD001-RD003)
         run: bash scripts/check-reviews.sh
 
+      # The cases run before the gate, deliberately. They prove the gate can
+      # refuse a violating fixture; a gate whose rules have never been watched
+      # fail is an enforcement claim with nothing behind it, and its green is
+      # worse than no check at all (iss-2608230847432286).
+      - name: Issue-resolution gate can fail (cases)
+        run: bash scripts/check-issue-resolution-cases.sh
+
+      # RS003 over the whole ledger: every resolved_by.commit stamp still
+      # resolves and is still reachable. This is what notices the day a squash
+      # or rebase merge rewrites a cited branch sha out of existence.
+      - name: Issue-resolution stamps are reachable (RS003)
+        run: bash scripts/check-issue-resolution.sh ledger HEAD
+
+      # RS001/RS002 over the pull request's own range. On a push to main the
+      # base is the previous tip, so the range is the merge that just landed.
+      - name: Declared resolutions move the record (RS001/RS002)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "issue-resolution: no usable base ref for this event — range checks skipped, RS003 above still ran."
+            exit 0
+          fi
+          bash scripts/check-issue-resolution.sh commits "$BASE_SHA" HEAD
+
   # Self-discovering smoke harness (evals/): builds the binary, walks the Cobra
   # command tree in-process, and runs every command's --help plus the read-only
   # verbs against the built binary. Catches a command that compiles but panics when

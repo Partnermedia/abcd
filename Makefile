@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/Partnermedia/abcd/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews record-lint docs-lint smoke \
+.PHONY: build test vet clean preflight lint-reviews lint-issues record-lint docs-lint smoke \
 	check-attribution scaffold-sync scaffold-sync-check
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
@@ -57,6 +57,19 @@ check-attribution:
 record-lint:
 	@go run ./cmd/record-lint
 
+# Deterministic issue-resolution gate (iss-2608241347321757). RS001: a
+# `Resolves: iss-N` trailer must be accompanied by that record leaving open/ in
+# the same change, so resolution lands INSIDE the fix and no post-merge step
+# exists to forget. RS002/RS003: a resolved_by.commit sha must name a commit
+# that is actually reachable — `--commit` is shape-checked only, and the repo
+# allows squash and rebase merges, either of which rewrites a cited branch sha
+# out of existence. The cases run first: a gate nobody has watched fail is an
+# enforcement claim with no evidence behind it.
+lint-issues:
+	@bash scripts/check-issue-resolution-cases.sh
+	@bash scripts/check-issue-resolution.sh ledger HEAD
+	@bash scripts/check-issue-resolution.sh commits origin/main HEAD
+
 # Deterministic docs-currency gate (itd-60): the same internal/core/lint engine,
 # driven over docs/ and the repo root via the transport-agnostic `abcd docs lint`
 # verb. Blocking: change-narration in a doc body, a broken relative link, or a
@@ -86,7 +99,7 @@ scaffold-sync-check:
 # Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
 # separately before pushing. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews record-lint docs-lint
+preflight: lint-reviews lint-issues record-lint docs-lint
 	go build ./...
 	go vet ./...
 	go test ./...
