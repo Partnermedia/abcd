@@ -151,13 +151,25 @@ irreversible; guessing downward costs nothing.**
 
 ## Definition of done
 
-- `make preflight` is clean — the three lint gates (`lint-reviews`,
-  `record-lint`, `docs-lint`) plus `go build ./...`, `go vet ./...`,
-  `go test ./...`, and `go test -race ./internal/...`.
+- `make preflight` is clean — the four lint gates (`lint-reviews`,
+  `lint-issues`, `record-lint`, `docs-lint`) plus `go build ./...`,
+  `go vet ./...`, `go test ./...`, and `go test -race ./internal/...`.
 - `gofmt -l .` reports nothing. The format gate is CI's own step, outside
   `make preflight`, so run it before pushing.
 - Every new behaviour has a test watched fail before the change and pass after.
 - A CHANGELOG entry accompanies any user-facing change.
+- **A change that fixes a captured issue resolves it in the same change**, and
+  says so with a `Resolves: iss-N` trailer. `lint-issues` (RS001) refuses a
+  trailer whose record does not leave `.abcd/work/issues/open/` in the same
+  diff. Resolution is deliberately not a post-merge step: a step that happens
+  after the merge is the one that gets forgotten, and a fixed-but-open issue
+  leaves no marker to find it by. Resolving without a trailer stays legal — a
+  stale issue closed on its own merits has no fixing commit to name.
+- **A `resolved_by.commit` stamp names a commit that is actually reachable.**
+  `abcd capture resolve --commit` is shape-checked only, so a wrong sha reads
+  exactly like a right one; RS002/RS003 check reachability instead. Note the
+  repository allows merge, squash and rebase merges, and the last two rewrite a
+  cited branch sha out of existence — RS003 is what notices.
 
 ## Attribution and acknowledgements
 

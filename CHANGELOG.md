@@ -12,6 +12,25 @@ called out in a **Breaking** section.
 
 ### Fixed
 
+- **An issue that gets fixed now gets closed, because a check can fail when it
+  does not.** `abcd capture resolve` worked and nothing compelled it, so a fixed
+  issue sat in `open/` until someone remembered — and a forgotten one left no
+  marker to find it by, which is why the drift had no denominator: 328 records
+  in `resolved/` against 78 carrying `resolved_by`. The mechanic forcing the
+  forgetting was `resolved_by.commit`, the one field whose value is unknowable
+  while the record is being edited, because the record and the fix are the same
+  change. That deferred stamping past the merge, and a deferred step is the one
+  that gets dropped. `make lint-issues` (also a CI step) closes it: a
+  `Resolves: iss-N` commit trailer must be accompanied by that record leaving
+  `open/` in the same diff, so resolution lands inside the fix and no
+  post-merge step exists to forget. Two further rules check that a
+  `resolved_by.commit` stamp names a commit that is actually reachable —
+  `--commit` is shape-checked only (`^[0-9a-f]{7,64}$`), so a sha that never
+  existed reads exactly like a good one, and because this repository allows
+  squash and rebase merges as well as merge commits, a cited branch sha can be
+  rewritten out of existence with nothing noticing. All 76 stamps in the ledger
+  were verified reachable when this landed (iss-2608241347321757).
+
 - **A planted per-repo scanner config can no longer hang or exhaust the process,
   and it was reachable with no human in the loop.** `scanner.New` read
   `.abcd/config/pii.json` with a bare `os.ReadFile` — no `O_NOFOLLOW`, no size
