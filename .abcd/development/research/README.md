@@ -9,6 +9,7 @@ the ADR are where the forward-looking record and the ratified choice live.
 |---|---|
 | [`notes/`](notes) | Dated and spec-scoped research notes — SOTA surveys, audit syntheses, investigation write-ups |
 | [`prompting/`](prompting) | Prompt R&D — the general best-practices baseline and per-agent prompt drafts |
+| [`data/`](data) | Measured corpora kept as data — detector output that grounds a note or an intent, and would otherwise survive only in ephemeral storage |
 | [`abcdev-site/`](abcdev-site) | The abcdev.app website work cluster — the investigation plan, the clickable prototype, the build prompt (adr-47/adr-48) |
 | `_references.md` | Registry of external sources cited across the research |
 | `legacy-harvest.md` | What carried over from the v0 scaffolding into the plugin |

@@ -1,0 +1,896 @@
+{
+  "detector": "iss35-brief-surface-crosscheck",
+  "run_date": "2026-08-23",
+  "content_commit": "7a4ee0030a9586071d18b4f3fe34ff833c0bbb3d",
+  "manifest_hash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "tier": "full",
+  "checkers": 28,
+  "note": "Empirical drift corpus. Detector output only: no verdict, no dispositions. Preserved out of ephemeral task storage; promote to a dated research note if it earns a durable home.",
+  "result": {
+    "count": 125,
+    "byClass": {
+      "false-claim": 58,
+      "undocumented-surface": 38,
+      "stale-count": 15,
+      "criterion-violation": 7,
+      "fictional-layout": 7
+    },
+    "discrepancies": [
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:361",
+        "claim": "Install step 9 describes the PATH entry as a symlink: \"transparent prompt: 'Install `abcd` symlink to `~/.local/bin/abcd`?' ... If accepted AND the target is absent or already points at this plugin -> write it, provided the binary it would point at exists\". The `config-change` category table (line 238) likewise names the example \"PATH symlink\".",
+        "reality": "The shipped default PATH entry is an abcd-owned regular-file COPY of the verified cached release binary, not a symlink. internal/core/ahoy/apply.go:734 `stepSymlink installs the PATH entry: an abcd-owned regular-file copy of the...`; installOwnedEntry (apply.go:774) writes the copy from the persistent data-dir cache plus a provenance record, and refuses/degrades to a symlink only when no verified cached artefact exists (apply.go:790). Ownership is established by the provenance record (`~/.abcd/path-entry`), not by \"points at this plugin\". detect.go carries binTargetOwnedCopy alongside binTargetOwnedSymlink; the shipped `abcd ahoy uninstall --help` reads \"Remove the marker block, abcd's owned PATH copy, and its provenance record\". The brief never mentions the copy, the cache, or the provenance record.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:177",
+        "claim": "Detection step 8 enumerates the PATH-entry outcomes: `symlink.dangling`, `path.bin_dir_not_on_path`, `symlink.shadowed`, plus a foreign/absent binary.",
+        "reality": "The binary also emits `symlink.legacy` (internal/core/ahoy/detect.go:467), Required+Resolvable, ConfigChange/machine: \"PATH entry is a symlink into the plugin root ... ahoy install replaces it with an abcd-owned copy of the verified release binary, which survives updates.\" This migration gap \u2014 the mechanism by which existing symlink installs become copies \u2014 appears nowhere in the chapter.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:61",
+        "claim": "The `~/.abcd/` tree block is presented as the complete user-scope layout: `history/` (shipped), `config.json` (a later phase), `memory/` (a later phase). Line 90 restates it as \"Everything genuinely machine-wide \u2014 the `history/` store, plus machine config and user memory in a later phase \u2014 lives under `~/.abcd/`\".",
+        "reality": "Two further user-scope entries ship today and are absent from the tree: `~/.abcd/path-entry`, the PATH-copy provenance record written by `ahoy install` and removed by `ahoy uninstall` (internal/core/ahoy/owned_copy.go:58, `filepath.Join(home, \".abcd\", \"path-entry\")`), and `~/.abcd/voyage/<root-sha>/disembark/history.jsonl`, the disembark voyage ledger (internal/core/lifeboat/voyage.go:59-78). Neither is marked staged or later-phase anywhere.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:200",
+        "claim": "\"Every event command is a self-provisioning shim, not a plain binary call: the non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root binary is missing (throttled by a `.bootstrap.attempt` marker within a 10-minute window), then fall back to a PATH-resolved `abcd` before failing loudly.\"",
+        "reality": "The shipped hooks/hooks.json SessionEnd command (`abcd hook session-end`) is a non-SessionStart shim that does NOT attempt bootstrap.sh and writes no `.bootstrap.attempt` marker: it tests `$r/abcd`, then falls straight through to `command -v abcd`, then errors. Only UserPromptSubmit, PreToolUse and PreCompact carry the bootstrap attempt and the 10-minute throttle.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:48",
+        "claim": "The status board is enumerated three times as exactly: folder kind, plugin-root status, root SHA, binary vintage/staleness, citations on a managed repo, gap count, guard health, and the banlist block (also at line 110 and in the acceptance criterion at line 450).",
+        "reality": "The shipped bare-`abcd ahoy` renderer prints an additional `install:` line between `root sha` and `vintage`, carrying `signals.install_mode` (`dev (tip build)` / `pinned`, optionally suffixed ` (shadowed on PATH)`) \u2014 internal/surface/cli/cli.go:1773-1775. commands/ahoy.md documents it and instructs the agent to report it; the brief's three enumerations omit it entirely.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:125",
+        "claim": "\"The detection pass ... Steps, run in parallel where independent:\" followed by an exhaustive numbered list, steps 0 through 11 (folder classification, plugin root, adapter probe, `.abcd/` skeleton, identity, history-store wiring, visibility, marker drift, PATH entry, hook manifest, version, name-banlist).",
+        "reality": "Detection also runs a guard-hook health check that no numbered step describes: internal/core/ahoy/detect.go:85-87 calls `detectGuardHealth` and appends `detectGuardGaps`, producing three shipped gaps (`guard.hook_missing`, `guard.binary_unreachable`, `guard.registry_unloadable`) and the `guard` envelope key. The chapter names the `guard` key in the dry-run envelope and \"guard health\" on the status board but never documents the detection step or its gaps.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:456",
+        "claim": "Acceptance: \"the two-file repo carve-out (`.abcd/config.json` + `.abcd/rules.json` per spc-16 T1) is written\". The folder-kind table's `.abcd/ written` column (line 80) likewise lists only `.abcd/config.json`, `.abcd/rules.json`, and `.abcd/config/identity.json`.",
+        "reality": "A shipped `install` writes two further repo-scope files inside `.abcd/`, per the banlist scaffolding the same chapter documents at step 6: `.abcd/docs-lint.json` (internal/core/banlist/banlist.go:64 `PublicConfigRelPath`) and `.abcd/.work.local/private-names.txt` (banlist.go:42 `PrivateRelPath`). The \"two-file repo carve-out\" label and the folder-kind table's `.abcd/ written` column are stale against the shipped write set.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/01-ahoy.md",
+        "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:410",
+        "claim": "\"Uninstall ... removes the BEGIN/END marker block from CLAUDE.md/AGENTS.md and abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever on `PATH` it sits) **if it points at this plugin**\" \u2014 an exhaustive enumeration of what uninstall removes.",
+        "reality": "Shipped `abcd ahoy uninstall --help`: \"Remove the marker block, abcd's owned PATH copy, and its provenance record (leaves .abcd/ intact)\". Uninstall also deletes the home-scoped `~/.abcd/path-entry` record (internal/core/ahoy/owned_copy.go:155 `removePathEntry drops the provenance record`), and ownership is decided by that record rather than by the entry \"pointing at this plugin\" (apply.go:1030, 1079). The brief documents neither the third removal nor the ownership test.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+        "where": ".abcd/development/brief/04-surfaces/02-disembark.md:34 (repeated at :67)",
+        "claim": "Of the four synthesis sub-verbs, \"Each is deterministic-or-validate-host-JSON\" \u2014 i.e. each runs a deterministic pass when no host JSON is supplied. Line 67 repeats it for \"press-release.{json,md}, principles.{json,md}, the review artefact, and the validated graveyard lessons\".",
+        "reality": "Three of the four have a deterministic mode; `graveyard` does not. `abcd disembark graveyard --help` shows `--lessons-json <file|->` with no \"absent runs deterministic mode\" note (unlike review/press-release/principles, whose help says exactly that), and `abcd disembark graveyard <dir>` exits 2 with `--lessons-json <file|-> is required`. graveyard is validate-host-JSON only; its deterministic layers (graveyard/abandoned.json, archaeology.json) are written by `pack`, not by the sub-verb.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+        "where": ".abcd/development/brief/04-surfaces/02-disembark.md:28-35 (\u00a7 Sub-verbs), :117",
+        "claim": "The chapter is disembark's surface chapter and says bare invocation \"prints the sub-verb list and flags only\"; \u00a7 Sub-verbs enumerates every shipped sub-verb with its argument shape (`pack <source-repo> <dest>`, `probe [source-repo]`, `plan [source-repo]`, `coverage <report.json>\u2026`). The only flag named anywhere in the chapter is `--json` (at :121).",
+        "reality": "Four shipped flags are undocumented here, one of them mandatory: `graveyard <lifeboat-dir> --lessons-json <file|->` (required), `review <lifeboat-dir> <source-repo> [--review-json <file|->]`, `press-release <lifeboat-dir> [--press-release-json <file|->]`, `principles <lifeboat-dir> [--principles-json <file|->]`. The positional shapes of the four synthesis sub-verbs (`<lifeboat-dir>`, and review's second `<source-repo>`) are also absent, though the chapter gives argument shapes for the other four. All are documented in commands/disembark.md, so the brief is the side that is behind.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+        "where": ".abcd/development/brief/04-surfaces/02-disembark.md:121 (annotation repeated at :82)",
+        "claim": "Acceptance: `probe` renders \"the coverage report ... with every brief section marked `grounded` / `partial` / `blank` plus what was searched\". The \u00a7 5 annotation for coverage.json likewise reads \"per-section status (grounded|partial|blank), evidence, what was searched\".",
+        "reality": "`searched` is populated only for blank / no-adapter rows. internal/core/lifeboat/probe.go:98 sets Searched solely on the blank Evidence constructor, and probe.go:561-579 fills it from the blank fallback or the hypothesis row; a grounded/partial row copies r.ev.Searched, which the source adapters never set (no `Searched` assignment exists in sources_native.go, sources_git.go, or sources_conventions.go). Empirically, `abcd disembark probe . --json` over this repo emits zero `\"searched\"` keys across all 23 sections (21 grounded, 2 partial). Grounded and partial rows carry `evidence` instead; \"what was searched\" is a blanks-only field, as :120 correctly scopes it.",
+        "class": "criterion-violation"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+        "where": ".abcd/development/brief/04-surfaces/02-disembark.md:124 and :126 (write step at :57-59)",
+        "claim": "\"abcd never overwrites a directory it did not produce (adr-35's destination safety gate; there is no `.bak`)\" and \"there is never a `lifeboat-v1/` / `lifeboat-v2/` directory\". The \u00a7 1 WRITE step describes the swap as \"write to a staging directory, then swap it into <dest>\".",
+        "reality": "A re-pack over an approved prior lifeboat does create a sibling backup directory. internal/core/lifeboat/pack.go:364-383 (`swapIntoPlace`): when dest exists, the prior lifeboat is renamed aside to `<dest>.abcd-prev-<staging-suffix>`, staging is renamed in, and the backup is then removed with `os.RemoveAll(backup)` on a best-effort basis (comment: \"best effort \u2014 the swap already succeeded\"). A failed RemoveAll, or a crash between the two renames, leaves a full prior-snapshot directory beside `<dest>`. The rename-aside step is not described in \u00a7 1's write flow.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/02-disembark.md",
+        "where": ".abcd/development/brief/04-surfaces/02-disembark.md:125",
+        "claim": "\"**Given** any pack run completes, **when** the lifeboat is written, **then** a new line is appended to `~/.abcd/voyage/<source-root-sha>/disembark/history.jsonl` with the run's schema_version, event, timestamp, manifest_sha256, source name, source root SHA, destination, file count, and bytes written.\" Stated unconditionally for any completed pack.",
+        "reality": "The field set matches (voyage.go:27-35), but the append is conditional and can be skipped entirely while the pack still completes: internal/core/lifeboat/voyage.go:48 returns `skipped: source has no root-commit SHA to key the voyage` for an empty or non-git source (the file header at :16-17 states such a pack \"is not logged\"), and :65/:75/:80 refuse on a symlinked `~/.abcd` or `~/.abcd/voyage` (`failed: voyage directory is not a real directory (symlinked?)`). In those cases a pack completes with no history.jsonl line at all. Line 64 acknowledges a failed append never fails the pack, but the acceptance criterion asserts the line is always written.",
+        "class": "criterion-violation"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+        "where": ".abcd/development/brief/04-surfaces/03-embark.md:44",
+        "claim": "`/abcd:embark probe <path> [target]` \"show what would land where, run schema/audit checks, write nothing\" \u2014 an unmarked present-tense claim that probe runs audit checks.",
+        "reality": "`EmbarkProbe` (internal/core/lifeboat/embark.go) runs only: lifeboat dir gate, `_provenance.json` parse, a schema_version gate, `VerifyManifest`, the plan, a dry-run marker prediction, and the coverage read. `grep -n audit internal/core/lifeboat/embark.go embark_render.go` returns nothing \u2014 there is no audit check anywhere in the embark path. The only audit surface is `--refresh-audit`, which this same chapter marks \"design target, not yet shipped\" (lines 3-11, 62, 103-107). The chapter's own acceptance criterion for probe (line 116) correctly omits audit, listing only \"file tree, schema validation, would-be writes\".",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+        "where": ".abcd/development/brief/04-surfaces/03-embark.md:13-22",
+        "claim": "The \"\u26a0 Partly superseded by adr-35\" banner asserts the reconciled prose \"lands with the unpacker \u2026 not this chapter's in-tree prose\", and its \"This chapter says\" column states the chapter says: voyage is in-tree at `.abcd/development/voyage/`; `from home` reads the current repo's `.abcd/lifeboat/`; writes land via ordinary file writes; a refusal path writes a conflict report.",
+        "reality": "All four rows are stale about the chapter they head \u2014 the body was already reconciled to adr-35, and the binary matches the body, not the banner. Line 125 and the \u00a77 tree specify `~/.abcd/voyage/<source-root-sha>/` at operator level (confirmed on disk: `~/.abcd/voyage/3c0ebaa\u2026/disembark/history.jsonl`, nothing in-tree). Lines 43, 55, 59 state flatly \"there is no `home` shorthand\" (confirmed: `abcd embark from` takes only `<lifeboat-dir> [target-dir]`, `cobra.RangeArgs(1,2)`). Line 76 and line 68 already specify `os.Root` containment plus independent lexical validation and \"core writes nothing\" on refusal (confirmed: `writeEmbark` uses `os.OpenRoot` + `validRelPath` + `fsutil.WriteFileAtomic`; `EmbarkFrom` returns `ErrEmbarkConflicts` having written nothing \u2014 a live conflict run left the target byte-identical). A reader is told the chapter still carries superseded in-tree prose that it does not carry.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/03-embark.md",
+        "where": ".abcd/development/brief/04-surfaces/03-embark.md:86-95",
+        "claim": "The \u00a74 quoted conflict report shows `.abcd/development/specs/open/spc-12.md` on the first line and `.abcd/work/issues/open/iss-7.md` on the second, presented as the shipped bulk-report output.",
+        "reality": "The renderer emits conflicts in the planner's deterministic sorted lifeboat-path order (`walkLifeboatFiles` does `sort.Strings`; `renderConflictList` iterates in that order), so `activity/issues/\u2026` always precedes `rescue/specs/\u2026`. A live run of exactly this case printed:\n\n    2 conflict(s) (nothing was written):\n      \u2022 .abcd/work/issues/open/iss-7.md  (exists-differs)\n      \u2022 .abcd/development/specs/open/spc-12.md  (exists-differs)\n\n    nothing was written \u2014 resolve the conflicts and re-run\n\nEvery other character of the sample matches; only the line order is inverted relative to what the binary can produce.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+        "where": ".abcd/development/brief/04-surfaces/04-launch.md:18 (and the Sub-verbs table, lines 12-16)",
+        "claim": "\"The shipped verb surface is the `--dry-run` flag on `abcd launch` ... plus the `abcd launch ship` subcommand ... and the `abcd launch scaffold` subcommand\" \u2014 an exhaustive statement of the shipped release surface; the chapter never mentions `abcd changelog` anywhere.",
+        "reality": "The binary ships a top-level `abcd changelog` verb (\"Preview the next release cut \u2014 derived version, records, guardrail (read-only, no prose)\", global `--json` only). Its output is byte-identical to bare `abcd launch ship`: both emit `{ready,base_tag,next_tag,bumped,impact,decided_by,added,removed,guard,refusals}` \u2014 it is the deterministic emit half of the release cut. It is in the committed command-tree snapshot (`.abcd/development/release/surface.json`) and is invoked by `commands/launch.md:63`, and `04-surfaces/README.md:10` names it (\"the deterministic emit alone is `abcd changelog`\") while pointing the reader at 04-launch.md for the detail \u2014 but 04-launch.md, the chapter that owns this surface, has no row or sentence for it. No brief chapter carries a table row for it either (08-abcd.md's top-level table has none).",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+        "where": ".abcd/development/brief/04-surfaces/04-launch.md:182 (\u00a76 Acceptance, first criterion)",
+        "claim": "\"the dispatcher shows ... the available sub-verbs (`ship`, `dry-run`) ...\" \u2014 enumerates two available sub-verbs.",
+        "reality": "Three sub-verb-shaped entries ship: `abcd launch --dry-run`, `abcd launch ship`, and `abcd launch scaffold` (`scaffold` is marked shipped in this chapter's own Sub-verbs table at line 14 and in `commands/launch.md`'s `argument-hint: \"[dry-run | ship | scaffold]\"`). The criterion's enumeration was not updated when `scaffold` (itd-93) landed; the \"Design target:\" note on the same line covers the bare-render behaviour, not the stale sub-verb list.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/04-launch.md",
+        "where": ".abcd/development/brief/04-surfaces/04-launch.md:21 (`/abcd:launch scaffold` bullet)",
+        "claim": "\"The workflows ship from a single embedded template that abcd-cli's own release workflows are regenerated from (self-scaffold parity, a byte-exact test) ... It is idempotent and fail-safe: a re-run on current machinery is a no-op (exit 0), a hand-edited file is refused (exit 1) rather than clobbered.\"",
+        "reality": "Run in abcd-cli itself, `abcd launch scaffold --json` exits 1 and refuses all three files \u2014 `.github/workflows/release.yml`, `.github/workflows/auto-release.yml`, `.abcd/development/release-gate/README.md` \u2014 each with `\"detail\": \"existing file differs from the current machinery (hand-edited or stale)\"` (`wrote: 0, refused: 3, no_op: false`), even though none is hand-edited. The shipped path hard-codes `subs := BareSubstitutions(branch, goVersion)` (internal/core/launch/scaffold/scaffold.go:96) and never uses `AbcdSubstitutions()` (internal/core/launch/scaffold/substitutions.go:24), the fact set the byte-exact parity test pins \u2014 so the verb cannot reproduce abcd-cli's own workflows, and the two sentences cannot both hold in this repo. The generic claim does hold elsewhere: in a fresh git repo the first run writes 3 files (exit 0) and the second reports `no_op: true` (exit 0).",
+        "class": "criterion-violation"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:210",
+        "claim": "\"**Bare-command-as-help is a universal abcd convention** \u2014 every command in the surface set (the enumeration lives in the [surfaces README](README.md)) shows status + suggested next actions when invoked without args.\"",
+        "reality": "Not universal, and the suggested-next-actions half ships nowhere. Verified on bin/abcd-darwin-arm64: bare `abcd guard` prints cobra usage/help with no status board; bare `abcd launch` prints only `abcd launch: pass --dry-run to preview the bundle`; bare `abcd update` prints a refusal; the `docs` and `history` parents print help. No bare invocation emits suggested next actions. The very README this sentence cites states the opposite at 04-surfaces/README.md:34 \u2014 \"Bare-command-as-status is a common abcd convention, not a universal one\" and \"The suggested-next-actions half of this convention is a design target: no shipped bare invocation yet emits next actions\".",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:201 (\u00a72 row) and :351 (\u00a77 Role 1)",
+        "claim": "`/abcd:intent audit <itd-N>` \"Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / \u2026 / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`\" \u2014 and \"is the **manual** Role 1 surface for `kind: standalone` and `kind: bundle-member` intents\".",
+        "reality": "The shipped verb compares nothing and writes no verdict. `abcd intent audit <itd-N>` calls `intent.ReEmitAudit` (internal/core/intent/audit.go:241), which re-emits an OWED stub plus an ephemeral host-delegated review request under `.abcd/.work.local/reviews/` \u2014 the binary's own Short is \"re-emit a shipped intent's request, or ingest a verdict\". Verdicts reach `## Audit Notes` only via `abcd intent audit ingest --verdict-json <path>`. The rows also omit two shipped refusals: the verb errors on any intent not in `shipped/` (\"only a shipped intent owes a fidelity audit\", audit.go:254) and on one lacking a well-formed `spec_id` (audit.go:257) \u2014 so it is not dispatched by `kind` at all. Line 13 repeats the same error (\"once `intent-auditor`'s Role 1 has run on it via `/abcd:intent audit <itd-N>`\").",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:327",
+        "claim": "\"lint verifies that *all* members of a bundle reference the same bundle ID, and that bundles are bidirectional in their members' frontmatter. **Exception for superseded bundle-members:** \u2026 carry `bundle: null` AND `bundle_at_supersession: <bundle-id>` \u2026 **Lint enforces this exception.**\" Stated in present tense with no later-phase marker.",
+        "reality": "No shipped lint reads `bundle` or `bundle_at_supersession`. `grep -rn \"bundle_at_supersession\" internal/` returns nothing, and `validateIntent` (internal/core/lint/lint.go:1872-1943) \u2014 the whole of `intent_lifecycle` \u2014 checks only `status`, `kind`, `spec_id`, and `superseded_by`. The page contradicts itself: line 62 says \"the shipped record lint has no bundle check\".",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:336",
+        "claim": "\"**Every intent in `superseded/` has both `superseded_by: <handle>` AND `kind_at_supersession: <original-kind>`.** \u2026 Both are required.\" Listed among \u00a76's shipped verifications, with no lint code and no later-phase marker.",
+        "reality": "The shipped `intent_lifecycle` superseded branch (internal/core/lint/lint.go:1927-1940) requires `superseded_by` matching `^(itd|adr)-\\d+` with a resolvable intent target, plus a non-null `kind`. `kind_at_supersession` appears nowhere in `internal/` \u2014 nothing enforces it. (The convention does hold in the record by hand: all four files in intents/superseded/ carry it.)",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:323",
+        "claim": "\"The shipped record-lint subset is the `intent_lifecycle` rule \u2026, the `intent_impact_valid` rule \u2026, and `persona_registry`\" \u2014 presented as the complete set of shipped gates over the committed intent tree.",
+        "reality": "Two further shipped rules gate that tree and are unnamed. `record_schema` is configured with an `itd` store at `.abcd/development/intents` (.abcd/record-lint.json:245-253) and \"reasons ACROSS the record's stores (ADRs, intents, specs, and the issue ledger)\" (lint.go:403). `spec_lifecycle` performs the bidirectional itd\u2194spc agreement check (lint.go:1945-1984) that this same section attributes to the intent rules at line 333 \u2014 `intent_lifecycle` itself only validates that `spec_id` is null or matches `^spc-`.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:13",
+        "claim": "\"**`shipped/`** \u2014 a capability built in Go. Empty until the Go build ships capabilities into it (Phase 1 onward).\"",
+        "reality": "`.abcd/development/intents/shipped/` holds 18 intents; `abcd intent` renders \"drafts 67 \u00b7 planned 43 \u00b7 shipped 18 \u00b7 disciplines 7 \u00b7 superseded 4\". The bucket has not been empty for some time.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:271, :281, :300, :302, :314",
+        "claim": "The PRD and its attempt journal live at `.abcd/intents/<itd-N>/prd.md` and `.abcd/intents/<itd-N>/.planning-attempt.json` (`prd_path` \"Relative path to the PRD at `.abcd/intents/<itd-N>/prd.md`\").",
+        "reality": "There is no `.abcd/intents/` root. `.abcd/` holds the three tiers `development/`, `work/`, `.work.local/`, and the intent store is `.abcd/development/intents/` \u2014 the path this same page declares at line 9. `.abcd/record-lint.json` even bans a stale intents path (`roadmap/intents`, id `moved-intents-path`) as a blocker for exactly this class of drift. The design target names a directory outside the record IA it would have to live in.",
+        "class": "fictional-layout"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:223-233 (\u00a73 frontmatter template)",
+        "claim": "\"The eight keys below are the canonical seed skeleton the quoted-text create writes\", followed by a commented list of the only three fields \"Added later, not part of the seed skeleton\": `bundle`, `impact`, `surface_history`.",
+        "reality": "The shipped create path writes a ninth key the page never mentions: `promoted_from`, the spc-24 issue back-edge (internal/core/intent/create.go:238-240 \u2014 \"Absent on a quoted-text draft \u2014 the field exists only when the draft graduated from an issue\"). It is live in the record on itd-131 and itd-132. `promoted_from` appears zero times in 05-intent.md, so a reader of the canonical template has no home for it. (The record also carries `grandfathered` / `grandfathered_at_phase` on itd-27, likewise undocumented here.)",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/05-intent.md",
+        "where": ".abcd/development/brief/04-surfaces/05-intent.md:467",
+        "claim": "\"Bare `/abcd:intent` is status+help per the universal bare-command-as-help convention.\"",
+        "reality": "Same false premise as line 210: the convention is not universal, per 04-surfaces/README.md:34 and the verified behaviour of bare `abcd guard` / `abcd launch` / `abcd update` / `abcd docs` / `abcd history`. Bare `abcd intent` itself does render a status board, so only the appeal to a \"universal\" convention is wrong.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+        "where": ".abcd/development/brief/04-surfaces/06-capture.md:52",
+        "claim": "The frontmatter schema block annotates the id field as `id: iss-N  # unpadded, mirrors itd-N`, and \u00a71 line 27 describes the fast path as appending an entry \"with auto-assigned `iss-N`\" \u2014 the chapter records no mint scheme beyond a sequential-looking `iss-N`.",
+        "reality": "Since adr-45 (`.abcd/development/decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md`, rollout \"captures-first\") the capture family mints timestamp-numeric ids through `recordid.Minter` \u2014 `<family>-<yymmddHHMMSS><4 random digits>` (`internal/core/recordid/mint.go:6,27`; `internal/core/capture/alloc.go:12,102`). Live ledger ids are e.g. `iss-2608231226347380` (18 digits), while the itd family is still allocated max+1 by `nextIntentID` (`internal/core/intent/create.go:169-215`; newest draft `itd-146`). The two schemes no longer mirror each other, and the chapter never records the timestamp mint, its placeholder retry budget, or the orphan sweep (`internal/core/capture/alloc.go:18-33`).",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+        "where": ".abcd/development/brief/04-surfaces/06-capture.md:27",
+        "claim": "The chapter documents the write path as rendering caller-supplied text and flags straight into the record: \u00a71 says the fast path \"appends a structured issue entry to the ledger\", \u00a72 says \"Body is free-form\", and \u00a74's acceptance says the captured text appears \"in the body\". Redaction is never mentioned anywhere in the chapter, including in the resolve/wontfix rows.",
+        "reality": "The shipped ledger write path redacts free text before writing and reports it loudly. `capture.Capture` rewrites Text, Slug, FoundAt and FoundDuring through `redactCaptureInputs` (`internal/core/capture/workflow.go:48-62`) and `transition` redacts the resolution/wontfix note (`internal/core/capture/workflow.go:287-290`). `CaptureResult`/`TransitionResult` carry `redacted` and `redaction_degraded` (`internal/core/capture/capture.go:127-133`), and the CLI prints \"redacted N span(s) before writing \u2026\" and a \"WARNING: \u2026\" degrade line (`internal/surface/cli/cli.go:2197-2204`). Text on disk can therefore differ from the text filed \u2014 a user-visible surface behaviour the chapter's \u00a72 schema and \u00a74 acceptance do not admit.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+        "where": ".abcd/development/brief/04-surfaces/06-capture.md:32",
+        "claim": "The promote row and \u00a74's promote acceptance describe exactly two outcomes: success (draft minted, `promoted_to` stamped, `promoted_from` reciprocal) and two refusals (already promoted; post-mint stamp failure naming the `--intent` repair). No degraded-success path is recorded.",
+        "reality": "`PromoteResult` carries a third, non-error outcome the surface is required to render: `MintWarning`, \"the loud-degrade note from the intent-id refs-union scan \u2026 the surface MUST render it so a degrade to working-tree-only minting is never silent\" (`internal/core/capture/promote.go:22-33`). A promote can succeed while the id scan degraded, meaning the minted `itd-N` was chosen without seeing other branches' refs \u2014 a failure mode the chapter's promote row and acceptance criterion do not mention.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/06-capture.md",
+        "where": ".abcd/development/brief/04-surfaces/06-capture.md:110",
+        "claim": "\u00a71 and \u00a74 describe `list` output as issue rows only: \"the output lists all 5 with id, state, severity, and slug, in derived-priority order\", with blocked rows annotated by their open blockers.",
+        "reality": "`ListResult` also carries a `Skipped` set, and the CLI renders a second row class for it \u2014 `  skipped <path>: <error>` for every ledger file that fails to parse or validate (`internal/surface/cli/cli.go:2240-2245`). A ledger containing a malformed `iss-*.md` therefore produces output the chapter's row description does not cover, and the JSON shape the plugin surface consumes has a `skipped` member the chapter never names.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+        "where": ".abcd/development/brief/04-surfaces/07-memory.md:3",
+        "claim": "\"Every bare `spc-38`/`spc-39` on this page is a predecessor-store id cited as provenance \u2014 neither id names a spec in this repo's store (`.abcd/development/specs/`), whose own ids stop well short of spc-38.\"",
+        "reality": "Both ids DO name specs in this repo's store, and they name different things: .abcd/development/specs/closed/spc-38-alice-opens-the-record-explorer-and-reads-the-whole-developm.md and .abcd/development/specs/closed/spc-39-maya-sees-how-every-decision-connects-one-relationship-chart.md. The store's ids do not \"stop well short of spc-38\" \u2014 they reach spc-40 (spc-40-bob-installs-abcd-with-one-checksum-verified-command-served.md). Every bare spc-38/spc-39 on this page therefore collides with a real, unrelated repo spec.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+        "where": ".abcd/development/brief/04-surfaces/07-memory.md:118",
+        "claim": "\"`principle-distiller` (design target \u2014 Phase 6, per [`05-internals/01-agents.md`](../05-internals/01-agents.md); nothing ships this yet)\"",
+        "reality": "principle-distiller ships today: agents/principle-distiller.md exists in the tree, `abcd disembark principles` is a registered sub-verb of the built binary, and the very chapter cited as the source (05-internals/01-agents.md:14) marks the row \"**shipped** \u2014 `disembark principles`\". The claim contradicts both the binary and its own cited source. (The memory-curator ROLE of that agent is genuinely unshipped, but the sentence asserts the agent itself is.)",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+        "where": ".abcd/development/brief/04-surfaces/07-memory.md:125",
+        "claim": "Cost table row: \"Curator role on `principle-distiller` | Role extension (Phase 6 design-target agent per `05-internals/01-agents.md`, not yet shipped; itd-31 precedent \u2014 the design-target agent roster stays at 16)\"",
+        "reality": "Same false premise as line 118: the agent is not a \"not yet shipped\" design-target agent \u2014 agents/principle-distiller.md ships and 05-internals/01-agents.md:14 marks it shipped against `disembark principles`. (The \"roster stays at 16\" half checks out: 01-agents.md:3 and :47 both declare a 16-agent roster.)",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+        "where": ".abcd/development/brief/04-surfaces/07-memory.md:116",
+        "claim": "\"its gate roster runs the secret/PII scan, installability smoke, and citation-baseline gates for real, while marker-block and documentation-auditor report `not_implemented`\" \u2014 an exhaustive-sounding five-gate partition of launch's roster.",
+        "reality": "`abcd launch --dry-run --json` returns SIX gates: secret+pii-scan (ran), marker-block (not_implemented), installability-smoke (ran), documentation-auditor (not_implemented), citation-baseline (ran), and semantic-receipts (status \"host-run\") \u2014 the sixth is unaccounted for on this page.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/07-memory.md",
+        "where": "commands/memory.md:24",
+        "claim": "\"Distil an external source (PDF / transcript / article / URL) into typed, cited memory pages\" \u2014 the shipped plugin command advertises PDF ingestion.",
+        "reality": "The shipped binary rejects PDFs: `abcd memory ingest <file>.pdf` exits with \"abcd: PDF extraction unavailable: no PDF text-extraction dependency is installed (supply a PDFExtractor)\" \u2014 the CLI wires no PDFExtractor (internal/surface/cli/cli.go:2623 passes none; internal/core/memory/ingest.go:692-695 errors on nil). The brief chapter under review states this correctly at line 24 (\"PDF is a later-phase seam \u2014 the binary rejects PDF sources with a clear error\"); the command surface contradicts it.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+        "where": ".abcd/development/brief/04-surfaces/08-abcd.md:79-83",
+        "claim": "\"The `/abcd:<verb>` surface covers `ahoy`, `banlist`, `capture`, `consult`, `disembark`, `docs`, `embark`, `guard`, `history`, `ideate`, `identity`, `ingest`, `intent`, `launch`, `lint`, `memory`, `prepare-this-repo`, `update`, and `version`\" \u2014 a closed 19-item enumeration presented as the current surface, with no staged/later-phase marker.",
+        "reality": "`commands/` holds 20 verb files: the 19 listed plus `commands/site.md`. `site` also ships as a CLI verb (`abcd --help` lists \"site  The website rendered from this repository: what is declared, and what was built (read-only)\") and has its own brief chapter `04-surfaces/22-site.md`. The enumeration omits it entirely.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+        "where": ".abcd/development/brief/04-surfaces/08-abcd.md:82-83, 87-88",
+        "claim": "\"(19 verb files, one per command directly under `commands/`)\" and \"the top-level command file itself is present today (`commands/abcd.md`, \u2026 alongside the nineteen verb files)\".",
+        "reality": "`ls commands/` returns 21 files: `abcd.md` plus 20 verb files (`ahoy, banlist, capture, consult, disembark, docs, embark, guard, history, ideate, identity, ingest, intent, launch, lint, memory, prepare-this-repo, site, update, version`). The count 19/nineteen is stale by one in both places.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+        "where": ".abcd/development/brief/04-surfaces/08-abcd.md:82 (\"one per command directly under `commands/`\")",
+        "claim": "The parenthetical asserts a one-file-per-command correspondence between the `/abcd:<verb>` plugin surface and the shipped command set.",
+        "reality": "The shipped binary exposes three further non-help commands with no `commands/*.md` page and no mention in this chapter: `changelog` (\"Preview the next release cut\u2026\"), `rules` (\"Render the active rule set\u2026\"), and `spec` (\"Native spec store; bare invocation is read-only status\") \u2014 all present in `abcd --help`. The correspondence claimed does not hold in that direction.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/08-abcd.md",
+        "where": ".abcd/development/brief/04-surfaces/08-abcd.md:119-123 (section 4) and :143 (known-state table row)",
+        "claim": "Present-tense description of an on-disk store: \"The logbook is organised `<category>/<entry>` (e.g. `grill/20260701T000000Z-itd-67`), so the render descends exactly ONE bounded level into each category directory\u2026\", plus a `.abcd/logbook/` (empty / unreadable) source row. The `<category>/<entry>` layout itself carries no unbuilt marker (the unbuilt markers at :131 and :179 attach to the known-state table and the NFR bounds, and :8-15 to the board).",
+        "reality": "No `.abcd/logbook/` exists in the tree (`.abcd/` holds `citations-baseline.json`, `config`, `config.json`, `development`, `docs-lint.json`, `positioning.json`, `README.md`, `record-lint.json`, `rules.json`, `site-baseline.json`, `site.json`, `work`, and the gitignored `.work.local`). No Go source under `internal/` or `cmd/` references \"logbook\" at all \u2014 nothing writes, reads, or defines the `<category>/<entry>` layout.",
+        "class": "fictional-layout"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:31-33",
+        "claim": "The positional argument is a phase id, \"e.g. `phase-1-substrate`, `phase-5-roundtrip`\".",
+        "reality": "Neither id exists. `.abcd/development/roadmap/phases/` holds exactly seven phase docs: `phase-0-substrate.md`, `phase-1-ahoy.md`, `phase-2-capture.md`, `phase-3-intent.md`, `phase-4-spec-engine.md`, `phase-5-run-seam.md`, `phase-6-lifeboat.md`. Substrate is phase-0 (not phase-1); phase-5 is the run seam and the round-trip is phase-6. Both worked examples of the surface's only argument name phases that do not exist, and the delivery-state banner disclaims the surface, not the live phase-id vocabulary.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:95-97",
+        "claim": "Output is fixed at `.abcd/retrospectives/<phase-id>/README.md` \"(a peer of `.abcd/development/intents/` and the design-target `.abcd/logbook/` tree)\".",
+        "reality": "`.abcd/retrospectives/` would sit directly under `.abcd/`, so it is a peer of `.abcd/development/` and of `.abcd/logbook/` \u2014 not of `.abcd/development/intents/`, which sits two levels down. The tree confirms intents live at `.abcd/development/intents/{drafts,planned,shipped}/`. (itd-24 states the peer relation against `.abcd/intents/`, a path that does not exist in the tree either; the brief page updated the path but kept the now-false peer claim.)",
+        "class": "fictional-layout"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:40-42",
+        "claim": "The consumed phase-audit receipt lives at `.abcd/logbook/audit/phase-<ts>/report.json`.",
+        "reality": "The canonical `.abcd/logbook/` layout contract (`.abcd/development/brief/05-internals/04-universal-patterns.md` \u00a76, which declares itself the layout SSOT) enumerates the `audit/<sub-tier>-<ts>/` sub-tiers as exactly six \u2014 review, spec-mg, consistency, shape, chain, lifeboat \u2014 and `phase` is not among them; per-phase outputs are declared in a separate `logbook/phase/<phase-id>/` tier there. Neither tree exists on disk, but the record disagrees with itself about where the receipt would be.",
+        "class": "fictional-layout"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:121-122",
+        "claim": "The deferred v1 behaviour is described as \"offer to run the phase-fidelity-reviewer inline\", naming `phase-fidelity-reviewer` as a known agent.",
+        "reality": "`phase-fidelity-reviewer` occurs nowhere else in `.abcd/development/brief/` (this line is the sole hit) and nowhere in `agents/`. The 16-agent design roster in `05-internals/01-agents.md` has no such row \u2014 the phase-audit producer is not registered anywhere in the catalog, so the name is neither shipped nor a declared design target.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:16-17, 103-104, 108-109",
+        "claim": "Body prose uses `voyage` for the project arc (\"a completed phase of the voyage\", \"the full reflection arc travels between voyages\") and asserts \"Canonical glossary terms (`voyage`, `persona`) are used in body prose\".",
+        "reality": "`.abcd/development/brief/glossary/core/voyage.md` defines `voyage` strictly as the operator-level operations namespace `~/.abcd/voyage/<source-root-sha>/`, lists `forbidden_synonyms: [\"lifeboat\", \"project\", \"sprint\"]`, and carries an explicit open question stating that the project-lifecycle-arc sense the entry \"previously carried\" is unsettled after adr-35. The page uses precisely that superseded sense while claiming canonical usage. (`persona` never appears in the page's body prose at all.)",
+        "class": "criterion-violation"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/09-reflect.md",
+        "where": ".abcd/development/brief/04-surfaces/09-reflect.md:106-114",
+        "claim": "The lifeboat-packs-every-retrospective rule is \"a **documented forward requirement on the disembark pack**\", \"recorded here and in the itd-24 intent acceptance so a later reader treats it as a requirement\".",
+        "reality": "Nothing on the disembark side records it. `.abcd/development/brief/04-surfaces/02-disembark.md` contains no occurrence of \"retrospect\", and a repo-wide grep for `.abcd/retrospectives` hits only 09-reflect.md, 05-internals/01-agents.md, 02-constraints/04-naming.md and itd-24 \u2014 no disembark surface doc, spec, or intent carries the obligation. itd-24 itself points the forward requirement at \"the future disembark spec (spc-17 stubs)\", but spc-17 in the shipped native store (`abcd spec`) is the citation-liveness spec (itd-101), not a disembark spec.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+        "where": ".abcd/development/brief/04-surfaces/10-docs.md:40-43",
+        "claim": "\"the bare-status convention is scoped to `ahoy`/`banlist`/`capture`/`identity`/`memory`/`intent`/`spec` and bare `abcd`, not to `docs`\" \u2014 an exhaustive enumeration of the verbs that render a status board bare.",
+        "reality": "`abcd site` also renders a bare status board and is absent from the list. Verified empirically: `./bin/abcd-darwin-arm64 site` prints \"abcd site \u2014 .abcd/site.json / chapters: 4 / issue ledger: published / \u2026 / run `abcd site build` to render\", the same bare-status shape as the seven listed verbs (each of which was confirmed to render one). The enumeration is stale against the shipped `site` verb.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+        "where": ".abcd/development/brief/04-surfaces/10-docs.md:49-52",
+        "claim": "\"`docs lint` additionally accepts `--release-gate`, which promotes an overdue citation from a warning to a blocker; the flag is release machinery's, so an ordinary commit is never blocked by the calendar.\"",
+        "reality": "The flag ships and works, but no release machinery in the repo passes it. `.github/workflows/release.yml:127` (\"Docs-lint (docs-currency gate)\") runs `go run ./cmd/abcd docs lint` with no `--release-gate`; `Makefile:65` (`docs-lint`, in `preflight`) likewise. A repo-wide grep over `.github/`, `Makefile`, `scripts/`, `docs/` and `commands/` finds `--release-gate` only on `record-lint` (release.yml:247) and in prose (docs/reference/cli/commands.md:344, commands/docs.md:41). The calendar-blocking behaviour the chapter attributes to release machinery is in fact only reachable by hand or via the separate `launch --dry-run` refusal path.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/10-docs.md",
+        "where": ".abcd/development/brief/04-surfaces/10-docs.md:72 (and 50-52)",
+        "claim": "The citation checks are described with a single threshold \u2014 \"a staleness warning past 180 days\" \u2014 and `--release-gate` \"promotes an overdue citation from a warning to a blocker\", which reads as promoting that same 180-day warning.",
+        "reality": "There are two independent, per-repo-configurable thresholds and the chapter documents only one. `internal/core/lint/citations.go:44-45` defines `defaultCitationWarnDays = 180` and `defaultCitationBlockDays = 365`; `.abcd/docs-lint.json` sets `\"warn_after_days\": 180, \"block_after_days\": 365` on `citation_baseline`. `ArmCitationOverdue` (internal/core/lint/citesummary.go:141-151) raises only `OverdueSeverity` \u2014 the `ruleCitationBaselineOverdu` finding emitted at `age >= blockDays` (citations.go:635-644). A citation 180\u2013364 days old therefore still only warns even under `--release-gate`. The 365-day release threshold and the configurability of both are absent from the record.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/11-history.md",
+        "where": ".abcd/development/brief/04-surfaces/11-history.md:13-20 vs internal/surface/cli/cli.go:1133 (`abcd hook --help`)",
+        "claim": "`abcd hook session-end` only **stages** the raw transcript beside the store; redaction and storage happen in the `session-start` drain.",
+        "reality": "The behaviour is as described (cli.go:1170 calls history.Stage, never Capture), but the SHIPPED help text still describes the old behaviour: `abcd hook --help` lists `session-end  SessionEnd: redact and store the session transcript`, and the command's own `Short` string (cli.go:1133) says the same. The record and the shipped surface's self-description disagree about what session-end does.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/11-history.md",
+        "where": ".abcd/development/brief/04-surfaces/11-history.md:24-25",
+        "claim": "Of staging: \"each file lives only until the next session drains it.\"",
+        "reality": "`hook session-start` drains at most `sessionStartDrainBudget = 4` entries per session (internal/surface/cli/cli.go:1222, :1301) and reports the rest as `Remaining`. With a backlog above four, a staged raw file survives multiple subsequent sessions until an explicit `abcd history drain`. The same chapter's line 69-71 states the bound, so line 25 overstates the guarantee against the shipped constant.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/12-version.md",
+        "where": ".abcd/development/brief/04-surfaces/12-version.md:19",
+        "claim": "`abcd version --json` emits `\"staleness\": \"<fresh|stale|unknown>\"` \u2014 presented as a three-value enum a consumer could switch on.",
+        "reality": "The field carries a prose sentence, not an enum token. `internal/core/ahoy/vintage.go:178` `Staleness()` returns \"up to date\" (Fresh), \"stale \u2014 behind the checkout tip (<short-sha>)\", \"stale \u2014 differs from the <source> (<ref>)\", or \"unknown\". Observed: `\"staleness\": \"stale \u2014 behind the checkout tip (7a4ee0030a95)\"`. The token `fresh` is never emitted at all.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/12-version.md",
+        "where": ".abcd/development/brief/04-surfaces/12-version.md:26-28",
+        "claim": "\"the bare-status convention is scoped to `ahoy`/`banlist`/`capture`/`identity`/`intent`/`memory`/`spec` and bare `abcd`, not to `version`\" \u2014 an explicitly closed enumeration.",
+        "reality": "`site` also ships a bare status render in exactly that form and is absent from the list: `abcd site` prints `abcd site \u2014 .abcd/site.json` followed by chapters/issue-ledger/ui-strings/baseline/release/commit/output lines, matching the `abcd spec \u2014 \u2026` / `abcd identity \u2014 \u2026` shape. (All seven listed verbs do behave as claimed; the list is simply behind the shipped surface.)",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/12-version.md",
+        "where": ".abcd/development/brief/04-surfaces/12-version.md:9",
+        "claim": "`--check` \"nam[es] its source and verdict in the render\" \u2014 unconditionally.",
+        "reality": "The text render names the source only on the success path. `internal/surface/cli/version.go` prints the `latest:    <tag> (source: <src>)` line inside `if out.Check.Latest != \"\"`; when the fetch fails (`!exp.Known`) `Latest` is empty, so only `check:     the latest release could not be determined (no network, or the source is unreachable)` prints and the source is never named in the render. The `source` key survives only in the JSON form.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/12-version.md",
+        "where": ".abcd/development/brief/04-surfaces/12-version.md:17",
+        "claim": "JSON schema sketch gives `\"vintage\": \"<revision>\"`.",
+        "reality": "`vintage` is a revision only for the checkout-tip (dogfood) comparison. `VintageStatus.DisplayVintage()` (internal/core/ahoy/vintage.go:164) returns the short SHA only when the value is hex; for a plugin-pinned install it returns the version tag verbatim (e.g. `v0.6.2`), and it returns the literal `\"unknown\"` when the vintage is undeterminable.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/13-consult.md",
+        "where": ".abcd/development/brief/04-surfaces/13-consult.md:22-24 (Flow step 1)",
+        "claim": "\"**Search** the corpus with `grep -ril \"<term>\"` across `confidential/` and `public/` \u2014 trying keywords, author surnames, and CSL keys.\" The chapter presents this as the search that finds keyword hits.",
+        "reality": "Keywords (and aliases) live only in `sources.json` at the corpus ROOT \u2014 the chapter itself says so nine lines earlier \u2014 and the documented search covers only `confidential/` and `public/`, so it cannot reach them. Empirically, with the live corpus: `grep -ril \"fog-of-war scouting\" ~/.abcd/sources/confidential/ ~/.abcd/sources/public/` exits 1 with no hits, while the same term hits `~/.abcd/sources/sources.json`. \"fog-of-war scouting\" is a real `custom.keywords` value on a stored entry. Author surnames and CSL keys DO work (both hit the entry's `text.md`), so the keyword/alias leg of the claim is the part that fails. `commands/consult.md:24` carries the identical instruction, so the shipped command has the same gap.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/13-consult.md",
+        "where": ".abcd/development/brief/04-surfaces/13-consult.md:16-17",
+        "claim": "\"Metadata lives in `sources.json` (CSL-JSON; the `custom` block carries `confidential`, `permission_status`, `keywords`, `aliases`).\" \u2014 presented as the contents of the custom block.",
+        "reality": "Every real entry in ~/.abcd/sources/sources.json also carries `custom.file` (the relative path to the stored document, e.g. `public/<key>/original.pdf`), which the enumeration omits; and `custom.ban_authors` is a real, load-bearing field the chapter's own guard-wiring section depends on \u2014 `~/.abcd/sources/bin/sync-banlist` reads `.custom.ban_authors` to decide whether author names enter the generated banlist block (also recorded in itd-76). Neither appears in the chapter's enumeration. Conversely, no live entry carries `aliases`, and the public entry carries no `permission_status` (both are optional per the corpus README, so those two are schema-real, not data-real).",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+        "where": ".abcd/development/brief/04-surfaces/14-ingest.md:42-44 (\"Confidentiality contract\")",
+        "claim": "States the ban derivation as titles only: \"Titles of confidential entries become banned phrases (whole title, whitespace-flexible), so an internal artifact whose natural title reads like ordinary prose is registered under a distinctive title instead.\" Aliases and author names are never mentioned anywhere in the chapter.",
+        "reality": "~/.abcd/sources/bin/sync-banlist derives patterns from \"every confidential corpus entry (title + aliases always; full author names only via the per-source custom.ban_authors opt-in)\" and maintains a fenced generated block in the repo's untracked .abcd/.work.local/private-names.txt. Aliases are always load-bearing for the ban, and a third author-name source exists behind an opt-in the chapter does not record.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/14-ingest.md",
+        "where": ".abcd/development/brief/04-surfaces/14-ingest.md:25-29 (\"What it does\", step 2 \"Decide class and key\")",
+        "claim": "Step 2 is described as class decision plus key construction only, with the confidential signals listed as \"the user's own unpublished work, internal or NDA material, AI-generated content, or a private repo's documentation\". No user interview, no --aliases, and no enumeration of permission values appears; --permission surfaces only obliquely in the acceptance criterion as \"a permission status\".",
+        "reality": "commands/ingest.md step 2 mandates a user interview for every confidential ingest \u2014 \"ask the user for every identifying name variant (--aliases \u2014 repo names, codenames, domains)\" \u2014 and requires picking --permission from a closed four-value set: no-public-citation, internal-never-cite, ai-generated-never-cite, ask-author. Both flags are real (~/.abcd/sources/bin/add-source accepts --aliases and --permission). The command also lists a fifth confidentiality signal the chapter drops: \"the user says so\".",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:15",
+        "claim": "`abcd identity init` is \"a write: it records the identity block pointer and `.abcd/positioning.json`\" \u2014 two artefacts, neither being a markdown block file; line 55 repeats it as \"the one write the binary makes here\".",
+        "reality": "`.abcd/positioning.json` IS the pointer (internal/core/positioning/config.go:19, `ConfigRelPath = \".abcd/positioning.json\"`), so the two named artefacts are one file. The second write the verb actually makes is unmentioned anywhere in the chapter: on the interview path `Init` calls `writeBlock` and creates/appends the identity block markdown file itself (default `.abcd/development/IDENTITY.md`, `DefaultBlockLocation` in internal/core/positioning/init.go), returning both paths in `InitResult.Wrote`. commands/prepare-this-repo.md states this correctly (\"writes the markdown block ... and `.abcd/positioning.json`\").",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:56",
+        "claim": "\"`abcd identity render` then holds every surface to it\" (and line 16: `identity render` named as the follow-on surface that enforces the block).",
+        "reality": "`abcd identity render --help`: \"Print the proposed correction for every drifted surface as a unified diff (writes nothing)\" \u2014 it proposes, it does not check or hold. The drift check is the bare `abcd identity` render plus the `identity-positioning` rule in `abcd lint` (internal/core/repolint/rules.go, rule_positioning.go). commands/prepare-this-repo.md:157-160 says exactly that: \"`abcd lint` reports any surface that drifts from it, and `abcd identity render` proposes the correction as a diff.\" The chapter's own Acceptance (line 90) states the accurate form (\"`abcd identity` reports every rendered surface\"), so the chapter contradicts itself.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:16",
+        "claim": "\"with `abcd identity render` and `abcd ahoy install` named as the follow-on surfaces\" \u2014 i.e. `ahoy install` is a follow-on to the adopt phase.",
+        "reality": "`ahoy install` appears exactly three times in commands/prepare-this-repo.md (lines 87-89), all inside the Phase 2 \"Binary resolution\" note as the way to get a binary onto `PATH` \u2014 never as a follow-on to adoption, and never in Phase 3 or the Definition of done. It is also not a PATH-only operation: `abcd ahoy install --help` reads \"Install or update abcd in this repo (idempotent)\", so it mutates the repo the chapter's adopt phase has just finished writing.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:32",
+        "claim": "Under \"Adopts the conventions\": \"and \u2014 where absent \u2014 a secrets + absolute-path pre-commit gate\", plus Flow line 52 \"offer the commit gates\" \u2014 stated unconditionally, with no marker that the asset is unavailable.",
+        "reality": "commands/prepare-this-repo.md:172-178 sources both the pre-commit config and the attribution hook from `~/ABCDevelopment/.agents/templates/`, a maintainer-local path outside the repository, each guarded by \"if present\". Nothing in the tree ships those templates (the only in-repo pre-commit assets are this repo's own `.githooks/pre-commit` and `internal/core/ahoy/defaults/pre-commit`, which the command does not use), and `.abcd/work/issues/open/iss-84-managed-pre-commit-gates.md` records the gap as open future work. For any user who is not the maintainer, the adopt step the chapter promises cannot fire.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:54",
+        "claim": "\"detect an existing block and adopt it via `abcd identity init --file`\" \u2014 `--file` is the only flag named for the adopt path.",
+        "reality": "`abcd identity init --help` ships `--heading` alongside `--file`, defaulting to \"Identity (canonical)\". commands/prepare-this-repo.md:139-141 invokes `identity init --file <path> --heading \"<that heading>\"` because the heading is load-bearing: `Init` locates the block via `parseBlockIn(r, loc)` and, when the heading does not match, falls through `ErrHeadingMissing` to `writeBlock` and scaffolds a *second* block instead of adopting. Following the chapter's flag list alone can produce two canons \u2014 violating the chapter's own Acceptance criterion at line 87-88 (\"one identity block is recorded and registered \u2014 adopted where the repo already had one\").",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md",
+        "where": ".abcd/development/brief/04-surfaces/15-prepare-this-repo.md:14",
+        "claim": "The workflow runs \"invoking the binary's read-only `abcd lint --json`\" \u2014 a bare `abcd` on PATH is the only invocation form the chapter describes.",
+        "reality": "commands/prepare-this-repo.md:75-89 mandates a three-rung resolution the chapter never records: `\"${CLAUDE_PLUGIN_ROOT}/abcd\"` first (the rung that fires for a plugin user), then `abcd` on `PATH`, then `go run ./cmd/abcd` in a source checkout only \u2014 with the reason (\"the published payload carrying no `cmd/`\"). The chapter also omits the `skipped` list and the tri-state exit code (0/1/2) the command file documents as part of the lint contract it consumes.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+        "where": ".abcd/development/brief/04-surfaces/16-lint.md:48",
+        "claim": "The `three-tier-layout` rule row states it checks that `.abcd/development/` and a **committed** `.abcd/work/` are present.",
+        "reality": "`internal/core/repolint/rule_layout.go` checks both tiers with `fsutil.IsDir` only \u2014 there is no git/ignore check on either. The rule's single `gitutil` call is scoped to `.abcd/.work.local/`. A `.abcd/work/` that is gitignored (i.e. not committed) passes `three-tier-layout` cleanly; the committed-ness of working-tier content is only enforced by `decision-durability`, and only for `DECISIONS.md`.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+        "where": ".abcd/development/brief/04-surfaces/16-lint.md:60",
+        "claim": "The repolint severity vocabulary is \"chosen over the record-lint engine's (`internal/core/lint`) `blocker|warn` and mapped **only** at the docs-currency rule's boundary\".",
+        "reality": "Two other rules map severities at their own boundaries. `internal/core/repolint/rule_positioning.go:severityFor` maps the positioning registry's `blocker` to `SeverityError` (its own comment: \"The mapping happens here, at this rule's boundary \u2026 (the docs-currency precedent)\"), and `rule_privacy.go:lintSeverity` maps scanner `warn`/`info` to `SeverityWarn` \u2014 a mapping the same brief file documents two paragraphs earlier at line 52. Conversely, `rule_docs.go` performs no mapping at all: it discards every docs-lint severity and emits `SeverityWarn` unconditionally.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+        "where": ".abcd/development/brief/04-surfaces/16-lint.md:34",
+        "claim": "\"content-scanning rules (`docs-currency`, `privacy-hygiene`, `identity-positioning`) additionally carry a `line`, while path-presence findings omit it\" \u2014 i.e. a content-scanning finding always has a `line`.",
+        "reality": "Three shipped finding paths on content-scanning rules emit no `line` (the field is `json:\"line,omitempty\"`, so the key is absent): `rule_privacy.go` emits the over-the-4-MiB-cap \"not scanned\" warn with no `Line`; `rule_positioning.go` emits the `StatusUnlocatable` finding and the \"positioning registry could not be loaded\" finding with no `Line`. The rule-id \u2192 line-present mapping the brief (and `commands/lint.md`) teaches consumers is therefore not a guarantee.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+        "where": ".abcd/development/brief/04-surfaces/16-lint.md:37",
+        "claim": "The Behaviour section describes the non-JSON output as \"a grouped, doctor-style human report (severity glyph, rule id, `file:line`, message, indented fix) and a summary tail\".",
+        "reality": "`renderLintHuman` (internal/surface/cli/lint.go) emits two further documented-nowhere output forms: a `not applicable` line per entry in `res.Skipped`, and, for a repo with zero findings, the single line `abcd lint \u2014 \u2713 conforms to the working conventions`. Verified by running `bin/abcd-darwin-arm64 lint`. The brief documents `skipped` only for the `--json` shape.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/16-lint.md",
+        "where": ".abcd/development/brief/04-surfaces/16-lint.md:14",
+        "claim": "The `## Sub-verbs` blockquote asserts the section is machine-checked: \"each row records the verb's adr-40 bucket \u2026 and its existence (`shipped` / `staged`), verified against the committed command-tree snapshot in both directions.\"",
+        "reality": "The section contains no table and no rows \u2014 only prose. `internal/core/lint/subverbs.go` returns early when `tableFound` is false and the verb registers zero sub-commands (`abcd lint` has none in `.abcd/development/release/surface.json`), so surface_coverage's sub-verb pass checks nothing here in either direction. The note describes a verification that does not run against this file.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:5-6",
+        "claim": "\"It is the execution-time half of itd-103; the teaching half is the rules loader injecting the same registry's entries before shell-heavy work.\" \u2014 stated in the present tense, with no staged/probe-only marker.",
+        "reality": "No guard/safety/hazard rules domain ships. `internal/core/rules/defaults/rules.json` bundles 8 domains (COMMITTING, DOCUMENTATION, ROADMAP, ISSUES, INTENTS, LIFEBOAT, PII, OPINIONS) and `abcd rules` renders 10 in this repo (those 8 plus repo-local BUGHUNT and DECOMPOSITION); none carries hazard-registry entries or shell-hazard recall keywords. itd-103's own verification block records it: \"the teaching plane \u2026 is not wired in this delivery; only the execution-time guard plane ships (a guard/safety rules domain does not exist in internal/core/rules/)\". The brief chapter presents an unshipped plane as shipped.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:44",
+        "claim": "The decision table's `warn` row: `guard hook` \u2192 \"exit 0, warning on stderr\".",
+        "reality": "`guard hook` exits 1 on a warn. `echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"mywrapper git push --force origin main\"}}' | abcd guard hook` prints the warning on stderr and exits 1. `internal/surface/cli/guard.go` is explicit and deliberate: \"Exit 1, not 0, is what makes a warn LOUD on a pre-tool-use hook\" \u2014 a hook that exits 0 has its stderr discarded, which is the same reasoning the chapter itself applies to the un-evaluatable case at lines 53-56 but not to the warn row.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:60-61",
+        "claim": "\"The binary's own three statuses pass through untouched \u2014 0 (allow), 1 (ran, could not decide, allowed loudly), 2 (block).\"",
+        "reality": "Exit 1 is not only \"could not decide\": `guard hook` returns 1 for a WARN as well, i.e. for a decision it did make. The gloss on status 1 is wrong, and it is inconsistent with the same file's table at line 44, which maps a hook warn onto 0. The shim in `hooks/hooks.json` passes 0/1/2 through unchanged, so a warn reaches the host as 1.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:79-80",
+        "claim": "\"An entry key overrides one field or declares a new hazard; `{\"disabled\": true}` switches the guard off.\" No mention of any other required field in `.abcd/guard.json`.",
+        "reality": "`.abcd/guard.json` must declare `schema_version: 1` or it does not load at all. A file containing literally `{\"disabled\": true}` yields `abcd: guard check: guard: unsupported schema_version: .abcd/guard.json must declare schema_version 1, got 0` and exit 2 (verified in a scratch repo). `guard.Load` in `internal/core/guard/config.go` fails closed on an absent version: \"an absent version is a truncated or hand-mangled file, not an invitation to guess\". Only `{\"schema_version\":1,\"disabled\":true}` actually switches the guard off. Following the brief's example verbatim produces a broken registry, not a disabled one.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:135-136",
+        "claim": "\"what is not read is a payload the tokenizer cannot resolve, which warns\" \u2014 an unresolvable exec-string payload is described as producing a warn, unconditionally.",
+        "reality": "An unresolvable payload can BLOCK. `abcd guard check --command 'env -S \"$CMD\"'` returns block, entry `execute-string-uninspectable` (blocker), exit 1, with the message \"`env -S`/`--split-string` carries a value the guard cannot read as a plain command, so what it would run cannot be checked.\" The warn form exists only for the su/runuser/script/flock family (`su bob -c` \u2192 warn, exit 0). The CLI help states both outcomes (\"warned or, for `env -S`, blocked\"); the brief states only the warn.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:133-135",
+        "claim": "The exec-string family is enumerated as \"`eval`, `sh -c` \u2026 along with the `su -c` / `runuser -c` / `script -c` / `flock -c` family\".",
+        "reality": "`env -S` / `--split-string` is a first-class member of the execute-a-string handling and is absent from the brief entirely. `internal/core/guard/match.go` carves `env`'s `-S`/`--split-string` out of the wrapper walk specifically so the execute-a-string pre-pass in `payload.go` can own it, and it carries its own registry entry (`execute-string-uninspectable`). `abcd guard check --help` names `env -S` twice; the brief names it nowhere.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/17-guard.md",
+        "where": ".abcd/development/brief/04-surfaces/17-guard.md:131-152",
+        "claim": "The bulleted list of \"What an allow still does not see\" enumerates the interpreter-payload, wrapper-flag, API-prefix, backtick and no-entry cases.",
+        "reality": "The list omits a bare `$VAR` inside a shell interpreter payload, which is a silent allow: `abcd guard check --command 'sh -c \"$CMD\"'` \u2192 allow, exit 0, and `abcd guard check --command 'sh -c \"$CMD\" && rm -rf /'` \u2192 allow. `abcd guard check --help` names this case explicitly (\"a bare `$VAR` inside an interpreter payload\"); the brief's coverage list does not, so the chapter's enumeration of allow blind spots is narrower than the shipped one.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/18-ideate.md",
+        "where": ".abcd/development/brief/04-surfaces/18-ideate.md:56-63 (Behaviour) and :79-92 (What the binary refuses)",
+        "claim": "The chapter describes the verdict payload only as `--verdict-json <file|->` and enumerates what the binary refuses, never mentioning that the payload document must carry a `schema_version` (== 1) and a semver `prompt_version` \u2014 both required and both a whole-document refusal when missing or wrong.",
+        "reality": "internal/core/ideate/ideate.go:31 defines `SchemaVersion = 1`; internal/core/ideate/record.go:222-234 refuses `verdict payload is missing schema_version`, `verdict schema vN; this abcd knows up to v1 \u2014 upgrade abcd`, and `unsupported verdict schema_version N`; record.go:232-234 refuses `verdict payload is missing a semver prompt_version` against `promptVersionRe = ^[0-9]+\\.[0-9]+\\.[0-9]+$`. commands/ideate.md:97-98 documents both fields in its example payload; the brief surface chapter documents neither, so a host composing a verdict from the brief alone is refused at exit 2.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/18-ideate.md",
+        "where": ".abcd/development/brief/04-surfaces/18-ideate.md:79-92 (What the binary refuses table)",
+        "claim": "The table is presented as the enumeration of what the binary refuses (ten rows), followed by 'Refusals are whole-document, never cite-or-be-dropped'.",
+        "reality": "internal/core/ideate/record.go enforces further whole-document refusals absent from the table: an unknown JSON key (`dec.DisallowUnknownFields()`, record.go:218), trailing data after the document (record.go:222), a payload over the 1 MiB `MaxPayloadBytes` cap (record.go:211-213), empty idea text (record.go:257-259), a research leg with zero claims (record.go:300-302), an adversarial leg with zero kill attempts (record.go:369-371), a rejected alternative carrying no `why_rejected` reason (record.go:437-439), `no_rejected_alternatives` set beside a populated list (record.go:413-416), and the per-list ceilings of 200 on claims/hits/kill attempts/rejected alternatives (ideate.go:71-79). The table's rejected-alternatives row covers only the empty-without-marker case, not its contradiction case.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/19-identity.md",
+        "where": ".abcd/development/brief/04-surfaces/19-identity.md:46-56",
+        "claim": "\"The registry\" section enumerates `.abcd/positioning.json` as recording exactly three things \u2014 \"the block's location, the family severity, and the registered surfaces\" \u2014 and its field table lists only `block`, `severity`, `surfaces[]`.",
+        "reality": "The shipped registry carries a fourth top-level field, `schema_version`, which is the first key of the repo's own committed `.abcd/positioning.json` and is a declared member of `positioning.Config` (`internal/core/positioning/config.go:48`: `SchemaVersion int \\`json:\"schema_version\"\\``) and of `DefaultConfig` (`Config{SchemaVersion: 1, \u2026}`). The brief's field table is presented as the registry's shape but omits it, so a maintainer authoring a registry from this chapter alone would write a file missing a field abcd's own registry and its default emit.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+        "where": ".abcd/development/brief/04-surfaces/20-banlist.md:257-261",
+        "claim": "The reach sentence \"names the second limit too\" and its list is enumerated as: a fast-forward `git pull`, a rebase, `git am`, `git revert`, a cherry-pick, `--no-verify`, \"and a merge commit needs the `pre-merge-commit` half\" \u2014 i.e. the shipped sentence carries the merge-commit clause.",
+        "reality": "The shipped constant carries no merge-commit clause. `internal/core/banlist/banlist.go:90` = \"CI cannot enforce this layer \u2014 it protects only machines that have opted in, and only the commits git runs a hook for (e.g. a fast-forward `git pull`, a rebase, `git am`, `git revert` or a cherry-pick bypasses it, as does --no-verify)\". Confirmed verbatim in the running binary on both `abcd banlist` and `abcd ahoy`. The merge-commit half is named only in the Go doc-comment above the constant, which never reaches a surface.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+        "where": ".abcd/development/brief/04-surfaces/20-banlist.md:63-65",
+        "claim": "\"the engine is the guard's `grep -iE`, so `(?i)` is never needed and Perl escapes such as `\\d`, `\\w` and `\\b` are not available\" \u2014 restated at line 118-120 as an inert line leaving \"the name unguarded while the store looks healthy\".",
+        "reality": "The implementation records the opposite for two of the three. `internal/core/banlist/engine.go:60-65`: \"GNU grep IMPLEMENTS `\\b`, `\\w`, `\\s` (so `widgetworks\\b` matches \u2014 exit 0), and reads `\\d`/`(?\u2026)` as something else; classifying all of them as 'matches nothing' before ever asking grep was a false claim.\" The shipped `list --private` text matches the code, not the brief: it says the guard \"reads it as an extended regular expression, which may match differently than written (grep implementations diverge)\" \u2014 a portability caveat, not unavailability.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+        "where": ".abcd/development/brief/04-surfaces/20-banlist.md:120-122",
+        "claim": "\"`add --private` refuses both up front, screening the constructs POSIX ERE does not implement and then asking grep itself, with the pattern on stdin, whether the expression is usable\" \u2014 static screen first, engine second.",
+        "reality": "The order is reversed in `internal/core/banlist/engine.go:52-88`: the perlish screen is computed but deliberately does not short-circuit (\"The perlish SCREEN no longer short-circuits ... So probe grep FIRST\"); `grepAccepts` decides `faultRefused`, and the static screen only downgrades an accepted pattern to `faultPerlish`, or stands in as the fallback when no grep is on the machine.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+        "where": ".abcd/development/brief/04-surfaces/20-banlist.md:14-26 (Sub-verbs) and the chapter as a whole",
+        "claim": "The chapter documents `add`/`remove` as verbs that each \"name its layer explicitly\", and describes no other flag on the public write path.",
+        "reality": "`abcd banlist add` ships two further flags, present in the binary's help and in the committed snapshot (`abcd banlist add` flags: private, public, severity, successor): `--severity` (blocker default | warn) and `--successor` (default \"a generic term\"). They are documented in `commands/banlist.md:4,93-94` but appear nowhere in this brief chapter, even though the chapter is the surface record for the verb and sibling chapters (e.g. 06-capture.md:27) document flags.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/20-banlist.md",
+        "where": ".abcd/development/brief/04-surfaces/20-banlist.md:49-85 (private entry format) and 128-130",
+        "claim": "The chapter describes `add --private <key> <pattern>` only, and stresses that on the guard side \"The pattern reaches grep on stdin, never in argv\" \u2014 with no equivalent for the write path.",
+        "reality": "`abcd banlist add` ships a stdin pattern form: usage is `abcd banlist add --private|--public <key> <pattern|->`, help line \"pattern `-` reads one line from stdin\". The scaffolded stub itself teaches it (`internal/core/ahoy/banlist_scaffold.go:135-136`: \"printf %s 'PATTERN' | abcd banlist add --private lab-host -\", \"which keeps the pattern out of argv and shell history\"). The brief chapter never mentions it, so the record omits the one write form that keeps a private pattern out of argv and shell history.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/21-update.md",
+        "where": ".abcd/development/brief/04-surfaces/21-update.md:15",
+        "claim": "The synopsis lists `abcd update [tag] [--yes] [--json]` but the chapter never says what `--yes` does or that the bare form is interactive; the prose only says the verb \"resolves the latest, naming the tag before acting\".",
+        "reality": "internal/surface/cli/update.go prompts `resolved latest release: <tag> \u2014 proceed? [y/N] ` on stderr when no tag was given, `--yes` is unset, and both stdin and stderr are TTYs; a non-y answer prints `declined \u2014 nothing was fetched.` and exits 0 without fetching. The binary's own help documents the flag as \"skip the TTY confirmation of a freshly resolved tag\"; the chapter documents neither the prompt nor the decline path.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/21-update.md",
+        "where": ".abcd/development/brief/04-surfaces/21-update.md:30-32",
+        "claim": "The Behaviour section describes only fetch \u2192 verify \u2192 atomic swap plus refusals, and says \"the receipt (origin, tag, digest, old\u2192new) prints in both modes\". No no-op outcome is documented.",
+        "reality": "The shipped receipt has three outcome classes (internal/core/update/update.go: ActionSwapped, ActionCurrent \"already-current\", ActionRefused). When the target's digest already matches the release manifest, Apply returns `already-current` and the text render prints `already current: <path> is <tag> (verified against the release checksums)` \u2014 carrying neither origin nor digest, so the field list the chapter promises holds only on the swapped path (a refusal receipt likewise renders `origin` empty, verified by running `PATH=/nonexistent ./bin/abcd-darwin-arm64 update --json`).",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/21-update.md",
+        "where": ".abcd/development/brief/04-surfaces/21-update.md:30-32",
+        "claim": "The only write the chapter attributes to the verb is the atomic swap of the PATH-installed binary in the target's own directory.",
+        "reality": "internal/surface/cli/update.go calls `ahoy.RefreshPathEntryDigest(tgt.Path, rep.Digest)` after a swapped OR already-current outcome, which rewrites the user-level provenance record at `~/.abcd/path-entry` (internal/core/ahoy/owned_copy.go:58,208-220). That second write \u2014 outside the target directory, in the user's home \u2014 is undocumented in the chapter.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/21-update.md",
+        "where": ".abcd/development/brief/04-surfaces/21-update.md:20-25",
+        "claim": "\"every other shape is a loud refusal naming its remedy: a plugin-root binary \u2026, the track-latest dev shim, a stranded owned entry \u2026, a Homebrew Cellar-resolved install \u2026, a foreign occupant, or an empty PATH\" \u2014 presented as the complete refusal set.",
+        "reality": "The shipped receipt emits eight refusal shapes. Beyond the six listed, Plan() returns `unclassified-target` for an unrecognised target kind (internal/core/update/update.go, default branch) and Apply() returns `unprovenanced-file` when the on-disk binary matches no published release. `unprovenanced-file` is named as a refusal shape in commands/update.md's relay list; neither shape is named in the chapter (the chapter only implies the provenance case in prose, and never names it as a refusal `shape` a caller will see in the JSON receipt).",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/21-update.md",
+        "where": ".abcd/development/brief/04-surfaces/21-update.md:28-29",
+        "claim": "\"redirects only onto the release origin's own hosts\".",
+        "reality": "NewGitHubUpdater's redirect allowlist holds three hosts across two registrable domains: the origin's `github.com` plus `objects.githubusercontent.com` and `release-assets.githubusercontent.com` (internal/core/update/update.go:186-193). The code's own comment calls these \"GitHub's own asset hosts\", not the origin's; a reader of the chapter would conclude the allowlist is the origin host alone.",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/22-site.md",
+        "where": ".abcd/development/brief/04-surfaces/22-site.md:54",
+        "claim": "`abcd site check --out DIR` is described only as gating \"an already-rendered tree\", and line 88 says it \"runs seven independent checks over a rendered tree\". The chapter's opening (lines 5-7) frames writes as build's alone: \"The bare form is **strictly read-only** ... `build` is the render, and it writes only inside the directory it is given.\" Nowhere does the chapter say `check` itself renders or writes.",
+        "reality": "`check` renders the whole site itself when the output directory holds no `index.html`. `./bin/abcd-darwin-arm64 site check --out <scratch>/absent` on a non-existent directory printed \"(rendered first: the output directory held no index.html)\", then created the directory and wrote the full 819-page tree (index.html, record/, contributors/, references/, record.json, install.sh, _headers, _redirects, assets/) before gating it. Its own `--help` says \"built output directory to check (rendered first if absent)\", and `commands/site.md` documents the behaviour (\"An output directory with no `index.html` is rendered first\"); only the brief chapter omits it.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/22-site.md",
+        "where": ".abcd/development/brief/04-surfaces/22-site.md:97",
+        "claim": "\"Scope follows adr-47 decision 3 exactly: composed surfaces are `/` and every manifest-selected span, the verbatim record rendering under `/record/` is exempt\" \u2014 one exemption named, and composed surfaces equated with `/` plus manifest-selected spans.",
+        "reality": "The shipped gate exempts TWO trees, not one. `internal/core/site/check.go:437` \u2014 `func isComposedSurface(rel string) bool { return !strings.HasPrefix(rel, recordRoutePrefix) && !strings.HasPrefix(rel, docsRoutePrefix) }` \u2014 with the comment \"everything the build writes except the verbatim record rendering and the documentation tree the SSG owns\". The `/docs/` exemption exists because `.github/workflows/site.yml` runs `mkdocs build -d site/docs` into the rendered tree (lines 463 and 767) before `./abcd site check --out site` (lines 477 and 779), so the checked production tree carries an mkdocs-owned `/docs/` tree the chapter never mentions at all. And composed surfaces are whole pages, not just `/` plus spans: `site check` on the built tree reported \"pages: 819 (3 composed surfaces)\" \u2014 `/`, `/contributors/` and `/references/`, the last of which is not selected through `.abcd/site.json` (its `record_pages` names only `contributors`).",
+        "class": "false-claim"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/22-site.md",
+        "where": ".abcd/development/brief/04-surfaces/22-site.md:49",
+        "claim": "The Behaviour block enumerates the build's flags as `--out`, `--preview` and `--version` only; the surrounding prose adds no others.",
+        "reality": "`abcd site build --help` ships five flags: `--commit string` (commit for the footer and the build stamp, default git HEAD) and `--date string` (date for the build stamp, default the newest release's date) alongside `--out`, `--preview` and `--version`. Both are in the committed snapshot `.abcd/development/release/surface.json` under `abcd site build`, and `commands/site.md` documents all three pinning flags (\"Three flags exist so a release build can pin what the footer says ... `--version`, `--commit` and `--date`\"); only the brief chapter is missing two of them. Neither is marked staged anywhere.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/04-surfaces/22-site.md",
+        "where": ".abcd/development/brief/04-surfaces/22-site.md:54",
+        "claim": "`abcd site check --out DIR    # gate an already-rendered tree; exit 1 on findings` \u2014 the chapter gives check two outcomes, 0 and 1 on findings.",
+        "reality": "There is a third documented-in-the-command, undocumented-in-the-brief exit code: 2, when the check cannot run at all. Running the binary from a directory that declares no composition produced `abcd: abcd site check: site: this repo declares no site composition (.abcd/site.json is absent)` with EXIT=2. `commands/site.md` states it (\"Exit is `0` when nothing failed, `1` when something did, and `2` when the check could not run at all\"); the brief chapter does not.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/05-internals/08-skills.md",
+        "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+        "claim": "\"abcd ships **sixteen binary-backed top-level commands**, each with both a Go verb and a `commands/` file\", enumerated as ahoy, banlist, capture, disembark, docs, embark, guard, history, ideate, identity, intent, launch, lint, memory, update, version.",
+        "reality": "Seventeen ship. `abcd --help` lists `site` (\"The website rendered from this repository... (read-only)\") as a top-level Go verb, `commands/site.md` exists with `name: site` frontmatter, and it has its own surface chapter `.abcd/development/brief/04-surfaces/22-site.md`. It meets both halves of the stated criterion (Go verb + commands/ file) and is absent from both the count and the list; nothing in this chapter marks it staged or later-phase.",
+        "class": "stale-count"
+      },
+      {
+        "item": ".abcd/development/brief/05-internals/08-skills.md",
+        "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+        "claim": "\"The three newest parents carry small trees: `guard` exposes `check` and `hook`, `ideate` exposes `record`, and `identity` exposes `init` and `render`\" \u2014 the chapter's complete account of the recently added sub-verb trees.",
+        "reality": "`abcd site --help` shows a fourth such parent with a two-sub-verb tree: `build` (\"Render the site into the output directory\") and `check` (\"Gate the built site: provenance, hero drift, banned tokens, snippets, the reference ratchet, mobile and figure labels\"), plus an `--out` flag. `site` is chapter 22 in `04-surfaces/`, newer than guard (17), ideate (18) and identity (19), so \"the three newest parents\" is stale and its sub-verbs are undocumented here.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": ".abcd/development/brief/05-internals/08-skills.md",
+        "where": ".abcd/development/brief/05-internals/08-skills.md:17",
+        "claim": "\"the bare-status-board convention holds for `ahoy`, `banlist`, `capture`, `memory`, `intent`, `identity`, and `spec` (and bare `abcd`); it is not universal (`version` prints a short version/install/vintage/staleness block rather than a board, and the `docs`/`history`/`disembark` cobra parents print help/usage with no status board).\"",
+        "reality": "The enumeration of board-renderers is incomplete. Bare `abcd site` renders a status board in exactly the documented shape: \"abcd site \u2014 .abcd/site.json\" followed by chapters / issue ledger / ui strings / baseline / release / commit / output rows and a \"run `abcd site build` to render\" hint. (Bare `abcd changelog` also renders a board \u2014 \"abcd changelog \u2014 REFUSED (base v0.6.1)\" with guard/added rows \u2014 and since the list already admits the CLI-only `spec`, CLI-only verbs are in scope for it.) Verified by running each bare verb against the built binary.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": "CLI verb tree",
+        "where": ".abcd/development/brief/04-surfaces/README.md:34",
+        "claim": "\"many commands render read-only status when invoked without args (bare `abcd`, `abcd ahoy`, `abcd banlist`, `abcd capture`, `abcd identity`, `abcd memory`, `abcd intent`, and `abcd spec` all render a status board), but it does not hold everywhere: `version` prints a short version/install/vintage/staleness block rather than a board, and the `docs`, `history`, and `disembark` cobra parents print help/usage with no status board.\"",
+        "reality": "Same two omissions as 08-skills.md:17, in the surface registry itself: bare `abcd site` renders a status board and is missing from the board list; bare `abcd embark`, `abcd guard` and `abcd ideate` each print cobra help/usage with no board and are missing from the exception list. The paragraph reads as a complete accounting of the exceptions and is not.",
+        "class": "stale-count"
+      },
+      {
+        "item": "CLI verb tree",
+        "where": ".abcd/development/brief/04-surfaces/README.md:17",
+        "claim": "Row 11: \"`/abcd:history` | shipped | Session-transcript store (`capture` / `list` / `show`) \u2014 per-repo, redact-on-write, keyed on the root-commit SHA\".",
+        "reality": "`abcd history --help` registers five sub-verbs: `capture`, `drain`, `list`, `show`, `staged`. The row's parenthetical enumerates three of the five; `drain` (redact and store every staged transcript) and `staged` (list transcripts that ended but are not yet redacted) are both shipped and both carry `shipped` rows in 11-history.md's own Sub-verbs table.",
+        "class": "stale-count"
+      },
+      {
+        "item": "CLI verb tree",
+        "where": ".abcd/development/brief/04-surfaces/README.md:16",
+        "claim": "Row 10: \"`/abcd:docs` | shipped | Documentation-currency lint (`lint`) \u2014 change-narration, broken links, stray root markdown; read-only, the deterministic half of the docs release gate\".",
+        "reality": "`abcd docs` registers two sub-verbs, `lint` and `cite`, and `cite` itself registers `confirm` and `refresh` \u2014 write paths that rewrite the committed citation baseline. The row describes the surface as read-only lint only; the `cite` family (documented in 10-docs.md's Sub-verbs table as three shipped rows) has no presence in the registry row, so the registry's one-line description of the surface omits its only mutating half.",
+        "class": "stale-count"
+      },
+      {
+        "item": "CLI verb tree",
+        "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+        "claim": "\"Three further binary verbs \u2014 `changelog`, `rules`, and `spec` \u2014 expose a Go verb but no `commands/` file, so they are CLI-only.\" (Line 15 makes the matching claim about surface chapters: \"The CLI-only binary verbs `changelog`, `rules`, and `spec` have a Go verb but no surface chapter.\")",
+        "reality": "Five registered verbs have a Go verb and no commands/ file: those three plus the hidden `hook` parent (sub-verbs `prompt-router`, `prompt-router-reset`, `session-start`, `session-end`) and cobra's generated `completion`. 04-surfaces/README.md:3 names both `hook` and `completion` as operator-internal with no commands/*.md surface; the internals chapter's count of \"three\" does not account for them.",
+        "class": "stale-count"
+      },
+      {
+        "item": "plugin command surface",
+        "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+        "claim": "\"The plugin manifest (`.claude-plugin/plugin.json`, `marketplace.json`) and the markdown surfaces (`commands/`, `agents/`, `skills/`) that shell to the binary load cleanly.\" \u2014 `skills/` is named as a shipped markdown surface directory alongside `commands/` and `agents/`, with no staged/design-target marker.",
+        "reality": "There is no `skills/` directory in the tree (`ls skills/` \u2192 No such file or directory). `commands/` (21 flat files) and `agents/` exist; `skills/` does not. The brief itself says so twice elsewhere \u2014 04-surfaces/README.md:36 (\"abcd ships zero skills\") and 04-surfaces/04-launch.md:47 (\"`skills/` is absent from the include list and does not exist in the tree at all\"), the latter matching `.abcd/config/launch-payload.json`, whose includes are `.claude-plugin, commands, agents, hooks, scripts, docs, README.md, LICENSE, .gitignore`.",
+        "class": "fictional-layout"
+      },
+      {
+        "item": "plugin command surface",
+        "where": ".abcd/development/brief/01-product/04-scope.md:19",
+        "claim": "\"**Operator-internal commands** (wiring under `commands/`, NOT part of the user-facing surface above): `/abcd:run` \u2014 the itd-29 autonomous-run operator surface (`status`/`pause`/`resume`/`preflight`\u2026)\" \u2014 presented as wiring that lives under `commands/`, with no staged/design-target marker (the preceding hedge, \"design target \u2026 not all shipped yet\", is attached to the user-facing bullet list above it, not to this paragraph).",
+        "reality": "`commands/` contains no `run.md` (the 21 files are abcd, ahoy, banlist, capture, consult, disembark, docs, embark, guard, history, ideate, identity, ingest, intent, launch, lint, memory, prepare-this-repo, site, update, version) and `abcd --help` registers no `run` verb. The surfaces README states the opposite of this paragraph explicitly: \"a design target (itd-29, `intents/planned/`); no `run` verb or `commands/run.md` is on any shipped surface.\"",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin command surface",
+        "where": ".abcd/development/brief/01-product/04-scope.md:7",
+        "claim": "The \"**User-facing commands**\" list enumerates ten entries \u2014 `/abcd:ahoy`, `/abcd:disembark`, `/abcd:embark`, `/abcd:launch`, `/abcd:intent`, `/abcd:capture`, `/abcd:memory`, `/abcd`, `/abcd:reflect` \u2014 hedged only as \"not all shipped yet\".",
+        "reality": "Thirteen shipped commands present in `commands/` are absent from this list: docs, history, version, consult, ingest, prepare-this-repo, lint, guard, ideate, identity, banlist, update, site. All thirteen are rows marked `shipped` in 04-surfaces/README.md with their own chapters (10\u201322). The hedge covers under-delivery, not omission of already-shipped surfaces, so a reader of the scope chapter sees a command surface roughly half the real one. (The one entry here that is NOT shipped, `/abcd:reflect`, is correctly marked `staged` in the surfaces README and has no command file \u2014 that part is consistent.)",
+        "class": "stale-count"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/04-surfaces/README.md:5-30",
+        "claim": "The surfaces registry is the enumeration of abcd's shipped surface \u2014 22 rows, all commands \u2014 and its gate \"asserts every `shipped` row has a backing surface (`commands/<name>.md` or `skills/<name>/`) ... and, in reverse, that every real surface has a row here.\"",
+        "reality": "A third convention register ships and has no row and no gate: `agents/` holds 12 markdown files (10 prompts + README.md + CHANGELOG.md) that the plugin loader registers as harness agents, and `agents` is in the release payload (`.abcd/config/launch-payload.json`). `.abcd/record-lint.json:276` configures `surface_coverage` with `commands_dir: \"commands\"` and `skills_dir: \"skills\"` only \u2014 no agents dir \u2014 and `index_drift` has no agents index, so nothing machine-checks the agent surface. No chapter under `04-surfaces/` documents it; `agents/` appears there only incidentally (row 2's disembark prose, and 04-launch.md's payload list).",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/04-surfaces/README.md:36 and 05-internals/08-skills.md:3",
+        "claim": "\"**abcd ships zero skills** \u2014 the `/abcd:` surface is commands only\" / \"abcd's surface namespace (`/abcd:`) is **commands only**.\"",
+        "reality": "Zero skills is correct (no `skills/` directory exists), but \"commands only\" is not a complete account of the installed `abcd:` namespace: `agents/*.md` registers 12 entries in it, as the brief's own 05-internals/01-agents.md:5 states when it names `abcd:README` and `abcd:CHANGELOG` as mis-registered harness agents. Both surface chapters describe the plugin's registered surface without ever mentioning the agent register.",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:9",
+        "claim": "\"The linter is delivered in two stages. **Shipped by spc-8 \u2014 the mechanical itd-5 floor (`PQ001`\u2013`PQ006`):** `prompt_version` present and valid semver; a matching `### <agent> <version>` heading exists in `agents/CHANGELOG.md`; `capability_scope` present and well-formed; `capability_scope.task_classes` strict set-membership against `task_classes.json`; canary-fixture *presence*...\" and (line 11) \"The linter runs pre-commit.\"",
+        "reality": "No such check ships. `grep -rn 'PQ001\\|PQ006' internal/` returns nothing; `grep -rln PromptLinter internal/core/lint/` returns nothing; the only match for \"agents\" anywhere in `internal/core/lint/` is `lint_test.go:1340` writing an `AGENTS.md` fixture. The brief contradicts itself: 05-internals/06-lint.md:18 and :63 say `PQ001`\u2013`PQ006` are \"a **design target**, not yet shipped (no `PromptLinter` exists in `internal/core/lint`)\". Nothing enforces prompt_version, the CHANGELOG heading, capability_scope, or canary presence on any shipped prompt.",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/01-agents.md:3 and :90 (and 05-prompt-quality.md:9)",
+        "claim": "Agent JSON schemas are \"owned by the core, `internal/core/schema`\", the `task_classes` closed enum is \"owned by `internal/core/schema`\", and the shipped check validates tokens \"against `task_classes.json`\".",
+        "reality": "`internal/core/schema` does not exist \u2014 `ls internal/core/` shows ahoy, banlist, capture, changelog, cite, frontmatter, glossary, guard, history, ideate, identity, intent, launch, lifeboat, lint, memory, positioning, record, recordid, release, repolint, rules, site, spec, surface, update, vintage \u2014 and `internal/README.md` does not list a schema package even as a planned seam. No `task_classes.json` exists anywhere in the tree. The brief's own 02-constraints/04-naming.md:91 says the opposite of both: \"This table is the source of truth today: the binary carries no `task_classes` schema and no cross-check test reads the field (iss-265).\"",
+        "class": "fictional-layout"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:21",
+        "claim": "\"**Research-driven prompts.** Every agent has a research file at `.abcd/development/research/prompting/agents/<name>.md`\" (present tense; line 13 makes that file layer D's reference document).",
+        "reality": "`.abcd/development/research/prompting/agents/` holds three agent files \u2014 `chat-distiller.md`, `embark-scaffolder.md`, `intent-fidelity-reviewer.md` \u2014 plus `README.md` and `_template.md`. Not one of the ten shipped prompts has a research file at its own name: chat-distiller and embark-scaffolder are unshipped design-roster agents, and `intent-fidelity-reviewer` is intent-auditor's pre-rename name (agents/CHANGELOG.md:121 records the rename). Nine of the ten shipped prompts have no research file at all.",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:31 and :35",
+        "claim": "Per-agent spec acceptance requires that the \"Prompt cites research file in `## Research basis: .abcd/development/research/prompting/agents/<name>.md` footer\" and that the \"Prompt has a `## Last SOTA Audit: <date>` footer line (initial value: spec completion date)\".",
+        "reality": "Zero of the ten shipped prompts carries either footer: `grep -l 'Research basis' agents/*.md` and `grep -l 'Last SOTA Audit' agents/*.md` both return nothing. These are unmarked acceptance criteria (not flagged staged or deferred \u2014 the deferral at line 11 covers only the *lint* of those footers, not the footers themselves), and every delivered agent violates them.",
+        "class": "criterion-violation"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:19",
+        "claim": "\"**Injection-canary fixtures** \u2014 every agent that reads untrusted input ... MUST have at least one fixture with a prompt-injection payload. Agents in scope: `chat-distiller`, `embark-scaffolder`, `issue-scout`, `code-rescuer`, `decision-archaeologist`, `review-collator`.\"",
+        "reality": "The in-scope list names six agents, none of which ships, and omits every agent that actually carries a canary. All ten shipped prompts declare `reads_untrusted_input: true` and each carries exactly one `agents/<name>/fixtures/injection-canary.json`: docs-currency-reviewer, graveyard-interpreter, intent-auditor, lifeboat-reviewer, press-release-composer, principle-distiller, release-changelog-composer, ruthless-reviewer, security-reviewer, sota-researcher.",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:3 and :5 and :13",
+        "claim": "\"abcd ships three layers (B+C+D)\"; layer B \u2014 \"Each agent spec ships 2\u20133 fixture inputs with expected output structure (JSON schema validation + oracle-judged ...)\"; layer D \u2014 \"`oracle-prompt-audit.md` template \u2014 once per minor release, run an oracle audit ... over all agent prompts.\"",
+        "reality": "None of the three layers ships in enforceable form. B: every agent fixtures directory holds exactly one file, `injection-canary.json` \u2014 no golden fixtures with expected output structure, and no `internal/core/prompttest` package exists. C: no prompt linter exists (see the PQ finding). D: no `oracle-prompt-audit.md` exists anywhere in the tree (`find . -name 'oracle-prompt-audit*'` returns nothing), and there is no `.abcd/logbook/sota-audits/` output.",
+        "class": "false-claim"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/01-agents.md:82-92",
+        "claim": "\"Every agent's prompt file carries declared frontmatter. Current fields:\" followed by a table of six fields \u2014 `name`, `description`, `color`, `prompt_version`, `capability_scope`, `reads_untrusted_input`.",
+        "reality": "Two live frontmatter fields on shipped prompts are absent from the \"Current fields\" table: `tools` (carried by docs-currency-reviewer `Read, Grep, Glob, Bash`, ruthless-reviewer, security-reviewer, and sota-researcher `WebSearch, WebFetch, Read, Grep, Glob`) and `model` (`model: opus` on ruthless-reviewer and security-reviewer). Both change how the harness dispatches the agent. The six documented fields themselves all check out, including the `color` row's exact five-prompt list and the ten-prompt `capability_scope` claim.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": "plugin agent surface",
+        "where": ".abcd/development/brief/05-internals/05-prompt-quality.md:17",
+        "claim": "\"every `agents/*.md` carries `prompt_version: <semver>` alongside existing `name`, `description`, `tools`, `model`.\"",
+        "reality": "`prompt_version` is indeed on all ten prompts, but `tools` is on only 4 of 10 (graveyard-interpreter, intent-auditor, lifeboat-reviewer, press-release-composer, principle-distiller and release-changelog-composer have none) and `model` on only 2 of 10. The glob is also wrong as written: `agents/README.md` and `agents/CHANGELOG.md` match `agents/*.md` and carry no frontmatter at all.",
+        "class": "false-claim"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/04-surfaces/README.md:3",
+        "claim": "The only brief home for the hook surface (a parenthetical in the surfaces README) states: \"`session-end` is the automatic redact-and-store write path into the transcript store.\"",
+        "reality": "`abcd hook session-end` only STAGES the raw, unredacted transcript (`history.Stage` at internal/surface/cli/cli.go:1166-1180; stderr says \"staged \u2026 the next session redacts and stores it\"). The redact-and-store path is `abcd hook session-start`'s drain. 04-surfaces/11-history.md:13-20 already carries the corrected split; the README parenthetical was not updated. (The binary's own `hook session-end` short help is stale in the same way: \"SessionEnd: redact and store the session transcript\".)",
+        "class": "false-claim"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/05-internals/03-configuration.md:373",
+        "claim": "\"The four non-SessionStart event shims also self-provision: when $CLAUDE_PLUGIN_ROOT/abcd is missing they attempt hooks/bootstrap.sh (throttled by a .bootstrap.attempt marker within a 10-minute window)\"",
+        "reality": "Only three of the four do (UserPromptSubmit, PreToolUse, PreCompact). The SessionEnd command in hooks/hooks.json contains no `bootstrap.sh` reference at all \u2014 it checks $CLAUDE_PLUGIN_ROOT/abcd, falls back to a PATH abcd, then fails loudly. The exclusion is deliberate and test-pinned (internal/surface/cli/hooks_selfprovision_test.go:292 TestSessionEndNeverBootstraps: a session-end download races the harness's hook cancellation and loses the transcript).",
+        "class": "false-claim"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/02-constraints/03-invariants.md:37",
+        "claim": "Invariant 12 defers the SessionEnd property: \"The SessionEnd clause \u2014 that the exit path performs no network work \u2014 lands with iss-2608210934566223 and is not asserted here ahead of it.\"",
+        "reality": "iss-2608210934566223 is resolved (.abcd/work/issues/resolved/iss-2608210934566223-sessionend-must-never-bootstrap.md) and the property is shipped in hooks/hooks.json plus behaviourally pinned by TestSessionEndNeverBootstraps. The invariant still describes it as unlanded and unasserted.",
+        "class": "false-claim"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:10",
+        "claim": "\"ahoy rules-loader install | \u2026 the prompt-router hook registered\"",
+        "reality": "ahoy never registers or writes a hook. Install and uninstall are verify-only over hooks/hooks.json (plugin-static per spc-14 T7 / spc-16 T1, spelled out at 04-surfaces/01-ahoy.md:189-207 and :371-375); internal/core/ahoy/store.go:805-848 only reads the manifest and checks three event entries. A matrix criterion checking for \"registered\" cannot pass against the shipped verb.",
+        "class": "criterion-violation"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:12",
+        "claim": "\"Native transcript capture | A session transcript is written to the root-SHA-keyed native local store, **redacted at write time before anything lands on disk** (the two-stage redaction model, per adr-29)\"",
+        "reality": "The automatic hook path writes unredacted bytes to disk first: `hook session-end` stages raw text under ~/.abcd/history/<root-sha>/staging/ (0o700/0o600) and the next SessionStart redacts it. 04-surfaces/11-history.md:22-23 documents staging as \"the one place abcd holds unredacted transcript text on purpose\"; the delivery criterion still asserts nothing unredacted lands on disk.",
+        "class": "criterion-violation"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/05-internals/08-skills.md:15 and :19",
+        "claim": "The binary-verb census enumerates the CLI-only Go verbs exhaustively and by count: \"The CLI-only binary verbs `changelog`, `rules`, and `spec` have a Go verb but no surface chapter\" and \"Three further binary verbs \u2014 `changelog`, `rules`, and `spec` \u2014 expose a Go verb but no `commands/` file, so they are CLI-only.\"",
+        "reality": "The shipped tree has a further top-level Go verb with no commands/ file and no surface chapter: the hidden `hook` parent with its four entrypoints (plus Cobra's `completion`). Both are recorded in .abcd/development/release/surface.json (\"abcd hook\", hidden: true, and its four children) and acknowledged in 04-surfaces/README.md:3, but this internals chapter's closed enumeration omits them.",
+        "class": "stale-count"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": ".abcd/development/brief/04-surfaces/11-history.md:23",
+        "claim": "Of staged transcripts: \"each file lives only until the next session drains it.\"",
+        "reality": "The SessionStart drain is capped at four staged transcripts per start (sessionStartDrainBudget = 4, internal/surface/cli/cli.go:1301); a larger backlog survives multiple sessions and is reported as \"N earlier session(s) are still awaiting capture\" until `abcd history drain` runs. Line 69 of the same chapter documents the bound, contradicting line 23.",
+        "class": "false-claim"
+      },
+      {
+        "item": "hook entrypoints",
+        "where": "hooks/hooks.json (SessionStart entry) vs .abcd/development/brief/05-internals/03-configuration.md:369-375 and 04-surfaces/01-ahoy.md:189-207",
+        "claim": "Both descriptions of the shipped manifest enumerate the event\u2192command wiring only; neither records that the SessionStart entry carries an explicit `\"timeout\": 240`.",
+        "reality": "The shipped SessionStart hook sets `\"timeout\": 240` (against the host's much shorter default), and it is load-bearing: that entry chains bootstrap.sh plus the redaction drain of up to four staged transcripts at ~0.7s/MB. No brief row documents the field.",
+        "class": "undocumented-surface"
+      },
+      {
+        "item": "skills surface",
+        "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+        "claim": "Lists the plugin's markdown surfaces as \"(`commands/`, `agents/`, `skills/`) that shell to the binary load cleanly\" \u2014 an unmarked claim that a skills/ surface directory exists and loads.",
+        "reality": "There is no skills/ directory in the tree at all (`ls skills/` \u2192 No such file or directory), and abcd ships zero skills; .abcd/config/launch-payload.json has no skills entry, and 04-surfaces/04-launch.md:47 and 05-internals/08-skills.md both state skills/ does not exist. The row is not marked staged/probe-only/later-phase.",
+        "class": "fictional-layout"
+      },
+      {
+        "item": "skills surface",
+        "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:55",
+        "claim": "Capture promote row, marked \"(spc-30, itd-46 \u2014 LIVE)\", says the flow is \"Skill-orchestrated (lock-acquire \u2192 promote-inspect \u2192 seed+interview \u2192 promote-link \u2192 release); never a `capture promote` CLI sub-verb\".",
+        "reality": "Nothing skill-orchestrated can be live: abcd ships zero skills and no skills/ directory exists. And `capture promote` IS a shipped CLI sub-verb \u2014 `abcd capture --help` lists \"promote  Graduate an issue into an intent draft (mints + stamps promoted_to)\", and commands/capture.md:100 invokes `\"${CLAUDE_PLUGIN_ROOT}/abcd\" capture promote <iss-N> --json`.",
+        "class": "false-claim"
+      }
+    ]
+  }
+}
