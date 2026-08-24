@@ -10,55 +10,29 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-08-24
+
+### Added
+
+- **The private banlist layer catches machine identifiers, not only names.** Hostnames, IPv4 and IPv6 addresses, CIDR prefixes and MAC addresses sit in the keyed private store and are refused by entry key, with the value itself never echoed, and a keyed corpus test pins the coverage. The work ships in v0.4.2; the ledger record is reconciled here. (iss-158)
+- **`abcd disembark` grounds open questions, naming, glossary and internals from a repository's own conventions.** A conventions-tier adapter walks the repository's files for in-code work markers — TODO and FIXME with a trailing delimiter, plus XXX, HACK and BUG — to fill `evidence/open-questions`, and three more read `GLOSSARY.md` or `docs/glossary` for naming and glossary and `docs/architecture` and the package layout for internals — so a repository with conventional docs and no abcd record still grounds these sections instead of reporting blank. The work ships in v0.4.0; the ledger records are reconciled here. (iss-99, iss-100)
+- **A lifeboat's graveyard reads what a repository abandoned, not only what it reverted.** The graveyard adapter grounds on files deleted after substantial history and on branches abandoned unmerged, so a project that walks away from work without a revert still has that work read back; `evidence/what-didnt` grounds on reverted commits alone, which is the section's declared source. The work ships in v0.2.0; the ledger record is reconciled here. (iss-98)
+
 ### Fixed
 
-- **An issue that gets fixed now gets closed, because a check can fail when it
-  does not.** `abcd capture resolve` worked and nothing compelled it, so a fixed
-  issue sat in `open/` until someone remembered — and a forgotten one left no
-  marker to find it by, which is why the drift had no denominator: 328 records
-  in `resolved/` against 78 carrying `resolved_by`. The mechanic forcing the
-  forgetting was `resolved_by.commit`, the one field whose value is unknowable
-  while the record is being edited, because the record and the fix are the same
-  change. That deferred stamping past the merge, and a deferred step is the one
-  that gets dropped. `make lint-issues` (also a CI step) closes it: a
-  `Resolves: iss-N` commit trailer must be accompanied by that record leaving
-  `open/` in the same diff, so resolution lands inside the fix and no
-  post-merge step exists to forget. Two further rules check that a
-  `resolved_by.commit` stamp names a commit that is actually reachable —
-  `--commit` is shape-checked only (`^[0-9a-f]{7,64}$`), so a sha that never
-  existed reads exactly like a good one, and because this repository allows
-  squash and rebase merges as well as merge commits, a cited branch sha can be
-  rewritten out of existence with nothing noticing. All 76 stamps in the ledger
-  were verified reachable when this landed (iss-2608241347321757).
+- **A fresh plugin install resolves the latest release again after the organisation rename.** `hooks/bootstrap.sh` reads — rather than follows — the redirect from the releases/latest location and parses a tag out of it with `sed`; pinned at the old organisation, that location answers with an organisation hop instead of a tag URL, so `resolved_tag` came out empty. With no cache the download path refused with a message blaming the network, and with a cache the script provisioned from an unauthenticated offline copy while asserting the wrong cause. The bootstrap, the hook manifest, the plugin manifest and the issue-template config name the current organisation, and the bootstrap test's pinned origin constants move with them. `bootstrap.sh` ships from the repository tree rather than a release asset, so the correction reaches installs on merge rather than on publish. (iss-2608241659573856)
+- **The release chain's site deploy does not receive its Cloudflare credentials, and the v0.6.3 entry saying it does is false.** `secrets: inherit` is necessary and not sufficient: it conveys the caller's secrets, a job that calls a reusable workflow cannot declare an environment, and this repository holds no repository- or organisation-scoped secrets, so the inherited set is empty inside the callee and `secrets.CLOUDFLARE_API_TOKEN` resolves to nothing. The credentials were correct and correctly scoped throughout. Dispatching `site.yml` directly deploys the newest published release and is the release-day recovery documented in `/abcd:launch`. The record returns to the open ledger carrying the evidence and the three remaining options, because the choice wants a decision rather than a third patch. (iss-2608231912566984)
+- **`abcd ahoy install --dev` refuses loudly when an unowned wrapper holds the target path.** `stepSymlink` names the foreign entry as a gap instead of keeping it silently, so the install says what stopped it rather than writing nothing, reporting no gap and leaving `install_mode` empty. The silent no-op ships in v0.4.1 and the loud refusal ships in v0.5.0; the ledger record is reconciled here. (iss-222)
+- **The abcd binary survives a plugin update, and the PATH entry pointing at it keeps working.** The binary and its metadata live in the harness's persistent data directory rather than in the commit-stamped plugin cache directory the host re-clones on every update, so an ~11 MB download stops repeating and the cache garbage collection stops dangling the pinned PATH entry roughly a fortnight after each update; the default PATH entry is an owned copy, with a cache-directory symlink kept only as a loud degraded fallback. An owned copy has no plugin root among its ancestors, so `writePathEntry` records a home-scoped `plugin_root=` in `~/.abcd/path-entry` and `resolvePluginRoot` reads it — which is what lets `ahoy install`, `abcd update`, uninstall and the version and staleness verbs work when abcd is invoked by name from a plain terminal, where the harness variable naming that directory is absent. The work ships in v0.6.2; the ledger records are reconciled here. (iss-2608210934566221, iss-2608210934566222, iss-2608210934566230)
+- **The references page fits a 360 px screen.** Long unbroken link tokens wrap inside their column instead of escaping it — `overflow-wrap: anywhere` on the references and inspirations list content, with a panel-level anchor overflow net — after a screenshot audit measured a 484 px scroll width on a tree the static mobile gate called clean. The work ships in v0.6.2; the ledger record is reconciled here. (iss-2608221342503802)
+- **`abcd site build` cannot leave a file from an earlier build in its output.** The build purges an output directory that carries its own marker before writing, and refuses a non-empty directory it did not write rather than deleting one it does not own. The work ships in v0.6.2; the ledger record is reconciled here. (iss-2608221342506046)
 
-- **A planted per-repo scanner config can no longer hang or exhaust the process,
-  and it was reachable with no human in the loop.** `scanner.New` read
-  `.abcd/config/pii.json` with a bare `os.ReadFile` — no `O_NOFOLLOW`, no size
-  cap, no regular-file check — while every sibling trust-boundary config reader
-  (`guard.Load`, the banlist private store, lint's config) already went through
-  `fsutil.ReadGuarded`. The path sits in the working tree, so a FIFO or a
-  symlink to an endless device is plantable by a hostile clone or a pull
-  request as git mode 120000, needing no local write access; the SessionEnd
-  hook's history capture then builds a scanner automatically and holds the
-  history repo lock across the read, so a hang wedged transcript capture for
-  that repository rather than one command. The read is now guarded and capped,
-  and a symlinked `.abcd` ancestor is refused before the leaf is touched,
-  because `O_NOFOLLOW` covers the final component only. The scanner still fails
-  closed exactly as before, but now says which of the four refusals it hit
-  instead of one flat "unreadable". Same bug class as iss-97, fixed once for
-  `ahoy.Detect` and left standing here (iss-202).
+### Security
 
-- **The 0.6.3 claim that the release chain's site deploy receives its
-  credentials was wrong, and the record now says so.** `secrets: inherit` was
-  necessary and not sufficient: a called workflow's job does not resolve
-  environment secrets even when it declares the environment, because `inherit`
-  conveys only the caller's secrets and a job that calls a reusable workflow
-  may not declare an environment of its own. Established by running it rather
-  than reading it — the identical deploy job fails through the release chain's
-  call and succeeds through `workflow_dispatch` on `site.yml`. The site is
-  deployed by that dispatch until the underlying choice is made, and
-  `/abcd:launch` documents the one command. iss-2608231912566984 is reopened
-  with the evidence and the three candidate fixes, none of them taken.
+- **The scanner's per-repo `pii.json` override is read through the shared guarded open.** `scanner.New` routes the read through `fsutil.ReadGuarded` — `O_NOFOLLOW`, a size cap and a regular-file check, with a symlinked `.abcd` ancestor refused before the leaf is opened — so a FIFO planted at that path cannot hang the read indefinitely and a committable symlink to a device file cannot grow it toward memory exhaustion. The path is reachable automatically through the session-end history capture, which holds an unbounded repository lock across such a hang and wedges transcript capture for the repository. The scanner still fails closed, and it names which of the four refusals it hit. (iss-202)
+- **The bootstrap authenticates a cached binary against the release's published checksums, and refuses a non-regular file at the cache path.** Re-verifying a cached artefact against the hash recorded beside it is a corruption check and not a tamper check, because artefact and metadata are equally writable by the same user; online cache promotion fetches that release's `checksums.txt` and verifies the cached digest against the published one, while the offline path stays a corruption check with a notice naming the trust level honestly, and a poisoned-pair test pins the self-consistent case the earlier corrupt-cache test never exercised. The migration seed takes the same `[ -e ] && [ ! -f ] -> refuse` form as the main install site, checked before the lock and again under it, closing a path where one `mkdir` turned the seed's `mv -f` into a move into a directory and left every session running shell commands unguarded until a human cleared it by hand. The work ships in v0.6.2; the ledger records are reconciled here. (iss-2608210934566228, iss-2608210934566229)
+- **`abcd capture` runs the redaction scanner over free text before it reaches the committed ledger.** Both ledger write paths — the capture render and the resolve or wontfix transition — redact through the scanner first and report the count of altered spans, so the person who filed the record can judge whether the redacted text still says what they meant. It redacts and reports and never refuses: the transcript store is fail-closed on the same detector, and the asymmetry is deliberate, because refusing a capture loses the finding and a ledger that rejects writes stops being written to. A per-repo `pii.json` that cannot be parsed redacts with the bundled defaults and returns a reason rather than blocking every capture in the repository. The work ships in v0.6.2; the ledger record is reconciled here. (iss-2608231025198888)
+- **The hook-supplied transcript path is opened through the shared guarded read.** `readTranscript` routes through `fsutil.ReadGuarded` — `O_NOFOLLOW` plus a regular-file check on the open descriptor plus a size cap — so a symlinked transcript is refused rather than followed. This is defence in depth rather than a reachable exploit, and it closes the last bespoke external-input read in the CLI. The work ships in v0.6.2; the ledger record is reconciled here. (iss-369)
 
 ## [0.6.3] - 2026-08-23
 

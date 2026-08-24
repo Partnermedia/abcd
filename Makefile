@@ -93,8 +93,9 @@ scaffold-sync:
 scaffold-sync-check:
 	@go run ./cmd/scaffold-sync -check
 
-# Pre-push gate (invoked by .githooks/pre-push): the three lint gates
-# (lint-reviews, record-lint, docs-lint) as prerequisites, then build, vet, test,
+# Pre-push gate (invoked by .githooks/pre-push): the four lint gates
+# (lint-reviews, lint-issues, record-lint, docs-lint) as prerequisites, then
+# build, vet, test,
 # and race-enabled internal tests natively. CI's check job runs those same four
 # Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
 # separately before pushing. Host-native `go build` (not the cross-compiling
