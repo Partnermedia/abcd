@@ -7,6 +7,8 @@ category: "drift"
 source: "user-observation"
 found_during: "v0.6.2 release 2026-08-23"
 found_at: ".github/workflows/site.yml"
+resolution: "the release chain deploys the site itself. The defect was one missing line: auto-release.yml's call to release.yml passed no secrets, so the chain ran with an empty context and the callee's environment-declaring job resolved nothing. Fixed and pinned as iss-2608250536214009, and OBSERVED in production on the v0.6.6 chain (run 32827279216): release / site / deploy success, abcdev.app serving v0.6.6, no manual dispatch. This record's own three diagnoses were each reasoned from configuration and asserted as fixes; it is closed on a green production deploy rather than on the canary that predicted one."
+impact: internal
 ---
 
 The v0.6.2 release published its binaries, then failed on its final job, and
@@ -58,9 +60,17 @@ measurement that refutes it:
 > either. The inherited set is therefore empty, and `secrets.CLOUDFLARE_API_TOKEN`
 > resolves to nothing inside the callee.
 
-This record stays OPEN until a release chain deploys the site without a hand on
-it. The fix is measured but not yet observed in production, and closing it on the
-measurement alone would be the fourth diagnosis asserted ahead of its evidence.
+OBSERVED IN PRODUCTION 2026-08-25. The v0.6.6 release chain (auto-release run
+32827279216) ran `release / site / deploy` to success with no hand on it, and
+abcdev.app serves v0.6.6. No `workflow_dispatch` of site.yml was involved: the
+three site.yml runs around that window are all `push` events. The fix is the one
+line `secrets: inherit` on auto-release.yml's call to release.yml, recorded as
+iss-2608250536214009 and pinned by TestReleaseChainPassesSecretsAtEveryLevel.
+
+That is the evidence this record was held open for. It stayed open through the
+canary measurement on purpose: three diagnoses in this record were reasoned from
+configuration and asserted as fixes, and closing on a measurement rather than on
+a green production deploy would have made the fourth.
 
 ## Two wrong diagnoses, recorded because the pattern matters more than the bug
 
