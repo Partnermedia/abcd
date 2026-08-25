@@ -2,6 +2,7 @@ package capture
 
 import (
 	"fmt"
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"strconv"
 	"strings"
 )
@@ -52,6 +53,34 @@ func parseFrontmatterAndBody(text string) (map[string]any, string, error) {
 }
 
 // parseFrontmatterBlock parses the interior lines of a frontmatter block.
+// nextLineIsIndented reports whether the line after i begins an indented block,
+// skipping blank lines. It is the lookahead that separates `key:` as a null from
+// `key:` as the head of a nested object.
+func nextLineIsIndented(lines []string, i int) bool {
+	for j := i + 1; j < len(lines); j++ {
+		l := strings.TrimRight(lines[j], "\r\n")
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		return strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t")
+	}
+	return false
+}
+
+// quotedScalar reports whether a raw scalar token is double-quoted, which in
+// YAML makes it a string whatever it spells.
+func quotedScalar(rest string) bool {
+	t := strings.TrimSpace(rest)
+	return len(t) >= 2 && strings.HasPrefix(t, `"`) && strings.HasSuffix(t, `"`)
+}
+
+// parseFrontmatterBlock parses the interior lines of a frontmatter block,
+// deciding null-vs-string while the RAW scalar is still in hand.
+//
+// An earlier draft split this in two and threaded a set of quoted keys out to the
+// validator. The decision is made inline here, so that set was never populated and
+// both callers discarded it — dead scaffolding, and the comment justifying it was
+// false as well. One function, no reserved return.
 func parseFrontmatterBlock(lines []string) (map[string]any, error) {
 	fm := map[string]any{}
 	i := 0
@@ -79,6 +108,17 @@ func parseFrontmatterBlock(lines []string) (map[string]any, error) {
 		// sees and the file a mutation edits diverge. A duplicate key is malformed.
 		if _, dup := fm[key]; dup {
 			return nil, fmt.Errorf("%w: duplicate key %q", ErrMalformedFrontmatter, key)
+		}
+		// `key:` with no value and NO indented line under it is a bare YAML null,
+		// not an empty object (iss-285). Taking the nested branch there made the
+		// value a map, which capture rejects as "must be a string" while
+		// record-lint reads the same raw scalar as null — the split verdict this
+		// normalisation exists to close, left open for the one spelling nobody
+		// tested. The lookahead is what parts them: an object has a member.
+		if rest == "" && !nextLineIsIndented(lines, i) {
+			fm[key] = ""
+			i++
+			continue
 		}
 		if rest == "" {
 			// Nested one-level object: consume following indented lines.
@@ -115,6 +155,24 @@ func parseFrontmatterBlock(lines []string) (map[string]any, error) {
 		val, err := parseScalarOrList(rest)
 		if err != nil {
 			return nil, err
+		}
+		// Normalise a BARE YAML null to the empty string, and leave a quoted one
+		// as the string it is (iss-285).
+		//
+		// parseScalarOrList unquotes, which destroys the only thing separating
+		// `impact: null` from `impact: "null"` — and record-lint tests the RAW
+		// scalar, so the two gates reached opposite verdicts on one record: the
+		// lint saw a string and refused, capture saw a null and passed. That is
+		// the shape where a record passes the lint and then fails the command
+		// that acts on it. Widening IsNull to the whole YAML null set (iss-287)
+		// makes the split worse rather than better, which is why the two fixes
+		// land together.
+		//
+		// Collapsing to "" here means every downstream nullness test is a test on
+		// a value that already knows which it was, without threading quotedness
+		// through validate and its callers.
+		if str, isStr := val.(string); isStr && !quotedScalar(rest) && frontmatter.IsNull(str) {
+			val = ""
 		}
 		fm[key] = val
 		i++
