@@ -192,7 +192,8 @@ jobs:
     # Measured rather than reasoned, on a canary environment secret through this
     # exact two-level shape: top-level job with the environment SET; nested twice
     # with no secrets line EMPTY; nested twice with inherit at this call SET.
-    # TestAutoReleaseInheritsSecrets pins it.
+    # TestReleaseChainPassesSecretsAtEveryLevel (internal/core/site) pins
+    # this line and the three others like it.
     #
     # The blast radius is what inherit conveys, which is the caller's own set —
     # and this repository holds no repository-scoped and no organisation secret

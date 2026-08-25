@@ -1,0 +1,30 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "1f2348333ed3d63c2ef6c8e98fcac28e44b2e954"
+    }
+  },
+  "verifier": {
+    "id": "docs-currency-reviewer@release"
+  },
+  "timeVerified": "2026-08-25T08:09:36Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.5"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": [],
+  "_reviewProvenance": "PROMOTE with ZERO findings on the FIFTH run of this gate against this cut. The four refusals before it are the provenance, not noise, and every one caught a claim corrected at one source while another source still said something else. Run 1 (5519d444) HOLD, 5: the changelog claimed the credential failed on v0.6.2 through v0.6.5, conflating 'the site did not deploy' with 'the deploy failed on the credential' \u2014 v0.6.4's render failed and its deploy was SKIPPED (run 32765800591), so the true set is v0.6.2, v0.6.3 and v0.6.5; a workflow comment named TestAutoReleaseInheritsSecrets, a test that never existed, in a file that scaffolds into every managed repository; commands/launch.md stated the causal story the canary disproves; it counted three failure modes above four bullets; and the ## [0.6.4] entry's disproven mechanism was retracted without being named. Run 2 (02c57d82) PROMOTE. Run 3 (a6712c64) HOLD, 2: the fix for the argument hints dropped the phantom `status` and ADDED `identity-check`, which the same page deliberately withholds \u2014 its scoping note says that verb stays a bare-CLI entrypoint so a hook or CI job can read its exit code, and the page carries a flow section for every other hinted token and none for it. The hint answers to two authorities, the binary and the page; satisfying one while breaking the other is still wrong. Run 4 (c018719a) HOLD, 1: that reversal was written into the record's body and left standing in its frontmatter `resolution:` field, which the reviewer caught not by reading the file but by running `abcd capture list --resolved --json` and seeing the stale text emitted on a path the rendered site does not cover. This run verified the correction through that same command, re-derived the three-releases claim from the live GitHub runs rather than from the prose, independently reproduced the tree-wide sweep for all three error classes rather than accepting the one supplied to it, and confirmed TestReleaseChainPassesSecretsAtEveryLevel covers exactly the four call sites grep finds. It also exercised the shipped binary in a throwaway repository: `ahoy status` and `launch dry-run` both exit 2, every hinted token resolves, and `launch --dry-run --json` matches commands/launch.md field by field. A probe invocation of `ahoy uninstall` mutated AGENTS.md; the reviewer restored it, and the operator independently verified the working tree clean and the marker block intact at this commit before the receipt was written. Not covered: brief-tier drift under .abcd/development/, CHANGELOG entries below ## [0.6.5], and the production deploy itself, which cannot be observed before the tag \u2014 which is precisely why iss-2608231912566984 stays open. The judge is the release session's pinned harness model."
+}

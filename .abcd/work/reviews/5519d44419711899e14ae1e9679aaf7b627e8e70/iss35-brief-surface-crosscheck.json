@@ -1,0 +1,157 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "5519d44419711899e14ae1e9679aaf7b627e8e70"
+    }
+  },
+  "verifier": {
+    "id": "maintainer@release"
+  },
+  "timeVerified": "2026-08-25T07:27:23Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-5",
+  "tier": "shallow",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "iss35-brief-surface-crosscheck",
+    "version": "1",
+    "promptHash": "sha256:6b4a388e596e159a04f73417af8c2d08699968dd01031b9c08aeac65596d8064",
+    "briefVersion": "0.6.5"
+  },
+  "categories": {
+    "fictional-layout": 2,
+    "false-claim": 7,
+    "stale-count": 6,
+    "undocumented-surface": 5,
+    "criterion-violation": 1
+  },
+  "failing": [
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "class": "fictional-layout",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/02-verification-matrix.md:55",
+      "class": "false-claim",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "stale-count",
+      "item": "skills surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17 and .abcd/development/brief/04-surfaces/README.md:34",
+      "class": "stale-count",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/06-delivery/01-build-sequence.md:29",
+      "class": "fictional-layout",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:50 (also row 8 at README.md:14, and 04-surfaces/08-abcd.md:13,17)",
+      "class": "false-claim",
+      "item": "plugin command surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/01-ahoy.md:200-203",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:373-375",
+      "class": "stale-count",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:367-368",
+      "class": "false-claim",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/03-configuration.md:368",
+      "class": "undocumented-surface",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": "hooks/hooks.json SessionStart entry \u2014 no brief row",
+      "class": "undocumented-surface",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "stale-count",
+      "item": "hook entrypoints",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:5",
+      "class": "undocumented-surface",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:30",
+      "class": "criterion-violation",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:3",
+      "class": "false-claim",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/01-agents.md:82",
+      "class": "undocumented-surface",
+      "item": "plugin agent surface",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/08-abcd.md:79-88",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/04-surfaces/README.md:34",
+      "class": "false-claim",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:17",
+      "class": "false-claim",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "undocumented-surface",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    },
+    {
+      "where": ".abcd/development/brief/05-internals/08-skills.md:19",
+      "class": "stale-count",
+      "item": "CLI verb tree",
+      "disposition": "deferred to iss-2608231346137587 (brief-tier record drift); not release-blocking: the brief ships in no release artefact (adr-28), so no installed surface is affected"
+    }
+  ],
+  "_reviewProvenance": "SHALLOW run, the tier the manifest assigns a patch release: this cut's impact is fix (decided by iss-2608250536214009), and requiredReleaseTier returns shallow below additive. Direction B only \u2014 all 5 declared surfaces, 5 checkers, 0 errored, 0 empty. Direction A (the 23 brief docs) is deliberately not run, which is what shallow means. Binaries built with `make build`; checkers probed bin/abcd-darwin-arm64 live, listed commands/ and agents/, and read hooks/hooks.json. 21 unique discrepancies after the Merge phase's dedup on (where, claim-prefix), against 43 at the v0.6.5 gate on the same tier \u2014 the fall is drift being re-counted, not drift being fixed, and no claim is made that anything improved. The tier was verified rather than assumed: the gate was reproduced locally against this cut before anything was tagged, because a shallow receipt refused at gate time consumes the version rather than blocking the release. VERDICT: PROMOTE with every finding dispositioned, under the standing disposition \u2014 brief-tier record drift, and the brief ships in no release artefact (adr-28), so no installed surface is affected. Tracked by iss-2608231346137587, which stays open. Two findings deserve the maintainer's eye beyond that disposition and are named here rather than buried. 06-delivery/01-build-sequence.md states in unmarked present tense that the markdown surfaces 'commands/, agents/, skills/' load cleanly, when no skills/ directory exists in the tree at all \u2014 and the brief contradicts that line twice elsewhere, at 04-surfaces/04-launch.md and 05-internals/08-skills.md, so the record disagrees with itself rather than merely with the tree. And the surfaces register spells commands/abcd.md as bare `/abcd` when the harness registers it inside the plugin namespace like every other command file, which is the same namespace-segment rule the register documents one paragraph earlier for iss-161, unapplied to the file whose name equals the plugin's. The rest is the familiar count drift: `abcd site` is a shipped verb with its own chapter and is absent from the sixteen-verb and nineteen-file counts, from the bare-status-board list it belongs on, and from the 'three newest parents' set it displaces. The gate is procedural by design and never judges a finding's content; the maintainer's dispositioned PROMOTE is the gate. The judge is the release session's pinned harness model."
+}
