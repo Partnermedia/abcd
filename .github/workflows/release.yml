@@ -416,28 +416,30 @@ jobs:
       # Explicit, never defaulted: site.yml refuses any other value, so its production
       # path can only be reached by a caller that asked for it by name.
       mode: production
-    # NOTE: this does NOT make the production site deploy work, and the record of
-    # that is iss-2608231912566984 (reopened). A called workflow's job does not
-    # resolve ENVIRONMENT secrets even when it declares the environment and the
-    # caller inherits: `inherit` conveys the caller's secrets, a job that uses
-    # `uses:` may not declare `environment:`, and this repository holds no
-    # repository-scoped secrets — so the inherited set is empty. Proven by running
-    # it rather than by reading it: the identical deploy job fails through this call
-    # (v0.6.2, v0.6.3) and succeeds through `workflow_dispatch` on site.yml, which
-    # is the documented emergency redeploy and is production by definition.
-    #
-    # The line is kept because it is harmless and plausibly necessary in any fix
-    # that lands, not because it is sufficient. Until iss-2608231912566984 is
-    # decided, the site is deployed by dispatch after a release.
-    #
     # `inherit` rather than a named `secrets:` block because the named form cannot
-    # work here: a job that calls a reusable workflow may not declare `environment:`,
-    # so this caller can never resolve an environment secret in order to pass it on.
-    # The blast radius is what `inherit` actually conveys, and this repository holds
-    # NO repository-scoped and no organization secrets — every Cloudflare credential
-    # is scoped to the `site` / `site-preview` environments, which the callee's own
-    # jobs gate on. What inherit restores is the callee's ability to resolve those
-    # environment secrets at all, not a pile of ambient ones to leak.
+    # work here: a job that calls a reusable workflow may not declare
+    # `environment:`, so this caller can never resolve an environment secret in
+    # order to pass one on. What inherit conveys is the caller's own set, and it
+    # is what lets the callee's `environment:`-declaring jobs resolve their
+    # environment secrets at all.
+    #
+    # This line is necessary and NOT sufficient on its own: the same line is
+    # required at every level of the call chain, including auto-release.yml's
+    # call to this workflow. It was missing there through v0.6.2 to v0.6.5, so
+    # this whole chain ran with an empty secrets context and the production
+    # deploy failed on a credential that had never been conveyed
+    # (iss-2608231912566984). The environment WAS applied on that path — a
+    # deployment record was created for each failed attempt — which is what made
+    # the cause look like the environment rather than the context.
+    #
+    # Measured rather than reasoned, on a canary environment secret through the
+    # same two-level shape: top-level job with the environment SET; nested twice
+    # with no secrets line EMPTY; nested twice with inherit at the outer call SET.
+    #
+    # The blast radius is what inherit actually conveys, and this repository holds
+    # NO repository-scoped and no organization secrets — every Cloudflare
+    # credential is scoped to the `site` / `site-preview` environments, which the
+    # callee's own jobs gate on.
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
   # The manual rehearsal (workflow_dispatch). It arms the full gate against a
