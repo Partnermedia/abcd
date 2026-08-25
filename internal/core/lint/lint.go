@@ -2486,9 +2486,12 @@ func contentExempt(rel string, fields map[string]fmField, cfg Config) bool {
 	return false
 }
 
-func isNull(v string) bool {
-	return v == "" || v == "null" || v == "~"
-}
+// isNull delegates to the one null predicate. It stays as a name here only
+// because the call sites read better for it; the SET of null spellings lives in
+// internal/core/frontmatter and is not restated (iss-287). The private copy this
+// replaces recognised only the lower-case spelling, so `impact: NULL` was null
+// to capture and a malformed impact to this lint.
+func isNull(v string) bool { return frontmatter.IsNull(v) }
 
 // fenceMask marks lines that are inside (or are a marker for) a triple-backtick
 // fenced code block.

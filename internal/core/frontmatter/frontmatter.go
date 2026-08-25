@@ -76,7 +76,28 @@ func TrimBOM(s string) string {
 	return strings.TrimPrefix(s, utf8BOM)
 }
 
-// IsNull treats an empty value and the YAML nulls ""/"null"/"~" as null.
+// IsNull reports whether a frontmatter scalar is a YAML null.
+//
+// The set is the YAML 1.2 core schema's, exactly: the empty value, "~", and the
+// three spellings "null", "Null" and "NULL". It is deliberately NOT a
+// case-insensitive compare — YAML does not accept "nUlL", and an EqualFold here
+// would make abcd read records no YAML parser would agree with, which is worse
+// than the miss it fixes (iss-287, reported as GitHub #290).
+//
+// This is the ONE null predicate. internal/core/lint held a private copy that
+// recognised only the lower-case spelling, so `impact: NULL` read as null in one
+// gate and as a malformed impact in the other — the split-verdict shape that
+// makes a record pass a lint and then fail the command that acts on it. Callers
+// come here rather than re-deriving it.
+//
+// The value must be the RAW scalar, before unquoting. Quoting is what separates
+// a null from a string in YAML: bare null is a null, and "null" with its quotes
+// is the three-character string. A caller that unquotes first destroys that
+// distinction and cannot get it back.
 func IsNull(v string) bool {
-	return v == "" || v == "null" || v == "~"
+	switch v {
+	case "", "~", "null", "Null", "NULL":
+		return true
+	}
+	return false
 }
