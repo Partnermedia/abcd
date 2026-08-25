@@ -180,3 +180,22 @@ jobs:
       # commit just tagged). The resolved tagged-commit SHA on the re-release
       # path, so the Release is built from the tag, not a newer main HEAD.
       ref: ${{ needs.detect.outputs.release_ref }}
+    # Without this the whole chain runs with an EMPTY secrets context, and the
+    # deploy at the end of it fails on a credential that was never conveyed
+    # (iss-2608231912566984). A called workflow's `secrets` context is ONLY what
+    # its caller passes: a job inside it that declares `environment:` gets the
+    # environment applied — a deployment record is even created — but resolves
+    # none of that environment's secrets unless `inherit` unlocked the context
+    # first. Necessary at EVERY level, so this line and release.yml's call to
+    # site.yml are one mechanism, not two.
+    #
+    # Measured rather than reasoned, on a canary environment secret through this
+    # exact two-level shape: top-level job with the environment SET; nested twice
+    # with no secrets line EMPTY; nested twice with inherit at this call SET.
+    # TestAutoReleaseInheritsSecrets pins it.
+    #
+    # The blast radius is what inherit conveys, which is the caller's own set —
+    # and this repository holds no repository-scoped and no organisation secret
+    # of its own.
+    # Every credential is environment-scoped, gated by the callee's own jobs.
+    secrets: inherit
