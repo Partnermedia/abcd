@@ -198,4 +198,4 @@ jobs:
     # and this repository holds no repository-scoped and no organisation secret
     # of its own.
     # Every credential is environment-scoped, gated by the callee's own jobs.
-    secrets: inherit
+    secrets: inherit # zizmor: ignore[secrets-inherit]
