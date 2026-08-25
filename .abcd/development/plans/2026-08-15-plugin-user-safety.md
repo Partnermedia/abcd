@@ -73,7 +73,7 @@ once. Human-paired (the §4 gate is manual by design).
    or nothing.
 2. **[iss-202](../../work/issues/resolved/iss-202-scanner-pii-config-unguarded-read.md)**
    (critical) — `scanner.New` reads `pii.json` unguarded. Autonomous-eligible.
-3. **[iss-203](../../work/issues/open/iss-203-audit-privacy-degraded-scanner-silent.md)**
+3. **[iss-203](../../work/issues/resolved/iss-203-audit-privacy-degraded-scanner-silent.md)**
    (major) — audit silently degrades when `scanner.New` fails. Same seam as
    iss-202; land with or immediately after it, never in parallel.
 4. **[iss-201](../../work/issues/resolved/iss-201-guard-hook-stdin-overflow-fail-open.md)**
