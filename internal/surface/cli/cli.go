@@ -1283,10 +1283,50 @@ func newHookCommand() *cobra.Command {
 			if len(notices) == 0 {
 				return nil
 			}
+			// Exit ZERO, and put the notices where a SessionStart hook's output is
+			// actually read (iss-2608241115201044).
+			//
+			// This returned exit 2 on the documented assumption that a non-zero
+			// SessionStart surfaces stderr without blocking. It does not: the
+			// harness renders the non-zero exit as an opaque "SessionStart:startup
+			// hook error" banner followed by a truncated echo of the hooks.json
+			// command string, and DROPS the stderr text. So every notice this hook
+			// exists to deliver — transcript-capture gaps, staged-drain failures,
+			// the backlog count, binary skew — reached the user as an error with no
+			// content, which is worse than silence: it reports a fault in abcd
+			// rather than the condition it was trying to report.
+			//
+			// The notice TEXT goes to stderr, sanitised. Only a CONSTANT goes to
+			// stdout.
+			//
+			// SessionStart's stdout is injected into the session's context, and the
+			// notices interpolate repo-derived strings — `meta.setup_version` from
+			// .abcd/config.json is a TRACKED file, so a pull request or a fork can
+			// set it, and an adversarial review demonstrated a directive payload
+			// reaching context through exactly this line. termsafe.Sanitize defends a
+			// terminal, not a context window: it masks control bytes and leaves prose
+			// untouched, which is the whole of an injection. Nothing repo-derived is
+			// worth putting on that channel for a notice.
+			//
+			// So stdout carries a fixed sentence and a count — enough for the session
+			// to know notices exist and say where to look — and the content stays on
+			// stderr where it has always been. The exit code stays 0 because a notice
+			// is not a hook failure, which is the delivery bug this fixes
+			// (iss-2608241115201044): a non-zero exit renders as an opaque error
+			// banner with the text dropped.
 			for _, n := range notices {
 				fmt.Fprintln(cmd.ErrOrStderr(), n)
 			}
-			return &exitError{Code: 2} // non-zero so SessionStart shows it; SessionStart never blocks
+			// Name the verbs that actually hold the detail. An earlier draft sent
+			// the reader to `abcd ahoy` alone, which renders install state and a
+			// gap COUNT and says nothing about a staged transcript or a failed
+			// drain — so the one notice naming a privacy artefact was the one it
+			// lost. `abcd history staged` is where that lives.
+			fmt.Fprintf(cmd.OutOrStdout(),
+				"abcd: %d session-start notice(s) on this hook's stderr; "+
+					"run `abcd history staged` for transcript backlog or `abcd ahoy` for install state.\n",
+				len(notices))
+			return nil
 		},
 	})
 
