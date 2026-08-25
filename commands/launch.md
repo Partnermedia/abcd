@@ -1,7 +1,7 @@
 ---
 name: launch
 description: Preview the public launch — the file bundle, the secret/PII scan, and the release gates — in dry-run mode, cut a release by deriving its version and composing its changelog, and scaffold the changelog-driven release gate into a managed repo. The preview performs zero writes; `ship` writes the dated CHANGELOG heading and never publishes; `scaffold` writes the release workflows and never publishes.
-argument-hint: "[dry-run | ship | scaffold]"
+argument-hint: "[--dry-run] | ship [--changelog-json <path>] | scaffold"
 ---
 
 # `/abcd:launch` release preview and release cut
@@ -100,7 +100,7 @@ binary is already in place, so it needs the plugin update to fetch a new one.
 
 ### When it goes wrong
 
-Three failures are worth recognising, because each looks like something else.
+Four failures are worth recognising, because each looks like something else.
 
 - **The run says `Waiting` for a long time and nothing happens.** That is the
   approval gate, not a hang. Approve it.
@@ -114,9 +114,11 @@ Three failures are worth recognising, because each looks like something else.
   gh workflow run site.yml
   ```
 
-  With no tag input it resolves the newest published release. It succeeds where
-  the release chain's own call fails, because a workflow reached by dispatch
-  resolves its environment secrets and one reached by `workflow_call` does not.
+  With no tag input it resolves the newest published release. Reach for it when
+  the chain's own deploy fails; a workflow reached by `workflow_call` resolves
+  its environment secrets perfectly well, provided every caller above it passes
+  `secrets: inherit` — measured on a canary secret, and pinned by
+  `TestReleaseChainPassesSecretsAtEveryLevel`.
 - **The release job fails on `Semantic-gate receipts`.** The receipts do not
   match the commit the workflow derived. The tag exists by then and the workflow
   never moves a tag, so the version is consumed: it needs the tag deleted and the

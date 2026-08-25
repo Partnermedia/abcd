@@ -425,7 +425,7 @@ jobs:
     #
     # This line is necessary and NOT sufficient on its own: the same line is
     # required at every level of the call chain, including auto-release.yml's
-    # call to this workflow. It was missing there through v0.6.2 to v0.6.5, so
+    # call to this workflow. It was missing there through v0.6.5, so
     # this whole chain ran with an empty secrets context and the production
     # deploy failed on a credential that had never been conveyed
     # (iss-2608231912566984). The environment WAS applied on that path — a

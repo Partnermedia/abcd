@@ -18,8 +18,9 @@ import (
 // That is exactly how iss-2608231912566984 happened. release.yml's call to site.yml
 // carried `secrets: inherit` from v0.6.3 onward, and auto-release.yml's call to
 // release.yml carried nothing, so the chain ran empty and the production deploy failed
-// on a credential that had never been conveyed — through v0.6.2, v0.6.3, v0.6.4 and
-// v0.6.5. The failure is invisible until release day: nothing parses wrong, no job is
+// on a credential that had never been conveyed — on v0.6.2, v0.6.3 and v0.6.5. Not
+// v0.6.4: that release's render failed first and its deploy was skipped, so it never
+// reached the credential. The failure is invisible until release day: nothing parses wrong, no job is
 // skipped, the deployment record is created, and wrangler is simply handed an empty
 // token at the last step of a release whose binaries are already public.
 //

@@ -10,6 +10,13 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-08-25
+
+### Fixed
+
+- **The production site deploy runs as part of the release, instead of needing a manual `gh workflow run site.yml` after every tag.** A called workflow's `secrets` context is only what its caller passes: a job inside one that declares `environment:` gets the environment applied — GitHub creates a deployment record for it, which is why this read as an environment problem — and still resolves none of that environment's secrets unless `inherit` unlocked the context first. `release.yml` has carried `secrets: inherit` on its call to `site.yml` since v0.6.3, while `auto-release.yml`'s call to `release.yml` carried no `secrets:` line at all, so the chain ran empty from the top and the deploy failed on a credential that had never been conveyed — on v0.6.2, v0.6.3 and v0.6.5, each time after the binaries, checksums and attestation had already published, leaving the site on an older version. v0.6.4 never reached the credential at all: its render failed first and the deploy was skipped, which is the defect the `## [0.6.5]` entry records. The line sits on both live calls and on the same two calls in the scaffold templates, so a repository scaffolded from them starts with every level of the chain passing secrets, and `TestReleaseChainPassesSecretsAtEveryLevel` in `internal/core/site` pins all four call sites. This retracts the `## [0.6.4]` entry below, where a reader meets the disproven mechanism: a job that calls a reusable workflow genuinely cannot declare `environment:`, but the conclusion drawn from that — that the inherited set is therefore empty inside the callee — is false. Measured on a canary environment secret through the same two-level shape: a top-level job declaring the environment saw it set, nested twice with no `secrets:` line empty, and nested twice with `inherit` at the outer call set. (iss-2608250536214009)
+- **Both slash-command argument hints — the one string a user reads in the picker before invoking — name only what the surface dispatches.** `/abcd:ahoy` lists `install`, `uninstall`, `doctor` and `dry-run`, each with its own flow section on the page; the bare invocation is the status render, and `identity-check`, scoped as a bare-CLI entrypoint so a hook or CI job can read its exit code, stays out of the picker. `/abcd:launch` shows `--dry-run` as the flag it is, beside the registered `ship` and `scaffold`. (iss-2608250743421381)
+
 ## [0.6.5] - 2026-08-24
 
 ### Changed
