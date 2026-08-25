@@ -62,8 +62,9 @@ Start with the plan and the design record:
 Run from the repo root.
 
 ```bash
-make preflight      # the pre-push gate: lint-reviews + record-lint + docs-lint,
-                    # then build + vet + test + race (internal)
+make preflight      # the pre-push gate: lint-reviews + lint-issues +
+                    # record-lint + docs-lint + site-render, then build + vet +
+                    # test + race (internal)
 make build          # cross-compiles bin/abcd-<goos>-<arch> (there is no plain bin/abcd)
 gofmt -l .          # format gate: any output names a file needing `gofmt -w`
 go vet ./...        # static checks
@@ -151,8 +152,8 @@ irreversible; guessing downward costs nothing.**
 
 ## Definition of done
 
-- `make preflight` is clean — the four lint gates (`lint-reviews`,
-  `lint-issues`, `record-lint`, `docs-lint`) plus `go build ./...`,
+- `make preflight` is clean — the five gates (`lint-reviews`, `lint-issues`,
+  `record-lint`, `docs-lint`, `site-render`) plus `go build ./...`,
   `go vet ./...`, `go test ./...`, and `go test -race ./internal/...`.
 - `gofmt -l .` reports nothing. The format gate is CI's own step, outside
   `make preflight`, so run it before pushing.

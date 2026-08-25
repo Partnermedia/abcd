@@ -7,6 +7,8 @@ category: "bug"
 source: "user-observation"
 found_during: "pr-294-review"
 found_at: "internal/core/frontmatter/frontmatter.go"
+resolution: "frontmatter.IsNull is the YAML 1.2 core null set exactly — empty, ~, null, Null, NULL — and deliberately not a case-insensitive compare, because YAML does not accept nUlL and reading records no parser agrees with is worse than the miss. internal/core/lint's private duplicate, which recognised only the lower-case spelling, now delegates to it: that duplicate was the split where impact: NULL was null to capture and a malformed impact to the lint."
+impact: fix
 ---
 
 Uppercase YAML null spellings unrecognised by the null predicates (reported as GitHub #290)

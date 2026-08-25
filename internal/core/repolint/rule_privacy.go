@@ -40,6 +40,12 @@ type privacyHygiene struct{}
 // docs-lint HTML-comment form it works in source files too, where `<!-- -->` is
 // not valid. It is the spelling the rule's own Fix hint teaches, so the corpus
 // converges on one token.
+// privacyConfigRel is the per-repo scanner override this rule reports on when it
+// cannot be used. It mirrors scanner's own unexported repoConfigRelPath; the
+// scanner does not export it, and duplicating one slash-joined literal is
+// cheaper than widening that package's surface for a message string.
+const privacyConfigRel = ".abcd/config/pii.json"
+
 const lintWaiver = "abcd-lint:allow"
 
 // auditWaiver is the pre-spc-29 spelling, honoured forever: the token lives in
@@ -95,14 +101,37 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	// The canonical network-identifier set AS THIS REPO CONFIGURES IT: the
 	// scanner's merged patterns, so a severity a repo raised in
 	// .abcd/config/pii.json is honoured here exactly as it is in Stage-1
-	// redaction. A scanner that cannot be built falls back to the built-in set,
-	// which detects the same things at their default severities.
+	// redaction.
+	//
+	// The degraded case is REPORTED, not silently absorbed (iss-203). scanner.New
+	// returns a nil error on every degradation path — an unreadable, unparseable
+	// or uncompilable pii.json all yield a usable scanner marked unavailable — so
+	// an `err == nil` guard here is always true and the fallback branch it reads
+	// as guarding is dead code. What actually happens on a broken override is
+	// that the merge fails, the scanner keeps the built-in defaults, and the
+	// repo's RAISED severities vanish. Reporting that is the whole point: a
+	// weakened privacy scan that says "conforms" is the didn't-scan-reported-clean
+	// shape this rule's contract forbids, and the operator who raised a severity
+	// is the one person who would never learn it stopped applying.
+	var out []Finding
 	patterns := scanner.NetworkPatterns()
-	if sc, err := scanner.New(ctx.RepoRoot); err == nil {
+	sc, err := scanner.New(ctx.RepoRoot)
+	if err != nil {
+		return nil, err
+	}
+	if degraded, reason := sc.Unavailable(); degraded {
+		out = append(out, Finding{
+			RuleID:   "privacy-hygiene",
+			Severity: SeverityError,
+			File:     privacyConfigRel,
+			Message: "per-repo scanner config is unusable, so this scan runs with the " +
+				"built-in severities and any raised in it do not apply: " + reason,
+			Fix: "repair or remove " + privacyConfigRel,
+		})
+	} else {
 		patterns = sc.NetworkPatterns()
 	}
 
-	var out []Finding
 	for _, rel := range tracked {
 		data, ok, oversizeText := readTrackedFile(root, filepath.FromSlash(rel))
 		if !ok {

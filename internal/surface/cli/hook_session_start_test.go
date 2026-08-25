@@ -64,14 +64,37 @@ func runSessionStart(stdin string, args ...string) (stdout, stderr string, code 
 
 // TestHookSessionStartWarnsWhenStoreMissing is iss-95: a session that begins in a
 // repo where abcd is not installed must SAY SO — visibly — so the user isn't left
-// with a silently non-accruing transcript corpus. SessionStart shows a hook's
-// stderr as a visible notice only on a non-zero exit, and never blocks on it.
+// with a silently non-accruing transcript corpus.
+//
+// The DELIVERY contract changed under iss-2608241115201044 and this test changed
+// with it, twice. It used to require a non-zero exit, on the assumption that
+// SessionStart renders a hook's stderr when the hook exits non-zero. The harness
+// instead renders an opaque "SessionStart:startup hook error" banner and drops the
+// stderr text, so the old assertion pinned a behaviour that delivered nothing.
+//
+// The first correction put the notice TEXT on stdout, and an adversarial review
+// showed why that is wrong: SessionStart's stdout is injected into the session's
+// context, and these notices interpolate repo-derived strings from a TRACKED
+// config file. So stdout carries a constant and a count, the text stays on
+// stderr, and the exit code is 0 because a notice is not a hook failure. Both
+// channels are asserted, because the point is that each carries the right thing.
 func TestHookSessionStartWarnsWhenStoreMissing(t *testing.T) {
 	repo := gitRepoNoStore(t)
-	_, stderr, code := runSessionStart(startPayload("s1", repo), "hook", "session-start")
+	stdout, stderr, code := runSessionStart(startPayload("s1", repo), "hook", "session-start")
 
-	if code == 0 {
-		t.Error("a missing store must exit non-zero so SessionStart renders the notice; got exit 0 (silent)")
+	if code != 0 {
+		t.Errorf("a notice is not a hook failure; got exit %d, which the harness renders as an opaque error banner with the text dropped", code)
+	}
+	if !strings.Contains(stderr, "ahoy install") {
+		t.Errorf("the notice text must reach stderr; stderr = %q", stderr)
+	}
+	if !strings.Contains(stdout, "session-start notice") {
+		t.Errorf("stdout must say notices exist so the session knows to look; stdout = %q", stdout)
+	}
+	// The guard that matters: nothing repo-derived may reach the context channel.
+	if strings.Contains(stdout, "ahoy install") || strings.Contains(stdout, repo) {
+		t.Errorf("repo-derived text reached SessionStart stdout, which is injected into "+
+			"the session's context; stdout = %q", stdout)
 	}
 	if !strings.Contains(stderr, "ahoy install") {
 		t.Errorf("the notice must tell the user how to fix it (ahoy install); stderr = %q", stderr)

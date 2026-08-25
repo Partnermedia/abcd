@@ -7,6 +7,8 @@ category: "bug"
 source: "impl-review"
 found_during: "pr-294-review"
 found_at: "internal/core/capture/parse.go"
+resolution: "capture and record-lint now part bare from quoted YAML nulls identically. A bare null spelling normalises to the empty string at parse time while a quoted one stays the string it spells, so the nullness decision is made while the RAW scalar is still in hand — record-lint tests the raw scalar, and capture used to test the unquoted one. Widening IsNull for iss-287 made that split wider rather than narrower, which is why the two land together. An adversarial review found the empty spelling still split: impact: with no value took the nested-object branch and parsed to a map, which capture rejected as must be a string while record-lint read it as null. A lookahead now parts them — an object has an indented member, a bare key: does not."
+impact: fix
 ---
 
 Quoted YAML nulls split capture and record-lint verdicts: capture unquotes before IsNull, record-lint reads the raw value

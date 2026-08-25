@@ -135,8 +135,12 @@ func sessionStartRoot(t *testing.T, bootstrap, binary string) (root, calls strin
 //     LimitReader), so two calls sharing one stdin leave the second reading EOF;
 //   - `hook prompt-router-reset` writes an UNCONDITIONAL success diagnostic to
 //     stderr, so whichever call runs first owns the line the transcript renders;
-//   - `hook session-start` exits 2 when it has a notice, which is the only way
-//     its warning reaches the human.
+//   - `hook session-start` exits 0 even when it has a notice, writing the text to
+//     stderr and a constant to stdout. It used to exit 2, on the belief that a
+//     non-zero SessionStart puts stderr in front of the human; the harness instead
+//     renders an opaque error banner and drops the text (iss-2608241115201044).
+//     This stub models the current binary, so the chain's own exits are what these
+//     tests exercise.
 const stubBinary = `#!/bin/sh
 in=$(cat)
 printf '%s %s stdin=[%s]\n' "$1" "$2" "$in" >> "$ABCD_CALLS"
@@ -146,7 +150,8 @@ if [ "$2" = "prompt-router-reset" ]; then
 	exit 0
 fi
 printf 'abcd: a session-start notice\n' >&2
-exit 2
+printf 'abcd: 1 session-start notice(s) on this hook stderr\n'
+exit 0
 `
 
 // sessionStartPayload is a harness SessionStart payload of the shape
@@ -220,8 +225,19 @@ exit 2
 	if got := firstLine(stderr); !strings.HasPrefix(got, "abcd bootstrap: installed") {
 		t.Errorf("the first stderr line must be the bootstrap's success (it is the only line the transcript shows); got %q\nfull stderr:\n%s", got, stderr)
 	}
-	if code == 0 {
-		t.Error("the exit must stay non-zero: only a non-zero SessionStart exit puts stderr in front of the human")
+	// The chain still exits 2 here, and that is the BOOTSTRAP's code, not the
+	// binary's. hooks/bootstrap.sh's notice() exits 2 for the same reason the Go
+	// hook used to, and its own comment states the reasoning that makes the other
+	// half of this correct: "a SessionStart hook's stdout becomes model context".
+	// That is exactly why the Go hook now puts only a constant there.
+	//
+	// The shell half is deliberately out of scope for iss-2608241115201044, which
+	// is about the binary's notices: bootstrap.sh's exit code also governs the
+	// install path, and changing it is a separate change with its own risk.
+	// Tracked as iss-2608251011427187. What this test pins either way is the
+	// TEXT and its ORDER, which the first-line assertion above carries.
+	if code != 2 {
+		t.Errorf("the bootstrap's own notice code must still propagate; code = %d", code)
 	}
 	if strings.Contains(stderr, "the plugin binary is not installed") {
 		t.Errorf("a successful bootstrap must not be followed by a missing-binary complaint; stderr:\n%s", stderr)
@@ -259,8 +275,11 @@ func TestSessionStartSteadyStateRunsBothCalls(t *testing.T) {
 	if got := firstLine(stderr); got != "abcd: a session-start notice" {
 		t.Errorf("session-start's notice must be the line the transcript renders, not the reset's success diagnostic; first line = %q\nfull stderr:\n%s", got, stderr)
 	}
-	if code != 2 {
-		t.Errorf("the binary's notice exit must propagate; code = %d", code)
+	// A notice is not a failure, so nothing propagates a non-zero code here. The
+	// first-line assertion above is what carries the coverage: the notice TEXT
+	// must be the line the transcript renders.
+	if code != 0 {
+		t.Errorf("a notice must not surface as a hook failure; code = %d", code)
 	}
 }
 

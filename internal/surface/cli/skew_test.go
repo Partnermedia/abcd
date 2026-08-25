@@ -57,8 +57,11 @@ func TestHookSessionStartReportsBinarySkew(t *testing.T) {
 
 	_, stderr, code := runSessionStart(startPayload("s-skew", repo), "hook", "session-start")
 
-	if code == 0 {
-		t.Error("the skew notice must exit non-zero so SessionStart renders it; got exit 0 (silent)")
+	// The exit is always 0 now — session-start's RunE returns nil on every path —
+	// so this cannot fail and is kept only as a regression tripwire on that.
+	// The stderr assertions below carry the real coverage.
+	if code != 0 {
+		t.Errorf("session-start must not signal a notice as a failure; got exit %d", code)
 	}
 	for _, want := range []string{"222222222222", "v0.4.9", "111111111111"} {
 		if !strings.Contains(stderr, want) {
@@ -91,7 +94,7 @@ func TestHookSessionStartSkewComparesTheLiveRoot(t *testing.T) {
 	skewCacheMeta(t, "release_tag=v0.4.9\nrelease_sha="+skewRelease+"\nplugin_sha="+skewRelease+"\nfetched_at=2026-08-01T00:00:00Z\n")
 
 	_, stderr, code := runSessionStart(startPayload("s-live", repo), "hook", "session-start")
-	if code == 0 {
+	if code != 0 {
 		t.Fatalf("the notice must be computed against the LIVE plugin root, never a recorded provisioning-time root; got exit 0 (stderr %q)", stderr)
 	}
 	if !strings.Contains(stderr, "222222222222") {
@@ -112,7 +115,7 @@ func TestHookSessionStartSkewFallsBackToRootMeta(t *testing.T) {
 	}
 
 	_, stderr, code := runSessionStart(startPayload("s-fallback", repo), "hook", "session-start")
-	if code == 0 {
+	if code != 0 {
 		t.Fatalf("the degraded install's root-local meta must still feed the notice; got exit 0 (stderr %q)", stderr)
 	}
 	for _, want := range []string{"222222222222", "111111111111"} {
@@ -135,7 +138,7 @@ func TestHookSessionStartSkewTagIsTermsafe(t *testing.T) {
 
 	_, stderr, code := runSessionStart(startPayload("s-termsafe", repo), "hook", "session-start")
 
-	if code == 0 {
+	if code != 0 {
 		t.Fatalf("the skew notice must still render; got exit 0 (stderr %q)", stderr)
 	}
 	if strings.ContainsRune(stderr, 0x1b) {

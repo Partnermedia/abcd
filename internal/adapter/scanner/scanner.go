@@ -226,7 +226,17 @@ func (s *Scanner) mergeConfig(cfg Config) error {
 		}
 		def := cfg.Patterns[name]
 		if def.Regex == "" {
-			continue
+			// A NEW pattern with no regex detects nothing, and skipping it
+			// silently is the one weakening a broken config can still achieve
+			// without being reported: an adversarial review demonstrated a
+			// pull request blanking a repo's custom detector's regex, after
+			// which `abcd lint` reported "conforms" at exit 0 over a file the
+			// detector had been catching. Bundled names never reach this loop
+			// (the floors check above continues past them), so refusing here
+			// cannot affect a config that only adjusts a built-in pattern's
+			// label or severity — it binds exactly the case where an empty
+			// regex is meaningless (iss-203's contract, closed here).
+			return errUnreadable("pattern " + name + " has no regex")
 		}
 		expr := def.Regex
 		if def.CaseInsensitive {
