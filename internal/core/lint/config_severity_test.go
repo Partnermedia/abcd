@@ -50,13 +50,36 @@ func TestLoadConfigRefusesOffEnumTokenSeverity(t *testing.T) {
 func TestLoadConfigRefusesUnknownKeys(t *testing.T) {
 	// A misspelt key silently zero-values the field it missed: "enabld" leaves
 	// Enabled false (a rule disarmed), "severty" leaves Severity "" (findings
-	// that count toward no exit). Strict decoding turns both into a refusal.
+	// that count toward no exit). Strict decoding of the rule and token
+	// objects turns both into a refusal.
 	path := writeConfig(t, `{
 	  "roots": ["rec"],
 	  "rules": {"links_resolve": {"enabld": true, "severity": "blocker"}}
 	}`)
 	if _, err := LoadConfig(path); err == nil {
 		t.Fatal("LoadConfig accepted an unknown config key (\"enabld\"); want rejection")
+	}
+	tok := writeConfig(t, `{
+	  "roots": ["rec"],
+	  "banned_tokens": [
+	    {"id":"t1","pattern":"foo","message":"no","severty":"blocker","severity":"blocker","successor":"bar","allow_context":["ok"]}
+	  ]
+	}`)
+	if _, err := LoadConfig(tok); err == nil {
+		t.Fatal("LoadConfig accepted an unknown banned-token key (\"severty\"); want rejection")
+	}
+}
+
+func TestLoadConfigAcceptsTopLevelAnnotationKey(t *testing.T) {
+	// The top level stays lenient: an annotation key is the JSON commentary
+	// convention, and the banlist editor pins that such a config still loads.
+	path := writeConfig(t, `{
+	  "note": "banned_tokens",
+	  "roots": ["rec"],
+	  "rules": {"links_resolve": {"enabled": true, "severity": "blocker"}}
+	}`)
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig refused a top-level annotation key: %v", err)
 	}
 }
 

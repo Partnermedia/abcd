@@ -345,13 +345,11 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, err
 		}
 	}
-	// Strict decode: a misspelt key would silently zero-value the field it
-	// missed ("enabld" disarms a rule, "severty" strips its exit-code weight),
-	// and both misreads survive review because the file still looks armed.
 	var cfg Config
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, err
+	}
+	if err := strictRuleAndTokenKeys(data); err != nil {
 		return Config{}, err
 	}
 	if err := cfg.validateBannedTokens(); err != nil {
@@ -361,6 +359,40 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// strictRuleAndTokenKeys re-decodes each rule and banned-token OBJECT with
+// DisallowUnknownFields: a misspelt key silently zero-values the field it
+// missed ("enabld" disarms a rule, "severty" strips its exit-code weight), and
+// both misreads survive review because the file still looks armed. The TOP
+// level stays lenient on purpose — an annotation key beside the declared ones
+// is the JSON commentary convention, and the banlist editor pins that a config
+// carrying one still loads.
+func strictRuleAndTokenKeys(data []byte) error {
+	var raw struct {
+		BannedTokens []json.RawMessage          `json:"banned_tokens"`
+		Rules        map[string]json.RawMessage `json:"rules"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for id, body := range raw.Rules {
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		var rc RuleConfig
+		if err := dec.Decode(&rc); err != nil {
+			return &configError{"rule " + id + ": " + err.Error()}
+		}
+	}
+	for i, body := range raw.BannedTokens {
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		var t BannedToken
+		if err := dec.Decode(&t); err != nil {
+			return &configError{"banned_tokens index " + strconv.Itoa(i) + ": " + err.Error()}
+		}
+	}
+	return nil
 }
 
 // validateSeverities refuses a severity outside the engine's enum on any
