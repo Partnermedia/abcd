@@ -141,6 +141,48 @@ git -C "$d" add -A
 git -C "$d" commit -qm "chore: resolve a stale issue"
 expect pass "$d" "ledger move with no trailer is allowed" -- commits main HEAD
 
+# A deleted record reaches no terminal folder, so a trailer pointing at it is a
+# declared resolution with no resolution. The bare delete used to satisfy the
+# gate on its own — counted as the D half of a presumed move, without the A half
+# that would have landed the record somewhere terminal.
+d="$(newrepo rs001-deleted)"
+git -C "$d" rm -q "$ISS_DIR/open/iss-999-a-fixture.md"
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-999"
+expect fail "$d" "RS001 trailer, record deleted from open/" -- commits main HEAD
+
+# A rewrite-move that stays inside open/ is not a resolution either, however
+# git reports it: rewritten heavily enough it is a D plus an A, and the D half
+# must not read as a terminal landing.
+d="$(newrepo rs001-renamed-within-open)"
+git -C "$d" mv "$ISS_DIR/open/iss-999-a-fixture.md" "$ISS_DIR/open/iss-999-a-fixture-renamed.md"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	echo "Rewritten line $i so git reports the move as a delete plus an add." >>"$d/$ISS_DIR/open/iss-999-a-fixture-renamed.md"
+done
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-999"
+expect fail "$d" "RS001 trailer, record renamed within open/" -- commits main HEAD
+
+# Captured and resolved in one range: the record never existed at base, so the
+# only ledger event is an A straight into resolved/ — the dominant capture-and-
+# fix-in-one-branch shape, which the gate admits through ids_entering_closed.
+d="$(newrepo rs001-capture-and-resolve)"
+cat >"$d/$ISS_DIR/resolved/iss-1000-found-and-fixed.md" <<'EOF'
+---
+schema_version: 1
+id: "iss-1000"
+---
+Found and fixed in one branch.
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-1000"
+expect pass "$d" "RS001 trailer on a record captured and resolved in the same range" -- commits main HEAD
+
 # --- RS002: a stamp added here must name a reachable commit ------------------
 
 d="$(newrepo rs002-bad)"

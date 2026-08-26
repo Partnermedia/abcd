@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"unicode/utf8"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -116,20 +115,23 @@ func New(repoRoot string) (*Scanner, error) {
 	// on a FIFO and reads unbounded through a symlink to an endless device,
 	// wedging transcript capture for the repo (iss-202). Every sibling
 	// trust-boundary config reader — guard.Load, the banlist private store,
-	// lint's config — goes through fsutil.ReadGuarded; this one is now no
-	// different.
+	// lint's config — guards the read; this one is now no different.
 	//
-	// The ancestor check comes first because O_NOFOLLOW applies to the final
-	// path component only: a swapped .abcd directory redirects the read out of
-	// the tree without the leaf guard ever seeing a symlink. guard.Load makes
-	// the same two-step check for the same reason.
-	if di, err := os.Lstat(filepath.Join(repoRoot, ".abcd")); err == nil && di.Mode()&os.ModeSymlink != 0 {
+	// The read is contained in an os.Root rather than guarded by a hand-rolled
+	// ancestor check: O_NOFOLLOW binds the final path component only, and this
+	// config sits two directories down (.abcd/config/pii.json), so a symlinked
+	// .abcd OR .abcd/config would redirect a path-based read out of the tree.
+	// os.Root resolves every component inside the root and refuses the escape
+	// wherever it sits — guard.Load's single ancestor check is complete for its
+	// one-deep .abcd/guard.json, but copying it here covered half the path.
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
 		s.unavailable = true
-		s.unavailReason = "per-repo scanner config unreadable: .abcd is a symlink (refusing to follow)"
+		s.unavailReason = "per-repo scanner config unreadable: the repo root cannot be opened for contained reads"
 		return s, nil
 	}
-	cfgPath := filepath.Join(repoRoot, repoConfigRelPath)
-	data, err := fsutil.ReadGuarded(cfgPath, maxScannerConfigBytes)
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, repoConfigRelPath, maxScannerConfigBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return s, nil // no override — built-in defaults stand
@@ -137,13 +139,13 @@ func New(repoRoot string) (*Scanner, error) {
 		// Every remaining failure is fail-closed, but the reason is specific:
 		// a degraded scanner that cannot say WHY is the defect iss-203 tracks.
 		switch {
-		case errors.Is(err, syscall.ELOOP):
-			s.unavailReason = "per-repo scanner config is a symlink (refusing to follow): " + repoConfigRelPath
 		case errors.Is(err, fsutil.ErrNotRegular):
-			s.unavailReason = "per-repo scanner config is not a regular file: " + repoConfigRelPath
+			s.unavailReason = "per-repo scanner config is not a regular file (a symlinked leaf is refused): " + repoConfigRelPath
 		case errors.Is(err, fsutil.ErrTooBig):
 			s.unavailReason = "per-repo scanner config exceeds the " + strconv.Itoa(maxScannerConfigBytes) + "-byte cap: " + repoConfigRelPath
 		default:
+			// Includes a path component that is a symlink or otherwise escapes
+			// the repo root — os.Root refuses the escape wherever it sits.
 			s.unavailReason = "per-repo scanner config unreadable: " + repoConfigRelPath
 		}
 		s.unavailable = true

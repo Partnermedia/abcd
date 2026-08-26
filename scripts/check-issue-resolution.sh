@@ -66,9 +66,12 @@ usage() {
 }
 
 # ids_leaving_open prints every iss-N whose record left open/ for resolved/ or
-# wontfix/ across the range. Rename detection is requested but not relied on: a
-# move recorded as a delete plus an add is the same event, so the two halves are
-# collected independently and intersected by the caller.
+# wontfix/ as a detected rename. Rename detection is requested but not relied
+# on: a move recorded as a delete plus an add is the same event, and its add
+# half is what ids_entering_closed reports — the caller unions the two views.
+# A bare deletion from open/ deliberately counts for NOTHING: a deleted record
+# reaches no terminal folder, so a trailer pointing at it is a declared
+# resolution with no resolution, exactly what RS001 exists to refuse.
 ids_leaving_open() {
 	local base="$1" head="$2"
 	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
@@ -79,11 +82,6 @@ ids_leaving_open() {
 				"$ISSUES_DIR/open/"*"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/open/"*"$ISSUES_DIR/wontfix/"*)
 					basename "$dest" | grep -oE '^iss-[0-9]+' || true
 					;;
-				esac
-				;;
-			D)
-				case "$path" in
-				"$ISSUES_DIR/open/"*) basename "$path" | grep -oE '^iss-[0-9]+' || true ;;
 				esac
 				;;
 			esac
@@ -156,7 +154,7 @@ check_commits() {
 			local id="${BASH_REMATCH[1]}"
 			declared="$declared $id"
 			if ! printf '%s\n' "$closed" | grep -qx "$id"; then
-				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not leave $ISSUES_DIR/open/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
+				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not reach $ISSUES_DIR/resolved/ or wontfix/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
 			fi
 		done <<<"$(git show -s --format='%B' "$sha")"
 	done <<<"$range"
@@ -215,6 +213,18 @@ check_ledger() {
 	done <<<"$files"
 	echo "check-issue-resolution: RS003 checked $checked stamped record(s) at $ref"
 }
+
+# A shallow checkout cannot run these checks honestly: reachable() cannot tell
+# an absent commit from an unfetched one, so RS002/RS003 would refuse every
+# stamp whose commit lies past the graft — 85 false violations on a clean tree,
+# each carrying a diagnosis about a repository fault that did not happen. The
+# spec that ruled git resolution out of --commit (spc-25) names shallow states
+# in-envelope, so the environment fault must be reported as itself: exit 2, the
+# code the contract reserves for it, never a violation.
+if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+	echo "check-issue-resolution: shallow checkout — RS002/RS003 cannot tell an absent commit from an unfetched one; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+	exit 2
+fi
 
 case "${1:-}" in
 commits)
