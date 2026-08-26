@@ -168,8 +168,9 @@ irreversible; guessing downward costs nothing.**
   blocks the next release.
 - **A change that fixes a captured issue resolves it in the same change**, and
   says so with a `Resolves: iss-N` trailer. `lint-issues` (RS001) refuses a
-  trailer whose record does not leave `.abcd/work/issues/open/` in the same
-  diff. Resolution is deliberately not a post-merge step: a step that happens
+  trailer whose record does not enter `.abcd/work/issues/resolved/` or
+  `.abcd/work/issues/wontfix/` in the same diff — a bare delete of the open
+  record satisfies nothing. Resolution is deliberately not a post-merge step: a step that happens
   after the merge is the one that gets forgotten, and a fixed-but-open issue
   leaves no marker to find it by. Resolving without a trailer stays legal — a
   stale issue closed on its own merits has no fixing commit to name.

@@ -41,7 +41,7 @@ stop it:
 
 ```text
 $ git push
-check-issue-resolution: RS001 commit c1e2c4c3d915 declares 'Resolves: iss-317', but iss-317 does not leave .abcd/work/issues/open/ in origin/main..HEAD. Resolve it in this change (abcd capture resolve iss-317 ...) or drop the trailer.
+check-issue-resolution: RS001 commit c1e2c4c3d915 declares 'Resolves: iss-317', but iss-317 does not enter .abcd/work/issues/resolved/ or .abcd/work/issues/wontfix/ in origin/main..HEAD. Resolve it in this change (abcd capture resolve iss-317 ...) or drop the trailer.
 check-issue-resolution: FAILED — 1 violation(s)
 ```
 
