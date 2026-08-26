@@ -39,7 +39,9 @@ rule id, `file:line`, message, indented fix) and a summary tail. The `--root` fl
 lints a repo other than the current working directory.
 
 The exit code is Conftest's tri-state: `0` clean, `1` warnings only, `2` any
-error — so `abcd lint` gates a repo's CI as well as backing onboarding.
+error, which is the shape a CI job can branch on. No gate in this repository
+invokes it: The verb backs onboarding and runs when a human types it. Wiring it
+into CI is a separate decision, tracked as iss-2608231000561060.
 
 ## The v1 rule set
 
