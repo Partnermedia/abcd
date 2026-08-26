@@ -15,7 +15,7 @@ severity: major
 ## Rule
 
 Every agent abcd ships that renders a **verdict** on code or artefacts — today
-`intent-fidelity-reviewer`, and every reviewer, auditor, linter-with-judgement,
+`intent-auditor`, and every reviewer, auditor, linter-with-judgement,
 and oracle that follows — is calibrated against a labelled corpus before its
 prompt is locked, and re-scored whenever the prompt changes.
 
@@ -156,7 +156,7 @@ length tiebreak is struck; the pre-flight gate is the corpus score.**
 ## Open Questions
 
 - **Where the TNR floor starts.** A floor set before we have a baseline is a
-  guess. Proposal: run the current `intent-fidelity-reviewer` against a first
+  guess. Proposal: run the current `intent-auditor` against a first
   corpus, take the measured TNR as the floor, and ratchet — never regress.
   Resolve at the first judge spec's T1.
 - **Corpus size before the number means anything.** 30–50 cases is the working
@@ -190,7 +190,7 @@ length tiebreak is struck; the pre-flight gate is the corpus score.**
 
 ## Audit Notes
 
-_Empty. Populated by `intent-fidelity-reviewer`'s single-document role when this
+_Empty. Populated by `intent-auditor`'s single-document role when this
 discipline is first audited. Like itd-1 and itd-5, audited continuously via
 rule-applies-to-every-judge-agent-spec semantics rather than a planned→shipped
 transition._

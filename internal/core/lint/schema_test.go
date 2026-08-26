@@ -571,6 +571,37 @@ func TestIntentLifecycleAcceptsAnADRSuccessor(t *testing.T) {
 	}
 }
 
+// TestRecordSchemaRequiresIssueFrontmatter (iss-2608261437041050) pins the
+// required-property invariant for the issue store. The ledger reader validates
+// every record it reads and SKIPS the ones that fail, so a committed record
+// missing a required property is invisible to every capture surface while the
+// record lint — which never asked the question — stays green. A store that
+// declares no required properties (adr/itd/spc, whose schemas differ) is
+// untouched, which the well-formed records in the same fixture prove.
+func TestRecordSchemaRequiresIssueFrontmatter(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	full := "---\nschema_version: 1\nid: iss-1\nslug: ok\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n"
+	writeFile(t, root, issues+"/open/iss-1-ok.md", full)
+	// The live shape of the defect: the record is complete but for schema_version,
+	// so every other gate reads it and only the reader drops it.
+	writeFile(t, root, issues+"/resolved/iss-2-stripped.md",
+		"---\nid: iss-2\nslug: stripped\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\nresolution: done\n---\n\nan issue\n")
+	// A store with a different schema must not be judged against the issue's.
+	writeFile(t, root, "rec/decisions/adrs/0001-model.md", "---\nid: adr-1\n---\n# ADR-1\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(issues, "resolved", "iss-2-stripped.md"), ruleRecordSchema, "schema_version") {
+		t.Errorf("expected a missing-schema_version finding on the stripped record: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 record_schema finding (the stripped record), got %d: %+v", n, fs)
+	}
+}
+
 // TestRecordSchemaGuardsTheRealRecord loads the committed record-lint config and
 // asserts the rule is armed as a blocker over the real stores. Deleting the rule,
 // dropping a store, or downgrading its severity fails here rather than silently

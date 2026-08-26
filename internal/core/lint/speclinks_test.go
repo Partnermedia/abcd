@@ -87,3 +87,18 @@ func TestScanSpecLinksMissingTreesAreSoft(t *testing.T) {
 		t.Errorf("scanned %+v, want an empty index", idx)
 	}
 }
+
+// TestScanSpecLinksUnreadableIntentIsHard proves the intent half fails closed
+// exactly as the spec half does: a record that lists but cannot be read is a
+// fault, not an absence. Swallowing it would hand the release cut's stale-intent
+// refusal an index that says "no intents" about a tree it could not read.
+func TestScanSpecLinksUnreadableIntentIsHard(t *testing.T) {
+	root := specLinkRepo(t)
+	planned := filepath.Join(root, "record", "intents", "planned")
+	if err := os.Symlink(filepath.Join(planned, "gone.md"), filepath.Join(planned, "itd-96-dangling.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := ScanSpecLinks(root, "record/intents", "record/specs", Config{}); err == nil {
+		t.Fatal("ScanSpecLinks must propagate an unreadable intent record")
+	}
+}

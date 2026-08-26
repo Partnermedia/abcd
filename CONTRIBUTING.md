@@ -20,8 +20,9 @@ inbound = outbound statement is the whole of it.
   that is policy, not a judgement of the work.
 - **Branch + PR** for substantive changes; CI gates the merge. Its `check` job
   builds, vets and tests (plain and race-enabled) on macOS + Linux, and on the
-  Linux leg alone adds the `gofmt -l .` format gate and the record-lint and
-  docs-lint steps; separate jobs run the reviews-charter check, `gitleaks`,
+  Linux leg alone adds the `gofmt -l .` format gate, the record-lint and
+  docs-lint steps, and the site-render gate; separate jobs run the
+  reviews-charter and issue-resolution checks (RS001–RS003), `gitleaks`,
   `zizmor`, dependency review, `govulncheck` and the smoke harness.
 - **Merge queue.** Merging goes through the queue ("Merge when ready"): the
   required checks run against the actual merged result, so branches never need

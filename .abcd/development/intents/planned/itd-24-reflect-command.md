@@ -6,7 +6,7 @@ kind: bundle-member
 bundle: spc-83-operator-surfaces
 suggested_kind: null
 reclassification_history: []
-glossary_terms_used: [core/phase, core/intent, core/voyage, core/persona, core/brief, core/epic, core/lifeboat, core/oracle, core/spec, interview/embark, distribution/release]
+glossary_terms_used: [core/phase, core/intent, core/voyage, core/persona, core/brief, core/lifeboat, core/oracle, core/spec, interview/embark, distribution/release]
 grill_session_id: e6a24d86-e133-495f-8dec-94dec21449ea
 grilled_at: 2026-05-16T15:37:17Z
 grilled_intent_hash: 8412a59b575df882fc4a370ab01404796cad4dd9e120d0519e9918d3ea891c61

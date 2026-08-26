@@ -48,8 +48,9 @@ opportunity produces nothing.
 
 **Live instance.** iss-2608241347321757 dissolves the dependency. `make
 lint-issues` (RS001) requires a commit carrying a `Resolves: iss-N` trailer to
-move that record out of `open/` in the same diff, so resolution lands inside the
-fixing commit and no post-merge step exists to forget. `resolved_by.commit`
+land that record in `resolved/` or `wontfix/` in the same diff — a bare delete
+of the open record satisfies nothing — so resolution lands inside the fixing
+commit and no post-merge step exists to forget. `resolved_by.commit`
 becomes optional-but-verified: RS002 checks that a stamp added in a range names
 a reachable commit, and RS003 checks that every stamp already in the ledger
 stays reachable under squash and rebase merges.

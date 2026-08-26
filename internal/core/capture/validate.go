@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // knownFields is the additionalProperties:false allow-list from
@@ -60,8 +61,11 @@ func validateStrict(fm map[string]any) error {
 		}
 	}
 
-	// Required strings.
-	for _, req := range []string{"id", "slug", "severity", "category", "source", "found_during"} {
+	// Required strings — the schema's own list (core/issueschema) minus
+	// schema_version, which the version check above already answered for. The
+	// record lint reads the SAME list, so the reader and the committed-ledger gate
+	// cannot disagree about what a well-formed record carries.
+	for _, req := range issueschema.RequiredStrings {
 		v, present := fm[req]
 		if !present {
 			return fmt.Errorf("%w: missing required property %q", ErrMissingRequiredField, req)

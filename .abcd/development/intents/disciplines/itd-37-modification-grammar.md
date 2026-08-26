@@ -2,7 +2,7 @@
 id: itd-37
 slug: modification-grammar
 kind: discipline
-kind_notes: "Cross-cutting modification-grammar gate; applied at every spec plan-review and ship time via concreteness lint (MG001-MG003) + intent-fidelity-reviewer Role 1 boilerplate detection (MG004). Every spec inherits this rule. Closes Naur's Modification axis — the genuinely new gap in abcd's theory transmission (Mapping + Justification already partially captured by press release + audit notes)."
+kind_notes: "Cross-cutting modification-grammar gate; applied at every spec plan-review and ship time via concreteness lint (MG001-MG003) + intent-auditor Role 1 boilerplate detection (MG004). Every spec inherits this rule. Closes Naur's Modification axis — the genuinely new gap in abcd's theory transmission (Mapping + Justification already partially captured by press release + audit notes)."
 suggested_kind: null
 spec_id: null
 reclassification_history: []
@@ -38,7 +38,7 @@ The discipline is named for what's actually new — **modification grammar**, no
 **Why two-layer enforcement.** Boilerplate-rot is the discipline's principal failure mode. A `## Modification Grammar` section that says *"extending requires care; modifying requires understanding the design"* is non-empty, parseable, content-free — and **worse than no section at all** because it occupies cross-cutting query surface with noise. A regex-level "non-empty" lint catches the laziest failure but not plausible-sounding boilerplate. Two layers:
 
 1. **Concreteness lint (mechanical)** rejects sections without a concrete reference (code block / file path / line ref). Lint codes `MG001`-`MG003`.
-2. **Semantic boilerplate detection (reviewer judgement)** runs `intent-fidelity-reviewer` Role 1 (the discipline role per itd-1) at spec plan-review and ship time. Prompt-encoded test: ***"Strip the spec name. Could this `## Modification Grammar` text describe a different spec? If yes, reject."*** Lint code `MG004`.
+2. **Semantic boilerplate detection (reviewer judgement)** runs `intent-auditor` Role 1 (the discipline role per itd-1) at spec plan-review and ship time. Prompt-encoded test: ***"Strip the spec name. Could this `## Modification Grammar` text describe a different spec? If yes, reject."*** Lint code `MG004`.
 
 The semantic enforcement is genuine LLM-judgement work. The discipline owns the requirement explicitly — regex cannot catch boilerplate.
 
@@ -57,7 +57,7 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
   - `MG001` — section missing.
   - `MG002` — sub-heading missing or empty.
   - `MG003` — sub-heading present but contains no concrete reference (code block / file path / line ref).
-- **Semantic boilerplate detection** via `intent-fidelity-reviewer` Role 1's discipline-checking pass. New prompt-encoded test ("could this describe a different spec?"). Lint code `MG004` — Role 1 boilerplate verdict.
+- **Semantic boilerplate detection** via `intent-auditor` Role 1's discipline-checking pass. New prompt-encoded test ("could this describe a different spec?"). Lint code `MG004` — Role 1 boilerplate verdict.
   - **Specific rejection criteria** the prompt encodes: (a) `Extends cleanly` rejected if it doesn't name a concrete extension point with a constraint; (b) `Breaks the design` rejected if it doesn't name a specific failure mode; (c) `Why` rejected if it's a list of cases without an underlying rule, OR if the rule could equally describe a different spec.
 - **`principle-distiller` extraction trigger** — at spec completion, the curator (per itd-36's role extension):
   - Writes append-only `spec_modification_grammar_<spec_id>.md` to `.abcd/memory/` with `source.class: spec_modification_grammar`.
@@ -79,12 +79,12 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 
 ## Acceptance Criteria
 
-> _BDD format, per [itd-1 acceptance gates](itd-1-acceptance-gates.md). These gates are checked by `intent-fidelity-reviewer` Role 1 against every spec plan-reviewed under abcd._
+> _BDD format, per [itd-1 acceptance gates](itd-1-acceptance-gates.md). These gates are checked by `intent-auditor` Role 1 against every spec plan-reviewed under abcd._
 
 - **Given** a spec without a `## Modification Grammar` section, **when** plan-review runs, **then** the intent lint emits `MG001` and blocks promotion.
 - **Given** a spec with `## Modification Grammar` but missing one of the three required sub-headings (`Extends cleanly` / `Breaks the design` / `Why`), **when** plan-review runs, **then** the lint emits `MG002` naming the missing sub-heading.
 - **Given** a spec where any of the three sub-headings is present but contains no concrete reference (no code block, no file path, no line ref), **when** plan-review runs, **then** the lint emits `MG003` and points at the offending sub-heading.
-- **Given** a spec where `## Modification Grammar` content could equally describe a different spec (boilerplate failure), **when** `intent-fidelity-reviewer` Role 1 runs the discipline check, **then** the reviewer emits `MG004` with the rejection reason ("strip-the-name test fails: this prose describes [generic concern] not [this spec's specifics]").
+- **Given** a spec where `## Modification Grammar` content could equally describe a different spec (boilerplate failure), **when** `intent-auditor` Role 1 runs the discipline check, **then** the reviewer emits `MG004` with the rejection reason ("strip-the-name test fails: this prose describes [generic concern] not [this spec's specifics]").
 - **Given** a spec with `### Ripple > Vocabulary delta` introducing a new term not registered in either registry named by `02-constraints/04-naming.md`, **when** plan-review runs, **then** the intent lint is designed to emit `VR001` and block promotion until the term is registered (reserved; not yet implemented — today this is a review-time check, not a lint gate).
 - **Given** a spec transitions to shipped, **when** `principle-distiller` runs the extraction pass, **then** an append-only memory page `spec_modification_grammar_<spec_id>.md` is written to `.abcd/memory/` with `source.class: spec_modification_grammar` AND a curator-merged page `modification_grammar_<domain>.md` is updated with `source.class: modification_grammar`.
 - **Given** the cost-discipline boundary (itd-37 is first expensive discipline; ~15-30 min capture per spec), **when** any spec proposes adding "modification grammar exemption for trivial specs", **then** the proposal is rejected — trivial-self-exemption invites loophole-driven bypass; trivial specs produce short Modification Grammar sections, not absent ones.
@@ -101,7 +101,7 @@ The semantic enforcement is genuine LLM-judgement work. The discipline owns the 
 
 ## Audit Notes
 
-_Empty. Populated by `intent-fidelity-reviewer` Role 1 (single-document fidelity per itd-1) when this discipline is first audited. Like itd-1, this discipline is audited continuously via the rule-applies-to-every-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any spec that violated the discipline (e.g., shipped without `## Modification Grammar`, or with boilerplate `MG004` not caught at plan-review)._
+_Empty. Populated by `intent-auditor` Role 1 (single-document fidelity per itd-1) when this discipline is first audited. Like itd-1, this discipline is audited continuously via the rule-applies-to-every-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any spec that violated the discipline (e.g., shipped without `## Modification Grammar`, or with boilerplate `MG004` not caught at plan-review)._
 
 ## References
 

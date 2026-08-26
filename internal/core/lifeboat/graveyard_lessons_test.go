@@ -354,6 +354,39 @@ func TestIngestLessonsSanitisesProse(t *testing.T) {
 	}
 }
 
+// TestIngestLessonsNeutralisesRawHTMLOpener pins the wider neutralisation the
+// termsafe seam carries: a bare HTML opener (not just a comment marker) is broken
+// with a space, so packed prose cannot smuggle a tag into a rendered lesson.
+func TestIngestLessonsNeutralisesRawHTMLOpener(t *testing.T) {
+	dir := stdFixture(t)
+	raw := payload(t, Lesson{ID: "les-tag", Lesson: "before <script>alert(1)</script> after",
+		Confidence: ConfidenceHigh, Evidence: []string{"adr-12"}})
+	if _, err := IngestLessons(dir, raw); err != nil {
+		t.Fatalf("IngestLessons: %v", err)
+	}
+	got := readWrittenLessons(t, dir).Lessons[0].Lesson
+	if !strings.Contains(got, "< script") {
+		t.Errorf("raw HTML opener not neutralised: %q", got)
+	}
+}
+
+// TestIngestLessonsNeutralisesAfterSanitise pins the ORDER of the two steps:
+// Sanitize substitutes '?' for a masked control byte, so a '<' followed by an
+// escape becomes '<?' — a processing instruction — unless the neutralisation runs
+// after the sanitiser.
+func TestIngestLessonsNeutralisesAfterSanitise(t *testing.T) {
+	dir := stdFixture(t)
+	raw := payload(t, Lesson{ID: "les-order", Lesson: "a <" + "\x1b" + " b",
+		Confidence: ConfidenceHigh, Evidence: []string{"adr-12"}})
+	if _, err := IngestLessons(dir, raw); err != nil {
+		t.Fatalf("IngestLessons: %v", err)
+	}
+	got := readWrittenLessons(t, dir).Lessons[0].Lesson
+	if strings.Contains(got, "<?") {
+		t.Errorf("masked control byte forged a processing instruction: %q", got)
+	}
+}
+
 // TestIngestLessonsLifeboatGate refuses a directory that is not an abcd lifeboat.
 func TestIngestLessonsLifeboatGate(t *testing.T) {
 	dir := t.TempDir() // no _provenance.json

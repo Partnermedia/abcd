@@ -31,6 +31,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 const ruleRecordSchema = "record_schema"
@@ -96,6 +98,12 @@ type recordStore struct {
 	fileNumRe *regexp.Regexp
 	// filename describes the convention a finding message quotes.
 	filename string
+	// requiredFields are the frontmatter properties every record in this store
+	// must carry. A nil requiredFields means the store declares none HERE and is
+	// left alone — the four stores have different schemas, and the ones whose
+	// frontmatter other rules already judge (intent_lifecycle, spec_id_unique)
+	// must not be re-judged against the issue's shape.
+	requiredFields []string
 }
 
 // recordStores is the closed set of identified record stores. It is code, not
@@ -105,7 +113,13 @@ var recordStores = []recordStore{
 	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md"},
 	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, filename: "itd-<N>-<slug>.md"},
 	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, filename: "spc-<N>-<slug>.md"},
-	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, filename: "iss-<N>-<slug>.md"},
+	// The issue store's required properties come from the schema's ONE definition
+	// (core/issueschema), the same list the ledger reader validates against — a
+	// hand-copied list here would drift the moment the schema gains a field, and
+	// the drift would show up as a silently unread record, which is the defect
+	// this invariant exists to catch.
+	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, filename: "iss-<N>-<slug>.md",
+		requiredFields: issueschema.Required},
 }
 
 // schemaRecord is one record file as the schema rule sees it: which store and
@@ -197,6 +211,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 
 	for _, r := range records {
 		out = append(out, checkRecordFilename(r, cfg.Severity)...)
+		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
 		// retired by the record that replaced it.
@@ -301,6 +316,41 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 		Message: "filename claims id '" + want + "' but frontmatter declares '" + got +
 			"'; a " + r.noun() + " filename is " + r.store.filename,
 	}}
+}
+
+// checkRecordRequiredFields asserts that a record carries every frontmatter
+// property its store declares required (iss-2608261437041050). Only a store that
+// declares a list is judged; the rest are left to the rules that know their own
+// schemas.
+//
+// The defect it closes is a SILENT one, which is why it belongs in the structural
+// rule rather than in the reader alone: the issue ledger's reader validates each
+// record and skips the ones that fail, so a committed record missing a required
+// property disappears from `capture list`, `capture status` and every other
+// surface — while sitting in the ledger, counted by nothing, reported by nothing.
+// A record nobody can read is not a lax record, it is a lost one.
+//
+// A property present but empty (`schema_version:`) counts as missing for the same
+// reason: the reader cannot make a value out of it either.
+func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
+	var out []Finding
+	for _, field := range r.store.requiredFields {
+		f, present := r.fields[field]
+		if present && !isAbsentValue(f.value) {
+			continue
+		}
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
+			Message: "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
+				" reader validates before it reads, so a record without it is skipped — invisible to every " +
+				r.store.noun + " surface while it still sits in the store",
+		})
+	}
+	return out
 }
 
 // noun renders the record kind for a message.

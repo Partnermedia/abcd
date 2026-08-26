@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Proves check-reviews.sh can actually FAIL, and fails for the right reasons.
+#
+# RD002 is an append-only claim over committed history, and the claim is a fact
+# about the history or it is nothing. Its first implementation probed each
+# working-tree file with a pathspec-scoped `git log --diff-filter=MR`, which can
+# never report an R — rename detection needs both sides in view — and swallowed
+# git's own errors, so a rename and a broken git both read as clean. That is the
+# worst shape a gate can take: green while it sees nothing. Every rule here is
+# asserted in BOTH directions — a violating fixture must be refused, and a clean
+# one must pass — because a check that only ever sees clean input proves nothing
+# about refusal.
+#
+# Fixtures are built in a scratch repository, never against this one: the rule is
+# about committed history, and history is cheap to stage in a throwaway repo and
+# impossible to stage honestly in a tree someone is working in.
+#
+# Usage: check-reviews-cases.sh
+# Exit 0 all cases behaved, 1 a case did not.
+set -euo pipefail
+
+# Hermetic git (iss-28, iss-313): every scratch-repo command below is `git -C
+# "$d" …`, but an inherited absolute GIT_DIR overrides -C and redirects these
+# fixture commits onto the ambient repository — which then reports all-green while
+# its real history is rewritten. An inherited GIT_CONFIG_GLOBAL / core.hooksPath
+# also fires the developer's global hooks inside the scratch repos and breaks the
+# run for a reason that has nothing to do with the reviews charter. Neutralise the
+# ambient git environment before the first git call, matching
+# check-issue-resolution-cases.sh and gitutil.IsolatedEnv. (commit.gpgsign is set
+# per-repo below; this closes the rest.)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+	GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
+
+GATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-reviews.sh"
+[ -x "$GATE" ] || {
+	echo "cases: gate not executable: $GATE" >&2
+	exit 2
+}
+
+failures=0
+tmproot="$(mktemp -d)"
+trap 'rm -rf "$tmproot"' EXIT
+
+REV_DIR=".abcd/work/reviews"
+SCOPE="$REV_DIR/2026-01-01-a-scope"
+
+# expect <want: pass|fail|fault> <repo> <label> [needle]
+#
+# fault is exit 2 specifically — the refusal polarity reserved for "git could not
+# answer", which must never collapse into either a pass or an ordinary RD failure.
+# The optional needle is asserted against the gate's combined output, so a pass
+# that is meant to say it covered nothing has to say so.
+#
+# The repo is a parameter rather than something the caller cds into, because a
+# caller wrapping this in a subshell would discard the failure counter and leave
+# THIS script unable to fail — the very defect it exists to catch. The cd lives
+# inside the command substitution, where it cannot outlive the capture and the
+# exit status still reaches the parent shell.
+expect() {
+	local want="$1" repo="$2" label="$3" needle="${4:-}"
+	local out rc=0
+	out="$(cd "$repo" && bash "$GATE" 2>&1)" || rc=$?
+	case "$want" in
+	pass)
+		if [ "$rc" -ne 0 ]; then
+			printf 'cases: FAIL %s — expected clean, got exit %d:\n%s\n' "$label" "$rc" "$out" >&2
+			failures=$((failures + 1))
+			return
+		fi
+		;;
+	fail)
+		if [ "$rc" -eq 0 ]; then
+			printf 'cases: FAIL %s — the gate PASSED a violating fixture. This rule cannot fail.\n%s\n' "$label" "$out" >&2
+			failures=$((failures + 1))
+			return
+		fi
+		;;
+	fault)
+		if [ "$rc" -ne 2 ]; then
+			printf 'cases: FAIL %s — expected the environment-fault refusal (exit 2), got exit %d:\n%s\n' "$label" "$rc" "$out" >&2
+			failures=$((failures + 1))
+			return
+		fi
+		;;
+	esac
+	if [ -n "$needle" ] && ! printf '%s' "$out" | grep -qF "$needle"; then
+		printf 'cases: FAIL %s — output does not say %q:\n%s\n' "$label" "$needle" "$out" >&2
+		failures=$((failures + 1))
+		return
+	fi
+	printf 'cases: ok   %s (exit %d, as expected)\n' "$label" "$rc"
+}
+
+# newrepo makes a scratch repo whose baseline commit holds a charter-clean review
+# directory: RD001's <date>-<scope>/00-summary.md shape and no absolute paths, so
+# only the RD002 polarity under test can move the verdict.
+newrepo() {
+	local d="$tmproot/$1"
+	mkdir -p "$d/$SCOPE"
+	git -C "$d" init -q -b main
+	git -C "$d" config user.name t
+	git -C "$d" config user.email t@example.invalid
+	git -C "$d" config commit.gpgsign false
+	printf '# Review summary\n\nA fixture review.\n' >"$d/$SCOPE/00-summary.md"
+	printf '# Findings\n\nA fixture finding.\n' >"$d/$SCOPE/01-findings.md"
+	printf '# Reviews charter\n\nThe root README is mutable.\n' >"$d/$REV_DIR/README.md"
+	git -C "$d" add -A
+	git -C "$d" commit -qm "baseline: add a review"
+	echo "$d"
+}
+
+# --- RD002: the three shapes of a post-creation change -----------------------
+
+# An in-place edit is the shape the original per-file probe did catch; it stays
+# caught, so the rewrite is not a trade.
+d="$(newrepo edit)"
+printf 'An amendment made after the fact.\n' >>"$d/$SCOPE/01-findings.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "edit a review file"
+expect fail "$d" "RD002 in-place edit of a review file"
+
+# A pure rename: git reports it as an R, which a pathspec-scoped log never emits.
+# This fixture passed the original gate — the defect this script exists to pin.
+d="$(newrepo rename)"
+git -C "$d" mv "$SCOPE/01-findings.md" "$SCOPE/02-findings.md"
+git -C "$d" commit -qm "rename a review file"
+expect fail "$d" "RD002 pure rename of a review file"
+
+# A rename with the content fully rewritten: past the similarity threshold git
+# reports a delete plus an add rather than an R, so the D half must carry the
+# refusal on its own.
+d="$(newrepo rename-rewrite)"
+git -C "$d" mv "$SCOPE/01-findings.md" "$SCOPE/03-findings.md"
+: >"$d/$SCOPE/03-findings.md"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	echo "Rewritten line $i so git reports the move as a delete plus an add." >>"$d/$SCOPE/03-findings.md"
+done
+git -C "$d" add -A
+git -C "$d" commit -qm "rename and rewrite a review file"
+expect fail "$d" "RD002 rename with a full content rewrite"
+
+# A deletion leaves no working-tree path to probe from, so a tree-driven check
+# cannot see it at all. The history scan can.
+d="$(newrepo delete)"
+git -C "$d" rm -q "$SCOPE/01-findings.md"
+git -C "$d" commit -qm "delete a review file"
+expect fail "$d" "RD002 deletion of a review file"
+
+# --- the clean polarity ------------------------------------------------------
+
+# Add-only is what the charter asks for, and it must pass — a gate that refuses
+# the intended shape is as useless as one that passes every shape.
+d="$(newrepo clean)"
+printf '# More findings\n\nAppended as a new file.\n' >"$d/$SCOPE/02-findings.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "add another review file"
+expect pass "$d" "add-only corpus is clean"
+
+# The charter itself is not a review: reviews/README.md sits at the root, outside
+# the dated-directory population, and stays mutable. Over-refusal is a real
+# failure mode of a broadened scan, so it is asserted too.
+d="$(newrepo readme)"
+printf 'An amendment to the charter.\n' >>"$d/$REV_DIR/README.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "amend the charter"
+expect pass "$d" "the root README stays mutable"
+
+# --- environment polarities --------------------------------------------------
+
+# An unborn HEAD is legitimate — a freshly scaffolded repo — and is the one git
+# condition that passes. It must say loudly that it covered nothing, so the pass
+# cannot be read as a verdict.
+d="$tmproot/unborn"
+mkdir -p "$d/$SCOPE"
+git -C "$d" init -q -b main
+printf '# Review summary\n\nUncommitted.\n' >"$d/$SCOPE/00-summary.md"
+expect pass "$d" "unborn HEAD covers nothing, loudly" "no committed history"
+
+# Every other git failure is an environment fault, not a clean history. Running
+# outside a repository is the cheapest one to stage.
+d="$tmproot/not-a-repo"
+mkdir -p "$d"
+expect fault "$d" "a git failure refuses instead of reading clean"
+
+if [ "$failures" -gt 0 ]; then
+	printf 'cases: FAILED — %d case(s) did not behave\n' "$failures" >&2
+	exit 1
+fi
+echo "cases: OK — every rule refused its violating fixture and passed its clean one"

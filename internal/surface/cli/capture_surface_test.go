@@ -400,3 +400,29 @@ func TestCaptureEmptyTextNeverWrites(t *testing.T) {
 		t.Fatalf("empty capture text filed %d issue(s); it must write nothing", n)
 	}
 }
+
+// TestCaptureStatusBoardRendersSkipped (iss-2608261437041050): a ledger record
+// the reader refuses is counted by none of the board's three totals, so a board
+// that printed the totals alone would report a ledger smaller than the one on
+// disk and say nothing about the record it dropped. `capture list` already
+// renders the skipped roster; the bare status board must not undercount in
+// silence.
+func TestCaptureStatusBoardRendersSkipped(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	// One well-formed capture, so the ledger dirs exist and the board has a total.
+	runCLI(t, "capture", "a well formed observation", "--slug", "fine", "--json")
+	// A committed record missing a required property: the reader validates before
+	// it reads, so this one is skipped rather than counted.
+	stripped := filepath.Join(repo, ".abcd", "work", "issues", "open", "iss-900-stripped.md")
+	if err := os.WriteFile(stripped, []byte(
+		"---\nid: iss-900\nslug: stripped\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	board := string(runCLI(t, "capture"))
+	if !strings.Contains(board, "skipped") || !strings.Contains(board, "iss-900-stripped.md") {
+		t.Fatalf("the status board must render the skipped roster:\n%s", board)
+	}
+}

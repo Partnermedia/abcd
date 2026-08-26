@@ -2,7 +2,7 @@
 id: itd-1
 slug: acceptance-gates
 kind: discipline
-kind_notes: "Cross-cutting acceptance-criteria gate; applied via the record lint (internal/core/lint) at /abcd:intent plan time and verified by intent-fidelity-reviewer (single-document role) on every shipped intent."
+kind_notes: "Cross-cutting acceptance-criteria gate; applied via the record lint (internal/core/lint) at /abcd:intent plan time and verified by intent-auditor (single-document role) on every shipped intent."
 suggested_kind: null
 spec_id: null
 reclassification_history:
@@ -14,11 +14,11 @@ severity: critical
 
 ## Rule
 
-Every standalone or bundle-member intent in `drafts/` and `planned/` carries a `## Acceptance Criteria` section with at least one well-formed Given-When-Then bullet. Every discipline intent in `disciplines/` carries the same. `/abcd:intent plan` refuses to promote an intent without it (hard block via the record lint, `internal/core/lint`). Every shipped intent's `## Audit Notes` section contains per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) emitted by the `intent-fidelity-reviewer` agent's single-document role.
+Every standalone or bundle-member intent in `drafts/` and `planned/` carries a `## Acceptance Criteria` section with at least one well-formed Given-When-Then bullet. Every discipline intent in `disciplines/` carries the same. `/abcd:intent plan` refuses to promote an intent without it (hard block via the record lint, `internal/core/lint`). Every shipped intent's `## Audit Notes` section contains per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) emitted by the `intent-auditor` agent's single-document role.
 
 ## Why
 
-abcd's intent format captures direction (press release or `## Rule`) and scope (in/out lists). Without acceptance criteria it cannot capture **the verifiable bar for "shipped"**. The `intent-fidelity-reviewer` agent is otherwise reduced to interpreting prose, which means drift detection depends on the reviewer's judgement rather than on a pre-committed standard.
+abcd's intent format captures direction (press release or `## Rule`) and scope (in/out lists). Without acceptance criteria it cannot capture **the verifiable bar for "shipped"**. The `intent-auditor` agent is otherwise reduced to interpreting prose, which means drift detection depends on the reviewer's judgement rather than on a pre-committed standard.
 
 Prior art ([PAUL][paul]) treats acceptance criteria as a hard gate: defined before tasks, verified by an Execute/Qualify loop, with multi-state escalation outcomes (`DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`). The full PAUL framework is more than abcd currently needs; the **acceptance-criteria pattern** ([Given-When-Then][bdd-given-when-then]) is the load-bearing piece.
 
@@ -28,7 +28,7 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 
 - **`## Acceptance Criteria` section** required in every intent template (standalone, bundle-member, *and* discipline). At least one Given-When-Then bullet. The section header is fixed (parser depends on it).
 - **Hard-block validation in `/abcd:intent plan`** — intent cannot transition `drafts/` → `planned/` (or `drafts/` → `disciplines/`) without at least one well-formed acceptance criterion. Lint code: `IL002` (delivered by spc-8; see `05-internals/06-lint.md`).
-- **`intent-fidelity-reviewer` single-document role** — when auditing a shipped intent, the agent emits a per-criterion verdict block into the intent's own `## Audit Notes` section. The writer maintains a single delimited `### itd-1 review <ts>` block (machine-fenced so a repeat review *replaces* it in place — the section never accumulates stale blocks; git history is the prior-review trail):
+- **`intent-auditor` single-document role** — when auditing a shipped intent, the agent emits a per-criterion verdict block into the intent's own `## Audit Notes` section. The writer maintains a single delimited `### itd-1 review <ts>` block (machine-fenced so a repeat review *replaces* it in place — the section never accumulates stale blocks; git history is the prior-review trail):
   ```
   ## Audit Notes
 
@@ -42,11 +42,11 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 
   Overall: MET / MET_WITH_CONCERNS / NOT_MET / INCONCLUSIVE
   ```
-  This `## Audit Notes` write is the **verdict of record**; each run also writes a per-run forensic copy at `.abcd/logbook/audit/review-<ts>/report.{json,md}`. **spc-12 ships the manual reviewer** (`/abcd:intent review <itd-N>`) plus the `## Audit Notes` / `review-<ts>` writers; **automatic invocation on the `planned → shipped` transition is deferred to the lifecycle-owning spec** (`spc-6`). Until that lands, a shipped intent's `## Audit Notes` is populated only when `/abcd:intent review` is run by hand.
+  This `## Audit Notes` write is the **verdict of record**; each run also writes a per-run forensic copy at `.abcd/logbook/audit/review-<ts>/report.{json,md}`. **spc-12 ships the manual reviewer** (`/abcd:intent audit <itd-N>`) plus the `## Audit Notes` / `review-<ts>` writers; **automatic invocation on the `planned → shipped` transition is deferred to the lifecycle-owning spec** (`spc-6`). Until that lands, a shipped intent's `## Audit Notes` is populated only when `/abcd:intent audit` is run by hand.
 - **Escalation states** — four states, lifted from PAUL. Binary pass/fail loses information; four states preserve nuance without exploding.
-- **Verdict family disjointness** (cross-referenced from [`05-internals/01-agents.md § Verdict-tag protocol`](../../brief/05-internals/01-agents.md#verdict-tag-protocol)). The four criterion verdicts above (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) score *promise vs reality on a shipped intent* — they belong to `intent-fidelity-reviewer`'s Role 1 output. They are **deliberately disjoint from review verdicts** (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`) which score *changes/runs* (oracle reviews of plans, implementations, completions; consumed by the native receipt schema validator). The two enums never mix — review verdicts emit on a *change*, criterion verdicts emit on a *promise*. This disjointness was reinforced 2026-05-08 when idea-4's pre-review draft conflated the two families ("NOT_MET on an agent run" — wrong; criterion verdicts apply to intents not agents). Closing-the-loop signals on agents (per Frontier Awareness, idea-4) MUST use canary/golden-test/operator-tagged failure signals, NOT spec-level criterion verdicts.
+- **Verdict family disjointness** (cross-referenced from [`05-internals/01-agents.md § Verdict-tag protocol`](../../brief/05-internals/01-agents.md#verdict-tag-protocol)). The four criterion verdicts above (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) score *promise vs reality on a shipped intent* — they belong to `intent-auditor`'s Role 1 output. They are **deliberately disjoint from review verdicts** (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`) which score *changes/runs* (oracle reviews of plans, implementations, completions; consumed by the native receipt schema validator). The two enums never mix — review verdicts emit on a *change*, criterion verdicts emit on a *promise*. This disjointness was reinforced 2026-05-08 when idea-4's pre-review draft conflated the two families ("NOT_MET on an agent run" — wrong; criterion verdicts apply to intents not agents). Closing-the-loop signals on agents (per Frontier Awareness, idea-4) MUST use canary/golden-test/operator-tagged failure signals, NOT spec-level criterion verdicts.
 - **Intent template update** — the intent template the binary scaffolds (`internal/core`) includes the `## Acceptance Criteria` section with one example criterion. The discipline template (separate file) includes the same section.
-- **Inheritance into every other spec** — every native spec plan-reviewed under abcd inherits the discipline's gate: the spec must reference the parent intent's acceptance criteria as the verification bar, and `intent-fidelity-reviewer` checks delivered reality against them on shipping.
+- **Inheritance into every other spec** — every native spec plan-reviewed under abcd inherits the discipline's gate: the spec must reference the parent intent's acceptance criteria as the verification bar, and `intent-auditor` checks delivered reality against them on shipping.
 
 ## What's Out of Scope
 
@@ -58,12 +58,12 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 
 ## Acceptance Criteria
 
-> _Yes, this discipline eats its own dog food. The criteria below describe how the discipline itself is checked — by the record lint (`internal/core/lint`) at promotion time and by `intent-fidelity-reviewer`'s single-document role on every shipped intent._
+> _Yes, this discipline eats its own dog food. The criteria below describe how the discipline itself is checked — by the record lint (`internal/core/lint`) at promotion time and by `intent-auditor`'s single-document role on every shipped intent._
 
 - **Given** a draft intent without an `## Acceptance Criteria` section, **when** the user runs `/abcd:intent plan itd-N`, **then** the command refuses to promote the intent and lists the missing section as the reason.
 - **Given** a draft intent with a malformed acceptance section (e.g. no Given-When-Then bullets, or a header but empty body), **when** `/abcd:intent plan` runs, **then** the lint emits a specific error pointing at the malformed line.
 - **Given** a discipline-kind intent in `drafts/` without a `## Acceptance Criteria` section, **when** the user attempts to promote it via `/abcd:intent plan --kind discipline`, **then** the same hard-block applies — disciplines are not exempt from their own rule.
-- **Given** a shipped intent with three acceptance criteria, **when** `intent-fidelity-reviewer` runs, **then** the resulting Audit Notes contain exactly three per-criterion verdict lines plus an overall status. *(Audit note 2026-05-07: this criterion is verifiable only after the reviewer's implementation lands in a separate spec; until then it is a paper-only gate. The reviewer itself will retroactively run against this discipline when implemented.)*
+- **Given** a shipped intent with three acceptance criteria, **when** `intent-auditor` runs, **then** the resulting Audit Notes contain exactly three per-criterion verdict lines plus an overall status. *(Audit note 2026-05-07: this criterion is verifiable only after the reviewer's implementation lands in a separate spec; until then it is a paper-only gate. The reviewer itself will retroactively run against this discipline when implemented.)*
 - **Given** a reviewer verdict of `NOT_MET` on any criterion, **when** the reviewer writes its report, **then** the report includes a "Divergence" sub-section explaining what was delivered vs. what was promised — not just a label.
 - **Given** the brief is updated, **when** a contributor reads `04-surfaces/05-intent.md` (intent system), **then** they find the acceptance-pattern requirement and one worked example with all four verdict types.
 - **Given** a native spec that traces back to a parent intent, **when** the spec's plan-review runs, **then** the review verifies the spec's acceptance section references (or is structurally compatible with) the parent intent's `## Acceptance Criteria` bullets — drift between the two surfaces is flagged.
@@ -79,7 +79,7 @@ This is a small schema bump with a large quality return. Every intent gets a mea
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer's single-document role when this discipline is first audited. Note: disciplines never "ship" in the standalone-intent sense — they are audited continuously via the rule-applies-to-every-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any spec that violated this discipline (e.g., merged without an AC section)._
+_Empty. Populated by intent-auditor's single-document role when this discipline is first audited. Note: disciplines never "ship" in the standalone-intent sense — they are audited continuously via the rule-applies-to-every-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any spec that violated this discipline (e.g., merged without an AC section)._
 
 ## References
 
