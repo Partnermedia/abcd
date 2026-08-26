@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // lint.go — the `abcd memory lint` verb (fn-39): a full-store curator
@@ -88,7 +90,9 @@ func isTypedMemoryPagePath(mem, path string) bool {
 			return false
 		}
 	}
-	raw, err := os.ReadFile(path)
+	// Guarded read: the store is a trust boundary, so a committed symlink
+	// page is refused here (O_NOFOLLOW) rather than followed unbounded.
+	raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 	if err != nil {
 		return false
 	}
@@ -291,13 +295,13 @@ func runMemoryCoverageLint(repoRoot string) ([]Finding, map[string]any, error) {
 
 	var pages []crawledPage
 	err := filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil || !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		if !isTypedMemoryPagePath(mem, path) {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 		if err != nil {
 			return nil
 		}
@@ -402,7 +406,7 @@ func Lint(req LintRequest) (LintResult, error) {
 	if fi, err := os.Stat(mem); err == nil && fi.IsDir() {
 		var pagePaths []string
 		err := filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+			if err != nil || !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 				return nil
 			}
 			if isTypedMemoryPagePath(mem, path) {
@@ -415,7 +419,7 @@ func Lint(req LintRequest) (LintResult, error) {
 		}
 		sort.Strings(pagePaths)
 		for _, path := range pagePaths {
-			raw, err := os.ReadFile(path)
+			raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 			if err != nil {
 				continue
 			}

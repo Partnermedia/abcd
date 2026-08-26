@@ -402,7 +402,9 @@ func contentSPDXHeader(text string) string {
 
 func manifestLicence(sourceRoot string) string {
 	pkg := filepath.Join(sourceRoot, "package.json")
-	if raw, err := os.ReadFile(pkg); err == nil {
+	// Guarded: sourceRoot is an arbitrary ingest source, outside the trusted
+	// worktree — a symlinked manifest is refused.
+	if raw, err := fsutil.ReadGuarded(pkg, maxRegistryBytes); err == nil {
 		var data map[string]any
 		if json.Unmarshal(raw, &data) == nil {
 			if lic, ok := data["license"].(string); ok && strings.TrimSpace(lic) != "" {
@@ -418,7 +420,7 @@ var licenceFileNames = []string{"LICENSE", "LICENCE", "LICENSE.md", "LICENCE.md"
 func licenceFileLicence(sourceRoot string) string {
 	for _, name := range licenceFileNames {
 		path := filepath.Join(sourceRoot, name)
-		raw, err := os.ReadFile(path)
+		raw, err := fsutil.ReadGuarded(path, maxRegistryBytes)
 		if err != nil {
 			continue
 		}

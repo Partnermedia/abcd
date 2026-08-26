@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // bare.go — the SD001-non-mutating bare render: page count by class,
@@ -170,7 +172,7 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 	const header = "Quotation-budget headroom:"
 	indexPath := CoverageIndexPath(repoRoot)
 
-	raw, err := os.ReadFile(indexPath)
+	raw, err := fsutil.ReadGuarded(indexPath, maxRegistryBytes)
 	if err != nil {
 		return []string{header + " coverage index not built yet — run `abcd memory lint`"}
 	}
@@ -189,13 +191,13 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 	// Read-only crawl over the same typed pages the lint crawls.
 	var pages []crawledPage
 	_ = filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil || !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		if !isTypedMemoryPagePath(mem, path) {
 			return nil
 		}
-		if b, err := os.ReadFile(path); err == nil {
+		if b, err := fsutil.ReadGuarded(path, maxMemoryPageBytes); err == nil {
 			rel, _ := filepath.Rel(mem, path)
 			pages = append(pages, crawledPage{rel: filepath.ToSlash(rel), text: string(b)})
 		}
@@ -265,8 +267,11 @@ func bareHeadroomLines(repoRoot, mem string) []string {
 	return lines
 }
 
+// readOrEmpty reads one store file through the guarded primitive: the store
+// sits inside the repo working tree — a trust boundary — so a committed
+// symlink leaf is refused rather than followed, and the read is size-capped.
 func readOrEmpty(path string) (string, bool) {
-	raw, err := os.ReadFile(path)
+	raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 	if err != nil {
 		return "", false
 	}

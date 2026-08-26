@@ -302,7 +302,9 @@ func writeStringAtomic(path, content string) error {
 // present-but-unreadable file -> WriterContractError (never overwrite what we
 // cannot read back); bytes -> (text, true, nil).
 func triStateRead(path string) (string, bool, error) {
-	raw, err := os.ReadFile(path)
+	// Guarded: a symlinked or oversize page on the write path is
+	// present-but-unreadable, never followed.
+	raw, err := fsutil.ReadGuarded(path, maxMemoryPageBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", false, nil
