@@ -59,9 +59,12 @@ usage() {
 }
 
 # ids_leaving_open prints every iss-N whose record left open/ for resolved/ or
-# wontfix/ across the range. Rename detection is requested but not relied on: a
-# move recorded as a delete plus an add is the same event, so the two halves are
-# collected independently and intersected by the caller.
+# wontfix/ as a detected rename. Rename detection is requested but not relied
+# on: a move recorded as a delete plus an add is the same event, and its add
+# half is what ids_entering_closed reports — the caller unions the two views.
+# A bare deletion from open/ deliberately counts for NOTHING: a deleted record
+# reaches no terminal folder, so a trailer pointing at it is a declared
+# resolution with no resolution, exactly what RS001 exists to refuse.
 ids_leaving_open() {
 	local base="$1" head="$2"
 	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
@@ -72,11 +75,6 @@ ids_leaving_open() {
 				"$ISSUES_DIR/open/"*"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/open/"*"$ISSUES_DIR/wontfix/"*)
 					basename "$dest" | grep -oE '^iss-[0-9]+'
 					;;
-				esac
-				;;
-			D)
-				case "$path" in
-				"$ISSUES_DIR/open/"*) basename "$path" | grep -oE '^iss-[0-9]+' ;;
 				esac
 				;;
 			esac
@@ -138,7 +136,7 @@ check_commits() {
 			local id="${BASH_REMATCH[1]}"
 			declared="$declared $id"
 			if ! printf '%s\n' "$closed" | grep -qx "$id"; then
-				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not leave $ISSUES_DIR/open/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
+				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not reach $ISSUES_DIR/resolved/ or wontfix/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
 			fi
 		done <<<"$(git show -s --format='%B' "$sha")"
 	done <<<"$range"
