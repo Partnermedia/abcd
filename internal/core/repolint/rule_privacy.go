@@ -2,12 +2,14 @@ package repolint
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/intentdriven/abcd/internal/adapter/scanner"
 	"github.com/intentdriven/abcd/internal/gitutil"
@@ -133,13 +135,18 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	}
 
 	for _, rel := range tracked {
-		data, ok, oversizeText := readTrackedFile(root, filepath.FromSlash(rel))
+		data, ok, oversizeText, openErr := readTrackedFile(root, filepath.FromSlash(rel))
 		if !ok {
 			// A textual file over the scan cap was NOT scanned, and silence
 			// here would report "conforms" for content nobody looked at —
 			// the didn't-scan-reported-clean shape the engine contract
 			// forbids (iss-356 item 4). Binary blobs stay quiet: the scan
 			// would skip them anyway, so the cap loses nothing there.
+			// The open branch gets the same treatment (the size branch's fix
+			// stopped one arm short): a tracked file the scan cannot OPEN is
+			// content nobody looked at, so it warns — except the absent and
+			// tracked-symlink shapes, which are legitimate worktree states
+			// the scan skips by design.
 			if oversizeText {
 				out = append(out, Finding{
 					RuleID:   "privacy-hygiene",
@@ -147,6 +154,13 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 					File:     rel,
 					Message: fmt.Sprintf("not scanned: over the %d MiB privacy-scan cap; split the file or verify it by hand",
 						maxScanBytes>>20),
+				})
+			} else if openFailureWarrantsWarn(openErr) {
+				out = append(out, Finding{
+					RuleID:   "privacy-hygiene",
+					Severity: SeverityWarn,
+					File:     rel,
+					Message:  "not scanned: the tracked file could not be opened; fix its permissions or verify it by hand",
 				})
 			}
 			continue
@@ -331,16 +345,31 @@ func isUsersRoot(m string) bool {
 // a regular file, or exceeds the cap is skipped (ok=false), not a scan failure;
 // oversizeText additionally reports that a skipped file is over the cap yet
 // looks textual, so the caller can say "not scanned" instead of staying silent.
-func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText bool) {
+// openFailureWarrantsWarn parts the open failures that are legitimate worktree
+// states from the ones that mean unscanned content. TrackedFiles lists INDEX
+// entries, so an absent path (deleted in the worktree but not yet committed, a
+// sparse checkout) is a normal state the scan has nothing to read for, and a
+// symlink-shaped refusal (a tracked link leaf under O_NOFOLLOW, an os.Root
+// containment refusal) is the scan's own skip-by-design, pinned by the
+// symlink tests. A permission or I/O fault is different in kind: the content
+// exists, nobody looked at it, and silence would read as "conforms" — the
+// same not-scanned shape the oversize arm already warns on (iss-356 item 4).
+func openFailureWarrantsWarn(err error) bool {
+	return errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EIO)
+}
+
+func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText bool, openErr error) {
 	f, err := root.OpenFile(rel, os.O_RDONLY|syscallNoFollow, 0)
 	if err != nil {
-		return nil, false, false // escapes the root, missing, or unreadable
+		// The caller decides whether the failure is warn-worthy
+		// (openFailureWarrantsWarn); reporting it is not this helper's call.
+		return nil, false, false, err
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return nil, false, false // FIFO, device, directory, or vanished
+		return nil, false, false, nil // FIFO, device, directory, or vanished
 	}
 	if info.Size() > maxScanBytes {
 		// Not scanned — but say whether it LOOKS like prose, so the caller
@@ -352,11 +381,12 @@ func readTrackedFile(root *os.Root, rel string) (data []byte, ok, oversizeText b
 			// The probe itself failed, so nothing about the file is known —
 			// warn rather than stay silent (the not-scanned shape again).
 			_ = err
-			return nil, false, true
+			return nil, false, true, nil
 		}
-		return nil, false, !isBinary(probe[:n])
+		return nil, false, !isBinary(probe[:n]), nil
 	}
-	return capRead(f)
+	data, ok, oversizeText = capRead(f)
+	return data, ok, oversizeText, nil
 }
 
 // capRead reads everything the scan may see from an already-vetted regular
