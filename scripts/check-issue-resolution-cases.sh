@@ -276,6 +276,48 @@ git -C "$d" commit -qm "chore: resolve"
 mkdir -p "$d/sub/deep"
 expect fail "$d/sub/deep" "RS003 still scans when run from a subdirectory" -- ledger HEAD
 
+# A git probe that fails must exit 2 as an environment fault, never read as an
+# empty ledger. Before the rc-check fix, `cd "$(git rev-parse --show-toplevel)"`
+# collapsed to a successful `cd ""` and the ls-tree || true turned the failure
+# into "no ledger records — nothing to check", exit 0 — a vacuous pass from the
+# one gate that notices rewritten resolution stamps. Two shapes: no repository
+# at all, and a repository git refuses to read (dubious ownership, the form a
+# container/devcontainer uid split produces on a real checkout).
+d="$tmproot/not-a-repo"
+mkdir -p "$d"
+out="$(cd "$d" && bash "$GATE" ledger HEAD 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 2 ]; then
+	printf 'cases: FAIL a non-repository cwd must exit 2, got exit %d:\n%s\n' "$rc" "$out" >&2
+	failures=$((failures + 1))
+else
+	printf 'cases: ok   a failing git probe is an environment fault, not an empty ledger\n'
+fi
+
+d="$(newrepo git-refused)"
+resolve_record "$d" "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: resolve"
+out="$(cd "$d" && GIT_TEST_ASSUME_DIFFERENT_OWNER=1 bash "$GATE" ledger HEAD 2>&1)" && rc=0 || rc=$?
+if [ "$rc" -ne 2 ]; then
+	printf 'cases: FAIL a git-refused repository must exit 2, got exit %d:\n%s\n' "$rc" "$out" >&2
+	failures=$((failures + 1))
+else
+	printf 'cases: ok   a git-refused repository (dubious ownership) is an environment fault\n'
+fi
+
+# The legitimate empty case survives the hardening: git succeeds, zero records —
+# a loud "nothing to check" pass, not a fault.
+d="$tmproot/empty-ledger"
+mkdir -p "$d"
+git -C "$d" init -q -b main
+git -C "$d" config user.name t
+git -C "$d" config user.email t@example.invalid
+git -C "$d" config commit.gpgsign false
+echo x >"$d/README.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "baseline"
+expect pass "$d" "an actually-empty ledger still passes loudly" -- ledger HEAD
+
 if [ "$failures" -gt 0 ]; then
 	printf 'cases: FAILED — %d case(s) did not behave\n' "$failures" >&2
 	exit 1
