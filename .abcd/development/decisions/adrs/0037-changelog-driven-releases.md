@@ -59,6 +59,13 @@ release automation:
    here is the *recording and cutting* instrument either way, not a second
    source of the number.
 
+   > **Amendment (2026-08-26).** itd-73 has landed: the ingest derives the
+   > number and renders the six closed Keep a Changelog sections, so a
+   > pre-1.0 break is signalled by the minor bump and the section its record
+   > belongs to, not by a **Breaking** heading — the derived renderer has no
+   > such section. The "called out under **Breaking**" clause above described
+   > the interim hand-rolled regime, whose last cut was v0.6.0.
+
 ## Alternatives Considered
 
 - **Manual tag push as the decision.** The status quo. Rejected as policy:

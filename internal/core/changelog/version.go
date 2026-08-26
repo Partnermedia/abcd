@@ -23,8 +23,9 @@ import "github.com/intentdriven/abcd/internal/core/launch"
 //	                fix      -> patch++
 //
 // The pre-1.0 row is load-bearing, not a shortcut. While abcd is at 0.x it has
-// declared no stable surface, so a break bumps the minor (ADR-37: "pre-1.0, a
-// minor may break, called out under Breaking"). The consequence is deliberate:
+// declared no stable surface, so a break bumps the minor (ADR-37, as amended:
+// pre-1.0, a minor may break — the bump itself is the signal, since the
+// derived changelog has no Breaking section). The consequence is deliberate:
 // NO input can derive 1.0.0 from a 0.x base. The first 1.0.0 is a human's
 // explicit override, because declaring stability is a product decision no set of
 // records can make on the maintainer's behalf.

@@ -5,8 +5,11 @@ All notable changes to abcd are recorded here. The format follows
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with a
 leading `v`.
 
-Before v1.0.0, minor releases may make breaking changes; each one is
-called out in a **Breaking** section.
+Before v1.0.0, a minor release may make breaking changes: a record
+declaring `impact: breaking` bumps the minor, and its entry appears under
+the Keep a Changelog section it belongs to — usually **Changed** or
+**Removed**. The version number is the signal; sections at v0.6.0 and
+earlier were rolled by hand and some carry a **Breaking** heading.
 
 ## [Unreleased]
 
