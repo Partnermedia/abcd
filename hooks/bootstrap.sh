@@ -102,14 +102,30 @@ refuse() {
 }
 
 # notice is a reported condition rather than a fault: the install succeeded, or
-# the platform has no released binary. It exits 2 because a SessionStart hook's
-# stdout becomes model context while only a NON-ZERO exit puts its stderr in
-# front of the human (the same reason `abcd hook session-start` returns 2 for its
-# own notices), and because SessionStart treats a non-zero exit as non-blocking:
-# the later hooks in this event still run.
+# the platform has no released binary. It exits ZERO.
+#
+# It used to exit 2, on the belief that only a non-zero exit puts a SessionStart
+# hook's stderr in front of the human. That belief is false and was measured:
+# the harness renders a non-zero SessionStart as an opaque "startup hook error"
+# banner followed by a truncated echo of the hooks.json command, and DROPS the
+# stderr text. So the exit code did not surface the notice, it replaced the
+# notice with an error — reporting a fault in abcd rather than the successful
+# install it was announcing (iss-2608251011427187, following the same correction
+# for `abcd hook session-start` in iss-2608241115201044).
+#
+# The half of the original reasoning that was RIGHT is kept, and it is the reason
+# this function still writes to stderr rather than stdout: a SessionStart hook's
+# stdout becomes model context. These messages interpolate a release tag and
+# paths, and an adversarial review demonstrated a directive payload reaching
+# context through exactly that channel when the Go hook briefly wrote its notices
+# there. Nothing derived goes to stdout.
+#
+# refuse() keeps its non-zero exit. That split is the point: a genuine fault
+# SHOULD raise an error banner, because something is wrong and the session should
+# say so; a successful install should not.
 notice() {
 	printf '%s\n' "$(safe "$1")" >&2
-	exit 2
+	exit 0
 }
 
 # sha256_file prints the lowercase SHA-256 of the file named by $1, or nothing
