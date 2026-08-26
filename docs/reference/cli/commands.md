@@ -191,7 +191,7 @@ Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed i
       --commit string       resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
       --impact string       product impact: additive|breaking|fix|internal (required)
       --intent string       resolved_by provenance: the itd-N that fixed it (must exist)
-      --shipped-in string   the release that already carried this work (vX.Y.Z); leaves the record out of the current cut
+      --shipped-in string   MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
       --spec string         resolved_by provenance: the spc-N that fixed it (must exist)
 ```
 

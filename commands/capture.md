@@ -98,8 +98,10 @@ what keeps the trail six months later. Ids must exist in their record store
 the remote). An unknown id or malformed value refuses the whole resolve and
 writes nothing.
 
-`resolve` also takes `--shipped-in <vX.Y.Z>` for the ledger-hygiene case: closing
-a record whose fix was RELEASED LONG AGO. The release derivation leaves such a
+`resolve` also takes `--shipped-in <vX.Y.Z>`, a MIGRATION flag for the
+ledger-hygiene case: closing a record whose fix was RELEASED LONG AGO. A
+repository abcd manages from its first commit should never need it — resolution
+rides the fixing commit there, so the release cut is right without it. The release derivation leaves such a
 record out of the current cut, so a sweep that closes old records cannot make the
 next release announce their fixes as new. Use it only when the work genuinely
 shipped in a named earlier release; absent means "this cut", and abcd never
