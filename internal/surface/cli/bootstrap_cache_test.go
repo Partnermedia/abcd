@@ -110,8 +110,8 @@ func TestBootstrapProvisionsRootFromCacheWithoutDownload(t *testing.T) {
 	fx := bootstrapServer(t, served, bootstrapManifest(cached))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
-	if code != 2 {
-		t.Fatalf("a cache-provisioned install must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+	if code != 0 {
+		t.Fatalf("a successful install is a notice, not a fault: it must exit 0, got %d (output %q)", code, out)
 	}
 	got, err := os.ReadFile(filepath.Join(root, "abcd"))
 	if err != nil {
@@ -160,7 +160,7 @@ func TestBootstrapCacheHitSurvivesOfflineResolve(t *testing.T) {
 	atomic.StoreInt32(fx.failLatest, 1)
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("a cache hit must survive a failed resolve, got exit %d (output %q)", code, out)
 	}
 	got, err := os.ReadFile(filepath.Join(root, "abcd"))
@@ -192,7 +192,7 @@ func TestBootstrapSecondRootIsProvisionedFromCache(t *testing.T) {
 
 	root1 := bootstrapRoot(t)
 	out, code := runBootstrapWithData(t, root1, data, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the first root must install from the network, got %d (output %q)", code, out)
 	}
 	if n := atomic.LoadInt32(fx.artefactHits); n == 0 {
@@ -224,7 +224,7 @@ func TestBootstrapSecondRootIsProvisionedFromCache(t *testing.T) {
 
 	root2 := bootstrapRoot(t)
 	out, code = runBootstrapWithData(t, root2, data, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the second root must be provisioned, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(filepath.Join(root2, "abcd")); err != nil || string(got) != string(body) {
@@ -258,7 +258,7 @@ func TestBootstrapNewReleaseRefreshesCacheAndPathEntry(t *testing.T) {
 	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
 
 	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("a new release must install, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(filepath.Join(root, "abcd")); err != nil || string(got) != string(fresh) {
@@ -312,7 +312,7 @@ func TestBootstrapNewReleaseLeavesForeignPathFileAlone(t *testing.T) {
 	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
 
 	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the install itself must proceed, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(pathCopy); err != nil || string(got) != string(foreign) {
@@ -342,7 +342,7 @@ func TestBootstrapNewReleaseSkipsAbsentPathCopy(t *testing.T) {
 	fx := bootstrapServer(t, fresh, bootstrapManifest(fresh))
 
 	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the install must proceed, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(pathCopy); !os.IsNotExist(err) {
@@ -370,7 +370,8 @@ func TestBootstrapCorruptCacheRefusesLoudly(t *testing.T) {
 	fx := bootstrapServer(t, recorded, bootstrapManifest(recorded))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
-	if code == 0 || code == 2 {
+	// refuse() exits 1 and notice() exits 0, so a non-refusal is exactly 0.
+	if code == 0 {
 		t.Fatalf("a corrupted cache artefact must refuse loudly, got exit %d (output %q)", code, out)
 	}
 	if !strings.Contains(out, "SHA-256") {
@@ -409,7 +410,7 @@ func TestBootstrapAuthenticatesCacheAgainstPublishedManifest(t *testing.T) {
 	fx := bootstrapServer(t, published, bootstrapManifest(published))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the authenticated cache path must install the published release, got %d (output %q)", code, out)
 	}
 	got, err := os.ReadFile(filepath.Join(root, "abcd"))
@@ -450,7 +451,7 @@ func TestBootstrapDegradesLoudlyWithoutDataDir(t *testing.T) {
 	fx := bootstrapServer(t, body, bootstrapManifest(body))
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the degraded per-root fetch must still install, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(filepath.Join(root, "abcd")); err != nil || string(got) != string(body) {
@@ -628,7 +629,7 @@ func TestBootstrapCacheModeSkipsPathRefreshOnCacheHit(t *testing.T) {
 	fx := bootstrapServer(t, cached, bootstrapManifest(cached))
 
 	out, code := runBootstrapWithDataHome(t, root, data, home, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the cache hit must provision the root, got %d (output %q)", code, out)
 	}
 	if got, err := os.ReadFile(pathCopy); err != nil || string(got) != string(stale) {
@@ -669,7 +670,8 @@ func TestBootstrapCachePathsStayOutOfMessagesRaw(t *testing.T) {
 	fx := bootstrapServer(t, recorded, bootstrapManifest(recorded))
 
 	out, code := runBootstrapWithData(t, root, data, fx, "")
-	if code == 0 || code == 2 {
+	// refuse() exits 1 and notice() exits 0, so a non-refusal is exactly 0.
+	if code == 0 {
 		t.Fatalf("expected the corrupt-cache refusal; got %d (output %q)", code, out)
 	}
 	if strings.ContainsRune(out, 0x1b) {

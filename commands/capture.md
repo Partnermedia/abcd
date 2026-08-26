@@ -105,9 +105,10 @@ rides the fixing commit there, so the release cut is right without it. The relea
 record out of the current cut, so a sweep that closes old records cannot make the
 next release announce their fixes as new. Use it only when the work genuinely
 shipped in a named earlier release; absent means "this cut", and abcd never
-infers it. The value must name a tag that exists and that the release being
-measured from can reach — a shape-valid but wrong version is refused rather than
-quietly dropping the record from the release record.
+infers it. `resolve` shape-checks the value only (`vMAJOR.MINOR.PATCH`); that the
+tag exists and the release being measured from can reach it is enforced later, at
+release derivation, which keeps a wrong-version record IN the cut with a stated
+reason rather than dropping it silently.
 
 With no provenance flags the record is byte-identical to a
 plain resolve: provenance is optional, never guessed. The written members come

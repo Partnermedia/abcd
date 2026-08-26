@@ -64,7 +64,7 @@ func (r PackResult) Render() string {
 // whole pack. Files are written into a staging directory and renamed into place,
 // so a crash leaves staging, never a half-lifeboat, and _provenance.json is
 // written last — it is the commit marker and the gate key for a later re-pack.
-func Pack(repoRoot, dest string, scan SecretScan) (PackResult, error) {
+func Pack(repoRoot, dest string, scan SecretScan, opts ...ProbeOption) (PackResult, error) {
 	if scan == nil {
 		// Fail closed: the secret scan is mandatory, not optional.
 		return PackResult{}, errors.New("pack: a secret scan is required")
@@ -81,7 +81,7 @@ func Pack(repoRoot, dest string, scan SecretScan) (PackResult, error) {
 		return PackResult{}, err
 	}
 
-	lb, err := Plan(repoAbs)
+	lb, err := Plan(repoAbs, opts...)
 	if err != nil {
 		return PackResult{}, err
 	}

@@ -43,6 +43,13 @@
 # Exit 0 clean, 1 a violation, 2 a usage/environment fault.
 set -euo pipefail
 
+# Resolve every path from the repository root, like the sibling gate
+# check-reviews.sh:11. ISSUES_DIR and the git pathspecs below are relative, and a
+# git pathspec is matched against the current directory — so run from a
+# subdirectory the diff and ls-tree match nothing and the gate reports a clean
+# pass having scanned zero records. cd first, so cwd cannot disarm it.
+cd "$(git rev-parse --show-toplevel)"
+
 ISSUES_DIR=".abcd/work/issues"
 TRAILER_RE='^Resolves:[[:space:]]+(iss-[0-9]+)[[:space:]]*$'
 
@@ -73,7 +80,7 @@ ids_leaving_open() {
 			R*)
 				case "$path/$dest" in
 				"$ISSUES_DIR/open/"*"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/open/"*"$ISSUES_DIR/wontfix/"*)
-					basename "$dest" | grep -oE '^iss-[0-9]+'
+					basename "$dest" | grep -oE '^iss-[0-9]+' || true
 					;;
 				esac
 				;;
@@ -88,16 +95,27 @@ ids_entering_closed() {
 			case "$status" in
 			R*)
 				case "$dest" in
-				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$dest" | grep -oE '^iss-[0-9]+' ;;
+				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$dest" | grep -oE '^iss-[0-9]+' || true ;;
 				esac
 				;;
 			A)
 				case "$path" in
-				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$path" | grep -oE '^iss-[0-9]+' ;;
+				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$path" | grep -oE '^iss-[0-9]+' || true ;;
 				esac
 				;;
 			esac
 		done
+}
+
+# frontmatter_commit prints a record's resolved_by.commit sha at ref, reading the
+# frontmatter ONLY: a sha quoted in the prose body is narrative, not provenance,
+# so the scan stops at the closing delimiter. RS002 and RS003 share this so the
+# two rules cannot drift apart on where a stamp lives.
+frontmatter_commit() {
+	local ref="$1" path="$2"
+	git show "$ref:$path" 2>/dev/null |
+		awk 'NR>1 && /^---$/{exit} /^[[:space:]]+commit:/{print}' |
+		grep -oE '[0-9a-f]{7,64}' | head -1 || true
 }
 
 # reachable reports whether sha names a real commit that ref can see. A sha that
@@ -141,20 +159,27 @@ check_commits() {
 		done <<<"$(git show -s --format='%B' "$sha")"
 	done <<<"$range"
 
-	# RS002 — a stamp added here must name a commit this head can see.
-	local added
-	added="$(git diff -U0 "$base".."$head" -- "$ISSUES_DIR" |
-		grep -E '^\+[[:space:]]*commit:' |
-		grep -oE '[0-9a-f]{7,64}' | sort -u || true)"
-	while IFS= read -r sha; do
-		[ -n "$sha" ] || continue
+	# RS002 — a stamp added here must name a commit this head can see. Read the
+	# frontmatter of each record the range touched and check only a resolved_by.commit
+	# this range introduced or changed. Scanning the raw diff for `+  commit:` instead
+	# would reachability-check a `commit:` example in a record's prose body — a false
+	# violation — which is exactly the boundary RS003 already draws.
+	local changed
+	changed="$(git diff --name-only "$base".."$head" -- "$ISSUES_DIR" | grep -E '\.md$' || true)"
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		local head_sha base_sha
+		head_sha="$(frontmatter_commit "$head" "$f")"
+		[ -n "$head_sha" ] || continue
+		base_sha="$(frontmatter_commit "$base" "$f")"
+		[ "$head_sha" = "$base_sha" ] && continue
 		local rc=0
-		reachable "$sha" "$head" || rc=$?
+		reachable "$head_sha" "$head" || rc=$?
 		case "$rc" in
-		2) fail "RS002 resolved_by.commit '$sha' is added in this range but names no commit in this repository. --commit is shape-checked only, so a wrong sha is accepted silently." ;;
-		1) fail "RS002 resolved_by.commit '$sha' is not reachable from $head. Cite a commit on this branch or already on main." ;;
+		2) fail "RS002 resolved_by.commit '$head_sha' is added in this range but names no commit in this repository. --commit is shape-checked only, so a wrong sha is accepted silently." ;;
+		1) fail "RS002 resolved_by.commit '$head_sha' is not reachable from $head. Cite a commit on this branch or already on main." ;;
 		esac
-	done <<<"$added"
+	done <<<"$changed"
 
 	if [ -n "${declared// /}" ]; then
 		echo "check-issue-resolution: RS001 checked$declared"
@@ -174,11 +199,9 @@ check_ledger() {
 		[ -n "$f" ] || continue
 		# Only the frontmatter's resolved_by block carries a stamp; a sha quoted in
 		# the prose body is narrative, not provenance, so the scan stops at the
-		# closing delimiter.
+		# closing delimiter (frontmatter_commit).
 		local sha
-		sha="$(git show "$ref:$f" 2>/dev/null |
-			awk 'NR>1 && /^---$/{exit} /^[[:space:]]+commit:/{print}' |
-			grep -oE '[0-9a-f]{7,64}' | head -1 || true)"
+		sha="$(frontmatter_commit "$ref" "$f")"
 		[ -n "$sha" ] || continue
 		checked=$((checked + 1))
 		local rc=0

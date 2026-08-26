@@ -850,9 +850,20 @@ func (convOpenQuestionsSource) probeLimited(ctx *SourceContext, budget int) Evid
 	}
 
 	if markers == 0 {
+		// The scope is stated, both ways round. A reader of a packed lifeboat has
+		// to be able to tell whether an absent citation means "nothing there" or
+		// "not looked at" — and the answer now depends on a caller's choice, so
+		// naming the choice is part of the result rather than a footnote to it
+		// (iss-2608241828356533).
+		scope := "every regular file in the tree except " + strings.Join(walkSkipDirs, ", ")
+		if ctx.IgnoredAreIncluded() {
+			scope += ", INCLUDING files git ignores"
+		} else {
+			scope += ", and excluding files git ignores"
+		}
 		searched := []string{
 			"in-code work markers (" + strings.Join(convMarkerNames, ", ") + ")",
-			"every regular file in the tree except " + strings.Join(walkSkipDirs, ", "),
+			scope,
 		}
 		// Loud staging on the blank too: a scan the bounds cut short read only
 		// part of the tree, so "no markers" would be a claim about files that

@@ -213,7 +213,7 @@ func TestSessionStartLeadsWithTheBootstrapSuccess(t *testing.T) {
 cp "$CLAUDE_PLUGIN_ROOT/staged-abcd" "$CLAUDE_PLUGIN_ROOT/abcd"
 chmod 0755 "$CLAUDE_PLUGIN_ROOT/abcd"
 printf 'abcd bootstrap: installed the checksum-verified abcd binary\n' >&2
-exit 2
+exit 0
 `, "")
 	// Staged beside the root rather than written by the stub: the binary the
 	// bootstrap installs is what the chained calls must then find.
@@ -225,19 +225,18 @@ exit 2
 	if got := firstLine(stderr); !strings.HasPrefix(got, "abcd bootstrap: installed") {
 		t.Errorf("the first stderr line must be the bootstrap's success (it is the only line the transcript shows); got %q\nfull stderr:\n%s", got, stderr)
 	}
-	// The chain still exits 2 here, and that is the BOOTSTRAP's code, not the
-	// binary's. hooks/bootstrap.sh's notice() exits 2 for the same reason the Go
-	// hook used to, and its own comment states the reasoning that makes the other
-	// half of this correct: "a SessionStart hook's stdout becomes model context".
-	// That is exactly why the Go hook now puts only a constant there.
+	// Exit 0 throughout now. bootstrap.sh's notice() announces a SUCCESSFUL
+	// install, which is a reported condition and not a fault, so it no longer
+	// raises an error banner that drops its own text (iss-2608251011427187). The
+	// stub above models that, because a fixture pinning a contract the real
+	// script has abandoned proves nothing.
 	//
-	// The shell half is deliberately out of scope for iss-2608241115201044, which
-	// is about the binary's notices: bootstrap.sh's exit code also governs the
-	// install path, and changing it is a separate change with its own risk.
-	// Tracked as iss-2608251011427187. What this test pins either way is the
-	// TEXT and its ORDER, which the first-line assertion above carries.
-	if code != 2 {
-		t.Errorf("the bootstrap's own notice code must still propagate; code = %d", code)
+	// refuse() keeps its non-zero exit, and that split is the point: a genuine
+	// fault should raise a banner, a successful install should not. What this
+	// test pins either way is the TEXT and its ORDER, which the first-line
+	// assertion above carries.
+	if code != 0 {
+		t.Errorf("a successful bootstrap plus a notice is not a fault; code = %d", code)
 	}
 	if strings.Contains(stderr, "the plugin binary is not installed") {
 		t.Errorf("a successful bootstrap must not be followed by a missing-binary complaint; stderr:\n%s", stderr)
