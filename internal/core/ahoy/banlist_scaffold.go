@@ -348,27 +348,11 @@ func publicPathIsWritable(cwd string) bool {
 	return !repoShaped(cwd)
 }
 
-// repoShaped reports whether cwd sits anywhere inside a tree carrying a .git entry
-// — a directory, or the file a worktree or submodule leaves. It is deliberately
-// cruder than gitutil.InRepo: its job is to tell "not a repository" apart from "a
-// repository git would not answer for".
-//
-// It walks to the filesystem root, because git does: checking cwd alone answers "not
-// a repository" for every SUBDIRECTORY of one, and with git unavailable that is the
-// answer that writes the stub into a tracked tree.
-func repoShaped(cwd string) bool {
-	dir := cwd
-	for {
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return false
-		}
-		dir = parent
-	}
-}
+// repoShaped tells "not a repository" apart from "a repository git would not
+// answer for". The walk lives in gitutil.RepoShaped so banlist's own write gate
+// shares the one discriminator (banlist cannot import ahoy); this wrapper keeps
+// the scaffold's tests pinning the behaviour at this boundary.
+func repoShaped(cwd string) bool { return gitutil.RepoShaped(cwd) }
 
 // ---------------------------------------------------------------------------
 // health

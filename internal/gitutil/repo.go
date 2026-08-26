@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -157,16 +158,48 @@ func InRepo(root string) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
+// RepoShaped reports whether root sits anywhere inside a tree carrying a .git
+// entry — a directory, or the file a worktree or submodule leaves. It is
+// deliberately cruder than InRepo: its job is to tell "not a repository" apart
+// from "a repository git would not answer for" (git absent from PATH, a corrupt
+// .git, an ownership refusal under the isolated env). Only the first is safe to
+// treat as "nothing is tracked here"; the others can commit, and nothing can
+// say what git would answer.
+//
+// It walks to the filesystem root, because git does: checking root alone
+// answers "not a repository" for every SUBDIRECTORY of one.
+func RepoShaped(root string) bool {
+	dir := root
+	for {
+		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
+}
+
 // TrackedFiles returns the repo-relative paths git tracks under root, NUL-safe
-// so a filename with a newline cannot desync the list. Outside a repo (or with
-// git absent) it returns no files and no error — a scan over committed files
-// then degrades to "nothing to scan" rather than failing. Inside a repo any
-// other ls-files failure (a corrupt index, say) is returned as an error, so a
-// caller cannot mistake "could not read the index" for "nothing tracked" and
-// report a scanning rule compliant after reading zero files.
+// so a filename with a newline cannot desync the list. Outside anything
+// repo-shaped it returns no files and no error — a scan over committed files
+// then degrades to "nothing to scan" rather than failing. In a repo-shaped tree
+// git cannot answer for, and inside a repo on any other ls-files failure (a
+// corrupt index, say), it returns an error, so a caller cannot mistake "could
+// not read the repository" for "nothing tracked" and report a scanning rule
+// compliant after reading zero files.
 func TrackedFiles(root string) ([]string, error) {
 	if !InRepo(root) {
-		// Not a repo / git absent → nothing tracked, not an error.
+		if RepoShaped(root) {
+			// Repo-shaped, but git could not answer: absent from PATH, an
+			// unreadable or corrupt repository, or an ownership refusal under
+			// the isolated env. Content here CAN be committed, so "nothing
+			// tracked" would be a false clean.
+			return nil, errors.New("git could not read the repository here (absent, unreadable, or refused), so tracked files cannot be listed")
+		}
+		// Not a repository → nothing tracked, not an error.
 		return nil, nil
 	}
 	out, err := isolatedGit(root, "ls-files", "-z").Output()
