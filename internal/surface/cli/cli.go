@@ -2333,11 +2333,13 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)")
-	// --shipped-in is for the ledger-hygiene case only: closing a record whose fix
-	// was released long ago. The derivation leaves such a record out of the current
+	// --shipped-in is a MIGRATION flag, for the ledger-hygiene case only: closing a
+	// record whose fix was released long ago. A repo abcd managed from its first
+	// commit should never reach for it — RS001 makes resolution ride the fixing
+	// commit, so the cut is right without it. The derivation leaves such a record out of the current
 	// cut, so the release record cannot announce old work as new. Absent by
 	// default, and never inferred — a record that says nothing belongs to this cut.
-	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "the release that already carried this work (vX.Y.Z); leaves the record out of the current cut")
+	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
 	// promote — graduate an issue into an intent draft (spc-24, step 2 of the

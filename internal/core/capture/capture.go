@@ -147,8 +147,10 @@ type ResolveRequest struct {
 	// so a resolved record the tool mints always satisfies its own blocker.
 	Impact string
 	// ShippedIn optionally names the release that already carried this work, as a
-	// tag (v0.6.2). It exists for the ledger-hygiene case: closing a record for a
-	// fix released long ago. The derivation reads it and leaves such a record out
+	// tag (v0.6.2). It is a MIGRATION mechanism for the ledger-hygiene case:
+	// closing a record for a fix released long ago. A repository abcd manages from
+	// its first commit should never need it, because RS001 makes resolution ride
+	// the fixing commit and the cut is then right by construction. The derivation reads it and leaves such a record out
 	// of the current cut, so the release record cannot announce old work as new
 	// (iss-2608241612087533). Absent by default — the ordinary resolution is for
 	// work shipping in the release being prepared, and it must never be guessed.
