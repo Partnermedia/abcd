@@ -18,6 +18,13 @@ plugin surface, and a future MCP server share one engine.
   entered the terminal folders since the anchor tag. It owns the enum so the
   lints that GATE the judgement (`core/lint`), the ledger reader that VALIDATES
   it (`core/capture`), and the derivation that CONSUMES it cannot drift apart.
+- **`core/issueschema/`** — the issue record's required frontmatter properties,
+  and nothing else. It is a leaf for the same reason `core/changelog` owns the
+  impact enum: the ledger reader (`core/capture`) and the lint that gates the
+  committed ledger (`core/lint`) must agree about what a well-formed record
+  carries, and a record they disagree about is one that sits in the ledger unread
+  by every surface. It is not inside `core/capture` because that package's own
+  tests import `core/lint`, so a lint importing capture back is an import cycle.
 - **`core/surface/`** — the compatibility surface as DATA: the snapshot of every
   command, flag, and manifest entry a consumer binds to, and the diff that names
   what a release narrowed. It shares a word with the `surface/` front-door tier
