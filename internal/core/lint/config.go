@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -344,14 +345,51 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, err
 		}
 	}
+	// Strict decode: a misspelt key would silently zero-value the field it
+	// missed ("enabld" disarms a rule, "severty" strips its exit-code weight),
+	// and both misreads survive review because the file still looks armed.
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
 		return Config{}, err
 	}
 	if err := cfg.validateBannedTokens(); err != nil {
 		return Config{}, err
 	}
+	if err := cfg.validateSeverities(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// validateSeverities refuses a severity outside the engine's enum on any
+// enabled rule or banned token. The exit paths count Severity == "blocker"
+// verbatim, so an off-enum value would emit findings that serialize yet count
+// toward no exit code — a clean exit beside a non-empty findings list, which
+// the sibling engines (repolint.Evaluate, guard.Validate, banlist.AddPublic)
+// name a rule bug and fail closed on. A disabled rule is inert and its
+// severity is not consulted, so it is not checked.
+func (c Config) validateSeverities() error {
+	for id, rc := range c.Rules {
+		if !rc.Enabled {
+			continue
+		}
+		if rc.Severity != severityBlocker && rc.Severity != severityWarn {
+			return &configError{"rule " + id + " has severity " + strconv.Quote(rc.Severity) + "; an enabled rule must declare \"blocker\" or \"warn\", or its findings count toward no exit code"}
+		}
+	}
+	for i, t := range c.BannedTokens {
+		if t.Severity == severityBlocker || t.Severity == severityWarn {
+			continue
+		}
+		who := t.ID
+		if who == "" {
+			who = "index " + strconv.Itoa(i)
+		}
+		return &configError{"banned_tokens entry " + who + " has severity " + strconv.Quote(t.Severity) + "; want \"blocker\" or \"warn\""}
+	}
+	return nil
 }
 
 // validateBannedTokens enforces the strict banned_tokens schema (iss-51): every
