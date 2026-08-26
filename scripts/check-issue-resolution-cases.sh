@@ -17,6 +17,19 @@
 # Exit 0 all cases behaved, 1 a case did not.
 set -euo pipefail
 
+# Hermetic git (iss-28, iss-313): every scratch-repo command below is `git -C
+# "$d" …`, but an inherited absolute GIT_DIR overrides -C and redirects these
+# fixture commits onto the ambient repository — which then reports all-green while
+# its real history is rewritten. An inherited GIT_CONFIG_GLOBAL / core.hooksPath
+# also fires the developer's global hooks inside the scratch repos and breaks the
+# run for a reason that has nothing to do with the ledger. Neutralise the ambient
+# git environment before the first git call, matching check-attribution-cases.sh
+# and gitutil.IsolatedEnv. (commit.gpgsign is set per-repo below; this closes the
+# rest.)
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+	GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
+
 GATE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-issue-resolution.sh"
 [ -x "$GATE" ] || {
 	echo "cases: gate not executable: $GATE" >&2
@@ -171,6 +184,50 @@ resolve_record "$d" "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 git -C "$d" add -A
 git -C "$d" commit -qm "chore: resolve"
 expect fail "$d" "RS003 stamp naming a nonexistent commit" -- ledger HEAD
+
+# --- boundary/robustness regressions ----------------------------------------
+
+# RS002 reads the frontmatter only: a `commit:` line in a record's PROSE BODY is
+# narrative, not a stamp, and must not be reachability-checked. The frontmatter
+# here carries a real reachable stamp; the body documents the stamp shape with a
+# nonexistent sha. Before the boundary fix the raw-diff scan flagged the body sha.
+d="$(newrepo rs002-body-example)"
+base="$(git -C "$d" rev-parse HEAD)"
+resolve_record "$d" "$base"
+cat >>"$d/$ISS_DIR/resolved/iss-999-a-fixture.md" <<'EOF'
+
+Example of the stamp this rule checks:
+
+    resolved_by:
+      commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: resolve and document the stamp shape"
+expect pass "$d" "RS002 ignores a commit: example in the prose body" -- commits main HEAD
+
+# A non-iss file entering resolved/ or wontfix/ (a README, a policy note) is not a
+# record, and it must not abort the gate. The id extractors skip a non-iss
+# basename; before the fix that skip exited non-zero and, when it was the last
+# diff entry under errexit, killed the whole run silently with RS001/RS002 never
+# reached. zzz- sorts last, so it is that final entry.
+d="$(newrepo rs001-nonrecord-last)"
+resolve_record "$d"
+echo "policy notes" >"$d/$ISS_DIR/wontfix/zzz-policy.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-999"
+expect pass "$d" "a non-iss file last in the diff does not abort the gate" -- commits main HEAD
+
+# The gate resolves its paths from the repository root, so it scans the same
+# records from any working directory. Before the cd fix, a run from a subdirectory
+# matched nothing and reported a clean pass over an unreachable-stamp ledger.
+d="$(newrepo rs003-subdir)"
+resolve_record "$d" "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: resolve"
+mkdir -p "$d/sub/deep"
+expect fail "$d/sub/deep" "RS003 still scans when run from a subdirectory" -- ledger HEAD
 
 if [ "$failures" -gt 0 ]; then
 	printf 'cases: FAILED — %d case(s) did not behave\n' "$failures" >&2
