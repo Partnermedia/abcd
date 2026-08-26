@@ -2300,9 +2300,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// resolve — open -> resolved with a note, a required product impact, and
 	// optional resolved_by provenance (spc-25): the intent, spec, or commit
 	// that fixed it.
-	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit string
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn string
 	resolveCmd := &cobra.Command{
-		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha]",
+		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
 		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2313,6 +2313,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			res, err := capture.Resolve(capture.ResolveRequest{
 				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
 				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
+				ShippedIn: resolveShippedIn,
 			})
 			if err != nil {
 				return err
@@ -2332,6 +2333,11 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)")
+	// --shipped-in is for the ledger-hygiene case only: closing a record whose fix
+	// was released long ago. The derivation leaves such a record out of the current
+	// cut, so the release record cannot announce old work as new. Absent by
+	// default, and never inferred — a record that says nothing belongs to this cut.
+	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "the release that already carried this work (vX.Y.Z); leaves the record out of the current cut")
 	captureCmd.AddCommand(resolveCmd)
 
 	// promote — graduate an issue into an intent draft (spc-24, step 2 of the

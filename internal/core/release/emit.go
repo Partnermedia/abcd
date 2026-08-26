@@ -56,6 +56,16 @@ type Entry struct {
 	// changelog.Record.InChangelog verbatim, which is why a record with no valid
 	// impact reads true here: unknown is not internal.
 	InChangelog bool `json:"in_changelog"`
+	// ShippedInErr is why this record's `shipped_in:` did not parse, empty when
+	// the field is absent, null, or valid. A record carrying one is IN the cut —
+	// an unreadable value never removes a record — so this is the only place an
+	// operator learns that a record tried to say it shipped elsewhere and failed.
+	//
+	// Reported rather than refused. Refusing would block a release on a typo in a
+	// field whose whole purpose is to take records OUT, and the fail-safe
+	// direction already holds: the record stays, so the worst outcome is a
+	// redundant changelog line rather than a missing one.
+	ShippedInErr string `json:"shipped_in_err,omitempty"`
 }
 
 // RefusalKind classifies why a cut cannot proceed. The string values are the
@@ -316,12 +326,13 @@ func entriesOf(records []changelog.Record) []Entry {
 	out := make([]Entry, 0, len(records))
 	for _, rec := range records {
 		out = append(out, Entry{
-			ID:          rec.ID,
-			Path:        rec.Path,
-			Impact:      rec.Impact,
-			Title:       rec.Title,
-			Summary:     rec.Summary,
-			InChangelog: rec.InChangelog(),
+			ID:           rec.ID,
+			Path:         rec.Path,
+			Impact:       rec.Impact,
+			Title:        rec.Title,
+			Summary:      rec.Summary,
+			InChangelog:  rec.InChangelog(),
+			ShippedInErr: rec.ShippedInErr,
 		})
 	}
 	return out

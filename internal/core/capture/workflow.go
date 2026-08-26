@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -184,7 +185,23 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 	if err != nil {
 		return TransitionResult{}, err
 	}
+	// Validated BEFORE the move, like every other member: the field's job is to
+	// take a record OUT of a release, so a value the derivation cannot read is
+	// worse than no value at all — it would sit in the ledger looking like an
+	// exclusion and never be one.
+	if req.ShippedIn != "" && !reShippedIn.MatchString(req.ShippedIn) {
+		return TransitionResult{}, fmt.Errorf(
+			"resolve: --shipped-in %q is not a release tag (want vMAJOR.MINOR.PATCH); nothing written", req.ShippedIn)
+	}
 	extras := []kv{{"impact", rawScalar(string(impact))}}
+	if req.ShippedIn != "" {
+		// rawScalar, like impact above: a plain string is double-quoted by
+		// yamlScalar, and the derivation reads the RAW scalar, so a quoted value
+		// arrives as `"v0.6.2"` and fails its own shape check. The first draft of
+		// this feature wrote it quoted and read it bare, so the field never
+		// excluded anything even once the property was allowed.
+		extras = append(extras, kv{"shipped_in", rawScalar(req.ShippedIn)})
+	}
 	if rb != nil {
 		var members nested
 		if rb.Intent != "" {
@@ -240,6 +257,17 @@ func resolveProvenance(req ResolveRequest) (*ResolvedBy, error) {
 	}
 	return &ResolvedBy{Intent: req.ByIntent, Spec: req.BySpec, Commit: req.ByCommit}, nil
 }
+
+// reShippedIn is the release-tag shape the derivation accepts. It is duplicated
+// from internal/core/changelog deliberately: capture must refuse a value that
+// package would silently ignore, and importing it here for one regexp would
+// couple the ledger writer to the release deriver. If a third site needs it, it
+// wants exporting rather than a third copy.
+//
+// It sits below Resolve rather than above it: an earlier draft put it between
+// Resolve's doc comment and its signature, which silently transferred twelve
+// lines of documentation from the function to the regexp.
+var reShippedIn = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 // Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
 // wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no

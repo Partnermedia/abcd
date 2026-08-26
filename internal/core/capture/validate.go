@@ -19,6 +19,13 @@ var knownFields = map[string]bool{
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
 	"resolved_by": true, "blocked_by": true,
+	// shipped_in names the release that already carried this record's work, so the
+	// derivation can leave it out of a later cut (iss-2608241612087533). Optional
+	// and rare — only a ledger-hygiene close, for a fix released long ago, has
+	// anything to say here. It must be a KNOWN property or every write carrying
+	// one is refused, which is exactly how the first draft of this feature shipped
+	// a flag that could never execute.
+	"shipped_in": true,
 	// impact is the product judgement the derived version and the generated
 	// changelog are computed from (spc-10). It is optional here — an open issue
 	// has not been judged yet, and the record-lint blocker issue_impact_valid is
