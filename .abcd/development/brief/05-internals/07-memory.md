@@ -35,7 +35,7 @@ Memory pages use the existing flat naming `<type>_<domain>_<slug>.md`. The flat 
 ├── <type>_<domain>_<slug>.md # individual pages (existing convention)
 ├── <type>_<domain>_<slug>.md
 ├── ...
-└── sources/                  # opt-in only via --keep-original; default-deny at the lifeboat licence gate (per § 4; adr-18 — NOT a launch payload gate)
+└── sources/                  # opt-in only via --keep-original; default-deny at the lifeboat licence gate (per § 4; adr-28 — NOT a launch payload gate)
     └── <sha256>.<ext>
 ```
 
@@ -114,7 +114,7 @@ recall: [<keyword>, ...]
 
 `/abcd:memory ingest <path>` reads the source, distils into typed entity/topic pages with citation frontmatter, and **discards the original by default**. Source path + hash recorded for re-ingest only.
 
-`--keep-original` flag opts the user into storing the original at `.abcd/memory/sources/<sha256>.<ext>`. The spc-38 restrictive-licence gate refuses to publish anything under `.abcd/memory/sources/` unless an explicit allowlist entry is written. Per adr-18 this gate is the **lifeboat's** (`/abcd:disembark`), NOT the launch payload's: `04-launch.md § 2` excludes the entire `.abcd/` namespace from the public launch payload wholesale, so launch never publishes `.abcd/memory/sources/` and is not the gate's consumer. At launch the gate is future/inert; its real consumer is the lifeboat, the surface that publishes curated project memory/provenance (adr-35).
+`--keep-original` flag opts the user into storing the original at `.abcd/memory/sources/<sha256>.<ext>`. The spc-38 restrictive-licence gate refuses to publish anything under `.abcd/memory/sources/` unless an explicit allowlist entry is written. Per adr-28 this gate is the **lifeboat's** (`/abcd:disembark`), NOT the launch payload's: `04-launch.md § 2` excludes the entire `.abcd/` namespace from the public launch payload wholesale, so launch never publishes `.abcd/memory/sources/` and is not the gate's consumer. At launch the gate is future/inert; its real consumer is the lifeboat, the surface that publishes curated project memory/provenance (adr-35).
 
 **Why default-no-originals.** External sources may be paywalled, NDA'd, or under restrictive licences. Storing the original creates a copyright-laundering vector unless paired with explicit per-source provenance + licence-tagging. Default-no-originals + bounded quotation (§ 5) closes the laundering vector for the common case; `--keep-original` is the explicit-opt-in for the case where the user owns the source or has clear redistribution rights.
 
@@ -163,7 +163,7 @@ User-facing surface (per itd-36):
 | Verb | Behaviour |
 |---|---|
 | Bare `/abcd:memory` | Status + help + render of current memory state (page count by class, last-ingest timestamp, recent contradictions). Per the [bare-command-as-render discipline](../02-constraints/04-naming.md). Quotation-budget headroom renders per external source READ-ONLY from the spc-39 `.coverage_index.json`: a fingerprint-fresh index shows per-source warn/block headroom, fingerprint drift shows a "stale — run /abcd:memory lint" hint, an absent index an info line, and a malformed index/crawl failure a non-fatal "headroom unavailable" line. The bare render never rebuilds or mutates the index (the `lint` sub-verb is the sole writer). |
-| `/abcd:memory ingest <path-or-url>` | Read external source, distil into typed pages with citation, append to log. Default: do NOT store original. Flag: `--keep-original` (opt-in storage; the lifeboat licence-gate allowlist is required before a kept original could ever publish — via `/abcd:disembark`, not launch; adr-18). |
+| `/abcd:memory ingest <path-or-url>` | Read external source, distil into typed pages with citation, append to log. Default: do NOT store original. Flag: `--keep-original` (opt-in storage; the lifeboat licence-gate allowlist is required before a kept original could ever publish — via `/abcd:disembark`, not launch; adr-28). |
 | `/abcd:memory ask <question>` | Query memory by domain + class; synthesise answer with citations; optionally file result back. |
 | `/abcd:memory lint` **(spc-39)** | Full-store curator health-check: ALWAYS crawls the whole repo store (the cumulative `MQ002` needs the full corpus), runs the `MQ`/`MS`/`ML` family (`MQ001`/`MQ002`/`MQ003` quotation budgets + coverage, `MS001`/`MS002` source-class advisories, `ML001` missing licences), rebuilds the regenerable `.coverage_index.json`, and writes `.abcd/logbook/memory/lint-<ts>/report.{json,md}`. Mutates NO memory-store state — the coverage index + logbook report are its only writes. Exit: blockers → nonzero; warn-only → exit 0 (curator advisory; the recorded divergence from the standalone grammar, see [`06-lint.md §2`](06-lint.md#2-severity-model)). **Not part of spc-39:** contradiction surfacing is RENDERED by spc-38's reconciliation into `contradictions.md` (surfaced by the bare render, not lint-coded), and orphan/stale-claim audits are DEFERRED to a later intent — `lint` runs neither. |
 
