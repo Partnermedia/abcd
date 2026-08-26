@@ -514,6 +514,16 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 	return docsCmd
 }
 
+// ignoredScope turns the --include-ignored flag into the probe options it means.
+// The narrow scan passes NO option, so the default lives in one place — the core
+// — and the front door cannot drift into asserting its own.
+func ignoredScope(include bool) []lifeboat.ProbeOption {
+	if !include {
+		return nil
+	}
+	return []lifeboat.ProbeOption{lifeboat.IncludeIgnored()}
+}
+
 // newDisembarkCommand builds the operator `disembark` sub-tree:
 //
 //   - `probe <repo>` walks a repository read-only and reports, per brief
@@ -537,6 +547,14 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 		RunE:  helpRunE,
 	}
 
+	// --include-ignored widens the walk to files git ignores. Off by default:
+	// disembark reads a working tree and a packed lifeboat cites evidence by
+	// path:line, so a file the user told git to ignore stays out of scope until
+	// they say otherwise (iss-2608241828356533). It is offered on all three verbs
+	// because the salvage case — a dead or archived repository whose uncommitted
+	// residue is the only thing left — is a PACK, not just a report.
+	var probeIgnored, planIgnored, packIgnored bool
+
 	probeCmd := &cobra.Command{
 		Use:   "probe [repo]",
 		Short: "Report which brief sections a lifeboat could ground from a repository (read-only)",
@@ -553,7 +571,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 			if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark probe: %s is not a directory", target)}
 			}
-			cov, err := lifeboat.Probe(abs)
+			cov, err := lifeboat.Probe(abs, ignoredScope(probeIgnored)...)
 			if err != nil {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark probe: %s", scrubPaths(err))}
 			}
@@ -634,7 +652,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 			if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark plan: %s is not a directory", target)}
 			}
-			lb, err := lifeboat.Plan(abs)
+			lb, err := lifeboat.Plan(abs, ignoredScope(planIgnored)...)
 			if err != nil {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark plan: %s", scrubPaths(err))}
 			}
@@ -682,7 +700,7 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 				}
 				return nil
 			}
-			res, err := lifeboat.Pack(repoAbs, args[1], scan)
+			res, err := lifeboat.Pack(repoAbs, args[1], scan, ignoredScope(packIgnored)...)
 			if err != nil {
 				return &exitError{Code: 2, Msg: fmt.Sprintf("disembark pack: %s", scrubPaths(err))}
 			}
@@ -818,6 +836,11 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 
 	disembarkCmd.AddCommand(probeCmd)
 	disembarkCmd.AddCommand(coverageCmd)
+	const includeIgnoredUsage = "also read files git ignores (widens the scan; the report says so)"
+	probeCmd.Flags().BoolVar(&probeIgnored, "include-ignored", false, includeIgnoredUsage)
+	planCmd.Flags().BoolVar(&planIgnored, "include-ignored", false, includeIgnoredUsage)
+	packCmd.Flags().BoolVar(&packIgnored, "include-ignored", false, includeIgnoredUsage)
+
 	disembarkCmd.AddCommand(planCmd)
 	disembarkCmd.AddCommand(packCmd)
 	disembarkCmd.AddCommand(graveyardCmd)

@@ -30,6 +30,12 @@ const maxProbeReadBytes = 4 << 20 // 4 MiB
 // repo cannot exhaust memory through a read-only command.
 const maxGitOutputBytes = 16 << 20 // 16 MiB
 
+// ignoredListCapBytes caps the one `ls-files` listing that decides which paths
+// git ignores. It is a var, not a const, so a test can force the overflow path
+// on a small tree — the truncation hazard is untestable at 16 MiB, and an
+// untested refusal path is the one that rots.
+var ignoredListCapBytes = maxGitOutputBytes
+
 // maxDirEntries caps how many entries a single directory read materialises, so a
 // directory with millions of files cannot exhaust memory when the probe indexes
 // it. It is the one canonical per-directory bound, shared by ListDir and by
@@ -133,6 +139,24 @@ type SourceContext struct {
 	root    *os.Root // containment scope for every file read; nil if unopenable
 	isGit   bool
 	rootSHA string
+
+	// includeIgnored widens the walk to files git ignores. It is OFF by default,
+	// and moving off that default is a caller's explicit choice, never inferred
+	// (iss-2608241828356533).
+	//
+	// The default is what a user already believes: a file they told git to ignore
+	// is out of scope. A packed lifeboat cites evidence by path:line, so a scan
+	// that read ignored files could carry a repository's scratch, logs and local
+	// notes into an artefact meant to be shared — this repository's own gitignored
+	// local tier is not in walkSkipDirs, so it was in scope.
+	//
+	// The opt-in exists because disembark is offered over DEAD and ARCHIVED
+	// repositories, where uncommitted residue is often the most valuable thing
+	// left. Refusing to read it would lose the case the verb exists for. So the
+	// wide scan stays reachable, and asking for it is the disclosure.
+	includeIgnored bool
+	ignoredOnce    sync.Once
+	notIgnored     map[string]struct{} // nil when unknown or not applicable
 
 	mu       sync.Mutex
 	gitCache map[string]gitResult
@@ -425,6 +449,9 @@ func (c *SourceContext) walkFilesBounded(rel string, limit, perDir int) (paths [
 			if !e.Type().IsRegular() {
 				continue
 			}
+			if c.pathIsIgnored(child) {
+				continue
+			}
 			if len(paths) >= limit {
 				truncated = true
 				return true
@@ -437,6 +464,54 @@ func (c *SourceContext) walkFilesBounded(rel string, limit, perDir int) (paths [
 	sort.Strings(paths)
 	return paths, truncated
 }
+
+// pathIsIgnored reports whether git ignores rel. It answers false whenever it
+// cannot know — a non-git tree, or a git call that fails — because the walk must
+// not silently narrow on a repository it could not interrogate: losing evidence
+// quietly is the failure this whole adapter family exists to avoid.
+//
+// The not-ignored set is computed ONCE per context, from a single
+// `ls-files --cached --others --exclude-standard`. That is git's own answer to
+// "everything tracked, plus everything untracked that is not ignored", so the
+// complement is exactly the ignored set — no .gitignore parsing of our own, and
+// no per-file `check-ignore`, which would be one process per file over a foreign
+// tree.
+func (c *SourceContext) pathIsIgnored(rel string) bool {
+	if c.includeIgnored || !c.isGit {
+		return false
+	}
+	c.ignoredOnce.Do(func() {
+		// RunCapped, not the cached Git/GitLines path. Those use RunLimited, which
+		// TRUNCATES silently when git's output exceeds the cap — and a truncated
+		// listing here is not a smaller answer, it is an inverted one: every file
+		// past the cut is absent from the set and therefore reads as ignored, so a
+		// large repository would silently drop the tail of its own tree from the
+		// scan. RunCapped exists for exactly this shape of caller, and its error
+		// leaves the set nil, which means "unknown" and narrows nothing.
+		out, err := gitutil.RunCapped(c.RepoRoot, ignoredListCapBytes,
+			"ls-files", "--cached", "--others", "--exclude-standard", "-z")
+		if err != nil || out == "" {
+			return // unknown: treat everything as not ignored
+		}
+		set := make(map[string]struct{}, 256)
+		for _, f := range strings.Split(out, "\x00") {
+			if f != "" {
+				set[f] = struct{}{}
+			}
+		}
+		c.notIgnored = set
+	})
+	if c.notIgnored == nil {
+		return false
+	}
+	_, ok := c.notIgnored[rel]
+	return !ok
+}
+
+// IgnoredAreIncluded reports whether this walk reads files git ignores. Adapters
+// use it to SAY which scan ran, so a reader of a packed lifeboat can tell whether
+// an absent citation means "nothing there" or "not looked at".
+func (c *SourceContext) IgnoredAreIncluded() bool { return c.includeIgnored }
 
 // readDirBounded reads at most bound entries from the directory dirRoot points
 // at, sorted by name for a deterministic walk, and reports whether the directory
@@ -484,13 +559,28 @@ func firstRootSHA(repoRoot string) string {
 	return fields[0]
 }
 
+// ProbeOption adjusts one probe run. Options are variadic so the default stays
+// the safe one and every widening is written at the call site.
+type ProbeOption func(*SourceContext)
+
+// IncludeIgnored widens the walk to files git ignores. Off by default: a file a
+// user told git to ignore is out of scope until they say otherwise, and a packed
+// lifeboat cites evidence by path:line. Pass it for the salvage case — a dead or
+// archived repository whose uncommitted residue is the point.
+func IncludeIgnored() ProbeOption { return func(c *SourceContext) { c.includeIgnored = true } }
+
 // Probe runs every registered adapter over one repository and reduces the
 // results to a Coverage report. Adapters run concurrently; the reduction is
 // deterministic. It never writes to the source repository.
-func Probe(repoRoot string) (Coverage, error) {
+//
+// By default it honours .gitignore. See IncludeIgnored.
+func Probe(repoRoot string, opts ...ProbeOption) (Coverage, error) {
 	ctx, err := newSourceContext(repoRoot)
 	if err != nil {
 		return Coverage{}, err
+	}
+	for _, o := range opts {
+		o(ctx)
 	}
 	defer ctx.Close()
 
@@ -601,9 +691,10 @@ func Probe(repoRoot string) (Coverage, error) {
 			RootSHA: ctx.RootSHA(),
 			Commits: ctx.CommitCount(),
 		},
-		TiersPresent: present,
-		Sections:     sections,
-		Summary:      sum,
+		TiersPresent:    present,
+		Sections:        sections,
+		Summary:         sum,
+		IncludedIgnored: ctx.IgnoredAreIncluded(),
 	}, nil
 }
 
