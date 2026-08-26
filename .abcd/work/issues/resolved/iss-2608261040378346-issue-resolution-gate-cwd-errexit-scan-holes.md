@@ -7,7 +7,7 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-a/round-7"
 found_at: "scripts/check-issue-resolution.sh"
-resolution: "cd to the repo [redacted-user]; non-fatal iss-id extraction; RS002 reads changed-record frontmatter via a helper shared with RS003. Three new cases pin it."
+resolution: "cd to the repo root; non-fatal iss-id extraction; RS002 reads changed-record frontmatter via a helper shared with RS003. Three new cases pin it."
 impact: fix
 resolved_by:
   commit: "47efe8e82d3d45d3f8f968d55c57cc8655dcb350"
