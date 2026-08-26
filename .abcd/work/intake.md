@@ -36,7 +36,13 @@ code-owner path, and S1 says so explicitly.
 ## S4 — review runs contained, never bare
 
 ```sh
-docker run --rm --network=none -v "$PWD:/src" -w /src golang:1.25
+# Provision modules first: the module cache mount is what lets the build work
+# once the network is cut, and the image tag MUST track go.mod's toolchain
+# (an older container refuses a newer `go` directive, and --network=none
+# blocks the GOTOOLCHAIN auto rescue). Bump the tag with go.mod.
+go mod download
+docker run --rm --network=none -v "$PWD:/src" \
+  -v "$(go env GOMODCACHE):/go/pkg/mod:ro" -w /src golang:1.26.7
 ```
 
 `go test` executes contributor Go via `init()` and `TestMain`; a bare run on a
