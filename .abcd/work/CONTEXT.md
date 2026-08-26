@@ -30,8 +30,10 @@ Python reference implementation.
 - Trust the binary over the record where they disagree. Less of the
   brief↔surface agreement is machine-enforced than the record's five named
   surfaces suggest: `surface_coverage` holds Direction B (every shipped surface
-  resolves to a brief row) on every run, but reads only the command and skill
-  surfaces — the agent, hook, and CLI-verb surfaces are not covered by it.
+  resolves to a brief row) on every run, and its sub-verb pass also reads the CLI
+  command tree (via the committed `surface.json` snapshot) for surface-bearing
+  verbs — but the agent and hook surfaces, the operator-internal verbs
+  (`spec`/`rules`/`hook`/`completion`), and all of Direction A stay uncovered.
   Direction A — the brief's prose describing what the binary actually DOES — is
   irreducibly semantic. Everything outside that one structural check is carried
   by the periodic release-gate cross-check

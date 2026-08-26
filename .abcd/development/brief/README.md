@@ -37,7 +37,7 @@ brief/
 ├── 02-constraints/              # platform, dependencies, invariants, naming
 ├── 03-evidence/                 # what worked / what didn't / open questions / tradeoffs
 ├── 04-surfaces/                 # one file per user-facing command surface (see 04-surfaces/README.md)
-├── 05-internals/                # agents, adapters, configuration, universal patterns, prompt quality, lint, memory, skills, provenance (see 05-internals/README.md)
+├── 05-internals/                # agents, adapters, configuration, universal patterns, prompt quality, lint, memory, skills, provenance, site (see 05-internals/README.md)
 ├── 06-delivery/                 # build sequence, verification matrix, out-of-scope
 └── glossary/                    # the canonical terminology glossary, by bounded context (see glossary/README.md)
 ```
@@ -49,5 +49,5 @@ For a fast orientation:
 1. **Start with [`01-product/03-mental-model.md`](01-product/03-mental-model.md)** — the brief / intents / specs distinction underpins every other section.
 2. **Then [`02-constraints/01-platform.md`](02-constraints/01-platform.md)** — what's locked, what's not.
 3. **Skim [`04-surfaces/README.md`](04-surfaces/README.md)** — the command surfaces at a glance.
-4. **Drill into [`05-internals/`](05-internals) only when implementing** — its README indexes the nine chapters.
+4. **Drill into [`05-internals/`](05-internals) only when implementing** — its README indexes the ten chapters.
 5. **Finish with [`06-delivery/01-build-sequence.md`](06-delivery/01-build-sequence.md)** — the order things ship.
