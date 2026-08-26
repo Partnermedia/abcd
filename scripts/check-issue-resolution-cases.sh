@@ -142,10 +142,9 @@ git -C "$d" commit -qm "chore: resolve a stale issue"
 expect pass "$d" "ledger move with no trailer is allowed" -- commits main HEAD
 
 # A bare `git rm` of the open record with a Resolves: trailer is NOT a
-# resolution: the record leaves open/ but enters neither resolved/ nor wontfix/,
-# so it vanishes from the ledger and its changelog line is lost. RS001 intersects
-# leaves-open AND enters-closed, so a delete-only "resolution" is refused — a
-# union of the two halves would wrongly pass it.
+# resolution: the record leaves open/ but ENTERS neither resolved/ nor wontfix/,
+# so it vanishes from the ledger and its changelog line is lost. RS001 keys on
+# the id ENTERING a terminal folder, so a delete-only "resolution" is refused.
 d="$(newrepo rs001-delete-only)"
 git -C "$d" rm -q "$ISS_DIR/open/iss-999-a-fixture.md"
 git -C "$d" add -A
@@ -153,6 +152,27 @@ git -C "$d" commit -qm "fix: something
 
 Resolves: iss-999"
 expect fail "$d" "RS001 trailer with a bare delete of the record" -- commits main HEAD
+
+# The mirror of the bare delete, and the load-bearing case: a record CAPTURED and
+# resolved in the same change lands as a plain add into resolved/ — a two-dot
+# base..head diff shows no departure from open/, because the record was never in
+# open/ at the base. It MUST pass: this is how the bug-hunt loop resolves its own
+# findings. RS001 keys on entering a terminal folder, not on leaving open/, so it
+# holds. (A blanket intersection of leaves-open and enters-closed would fail this
+# and break every such PR at the push gate.)
+d="$(newrepo rs001-fresh-capture)"
+cat >"$d/$ISS_DIR/resolved/iss-777-born-resolved.md" <<'EOF'
+---
+schema_version: 1
+id: "iss-777"
+---
+A finding captured and resolved in one change.
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: address a fresh finding
+
+Resolves: iss-777"
+expect pass "$d" "RS001 trailer with a same-change capture-and-resolve" -- commits main HEAD
 
 # --- RS002: a stamp added here must name a reachable commit ------------------
 

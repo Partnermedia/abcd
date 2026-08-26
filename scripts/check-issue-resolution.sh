@@ -20,9 +20,10 @@
 # Three checks:
 #
 #   RS001  A `Resolves: iss-N` trailer in the range must be accompanied by that
-#          issue leaving open/ for resolved/ or wontfix/ in the same range. A
-#          commit that says it resolves an issue and does not move the record is
-#          the exact drift this gate exists to stop.
+#          issue ENTERING resolved/ or wontfix/ in the same range — whether it
+#          moved out of open/ or was captured and resolved in the same change. A
+#          commit that says it resolves an issue and lands the record in no
+#          terminal folder is the exact drift this gate exists to stop.
 #
 #   RS002  A resolved_by.commit sha ADDED in the range must name a commit that
 #          exists and is reachable from the head being pushed. The --commit flag
@@ -143,7 +144,7 @@ check_commits() {
 			local id="${BASH_REMATCH[1]}"
 			declared="$declared $id"
 			if ! printf '%s\n' "$closed" | grep -qx "$id"; then
-				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not leave $ISSUES_DIR/open/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
+				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not enter $ISSUES_DIR/resolved/ or $ISSUES_DIR/wontfix/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
 			fi
 		done <<<"$(git show -s --format='%B' "$sha")"
 	done <<<"$range"

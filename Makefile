@@ -58,8 +58,9 @@ record-lint:
 	@go run ./cmd/record-lint
 
 # Deterministic issue-resolution gate (iss-2608241347321757). RS001: a
-# `Resolves: iss-N` trailer must be accompanied by that record leaving open/ in
-# the same change, so resolution lands INSIDE the fix and no post-merge step
+# `Resolves: iss-N` trailer must be accompanied by that record entering a terminal
+# folder (resolved/ or wontfix/) in the same change, so resolution lands INSIDE
+# the fix and no post-merge step
 # exists to forget. RS002/RS003: a resolved_by.commit sha must name a commit
 # that is actually reachable — `--commit` is shape-checked only, and the repo
 # allows squash and rebase merges, either of which rewrites a cited branch sha
