@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-2608261437040578"
+slug: "cleanlessonprose-kept-the-pre-migration-body-the-cleanprose"
+severity: "major"
+category: "bug"
+source: "agent-observation"
+found_during: "bughunt-b-round-9"
+found_at: "internal/core/lifeboat/graveyard_lessons.go"
+---
+
+cleanLessonProse kept the pre-migration body the CleanProse consolidation claims routed
