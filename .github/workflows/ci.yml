@@ -4,10 +4,10 @@ name: ci
 # work is covered by the pull_request trigger alone, so a PR push runs the matrix
 # once; the default-branch push keeps the merged tip checked. The check job
 # builds, vets and tests on macOS and Linux, with race-enabled internal tests on
-# both and the `gofmt -l .` format gate, record-lint and docs-lint on the ubuntu
-# leg alone. Separate jobs run full-history secret scanning, a workflow audit,
-# the reviews-charter discipline, dependency review, govulncheck, and the smoke
-# harness.
+# both and the `gofmt -l .` format gate, record-lint, docs-lint and the
+# site-render gate on the ubuntu leg alone. Separate jobs run full-history
+# secret scanning, a workflow audit, the reviews-charter and issue-resolution
+# gates (RS001-RS003), dependency review, govulncheck, and the smoke harness.
 #
 # The `changes` job classifies the diff, and the duplicated lanes stand down on a
 # change confined to the record and the user-facing docs. Two properties make
