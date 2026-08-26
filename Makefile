@@ -87,13 +87,19 @@ docs-lint:
 # triggered no audit. It reached a release, where `release.yml`'s site job failed
 # AFTER the binaries had published.
 #
-# Builds into a throwaway directory and keeps nothing: this asks "does it render"
-# and nothing else. Roughly ten seconds, almost all of it writing files.
+# Builds into a throwaway directory, then runs `site check` over it before
+# discarding it. Build alone answers "does it render"; the publish gates
+# (provenance, hero, banned-tokens, snippets, baseline, mobile, figure-labels)
+# are what release.yml's post-publish site job runs, so a change that renders but
+# trips a check gate would otherwise pass every pre-publish gate and fail only
+# AFTER the binaries ship. `site check` needs no mkdocs — it excludes docs/ — so a
+# plain build output suffices. Roughly ten seconds, almost all of it writing files.
 site-render:
 	@rm -rf .abcd/.work.local/scratch/site-render-check
 	@go run ./cmd/abcd site build --out .abcd/.work.local/scratch/site-render-check >/dev/null
+	@go run ./cmd/abcd site check --out .abcd/.work.local/scratch/site-render-check >/dev/null
 	@rm -rf .abcd/.work.local/scratch/site-render-check
-	@echo "site-render: the record and docs render"
+	@echo "site-render: the record and docs render and pass the site gates"
 
 # Propagate the pinned action refs in the committed release workflows back into
 # the scaffold templates they were rendered from (iss-209). Dependabot only ever
