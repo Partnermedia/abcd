@@ -504,3 +504,18 @@ func TestIngestVerdictRefusesSymlink(t *testing.T) {
 		t.Errorf("unexpected error for symlinked verdict: %v", err)
 	}
 }
+
+// TestReEmitAuditToleratesSpecIDSpelling proves the manual re-emit verb accepts
+// the same lint-green spec_id spellings the ship move does.
+func TestReEmitAuditToleratesSpecIDSpelling(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1-alpha"))
+
+	res, err := ReEmitAudit(root, "itd-10")
+	if err != nil {
+		t.Fatalf("ReEmitAudit must accept a slug-suffixed spec_id: %v", err)
+	}
+	if res.ReceiptID == "" || res.Status != "owed" {
+		t.Fatalf("ReEmitAudit result = %+v, want an owed receipt", res)
+	}
+}

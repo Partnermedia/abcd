@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -179,8 +180,11 @@ func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 	if !intentIDRe.MatchString(it.ID) {
 		return AuditEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", it.ID)
 	}
-	if !specIDRe.MatchString(it.SpecID) {
-		return AuditEmitResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", it.SpecID)
+	// The stored spec_id is checked the tolerant way (a number must be readable
+	// from it), not against the strict argument grammar: record-lint accepts a
+	// slug-suffixed or zero-padded spec_id, and no path is built from this value.
+	if !spec.HasNum(it.SpecID) {
+		return AuditEmitResult{}, fmt.Errorf("intent: spec id %q must carry a spec number (spc-N)", it.SpecID)
 	}
 	abs := filepath.Join(repoRoot, it.Path)
 	data, err := readRepoFile(abs, it.Path)
@@ -253,7 +257,7 @@ func ReEmitAudit(repoRoot, intentID string) (AuditEmitResult, error) {
 	if it.Bucket != BucketShipped {
 		return AuditEmitResult{}, fmt.Errorf("intent: %s is in %s, not shipped; only a shipped intent owes a fidelity audit", intentID, it.Bucket)
 	}
-	if !specIDRe.MatchString(it.SpecID) {
+	if !spec.HasNum(it.SpecID) {
 		return AuditEmitResult{}, fmt.Errorf("intent: %s has no well-formed spec_id (%q); refusing to emit a review", intentID, it.SpecID)
 	}
 	return emitAuditForIntent(repoRoot, it)

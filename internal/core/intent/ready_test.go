@@ -264,3 +264,24 @@ func TestReadyFaults(t *testing.T) {
 		t.Fatal("a symlinked intent record must be a fault")
 	}
 }
+
+// TestReadySpecLinkToleratesSpecIDSpelling mirrors Reconcile's tolerance in the
+// report: the spec_link check reads the same stored spec_id, so a lint-green
+// slug-suffixed or zero-padded value must report the link as held, not missing.
+func TestReadySpecLinkToleratesSpecIDSpelling(t *testing.T) {
+	for _, specID := range []string{"spc-1-alpha", "spc-01"} {
+		t.Run(specID, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", specID))
+			writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+			res, err := Ready(root, "itd-10")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if link := checkByName(t, res, "spec_link"); !link.OK {
+				t.Fatalf("spec_link = %+v, want OK for the lint-green spec_id %q", link, specID)
+			}
+		})
+	}
+}
