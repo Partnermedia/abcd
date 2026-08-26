@@ -40,8 +40,11 @@ vet:
 # Deterministic gate for the .abcd/work/reviews/ charter (RD001-RD003) — a
 # stopgap until these codes land in internal/core/lint. Needs full git history
 # (RD002 is append-only over committed history): on a shallow checkout the
-# script refuses (exit 2) rather than pass vacuously with nothing covered.
+# script refuses (exit 2) rather than pass vacuously with nothing covered. The
+# cases run first, as in lint-issues: a gate nobody has watched fail is an
+# enforcement claim with no evidence behind it.
 lint-reviews:
+	@bash scripts/check-reviews-cases.sh
 	@bash scripts/check-reviews.sh
 
 # AI-attribution gate (AGENTS.md § Attribution). Checks the commit trailers on

@@ -349,6 +349,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Reviews-charter gate can fail (cases)
+        run: bash scripts/check-reviews-cases.sh
+
       - name: Reviews-charter discipline (RD001-RD003)
         run: bash scripts/check-reviews.sh
 
