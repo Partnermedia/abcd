@@ -10,6 +10,10 @@ called out in a **Breaking** section.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The issue-resolution gate scans the same records from any working directory, survives a non-record file entering the ledger, and no longer flags a `commit:` example in a record's prose.** `scripts/check-issue-resolution.sh` resolved its paths relative to the current directory, so a run from a subdirectory matched nothing and reported a clean pass having scanned zero records — RS003, the reachability drift detector, is the rule this most protected; it now `cd`s to the repository root like `check-reviews.sh`. Its `iss-N` extractors ended a matched case with a `grep` that exits 1 on a non-record filename, so under `set -euo pipefail` a non-`iss` file arriving last in the diff aborted the run with no diagnostic and RS001/RS002 unrun; the extraction is now non-fatal. And RS002 grepped the raw range diff for `commit:` lines, so one quoted in a record's prose body was reachability-checked as if it were a stamp; it now reads each changed record's frontmatter through the same helper RS003 uses, so the two rules cannot drift on where a stamp lives. `scripts/check-issue-resolution-cases.sh` gained the hermetic git-environment scrub its sibling `check-attribution-cases.sh` already carries (iss-28, iss-313), so an inherited `GIT_DIR` can no longer redirect the scratch-repo fixtures onto the caller's real repository and a global `core.hooksPath` can no longer fire the developer's hooks inside them. Three new cases pin the fixes, each watched fail before and pass after. (iss-2608261040378346, iss-2608261041020040)
+
 ## [0.6.6] - 2026-08-25
 
 ### Fixed
