@@ -94,11 +94,14 @@ func TestHookSessionStartSkewComparesTheLiveRoot(t *testing.T) {
 	skewCacheMeta(t, "release_tag=v0.4.9\nrelease_sha="+skewRelease+"\nplugin_sha="+skewRelease+"\nfetched_at=2026-08-01T00:00:00Z\n")
 
 	_, stderr, code := runSessionStart(startPayload("s-live", repo), "hook", "session-start")
+	// Always 0 now — session-start's RunE returns nil on every path — so this
+	// is a regression tripwire like its sibling above; the stderr assertion
+	// below carries the real coverage.
 	if code != 0 {
-		t.Fatalf("the notice must be computed against the LIVE plugin root, never a recorded provisioning-time root; got exit 0 (stderr %q)", stderr)
+		t.Fatalf("session-start must not signal a notice as a failure; got exit %d (stderr %q)", code, stderr)
 	}
 	if !strings.Contains(stderr, "222222222222") {
-		t.Errorf("the notice must name the live root's commit; stderr = %q", stderr)
+		t.Errorf("the notice must be computed against the LIVE plugin root, never a recorded provisioning-time root — it must name the live root's commit; stderr = %q", stderr)
 	}
 }
 
@@ -115,8 +118,9 @@ func TestHookSessionStartSkewFallsBackToRootMeta(t *testing.T) {
 	}
 
 	_, stderr, code := runSessionStart(startPayload("s-fallback", repo), "hook", "session-start")
+	// The same regression tripwire as above: exit is always 0 on this path.
 	if code != 0 {
-		t.Fatalf("the degraded install's root-local meta must still feed the notice; got exit 0 (stderr %q)", stderr)
+		t.Fatalf("session-start must not signal a notice as a failure; got exit %d (stderr %q)", code, stderr)
 	}
 	for _, want := range []string{"222222222222", "111111111111"} {
 		if !strings.Contains(stderr, want) {

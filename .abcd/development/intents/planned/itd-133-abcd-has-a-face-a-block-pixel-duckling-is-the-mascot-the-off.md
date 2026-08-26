@@ -29,7 +29,7 @@ small lifeboat marks the lifeboat verbs. All of it derives from one
 pixel-grid source of truth in the Go tree: a generator emits the committed
 SVG assets, a drift gate proves they never diverge, and any surface that
 renders the identity draws from the same grids. Alice sees the same duckling
-in her terminal that Bob sees on a web page, pixel for pixel, because there
+in their terminal that Bob sees on a web page, pixel for pixel, because there
 is only one duckling to see.
 
 ## Why This Matters

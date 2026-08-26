@@ -11,10 +11,10 @@ import (
 // preflight's prerequisite list is a DERIVED value, and every surface that
 // restates it must name the same set (iss-2608242043243131).
 //
-// The Makefile declares the list once. Three prose surfaces restate it by hand,
-// and nothing derived them from the recipe, so they drifted every time the
-// recipe changed — twice in two releases, each time caught only by a host-run
-// semantic reviewer refusing a release:
+// The Makefile declares the list once. The surfaces in the list below restate
+// it by hand, and nothing derived them from the recipe, so they drifted every
+// time the recipe changed — twice in two releases, each time caught only by a
+// host-run semantic reviewer refusing a release:
 //
 //   - v0.6.4: `lint-issues` made preflight four gates. The commit that added it
 //     updated AGENTS.md alone; the install guide, CONTRIBUTING.md and the
@@ -31,7 +31,9 @@ import (
 // sentences, not lists — "together with the lint-reviews, lint-issues, … gates"
 // — so requiring an exact rendering would fail on a comma. What must hold is
 // that every prerequisite the recipe declares is NAMED where the list is
-// restated, and that no surface names a gate the recipe does not have.
+// restated. The reverse direction — a surface naming a gate the recipe no
+// longer has — is not checked here; a retired gate's mention is a review
+// concern, since a phantom NAME has no recipe line to derive a check from.
 func TestPreflightGateListIsNotRestatedWrongly(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
 
@@ -48,6 +50,7 @@ func TestPreflightGateListIsNotRestatedWrongly(t *testing.T) {
 		"CONTRIBUTING.md",        // the local-gates paragraph
 		"AGENTS.md",              // the definition-of-done list
 		"CLAUDE.md",              // AGENTS.md's committed mirror
+		".githooks/pre-push",     // the hook that invokes the recipe
 	} {
 		t.Run(rel, func(t *testing.T) {
 			prose := readRepoFile(t, root, rel)

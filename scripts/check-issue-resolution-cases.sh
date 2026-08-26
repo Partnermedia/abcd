@@ -153,6 +153,20 @@ git -C "$d" commit -qm "fix: something
 Resolves: iss-999"
 expect fail "$d" "RS001 trailer with a bare delete of the record" -- commits main HEAD
 
+# A rewrite-move that stays inside open/ is not a resolution either, however
+# git reports it: rewritten heavily enough it is a D plus an A, and the D half
+# must not read as a terminal landing.
+d="$(newrepo rs001-renamed-within-open)"
+git -C "$d" mv "$ISS_DIR/open/iss-999-a-fixture.md" "$ISS_DIR/open/iss-999-a-fixture-renamed.md"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	echo "Rewritten line $i so git reports the move as a delete plus an add." >>"$d/$ISS_DIR/open/iss-999-a-fixture-renamed.md"
+done
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-999"
+expect fail "$d" "RS001 trailer, record renamed within open/" -- commits main HEAD
+
 # The mirror of the bare delete, and the load-bearing case: a record CAPTURED and
 # resolved in the same change lands as a plain add into resolved/ — a two-dot
 # base..head diff shows no departure from open/, because the record was never in

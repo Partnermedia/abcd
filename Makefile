@@ -39,7 +39,8 @@ vet:
 
 # Deterministic gate for the .abcd/work/reviews/ charter (RD001-RD003) — a
 # stopgap until these codes land in internal/core/lint. Needs full git history
-# (RD002 is append-only over committed history), which the local pre-push hook has.
+# (RD002 is append-only over committed history): on a shallow checkout the
+# script refuses (exit 2) rather than pass vacuously with nothing covered.
 lint-reviews:
 	@bash scripts/check-reviews.sh
 
@@ -65,7 +66,9 @@ record-lint:
 # that is actually reachable — `--commit` is shape-checked only, and the repo
 # allows squash and rebase merges, either of which rewrites a cited branch sha
 # out of existence. The cases run first: a gate nobody has watched fail is an
-# enforcement claim with no evidence behind it.
+# enforcement claim with no evidence behind it. Needs full git history, like
+# lint-reviews: on a shallow checkout the scripts refuse (exit 2) rather than
+# report unfetched commits as ledger violations.
 lint-issues:
 	@bash scripts/check-issue-resolution-cases.sh
 	@bash scripts/check-issue-resolution.sh ledger HEAD

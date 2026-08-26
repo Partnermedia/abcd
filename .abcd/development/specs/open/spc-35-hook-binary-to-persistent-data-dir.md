@@ -223,8 +223,8 @@ provenance record.
   persistence must not weaken the spc-21 verification posture at fetch time
   or at rest — every promotion re-verifies, the cache is authenticated
   against the published manifest when online, and SessionEnd performs no
-  network work. Invariant 12's SessionEnd clause lands with
-  iss-2608210934566223, never ahead of it.
+  network work. Invariant 12's SessionEnd clause landed with
+  iss-2608210934566223 and is asserted in the register.
 - Principle from iss-2608210934566227: store durable state where the
   platform documents it survives.
 - CHANGELOG entry at ship; iss-2608210934566221/222 resolved by the
