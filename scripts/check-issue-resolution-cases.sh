@@ -141,6 +141,19 @@ git -C "$d" add -A
 git -C "$d" commit -qm "chore: resolve a stale issue"
 expect pass "$d" "ledger move with no trailer is allowed" -- commits main HEAD
 
+# A bare `git rm` of the open record with a Resolves: trailer is NOT a
+# resolution: the record leaves open/ but enters neither resolved/ nor wontfix/,
+# so it vanishes from the ledger and its changelog line is lost. RS001 intersects
+# leaves-open AND enters-closed, so a delete-only "resolution" is refused — a
+# union of the two halves would wrongly pass it.
+d="$(newrepo rs001-delete-only)"
+git -C "$d" rm -q "$ISS_DIR/open/iss-999-a-fixture.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-999"
+expect fail "$d" "RS001 trailer with a bare delete of the record" -- commits main HEAD
+
 # --- RS002: a stamp added here must name a reachable commit ------------------
 
 d="$(newrepo rs002-bad)"

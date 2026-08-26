@@ -65,31 +65,13 @@ usage() {
 	exit 2
 }
 
-# ids_leaving_open prints every iss-N whose record left open/ for resolved/ or
-# wontfix/ across the range. Rename detection is requested but not relied on: a
-# move recorded as a delete plus an add is the same event, so the two halves are
-# collected independently and intersected by the caller.
-ids_leaving_open() {
-	local base="$1" head="$2"
-	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
-		while IFS=$'\t' read -r status path dest; do
-			case "$status" in
-			R*)
-				case "$path/$dest" in
-				"$ISSUES_DIR/open/"*"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/open/"*"$ISSUES_DIR/wontfix/"*)
-					basename "$dest" | grep -oE '^iss-[0-9]+' || true
-					;;
-				esac
-				;;
-			D)
-				case "$path" in
-				"$ISSUES_DIR/open/"*) basename "$path" | grep -oE '^iss-[0-9]+' || true ;;
-				esac
-				;;
-			esac
-		done
-}
-
+# ids_entering_closed prints every iss-N whose record ENTERS resolved/ or wontfix/
+# across the range — the destination half of a resolution. A record moved from
+# open/ shows as a rename (or, without rename detection, as an add into the
+# terminal folder); a record captured and resolved in the same change shows as a
+# plain add into the terminal folder. Both are honest resolutions and both are
+# caught here. A record that only LEAVES open/ (a bare delete) enters nothing and
+# is deliberately absent, so RS001 refuses a trailer that merely deletes.
 ids_entering_closed() {
 	local base="$1" head="$2"
 	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
@@ -139,13 +121,18 @@ check_commits() {
 		return 0
 	fi
 
+	# A declared resolution must land the record in a terminal folder: the id must
+	# ENTER resolved/ or wontfix/ in this range. That is the honest test of the
+	# trailer — the changelog derives from records reaching a terminal folder — and
+	# it holds both for a record moved out of open/ AND for one captured and
+	# resolved in the same change (a two-dot diff shows the latter only as an add
+	# into resolved/, never as a departure from open/). A bare `git rm` of the open
+	# record enters nothing, so it does NOT satisfy the trailer: the record would
+	# otherwise vanish from the ledger, its changelog line lost, with no other gate
+	# to catch it. (A record that enters resolved/ while a copy stays in open/ is a
+	# duplicate id, which record-lint's issue_id_unique refuses.)
 	local closed
-	closed="$(
-		{
-			ids_leaving_open "$base" "$head"
-			ids_entering_closed "$base" "$head"
-		} | sort -u
-	)"
+	closed="$(ids_entering_closed "$base" "$head" | sort -u)"
 
 	# RS001 — a declared resolution must move the record.
 	local declared=""
