@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,9 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		return CaptureResult{}, err
 	}
 	if err := mutationPreamble(issuesRoot); err != nil {
+		return CaptureResult{}, err
+	}
+	if err := captureBlockers(issuesRoot, req.BlockedBy); err != nil {
 		return CaptureResult{}, err
 	}
 
@@ -86,6 +90,30 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	// developer-identity path (iss-81).
 	result.Path = fsutil.RepoRel(repoRoot, result.Path)
 	return result, nil
+}
+
+// captureBlockers validates the blocked_by targets before any write, exactly as
+// resolveProvenance validates the resolved_by members: the field is a
+// cross-reference, and the record-lint blocker record_schema refuses one whose
+// target is not in the corpus — so a capture that mints an unverified link hands
+// back a record its own gate rejects, and the caller learns of it from the next
+// preflight rather than from the command that wrote it.
+//
+// All three status directories count. Blocking on a resolved or wontfix target
+// is legal: existence is what the cross-reference claims, and whether a blocker
+// still holds anything up is the read-time priority projection's question
+// (prioritise reads open/ alone). Shape stays validateStrict's and
+// parseBlockedBy's job; this probe answers existence only.
+func captureBlockers(issuesRoot string, blockedBy []string) error {
+	for _, dep := range blockedBy {
+		if _, _, err := findIssue(issuesRoot, dep); err != nil {
+			if errors.Is(err, ErrUnknownIssueID) {
+				return fmt.Errorf("capture: --blocked-by %s not found in the issue ledger; nothing written", dep)
+			}
+			return fmt.Errorf("capture: --blocked-by %s: %w; nothing written", dep, err)
+		}
+	}
+	return nil
 }
 
 func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
