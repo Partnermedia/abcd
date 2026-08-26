@@ -291,5 +291,11 @@ func runBounded(root string, maxBytes int, args ...string) (string, bool, error)
 	if err := cmd.Run(); err != nil {
 		return "", w.overflowed, fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
 	}
-	return strings.TrimSpace(string(w.buf)), w.overflowed, nil
+	// Trim the trailing side only. Leading bytes are content: a NUL-separated
+	// listing (-z) starts with its first entry, and a whole-buffer TrimSpace
+	// silently stripped leading whitespace off that entry's filename — the -z
+	// form exists precisely so such names survive. Every consumer parses
+	// per-line, per-field, or per-NUL and tolerates a leading space; none may
+	// lose one.
+	return strings.TrimRight(string(w.buf), " \t\r\n"), w.overflowed, nil
 }

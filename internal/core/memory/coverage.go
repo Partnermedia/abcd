@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // coverage.go — quotation-budget math + the regenerable coverage index (fn-39):
@@ -60,7 +62,9 @@ func memoryConfigPath(repoRoot string) string {
 
 func loadQuotationBudget(repoRoot string) quotationBudget {
 	def := defaultBudget()
-	raw, err := os.ReadFile(memoryConfigPath(repoRoot))
+	// Guarded read: config.json lives in the store, a trust boundary — a
+	// committed symlink is refused, not followed.
+	raw, err := fsutil.ReadGuarded(memoryConfigPath(repoRoot), maxRegistryBytes)
 	if err != nil {
 		return def
 	}
@@ -520,7 +524,7 @@ func buildCoverage(pages []crawledPage, registry map[string]any, budget quotatio
 // ---------------------------------------------------------------------------
 
 func readStoredFingerprint(path string) string {
-	raw, err := os.ReadFile(path)
+	raw, err := fsutil.ReadGuarded(path, maxRegistryBytes)
 	if err != nil {
 		return ""
 	}

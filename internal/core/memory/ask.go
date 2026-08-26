@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
@@ -214,7 +215,9 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 		if !e.Type().IsRegular() || !IsMemoryPageName(e.Name()) {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(mem, e.Name()))
+		// ReadGuarded re-checks regular-file on the open fd (closing the
+		// ReadDir→open symlink-swap TOCTOU) and caps the size.
+		raw, err := fsutil.ReadGuarded(filepath.Join(mem, e.Name()), maxMemoryPageBytes)
 		if err != nil {
 			continue
 		}

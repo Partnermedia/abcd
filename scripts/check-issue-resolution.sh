@@ -45,11 +45,24 @@
 set -euo pipefail
 
 # Resolve every path from the repository root, like the sibling gate
-# check-reviews.sh:11. ISSUES_DIR and the git pathspecs below are relative, and a
+# check-reviews.sh. ISSUES_DIR and the git pathspecs below are relative, and a
 # git pathspec is matched against the current directory — so run from a
 # subdirectory the diff and ls-tree match nothing and the gate reports a clean
 # pass having scanned zero records. cd first, so cwd cannot disarm it.
-cd "$(git rev-parse --show-toplevel)"
+#
+# Every git probe below is fail-closed: `cd "$(...)"` collapses to a successful
+# `cd ""` when the substitution fails under errexit, and a swallowed git error
+# reads exactly like an empty ledger — a gate that cannot tell them apart is a
+# false green (git refuses a repo entirely on e.g. dubious ownership, so the
+# fault is reachable from make preflight, not just a broken cwd).
+rc=0
+toplevel="$(git rev-parse --show-toplevel 2>&1)" || rc=$?
+if [ "$rc" -ne 0 ]; then
+	echo "check-issue-resolution: not a readable git repository (git rev-parse --show-toplevel exit $rc) — refusing rather than reporting a vacuous pass:" >&2
+	echo "$toplevel" >&2
+	exit 2
+fi
+cd "$toplevel"
 
 ISSUES_DIR=".abcd/work/issues"
 TRAILER_RE='^Resolves:[[:space:]]+(iss-[0-9]+)[[:space:]]*$'
@@ -154,8 +167,17 @@ check_commits() {
 	# this range introduced or changed. Scanning the raw diff for `+  commit:` instead
 	# would reachability-check a `commit:` example in a record's prose body — a false
 	# violation — which is exactly the boundary RS003 already draws.
-	local changed
-	changed="$(git diff --name-only "$base".."$head" -- "$ISSUES_DIR" | grep -E '\.md$' || true)"
+	# rc-checked like the ledger listing: the || true belongs to grep's no-match
+	# exit alone, never to a git failure.
+	local diffout changed
+	local rc=0
+	diffout="$(git diff --name-only "$base".."$head" -- "$ISSUES_DIR" 2>&1)" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		echo "check-issue-resolution: git diff failed for $base..$head (exit $rc) — refusing rather than reporting a vacuous pass:" >&2
+		echo "$diffout" >&2
+		exit 2
+	fi
+	changed="$(printf '%s\n' "$diffout" | grep -E '\.md$' || true)"
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
 		local head_sha base_sha
@@ -179,8 +201,18 @@ check_commits() {
 check_ledger() {
 	local ref="${1:-HEAD}"
 	local checked=0
-	local files
-	files="$(git ls-tree -r --name-only "$ref" -- "$ISSUES_DIR" | grep -E '\.md$' || true)"
+	# The listing probe is rc-checked so a git failure exits 2 as an environment
+	# fault; only a git success with zero matches is the legitimate empty-ledger
+	# pass, and it stays loud so it cannot be mistaken for a verdict.
+	local listing files
+	local rc=0
+	listing="$(git ls-tree -r --name-only "$ref" -- "$ISSUES_DIR" 2>&1)" || rc=$?
+	if [ "$rc" -ne 0 ]; then
+		echo "check-issue-resolution: git ls-tree failed at $ref (exit $rc) — refusing rather than reporting a vacuous pass:" >&2
+		echo "$listing" >&2
+		exit 2
+	fi
+	files="$(printf '%s\n' "$listing" | grep -E '\.md$' || true)"
 	[ -n "$files" ] || {
 		echo "check-issue-resolution: no ledger records at $ref — nothing to check"
 		return 0
@@ -211,10 +243,26 @@ check_ledger() {
 # spec that ruled git resolution out of --commit (spc-25) names shallow states
 # in-envelope, so the environment fault must be reported as itself: exit 2, the
 # code the contract reserves for it, never a violation.
-if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
-	echo "check-issue-resolution: shallow checkout — RS002/RS003 cannot tell an absent commit from an unfetched one; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+# The probe itself is rc-checked: comparing a failed substitution against
+# "true" would let the very fault this arm exists to report disarm it.
+rc=0
+shallow="$(git rev-parse --is-shallow-repository 2>&1)" || rc=$?
+if [ "$rc" -ne 0 ]; then
+	echo "check-issue-resolution: git rev-parse --is-shallow-repository failed (exit $rc) — refusing rather than reporting a vacuous pass:" >&2
+	echo "$shallow" >&2
 	exit 2
 fi
+case "$shallow" in
+true)
+	echo "check-issue-resolution: shallow checkout — RS002/RS003 cannot tell an absent commit from an unfetched one; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+	exit 2
+	;;
+false) ;;
+*)
+	echo "check-issue-resolution: unexpected git rev-parse --is-shallow-repository output \"$shallow\" — refusing rather than guessing." >&2
+	exit 2
+	;;
+esac
 
 case "${1:-}" in
 commits)

@@ -38,7 +38,7 @@ func TestReadTrackedFileCapBoundary(t *testing.T) {
 	if err := os.WriteFile(atCap, buf, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	data, ok, oversize := readTrackedFile(root, "at-cap.txt")
+	data, ok, oversize, _ := readTrackedFile(root, "at-cap.txt")
 	if !ok {
 		t.Fatalf("a file exactly at the cap must scan whole; ok=false oversize=%v", oversize)
 	}
@@ -55,7 +55,7 @@ func TestReadTrackedFileCapBoundary(t *testing.T) {
 	if err := os.WriteFile(overCap, append(buf, 'z'), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	data, ok, oversize = readTrackedFile(root, "over-cap.txt")
+	data, ok, oversize, _ = readTrackedFile(root, "over-cap.txt")
 	if ok || data != nil {
 		t.Errorf("an over-cap file must not be scanned; ok=%v len=%d", ok, len(data))
 	}
