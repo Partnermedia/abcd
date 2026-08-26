@@ -149,6 +149,48 @@ func TestAbandonedAcceptedADRIsNotReported(t *testing.T) {
 	}
 }
 
+func TestAbandonedAcceptedADRWithUppercaseNullIsNotReported(t *testing.T) {
+	// Regression (iss #290): superseded_by carrying an uppercase YAML null —
+	// NULL or Null — must read as "not superseded", exactly as lowercase null
+	// and ~ do. frontmatter.IsNull previously missed the uppercase spellings, so
+	// a live (status: accepted) ADR packed from a foreign repo via
+	// `disembark pack` was silently emitted as a superseded-adr finding, quoting
+	// `superseded_by: NULL` as its evidence. The status is not-superseded and
+	// case-folded, so only the null literal decides the finding.
+	//
+	// This walks the bare-spelling matrix on the lifeboat path: only the four
+	// UNQUOTED YAML nulls decide the finding here. A *quoted* null (`"NULL"`,
+	// `'Null'`) is deliberately NOT in this table: per YAML scalar semantics a
+	// quoted value is a string, and frontmatter.IsNull — which sees what Fields
+	// captured, quotes intact — must keep reading it as non-null (asserted by
+	// TestIsNull's negative controls). gvSupersededADRs currently calls
+	// gvUnquote BEFORE IsNull, so in the lifeboat path alone a quoted null
+	// happens to read as absent today; that is quote-insensitive sentinel
+	// behaviour of gvUnquote, not YAML null semantics, and it is an open
+	// heuristic decision for lifeboat supersession handling tracked separately —
+	// this regression pins only the unquoted spellings. A real record handle
+	// (`adr-9`) is the positive control: widening the null set must not
+	// suppress a genuine superseding pointer.
+	nulls := []string{"NULL", "Null", "null", "~"}
+	for _, nul := range nulls {
+		dir, write := abandonedWriter(t)
+		write(".abcd/development/decisions/adrs/0035-live.md",
+			"---\nid: adr-35\nstatus: accepted\nsuperseded_by: "+nul+"\n---\n\n# Live decision\n")
+		fs := gvSupersededADRs(abandonedCtx(t, dir))
+		if len(fs) != 0 {
+			t.Fatalf("superseded_by: %s is a YAML null and must not be reported, got %v", nul, fs)
+		}
+	}
+	// Positive control: a real handle still yields a superseded finding.
+	dir, write := abandonedWriter(t)
+	write(".abcd/development/decisions/adrs/0035-live.md",
+		"---\nid: adr-35\nstatus: accepted\nsuperseded_by: adr-9\n---\n\n# Live decision\n")
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if _, ok := gvFindingByID(fs, "adr-35"); !ok {
+		t.Fatalf("superseded_by: adr-9 is a real handle and must still be reported, got %v", fs)
+	}
+}
+
 func TestAbandonedSupersededADRAcrossBothHomesDedupes(t *testing.T) {
 	dir, write := abandonedWriter(t)
 	// Same ADR id present in the native home AND a conventional home.

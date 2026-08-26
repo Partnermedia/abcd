@@ -70,11 +70,30 @@ func runShim(t *testing.T, command, pluginRoot, pathDir string) (stderr string, 
 		pathEnv = pathDir + ":" + pathEnv
 	}
 	cmd := exec.Command("/bin/sh", "-c", command)
-	cmd.Env = []string{
-		"PATH=" + pathEnv,
-		"HOME=" + t.TempDir(),
-		"CLAUDE_PLUGIN_ROOT=" + pluginRoot,
+	// Hermetic env: the shim's last resort is `command -v abcd`, so a
+	// developer machine with abcd installed on PATH (this one ships
+	// ~/.local/bin/abcd) would answer the "binary absent" case with the REAL
+	// binary — a silent allow, no UNGUARDED notice, and a failure that
+	// reproduces only on machines that use the tool. PATH keeps the system
+	// directories the shim's POSIX utilities live in (/bin/sh, find, printf);
+	// everything user-local is out of reach, and HOME moves off-machine for
+	// the same reason. Same lesson as iss-219's setupHermetic.
+	for _, e := range os.Environ() {
+		switch {
+		case strings.HasPrefix(e, "PATH="), strings.HasPrefix(e, "HOME="),
+			strings.HasPrefix(e, "CLAUDE_PLUGIN_ROOT="):
+		default:
+			cmd.Env = append(cmd.Env, e)
+		}
 	}
+	cmd.Env = append(cmd.Env,
+		// pathEnv, not a literal: the caller-supplied stub directory is what the
+		// PATH-fallback case needs to find, and hardcoding the system pair here
+		// would strip it — hermetic against the developer's PATH, not against the
+		// test's own fixture.
+		"PATH="+pathEnv,
+		"HOME="+t.TempDir(),
+		"CLAUDE_PLUGIN_ROOT="+pluginRoot)
 	cmd.Stdin = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"ls"}}`)
 	var se strings.Builder
 	cmd.Stderr = &se
