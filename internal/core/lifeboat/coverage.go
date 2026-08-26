@@ -18,6 +18,16 @@ type Coverage struct {
 	TiersPresent  []Tier            `json:"tiers_present"`
 	Sections      []SectionCoverage `json:"sections"`
 	Summary       Summary           `json:"summary"`
+
+	// IncludedIgnored records that this probe read files git ignores. Only the
+	// WIDE scan is stated: the narrow one is the default and every existing
+	// report already means it, so omitempty keeps a default report byte-identical
+	// and no schema bump is owed.
+	//
+	// It is stated because scope is not visible in the result. A section that
+	// came back blank looks the same either way, and a reader of a packed
+	// lifeboat cannot otherwise tell "nothing there" from "not looked at".
+	IncludedIgnored bool `json:"included_ignored,omitempty"`
 }
 
 // RepoInfo identifies the probed repository.
@@ -96,6 +106,9 @@ func (c Coverage) Render() string {
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "tiers present: %s\n", tiersOrNone(tiers))
+	if c.IncludedIgnored {
+		b.WriteString("scope: WIDE — files git ignores were read\n")
+	}
 	fmt.Fprintf(&b, "grounded %d · partial %d · blank %d  (of %d sections)\n\n",
 		c.Summary.Grounded, c.Summary.Partial, c.Summary.Blank, len(c.Sections))
 

@@ -36,6 +36,31 @@ Show the exact file set a pack would write, without writing anything:
 Report `file_count`, `total_bytes`, `manifest_sha256`, and any `omissions` (records
 too large or unreadable to carry). Then pack for real.
 
+## Scope: what the scan reads
+
+All three verbs honour `.gitignore` by default. A file the user told git to
+ignore is out of scope, because a lifeboat cites its evidence by `path:line` and
+is meant to be shared — so a scan that read ignored files could carry a
+repository's scratch, logs and local notes into the artefact.
+
+The salvage case is the other way round, and it is the case `disembark` exists
+for: a **dead or archived** repository whose uncommitted residue is often the
+most valuable thing left. Reach that with an explicit flag on any of the three:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" disembark probe <source-repo> --include-ignored --json
+```
+
+**Offer it; never assume it.** Widening the scan is the user's choice to make,
+not a default to infer from a repo looking abandoned. When a probe comes back
+thin over a repo that plainly had work in it, say the scan honoured `.gitignore`
+and ask whether to widen — do not re-run wide on your own judgement.
+
+The wide scan declares itself: the report carries `included_ignored: true`
+(`scope: WIDE` in the text rendering), and the marker scan's `searched` line says
+which scope it ran at. A default report says nothing, because the narrow scan is
+what every reader already assumes.
+
 ## Coverage (aggregate probe reports)
 
 Aggregate one or more saved probe reports into the cross-repo section×repo

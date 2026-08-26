@@ -235,13 +235,25 @@ Validate host-produced lesson JSON against a packed lifeboat and write the survi
 
 Pack a lifeboat from a repository into a destination directory (writes <dest>, never the source)
 
-**Usage:** `abcd disembark pack <repo> <dest>`
+**Usage:** `abcd disembark pack <repo> <dest> [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark plan`
 
 Show the full lifeboat file set a pack would write, without writing anything (dry run)
 
-**Usage:** `abcd disembark plan [repo]`
+**Usage:** `abcd disembark plan [repo] [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark press-release`
 
@@ -271,7 +283,13 @@ Distil principles from a packed lifeboat (deterministic from the ADRs, or valida
 
 Report which brief sections a lifeboat could ground from a repository (read-only)
 
-**Usage:** `abcd disembark probe [repo]`
+**Usage:** `abcd disembark probe [repo] [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark review`
 

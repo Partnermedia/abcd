@@ -137,14 +137,20 @@ func (pb *planBuilder) copyRecord(ctx *SourceContext, src, dest string) {
 // citing its source), the coverage report (JSON and Markdown), verbatim copies
 // of the ADRs and the issue ledger, the rescue spine, and _provenance.json with
 // the pinned manifest hash. It writes nothing — Plan has no destination.
-func Plan(repoRoot string) (Lifeboat, error) {
-	cov, err := Probe(repoRoot)
+func Plan(repoRoot string, opts ...ProbeOption) (Lifeboat, error) {
+	cov, err := Probe(repoRoot, opts...)
 	if err != nil {
 		return Lifeboat{}, err
 	}
 	ctx, err := newSourceContext(repoRoot)
 	if err != nil {
 		return Lifeboat{}, err
+	}
+	// The plan's own walk must run at the SAME scope as the probe that decided
+	// what to plan. Applying the options to one context and not the other would
+	// pack files a coverage report never admitted to reading.
+	for _, o := range opts {
+		o(ctx)
 	}
 	defer ctx.Close()
 
