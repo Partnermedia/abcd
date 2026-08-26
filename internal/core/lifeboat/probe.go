@@ -554,7 +554,7 @@ func isSkipDir(name string) bool {
 
 // firstRootSHA returns the canonical (first) root-commit SHA, or "".
 func firstRootSHA(repoRoot string) string {
-	out, err := gitutil.Run(repoRoot, "rev-list", "--max-parents=0", "HEAD")
+	out, err := gitutil.RunLimited(repoRoot, maxGitOutputBytes, "rev-list", "-n", "1", "--max-parents=0", "HEAD")
 	if err != nil {
 		return ""
 	}

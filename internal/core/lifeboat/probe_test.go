@@ -500,3 +500,61 @@ func itoa(n int64) string {
 	}
 	return string(b)
 }
+
+// TestFirstRootSHAOctopusMerge pins the canonical root over a history with more
+// than one root commit: an octopus merge joins three unrelated roots, and
+// firstRootSHA must report the same one git's own `rev-list -n 1` does — the
+// identity every cross-repo mapping keys on.
+func TestFirstRootSHAOctopusMerge(t *testing.T) {
+	r := gvNewRepo(t)
+	r.write("a.txt", "a\n")
+	r.addCommit("root one")
+	for _, b := range []string{"b2", "b3"} {
+		r.git("checkout", "-q", "--orphan", b)
+		r.git("rm", "-q", "-rf", ".")
+		r.write(b+".txt", b+"\n")
+		r.addCommit("root " + b)
+	}
+	r.git("checkout", "-q", "-f", "main")
+	// git merge refuses an octopus of unrelated histories, so the merge commit is
+	// built with plumbing — the shape is what matters, not how it was made.
+	tree := strings.TrimSpace(r.git("rev-parse", "main^{tree}"))
+	parents := []string{"commit-tree", tree, "-m", "octopus"}
+	for _, ref := range []string{"main", "b2", "b3"} {
+		parents = append(parents, "-p", strings.TrimSpace(r.git("rev-parse", ref)))
+	}
+	merge := strings.TrimSpace(r.git(parents...))
+	r.git("update-ref", "refs/heads/main", merge)
+	r.git("reset", "-q", "--hard", "main")
+
+	want := strings.TrimSpace(r.git("rev-list", "-n", "1", "--max-parents=0", "HEAD"))
+	if got := firstRootSHA(r.dir); got != want {
+		t.Errorf("firstRootSHA = %q, want %q", got, want)
+	}
+}
+
+// TestNoUncappedGitRun is a source guard: every git call in this package buffers
+// untrusted repository output, so it must go through the capped RunLimited form.
+// The uncapped gitutil.Run reads a hostile repo's stdout without a ceiling, and
+// one uncapped call is enough to reopen that. Asserted over the sources rather
+// than per call site, so a new one cannot be added quietly.
+func TestNoUncappedGitRun(t *testing.T) {
+	// Built at run time so this file is not itself a match.
+	needle := "gitutil.Run" + "("
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+			continue
+		}
+		data, err := os.ReadFile(e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), needle) {
+			t.Errorf("%s calls the uncapped %s — use gitutil.RunLimited with maxGitOutputBytes", e.Name(), needle)
+		}
+	}
+}
