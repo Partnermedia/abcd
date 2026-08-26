@@ -78,7 +78,7 @@ done
 | Bucket | Location | Lifecycle stage |
 |---|---|---|
 | Drafts | [intents/drafts/](../intents/drafts) | Captured (press release written), no plan yet |
-| Planned | [intents/planned/](../intents/planned) | `/abcd:intent plan` has linked an in-flight native spec |
+| Planned | [intents/planned/](../intents/planned) | Committed capability awaiting its Go build — scheduled into a roadmap phase or awaiting sequencing; `spec_id` is `null` until the spec layer schedules it (per adr-34) |
 | Shipped | [intents/shipped/](../intents/shipped) | Linked spec closed; fidelity audit queued/appended (a spec-side guard keeps the lifecycle state from re-drifting) |
 | Disciplines | [intents/disciplines/](../intents/disciplines) | Active cross-cutting rules — the directory is the roster |
 | Superseded | [intents/superseded/](../intents/superseded) | Killed by reclassification |

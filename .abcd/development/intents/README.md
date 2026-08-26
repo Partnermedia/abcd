@@ -52,7 +52,7 @@ The kind is **project-agnostic** — application projects (e.g., a macOS app und
 |---|---|---|
 | `drafts/` | 📝 Draft | Press-release-shaped intent captured but no native spec yet. Bench of ideas / forward-looking work. Cheap to draft and discard. |
 | `planned/` | 📅 Planned | A committed capability awaiting its Go build — scheduled into a roadmap phase, or committed-but-unscheduled awaiting sequencing (the two axes are orthogonal, per [adr-34](../decisions/adrs/0034-lifecycle-and-scheduling-orthogonal.md)). `spec_id` is `null` until the native spec layer schedules it (Phase 4), then points at a `spc-N`; bundle-member intents share a `spec_id` with their bundle-mates. |
-| `shipped/` | ✅ Shipped | Linked spec closed; `intent-auditor` ran. The intent's "Audit Notes" section contains per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
+| `shipped/` | ✅ Shipped | Linked spec closed. The "Audit Notes" section carries an OWED review receipt until `intent-auditor` runs and its ingest replaces the stub with per-criterion verdicts (per the itd-1 discipline) plus a three-bucket prose audit. |
 | `disciplines/` | 📐 Active rule | Discipline-kind intents. Never get a native spec of their own; instead they impose acceptance gates that every *other* spec inherits and is checked against. **No `status` frontmatter field — the directory IS the state.** |
 | `superseded/` | 🗄️ Superseded | Intents killed by reclassification or absorption. The file records `superseded_by: <handle>` (the successor — an intent, or the ADR that redecided the question the intent rested on) AND `kind_at_supersession: <original-kind>` (what shape the intent had when retired). The successor names the intent back in its own `supersedes`. Preserved as historical record. |
 
@@ -312,4 +312,4 @@ Files in `superseded/` are preserved as historical record; never deleted.
 
 ## Shipped
 
-[`shipped/`](shipped/) holds the capabilities built in Go. An intent moves here automatically when its linked spec closes and `intent-auditor` has run, and its "Audit Notes" section carries the per-criterion verdicts that move recorded.
+[`shipped/`](shipped/) holds the capabilities built in Go. An intent moves here automatically when its linked spec closes; the close hook emits an OWED review receipt into its "Audit Notes" section, which `intent-auditor` later replaces with the per-criterion verdicts.

@@ -490,9 +490,15 @@ func (c *SourceContext) pathIsIgnored(rel string) bool {
 		// leaves the set nil, which means "unknown" and narrows nothing.
 		out, err := gitutil.RunCapped(c.RepoRoot, ignoredListCapBytes,
 			"ls-files", "--cached", "--others", "--exclude-standard", "-z")
-		if err != nil || out == "" {
-			return // unknown: treat everything as not ignored
+		if err != nil {
+			return // unknown: git could not answer, so narrow nothing
 		}
+		// An empty listing is a definite answer, not an unknown: git is saying
+		// nothing is tracked and nothing untracked is un-ignored, so every path in
+		// this tree is ignored. That must leave an EMPTY (non-nil) set, which
+		// narrows every path — not the nil set below, which widens. A repository
+		// whose files are all ignored is exactly the leak the default scan refuses,
+		// so it must NOT fall through to the "unknown" widening above.
 		set := make(map[string]struct{}, 256)
 		for _, f := range strings.Split(out, "\x00") {
 			if f != "" {

@@ -1,6 +1,6 @@
 # Provenance / Licence Substrate
 
-A separable plumbing layer used by both `/abcd:memory ingest` (per itd-36) and `/abcd:loot` (a later phase, per itd-26). Owns: licence detection, citation generation, source-hash registry, the restrictive-licence publish gate (per adr-18 the gate's consumer is the lifeboat `/abcd:disembark`, future/inert at launch — see § 4).
+A separable plumbing layer used by both `/abcd:memory ingest` (per itd-36) and `/abcd:loot` (a later phase, per itd-26). Owns: licence detection, citation generation, source-hash registry, the restrictive-licence publish gate (per adr-28 the gate's consumer is the lifeboat `/abcd:disembark`, future/inert at launch — see § 4).
 
 ## Why it exists as a separate component doc
 
@@ -80,13 +80,13 @@ Citation is read-only after creation; updates require a new ingest pass (`/abcd:
 
 ## 4. Restrictive-licence publish gate (lifeboat consumer; future/inert at launch)
 
-Per adr-18, the spc-38 restrictive-licence gate is **NOT** the `/abcd:launch` payload's gate. The launch payload manifest (see [`04-launch.md § 2`](../04-surfaces/04-launch.md#2-curated-release-artefact-default-deny)) excludes the entire `.abcd/` namespace — including `.abcd/memory/**` — **wholesale**, so nothing the gate evaluates is ever in the launch publish walk. The gate's real consumer is the **lifeboat** (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-35). At launch the gate is **future/inert** against the lifeboat's provenance surface (`02-disembark.md § 5`); `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview, never as enforcement over files launch excludes. The exact verbatim `.abcd/memory/` lifeboat payload (if any) is deferred to the disembark spec that wires the packer.
+Per adr-28, the spc-38 restrictive-licence gate is **NOT** the `/abcd:launch` payload's gate. The launch payload manifest (see [`04-launch.md § 2`](../04-surfaces/04-launch.md#2-curated-release-artefact-default-deny)) excludes the entire `.abcd/` namespace — including `.abcd/memory/**` — **wholesale**, so nothing the gate evaluates is ever in the launch publish walk. The gate's real consumer is the **lifeboat** (`/abcd:disembark`), the surface that publishes curated project memory/provenance (adr-35). At launch the gate is **future/inert** against the lifeboat's provenance surface (`02-disembark.md § 5`); `/abcd:launch dry-run` renders its verdicts only as a diagnostic preview, never as enforcement over files launch excludes. The exact verbatim `.abcd/memory/` lifeboat payload (if any) is deferred to the disembark spec that wires the packer.
 
 The gate's substrate integration (consumed by the lifeboat, not launch):
 
 | Gate | Behaviour |
 |---|---|
-| **`.abcd/memory/sources/` allowlist** | Default-deny. Refuses to surface any file under this path to the gate unless `.abcd/launch-allowlist.json` explicitly names it. Per § 4 of `07-memory.md`. This JSON allowlist re-includes files into the gate's *own evaluation input*, never into the launch publish payload (adr-18 — distinct from the `.abcd/launch.allow` payload-promotion override). |
+| **`.abcd/memory/sources/` allowlist** | Default-deny. Refuses to surface any file under this path to the gate unless `.abcd/launch-allowlist.json` explicitly names it. Per § 4 of `07-memory.md`. This JSON allowlist re-includes files into the gate's *own evaluation input*, never into the launch publish payload (adr-28 — distinct from the `.abcd/launch.allow` payload-promotion override). |
 | **Restrictive-licence detection in the gated payload** | If any file the gate evaluates has a citation with `licence` flagged as restrictive (GPL, AGPL, proprietary, NDA-marked), the gate refuses. The consumer (lifeboat) overrides via `--accept-licence-risk` (logged; never silent). |
 | **Unknown-licence detection in the gated payload** | If any gated file has `licence: unknown`, the gate warns (does not block). Surfaces the file path + origin so the user can resolve before publish. |
 
@@ -99,7 +99,7 @@ Lint codes referenced below (`ML*`, `MQ*`) ship with spc-39 (the write/lint spli
 - **Given** an external source with a declared SPDX licence visible to the detector (an in-file `SPDX-License-Identifier:` header; or a `LICENSE` file / package manifest when the ingest provides a `source_root` — see § 1), **when** the user runs `/abcd:memory ingest <path>`, **then** the resulting memory page(s) carry `source.licence: <spdx-id>` AND a registry entry exists at `.abcd/memory/.sources_index.json[<sha256>]` whose `consumers` map contains the `memory` key.
 - **Given** an external source with no declared licence, **when** ingest runs, **then** the page carries `source.licence: unknown` (explicit) AND lint code `ML001` (spc-39) does NOT fire (unknown is acceptable; missing-field would be the violation).
 - **Given** the same source content ingested by both `/abcd:memory ingest` (as documentation) and `/abcd:loot` (as code), **when** both have run, **then** the registry has ONE entry with `ingest_count: 2` whose `consumers` map holds BOTH the `memory` and `loot` keys, each with its own `class`/`citation`/`ingested_at`/`pages`.
-- **Given** a gated payload (the lifeboat consumer's, per adr-18 — NOT the launch publish payload) includes a file with `citation.licence: GPL-3.0` AND the project is being published as MIT, **when** the gate runs, **then** it refuses with a licence-mismatch error AND lists the offending file + its citation. Override via `--accept-licence-risk` logs the override. (At launch the gate is future/inert; the launch dry-run only renders these verdicts diagnostically.)
+- **Given** a gated payload (the lifeboat consumer's, per adr-28 — NOT the launch publish payload) includes a file with `citation.licence: GPL-3.0` AND the project is being published as MIT, **when** the gate runs, **then** it refuses with a licence-mismatch error AND lists the offending file + its citation. Override via `--accept-licence-risk` logs the override. (At launch the gate is future/inert; the launch dry-run only renders these verdicts diagnostically.)
 - **Given** itd-36 ships with the substrate but itd-26 hasn't shipped, **when** the substrate code is exercised, **then** all citation/licence/registry behaviour works for memory ingest AND the substrate is verified to handle the loot-future case via mock invocations in test fixtures (substrate is separable; memory ingest doesn't depend on loot existing).
 
 ## 6. Composition with adjacent surfaces
@@ -107,14 +107,14 @@ Lint codes referenced below (`ML*`, `MQ*`) ship with spc-39 (the write/lint spli
 - **`internal/core/memory` adapter** ([`02-adapters.md`](02-adapters.md)) reads vendor session memory and writes session-memory-class pages. Does NOT consume the provenance substrate (session memory is internal, not external).
 - **`/abcd:memory ingest`** (this substrate's primary consumer) consumes for: licence detection on every external source, citation generation on every page, registry update on every ingest.
 - **`/abcd:loot`** (later-phase consumer) consumes for: licence detection on vendored repos, citation generation in `.abcd/development/loot/<source>.md`, registry update on every vendor pass.
-- **`/abcd:disembark` (lifeboat)** is the gate's real consumer (adr-18): it reads the registry for restrictive-licence enforcement over the curated memory/provenance it publishes; does not write to it. At launch the gate is future/inert — `/abcd:launch` excludes `.abcd/` wholesale and is not the gate's consumer (the launch dry-run only renders the gate's verdicts diagnostically).
+- **`/abcd:disembark` (lifeboat)** is the gate's real consumer (adr-28): it reads the registry for restrictive-licence enforcement over the curated memory/provenance it publishes; does not write to it. At launch the gate is future/inert — `/abcd:launch` excludes `.abcd/` wholesale and is not the gate's consumer (the launch dry-run only renders the gate's verdicts diagnostically).
 
 ## 7. Ship gate
 
 The substrate ships alongside itd-36. The `ML*`/`MQ*` lint family is NOT part of this gate — those codes ship with spc-39; the substrate only writes explicit licence values (including `unknown`) for spc-39 to lint. Acceptance is verified by:
 
 1. Memory ingest of three real external sources (one with SPDX licence declared, one with `unknown`, one with restrictive licence) producing correct frontmatter + registry entries.
-2. Gate refusal on a gated payload containing a restrictive-licence-tagged file (mock fixture) — the lifeboat consumer's gate, future/inert at launch (adr-18).
+2. Gate refusal on a gated payload containing a restrictive-licence-tagged file (mock fixture) — the lifeboat consumer's gate, future/inert at launch (adr-28).
 3. Mock loot invocation against a stub URL writes correctly to the same registry, demonstrating substrate separability.
 
 ## References

@@ -46,7 +46,9 @@ inbound = outbound statement is the whole of it.
   pre-commit name guard and the pre-push preflight.
 - **Conventional-commit prefixes** (`feat`/`fix`/`docs`/`chore`/`refactor`/`test`/`ci`),
   no scopes; short title, body explains why.
-- A **CHANGELOG** entry accompanies any user-facing change.
+- A user-facing change **resolves its issue or ships its intent in the same diff**;
+  the CHANGELOG is derived at release from those record transitions, and
+  `## [Unreleased]` stays empty (a hand-written entry blocks the next cut).
 - **Docs** are Diátaxis (one type per page, present tense); the design record lives
   under `.abcd/`, never in `docs/`. Prose follows the canonical
   [writing style guide](docs/reference/writing-style.md).

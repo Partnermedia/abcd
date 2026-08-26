@@ -141,16 +141,17 @@ git -C "$d" add -A
 git -C "$d" commit -qm "chore: resolve a stale issue"
 expect pass "$d" "ledger move with no trailer is allowed" -- commits main HEAD
 
-# A deleted record reaches no terminal folder, so a trailer pointing at it is a
-# declared resolution with no resolution. The bare delete used to satisfy the
-# gate on its own — counted as the D half of a presumed move, without the A half
-# that would have landed the record somewhere terminal.
-d="$(newrepo rs001-deleted)"
+# A bare `git rm` of the open record with a Resolves: trailer is NOT a
+# resolution: the record leaves open/ but ENTERS neither resolved/ nor wontfix/,
+# so it vanishes from the ledger and its changelog line is lost. RS001 keys on
+# the id ENTERING a terminal folder, so a delete-only "resolution" is refused.
+d="$(newrepo rs001-delete-only)"
 git -C "$d" rm -q "$ISS_DIR/open/iss-999-a-fixture.md"
+git -C "$d" add -A
 git -C "$d" commit -qm "fix: something
 
 Resolves: iss-999"
-expect fail "$d" "RS001 trailer, record deleted from open/" -- commits main HEAD
+expect fail "$d" "RS001 trailer with a bare delete of the record" -- commits main HEAD
 
 # A rewrite-move that stays inside open/ is not a resolution either, however
 # git reports it: rewritten heavily enough it is a D plus an A, and the D half
@@ -166,22 +167,26 @@ git -C "$d" commit -qm "fix: something
 Resolves: iss-999"
 expect fail "$d" "RS001 trailer, record renamed within open/" -- commits main HEAD
 
-# Captured and resolved in one range: the record never existed at base, so the
-# only ledger event is an A straight into resolved/ — the dominant capture-and-
-# fix-in-one-branch shape, which the gate admits through ids_entering_closed.
-d="$(newrepo rs001-capture-and-resolve)"
-cat >"$d/$ISS_DIR/resolved/iss-1000-found-and-fixed.md" <<'EOF'
+# The mirror of the bare delete, and the load-bearing case: a record CAPTURED and
+# resolved in the same change lands as a plain add into resolved/ — a two-dot
+# base..head diff shows no departure from open/, because the record was never in
+# open/ at the base. It MUST pass: this is how the bug-hunt loop resolves its own
+# findings. RS001 keys on entering a terminal folder, not on leaving open/, so it
+# holds. (A blanket intersection of leaves-open and enters-closed would fail this
+# and break every such PR at the push gate.)
+d="$(newrepo rs001-fresh-capture)"
+cat >"$d/$ISS_DIR/resolved/iss-777-born-resolved.md" <<'EOF'
 ---
 schema_version: 1
-id: "iss-1000"
+id: "iss-777"
 ---
-Found and fixed in one branch.
+A finding captured and resolved in one change.
 EOF
 git -C "$d" add -A
-git -C "$d" commit -qm "fix: something
+git -C "$d" commit -qm "fix: address a fresh finding
 
-Resolves: iss-1000"
-expect pass "$d" "RS001 trailer on a record captured and resolved in the same range" -- commits main HEAD
+Resolves: iss-777"
+expect pass "$d" "RS001 trailer with a same-change capture-and-resolve" -- commits main HEAD
 
 # --- RS002: a stamp added here must name a reachable commit ------------------
 
