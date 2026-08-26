@@ -158,7 +158,14 @@ irreversible; guessing downward costs nothing.**
 - `gofmt -l .` reports nothing. The format gate is CI's own step, outside
   `make preflight`, so run it before pushing.
 - Every new behaviour has a test watched fail before the change and pass after.
-- A CHANGELOG entry accompanies any user-facing change.
+- **A user-facing change is accompanied by a RECORD, not by a hand-written
+  CHANGELOG entry.** The changelog is derived: `launch ship` composes the dated
+  section from the records that reached a terminal folder since the last tag, and
+  `## [Unreleased]` must be EMPTY or the ingest refuses — a derived cut never
+  folds hand-written prose into a generated section. So the way to announce a
+  change is to resolve its issue or ship its intent in the same diff, which the
+  point below already requires. Writing the entry by hand does not add a line; it
+  blocks the next release.
 - **A change that fixes a captured issue resolves it in the same change**, and
   says so with a `Resolves: iss-N` trailer. `lint-issues` (RS001) refuses a
   trailer whose record does not leave `.abcd/work/issues/open/` in the same

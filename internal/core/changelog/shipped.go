@@ -60,6 +60,18 @@ type Record struct {
 	// record says so — the `shipped_in:` frontmatter field, parsed as a version.
 	// Empty when the field is absent, null, or does not parse.
 	//
+	// THIS IS A MIGRATION MECHANISM. A repository abcd manages from its first
+	// commit should never set it: RS001 makes resolution ride the fixing commit,
+	// so a record reaching a terminal folder and the work shipping are the same
+	// event, and the cut is right by construction. The field exists because abcd
+	// was built before that rule existed — a 2026-08-24 hygiene sweep closed 33
+	// records for work released as far back as v0.2.0, and the v0.6.4 cut derived
+	// its version from four of them.
+	//
+	// Say that here rather than in a note elsewhere: a migration accommodation
+	// that does not name itself becomes permanent architecture by default, and
+	// the next author builds on it (less-but-better).
+	//
 	// It exists because the cut is a set-difference of FOLDER MEMBERSHIP, which
 	// answers "did this record reach a terminal folder since the anchor?" and is
 	// read as "did this work ship in this release?". Those coincide only while
