@@ -94,6 +94,32 @@ func TestANonGitTreeIsNotNarrowed(t *testing.T) {
 	}
 }
 
+// A repository whose files are ALL ignored must narrow to nothing, not widen to
+// everything. An empty `ls-files` listing at a clean exit is a definite answer —
+// git is telling us nothing is tracked and nothing untracked is un-ignored — not
+// the "git could not answer" case that narrows nothing. Folding the two together
+// re-opens the very leak the default scan exists to refuse: the ignored file is
+// read and could be quoted by path:line into a shared lifeboat.
+func TestAnAllIgnoredRepoNarrowsToNothing(t *testing.T) {
+	r := gittest.NewRepo(t)
+	// `*` ignores the whole tree (including .gitignore itself), and nothing is
+	// committed, so `ls-files --cached --others --exclude-standard` is empty.
+	r.Write(".gitignore", "*\n")
+	r.Write("secret-notes.md", "TODO: a private note\n")
+
+	ctx, err := newSourceContext(r.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	if got := strings.Join(mustWalk(t, ctx), "\n"); strings.Contains(got, "secret-notes.md") {
+		t.Errorf("an all-ignored repo widened to read an ignored file; the empty "+
+			"listing is a definite \"everything is ignored\" answer, not an unknown "+
+			"that widens. walk = %q", got)
+	}
+}
+
 func mustWalk(t *testing.T, ctx *SourceContext) []string {
 	t.Helper()
 	paths, _ := ctx.WalkFiles(".")
