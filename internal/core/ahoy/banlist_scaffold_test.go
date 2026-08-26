@@ -774,3 +774,173 @@ func shortName(s string) string {
 	}
 	return s
 }
+
+// TestScaffoldedGuardHookResistsEnvironmentSubversion is the regression pin for the
+// environment-hardening pass (itd hardening after two adversarial reviews): the
+// guard must not be talked into a silent — or a printed-but-unenforced — pass by
+// hostile shell state it inherits. Each case injects that state through BASH_ENV,
+// which bash sources at non-interactive startup BEFORE the hook body runs, exactly
+// as a sourced repo helper or a poisoned rc would; the version-specific BASH_FUNC_*
+// env encoding is avoided so the test holds on every bash the hook can run under.
+//
+// Every case FAILS against the stock v0.6.6 template (verified by reverting it) and
+// PASSES against the hardened one.
+func TestScaffoldedGuardHookResistsEnvironmentSubversion(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	setupHermetic(t)
+	repo := t.TempDir()
+	baseEnv := gittest.Env(t)
+	git := func(extraEnv []string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(append([]string{}, baseEnv...), extraEnv...)
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	mustGit := func(extraEnv []string, args ...string) string {
+		t.Helper()
+		out, err := git(extraEnv, args...)
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return out
+	}
+	mustGit(nil, "init")
+	mustGit(nil, "config", "user.name", "Alice Example")
+	mustGit(nil, "config", "user.email", "alice@example.com")
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	// Wire BOTH scaffolded hooks the way a clone's core.hooksPath does, so the merge
+	// half's delegation is exercised too.
+	hooksDir := filepath.Join(repo, ".git", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{GuardHookRelPath, GuardMergeHookRelPath} {
+		src, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(hooksDir, filepath.Base(rel)), src, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A live store: key "lab-host", pattern matching a reserved-documentation host.
+	store := filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath))
+	if err := os.WriteFile(store, []byte("# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Seed one clean commit so a later gitlink has a target sha and HEAD exists.
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(nil, "add", "README.md")
+	mustGit(nil, "commit", "-m", "seed")
+	headSHA := strings.TrimSpace(mustGit(nil, "rev-parse", "HEAD"))
+
+	// bashEnv writes a sourced-at-startup script and returns the env entry that
+	// points bash at it. The functions it defines are the hostile shell state.
+	bashEnv := func(body string) []string {
+		p := filepath.Join(t.TempDir(), "hostile.sh")
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return []string{"BASH_ENV=" + p}
+	}
+	const banned = "ssh carol-server.example.net\n"
+
+	// Case A — read and echo shadowed. The stock hook's unset list omits them, so the
+	// parse loop reads zero entries and every diagnostic goes quiet: a silent pass.
+	// The hardened hook pins both, so it still announces its entry count and BLOCKS.
+	t.Run("read_echo_shadowed", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte(banned), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mustGit(nil, "add", "a.txt")
+		out, err := git(bashEnv("read() { :; }\necho() { :; }\n"), "commit", "-m", "leakA")
+		if err == nil {
+			t.Fatalf("guard passed a banned name under a read/echo shadow:\n%s", out)
+		}
+		if !strings.Contains(out, "1 entry") {
+			t.Errorf("guard went quiet under attack (no entry count):\n%s", out)
+		}
+		if !strings.Contains(out, "lab-host") {
+			t.Errorf("refusal did not name the key:\n%s", out)
+		}
+		if strings.Contains(out, "carol-server") {
+			t.Errorf("refusal echoed the pattern or matched text:\n%s", out)
+		}
+		mustGit(nil, "reset")
+	})
+
+	// Case B — declare and exit shadowed. A fake declare neuters the function sweep,
+	// so a surviving exit function turns every `exit 1` into a no-op: the stock hook
+	// PRINTS a refusal and commits anyway. The hardened hook pins exit on the fixed,
+	// expansion-free list that runs before declare is ever consulted, so exit still
+	// exits and the commit does not land.
+	t.Run("declare_exit_shadowed", func(t *testing.T) {
+		if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte(banned), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		mustGit(nil, "add", "b.txt")
+		out, err := git(bashEnv("declare() { return 0; }\nexit() { return 0; }\n"), "commit", "-m", "leakB")
+		if err == nil {
+			t.Fatalf("guard let a banned name through under a declare/exit shadow:\n%s", out)
+		}
+		if tree := mustGit(nil, "ls-tree", "-r", "--name-only", "HEAD"); strings.Contains(tree, "b.txt") {
+			t.Fatalf("the banned commit landed in history despite the printed refusal:\n%s", tree)
+		}
+		mustGit(nil, "reset")
+	})
+
+	// Case C — a gitlink whose PATH is a banned name. The stock hook appended the
+	// staged path AFTER the gitlink `continue`, so a submodule path skipped the scan
+	// entirely. The hardened hook appends it before, so the path is scanned like
+	// content and refuses by key.
+	t.Run("gitlink_path", func(t *testing.T) {
+		if out, err := git(nil, "update-index", "--add", "--cacheinfo",
+			"160000,"+headSHA+",carol-server.example.net"); err != nil {
+			t.Fatalf("stage gitlink: %v\n%s", err, out)
+		}
+		out, err := git(nil, "commit", "-m", "leakC")
+		if err == nil {
+			t.Fatalf("guard passed a gitlink named with a banned path:\n%s", out)
+		}
+		if !strings.Contains(out, "lab-host") {
+			t.Errorf("gitlink refusal did not name the key:\n%s", out)
+		}
+		mustGit(nil, "read-tree", "HEAD")
+	})
+
+	// Case D — a refused path carrying control bytes. The stock hook echoed the raw
+	// staged path, so an embedded escape could redraw or forge the refusal text. The
+	// hardened hook scrubs control bytes before printing, so no raw ESC reaches the
+	// output while the refusal still stands.
+	t.Run("control_bytes_scrubbed", func(t *testing.T) {
+		tierDir := filepath.Join(repo, ".abcd", ".work.local")
+		if err := os.MkdirAll(tierDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		evil := ".abcd/.work.local/\x1b[2Kevil.txt"
+		if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(evil)), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, err := git(nil, "add", "-f", filepath.FromSlash(evil))
+		if err != nil {
+			t.Fatalf("git add tier path: %v\n%s", err, out)
+		}
+		out, err = git(nil, "commit", "-m", "leakD")
+		if err == nil {
+			t.Fatalf("guard allowed a file inside the gitignored local tier to be committed:\n%s", out)
+		}
+		if strings.ContainsRune(out, '\x1b') {
+			t.Errorf("a raw ESC byte from the staged path reached the terminal output:\n%q", out)
+		}
+		mustGit(nil, "reset")
+	})
+}

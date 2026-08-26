@@ -712,6 +712,21 @@ func hermeticEnv(t *testing.T) {
 	t.Setenv("ABCD_PLUGIN_ROOT", pluginRoot)
 	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
 	t.Setenv("ABCD_BIN_TARGET", filepath.Join(t.TempDir(), "bin", "abcd"))
+	// Scrub any real abcd off PATH (iss-249, and the same guard setupHermetic in the
+	// ahoy package applies). Without it, effectiveBinTarget finds the developer's own
+	// installed abcd — exactly the machines that dogfood the installer — and `ahoy
+	// install` in a test ADOPTS it, rewriting a real PATH entry to point into the
+	// test's temp dir: a destructive escape from the hermetic sandbox. Lstat, not
+	// Stat, so a DANGLING abcd symlink (a link whose target a prior killed test
+	// removed) is dropped too rather than followed to an error and kept.
+	var kept []string
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if fi, err := os.Lstat(filepath.Join(dir, "abcd")); err == nil && !fi.IsDir() {
+			continue
+		}
+		kept = append(kept, dir)
+	}
+	t.Setenv("PATH", strings.Join(kept, string(os.PathListSeparator)))
 }
 
 // TestAhoyBareUnmanagedRepoNamesAdoptPath proves itd-40 AC2: bare `abcd ahoy`
