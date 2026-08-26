@@ -22,15 +22,15 @@ declares its `refines` edge itself. (Slug renamed from the capture slug
 
 ## Press Release
 
-Alice opens a terminal and types `abcd`. Before the status board she already
-knows, the tool now greets her: the a-b-c-d signal-flag hoist in colour —
+Alice opens a terminal and types `abcd`. Before the status board they already
+know, the tool now greets them: the a-b-c-d signal-flag hoist in colour —
 half-block pixels on their painted panel, true flag geometry — with
 `abcd v0.6.0` beside it, the tagline underneath, and two highlighted
 next-action commands. It reads correctly on a light terminal and a dark one,
 in tmux, and over SSH. When Bob pipes `abcd` into a file, greps a CI log, or
 reads a hook's context injection, there is no banner and no escape byte —
 machine surfaces stay exactly as they were. When Carol builds from source,
-her unstamped build says `abcd (dev build)` and never pretends to be a
+their unstamped build says `abcd (dev build)` and never pretends to be a
 release. The banner is generated, not hand-drawn: the art comes from the
 livery grids, the words from the canonical identity block baked in at build
 time, and a drift gate holds both.
