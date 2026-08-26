@@ -831,3 +831,35 @@ Per hand-run, append:
   errata: it proves a cited id resolves and proves nothing about whether the
   claim beside it is true, and a claim marked `verified` in leg 1 of that run
   was false.
+
+### 2026-08-26 — the worktree-first proposal (itd-148)
+
+- **Proposal:** "automate the worktree step": primary checkout read-only,
+  every change starts in a worktree, hard-block enforcement, sweep of stale
+  worktrees, cross-worktree agent communication, scaffolded to all
+  abcd-managed repos. Live interview session; two peer sessions active.
+- **Initial routing:** seven parts — worktree-first discipline (capability |
+  new intent); mutation block (mechanism | same intent); all-repos scaffolding
+  (plumbing | the spec); merged-worktree removal (**duplicates itd-118** |
+  routed there, consumed via `builds_on`); abandoned-worktree dossier sweep
+  (capability | new intent, `builds_on: itd-118`); cross-worktree
+  communication (**overlaps itd-33** | flagged for the human — fold, layer, or
+  advance itd-33); timestamp mint (prerequisite | already
+  iss-2608210737260468, linked as blocker, not filed). Bundle candidates
+  surfaced from the ledger: iss-370, iss-2608230847432285 + iss-213,
+  iss-2608230957104179, iss-2608210738378295.
+- **Confirmed routing:** adopted unchanged, with the itd-33 overlap resolved
+  as **layered** (announce-duty AC in the new intent; mechanism stays
+  itd-33's) and all four bundle candidates confirmed into scope. One addition
+  from the human at confirmation: the iss-370 seeding gains a four-category
+  pre-population floor for the private banlist (home/user paths, machine
+  hostnames, personal email, real surname — categories committed, values
+  never).
+- **Verdict:** SPLIT, proposed and confirmed — the initial verdict survived
+  confirmation; filed as itd-148.
+- **Notes:** no over-flags; no reversal candidates. The duplicate detection
+  (itd-118) came from a ledger grep before the table was built — the scan
+  step earns its place. The communication part shows the taxonomy gap for
+  "requirement whose mechanism lives in another draft": neither `refines`
+  nor `duplicates` fits; recorded here as *layered* pending the enum
+  question.
