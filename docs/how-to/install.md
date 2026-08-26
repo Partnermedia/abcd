@@ -116,9 +116,11 @@ Add this line to your shell profile:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-The installer prints the same one-line fix when it notices the gap, and
-writes its own `PATH` entry to `~/.local/bin` unless you point it elsewhere
-with `--bin-dir`. abcd never escalates privileges: a
+The one-liners above take no options — they always install to `~/.local/bin`
+and print no `PATH` warning. `abcd ahoy` reports the same gap as a named
+finding with the same one-line fix, and `abcd ahoy install` writes its own
+`PATH` entry to `~/.local/bin` unless you point it elsewhere with
+`--bin-dir`. abcd never escalates privileges: a
 directory it can't write to is an error, not a prompt for your password.
 
 Already have an `abcd` in a system directory from an earlier install? Delete it
