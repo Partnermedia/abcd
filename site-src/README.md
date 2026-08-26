@@ -8,8 +8,8 @@ comes from the repository. This directory holds:
   added here that no field reads fails the build.
 - `site.css` — the stylesheet: light is the base and dark redefines tokens only.
   The landing page follows the reader's system preference; a page that sets an
-  explicit `data-theme` attribute is honoured too, and the record explorer is
-  the slice that ships the control which sets one.
+  explicit `data-theme` attribute is honoured too, though no page sets one yet —
+  those blocks are carried deferred for a future theme control.
 - `site.js` — the landing page's only script: install tabs, copy buttons, and
   nothing else. It adds no words of its own — every string it shows is read back
   from the markup, where the build put it from `ui.json`. No analytics, no

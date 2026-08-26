@@ -77,7 +77,7 @@ The discipline is project-agnostic: any project shipping LLM-driven agents under
     designed_for: "<free-text 1-line>"
   ```
 
-- `task_classes` is a closed-enum list of tokens drawn from the controlled vocabulary in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) (`Reserved vocabulary § task_classes`). The machine-readable source of truth is the `task_classes` enum in `internal/core/lint`. Initial set (~10 tokens, PR-to-extend): `oracle_review`, `intent_review`, `spec_planning`, `code_rescue`, `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`, `cross_document_audit`.
+- `task_classes` is a closed-enum list of tokens drawn from the controlled vocabulary in [`02-constraints/04-naming.md`](../../brief/02-constraints/04-naming.md) (`Reserved vocabulary § task_classes`), which is the source of truth today — the binary carries no `task_classes` schema and no check reads the field (iss-265); a machine-readable enum in the binary is a design target, not a shipped artefact. Initial set (~10 tokens, PR-to-extend): `oracle_review`, `intent_audit`, `spec_planning`, `code_rescue`, `principle_distillation`, `lifeboat_packing`, `audit`, `lint`, `surface_render`, `cross_document_audit`.
 - `designed_for` is a free-text 1-line description of the agent's intended task class (for human readers — does not participate in lint, and is NEVER read to infer scope).
 - **Validation in `lint_prompts`** — strictly set-membership, NEVER inference:
   - (i) `capability_scope` field is present and parses; `task_classes` is a non-empty inline list; `designed_for` is a string.
@@ -99,7 +99,7 @@ Every native spec that ships an agent inherits all four rules above as acceptanc
 - If the agent reads untrusted input (per the in-scope list), the spec's task list includes a canary-fixture task.
 - The agent's `agents/<name>.md` will carry `capability_scope` with valid `task_classes` tokens at close.
 
-`intent-fidelity-reviewer`'s single-document role (per the [itd-1 discipline](itd-1-acceptance-gates.md)) checks delivered reality against this discipline's acceptance criteria when each agent spec ships.
+`intent-auditor`'s single-document role (per the [itd-1 discipline](itd-1-acceptance-gates.md)) checks delivered reality against this discipline's acceptance criteria when each agent spec ships.
 
 ## What's Out of Scope
 
@@ -112,7 +112,7 @@ Every native spec that ships an agent inherits all four rules above as acceptanc
 
 ## Acceptance Criteria
 
-> _BDD format, per the [itd-1 discipline](itd-1-acceptance-gates.md). The criteria below describe how this discipline is checked — by `lint_prompts` continuously, and by `intent-fidelity-reviewer`'s single-document role on every agent spec._
+> _BDD format, per the [itd-1 discipline](itd-1-acceptance-gates.md). The criteria below describe how this discipline is checked — by `lint_prompts` continuously, and by `intent-auditor`'s single-document role on every agent spec._
 
 - **Given** a fresh checkout, **when** the prompt linter runs, **then** it passes only if every `agents/*.md` has `prompt_version: <semver>` and a corresponding `CHANGELOG.md` entry exists for `1.0.0`.
 - **Given** any agent at v1.0.0 lock-time, **when** the agent's spec closes, **then** `agents/CHANGELOG.md` contains an entry with the self-improvement pre-flight outcome (oracle variant accepted | candidate retained + reason).
@@ -138,7 +138,7 @@ Every native spec that ships an agent inherits all four rules above as acceptanc
 
 ## Audit Notes
 
-_Empty. Populated by intent-fidelity-reviewer's single-document role when this discipline is first audited. Note: like itd-1, this discipline is audited continuously via the rule-applies-to-every-agent-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any agent spec that violated this discipline (e.g., shipped without `prompt_version`, or without canary fixtures despite reading untrusted input)._
+_Empty. Populated by intent-auditor's single-document role when this discipline is first audited. Note: like itd-1, this discipline is audited continuously via the rule-applies-to-every-agent-spec semantics rather than via a planned→shipped transition. The reviewer's findings here record any agent spec that violated this discipline (e.g., shipped without `prompt_version`, or without canary fixtures despite reading untrusted input)._
 
 ## References
 

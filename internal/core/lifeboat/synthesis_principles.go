@@ -398,7 +398,8 @@ func reviewOwnOutput(rel string) bool {
 // headline, subhead, quote): it collapses newlines, neutralises HTML-comment
 // delimiters (so the prose can neither break its line nor forge an abcd marker),
 // strips control characters, then caps the length. An empty result signals the
-// entry should be dropped. It mirrors cleanLessonProse.
+// entry should be dropped. It mirrors cleanLessonProse — both route through
+// termsafe.CleanProse, differing only in their byte cap.
 func cleanSynthProse(s string) string { return cleanSynthProseN(s, maxSynthProseBytes) }
 
 // cleanSynthProseN is cleanSynthProse with an explicit byte cap, so a longer-form

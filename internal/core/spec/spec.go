@@ -78,10 +78,24 @@ type Store struct {
 	Specs []Spec `json:"specs"`
 }
 
-// Lookup returns the spec with the given id; ok is false when absent.
+// Lookup returns the spec the given reference names; ok is false when absent.
+//
+// Matching is on the spec NUMBER, not the literal string, because that is the
+// comparison record-lint makes: a spec_id is written bare (spc-9), with its slug
+// (spc-9-widget), and zero-padded (spc-009) across the record, and all three are
+// lint-green. A literal-only compare would let the lifecycle verbs refuse a
+// record the lint accepts. An exact string match still wins when the store holds
+// one, so a caller that names a record precisely gets that record; two specs
+// sharing a number is a record defect the lint's spec_id_unique rule flags (the
+// mint never produces one, since NextID allocates max+1 over the same numbers).
 func (s Store) Lookup(specID string) (Spec, bool) {
 	for _, sp := range s.Specs {
 		if sp.ID == specID {
+			return sp, true
+		}
+	}
+	for _, sp := range s.Specs {
+		if SameNum(sp.ID, specID) {
 			return sp, true
 		}
 	}
@@ -114,9 +128,16 @@ func Validate(s Spec) error {
 
 // specNum extracts the numeric N from a spec id or spec_id value, or 0 if none.
 func specNum(id string) int {
+	n, _ := parseSpecNum(id)
+	return n
+}
+
+// parseSpecNum extracts the numeric N from a spec id or spec_id value; ok is
+// false when the value carries no usable number.
+func parseSpecNum(id string) (int, bool) {
 	m := specNumRe.FindStringSubmatch(id)
 	if m == nil {
-		return 0
+		return 0, false
 	}
 	n, err := strconv.Atoi(m[1])
 	if err != nil {
@@ -124,9 +145,28 @@ func specNum(id string) int {
 		// reservation: Atoi returns the clamped MaxInt64 alongside the error, and
 		// keeping it would make NextID compute max+1 and wrap to a NEGATIVE id
 		// (spc--9223…). Treat it as no number so the id space stays sane.
-		return 0
+		return 0, false
 	}
-	return n
+	return n, true
+}
+
+// SameNum reports whether two spec references name the same spec number — the
+// canonical comparison the record lint makes, so a verb using it can never
+// refuse a spelling the lint accepts (spc-9, spc-9-widget, spc-009 are one
+// spec). A value carrying no usable number (null, "spc-", "spc-abc", an
+// over-int64 N) matches nothing, including another such value.
+func SameNum(a, b string) bool {
+	an, aok := parseSpecNum(a)
+	bn, bok := parseSpecNum(b)
+	return aok && bok && an == bn
+}
+
+// HasNum reports whether v is a spec reference carrying a usable number. It is
+// the tolerant counterpart of the ^spc-[0-9]+$ argument grammar, for validating
+// a STORED spec_id, which the record lint lets carry a slug or zero padding.
+func HasNum(v string) bool {
+	_, ok := parseSpecNum(v)
+	return ok
 }
 
 // stubMarker is the opening of the author-guidance placeholder renderSpec mints.

@@ -94,6 +94,9 @@ func (x SpecLinkIndex) SpecBucket(specID string) (string, bool) {
 // ScanSpecLinks reads the intent buckets and the spec store once, both relative
 // to repoRoot. A missing tree contributes nothing and is not an error, mirroring
 // the rest of the record lint: an unpopulated repository is a state, not a fault.
+// A tree that is present but cannot be read IS a fault and is returned: both
+// halves fail closed, so no consumer ever reads an index that says "nothing
+// here" about records it merely failed to open.
 //
 // top supplies the content exemptions. They are recorded per spec rather than
 // applied here, because they exempt a file from the lint's CONTENT checks — they
@@ -103,13 +106,23 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 	var idx SpecLinkIndex
 
 	intentsRoot := filepath.Join(repoRoot, filepath.FromSlash(intentsDir))
-	_ = filepath.WalkDir(intentsRoot, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !intentFileRe.MatchString(d.Name()) {
+	if err := filepath.WalkDir(intentsRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			// A missing tree is the one soft case (and the guard that keeps the
+			// nil DirEntry WalkDir hands the failed root out of the checks below);
+			// every other walk error is a tree that could not be read, which is a
+			// fault, not an absence — fail closed exactly as the spec half does.
+			if path == intentsRoot && os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || !intentFileRe.MatchString(d.Name()) {
 			return nil
 		}
 		content, rerr := os.ReadFile(path)
 		if rerr != nil {
-			return nil
+			return rerr
 		}
 		fields := frontmatterFields(strings.Split(string(content), "\n"))
 		id := fields["id"].value
@@ -134,7 +147,9 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 			SpecID: fields["spec_id"].value,
 		})
 		return nil
-	})
+	}); err != nil {
+		return SpecLinkIndex{}, err
+	}
 
 	specsRoot := filepath.Join(repoRoot, filepath.FromSlash(specsDir))
 	for _, bucket := range specBucketNames {

@@ -182,7 +182,7 @@ optional layer, never the headline.
 
 ## Audit Notes
 
-_Empty. Populated by `intent-fidelity-reviewer`'s single-document role when this
+_Empty. Populated by `intent-auditor`'s single-document role when this
 discipline is first audited. Like itd-1, itd-5, and itd-81, audited continuously
 via rule-applies-to-every-capture semantics rather than a planned→shipped
 transition._
