@@ -135,8 +135,16 @@ irreversible; guessing downward costs nothing.**
   three under whoever else is using them. The lint gates read the whole tree,
   so foreign work-in-progress fails them in both directions.
 - **Scan before mutating git state.** Before a commit, branch switch, stash,
-  or rebase in a checkout that might be shared, check for peer sessions via
-  the harness's session listing, and announce the mutation to any peer found.
+  rebase, or `git worktree add`/`remove` in a checkout that might be shared,
+  check for peer sessions via the harness's session listing, and announce the
+  mutation to any peer found. A worktree counts even though it leaves HEAD
+  alone: creating one inside the checkout churns the tree a peer's scan walks,
+  so a concurrent `make preflight` can fail
+  `TestPayloadTreeImplementationsResolveIdentically` with `the payload carries
+  N rejected file(s)` while the directory populates. That signature, during
+  another session's worktree churn, is a retry rather than a bisect — the
+  steady-state worktree is harmless, and only the creation window flakes
+  (iss-2608261331317889).
 - **A diff you did not make is a peer's work.** Never commit it, revert it,
   or stash it away silently — coordinate with the session that made it;
   uncommitted peer work is untouchable. (Mechanical presence detection is
