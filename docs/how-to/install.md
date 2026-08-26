@@ -8,10 +8,17 @@ This repository is also its own plugin marketplace, so a compatible agent
 harness can install the `/abcd:*` surface — the commands under
 [`commands/`](https://github.com/intentdriven/abcd/tree/main/commands/), the agents under [`agents/`](https://github.com/intentdriven/abcd/tree/main/agents/) and the hook
 wiring in [`hooks/`](https://github.com/intentdriven/abcd/tree/main/hooks/) — straight from it. Add the marketplace, then
-install the plugin:
+install the plugin. Run them one at a time: the add opens a prompt for the
+marketplace source, and a second line pasted alongside it becomes part of that
+source, so the add fails.
 
 ```text
 /plugin marketplace add intentdriven/abcd
+```
+
+Once the marketplace is added:
+
+```text
 /plugin install abcd@abcd-marketplace
 ```
 
