@@ -56,6 +56,30 @@ type Record struct {
 	// they are carried on the record because the blob is read once here, and a
 	// later reader could disagree with this one about what a record says.
 	Summary string
+	// ShippedIn is the release that actually carried this record's work, when the
+	// record says so — the `shipped_in:` frontmatter field, parsed as a version.
+	// Empty when the field is absent, null, or does not parse.
+	//
+	// It exists because the cut is a set-difference of FOLDER MEMBERSHIP, which
+	// answers "did this record reach a terminal folder since the anchor?" and is
+	// read as "did this work ship in this release?". Those coincide only while
+	// resolution lands in the fixing commit. A ledger hygiene sweep is the
+	// legitimate exception — it closes records for work released long ago — and
+	// on 2026-08-24 one closed 33 of them, after which the v0.6.4 cut tried to
+	// announce fixes first released in v0.2.0 as new (iss-2608241612087533).
+	//
+	// Nothing is INFERRED here. An earlier design tested whether
+	// resolved_by.commit was reachable from the anchor, which would have judged
+	// 85 of 376 resolved records and guessed at the rest. A record either states
+	// which release carried it or it does not, and a record that does not say is
+	// treated as this cut's — the direction that risks a redundant line rather
+	// than a silent omission.
+	ShippedIn string
+	// ShippedInErr is why a present `shipped_in:` did not parse, empty otherwise.
+	// A record carrying an unparseable value stays IN the cut: excluding on a
+	// value nobody could read would drop real content from a release record on a
+	// typo, which is the worse of the two failures.
+	ShippedInErr string
 }
 
 // RecordSet is a release cut: the set-difference of record END STATES between
@@ -211,14 +235,26 @@ func ShippedSince(root string, baseRef string) (RecordSet, error) {
 		return RecordSet{}, err
 	}
 
+	// ADDED only. A record that names the release which carried it is not part of
+	// this cut: folder membership says it arrived since the anchor, the record says
+	// the work shipped earlier, and the record is the more specific claim.
 	for p := range headPaths {
 		if _, atBase := basePaths[p]; !atBase {
-			set.Added = append(set.Added, newRecord(root, "HEAD", p))
+			if rec := newRecord(root, "HEAD", baseRef, p); rec.ShippedIn == "" {
+				set.Added = append(set.Added, rec)
+			}
 		}
 	}
+	// REMOVED keeps everything, deliberately. `shipped_in` answers "when did this
+	// WORK ship", and a record leaving a terminal folder is a different event: the
+	// withdrawal or supersession happened in THIS window whenever the work first
+	// shipped. Filtering here dropped a supersession's impact from the version
+	// arithmetic and, alone in a window, emptied the cut and refused the release —
+	// while ingest.go states plainly that letting a removal go uncited "would be
+	// the same omission as dropping an addition".
 	for p := range basePaths {
 		if _, atHead := headPaths[p]; !atHead {
-			set.Removed = append(set.Removed, newRecord(root, baseRef, p))
+			set.Removed = append(set.Removed, newRecord(root, baseRef, baseRef, p))
 		}
 	}
 	sortRecords(set.Added)
@@ -262,7 +298,7 @@ const maxRecordBytes = 4 << 20
 // cannot be read, or an impact that cannot be parsed, yields an unlabelled
 // record carrying the reason rather than an error: one malformed record must not
 // hide the rest of the cut from the operator who has to fix it.
-func newRecord(root string, ref string, relPath string) Record {
+func newRecord(root, ref, baseRef, relPath string) Record {
 	rec := Record{Path: relPath, ID: recordID(relPath)}
 	blob, err := gitutil.RunLimited(root, maxRecordBytes, "cat-file", "blob", ref+":"+relPath)
 	if err != nil {
@@ -273,8 +309,14 @@ func newRecord(root string, ref string, relPath string) Record {
 	// The source material is extracted even when the impact is unlabelled: the
 	// operator who has to fix that record is helped by seeing what it says.
 	rec.Title, rec.Summary = summarise(blob, rec.ID)
-	field := frontmatter.Fields(strings.Split(blob, "\n"))["impact"]
-	impact, err := ParseImpact(field.Value)
+	fields := frontmatter.Fields(strings.Split(blob, "\n"))
+	// Read BEFORE the impact early-return. A record whose impact does not parse is
+	// exactly the legacy population this field exists for — an old record closed by
+	// a hygiene sweep — and returning early left it unable to declare itself out of
+	// the cut, so it stayed and refused the release as unlabelled with no way to
+	// honour the exclusion.
+	rec.ShippedIn, rec.ShippedInErr = parseShippedIn(root, baseRef, fields["shipped_in"].Value)
+	impact, err := ParseImpact(fields["impact"].Value)
 	if err != nil {
 		rec.ImpactErr = err.Error()
 		return rec
@@ -282,6 +324,48 @@ func newRecord(root string, ref string, relPath string) Record {
 	rec.Impact = impact
 	return rec
 }
+
+// parseShippedIn reads the `shipped_in:` frontmatter value and decides whether it
+// may remove this record from the cut. An absent or null field is neither a value
+// nor an error: most records have nothing to say here.
+//
+// Shape is checked, and then so is TRUTH. A value must name a tag that actually
+// exists and that the anchor can reach — meaning a release already published at
+// or before the one being measured from. Shape alone is not enough, and the
+// distinction is not academic: `v0.64.0` mistyped for `v0.6.4` matches the
+// pattern perfectly, names no release, and under a shape-only check removed its
+// record from the cut with no error at all. An adversarial review demonstrated
+// exactly that with `v9.9.9` on a breaking record, which vanished and left the
+// cut empty.
+//
+// Every rejection keeps the record IN the cut and says why. The field's whole job
+// is to take records OUT, so any doubt must resolve toward a redundant changelog
+// line rather than a silent omission.
+func parseShippedIn(root, baseRef, raw string) (value string, parseErr string) {
+	v := strings.TrimSpace(raw)
+	if frontmatter.IsNull(v) {
+		return "", ""
+	}
+	if !shippedInRe.MatchString(v) {
+		return "", fmt.Sprintf("shipped_in %q is not a release tag (want vMAJOR.MINOR.PATCH)", v)
+	}
+	if _, err := gitutil.Run(root, "rev-parse", "--verify", "--quiet", v+"^{commit}"); err != nil {
+		return "", fmt.Sprintf("shipped_in %q names no tag in this repository", v)
+	}
+	// Reachable from the anchor means "already released by the time this cut
+	// starts". A tag that is newer than the anchor, or on an unrelated line of
+	// history, cannot have carried work this cut is measuring.
+	if _, err := gitutil.Run(root, "merge-base", "--is-ancestor", v, baseRef); err != nil {
+		return "", fmt.Sprintf("shipped_in %q is not an ancestor of %s, so it cannot have carried this work", v, baseRef)
+	}
+	return v, ""
+}
+
+// shippedInRe is the release-tag shape this repository tags with: a leading v
+// and three dot-separated numbers. Deliberately strict — the field's whole job
+// is to remove a record from a release, so a value that cannot be checked must
+// not be able to do it silently.
+var shippedInRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
 // recordID extracts the id from a record path; the caller has already matched
 // the filename, so the empty fallback is unreachable in practice.

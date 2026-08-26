@@ -337,6 +337,13 @@
           "hidden": false
         },
         {
+          "name": "shipped-in",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "spec",
           "shorthand": "",
           "type": "string",
