@@ -1,7 +1,9 @@
 name: release
 <% if .Abcd %>
-# Pushing a version tag (vX.Y.Z) first re-runs the full verification gate (gofmt,
-# build, vet, the race leg, and the deterministic record/docs/reviews gates)
+# Pushing a version tag (vX.Y.Z) first re-runs the deterministic, Linux-only
+# verify gate (gofmt, build, vet, the race leg, and the record/docs/reviews
+# gates — a subset of the merge gate, which is the authority; see the
+# release-gate runbook for what gates the merge alone)
 # against the PUSHED COMMIT; only if that gate is green does it cross-compile the
 # four binaries FROM THAT SAME COMMIT, generate a checksums.txt manifest over them,
 # and publish a GitHub Release with the binaries + checksums.txt attached (plus
@@ -73,9 +75,11 @@ permissions:
 
 jobs:
 <%- if .Abcd %>
-  # Gate the release on the pushed commit, mirroring ci.yml's check + record-lint
-  # jobs (gofmt, build, vet, test, the race leg, the record/docs drift gates, and
-  # the reviews-charter discipline). A red step here aborts before anything is built
+  # Gate the release on the pushed commit: the deterministic, Linux-only re-run
+  # of the build and record gates (gofmt, build, vet, test, the race leg, the
+  # record/docs drift gates, the reviews-charter discipline, smoke) — a subset
+  # of ci.yml's merge gate, not a substitute for it. A red step here aborts
+  # before anything is built
   # or published. Checked out at github.sha — the commit the pushed tag pointed at,
   # never the default-branch tip or the re-resolvable tag name — so the gate
   # exercises exactly the commit whose binaries will ship.

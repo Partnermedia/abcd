@@ -183,15 +183,16 @@ Graduate an issue into an intent draft (mints + stamps promoted_to)
 
 Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it
 
-**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [flags]`
+**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z] [flags]`
 
 **Flags:**
 
 ```
-      --commit string   resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
-      --impact string   product impact: additive|breaking|fix|internal (required)
-      --intent string   resolved_by provenance: the itd-N that fixed it (must exist)
-      --spec string     resolved_by provenance: the spc-N that fixed it (must exist)
+      --commit string       resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
+      --impact string       product impact: additive|breaking|fix|internal (required)
+      --intent string       resolved_by provenance: the itd-N that fixed it (must exist)
+      --shipped-in string   MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
+      --spec string         resolved_by provenance: the spc-N that fixed it (must exist)
 ```
 
 #### `abcd capture wontfix`
@@ -234,13 +235,25 @@ Validate host-produced lesson JSON against a packed lifeboat and write the survi
 
 Pack a lifeboat from a repository into a destination directory (writes <dest>, never the source)
 
-**Usage:** `abcd disembark pack <repo> <dest>`
+**Usage:** `abcd disembark pack <repo> <dest> [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark plan`
 
 Show the full lifeboat file set a pack would write, without writing anything (dry run)
 
-**Usage:** `abcd disembark plan [repo]`
+**Usage:** `abcd disembark plan [repo] [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark press-release`
 
@@ -270,7 +283,13 @@ Distil principles from a packed lifeboat (deterministic from the ADRs, or valida
 
 Report which brief sections a lifeboat could ground from a repository (read-only)
 
-**Usage:** `abcd disembark probe [repo]`
+**Usage:** `abcd disembark probe [repo] [flags]`
+
+**Flags:**
+
+```
+      --include-ignored   also read files git ignores (widens the scan; the report says so)
+```
 
 #### `abcd disembark review`
 

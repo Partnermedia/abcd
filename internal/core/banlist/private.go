@@ -83,6 +83,12 @@ type PrivateReport struct {
 	// history. The read path surfaces it (AddPrivate refuses outright); it is only
 	// meaningful when the store is Present and inside a git repo.
 	NotIgnored bool `json:"not_ignored"`
+	// IgnoreUnanswerable reports a present store in a repo-shaped tree git cannot
+	// answer for (git absent from PATH, a corrupt .git, an ownership refusal): the
+	// store may or may not be ignored, and nothing can prove which. The warning
+	// direction is the same as NotIgnored — the proof the layer rests on is
+	// missing — but the remedy is restoring git's answer, not editing .gitignore.
+	IgnoreUnanswerable bool `json:"ignore_unanswerable"`
 	// Reach is the one-sentence statement of what the private layer does and does
 	// not protect (PrivateReachNote), carried on the report unconditionally. It is
 	// on the struct rather than added by a renderer so a surface that only
@@ -339,9 +345,15 @@ func ListPrivate(repoRoot string) (PrivateReport, error) {
 	// The layer's whole safety is that the store is untracked; a present store git
 	// would track is a leak waiting for `git add -A`, and the read path must not
 	// report it as healthy. requireIgnoredStore is the write-path enforcement; here
-	// the same condition is reported rather than refused.
-	if gitutil.InRepo(repoRoot) && !gitutil.IsIgnored(repoRoot, PrivateRelPath) {
-		rep.NotIgnored = true
+	// the same condition is reported rather than refused — including the third
+	// state, a repo-shaped tree git cannot answer for, where the warning must not
+	// silently vanish just because the proof went missing.
+	if gitutil.InRepo(repoRoot) {
+		if !gitutil.IsIgnored(repoRoot, PrivateRelPath) {
+			rep.NotIgnored = true
+		}
+	} else if gitutil.RepoShaped(repoRoot) {
+		rep.IgnoreUnanswerable = true
 	}
 	entries, keyed, perr := parse(data)
 	if perr != nil {
@@ -604,10 +616,20 @@ func legacyStoreRefusal(verb string) error {
 // would track. The whole layer rests on the file being untracked: a store that is
 // not ignored is one `git add -A` from committing the very strings it exists to
 // keep out of history, and the guard cannot catch it (the guard's own patterns are
-// what the file holds). When git cannot answer — not a repo, git absent — the check
-// is skipped: a verb cannot demand proof no one can supply.
+// what the file holds). Three states, not two, matching ahoy's storePathIsSafe:
+// outside anything repo-shaped the check is skipped — a directory that is not a
+// repository cannot commit anything, and a verb cannot demand proof no one can
+// supply. But a repo-shaped tree git will not answer for — git absent from PATH,
+// a corrupt .git, an ownership refusal under the isolated env — can still commit,
+// and nothing can say whether this path would be. That fails closed, because the
+// whole hazard is the store entering history.
 func requireIgnoredStore(repoRoot string) error {
 	if !gitutil.InRepo(repoRoot) {
+		if gitutil.RepoShaped(repoRoot) {
+			return fmt.Errorf("%w: this tree is repo-shaped but git cannot answer for it (git absent from PATH, an unreadable repository, or an ownership refusal), "+
+				"so there is no proof git ignores %s; the store is not written",
+				ErrStoreNotIgnored, PrivateRelPath)
+		}
 		return nil
 	}
 	if gitutil.IsIgnored(repoRoot, PrivateRelPath) {

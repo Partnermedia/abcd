@@ -112,30 +112,57 @@ func TestNewRefusesSymlinkedConfigLeaf(t *testing.T) {
 	}
 }
 
-// A symlinked .abcd ancestor redirects the whole read out of the tree. The leaf
-// guard cannot see this — O_NOFOLLOW applies to the final component only — so
-// the ancestor is checked separately, as guard.Load already does.
+// A symlinked ancestor redirects the whole read out of the tree, and the leaf
+// guard cannot see it — O_NOFOLLOW applies to the final component only. The
+// config sits two directories down, so BOTH ancestors are attack surface: the
+// hand-rolled check this replaced lstat'd .abcd alone, and a symlinked
+// .abcd/config walked the read out of the tree with no guard firing. The
+// os.Root containment refuses the escape wherever it sits.
 func TestNewRefusesSymlinkedConfigAncestor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on Windows")
 	}
-	repoRoot := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		// plant maps repoRoot to the ancestor that becomes the symlink and the
+		// out-of-tree layout it points at.
+		plant func(t *testing.T, repoRoot string)
+	}{
+		{"symlinked .abcd", func(t *testing.T, repoRoot string) {
+			elsewhere := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(elsewhere, "config"), 0o755); err != nil {
+				t.Fatalf("mkdir elsewhere: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(elsewhere, "config", "pii.json"), []byte(`{"skip_dirs":["vendor"]}`), 0o644); err != nil {
+				t.Fatalf("write elsewhere config: %v", err)
+			}
+			if err := os.Symlink(elsewhere, filepath.Join(repoRoot, ".abcd")); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+		}},
+		{"symlinked .abcd/config", func(t *testing.T, repoRoot string) {
+			elsewhere := t.TempDir()
+			if err := os.WriteFile(filepath.Join(elsewhere, "pii.json"), []byte(`{"skip_dirs":["vendor"]}`), 0o644); err != nil {
+				t.Fatalf("write elsewhere config: %v", err)
+			}
+			if err := os.MkdirAll(filepath.Join(repoRoot, ".abcd"), 0o755); err != nil {
+				t.Fatalf("mkdir .abcd: %v", err)
+			}
+			if err := os.Symlink(elsewhere, filepath.Join(repoRoot, ".abcd", "config")); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			tc.plant(t, repoRoot)
 
-	elsewhere := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(elsewhere, "config"), 0o755); err != nil {
-		t.Fatalf("mkdir elsewhere: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(elsewhere, "config", "pii.json"), []byte(`{"skip_dirs":["vendor"]}`), 0o644); err != nil {
-		t.Fatalf("write elsewhere config: %v", err)
-	}
-	if err := os.Symlink(elsewhere, filepath.Join(repoRoot, ".abcd")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
+			s := newWithinDeadline(t, repoRoot, 3*time.Second)
 
-	s := newWithinDeadline(t, repoRoot, 3*time.Second)
-
-	if unavailable, _ := s.Unavailable(); !unavailable {
-		t.Fatal("a symlinked .abcd ancestor was followed; the read must be refused")
+			if unavailable, _ := s.Unavailable(); !unavailable {
+				t.Fatalf("%s was followed; the read must be refused", tc.name)
+			}
+		})
 	}
 }
 

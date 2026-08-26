@@ -56,6 +56,17 @@ Optional:
 - `related_specs` — list of `spc-N` ids.
 - `related_issues` — list of `iss-N` ids.
 - `blocked_by` — list of `iss-N` ids this issue depends on (see below).
+- `shipped_in` — MIGRATION USE ONLY. The release that already carried this work, as a tag (`v0.6.2`),
+  written bare like `impact` and never YAML-quoted. Only a ledger-hygiene close
+  has anything to say here: a record whose fix was released long ago. The release
+  derivation leaves such a record out of the current cut, so the release record
+  cannot announce old work as new. Absent means "this cut", and the value is
+  never inferred — a record either states it or it does not. A value that names
+  no real tag, or one the anchor cannot reach, keeps the record in the cut and
+  reports itself rather than dropping it silently. A repository abcd manages from
+  its first commit should never set this field: RS001 makes resolution ride the
+  fixing commit, so a record reaching `resolved/` and the work shipping are the
+  same event. It exists because abcd was built before that rule did.
 - `promoted_to` — the `itd-N` this issue graduated into.
 - `impact` — one of `additive`, `breaking`, `fix`, `internal`. Required and valid
   in `resolved/`, where the record-lint blocker `issue_impact_valid` gates it;

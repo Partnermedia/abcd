@@ -666,3 +666,48 @@ func TestParseRefusesTheDuplicateDeclarationCorpus(t *testing.T) {
 		t.Errorf("the refusal echoes store content: %v", err)
 	}
 }
+
+// TestPrivateStoreFailsClosedWhenGitCannotAnswer pins the third state the write
+// gate and the report share with ahoy's storePathIsSafe: a plain directory is
+// not a repository and keeps the skip, but a repo-shaped tree git will not
+// answer for (here: a corrupt .git) can still commit — so the add refuses with
+// nothing written, and the report carries the missing proof instead of silently
+// dropping its warning.
+func TestPrivateStoreFailsClosedWhenGitCannotAnswer(t *testing.T) {
+	t.Run("plain directory keeps the skip", func(t *testing.T) {
+		root := t.TempDir()
+		if _, err := AddPrivate(AddPrivateRequest{RepoRoot: root, Key: "widget-partner", Pattern: "widgetworks"}); err != nil {
+			t.Fatalf("AddPrivate outside any repository: %v", err)
+		}
+	})
+	t.Run("repo-shaped but unanswerable refuses the write", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		_, err := AddPrivate(AddPrivateRequest{RepoRoot: root, Key: "widget-partner", Pattern: "widgetworks"})
+		if !errors.Is(err, ErrStoreNotIgnored) {
+			t.Fatalf("err = %v, want ErrStoreNotIgnored", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(PrivateRelPath))); statErr == nil {
+			t.Error("the store was written anyway; a refused add must leave no plaintext behind")
+		}
+	})
+	t.Run("the report says the proof is missing", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writePrivate(t, root, privateFormatDecl+"\nwidget-partner   widgetworks\n")
+		rep, err := ListPrivate(root)
+		if err != nil {
+			t.Fatalf("ListPrivate: %v", err)
+		}
+		if !rep.IgnoreUnanswerable {
+			t.Error("IgnoreUnanswerable = false in a repo-shaped tree git cannot answer for — the warning silently vanished")
+		}
+		if rep.NotIgnored {
+			t.Error("NotIgnored = true without git's answer; the two states carry different remedies")
+		}
+	})
+}

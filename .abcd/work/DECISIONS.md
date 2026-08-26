@@ -2019,3 +2019,66 @@ parallel-agent merge contention bites.
   current contents) — kept out of scope. Persona-pronoun drift in a frozen
   dated implementation-prompt transcript logged as considered-and-rejected
   (historical artefact; the shipped intent itd-135 already reads they/them).
+- 2026-08-26 — bughunt round 7 (state #368): hardened the new issue-resolution
+  gate scripts. check-issue-resolution.sh now cd's to the repo root (RS003 no
+  longer passes vacuously from a subdirectory), extracts iss-ids non-fatally (a
+  non-record file last in the diff no longer silently aborts RS001/RS002 under
+  set -e), and RS002 reads each changed record's frontmatter via a helper shared
+  with RS003 instead of the raw diff (a body-level commit: example is no longer
+  reachability-checked); check-issue-resolution-cases.sh gained the
+  check-attribution-cases hermetic git-env scrub (iss-28/iss-313 sibling authored
+  four days after that fix). iss-2608261040378346, iss-2608261041020040. Doc
+  corrections: the 05-internals and 04-surfaces indexes no longer call the shipped
+  site check gates / explorer / deploy design targets (10-site.md is the correct
+  side; adr-48), brief/README nine→ten internals chapters, capture.md --shipped-in
+  named as derivation-time not resolve-time validation, CONTEXT surface_coverage
+  bullet names the sub-verb CLI-tree pass. iss-2608261041027043,
+  iss-2608261041029596, iss-2608261041027268, iss-2608261041020419. Recorded not
+  fixed (autonomous-scope limits): release.yml feeds an unvalidated tag into make
+  build's -ldflags shell recipe — a shape-check-parity gap vs site.yml,
+  insider-bounded, deferred because CI cannot exercise the release pipeline
+  (iss-2608261041218890); the principle spec-moves-with-the-surface sits unpromoted
+  while its named surface_coverage gate is armed at blocker — promotion is a
+  governance act for the maintainer (iss-2608261041210476). Refuted: a resolved_by
+  bare-null "regression" (the shape is unwritable and the new rejection removes a
+  phantom empty-pointer); the release.yml verify job "not mirroring ci" (a
+  deliberate, gate_lockstep-checked subset).
+- 2026-08-26 — "Less, but better" (Rams) adopted as a guiding principle. Design
+  for the STEADY state, not the migration in front of you; name a migration
+  accommodation in the mechanism itself or it becomes permanent by default.
+  Recorded as a principle.
+- 2026-08-26 — The changelog is an INDEX of record transitions, not a curated
+  release note: every record reaching a terminal folder earns its line, with no
+  inclusion judgement. Rationale lives in the record; the changelog is the trace
+  from record to version, which is why a record does not carry its own release.
+  Consequences: `impact` keeps its version arithmetic and LOSES its silencing
+  job; two families the cut ignores today (principles, ADRs) come into scope;
+  bundling stays, because fewer lines carrying the same information is the
+  "better" half, while dropping a record for dullness is not. `shipped_in`
+  (iss-2608241612087533) is reclassified as MIGRATION-ONLY: abcd was built before
+  RS001 made resolution ride the fixing commit, and a repo managed from its first
+  commit should never set it. Not yet implemented — captured, so the change lands
+  behind a record like everything else.
+
+- 2026-08-26 — Bug-hunt round 8 (bughunt-b): baseline green after unshallowing
+  the environment's clone (the shallow false-red itself became a finding). Five
+  parallel hunters returned 16 substantive candidates and 7 nitpicks across the
+  four dimensions; per-finding adversarial refutation confirmed 9 substantive
+  and 4 fixable nitpicks and refuted 5 — the merge-queue RS001/RS002 skip
+  (RS003 at the batch head plus the push-to-main range cover it, the
+  attribution/external-review exemption shape), the ungated mkdocs half
+  (adr-48's deploy-fail-closed design plus the preview job on every main push),
+  the CODEOWNERS baseline gap (round-3 prior adjudication; external-review is
+  strictly stronger), the site verb-roster counts (inside
+  iss-2608231346137587's do-not-hand-fix corpus), and the site-render depth-1
+  gate (shallow history changes bytes, never the exit). Fixed and resolved with
+  provenance: gitutil.RepoShaped three-state fail-closed (privacy-hygiene scan,
+  private banlist write gate), capture/record-lint quoted-null parity at the
+  gate, the RS001 deleted-record hole, shallow-checkout refusal in both history
+  gates, the pre-push roster plus its detector blind spot, scanner config
+  containment via ReadGuardedInRoot, phase-audit design-target corrections,
+  invariant 12's SessionEnd clause assertion, the install guide's installer
+  subject, verify-as-subset framing, skew-tripwire messages, and persona
+  pronouns in two planned intents. Recorded open: the memory store-lock S_IFMT
+  mask (rides iss-129), the quoted-enum impact split, and a deferral-currency
+  detector seed.

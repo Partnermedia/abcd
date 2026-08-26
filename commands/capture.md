@@ -96,7 +96,21 @@ in any combination. Supply them whenever the fixing record is known — that is
 what keeps the trail six months later. Ids must exist in their record store
 (any bucket); the sha is shape-checked only (7–64 hex chars — its home may be
 the remote). An unknown id or malformed value refuses the whole resolve and
-writes nothing. With no provenance flags the record is byte-identical to a
+writes nothing.
+
+`resolve` also takes `--shipped-in <vX.Y.Z>`, a MIGRATION flag for the
+ledger-hygiene case: closing a record whose fix was RELEASED LONG AGO. A
+repository abcd manages from its first commit should never need it — resolution
+rides the fixing commit there, so the release cut is right without it. The release derivation leaves such a
+record out of the current cut, so a sweep that closes old records cannot make the
+next release announce their fixes as new. Use it only when the work genuinely
+shipped in a named earlier release; absent means "this cut", and abcd never
+infers it. `resolve` shape-checks the value only (`vMAJOR.MINOR.PATCH`); that the
+tag exists and the release being measured from can reach it is enforced later, at
+release derivation, which keeps a wrong-version record IN the cut with a stated
+reason rather than dropping it silently.
+
+With no provenance flags the record is byte-identical to a
 plain resolve: provenance is optional, never guessed. The written members come
 back in the JSON as `resolved_by`. `wontfix` takes no provenance — a non-action
 points at nothing.

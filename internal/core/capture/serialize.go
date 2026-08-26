@@ -48,8 +48,13 @@ func yamlScalar(value any) (string, error) {
 		// any control char (a newline would inject a second key) and any character
 		// outside a bare enum token. The caller has already validated the value
 		// against its enum; this is defence in depth at the serialise boundary.
+		//
+		// The dot is admitted for shipped_in, whose value is a release tag
+		// (v0.6.2) and which reShippedIn has already constrained to ^v[0-9.]+$
+		// before it reaches here. It stays a bare token: nothing in this class can
+		// open a quote, start a comment, or introduce a key.
 		for _, r := range v {
-			if r < 0x20 || !(r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			if r < 0x20 || !(r == '-' || r == '_' || r == '.' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
 				return "", fmt.Errorf("%w: unsafe raw scalar %q", ErrMalformedFrontmatter, string(v))
 			}
 		}

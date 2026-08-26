@@ -377,5 +377,14 @@ func renderEntries(w io.Writer, label string, entries []release.Entry) {
 			note = "  (excluded from the changelog)"
 		}
 		fmt.Fprintf(w, "    [%-9s] %-8s %s%s\n", e.Impact, termsafe.Sanitize(e.ID), termsafe.Sanitize(e.Title), note)
+		// A record that TRIED to say it shipped elsewhere and failed says so here.
+		// It is in the cut precisely because the value could not be read, so
+		// without this line the operator sees an ordinary entry and never learns
+		// the exclusion they wrote did not take. The field was reachable only in
+		// --json before, which made "reported, not silent" true for a machine and
+		// false for the person running the documented ship flow.
+		if e.ShippedInErr != "" {
+			fmt.Fprintf(w, "      ! %s — still in this cut\n", termsafe.Sanitize(e.ShippedInErr))
+		}
 	}
 }

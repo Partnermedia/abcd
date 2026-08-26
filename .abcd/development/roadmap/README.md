@@ -90,13 +90,14 @@ is the single source for which intents it bundles (per
 [`../brief/06-delivery/03-out-of-scope.md`](../brief/06-delivery/03-out-of-scope.md).
 See [intents/README.md](../intents/README.md) for the full intent index.
 
-**Phase audit.** A phase's delivered reality is reviewed against its structured
-`## Phase Acceptance` by the **phase-audit reviewer** (Go tooling) — a sibling of
-`intent-auditor` that resolves member specs through the editorial
-`## Scope` membership chain (intents → implementing specs), emits per-acceptance
-verdicts, and writes a receipt under `.abcd/logbook/audit/` without mutating the
-phase doc. The companion `PA001` lint verifies any `phase:` anchor names a real
-phase. (See [adr-9](../decisions/adrs/0009-phase-as-product-layer.md).)
+**Phase audit.** The **phase-audit reviewer** is a design target for the Go
+binary — specified in the predecessor store's spc-66, not yet shipped: a sibling
+of `intent-auditor` that reviews a phase's delivered reality against its
+structured `## Phase Acceptance`, resolving member specs through the editorial
+`## Scope` membership chain (intents → implementing specs) and emitting
+per-acceptance verdicts without mutating the phase doc. The companion `PA001`
+lint, which verifies any `phase:` anchor names a real phase, is part of the same
+target. (See [adr-9](../decisions/adrs/0009-phase-as-product-layer.md).)
 
 There is no `intents/active/` directory — "active" is implicit (a planned
 intent's linked spec is currently in flight in the native spec store). See

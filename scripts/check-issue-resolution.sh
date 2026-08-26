@@ -43,6 +43,13 @@
 # Exit 0 clean, 1 a violation, 2 a usage/environment fault.
 set -euo pipefail
 
+# Resolve every path from the repository root, like the sibling gate
+# check-reviews.sh:11. ISSUES_DIR and the git pathspecs below are relative, and a
+# git pathspec is matched against the current directory — so run from a
+# subdirectory the diff and ls-tree match nothing and the gate reports a clean
+# pass having scanned zero records. cd first, so cwd cannot disarm it.
+cd "$(git rev-parse --show-toplevel)"
+
 ISSUES_DIR=".abcd/work/issues"
 TRAILER_RE='^Resolves:[[:space:]]+(iss-[0-9]+)[[:space:]]*$'
 
@@ -59,9 +66,12 @@ usage() {
 }
 
 # ids_leaving_open prints every iss-N whose record left open/ for resolved/ or
-# wontfix/ across the range. Rename detection is requested but not relied on: a
-# move recorded as a delete plus an add is the same event, so the two halves are
-# collected independently and intersected by the caller.
+# wontfix/ as a detected rename. Rename detection is requested but not relied
+# on: a move recorded as a delete plus an add is the same event, and its add
+# half is what ids_entering_closed reports — the caller unions the two views.
+# A bare deletion from open/ deliberately counts for NOTHING: a deleted record
+# reaches no terminal folder, so a trailer pointing at it is a declared
+# resolution with no resolution, exactly what RS001 exists to refuse.
 ids_leaving_open() {
 	local base="$1" head="$2"
 	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
@@ -70,13 +80,8 @@ ids_leaving_open() {
 			R*)
 				case "$path/$dest" in
 				"$ISSUES_DIR/open/"*"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/open/"*"$ISSUES_DIR/wontfix/"*)
-					basename "$dest" | grep -oE '^iss-[0-9]+'
+					basename "$dest" | grep -oE '^iss-[0-9]+' || true
 					;;
-				esac
-				;;
-			D)
-				case "$path" in
-				"$ISSUES_DIR/open/"*) basename "$path" | grep -oE '^iss-[0-9]+' ;;
 				esac
 				;;
 			esac
@@ -90,16 +95,27 @@ ids_entering_closed() {
 			case "$status" in
 			R*)
 				case "$dest" in
-				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$dest" | grep -oE '^iss-[0-9]+' ;;
+				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$dest" | grep -oE '^iss-[0-9]+' || true ;;
 				esac
 				;;
 			A)
 				case "$path" in
-				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$path" | grep -oE '^iss-[0-9]+' ;;
+				"$ISSUES_DIR/resolved/"* | "$ISSUES_DIR/wontfix/"*) basename "$path" | grep -oE '^iss-[0-9]+' || true ;;
 				esac
 				;;
 			esac
 		done
+}
+
+# frontmatter_commit prints a record's resolved_by.commit sha at ref, reading the
+# frontmatter ONLY: a sha quoted in the prose body is narrative, not provenance,
+# so the scan stops at the closing delimiter. RS002 and RS003 share this so the
+# two rules cannot drift apart on where a stamp lives.
+frontmatter_commit() {
+	local ref="$1" path="$2"
+	git show "$ref:$path" 2>/dev/null |
+		awk 'NR>1 && /^---$/{exit} /^[[:space:]]+commit:/{print}' |
+		grep -oE '[0-9a-f]{7,64}' | head -1 || true
 }
 
 # reachable reports whether sha names a real commit that ref can see. A sha that
@@ -138,25 +154,32 @@ check_commits() {
 			local id="${BASH_REMATCH[1]}"
 			declared="$declared $id"
 			if ! printf '%s\n' "$closed" | grep -qx "$id"; then
-				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not leave $ISSUES_DIR/open/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
+				fail "RS001 commit ${sha:0:12} declares 'Resolves: $id', but $id does not reach $ISSUES_DIR/resolved/ or wontfix/ in $base..$head. Resolve it in this change (abcd capture resolve $id ...) or drop the trailer."
 			fi
 		done <<<"$(git show -s --format='%B' "$sha")"
 	done <<<"$range"
 
-	# RS002 — a stamp added here must name a commit this head can see.
-	local added
-	added="$(git diff -U0 "$base".."$head" -- "$ISSUES_DIR" |
-		grep -E '^\+[[:space:]]*commit:' |
-		grep -oE '[0-9a-f]{7,64}' | sort -u || true)"
-	while IFS= read -r sha; do
-		[ -n "$sha" ] || continue
+	# RS002 — a stamp added here must name a commit this head can see. Read the
+	# frontmatter of each record the range touched and check only a resolved_by.commit
+	# this range introduced or changed. Scanning the raw diff for `+  commit:` instead
+	# would reachability-check a `commit:` example in a record's prose body — a false
+	# violation — which is exactly the boundary RS003 already draws.
+	local changed
+	changed="$(git diff --name-only "$base".."$head" -- "$ISSUES_DIR" | grep -E '\.md$' || true)"
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		local head_sha base_sha
+		head_sha="$(frontmatter_commit "$head" "$f")"
+		[ -n "$head_sha" ] || continue
+		base_sha="$(frontmatter_commit "$base" "$f")"
+		[ "$head_sha" = "$base_sha" ] && continue
 		local rc=0
-		reachable "$sha" "$head" || rc=$?
+		reachable "$head_sha" "$head" || rc=$?
 		case "$rc" in
-		2) fail "RS002 resolved_by.commit '$sha' is added in this range but names no commit in this repository. --commit is shape-checked only, so a wrong sha is accepted silently." ;;
-		1) fail "RS002 resolved_by.commit '$sha' is not reachable from $head. Cite a commit on this branch or already on main." ;;
+		2) fail "RS002 resolved_by.commit '$head_sha' is added in this range but names no commit in this repository. --commit is shape-checked only, so a wrong sha is accepted silently." ;;
+		1) fail "RS002 resolved_by.commit '$head_sha' is not reachable from $head. Cite a commit on this branch or already on main." ;;
 		esac
-	done <<<"$added"
+	done <<<"$changed"
 
 	if [ -n "${declared// /}" ]; then
 		echo "check-issue-resolution: RS001 checked$declared"
@@ -176,11 +199,9 @@ check_ledger() {
 		[ -n "$f" ] || continue
 		# Only the frontmatter's resolved_by block carries a stamp; a sha quoted in
 		# the prose body is narrative, not provenance, so the scan stops at the
-		# closing delimiter.
+		# closing delimiter (frontmatter_commit).
 		local sha
-		sha="$(git show "$ref:$f" 2>/dev/null |
-			awk 'NR>1 && /^---$/{exit} /^[[:space:]]+commit:/{print}' |
-			grep -oE '[0-9a-f]{7,64}' | head -1 || true)"
+		sha="$(frontmatter_commit "$ref" "$f")"
 		[ -n "$sha" ] || continue
 		checked=$((checked + 1))
 		local rc=0
@@ -192,6 +213,18 @@ check_ledger() {
 	done <<<"$files"
 	echo "check-issue-resolution: RS003 checked $checked stamped record(s) at $ref"
 }
+
+# A shallow checkout cannot run these checks honestly: reachable() cannot tell
+# an absent commit from an unfetched one, so RS002/RS003 would refuse every
+# stamp whose commit lies past the graft — 85 false violations on a clean tree,
+# each carrying a diagnosis about a repository fault that did not happen. The
+# spec that ruled git resolution out of --commit (spc-25) names shallow states
+# in-envelope, so the environment fault must be reported as itself: exit 2, the
+# code the contract reserves for it, never a violation.
+if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+	echo "check-issue-resolution: shallow checkout — RS002/RS003 cannot tell an absent commit from an unfetched one; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+	exit 2
+fi
 
 case "${1:-}" in
 commits)

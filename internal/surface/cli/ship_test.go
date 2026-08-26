@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/intentdriven/abcd/internal/core/release"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -397,4 +398,36 @@ func cliTreeDigest(t *testing.T, root string) string {
 	sort.Strings(lines)
 	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
 	return hex.EncodeToString(sum[:])
+}
+
+// A record whose `shipped_in` could not be read must say so in the HUMAN cut
+// render, not only in --json (iss-2608241612087533).
+//
+// Such a record is in the cut precisely because its value was unreadable, so it
+// prints as an ordinary entry and the operator never learns that the exclusion
+// they wrote did not take. An adversarial review found the field reachable only
+// through `--json`, which made "reported, not silent" true for a machine and
+// false for the person running the documented ship flow.
+func TestRenderEntriesShowsAnUnreadableShippedIn(t *testing.T) {
+	var w strings.Builder
+	renderEntries(&w, "added", []release.Entry{
+		{ID: "iss-1", Impact: "fix", Title: "a real fix", InChangelog: true},
+		{ID: "iss-2", Impact: "fix", Title: "a swept record", InChangelog: true,
+			ShippedInErr: `shipped_in "v9.9.9" names no tag in this repository`},
+	})
+	got := w.String()
+
+	if !strings.Contains(got, "names no tag") {
+		t.Errorf("the human render drops the shipped_in fault; an operator running the "+
+			"documented flow would never see it.\n%s", got)
+	}
+	if !strings.Contains(got, "still in this cut") {
+		t.Errorf("the render must say the record is still in the cut — that is the "+
+			"consequence the operator has to act on.\n%s", got)
+	}
+	// The clean record must not sprout a fault line.
+	if strings.Count(got, "still in this cut") != 1 {
+		t.Errorf("exactly one entry has a fault; got %d annotations.\n%s",
+			strings.Count(got, "still in this cut"), got)
+	}
 }

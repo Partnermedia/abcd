@@ -118,16 +118,23 @@ func TestValidateStrictImpact(t *testing.T) {
 			t.Errorf("invalid impact %#v was accepted", v)
 		}
 	}
-	// The YAML nulls read as ABSENT, not as a malformed value — the same verdict
-	// the record-lint blocker issue_impact_valid reaches through
-	// frontmatter.IsNull. One value must not be legal to one gate and malformed
-	// to the other: `impact: null` on an open issue would otherwise pass the lint
-	// and then fail `abcd capture resolve` on the very record it judged fine.
-	for _, v := range []string{"", "null", "~"} {
+	// A YAML null reads as ABSENT, not as a malformed value — and the parser is
+	// where bare parts from quoted, so the only null that reaches this map is
+	// the empty string. A map-level "null" or "~" can only arise from a QUOTED
+	// scalar, which record-lint's issue_impact_valid blocker refuses on the raw
+	// bytes; accepting it here would re-open the split iss-285 closed.
+	{
+		fm := base()
+		fm["impact"] = ""
+		if err := validateStrict(fm); err != nil {
+			t.Errorf("null impact (empty string) rejected: %v", err)
+		}
+	}
+	for _, v := range []string{"null", "NULL", "Null", "~"} {
 		fm := base()
 		fm["impact"] = v
-		if err := validateStrict(fm); err != nil {
-			t.Errorf("null-ish impact %q rejected: %v", v, err)
+		if err := validateStrict(fm); err == nil {
+			t.Errorf("quoted null-spelling impact %q accepted — record-lint blocks it on the raw scalar", v)
 		}
 	}
 	// Absent stays legal: an open issue has not been judged yet, and the

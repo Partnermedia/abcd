@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
-	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 // knownFields is the additionalProperties:false allow-list from
@@ -19,6 +18,13 @@ var knownFields = map[string]bool{
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
 	"resolved_by": true, "blocked_by": true,
+	// shipped_in names the release that already carried this record's work, so the
+	// derivation can leave it out of a later cut (iss-2608241612087533). Optional
+	// and rare — only a ledger-hygiene close, for a fix released long ago, has
+	// anything to say here. It must be a KNOWN property or every write carrying
+	// one is refused, which is exactly how the first draft of this feature shipped
+	// a flag that could never execute.
+	"shipped_in": true,
 	// impact is the product judgement the derived version and the generated
 	// changelog are computed from (spc-10). It is optional here — an open issue
 	// has not been judged yet, and the record-lint blocker issue_impact_valid is
@@ -90,18 +96,20 @@ func validateStrict(fm map[string]any) error {
 	// the record lint gates on and the release derivation consumes, so all three
 	// can never disagree about what a legal judgement is.
 	//
-	// A YAML null reads as ABSENT rather than as a value, via the repo's one null
-	// test (frontmatter.IsNull) — the same test the record-lint blocker
-	// issue_impact_valid applies. Both gates must reach the same verdict on one
-	// value: an open issue written `impact: null` ("not judged yet", the schema's
-	// own convention) would otherwise pass the lint and then be refused here,
-	// failing `abcd capture resolve` on a record nothing is wrong with.
+	// A YAML null reads as ABSENT rather than as a value. The parser is where
+	// bare parts from quoted (parse.go maps every bare null spelling to "" and
+	// deliberately keeps a QUOTED null as the string it spells), so by here the
+	// only null left is the empty string. Re-testing frontmatter.IsNull on the
+	// unquoted value would swallow the quoted spellings the parser just
+	// preserved, accepting `impact: "null"` here while the record-lint blocker
+	// issue_impact_valid — which reads the raw scalar — refuses it. Both gates
+	// must reach the same verdict on one value.
 	if v, present := fm["impact"]; present {
 		s, isStr := v.(string)
 		if !isStr {
 			return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, "impact")
 		}
-		if !frontmatter.IsNull(s) {
+		if s != "" {
 			if _, err := changelog.ParseImpact(s); err != nil {
 				return fmt.Errorf("%w: %v", ErrMalformedFrontmatter, err)
 			}

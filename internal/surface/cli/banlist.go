@@ -270,6 +270,11 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 			fmt.Fprintf(w, "  WARNING: git does NOT ignore %s — it is one `git add -A` from committing\n", rep.Path)
 			fmt.Fprintf(w, "  the patterns it holds; add `%s/` to .gitignore before you rely on this layer\n", banlist.PrivateDirRelPath)
 		}
+		if rep.IgnoreUnanswerable {
+			fmt.Fprintf(w, "  WARNING: git cannot answer whether it ignores %s (git absent from PATH,\n", rep.Path)
+			fmt.Fprintln(w, "  an unreadable repository, or an ownership refusal) — the untracked-store proof this")
+			fmt.Fprintln(w, "  layer rests on is missing; restore git's answer before you rely on it")
+		}
 		if !rep.Keyed && len(rep.Entries) > 0 {
 			fmt.Fprintln(w, "  format: LEGACY (no `# abcd-banlist: keyed` first line) — every line is one whole-line")
 			fmt.Fprintln(w, "  pattern and `add`/`remove` refuse until you add that line and give each entry a key")

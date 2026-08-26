@@ -133,5 +133,8 @@ than in the intent's prose (iss-2608210934566226).
   record; its SessionEnd clause (decision 5) is accepted only when the
   SessionEnd hook change (iss-2608210934566223) lands, and the two are
   sequenced so the invariant is never present-tense-false in the tree.
+  That condition has since been met: the fix landed in `baf0551`, is
+  pinned by `TestSessionEndNeverBootstraps`, and the register asserts
+  the clause.
 - Any future verb that moves the persisted artefact (a repair verb, a
   multi-machine sync) inherits rules 2–4 as requirements, not suggestions.

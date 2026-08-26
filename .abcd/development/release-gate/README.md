@@ -31,6 +31,17 @@ This list is machine-checked: the `gate_lockstep` `record-lint` rule blocks if i
 diverges from `release.yml`'s `verify` job steps (setup steps excepted). Edit both
 together — the mirror cannot silently drift.
 
+## Enforced at merge only
+
+`verify` is a subset of what CI enforces at merge, not a substitute for it: the
+merge gate additionally runs the issue-resolution gate (RS001-RS003 plus its
+cases), the site-render gate, the macOS leg, secret scanning, the workflow
+audit, dependency review, `govulncheck`, the attribution gate and the external
+review. The normal release path (`auto-release` tagging the main tip) re-checks
+nothing those gates have not already passed on the exact tagged commit; a
+hand-pushed tag on a commit outside `main` forgoes them, which is one more
+reason the runbook's branch → PR → merge path is the supported one.
+
 ## Semantic gates (host-run, before the tag)
 
 CI cannot run these — they spawn LLM agents. Run them in the agent harness

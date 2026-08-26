@@ -54,3 +54,55 @@ func TestBareAndQuotedNullsPartTheSameWay(t *testing.T) {
 		})
 	}
 }
+
+// TestQuotedNullImpactPartsAtTheGate extends the parity pin past the parse
+// layer to the gate the split is actually about. validateStrict receives the
+// parser's already-unquoted value, so a bare null arrives as "" (accepted:
+// impact is absent, not judged yet) while a quoted null arrives as the string
+// it spells — which record-lint's issue_impact_valid blocker refuses on the
+// raw scalar, and capture must refuse too or a lint-blocked record loads and
+// resolves cleanly here.
+func TestQuotedNullImpactPartsAtTheGate(t *testing.T) {
+	valid := func() map[string]any {
+		return map[string]any{
+			"schema_version": 1,
+			"id":             "iss-1",
+			"slug":           "x",
+			"severity":       "minor",
+			"category":       "bug",
+			"source":         "agent-finding",
+			"found_during":   "review",
+		}
+	}
+	for _, c := range []struct {
+		name   string
+		line   string
+		wantOK bool
+	}{
+		{"bare lower", "impact: null", true},
+		{"bare title", "impact: Null", true},
+		{"bare upper", "impact: NULL", true},
+		{"bare tilde", "impact: ~", true},
+		{"a real impact", "impact: fix", true},
+		{"quoted lower", `impact: "null"`, false},
+		{"quoted title", `impact: "Null"`, false},
+		{"quoted upper", `impact: "NULL"`, false},
+		{"quoted tilde", `impact: "~"`, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fm, err := parseFrontmatterBlock([]string{c.line})
+			if err != nil {
+				t.Fatalf("parse %q: %v", c.line, err)
+			}
+			m := valid()
+			m["impact"] = fm["impact"]
+			err = validateStrict(m)
+			if c.wantOK && err != nil {
+				t.Errorf("%q refused by validateStrict: %v", c.line, err)
+			}
+			if !c.wantOK && err == nil {
+				t.Errorf("%q accepted by validateStrict — record-lint blocks the same record, so the two gates disagree", c.line)
+			}
+		})
+	}
+}

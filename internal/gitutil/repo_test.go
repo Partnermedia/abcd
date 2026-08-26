@@ -189,3 +189,38 @@ func TestRunCappedRefusesOversizeOutput(t *testing.T) {
 		t.Errorf("RunLimited must still degrade rather than refuse: %v", err)
 	}
 }
+
+// TestTrackedFilesRepoShapedButUnanswerable pins the three-state contract: a
+// plain directory is "nothing tracked, not an error", but a repo-shaped tree
+// git cannot answer for (here: a corrupt .git) is an error — never a silent
+// zero-file result a scanning rule would report as a clean pass.
+func TestTrackedFilesRepoShapedButUnanswerable(t *testing.T) {
+	plain := t.TempDir()
+	if got, err := gitutil.TrackedFiles(plain); err != nil || got != nil {
+		t.Fatalf("TrackedFiles(plain dir) = %v, %v; want nil, nil", got, err)
+	}
+	if gitutil.RepoShaped(plain) {
+		t.Error("RepoShaped(plain dir) = true, want false")
+	}
+
+	shaped := t.TempDir()
+	if err := os.Mkdir(filepath.Join(shaped, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !gitutil.RepoShaped(shaped) {
+		t.Error("RepoShaped(dir with .git) = false, want true")
+	}
+	if _, err := gitutil.TrackedFiles(shaped); err == nil {
+		t.Error("TrackedFiles over a repo-shaped tree git cannot answer for returned no error — a caller would report a scan clean after reading zero files")
+	}
+
+	// The subdirectory of a repo-shaped tree is still repo-shaped: the walk
+	// climbs, because git does.
+	sub := filepath.Join(shaped, "docs")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !gitutil.RepoShaped(sub) {
+		t.Error("RepoShaped(subdirectory of a repo-shaped tree) = false, want true")
+	}
+}

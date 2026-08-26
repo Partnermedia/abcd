@@ -125,10 +125,11 @@ audit (reality vs. intent acceptance).
 - `brief/01-product/03-mental-model.md` becomes a four-layer model; its diagram
   and prose are updated.
 - The `phase:` spec anchor needs eventual lint coverage (verify the named
-  phase exists) — deferred until the phase-audit reviewer is built. **Delivered
-  (spc-66):** the `PA001` verify-exists anchor lint and the phase-audit reviewer
-  both now exist. The *corpus anchor backfill* onto the unanchored specs stays
-  deferred (now unblocked — see the amendment's delivery note).
+  phase exists) — deferred until the phase-audit reviewer is built. **Specified
+  (spc-66, predecessor store):** the `PA001` verify-exists anchor lint and the
+  phase-audit reviewer are both specified there; neither is in the Go binary
+  yet. The *corpus anchor backfill* onto the unanchored specs stays deferred
+  (see the amendment's delivery note).
 - Removing `target_release` changes every intent's `intent_source_hash` (the
   field was in the hash recipe). Harmless here — no intent in the corpus is
   grilled yet, so no stored `grilled_intent_hash` is invalidated — but the two
@@ -248,14 +249,15 @@ the anchor as live ("authored going forward") were aligned to this posture in th
 same change (`roadmap/phases/README.md`, `brief/01-product/03-mental-model.md`,
 `brief/04-surfaces/04-launch.md`).
 
-**Delivery note (spc-66).** Two of the three bundled artefacts are now built: the
-`PA001` valid-phase anchor lint (verify-exists, line-precise on the `phase:` key)
-and the phase-audit reviewer (Go tooling, a sibling of `intent-fidelity-reviewer`;
-specified here, not yet in the binary — reviewing delivered reality against a phase's
-`## Phase Acceptance` via the editorial `## Scope` membership chain, receipt-only
-to `.abcd/logbook/audit/phase-<ts>/`). The **third** artefact — the corpus anchor
-backfill onto the unanchored specs — remains **deferred**, but is now **unblocked**:
-the reviewer + lint this backfill was gated on exist, so a future spec can do the
-editorial spec→phase mapping with the verification machinery in place. spc-66 makes
-the backfill *safe*; it deliberately does not perform it (a spec in no `## Scope`
-stays correctly unscheduled and carries no anchor).
+**Delivery note (spc-66, predecessor store).** Two of the three bundled
+artefacts are specified there: the `PA001` valid-phase anchor lint
+(verify-exists, line-precise on the `phase:` key) and the phase-audit reviewer
+(a sibling of `intent-fidelity-reviewer`; specified there, not yet in the Go
+binary — reviewing delivered reality against a phase's `## Phase Acceptance` via
+the editorial `## Scope` membership chain, receipt-only). The **third** artefact
+— the corpus anchor backfill onto the unanchored specs — remains **deferred**,
+gated on the reviewer and lint reaching the Go binary: a future spec can then do
+the editorial spec→phase mapping with the verification machinery in place.
+spc-66 specifies what makes the backfill *safe*; it deliberately does not
+perform it (a spec in no `## Scope` stays correctly unscheduled and carries no
+anchor).

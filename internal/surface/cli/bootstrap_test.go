@@ -399,8 +399,8 @@ func TestBootstrapInstallsVerifiedBinary(t *testing.T) {
 	fx := bootstrapServer(t, body, bootstrapManifest(body))
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
-		t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+	if code != 0 {
+		t.Fatalf("a successful install is a notice, not a fault: it must exit 0, got %d (output %q)", code, out)
 	}
 	// The substitution is proved BEHAVIOURALLY as well as textually: a copy that
 	// still named the real origin could not have reached this fixture at all.
@@ -537,8 +537,8 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 		fx := bootstrapServer(t, body, bootstrapManifest(body))
 
 		out, code := runBootstrap(t, root, fx, "")
-		if code != 2 {
-			t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+		if code != 0 {
+			t.Fatalf("a successful install is a notice, not a fault: it must exit 0, got %d (output %q)", code, out)
 		}
 		binary := filepath.Join(root, "abcd")
 		prefix := bootstrapShSingleQuote(binary) + " "
@@ -603,8 +603,8 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 		fx := bootstrapServer(t, body, bootstrapManifest(body))
 
 		out, code := runBootstrap(t, root, fx, "")
-		if code != 2 {
-			t.Fatalf("a verified download must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+		if code != 0 {
+			t.Fatalf("a successful install is a notice, not a fault: it must exit 0, got %d (output %q)", code, out)
 		}
 		command := bootstrapShSingleQuote(filepath.Join(root, "abcd")) + " ahoy install"
 		if !strings.Contains(out, " "+command) {
@@ -703,8 +703,8 @@ func TestBootstrapUnsupportedPlatformChangesNothing(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, fx, shim)
-	if code != 2 {
-		t.Errorf("an unsupported platform must exit 2 (a notice the user is shown), got %d (output %q)", code, out)
+	if code != 0 {
+		t.Errorf("an unsupported platform must exit 0 (a notice is not a fault), got %d (output %q)", code, out)
 	}
 	if n := atomic.LoadInt32(fx.hits); n != 0 {
 		t.Errorf("an unsupported platform must download nothing, got %d request(s)", n)
@@ -793,7 +793,7 @@ func TestBootstrapSweepsOrphanedTempDirs(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the install must still proceed, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
@@ -848,7 +848,7 @@ func TestBootstrapStaleLockIsBroken(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("a stale lock must be broken and the install proceed, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "abcd")); err != nil {
@@ -889,7 +889,7 @@ func TestBootstrapStripsControlCharactersFromMessages(t *testing.T) {
 		}
 
 		out, code := runBootstrap(t, root, fx, shim)
-		if code != 2 {
+		if code != 0 {
 			t.Fatalf("expected the unsupported-platform notice; got %d (output %q)", code, out)
 		}
 		if strings.ContainsRune(out, 0x1b) {
@@ -913,7 +913,7 @@ func TestBootstrapMetaHoldsExactlyItsDeclaredFields(t *testing.T) {
 	fx := bootstrapServer(t, body, bootstrapManifest(body))
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("the install must still succeed despite the hostile basename, got %d (output %q)", code, out)
 	}
 	raw := strings.TrimSpace(mustReadFile(t, filepath.Join(root, ".binary-meta")))
@@ -981,7 +981,7 @@ func TestBootstrapIgnoresCurlsOwnConfigSurface(t *testing.T) {
 			// HOME case really does replace the constructed one.
 			out, code := runScript(t, bootstrapFixtureScript(t, fx.base), root,
 				append(fx.env(), name+"="+dir), "")
-			if code != 2 {
+			if code != 0 {
 				t.Fatalf("the published release must still install, got %d (output %q)", code, out)
 			}
 			if n := atomic.LoadInt32(forger.hits); n != 0 {
@@ -1027,7 +1027,7 @@ func TestBootstrapReportsAnObstructedBinaryMeta(t *testing.T) {
 	}
 
 	out, code := runBootstrap(t, root, fx, "")
-	if code != 2 {
+	if code != 0 {
 		t.Fatalf("an obstructed .binary-meta must not fail the install itself, got %d (output %q)", code, out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "abcd")); err != nil {

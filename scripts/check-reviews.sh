@@ -10,6 +10,14 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# A shallow checkout blinds RD002: past the graft boundary every file reports
+# as newly added, so the append-only check covers nothing and passes vacuously
+# — a false green, the worse polarity. Report the environment fault as itself.
+if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+  echo "check-reviews: shallow checkout — RD002 (append-only over committed history) cannot see past the graft; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+  exit 2
+fi
+
 ROOT=".abcd/work/reviews"
 fail=0
 note() { echo "  $1" >&2; }

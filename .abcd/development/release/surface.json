@@ -337,6 +337,13 @@
           "hidden": false
         },
         {
+          "name": "shipped-in",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "spec",
           "shorthand": "",
           "type": "string",
@@ -381,12 +388,28 @@
     {
       "path": "abcd disembark pack",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "include-ignored",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd disembark plan",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "include-ignored",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd disembark press-release",
@@ -417,7 +440,15 @@
     {
       "path": "abcd disembark probe",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "include-ignored",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd disembark review",
