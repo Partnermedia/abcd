@@ -42,9 +42,10 @@ that backend is attached) via the Go CLI.
   (per adr-9 — phase-grain mapping is editorial, not per-item linkage).
 - **Specs → phase.** Phase membership is reconstructed **editorially from each
   phase doc's `## Scope`** — this is the live mechanism. A spec's `phase:` anchor
-  is a native-store field: the phase-audit reviewer reads it and the `PA001`
-  verify-exists lint (a `phase:` naming a non-existent phase is an error) both
-  run as Go tooling. What stays **deferred** is making `phase:` a *standing
+  is a native-store field: the phase-audit reviewer that reads it and the `PA001`
+  verify-exists lint (a `phase:` naming a non-existent phase is an error) are a
+  design target for the Go binary — specified in the predecessor store's spc-66,
+  not yet shipped. What stays **deferred** is making `phase:` a *standing
   convention* — the corpus anchor backfill onto the unanchored specs is a
   separate planning act. Until that backfill lands, no spec is expected to carry
   the anchor and its absence on the corpus is not drift; a spec listed in no
