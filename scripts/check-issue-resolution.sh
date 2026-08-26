@@ -191,6 +191,18 @@ check_ledger() {
 	echo "check-issue-resolution: RS003 checked $checked stamped record(s) at $ref"
 }
 
+# A shallow checkout cannot run these checks honestly: reachable() cannot tell
+# an absent commit from an unfetched one, so RS002/RS003 would refuse every
+# stamp whose commit lies past the graft — 85 false violations on a clean tree,
+# each carrying a diagnosis about a repository fault that did not happen. The
+# spec that ruled git resolution out of --commit (spc-25) names shallow states
+# in-envelope, so the environment fault must be reported as itself: exit 2, the
+# code the contract reserves for it, never a violation.
+if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+	echo "check-issue-resolution: shallow checkout — RS002/RS003 cannot tell an absent commit from an unfetched one; run 'git fetch --unshallow' first (CI checks out with fetch-depth: 0)." >&2
+	exit 2
+fi
+
 case "${1:-}" in
 commits)
 	[ $# -eq 3 ] || usage
