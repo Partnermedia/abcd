@@ -88,3 +88,30 @@ func TestStoreLookupAndByIntent(t *testing.T) {
 		t.Fatal("ByIntent(itd-77) unexpectedly found")
 	}
 }
+
+// TestLookupResolvesBySpecNumber proves the store yields to the record lint: a
+// spec_id is written bare, zero-padded, and with its slug across the corpus, and
+// record-lint compares the NUMBER, so a literal-only Lookup would refuse a
+// lint-green record. An exact string match still wins when the store holds one.
+func TestLookupResolvesBySpecNumber(t *testing.T) {
+	store := Store{Specs: []Spec{
+		{ID: "spc-9", Intent: "itd-1"},
+		{ID: "spc-10", Intent: "itd-2"},
+	}}
+	for _, ref := range []string{"spc-9", "spc-9-widget", "spc-009"} {
+		sp, ok := store.Lookup(ref)
+		if !ok || sp.ID != "spc-9" {
+			t.Errorf("Lookup(%q) = %+v, %v; want spc-9, true", ref, sp, ok)
+		}
+	}
+	for _, ref := range []string{"spc-11", "spc-", "null", ""} {
+		if sp, ok := store.Lookup(ref); ok {
+			t.Errorf("Lookup(%q) = %+v, true; want no match", ref, sp)
+		}
+	}
+	// A store carrying both spellings resolves to the record the caller named.
+	both := Store{Specs: []Spec{{ID: "spc-009", Intent: "itd-1"}, {ID: "spc-9", Intent: "itd-2"}}}
+	if sp, ok := both.Lookup("spc-9"); !ok || sp.ID != "spc-9" {
+		t.Errorf("Lookup(spc-9) = %+v, %v; want the exact-match record", sp, ok)
+	}
+}

@@ -585,6 +585,60 @@ func TestCaptureWritesBlockedByAndReadsBack(t *testing.T) {
 	}
 }
 
+// TestCaptureRefusesDanglingBlockedBy (iss-2608261437046287) proves a capture
+// naming a blocked_by target that is in no status directory is refused before
+// anything is written: blocked_by is a cross-reference, and record_schema — a
+// blocker — refuses one whose target is not in the corpus, so minting the record
+// anyway hands the caller a ledger entry the tool's own gate rejects.
+func TestCaptureRefusesDanglingBlockedBy(t *testing.T) {
+	repo, ir := ledger(t)
+	_, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "dependent", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "dep", FoundDuring: "t",
+		BlockedBy: []string{"iss-999999"},
+	})
+	if err == nil {
+		t.Fatal("capture with a dangling --blocked-by target must be refused")
+	}
+	if !strings.Contains(err.Error(), "iss-999999") || !strings.Contains(err.Error(), "nothing written") {
+		t.Errorf("error must name the id and say nothing was written, got %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(ir, "open"))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".md") {
+			t.Fatalf("a refused capture wrote a record: %s", e.Name())
+		}
+	}
+}
+
+// TestCaptureAcceptsResolvedBlockedByTarget proves the existence probe counts all
+// three status directories: blocking on an already-resolved issue is legal (the
+// read-time priority projection is what decides a blocker is no longer holding
+// anything up), so a resolved target must not refuse the capture.
+func TestCaptureAcceptsResolvedBlockedByTarget(t *testing.T) {
+	repo, ir := ledger(t)
+	setSeqMinter(t)
+	root, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "root cause", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "root", FoundDuring: "t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: root.ID, Resolution: "fixed", Impact: "fix",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "dependent", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "dep", FoundDuring: "t",
+		BlockedBy: []string{root.ID},
+	}); err != nil {
+		t.Fatalf("blocking on a resolved target is legal, got %v", err)
+	}
+}
+
 // TestDerivedPriorityUnblockedFirstThenSeverity proves the read-time projection:
 // List orders unblocked issues (highest severity first) ahead of blocked ones,
 // annotates each blocked row with its still-open blockers, and re-derives once a

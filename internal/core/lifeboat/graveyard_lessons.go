@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // IngestLessons validates host-produced lesson JSON against a PACKED lifeboat and
@@ -310,20 +311,12 @@ func filterEvidence(refs []string, ids map[string]bool) []string {
 	return out
 }
 
-// cleanLessonProse sanitises untrusted lesson prose: it collapses newlines and
-// neutralises HTML-comment delimiters (oneLine-style, so the prose can neither
-// break its line nor forge an abcd marker), strips control characters, then caps
-// the length. An empty result signals the entry should be dropped.
+// cleanLessonProse sanitises untrusted lesson prose: it collapses newlines,
+// neutralises HTML openers (so the prose can neither break its line nor forge an
+// abcd marker), strips control characters, then caps the length. An empty result
+// signals the entry should be dropped. The cleaning itself is termsafe's — the
+// canonical home this seam and cleanSynthProse both route through, rather than
+// keeping divergent copies.
 func cleanLessonProse(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	s = sanitize(s) // C0/DEL -> ?, tab -> space (the coverage helper)
-	s = strings.TrimSpace(s)
-	if len(s) > maxLessonProseBytes {
-		s = strings.ToValidUTF8(s[:maxLessonProseBytes], "")
-		s = strings.TrimSpace(s)
-	}
-	return s
+	return termsafe.CleanProse(s, maxLessonProseBytes)
 }

@@ -2209,6 +2209,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 							fmt.Fprintf(w, "  %s  %s  %s%s\n", iss.ID, iss.Severity, iss.Slug, blockedNote(iss))
 						}
 					}
+					// The skipped roster, exactly as `capture list` renders it
+					// (iss-2608261437041050): a record the reader refuses is counted
+					// by none of the three totals above, so a board that printed the
+					// totals alone would under-report the ledger and say nothing about
+					// the records it dropped. Path and Error echo the malformed file's
+					// own name and bytes, so both are sanitised before the terminal.
+					for _, sk := range st.Skipped {
+						fmt.Fprintf(w, "  skipped %s: %s\n", termsafe.Sanitize(sk.Path), termsafe.Sanitize(sk.Error))
+					}
 					fmt.Fprint(w, ledgerDecisionRule)
 					fmt.Fprint(w, ideateRoutingRule)
 				})

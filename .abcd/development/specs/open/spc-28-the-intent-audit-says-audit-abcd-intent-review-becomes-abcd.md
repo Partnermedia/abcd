@@ -47,7 +47,13 @@ Record (current-state surfaces only):
 research notes, dated plans, resolved/wontfix issues, shipped/superseded
 intents, `DECISIONS.md`, review-store artefacts, git history. A test or grep
 in the PR description demonstrates remaining occurrences are all in these
-classes.
+classes. Amendment (2026-08-26): `intents/disciplines/` appeared in neither
+the swept inventory nor this list and was swept late (iss-2608261437043634) —
+it is live state with no reachable reconciliation event, since `intent audit`
+refuses a non-shipped intent; `drafts/` and `planned/` stay deliberately
+unswept under the iss-94 convention (each reconciles when next planned).
+Stored artefact formats (`abcd-review:` markers, `review-<ts>` receipt
+directories) keep their frozen spellings.
 
 ## Approach
 

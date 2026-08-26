@@ -1,4 +1,5 @@
 ---
+schema_version: 1
 id: iss-2608231237300997
 slug: no-way-to-edit-a-file-the-private-name-guard-blocks
 severity: minor
@@ -6,7 +7,6 @@ category: documentation
 found_at: ACKNOWLEDGEMENTS.md
 found_during: user-observation
 source: user-observation
-status: open
 ---
 
 # There is no way to change text in a file the private name-guard blocks

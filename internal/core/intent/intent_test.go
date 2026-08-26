@@ -613,3 +613,50 @@ func TestSetFrontmatterFieldsToleratesDelimiterTrailingSpace(t *testing.T) {
 		t.Fatalf("inserted keys must precede the closing delimiter, not enter the body\n---\n%s", out)
 	}
 }
+
+// TestReconcileToleratesSpecIDSpelling proves the lifecycle verb yields to the
+// record lint: record-lint compares a spec_id by NUMBER, so a slug suffix or a
+// zero-padded id is lint-green — and a lint-green record must never be refused
+// by the verb that ships it.
+func TestReconcileToleratesSpecIDSpelling(t *testing.T) {
+	for _, specID := range []string{"spc-1-alpha", "spc-01"} {
+		t.Run(specID, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", specID))
+			writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+			res, err := Reconcile(root, "spc-1")
+			if err != nil {
+				t.Fatalf("Reconcile must accept the lint-green spec_id %q: %v", specID, err)
+			}
+			if !res.IntentMoved || res.To != BucketShipped {
+				t.Fatalf("Reconcile result = %+v", res)
+			}
+			// The audit emit reads the same stored spec_id, so it must tolerate it too.
+			if res.AuditEmitError != "" {
+				t.Fatalf("audit emit must accept spec_id %q: %s", specID, res.AuditEmitError)
+			}
+		})
+	}
+}
+
+// TestLinkResolvesSpecByNumber proves the strict ^spc-[0-9]+$ ARGUMENT grammar
+// still stands while the store lookup behind it compares by number, so a
+// zero-padded spec record is linkable by its canonical id.
+func TestLinkResolvesSpecByNumber(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n---\n# alpha\n")
+	writeFile(t, root, specsOpen+"/spc-01-alpha.md", specNaming("spc-01", "alpha", "itd-10"))
+
+	res, err := Link(root, "itd-10", "spc-1")
+	if err != nil {
+		t.Fatalf("Link must resolve a zero-padded spec record: %v", err)
+	}
+	if res.Spec.ID != "spc-01" {
+		t.Fatalf("Link spec = %+v, want the spc-01 record", res.Spec)
+	}
+	if _, err := Link(root, "itd-10", "spc-1-alpha"); err == nil {
+		t.Fatal("Link must keep the strict ^spc-[0-9]+$ grammar for its argument")
+	}
+}

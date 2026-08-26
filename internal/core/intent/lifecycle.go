@@ -303,7 +303,10 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 	// Bidirectional agreement: the intent must point back at THIS spec. A null or
 	// mismatched spec_id is drift (a one-sided link) — fail closed rather than ship
 	// an intent that names a different, or no, spec.
-	if it.SpecID != specID {
+	// The comparison is canonical (spec.SameNum), not literal: record-lint matches
+	// a spec_id on its NUMBER, so a slug-suffixed or zero-padded value is
+	// lint-green and this verb must not refuse what the lint accepts.
+	if !spec.SameNum(it.SpecID, specID) {
 		return ReconcileResult{}, fmt.Errorf("intent: %s spec_id is %q but spec %s claims it (bidirectional link disagrees); refusing to reconcile", intentID, it.SpecID, specID)
 	}
 	// Bucket guard runs BEFORE any move, so an unexpected bucket (drafts,

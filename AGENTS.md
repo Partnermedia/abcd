@@ -75,10 +75,12 @@ go test -run TestStatus ./internal/core/ # a single test
 
 CI (`.github/workflows/ci.yml`) runs its `check` job on macOS + Linux — build,
 vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
-format gate and the record-lint and docs-lint steps on the Linux leg alone.
-Separate jobs run the reviews-charter check (`scripts/check-reviews.sh`),
-full-history secret scanning (`gitleaks`), a workflow audit (`zizmor`),
-dependency review, `govulncheck`, and the smoke harness (`make smoke`). A
+format gate, the record-lint and docs-lint steps and the site-render gate on
+the Linux leg alone. Separate jobs run the reviews-charter check
+(`scripts/check-reviews.sh`) together with the issue-resolution gates
+(RS001–RS003), full-history secret scanning (`gitleaks`), a workflow audit
+(`zizmor`), dependency review, `govulncheck`, and the smoke harness
+(`make smoke`). A
 fail-closed classifier stands the macOS leg, the race lane and the `zizmor`,
 `govulncheck` and smoke jobs down on a pull request confined to `docs/`,
 `.abcd/development/`, `.abcd/work/` and the root prose files; the Linux unit
@@ -176,8 +178,9 @@ irreversible; guessing downward costs nothing.**
   blocks the next release.
 - **A change that fixes a captured issue resolves it in the same change**, and
   says so with a `Resolves: iss-N` trailer. `lint-issues` (RS001) refuses a
-  trailer whose record does not leave `.abcd/work/issues/open/` in the same
-  diff. Resolution is deliberately not a post-merge step: a step that happens
+  trailer whose record does not enter `.abcd/work/issues/resolved/` or
+  `.abcd/work/issues/wontfix/` in the same diff — a bare delete of the open
+  record satisfies nothing. Resolution is deliberately not a post-merge step: a step that happens
   after the merge is the one that gets forgotten, and a fixed-but-open issue
   leaves no marker to find it by. Resolving without a trailer stays legal — a
   stale issue closed on its own merits has no fixing commit to name.

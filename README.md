@@ -41,7 +41,7 @@ stop it:
 
 ```text
 $ git push
-check-issue-resolution: RS001 commit c1e2c4c3d915 declares 'Resolves: iss-317', but iss-317 does not leave .abcd/work/issues/open/ in origin/main..HEAD. Resolve it in this change (abcd capture resolve iss-317 ...) or drop the trailer.
+check-issue-resolution: RS001 commit c1e2c4c3d915 declares 'Resolves: iss-317', but iss-317 does not enter .abcd/work/issues/resolved/ or .abcd/work/issues/wontfix/ in origin/main..HEAD. Resolve it in this change (abcd capture resolve iss-317 ...) or drop the trailer.
 check-issue-resolution: FAILED — 1 violation(s)
 ```
 
@@ -107,8 +107,9 @@ abcd — /path/to/your-repo
   work tiers: [development work work.local]
 ```
 
-The plugin surface adds one command the CLI does not carry: `/abcd:prepare-this-repo` gives a repository with no record yet the three-tier
-`.abcd/` layout, an `AGENTS.md` router, and the commit gates.
+The plugin surface adds three commands the CLI does not carry, all host-delegated markdown with no Go verb behind them. The one that matters
+first: `/abcd:prepare-this-repo` gives a repository with no record yet the three-tier `.abcd/` layout, an `AGENTS.md` router, and the commit
+gates. (`/abcd:consult` and `/abcd:ingest` drive a local sources corpus.)
 
 From there, three verbs cover most of a first session. In a plugin session, `/abcd:lint` checks the repository against the working conventions and names what is missing. `/abcd:capture "…"` files a half-formed observation to the issue ledger so it survives the session that noticed it. `/abcd:intent "…"` opens a user-facing change as a press-release intent, which is where a shipping change starts.
 
