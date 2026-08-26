@@ -266,6 +266,22 @@ func danglingPathEntry(pluginRoot string) (pathEntry, bool) {
 // effectiveBinTarget is the PATH entry every verb acts on: an existing owned
 // install (adopted where it stands), else the default target.
 func effectiveBinTarget(pluginRoot string) string {
+	// An explicitly set ABCD_BIN_TARGET is an instruction, not a hint, and it
+	// wins over adoption (iss-2608261447262355). Adoption is right when the
+	// variable is unset — an install that finds an abcd it already owns should
+	// update THAT one rather than leave a second copy elsewhere, which is how
+	// `ahoy install` stays idempotent across the shapes a real machine presents.
+	// But a caller that names a target has asked for a specific file, and the
+	// only callers that name one are tests asking for a sandbox. Preferring an
+	// owned entry over their ask is how `go test ./...` came to adopt a real
+	// PATH entry and rewrite it into a temp dir: the machines that dogfood the
+	// installer are exactly the machines with an owned entry to find.
+	//
+	// Inert in production, where ABCD_BIN_TARGET is unset and this falls through
+	// to the adoption path unchanged.
+	if os.Getenv("ABCD_BIN_TARGET") != "" {
+		return binTarget()
+	}
 	if e, ok := ownedPathEntry(pluginRoot); ok {
 		return e.path
 	}
