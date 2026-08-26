@@ -487,10 +487,13 @@ func newDocsCommand(asJSON *bool) *cobra.Command {
 			res := docsLintResult{Findings: findings, Blockers: blockers}
 			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				for _, f := range findings {
-					// File and Message embed untrusted repo content (paths, link targets);
-					// Severity/RuleID are enum-constrained.
+					// Every non-numeric field embeds untrusted repo content: File and
+					// Message carry paths and link targets, and Severity/RuleID come
+					// verbatim from the committed config (LoadConfig validates rule
+					// severities, but a banned token's id is free text), so all four
+					// are sanitised.
 					fmt.Fprintf(w, "%s:%d: [%s %s] %s\n",
-						termsafe.Sanitize(f.File), f.Line, strings.ToUpper(f.Severity), f.RuleID, termsafe.Sanitize(f.Message))
+						termsafe.Sanitize(f.File), f.Line, termsafe.Sanitize(strings.ToUpper(f.Severity)), termsafe.Sanitize(f.RuleID), termsafe.Sanitize(f.Message))
 				}
 				fmt.Fprintf(w, "abcd docs lint — %d finding(s), %d blocker(s)\n", len(findings), blockers)
 			}); err != nil {
