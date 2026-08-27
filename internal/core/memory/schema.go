@@ -41,6 +41,10 @@ const backfillSourceClass = "session_memory"
 // externalClassPrefix marks a licence-bearing source.class value.
 const externalClassPrefix = "external_"
 
+// dredgeSynthesisClass is the non-external class that still carries a
+// source_hash (07-memory.md §3).
+const dredgeSynthesisClass = "dredge_synthesis"
+
 func isExternalClass(cls any) bool {
 	s, ok := cls.(string)
 	return ok && strings.HasPrefix(s, externalClassPrefix)
@@ -210,11 +214,36 @@ func validateSourceBlock(source any) error {
 		return newSchemaError("source: block carries neither a scalar `class` nor a `classes` + `sources` pair")
 	}
 	if isSingle {
-		if _, err := requireClass(sm["class"], "source"); err != nil {
+		cls, err := requireClass(sm["class"], "source")
+		if err != nil {
 			return err
 		}
 		if _, ok := sm["weighting_note"]; ok {
 			return newSchemaError("source.weighting_note never appears on a single-source page")
+		}
+		// 07-memory.md §3 marks citation and licence required for external_*, and
+		// source_hash required for external_* and dredge_synthesis. This branch is
+		// the distiller/file-back trust boundary as much as the multi-source one is,
+		// so it enforces the same fields its sources[] sibling does — but
+		// class-conditionally, since a session_memory / work_notes page is
+		// legitimately hashless. Without it, an external_* page written with no
+		// source_hash dropped out of quotation-coverage accounting: lint reported an
+		// MQ003 "no external source" (false on the page's own class) and the
+		// MQ001/MQ002 budget blockers never ran.
+		if isExternalClass(cls) {
+			if _, ok := sm["citation"]; !ok {
+				return newSchemaError("source: citation is required for class %s", cls)
+			}
+			lic, ok := sm["licence"].(string)
+			if !ok || strings.TrimSpace(lic) == "" {
+				return newSchemaError("source: licence must be a non-empty string for class %s (explicit 'unknown' is acceptable)", cls)
+			}
+		}
+		if isExternalClass(cls) || cls == dredgeSynthesisClass {
+			sh, ok := sm["source_hash"].(string)
+			if !ok || !hex64Re.MatchString(sh) {
+				return newSchemaError("source: source_hash must be a sha256 hex digest for class %s", cls)
+			}
 		}
 		if _, ok := sm["citation"]; ok {
 			if err := requireCitation(sm["citation"], "source"); err != nil {
