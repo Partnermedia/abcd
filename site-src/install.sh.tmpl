@@ -15,6 +15,20 @@
 
 set -eu
 
+# curl reads a configuration surface this script's argv knows nothing about, and
+# the HTTPS pin below does not close it. Unless -q is curl's FIRST argument, it
+# loads $CURL_HOME/.curlrc (falling back to $HOME/.curlrc), and one `connect-to`
+# or `resolve` line there re-points the connection while the URL still literally
+# reads https://github.com/… — the transport pin holds, and the checksum check
+# becomes vacuous, because the same config supplies the binary AND the
+# checksums.txt that "verifies" it. So -q is first on every fetch, and the other
+# names curl reads without being told to — the proxy variables, which route both
+# fetches through a server of the setter's choosing, and the CA overrides, which
+# make such a route succeed on TLS — are removed here, before any fetch. This is
+# the lockdown hooks/bootstrap.sh already carries (GHSA-x4v8-rxvx-8v89).
+unset HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy CURL_HOME
+unset CURL_CA_BUNDLE SSL_CERT_FILE SSL_CERT_DIR
+
 # usage is the --help text.
 usage() {
 	cat <<'EOT'
@@ -70,9 +84,9 @@ require_released_platform() {
 # verifies it.
 download() {
 	command -v curl >/dev/null 2>&1 || die "curl is needed to download the release. Install curl, or download the binary by hand from https://github.com/intentdriven/abcd/releases"
-	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$1" ||
+	curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$1" ||
 		die "could not download $1 from the latest release. Check the network, or download it by hand from https://github.com/intentdriven/abcd/releases"
-	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt" ||
+	curl -q --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt" ||
 		die "could not download checksums.txt from the latest release. Nothing is installed without it."
 }
 
