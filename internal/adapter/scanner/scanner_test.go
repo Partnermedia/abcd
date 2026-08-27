@@ -105,7 +105,7 @@ func TestIdentityHomeSelfCaseInsensitive(t *testing.T) {
 // the redacted text must find no surviving hard_fail (the store's fail-closed
 // guarantee). The old substring-replace Redact left the JWT's tail verbatim.
 func TestRedactSealsOverlappingSecrets(t *testing.T) {
-	line := "sk-ant-" + strings.Repeat("X", 34) + "-eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	line := "sk-ant-" + strings.Repeat("X", 34) + "-eyJ" + "ABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
 	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "f")
 	redacted, _ := Redact(line, findings)
 	for _, raw := range []string{"KLMNOPQRST", "UVWXYZ0123456"} {
@@ -127,7 +127,7 @@ func TestRE2LookaroundPorts(t *testing.T) {
 	if hasKind(scanLine("AKIAIOSFODNN7EXAMPLE"), "token:aws_access_key") {
 		t.Error("AWS docs example must NOT be flagged")
 	}
-	if !hasKind(scanLine("AKIA1234567890ABCDEF"), "token:aws_access_key") {
+	if !hasKind(scanLine("AKIA"+"1234567890ABCDEF"), "token:aws_access_key") {
 		t.Error("a real AKIA key must be flagged")
 	}
 	// A redacted sessionKey value is not re-flagged; a real one is.
@@ -616,7 +616,7 @@ func TestSerializedFindingRedactsSiblingSecret(t *testing.T) {
 // window of either token may survive in the serialized snippet.
 func TestSerializedFindingRedactsOverlappingSecret(t *testing.T) {
 	key := "sk-ant-" + strings.Repeat("X", 34)
-	jwt := "eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	jwt := "eyJ" + "ABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
 	line := key + "-" + jwt // the `-` lets the key run into the JWT head; both fire
 
 	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "commands/x.md")

@@ -117,12 +117,15 @@ func rejectBadInclude(pattern string) error {
 		if seg == ".." {
 			return preflight("include pattern contains a '..' traversal: %q", pattern)
 		}
+		// The structural deny binds EVERY component, case-insensitively: an
+		// include that names a denied namespace at any depth (or in a case
+		// variant) is refused up front, not left for the walk to prune
+		// (GHSA-g2v7-wfmv-v28r, #335).
+		if segmentDenied(seg) {
+			return preflight("include pattern names a denied namespace segment %q: %q", seg, pattern)
+		}
 	}
-	first := segments[0]
-	if _, denied := DenyNamespaces[first]; denied {
-		return preflight("include pattern is rooted in a denied namespace: %q", pattern)
-	}
-	if firstSegmentGlobsDenied(first) {
+	if firstSegmentGlobsDenied(segments[0]) {
 		return preflight("include pattern's first segment could match a denied namespace: %q", pattern)
 	}
 	return nil

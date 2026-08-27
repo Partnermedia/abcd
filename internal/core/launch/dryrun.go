@@ -148,6 +148,15 @@ func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResu
 	if scan.HardFails > 0 {
 		reasons = append(reasons, hardFailReason(scan))
 	}
+	// Fail closed on the coverage gap: any include-selected file the scanner
+	// could not cover (unreadable, or binary without a reviewed skip) is refused
+	// rather than shipped raw. "Some other file scanned" is not coverage of the
+	// unscanned one, so a single scanned README cannot disarm this
+	// (GHSA-5mmm-3whv-3rqp). Reviewed skips (scan.Skipped) are an accepted allow
+	// and do NOT refuse.
+	for _, p := range scan.Unscanned {
+		reasons = append(reasons, "unscanned payload file (fail-closed coverage gap): "+p)
+	}
 	for _, r := range bundle.Rejected {
 		reasons = append(reasons, "bundle rejected: "+r.LogicalPath+" ("+string(r.Reason)+")")
 	}
