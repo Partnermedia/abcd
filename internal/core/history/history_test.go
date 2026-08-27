@@ -117,6 +117,49 @@ func TestCaptureRedactsSecretsAndHomePaths(t *testing.T) {
 	}
 }
 
+// TestCaptureRedactsPercentEncodedSecrets is the gh-370 regression: a live token
+// embedded in a percent-encoded URL (an OAuth/redirect/magic-link) has a %XX hex
+// word-char before it, so the leading \b every bundled token pattern anchors on
+// never holds and the raw scan misses it. Before the percent-decode pre-pass the
+// live PAT/AKIA/JWT was written verbatim into the committed transcript. The tokens
+// here are FAKE shapes (structurally valid, never real credentials).
+func TestCaptureRedactsPercentEncodedSecrets(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+
+	ghp := "ghp_" + "0123456789abcdefABCDEF0123456789abcd" // ghp_ + 36 alnum
+	akia := "AKIA" + "ABCDEFGHIJKLMNOP"                    // AKIA + 16 [0-9A-Z]
+	jwt := "eyJ" + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV0abcdefgh"
+
+	transcript := strings.Join([]string{
+		"user: GET /cb?redirect=%2Fauth%3Ftoken%3D" + ghp + "&s=x",
+		"assistant: curl 'https://api?key%3D" + akia + "'",
+		"assistant: magic link%3Ftoken%3D" + jwt + " sent",
+		"assistant: done",
+	}, "\n")
+
+	res, err := Capture(repoRoot, testRootSHA, "sess-pct370", []byte(transcript), "native")
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	if !res.Wrote {
+		t.Fatalf("expected Wrote=true on first capture")
+	}
+	onDisk, err := os.ReadFile(res.Record.Path)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	for _, tok := range []struct{ name, value string }{
+		{"github PAT", ghp}, {"AWS key", akia}, {"JWT", jwt},
+	} {
+		if bytes.Contains(onDisk, []byte(tok.value)) {
+			t.Errorf("%s leaked into the stored record behind a percent-encoded delimiter:\n%s", tok.name, onDisk)
+		}
+	}
+	if res.Record.Secrets < 3 {
+		t.Errorf("expected >=3 secret redactions counted, got %d", res.Record.Secrets)
+	}
+}
+
 // TestCaptureRedactsHomePathFollowedByPunctuation is the Finding-A regression:
 // a home path followed by a non-boundary punctuation char (#, &, =, @) must NOT
 // survive in a stored record. Before the fix the scanner's trailing-boundary

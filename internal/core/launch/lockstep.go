@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // LockstepTree is the polarity the lockstep check runs under.
@@ -130,6 +132,13 @@ func validateVersionLocation(decision any) (string, string, string) {
 	mp, ok := obj["manifest_path"].(string)
 	if !ok || mp == "" {
 		return "", "", "version-location decision missing a string manifest_path"
+	}
+	// manifest_path arrives as committed configuration data and is joined onto a
+	// trusted root and then WRITTEN (editManifest stamps the derived version), so
+	// it must be contained the way launch include patterns are — no absolute path
+	// and no ".." traversal, or the stamp escapes the destination (gh-488).
+	if !fsutil.ValidRelPath(mp) {
+		return "", "", "version-location manifest_path is not a contained repo-relative path: " + mp
 	}
 	ptr, ok := obj["json_pointer"].(string)
 	if !ok || !strings.HasPrefix(ptr, "/") {

@@ -136,10 +136,6 @@ func WritePin(root string, p Pin) error {
 	if unpinnable(p.Email) {
 		return fmt.Errorf("identity pin email must not contain a double-quote, backslash, or control character; adjust git config user.email")
 	}
-	path := filepath.Join(root, PinRelPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	// Marshal WITHOUT HTML escaping (so &, <, > survive literally) and route the
 	// bytes through the canonical atomic primitive (temp + fchmod + fsync +
 	// rename + parent-dir fsync): a plain in-place os.WriteFile truncates the pin
@@ -153,7 +149,18 @@ func WritePin(root string, p Pin) error {
 	if err := enc.Encode(p); err != nil {
 		return err
 	}
-	return fsutil.WriteFileAtomic(path, buf.Bytes(), 0o644)
+	// Contain the write under an os.Root opened at the repo: PinRelPath joins
+	// `.abcd/config/identity.json`, and a committed `.abcd` ancestor symlink would
+	// otherwise land the pin outside the working tree (GHSA-xrf8-4432-gw2f). The
+	// InRoot writer resolves every component through the root — creating the
+	// missing config/ parent included — so a symlinked ancestor is refused rather
+	// than followed. The leaf's own symlink is still replaced, not written through.
+	osRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer osRoot.Close()
+	return fsutil.WriteFileAtomicInRoot(osRoot, PinRelPath, buf.Bytes(), 0o644)
 }
 
 // unpinnable reports whether s holds a character the identity pin cannot safely

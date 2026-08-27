@@ -45,6 +45,42 @@ func TestBlockedIP(t *testing.T) {
 	}
 }
 
+// TestBlockedIPRefusesProviderPlatformMagicIPs pins the fixed, provider-owned
+// magic addresses that live in PUBLIC (globally-unicast) space and so match none
+// of net.IP's range predicates, yet serve a VM's cloud-platform/metadata plane.
+// Azure's 168.63.129.16 (the WireServer / host-platform endpoint delivering
+// goal-state and protected extension settings) is the case gh-324 caught. Its
+// siblings — Alibaba 100.100.100.200 and Oracle OCI 192.0.0.192 — are already
+// refused structurally (CGNAT 100.64/10 and the 192.0.0.0/24 protocol block),
+// and are pinned here so the sweep is regression-guarded in one place.
+func TestBlockedIPRefusesProviderPlatformMagicIPs(t *testing.T) {
+	blocked := []string{
+		"168.63.129.16",   // Azure WireServer / host platform (gh-324) abcd-audit:allow
+		"100.100.100.200", // Alibaba Cloud metadata (already via CGNAT) abcd-audit:allow
+		"192.0.0.192",     // Oracle OCI metadata (already via 192.0.0.0/24) abcd-audit:allow
+	}
+	for _, s := range blocked {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			t.Fatalf("test bug: %q is not an IP", s)
+		}
+		if !BlockedIP(ip) {
+			t.Errorf("BlockedIP(%s) = false, want true (provider platform magic IP)", s)
+		}
+	}
+	// The NAT64 unwrap must refuse the Azure endpoint wrapped in an IPv6 form too.
+	if !BlockedIP(net.ParseIP("64:ff9b::168.63.129.16")) { // abcd-audit:allow
+		t.Error("BlockedIP failed to refuse the NAT64-embedded Azure WireServer form")
+	}
+	// The nearest public neighbours in Azure's 168.63/16 stay reachable: only the
+	// single /32 magic address is blocked, not Microsoft's surrounding public space.
+	for _, s := range []string{"168.63.129.15", "168.63.129.17", "168.63.0.1"} { // abcd-audit:allow
+		if BlockedIP(net.ParseIP(s)) {
+			t.Errorf("BlockedIP(%s) = true, want false (public neighbour, not the magic IP)", s)
+		}
+	}
+}
+
 // TestCheckHostRefusesNamesAndLiterals covers the two refusal paths that resolve
 // without any DNS traffic: the internal/metadata NAME guard, and IP literals.
 func TestCheckHostRefusesNamesAndLiterals(t *testing.T) {

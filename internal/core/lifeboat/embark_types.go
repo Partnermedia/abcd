@@ -39,6 +39,16 @@ const (
 	maxEmbarkTotalBytes = maxPlanTotalBytes // 512 MiB across the whole lifeboat
 )
 
+// maxEmbarkDepth caps how many directory levels below the lifeboat root the
+// walk descends. Like probe.go's maxWalkDepth it prunes the pathological deep
+// chain — a directory-only lifeboat `a/a/a/…` holds no regular file, so the
+// file cap never fires and an unbounded recursion walks it at O(depth) cost
+// (GH #337). A packed lifeboat mirrors a shallow record tree, so the ceiling is
+// generous headroom that only a hostile chain reaches; unlike the probe, embark
+// REFUSES the lifeboat on reaching it rather than truncating, because manifest
+// verification needs the complete file list and a partial one is a mismatch.
+const maxEmbarkDepth = 64
+
 // ErrEmbarkConflicts is the sentinel EmbarkFrom returns when the target already
 // holds files that differ from what the lifeboat would write. On this error the
 // write path has done NOTHING (decision 4): the returned EmbarkResult carries the

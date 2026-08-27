@@ -24,9 +24,12 @@ import (
 	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
-// DenyNamespaces are first-path-segment names that never ship. Structural deny
-// (adr-18): NOT overridable by any allowlist. Mirrors launch_resolve
-// DENY_NAMESPACES.
+// DenyNamespaces are namespace names that never ship. The structural deny
+// (adr-18) binds EVERY path component case-insensitively (see
+// pathContainsDeniedSegment), not just the first segment: a denied name nested
+// under an included tree, or spelled in a different case, is denied all the same
+// (GHSA-g2v7-wfmv-v28r, #335). NOT overridable by any allowlist. Mirrors
+// launch_resolve DENY_NAMESPACES.
 var DenyNamespaces = map[string]struct{}{
 	".git": {}, ".abcd": {}, ".flow": {}, ".work": {}, ".specstory": {}, "memory": {},
 }
@@ -225,7 +228,7 @@ func (r *resolver) walkDir(rel, absDir string, ancestors map[string]struct{}) {
 		case mode&os.ModeSymlink != 0:
 			r.handleSymlink(childRel, childAbs, ancestors)
 		case mode.IsDir():
-			if _, denied := DenyNamespaces[firstSegment(childRel)]; denied {
+			if pathContainsDeniedSegment(childRel) {
 				// Structural deny BEFORE ignore: a denied dir reached by a broad
 				// include is excluded(denied_namespace); otherwise silently pruned.
 				// Either way it is never descended — .abcd/** cannot enter here.
@@ -252,7 +255,7 @@ func (r *resolver) classifyRegular(rel, abs string, info os.FileInfo, deref bool
 	if source == "" {
 		return // default-deny: not requested at all
 	}
-	if _, denied := DenyNamespaces[firstSegment(rel)]; denied {
+	if pathContainsDeniedSegment(rel) {
 		r.result.Excluded = append(r.result.Excluded, ExcludedFile{LogicalPath: rel, Reason: ExcludedDeniedNamespace})
 		return
 	}
@@ -324,7 +327,7 @@ func (r *resolver) handleSymlink(rel, abs string, ancestors map[string]struct{})
 		return
 	}
 	realRel := filepath.ToSlash(relToRoot)
-	if _, denied := DenyNamespaces[firstSegment(realRel)]; denied {
+	if pathContainsDeniedSegment(realRel) {
 		// A symlink whose target realpath is under a denied namespace is a
 		// smuggling attempt — reject(deny) even if the logical path is benign.
 		if r.anyIncludeMatches(rel) || r.includeMayReachDir(rel) {
@@ -412,8 +415,7 @@ func (r *resolver) realPathDenied(abs string) bool {
 	if rel == ".." || strings.HasPrefix(rel, "../") {
 		return true
 	}
-	_, denied := DenyNamespaces[firstSegment(rel)]
-	return denied
+	return pathContainsDeniedSegment(rel)
 }
 
 // finalize applies the batched ignore pass and duplicate resolution, promoting
@@ -531,7 +533,17 @@ func checkIgnoredStrict(root string, candidates []string) (map[string]struct{}, 
 	if !gitutil.InRepo(root) {
 		return out, nil
 	}
-	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
+	// The same exec pins gitutil.isolatedGit forces (core.hooksPath=/dev/null,
+	// core.fsmonitor=false; core.quotePath=false for path fidelity). This probe's
+	// --no-index skips the index refresh that consults core.fsmonitor, so the pin
+	// is defence-in-depth here rather than the live hole (GHSA-h2gm-w3hm-8xpq) —
+	// but a probe pointed at a possibly-hostile clone must not depend on one flag
+	// to stay non-executing. A clone's own .git/config is fully trusted by git.
+	cmd := exec.Command("git", "-C", root,
+		"-c", "core.hooksPath=/dev/null",
+		"-c", "core.fsmonitor=false",
+		"-c", "core.quotePath=false",
+		"-c", "core.excludesFile=",
 		"check-ignore", "-z", "--no-index", "-v", "--stdin")
 	// Scrub the environment: appending to os.Environ() left GIT_DIR/GIT_WORK_TREE/
 	// GIT_CONFIG_* intact, and those override `-C root`, silently redirecting this
@@ -579,6 +591,34 @@ func firstSegment(rel string) string {
 		return rel[:i]
 	}
 	return rel
+}
+
+// segmentDenied reports whether one path COMPONENT case-insensitively matches a
+// denied namespace. The compare is EqualFold, not an exact map lookup, so a case
+// variant (.ABCD, .Git, MEMORY) is denied exactly as its canonical spelling is
+// (GHSA-g2v7-wfmv-v28r / #335, the case-fold axis).
+func segmentDenied(seg string) bool {
+	for denied := range DenyNamespaces {
+		if strings.EqualFold(seg, denied) {
+			return true
+		}
+	}
+	return false
+}
+
+// pathContainsDeniedSegment reports whether ANY component of the repo-relative
+// POSIX path rel is a denied namespace. The structural deny (adr-18) binds every
+// segment, not only the first: a denied name nested under an included tree
+// (docs/.abcd/…, docs/.git/config) is as much a smuggling path as a top-level
+// one (GHSA-g2v7-wfmv-v28r, the nested-segment axis), and the compare is
+// case-insensitive per segmentDenied.
+func pathContainsDeniedSegment(rel string) bool {
+	for _, seg := range strings.Split(rel, "/") {
+		if segmentDenied(seg) {
+			return true
+		}
+	}
+	return false
 }
 
 // firstMatchAndMark returns the first include covering rel and marks every glob
@@ -921,7 +961,7 @@ func buildInodeMap(root string) *inodeMap {
 			rel, _ := filepath.Rel(root, abs)
 			relSlash := filepath.ToSlash(rel)
 			m.aliases[key] = append(m.aliases[key], relSlash)
-			if _, denied := DenyNamespaces[firstSegment(relSlash)]; denied {
+			if pathContainsDeniedSegment(relSlash) {
 				m.deniedInodes[key] = struct{}{}
 			}
 		}

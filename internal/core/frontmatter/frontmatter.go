@@ -14,8 +14,14 @@ import (
 	"strings"
 )
 
-// keyRe matches a top-level frontmatter key (column 0, no indentation).
-var keyRe = regexp.MustCompile(`^([A-Za-z0-9_]+):(.*)$`)
+// keyRe matches a top-level frontmatter key (column 0, no indentation). The
+// optional whitespace before the colon matches how the strict ledger parser
+// (internal/core/capture) reads a key — it splits on the first colon and trims
+// the key — so `id : value` is the key it plainly is, to BOTH readers. Without
+// this the lenient scanner read `id :` as no key at all while capture read the
+// id fine, and a gate armed on that key (record_schema's filename↔id blocker)
+// was silently disarmed by a stray space (GitHub #357).
+var keyRe = regexp.MustCompile(`^([A-Za-z0-9_]+)[ \t]*:(.*)$`)
 
 // Field is a frontmatter key's value and its 1-based source line.
 type Field struct {
@@ -61,6 +67,54 @@ func Fields(lines []string) map[string]Field {
 		return map[string]Field{}
 	}
 	return fields
+}
+
+// Dup is a duplicated top-level key and the 1-based line of its SECOND (the
+// offending) occurrence.
+type Dup struct {
+	Key  string
+	Line int
+}
+
+// Duplicates returns the top-level keys that appear more than once in the leading
+// frontmatter block, one Dup per extra occurrence, in source order.
+//
+// Fields keeps the FIRST occurrence and drops the rest silently — correct for a
+// reader that wants one value, but it means a second `impact:` line hides the
+// value a gate is armed to reject, and the strict ledger parser
+// (internal/core/capture) refuses such a file outright (last-wins there would
+// diverge from the first-occurrence rewrite setScalarField performs). A gate
+// built on Fields calls Duplicates so it can refuse exactly what its consumer
+// refuses (GitHub #357). The block-boundary contract is Fields': no leading `---`
+// or no closing `---` yields nothing, so body prose is never scanned.
+func Duplicates(lines []string) []Dup {
+	if len(lines) == 0 || strings.TrimRight(TrimBOM(lines[0]), " \t\r") != "---" {
+		return nil
+	}
+	seen := map[string]bool{}
+	var dups []Dup
+	closed := false
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], "\r")
+		if strings.TrimRight(line, " \t") == "---" {
+			closed = true
+			break
+		}
+		m := keyRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		key := m[1]
+		if seen[key] {
+			dups = append(dups, Dup{Key: key, Line: i + 1})
+			continue
+		}
+		seen[key] = true
+	}
+	if !closed {
+		return nil
+	}
+	return dups
 }
 
 // utf8BOM is U+FEFF, the byte-order mark some editors prepend to a file. It is

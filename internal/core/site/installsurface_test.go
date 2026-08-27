@@ -56,6 +56,85 @@ var installInvocation = regexp.MustCompile(`(?m)(?:^|[;&|(]|\bthen\b|\bdo\b|\bel
 // inside a longer word ("pseudo") does not trip it.
 var privilegeEscalation = regexp.MustCompile(`\b(?:sudo|doas)\b`)
 
+// The curl hardening bootstrap already carries (hooks/bootstrap.sh), held here
+// so the public install surfaces cannot drift back to the vacuous-verification
+// hole GHSA-x4v8-rxvx-8v89 records. `--proto '=https'` keeps the scheme, but it
+// does NOT defend the connection: a ~/.curlrc `connect-to`/`resolve` line still
+// re-points where curl actually dials while the URL still reads https://github…,
+// and an HTTPS_PROXY + CURL_CA_BUNDLE pair still reroutes the fetch through a
+// server of the setter's choosing. Because the same poisoned surface serves both
+// the binary AND the checksums.txt that "verifies" it, SHA-256 verification is
+// vacuous unless the fetch is closed at the source: `-q` as curl's FIRST argument
+// (so no .curlrc is read at all) and the proxy/CA/CURL_HOME scrub before any
+// fetch. A surface that pins the transport but skips those two is the exact drift
+// this holds every form to.
+
+// fetchingCurl matches a curl used to fetch — `curl` followed by a dash option.
+// `command -v curl >/dev/null` is `curl` followed by a redirection, not a dash,
+// so it is not counted; every match here is a download that must be hardened.
+var fetchingCurl = regexp.MustCompile(`curl\s+-`)
+
+// qFirstCurl matches a curl whose FIRST argument is `-q`. Only the first
+// position suppresses the .curlrc read: `curl -fsSL -q` still loads it before it
+// sees the flag.
+var qFirstCurl = regexp.MustCompile(`curl\s+-q\b`)
+
+// protoPin and protoRedirPin match the HTTPS transport pin in either quoting the
+// surfaces use — `'=https'` in the standalone script, bare `=https` inside the
+// single-quoted `sh -c '…'` one-liners, which cannot nest a single quote. The
+// `\s` after `--proto` keeps protoPin from also matching `--proto-redir`.
+var protoPin = regexp.MustCompile(`--proto\s+'?=https'?`)
+var protoRedirPin = regexp.MustCompile(`--proto-redir\s+'?=https'?`)
+
+// scrubbedCurlEnv is the environment every surface must unset before it fetches:
+// the proxy variables that reroute the connection, the CA overrides that make
+// such a route pass TLS, and CURL_HOME, which relocates the .curlrc `-q` alone
+// would otherwise still be asked to ignore. This is bootstrap's list, verbatim.
+var scrubbedCurlEnv = []string{
+	"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy",
+	"ALL_PROXY", "all_proxy", "CURL_HOME",
+	"CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR",
+}
+
+// unsetsVar matches an `unset` statement that lists the named variable. The
+// character class stops at a newline or `;`, so a variable unset on one statement
+// is not credited to an `unset` on a different one.
+func unsetsVar(script, v string) bool {
+	return regexp.MustCompile(`\bunset\b[^\n;]*\b` + regexp.QuoteMeta(v) + `\b`).MatchString(script)
+}
+
+// TestInstallSurfacesHardenCurl holds all four public install surfaces (and the
+// served render) to the curl hardening bootstrap already carries. Without it the
+// checksum step every surface performs is defeated by a local curl surface the
+// victim need not have set maliciously — direnv, a sourced .env — so the fix is
+// not "verify harder" but "close the fetch": -q first, the env scrub, the proto
+// pins. See GHSA-x4v8-rxvx-8v89 and hooks/bootstrap.sh.
+func TestInstallSurfacesHardenCurl(t *testing.T) {
+	for _, s := range loadInstallSurfaces(t) {
+		t.Run(s.name, func(t *testing.T) {
+			fetches := len(fetchingCurl.FindAllString(s.script, -1))
+			if fetches == 0 {
+				t.Fatalf("%s makes no curl fetch to harden", s.source)
+			}
+
+			if got := len(qFirstCurl.FindAllString(s.script, -1)); got != fetches {
+				t.Errorf("%s: %d curl fetch(es), %d lead with -q; -q must be curl's FIRST argument or ~/.curlrc is read and the checksum check is vacuous", s.source, fetches, got)
+			}
+			if got := len(protoPin.FindAllString(s.script, -1)); got != fetches {
+				t.Errorf("%s: %d curl fetch(es), %d carry --proto =https", s.source, fetches, got)
+			}
+			if got := len(protoRedirPin.FindAllString(s.script, -1)); got != fetches {
+				t.Errorf("%s: %d curl fetch(es), %d carry --proto-redir =https", s.source, fetches, got)
+			}
+			for _, v := range scrubbedCurlEnv {
+				if !unsetsVar(s.script, v) {
+					t.Errorf("%s does not unset %s before fetching; a poisoned proxy/CA/CURL_HOME surface reroutes both the binary and the checksums.txt that verifies it", s.source, v)
+				}
+			}
+		})
+	}
+}
+
 // archMapping is one `uname -m` value and the release architecture it must map
 // to. The release matrix names amd64 and arm64; a machine that reports the
 // kernel spellings and is not translated downloads an asset that does not exist.

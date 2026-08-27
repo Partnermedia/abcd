@@ -145,3 +145,37 @@ func TestTrimBOM(t *testing.T) {
 		t.Errorf("TrimBOM must not touch an interior mark, got %q", got)
 	}
 }
+
+// GitHub #357: `key : value` (whitespace before the colon) must read as the key
+// it is, the way the strict ledger parser (internal/core/capture) reads it \u2014
+// otherwise the lenient scanner sees NO key and a gate armed on that key
+// (record_schema's filename\u2194id blocker) is silently disarmed by a stray space.
+func TestFieldsToleratesSpaceBeforeColon(t *testing.T) {
+	lines := []string{"---", "id : itd-999", "kind:\tstandalone", "---"}
+	fields := Fields(lines)
+	if got := fields["id"]; got.Value != "itd-999" {
+		t.Fatalf("id = %+v, want the value read past a space-before-colon {itd-999 2}", got)
+	}
+	if got := fields["kind"]; got.Value != "standalone" {
+		t.Fatalf("kind = %+v, want a tab-before-colon key read too", got)
+	}
+}
+
+// GitHub #357: Fields keeps the FIRST occurrence of a duplicated key and drops
+// the rest silently. Duplicates surfaces them so a gate can refuse what its
+// strict consumer refuses.
+func TestDuplicates(t *testing.T) {
+	lines := []string{"---", "id: adr-12", "impact: fix", "impact: banana", "---", "# body"}
+	dups := Duplicates(lines)
+	if len(dups) != 1 || dups[0].Key != "impact" || dups[0].Line != 4 {
+		t.Fatalf("Duplicates = %+v, want one impact duplicate at line 4", dups)
+	}
+	// A clean block has none.
+	if got := Duplicates([]string{"---", "id: adr-12", "impact: fix", "---"}); len(got) != 0 {
+		t.Fatalf("a block with no duplicates must yield none, got %+v", got)
+	}
+	// No frontmatter -> no duplicates (never harvest body lines).
+	if got := Duplicates([]string{"# Title", "id: a", "id: b"}); len(got) != 0 {
+		t.Fatalf("no leading --- must yield no duplicates, got %+v", got)
+	}
+}

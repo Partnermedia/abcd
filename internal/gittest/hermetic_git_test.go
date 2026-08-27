@@ -31,6 +31,13 @@ var allowlist = map[string]string{
 	// cleanup flake (see internal/core/lifeboat/testmain_test.go). They already
 	// isolate global/system config and identity explicitly. Left as follow-up.
 	"internal/core/lifeboat/": "async-disable via GIT_CONFIG_COUNT, scrubbed by IsolatedEnv; see testmain_test.go",
+	// The check-ignore exec-pin regression (GHSA-h2gm) deliberately plants a
+	// HOSTILE repo-local core.fsmonitor and drives CheckIgnored to prove the
+	// isolatedGit pins neutralise it. Routing through gittest.Env would inject
+	// core.fsmonitor=false and strip the exact config under test, defeating the
+	// test's purpose. File-precise entry (matches only this one file), not the
+	// whole gitutil package.
+	"internal/gitutil/fsmonitor_exec_test.go": "plants a hostile repo-local core.fsmonitor to verify the isolatedGit exec-pins (GHSA-h2gm); gittest.Env would strip it",
 }
 
 // TestTestGitCallsAreHermetic is the enforcement half of iss-28. It walks every

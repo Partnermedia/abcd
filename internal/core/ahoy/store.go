@@ -120,8 +120,23 @@ func resolvePluginRoot() (string, bool) {
 		candidates = append(candidates, rec.pluginRoot)
 	}
 	for _, c := range candidates {
-		if pluginRootValid(c) {
-			return c, true
+		// Absolutise before validating OR returning. A relative candidate — the
+		// shape a `cd abcd-cli && ABCD_PLUGIN_ROOT=.` user produces, and the env
+		// var is first in the ladder — otherwise means one file to os.Stat (the
+		// anti-dangling guard, resolving against the process CWD) and a different
+		// file to os.Symlink (the kernel, resolving the stored string against the
+		// LINK's directory). The guard then validates one path and links another,
+		// writing a self-referential or dangling PATH entry it later reclassifies
+		// as foreign so neither doctor nor uninstall can repair it (gh-334). The
+		// sibling routes (executable-ancestor, --bin-dir, banlist scaffold) are
+		// already absolutised; this closes the one gap. The exe-ancestor
+		// candidates are already absolute, so filepath.Abs is a no-op for them.
+		abs, err := filepath.Abs(c)
+		if err != nil {
+			continue
+		}
+		if pluginRootValid(abs) {
+			return abs, true
 		}
 	}
 	return "", false
@@ -759,6 +774,16 @@ func configPath(cwd string) string {
 	return filepath.Join(cwd, ".abcd", "config.json")
 }
 
+// configRelPath and rulesRelPath are the repo-.abcd writers' os.Root-relative,
+// slash-separated targets. They are the containment counterparts of the
+// filepath.Join(cwd, …) forms: a write resolved through an os.Root opened at the
+// repo cannot follow a committed `.abcd` ancestor symlink outside the tree
+// (GHSA-xrf8-4432-gw2f), the same idiom the banlist scaffold already uses.
+const (
+	configRelPath = ".abcd/config.json"
+	rulesRelPath  = ".abcd/rules.json"
+)
+
 // readConfig reads .abcd/config.json into a generic map. Returns (nil,nil) when
 // absent, and an error on malformed JSON or a guarded-read refusal (a non-regular
 // leaf such as a FIFO, or a file past the size cap). Callers treat any error as
@@ -790,7 +815,9 @@ func subMap(cfg map[string]any, name string) map[string]any {
 }
 
 // writeJSON marshals v deterministically (map keys sorted) with a trailing
-// newline via the atomic writer.
+// newline via the atomic writer. It guards the LEAF only, so it is reserved for
+// the ~/.abcd/history writers, whose paths are the user's own home and never
+// influenced by committed repo content.
 func writeJSON(path string, v any) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -800,9 +827,37 @@ func writeJSON(path string, v any) error {
 	return fsutil.WriteFileAtomicPreserveMode(path, data)
 }
 
-// writeConfig persists a config map deterministically.
+// marshalJSON renders v the way writeJSON persists it: deterministic, trailing
+// newline. Split out so the contained writer can share the exact bytes.
+func marshalJSON(v any) ([]byte, error) {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
+}
+
+// writeRepoJSON persists v to a repo-.abcd path (slash-separated, relative to
+// cwd) THROUGH an os.Root opened at cwd, so a committed `.abcd` ancestor symlink
+// cannot land the write outside the working tree (GHSA-xrf8-4432-gw2f). It is the
+// contained counterpart of writeJSON and the only writer the config/rules paths
+// use.
+func writeRepoJSON(cwd, rel string, v any) error {
+	data, err := marshalJSON(v)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(cwd)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return fsutil.WriteFileAtomicPreserveModeInRoot(root, rel, data)
+}
+
+// writeConfig persists a config map deterministically, contained under cwd.
 func writeConfig(cwd string, cfg map[string]any) error {
-	return writeJSON(configPath(cwd), cfg)
+	return writeRepoJSON(cwd, configRelPath, cfg)
 }
 
 // ---------------------------------------------------------------------------

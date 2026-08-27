@@ -235,7 +235,12 @@ type RepoMeta struct {
 // LoadRepoMeta reads the package manifest. An absent one is a state: the pages
 // that would carry a forge link render without it.
 func LoadRepoMeta(repoRoot string) (RepoMeta, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, pluginManifestRelPath), maxPluginManifestBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return RepoMeta{}, err
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, pluginManifestRelPath, maxPluginManifestBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return RepoMeta{}, nil
@@ -399,9 +404,20 @@ func Build(req Request) (Result, error) {
 		stamp.GeneratedAt = releases[0].Date
 	}
 
+	// The READ containment root, opened once at the repository for the whole
+	// build. Every repo-relative source read below resolves through it, so a
+	// committed directory symlink planted as an ANCESTOR of a source path cannot
+	// walk the read outside the repository — the counterpart of the destination
+	// os.Root the writes already go through (gh #487).
+	srcRoot, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return Result{}, err
+	}
+	defer srcRoot.Close()
+
 	c := &composer{
-		repoRoot: repoRoot, manifest: manifest, ui: ui, repo: repo,
-		assets: newAssetPipe(repoRoot), graph: graph, history: hist, stamp: stamp,
+		repoRoot: repoRoot, root: srcRoot, manifest: manifest, ui: ui, repo: repo,
+		assets: newAssetPipe(repoRoot, srcRoot), graph: graph, history: hist, stamp: stamp,
 		beta: isPreOne(version), version: version, releaseDate: releaseDate,
 	}
 	html, err := c.ComposeLanding()
@@ -504,7 +520,7 @@ func Build(req Request) (Result, error) {
 	}
 	res.Pages = len(pages)
 	for _, cp := range copiedSources {
-		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, cp.src), maxAssetBytes)
+		data, err := fsutil.ReadGuardedInRoot(srcRoot, cp.src, maxAssetBytes)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -517,7 +533,7 @@ func Build(req Request) (Result, error) {
 	}
 	// The installer. A repository that commits no template serves no /install.sh
 	// — the same graceful absence every other copied source has.
-	switch tmpl, err := fsutil.ReadGuarded(joinRepo(repoRoot, installTemplateRelPath), maxAssetBytes); {
+	switch tmpl, err := fsutil.ReadGuardedInRoot(srcRoot, installTemplateRelPath, maxAssetBytes); {
 	case err == nil:
 		if err := write(installScriptName, renderInstallScript(tmpl, stamp)); err != nil {
 			return Result{}, err
@@ -527,7 +543,7 @@ func Build(req Request) (Result, error) {
 		return Result{}, err
 	}
 	for _, pair := range c.assets.Copies() {
-		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, pair[0]), maxAssetBytes)
+		data, err := fsutil.ReadGuardedInRoot(srcRoot, pair[0], maxAssetBytes)
 		if err != nil {
 			return Result{}, err
 		}
@@ -583,8 +599,11 @@ func Describe(repoRoot, outDir string) (Status, error) {
 		st.Chapters = len(m.Home.Chapters)
 		st.IssueLedge = m.Record.IssueLedger
 		st.UIPath = m.UIStrings
-		if ok, _ := fsutil.Exists(joinRepo(repoRoot, m.UIStrings)); ok {
-			st.UIStrings = true
+		if root, rerr := os.OpenRoot(repoRoot); rerr == nil {
+			if _, serr := root.Stat(m.UIStrings); serr == nil {
+				st.UIStrings = true
+			}
+			root.Close()
 		}
 		if baselineRel = m.Checks.UnresolvedReferenceBaseline; baselineRel != "" {
 			st.BaselinePath = baselineRel

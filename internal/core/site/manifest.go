@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -189,7 +190,12 @@ type ManifestGate struct {
 
 // LoadManifest reads and validates the composition manifest at repoRoot.
 func LoadManifest(repoRoot string) (Manifest, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, ManifestRelPath), maxManifestBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return Manifest{}, err
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, ManifestRelPath, maxManifestBytes)
 	if err != nil {
 		return Manifest{}, err
 	}

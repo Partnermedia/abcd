@@ -36,9 +36,18 @@ type BareStatus struct {
 
 // Bare renders the read-only store status.
 func Bare(repoRoot string) (BareStatus, error) {
-	mem := Dir(repoRoot)
-	fi, statErr := os.Stat(mem)
-	present := statErr == nil && fi.IsDir()
+	// Refuse a symlinked store DIRECTORY (GHSA-72rp): the leaf O_NOFOLLOW guards
+	// below do not contain a symlinked ancestor, so a committed `.abcd/memory`
+	// symlink would otherwise have its out-of-repo pages crawled and disclosed.
+	mem, present, err := safeMemoryDir(repoRoot)
+	if err != nil {
+		return BareStatus{}, err
+	}
+	if !present {
+		// Keep mem an absolute (nonexistent) path so the downstream joins do not
+		// fall back to cwd-relative reads; every read then fails cleanly as absent.
+		mem = Dir(repoRoot)
+	}
 
 	infos := barePageInfos(mem)
 	// Seed the collections non-nil so an empty or contradiction-free store

@@ -49,7 +49,12 @@ func LoadBaseline(repoRoot, rel string) (Baseline, bool, error) {
 	if !named {
 		rel = BaselineRelPath
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, rel), maxBaselineBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return Baseline{}, false, err
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, rel, maxBaselineBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if named {

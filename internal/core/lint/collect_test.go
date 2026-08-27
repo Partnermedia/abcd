@@ -3,6 +3,7 @@ package lint
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -202,16 +203,19 @@ func TestCollectCitedURLs(t *testing.T) {
 	}
 }
 
-// TestCollectCitedURLsMissingRootIsNotAnError mirrors Lint: a configured root
-// that does not exist is skipped, so a repo that has not written docs/ yet can
-// still run the refresh.
-func TestCollectCitedURLsMissingRootIsNotAnError(t *testing.T) {
+// TestCollectCitedURLsMissingRootIsLoud mirrors Lint: a configured root that does
+// not resolve is misconfiguration, not a clean tree. It used to be skipped, but a
+// scope-collapsed root then collects zero cited URLs and the refresh's
+// wholesale-failure guard writes an empty baseline, dropping every entry
+// including human confirm receipts — so an unresolvable root must fail loud
+// (GitHub #360).
+func TestCollectCitedURLsMissingRootIsLoud(t *testing.T) {
 	root := citeRepo(t, map[string]string{"docs/a.md": "# A\n"})
-	refs, err := CollectCitedURLs(Config{Roots: []string{"docs", "nope"}}, root)
-	if err != nil {
-		t.Fatalf("CollectCitedURLs: %v", err)
+	_, err := CollectCitedURLs(Config{Roots: []string{"docs", "nope"}}, root)
+	if err == nil {
+		t.Fatal("CollectCitedURLs must fail loudly on a configured root that does not exist")
 	}
-	if len(refs) != 0 {
-		t.Fatalf("got %+v, want no citations", refs)
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("the loud error should name the unresolved root: %v", err)
 	}
 }

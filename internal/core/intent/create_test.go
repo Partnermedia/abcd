@@ -83,6 +83,52 @@ func TestCreateFromTextRefusesEmpty(t *testing.T) {
 	}
 }
 
+// TestCreateFromTextRedactsSecretsAndHomePaths proves gh-486: a quoted-text
+// create must route the caller's text through the ONE canonical scanner before
+// it persists, so a secret token or an absolute home path in the intent text
+// never lands verbatim in the committed draft — neither in the body nor in the
+// derived filename/slug. The spans below are FAKE shapes (a syntactically valid
+// ghp_ PAT of 36 chars and a non-caller /Users/<name> path), matched only by
+// shape, never real credentials.
+func TestCreateFromTextRedactsSecretsAndHomePaths(t *testing.T) {
+	root := t.TempDir()
+
+	const fakeToken = "ghp_" + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" // ghp_ + 36 A's
+	const fakeHome = "/Users/alice/.ssh/id_rsa"
+	text := "leftover " + fakeToken + " and " + fakeHome + " in the install receipt"
+
+	it, _, err := CreateFromText(root, text, "")
+	if err != nil {
+		t.Fatalf("CreateFromText: %v", err)
+	}
+
+	abs := filepath.Join(root, it.Path)
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatalf("created file unreadable: %v", err)
+	}
+	body := string(data)
+
+	if strings.Contains(body, fakeToken) {
+		t.Errorf("draft body persisted the raw secret token verbatim:\n%s", body)
+	}
+	if strings.Contains(body, "/Users/alice") {
+		t.Errorf("draft body persisted the raw home path verbatim:\n%s", body)
+	}
+	// The slug is derived from the same text and becomes the filename: it must
+	// not carry the leaked spans either (the capture-slug leak shape).
+	if strings.Contains(it.Path, "users-alice") || strings.Contains(it.Slug, "users-alice") {
+		t.Errorf("derived filename/slug leaked the home path: path=%q slug=%q", it.Path, it.Slug)
+	}
+	// The masked fingerprint deliberately keeps the token's first three runes for
+	// triage, so "ghp" surviving in the slug is the REDACTED form — what must not
+	// persist is the raw span (the full token, or a long run of its body).
+	rawRun := strings.Repeat("a", 8) // 8+ of the token's 36 A's would mean it slipped through
+	if strings.Contains(it.Path, fakeToken) || strings.Contains(it.Slug, rawRun) {
+		t.Errorf("derived filename/slug leaked the raw secret token: path=%q slug=%q", it.Path, it.Slug)
+	}
+}
+
 // TestCreateFromTextPassesRecordLint runs the real intent_lifecycle record-lint
 // over a freshly seeded draft — the "abcd lint stays green" guarantee.
 func TestCreateFromTextPassesRecordLint(t *testing.T) {
