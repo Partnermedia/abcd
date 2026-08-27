@@ -1029,3 +1029,87 @@ func TestEmbarkDuplicateTargetIsConflict(t *testing.T) {
 		t.Fatal("EmbarkFrom wrote into the target on the conflict path")
 	}
 }
+
+// TestEmbarkCaseVariantTargetIsConflict is the case-folding detector over the
+// duplicate-target guard (iss-2608270500193735). The guard keys a plain Go map
+// on the resolved target string, so two lifeboat files whose targets differ only
+// in case are two distinct keys, no conflict fires, and both plan as Create
+// (planning precedes writing, so neither target exists yet). On a case-folding
+// target filesystem writeEmbark's overwriting rename then lands the second on
+// the first — one record silently lost — while the result reports both as
+// written. The lifeboat is untrusted content that names both files, so the
+// attacker chooses which body survives.
+//
+// The two lifeboat paths differ by DIRECTORY, not only by case (a bucket-less
+// intent and a bucketed one), so the fixture builds on a case-folding host and a
+// case-sensitive one alike, and the fold predicate is substituted rather than
+// read off the host — the refusal is proven either way.
+func TestEmbarkCaseVariantTargetIsConflict(t *testing.T) {
+	build := func(t *testing.T) string {
+		t.Helper()
+		source := embarkableSourceFixture(t)
+		lifeboat := packSource(t, source)
+		// Both resolve under .abcd/development/intents/drafts/: the bucket-less
+		// file through the default bucket, the bucketed one directly. The leaves
+		// differ only in case.
+		mustWrite(t, filepath.Join(lifeboat, "rescue/intents/itd-77-dup.md"),
+			[]byte("---\nid: itd-77\nslug: dup\nkind: feature\n---\n# bucket-less copy\n"))
+		mustWrite(t, filepath.Join(lifeboat, "rescue/intents/drafts/ITD-77-DUP.md"),
+			[]byte("---\nid: itd-77\nslug: dup\nkind: feature\n---\n# re-cased copy\n"))
+		reseal(t, lifeboat)
+		return lifeboat
+	}
+	hasDup := func(t *testing.T, conflicts []Conflict) bool {
+		t.Helper()
+		for _, c := range conflicts {
+			if c.Kind == ConflictDuplicateTarget {
+				return true
+			}
+		}
+		return false
+	}
+
+	restore := caseFoldingFS
+	t.Cleanup(func() { caseFoldingFS = restore })
+
+	t.Run("case-folding filesystem refuses the whole write", func(t *testing.T) {
+		caseFoldingFS = func() bool { return true }
+		lifeboat := build(t)
+		target := t.TempDir()
+
+		plan, err := EmbarkProbe(lifeboat, target)
+		if err != nil {
+			t.Fatalf("EmbarkProbe: %v", err)
+		}
+		if !hasDup(t, plan.Conflicts) {
+			t.Fatalf("no duplicate-target conflict for two case-variant targets; conflicts=%+v planned=%d",
+				plan.Conflicts, len(plan.Planned))
+		}
+
+		before := contentFingerprint(t, target)
+		res, err := EmbarkFrom(lifeboat, target)
+		if err == nil {
+			t.Fatalf("EmbarkFrom succeeded on a case-variant collision; Written=%d Families=%v", res.Written, res.Families)
+		}
+		if res.Written != 0 {
+			t.Errorf("EmbarkFrom reported %d written on the conflict path, want 0", res.Written)
+		}
+		if contentFingerprint(t, target) != before {
+			t.Fatal("EmbarkFrom wrote into the target on the conflict path")
+		}
+	})
+
+	t.Run("case-sensitive filesystem keeps both", func(t *testing.T) {
+		caseFoldingFS = func() bool { return false }
+		lifeboat := build(t)
+		target := t.TempDir()
+
+		plan, err := EmbarkProbe(lifeboat, target)
+		if err != nil {
+			t.Fatalf("EmbarkProbe: %v", err)
+		}
+		if hasDup(t, plan.Conflicts) {
+			t.Fatalf("two case-variant targets are distinct files on a case-sensitive filesystem; conflicts=%+v", plan.Conflicts)
+		}
+	})
+}

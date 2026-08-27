@@ -288,3 +288,41 @@ func TestRenderPayloadRefusesOnItsOwnDrift(t *testing.T) {
 		t.Errorf("the failing verdict must travel with the result, got %+v", res.Lockstep)
 	}
 }
+
+// TestPrecheckPayloadRefusesACaseVariantDestination is the case-folding
+// detector over the payload-destination gate (iss-2608270500192615). On a
+// case-folding filesystem a --payload-dir spelled ".../REPO/dist" names the same
+// on-disk place as ".../repo/dist", and neither filepath.Abs nor EvalSymlinks
+// case-canonicalises it — so a byte-sensitive prefix test reports the
+// destination as out-of-tree and the render stages the whole payload inside the
+// working tree. The gate must refuse it, in BOTH containment directions.
+//
+// The fold predicate is substituted rather than read off the host, so the
+// refusal is proven on a case-sensitive filesystem too — and the unfolded branch
+// proves the gate does not refuse two genuinely distinct directories.
+func TestPrecheckPayloadRefusesACaseVariantDestination(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := caseFoldsPaths
+	t.Cleanup(func() { caseFoldsPaths = restore })
+
+	caseFoldsPaths = func() bool { return true }
+	dest := filepath.Join(base, "REPO", "dist")
+	_, err := PrecheckPayload(root, dest)
+	if err == nil || !strings.Contains(err.Error(), "inside the repository") {
+		t.Fatalf("case-variant dest %q under root %q: got %v, want a refusal naming the repository", dest, root, err)
+	}
+	_, err = PrecheckPayload(filepath.Join(root, "inner"), filepath.Join(base, "REPO"))
+	if err == nil || !strings.Contains(err.Error(), "contains the repository") {
+		t.Fatalf("case-variant dest containing the root: got %v, want a refusal", err)
+	}
+
+	caseFoldsPaths = func() bool { return false }
+	if _, err := PrecheckPayload(root, dest); err != nil && strings.Contains(err.Error(), "the repository") {
+		t.Fatalf("on a case-sensitive filesystem %q and %q are distinct directories; got %v", dest, root, err)
+	}
+}

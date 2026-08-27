@@ -189,3 +189,56 @@ func TestDirHasEntriesDotfileCounts(t *testing.T) {
 		t.Errorf("DirHasEntries(dir with only .gitkeep) = false, want true")
 	}
 }
+
+// TestPathWithinFoldsCaseWhenAsked is the canonical containment comparison's
+// case detector, stated over literal paths so it is deterministic on a
+// case-folding host and a case-sensitive one alike: with fold set, a re-cased
+// child is INSIDE its parent (the fail-closed direction a destructive-write
+// gate needs); without it, the two are unrelated paths.
+func TestPathWithinFoldsCaseWhenAsked(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := sep + filepath.Join("Users", "dev", "repo")
+	variant := sep + filepath.Join("Users", "dev", "REPO", "dist")
+
+	for _, tc := range []struct {
+		name             string
+		child, parent    string
+		fold             bool
+		within, overlaps bool
+	}{
+		{"exact child folded", variant, root, true, true, true},
+		{"exact child unfolded", variant, root, false, false, false},
+		{"same directory re-cased", sep + filepath.Join("Users", "dev", "REPO"), root, true, true, true},
+		{"identical", root, root, false, true, true},
+		{"true sibling stays out", sep + filepath.Join("Users", "dev", "other"), root, true, false, false},
+		{"parent inside child folded", root, sep + filepath.Join("Users", "DEV"), true, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := fsutil.PathWithin(tc.child, tc.parent, tc.fold); got != tc.within {
+				t.Errorf("PathWithin(%q, %q, %v) = %v, want %v", tc.child, tc.parent, tc.fold, got, tc.within)
+			}
+			if got := fsutil.PathsOverlap(tc.child, tc.parent, tc.fold); got != tc.overlaps {
+				t.Errorf("PathsOverlap(%q, %q, %v) = %v, want %v", tc.child, tc.parent, tc.fold, got, tc.overlaps)
+			}
+			if got := fsutil.PathsOverlap(tc.parent, tc.child, tc.fold); got != tc.overlaps {
+				t.Errorf("PathsOverlap is not symmetric for (%q, %q, %v)", tc.parent, tc.child, tc.fold)
+			}
+		})
+	}
+}
+
+// TestFoldPathMintsOneComparisonKey: the fold is the single key-minting step, so
+// two case-variant spellings collapse to one key when folding and stay distinct
+// when not.
+func TestFoldPathMintsOneComparisonKey(t *testing.T) {
+	a, b := ".abcd/development/decisions/adr-1.md", ".abcd/development/decisions/ADR-1.md"
+	if fsutil.FoldPath(a, true) != fsutil.FoldPath(b, true) {
+		t.Errorf("FoldPath(%q, true) != FoldPath(%q, true); case variants must share one key", a, b)
+	}
+	if fsutil.FoldPath(a, false) == fsutil.FoldPath(b, false) {
+		t.Errorf("FoldPath(_, false) collapsed %q and %q; an unfolded key must stay verbatim", a, b)
+	}
+	if got := fsutil.FoldPath(a, false); got != a {
+		t.Errorf("FoldPath(%q, false) = %q, want it unchanged", a, got)
+	}
+}

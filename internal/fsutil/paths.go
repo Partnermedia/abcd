@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 )
@@ -36,6 +37,60 @@ func ValidRelPath(p string) bool {
 		}
 	}
 	return true
+}
+
+// CaseFoldingFS reports whether the platform's default filesystem folds case.
+// macOS (APFS/HFS+ default) and Windows do; abcd assumes this default rather
+// than probing each volume, and the only cost of a false assumption is a
+// stricter comparison.
+func CaseFoldingFS() bool {
+	return runtime.GOOS == "darwin" || runtime.GOOS == "windows"
+}
+
+// FoldPath returns p in the spelling a path comparison uses: lower-cased when
+// fold is set, unchanged otherwise. It is the single place a case-folding
+// comparison key is minted, so a containment gate and a duplicate-target map
+// fold identically rather than drifting apart.
+//
+// fold is a parameter rather than a call to CaseFoldingFS because a fail-closed
+// gate's case-folding branch cannot be provoked on a case-sensitive host: the
+// caller passes its own predicate, and a test passes the branch it means to
+// prove.
+func FoldPath(p string, fold bool) string {
+	if fold {
+		return strings.ToLower(p)
+	}
+	return p
+}
+
+// PathWithin reports whether child is equal to or nested inside parent. With
+// fold set the comparison is case-insensitive: otherwise a destination like
+// ".../REPO/dist" computes as an out-of-tree sibling of ".../repo" and slips a
+// containment gate, even though the two name the SAME directory on a
+// case-folding filesystem — and the write then lands inside the tree the gate
+// exists to protect. Erring toward "within" is the safe direction for a
+// destructive-write gate (iss-2608270500192615).
+//
+// It is the canonical containment comparison: the launch payload-destination
+// gate and the lifeboat pack overlap gate both route through it rather than
+// keeping divergent prefix tests.
+func PathWithin(child, parent string, fold bool) bool {
+	child = FoldPath(child, fold)
+	parent = FoldPath(parent, fold)
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// PathsOverlap reports whether a and b are the same directory or one contains
+// the other — either way a write under one touches the other.
+func PathsOverlap(a, b string, fold bool) bool {
+	return PathWithin(a, b, fold) || PathWithin(b, a, fold)
 }
 
 // RepoRel renders target as a path relative to base — the repo root, or the

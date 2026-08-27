@@ -231,7 +231,15 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 	// One lifeboat file per embark target: a second claimant (a bucket-less
 	// intent alongside its bucketed twin) would be a silent last-writer-wins
 	// overwrite, so it surfaces as a conflict instead.
-	claimed := map[string]string{}
+	//
+	// The key is case-folded on a filesystem that folds case: writeEmbark commits
+	// through an overwriting rename, so two targets that differ only in case are
+	// ONE file there, and a byte-sensitive map would plan both as Create, write
+	// the second over the first, and still report two written. The lifeboat is
+	// untrusted content that names both files, so the loser is the attacker's
+	// choice. Folding makes the collision a conflict, and one conflict refuses the
+	// whole write.
+	claimed := map[string]claimedTarget{}
 	for _, rel := range rels {
 		family, targetRel, disp, detail := resolveTarget(rel)
 		switch disp {
@@ -251,16 +259,21 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 			if !validRelPath(targetRel) {
 				return plannerResult{}, fmt.Errorf("embark: refusing unsafe target path %q", targetRel)
 			}
-			if first, dup := claimed[targetRel]; dup {
+			key := fsutil.FoldPath(targetRel, caseFoldingFS())
+			if first, dup := claimed[key]; dup {
+				detail := "also mapped from " + first.lifeboatRel
+				if first.targetRel != targetRel {
+					detail += " as " + first.targetRel + ", which differs only in case — one file on this filesystem"
+				}
 				conflicts = append(conflicts, Conflict{
 					Path:         targetRel,
 					LifeboatPath: rel,
 					Kind:         ConflictDuplicateTarget,
-					Detail:       "also mapped from " + first,
+					Detail:       detail,
 				})
 				continue
 			}
-			claimed[targetRel] = rel
+			claimed[key] = claimedTarget{lifeboatRel: rel, targetRel: targetRel}
 			pe, cf := classifyEmbark(targetAbs, rel, targetRel, family, data)
 			if cf != nil {
 				conflicts = append(conflicts, *cf)
@@ -279,6 +292,14 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 		ignored:     ignored,
 		coverage:    readCoverageHandoff(lifeboatAbs),
 	}, nil
+}
+
+// claimedTarget is the lifeboat file that already claimed one embark target,
+// kept with the target's own spelling so a case-variant collision can say which
+// two names collapsed rather than reporting an identical-looking duplicate.
+type claimedTarget struct {
+	lifeboatRel string
+	targetRel   string
 }
 
 // disposition is where resolveTarget routes one lifeboat file.
