@@ -108,9 +108,16 @@ func ReviewLifeboat(lifeboatDir, sourceRepo string, raw []byte) (ReviewResult, e
 
 	manifest12 := shortHex(prov.ManifestSHA256)
 	audit := ReviewArtefact{
-		SchemaVersion:    ReviewSchemaVersion,
-		SourceName:       sourceName,
-		ManifestSHA256:   sanitize(prov.ManifestSHA256),
+		SchemaVersion: ReviewSchemaVersion,
+		SourceName:    sourceName,
+		// manifest_sha256 comes verbatim from the reviewed lifeboat's untrusted
+		// _provenance.json (readProvenance is a bare Unmarshal) and is stamped into
+		// the durable review .md. sanitize masks terminal-escape runes but leaves a
+		// CommonMark HTML-block opener ('<script', '<!--', …) intact, so a hostile
+		// header could hide or forge the attestation when the record is rendered.
+		// Route it through the file-write cleaner, as the delegated findings already
+		// are (GH #325); a legitimate hex sha has no '<' and is unchanged.
+		ManifestSHA256:   cleanSynthProse(prov.ManifestSHA256),
 		ManifestVerified: manifestVerified,
 		Coverage:         cov.Summary,
 	}
@@ -220,8 +227,14 @@ func deterministicFindings(manifestVerified, coveragePresent bool, s Summary, pr
 	if provName != sourceName {
 		out = append(out, ReviewFinding{
 			ID: "fnd-source-name", Severity: "info",
+			// provName is the untrusted _provenance.json source_name, embedded raw in
+			// deterministic finding prose that lands in the durable review .md. Its
+			// delegated siblings are cleaned with cleanSynthProse; this one used
+			// sanitize, which leaves a CommonMark HTML-block opener intact (GH #325).
+			// %q-quoting does not defang '<script>'. Route it through the same
+			// file-write cleaner so it can neither open nor close an HTML construct.
 			Finding: fmt.Sprintf("the lifeboat's recorded source name %q differs from the audited source %q",
-				sanitize(provName), sourceName),
+				cleanSynthProse(provName), sourceName),
 			Evidence: []string{ProvenanceName},
 		})
 	}

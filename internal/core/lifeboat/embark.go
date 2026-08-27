@@ -520,37 +520,82 @@ func readCoverageHandoff(abs string) *CoverageHandoff {
 // walkLifeboatFiles returns every regular file's lifeboat-relative POSIX path,
 // sorted, after enforcing the trust boundary through the containment root: no
 // symlink anywhere (a symlinked entry is fatal, not followed), every path
-// validRelPath, and the file count under maxEmbarkFiles. It reads no content.
+// validRelPath, and the tree bounded against a hostile shape. It reads no content.
 func walkLifeboatFiles(root *os.Root) ([]string, error) {
+	return walkLifeboatFilesBounded(root, maxEmbarkFiles, maxDirEntries, maxEmbarkDepth)
+}
+
+// walkLifeboatFilesBounded is walkLifeboatFiles with its three bounds injected so
+// a test can exercise each at an affordable scale: the whole-walk entry cap
+// (limit, counting directories AND regular files), the per-directory read bound
+// (perDir), and the depth cap (maxDepth). The shipped caps stay consts.
+//
+// This mirrors probe.go's walkFilesBounded — the hardened sibling this walk had
+// diverged from (iss-112/114/116, GH #337/#343). Two bounds are load-bearing that
+// the old fs.WalkDir(root.FS(), …) walk lacked:
+//
+//   - Directories count against limit. The old walk incremented only on regular
+//     files, so a lifeboat made only of directories — a deep chain or a wide
+//     fan-out — never reached the file cap and walked unbounded.
+//   - Each directory is read with a bounded readDirBounded(perDir) — the same
+//     per-directory guard ListDir and the probe walk use — so one very wide
+//     directory cannot materialise its whole entry list (the old fs.WalkDir did
+//     ReadDir(-1) + sort before the callback ever saw an entry) before the cap
+//     applies. Exceeding perDir in a single directory refuses the lifeboat.
+//
+// It descends through a sub-root per directory (os.Root.OpenRoot), so a chain
+// costs O(entries) rather than O(entries × depth) while the os.Root containment
+// guarantee the FS() walk had survives unchanged. Unlike the probe, every bound
+// is FATAL rather than a silent truncation: manifest verification needs the
+// complete file list, so a bounded-away subtree is a refusal, not a smaller answer.
+func walkLifeboatFilesBounded(root *os.Root, limit, perDir, maxDepth int) ([]string, error) {
 	var rels []string
-	count := 0
-	err := fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	count := 0 // regular files AND directories, against limit
+	var walk func(dirRoot *os.Root, prefix string, depth int) error
+	walk = func(dirRoot *os.Root, prefix string, depth int) error {
+		entries, more := readDirBounded(dirRoot, perDir)
+		if more {
+			return fmt.Errorf("lifeboat directory %q exceeds the %d-entry cap", prefix, perDir)
 		}
-		if p == "." {
-			return nil
+		for _, e := range entries {
+			name := e.Name()
+			rel := name
+			if prefix != "." {
+				rel = prefix + "/" + name
+			}
+			if e.Type()&fs.ModeSymlink != 0 {
+				return fmt.Errorf("lifeboat contains a symlink at %q (refusing to follow)", rel)
+			}
+			if !validRelPath(rel) {
+				return fmt.Errorf("lifeboat contains an unsafe path %q", rel)
+			}
+			count++
+			if count > limit {
+				return fmt.Errorf("lifeboat exceeds the %d-file cap", limit)
+			}
+			if e.IsDir() {
+				if depth+1 >= maxDepth {
+					return fmt.Errorf("lifeboat nesting at %q exceeds the %d-level cap", rel, maxDepth)
+				}
+				sub, err := dirRoot.OpenRoot(name)
+				if err != nil {
+					return err
+				}
+				err = walk(sub, rel, depth+1)
+				sub.Close()
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if !e.Type().IsRegular() {
+				return fmt.Errorf("lifeboat contains a non-regular file at %q", rel)
+			}
+			rels = append(rels, rel)
 		}
-		if d.Type()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("lifeboat contains a symlink at %q (refusing to follow)", p)
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if !d.Type().IsRegular() {
-			return fmt.Errorf("lifeboat contains a non-regular file at %q", p)
-		}
-		if !validRelPath(p) {
-			return fmt.Errorf("lifeboat contains an unsafe path %q", p)
-		}
-		count++
-		if count > maxEmbarkFiles {
-			return fmt.Errorf("lifeboat exceeds the %d-file cap", maxEmbarkFiles)
-		}
-		rels = append(rels, p)
 		return nil
-	})
-	if err != nil {
+	}
+	if err := walk(root, ".", 0); err != nil {
 		return nil, err
 	}
 	sort.Strings(rels)
