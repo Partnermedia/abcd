@@ -124,6 +124,16 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	if err != nil {
 		return IngestResult{}, err
 	}
+	// Build the write-time sanitiser before any store write. It fails closed on a
+	// degraded scanner, so a broken per-repo pii.json refuses the whole ingest
+	// rather than committing acquired source text with a weakened detector
+	// (GHSA-j5f5-phgm-9m73). Every acquired-text write below — page bodies and the
+	// --keep-original copy — routes through it; index.md/log.md are derived from
+	// the redacted bodies and so are covered transitively.
+	redactor, err := newStoreRedactor(root)
+	if err != nil {
+		return IngestResult{}, err
+	}
 	normalized := NormaliseSourceText(material.text)
 	if strings.TrimSpace(normalized) == "" {
 		return IngestResult{}, newIngestError("source has no text content: %s", material.origin)
@@ -196,7 +206,7 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 			// recorded, never reported as total failure (iss-30).
 			kept, keepErr := "", ""
 			if req.KeepOriginal {
-				if k, serr := storeOriginal(root, material, contentHash); serr != nil {
+				if k, serr := storeOriginal(root, material, contentHash, redactor); serr != nil {
 					keepErr = keepOriginalErrorMessage(serr)
 				} else {
 					kept = k
@@ -315,9 +325,19 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 		return newRegistry, nil
 	}
 
+	// Redact every page body before it is written. The distiller is
+	// host-delegated and may echo a secret or an absolute home path from the
+	// source straight into a page body; this is the core's own fail-closed gate,
+	// not a trust in the host. index.md and log.md are rebuilt from these bodies
+	// (reconcile reads the written files; the log event is derived from the
+	// PageWrite body), so redacting here covers those derived surfaces too.
 	var pageWrites []PageWrite
 	for _, w := range plan.Writes {
-		pageWrites = append(pageWrites, PageWrite{Filename: w.Filename, Frontmatter: w.Frontmatter, Body: w.Body})
+		body, _, rerr := redactor.redactText(w.Body, w.Filename)
+		if rerr != nil {
+			return IngestResult{}, rerr
+		}
+		pageWrites = append(pageWrites, PageWrite{Filename: w.Filename, Frontmatter: w.Frontmatter, Body: body})
 	}
 	report, err := WritePages(root, pageWrites, merge, now)
 	if err != nil {
@@ -328,7 +348,7 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	// failure — record it and return the successful result (iss-30).
 	kept, keepErr := "", ""
 	if req.KeepOriginal {
-		if k, serr := storeOriginal(root, material, contentHash); serr != nil {
+		if k, serr := storeOriginal(root, material, contentHash, redactor); serr != nil {
 			keepErr = keepOriginalErrorMessage(serr)
 		} else {
 			kept = k
@@ -765,7 +785,14 @@ func keepOriginalErrorMessage(err error) string {
 	return err.Error()
 }
 
-func storeOriginal(repoRoot string, material sourceMaterial, contentHash string) (string, error) {
+func storeOriginal(repoRoot string, material sourceMaterial, contentHash string, redactor *storeRedactor) (string, error) {
+	// The kept-original copy lands in the committed store, so it is sanitised
+	// through the same detector as the page bodies before it is written — the raw
+	// bytes verbatim were the zero-host-cooperation leak in GHSA-j5f5-phgm-9m73.
+	payload, err := redactor.redactOriginalBytes(material)
+	if err != nil {
+		return "", err
+	}
 	sourcesDir := filepath.Join(Dir(repoRoot), "sources")
 	if fi, err := os.Lstat(sourcesDir); err != nil {
 		if os.IsNotExist(err) {
@@ -784,7 +811,7 @@ func storeOriginal(repoRoot string, material sourceMaterial, contentHash string)
 	// one-canonical-primitive). os.Rename does not follow a leaf symlink, so a
 	// pre-planted target symlink is replaced, not written through.
 	target := filepath.Join(sourcesDir, contentHash+material.ext)
-	if err := fsutil.WriteFileAtomic(target, material.rawBytes, 0o644); err != nil {
+	if err := fsutil.WriteFileAtomic(target, payload, 0o644); err != nil {
 		return "", err
 	}
 	return filepath.Join(".abcd", "memory", "sources", contentHash+material.ext), nil
