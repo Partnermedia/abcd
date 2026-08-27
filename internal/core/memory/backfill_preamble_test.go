@@ -62,6 +62,56 @@ func TestBackfillLegacyAsksTheParserNotTheBytePrefix(t *testing.T) {
 	}
 }
 
+// TestBackfillLegacyLeavesAPreambleItCannotPreserve covers the guard the cases
+// above never reach: they all short-circuit on the fm["source"] check, so the
+// preamble guard that follows it is load-bearing but untested. A page that has
+// a preamble AND no source: key is the one that reaches it — and backfilling it
+// would mean rebuilding the file from (region, body), which cannot carry the
+// preamble across. The comment here carries the page's attribution, so the
+// backfill leaves the page alone rather than dropping it: the page simply stays
+// unclassified, which the lint crawl already tolerates.
+func TestBackfillLegacyLeavesAPreambleItCannotPreserve(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		page string
+	}{
+		{
+			name: "comment_led_frontmatter_without_source",
+			file: "note_finance_q3-attrib.md",
+			page: "<!-- Adapted from interview.pdf (CC-BY-4.0). -->\n---\ntitle: T\n---\nProse.\n",
+		},
+		{
+			name: "indented_open_without_source",
+			file: "note_finance_q3-indent.md",
+			page: " ---\ntitle: T\n---\nProse.\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mem := t.TempDir()
+			path := filepath.Join(mem, tc.file)
+			if err := os.WriteFile(path, []byte(tc.page), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			backfilled, err := backfillLegacy(mem)
+			if err != nil {
+				t.Fatalf("backfillLegacy: %v", err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != tc.page {
+				t.Fatalf("backfillLegacy rewrote a page whose preamble the rebuild cannot carry across.\n--- before ---\n%s\n--- after ---\n%s", tc.page, after)
+			}
+			if contains(backfilled, tc.file) {
+				t.Fatalf("page reported as backfilled: %v", backfilled)
+			}
+		})
+	}
+}
+
 // TestBackfillLegacyStillBackfillsGenuineLegacyPages is the control: the pages
 // backfillLegacy exists for — a pre-itd-36 flat page with no frontmatter, and a
 // page whose frontmatter carries no source block — must still be backfilled.
