@@ -121,8 +121,19 @@ func DefaultPatterns() []Pattern {
 		},
 		{
 			Name: "aws_access_key", Kind: "token:aws_access_key", Label: "AWS access key ID",
-			// The neg-lookahead excluding the docs example is ported as a Skip.
-			Re:         regexp.MustCompile(`\bAKIA[0-9A-Z]{16}`),
+			// The prefix set is the documented AWS access-key-ID family, not the
+			// single long-term AKIA literal (gh-358): the canonical gitleaks
+			// aws-access-token form
+			// `(A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}`. ASIA (temporary STS
+			// key), ABIA (STS service bearer token), ACCA (context-specific
+			// credential) and the legacy A3T access key are all shape-identical
+			// credential material that must block exactly as AKIA does. The
+			// RESOURCE-identifier prefixes (AROA role, AIDA user, AGPA group, AIPA
+			// instance profile, ANPA/ANVA policy, APKA public key, ASCA certificate)
+			// are DELIBERATELY excluded: they are non-secret identifiers that appear
+			// openly in ARNs and policy documents, so matching them would be a false
+			// positive. The neg-lookahead excluding the docs example is ported as a Skip.
+			Re:         regexp.MustCompile(`\b(?:A3T[0-9A-Z]|AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}`),
 			Severity:   SeverityHardFail,
 			Skip:       func(m string) bool { return m == awsExample },
 			Suggestion: "DELETE AND ROTATE — also rotate corresponding secret in IAM",
