@@ -314,17 +314,25 @@ func RenderCitedMatches(question string, matches []MatchedPage) string {
 		}
 		lines = append(lines, fmt.Sprintf("- `%s` (score %d) — %s", termsafe.Sanitize(m.Filename), m.Score, summary))
 		for _, c := range m.Citations {
-			cls := c.SourceClass
+			// Every citation field is page-derived content from the same untrusted
+			// ingest boundary as Summary/Filename above, so each is sanitised before
+			// it joins the answer. encoding/json (compactJSONSorted) escapes only C0
+			// and a couple of runes — C1 (U+009B), bidi overrides (U+202E) and
+			// zero-width runes reach the terminal raw from the citation JSON unless
+			// masked here (gh-250). class/source_hash are charset-constrained upstream,
+			// but sanitising them too matches the sibling treatment and defends the
+			// render even if that constraint ever weakens.
+			cls := termsafe.Sanitize(c.SourceClass)
 			if cls == "" {
 				cls = "(none)"
 			}
-			sh := c.SourceHash
+			sh := termsafe.Sanitize(c.SourceHash)
 			if sh == "" {
 				sh = "(none)"
 			}
 			cj := "(none)"
 			if len(c.Citation) > 0 {
-				cj = compactJSONSorted(c.Citation)
+				cj = termsafe.Sanitize(compactJSONSorted(c.Citation))
 			}
 			lines = append(lines, fmt.Sprintf("  - cites: class=%s | source_hash=%s | citation=%s", cls, sh, cj))
 		}
