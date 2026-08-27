@@ -193,11 +193,75 @@ const (
 // `eval` is not a member: it is a builtin, not an interpreter binary, and carries
 // its own end-of-options rule, so it keeps its own branch.
 func isShellFamily(cmd string) bool {
-	switch cmd {
-	case "sh", "bash", "dash", "zsh", "ksh", "mksh", "ash":
+	// Folded to lower case: on a case-insensitive filesystem `BASH -c` /
+	// `RBASH -c` resolve to and run the real interpreter, so a case-varied name
+	// must descend into its payload exactly as the lowercase spelling does
+	// (gh-315). rbash (restricted bash, a bash symlink on Debian/Ubuntu) and yash
+	// (Yet Another Shell) are real POSIX shells whose `-c` runs the same grammar —
+	// the unswept siblings of the closed zsh/ksh fix (gh-353).
+	switch strings.ToLower(cmd) {
+	case "sh", "bash", "dash", "zsh", "ksh", "mksh", "ash", "rbash", "yash":
 		return true
 	}
 	return false
+}
+
+// singleStringLaunchers run a command handed to them as a single operand by
+// passing it to `sh -c`: `watch '<cmd>'`, GNU `parallel '<cmd>' ::: args`. They
+// are not shells (isShellFamily misses them) and not wrappers (their operand is a
+// shell STRING, not an argv to exec), so a quoted payload was one opaque token
+// that defeated even the Tier-2 fail-safe (gh-354). The value maps each launcher
+// to its OWN option-argument flags, stepped over so the walk to the command
+// operand is not derailed by an interval or a job count.
+//
+// Like `wrappers`, this is an UPGRADE, not the safety property: a launcher this
+// map does not name still takes the Tier-2 posture. It is intentionally small.
+var singleStringLaunchers = map[string][]string{
+	"watch": {"-n", "--interval"},
+	"parallel": {
+		"-j", "--jobs", "-N", "-L", "--max-lines", "-n", "--max-args",
+		"-I", "-d", "--delimiter", "-C", "--colsep", "--timeout", "--delay",
+	},
+}
+
+// launcherPayload returns the command STRING a single-string launcher hands to
+// `sh -c`: its first non-option operand, but ONLY when that operand is a single
+// token carrying a whole command line — the QUOTED form `watch 'git push
+// --force'`. The unquoted, multi-token form spreads the command across argv,
+// where Tier 2 already restarts at the real command and warns, so it is left to
+// that path; classifying it here would switch the Tier-2 fail-safe off for the
+// segment and silently allow it. valueFlags are stepped over so an interval or a
+// job count is not read as the command operand.
+func launcherPayload(args, valueFlags []string) (string, bool) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			if i+1 < len(args) {
+				return packedCommand(args[i+1])
+			}
+			return "", false
+		}
+		if strings.HasPrefix(a, "-") && a != "-" {
+			if !strings.Contains(a, "=") && containsString(valueFlags, a) {
+				i++ // its value belongs to the launcher, not to command position
+			}
+			continue
+		}
+		return packedCommand(a)
+	}
+	return "", false
+}
+
+// packedCommand accepts an operand as a shell payload only when it carries
+// whitespace — the mark of a quoted command line packed into one token. Every
+// registry hazard needs at least two tokens, so a whitespace-free operand can
+// carry none of them, and reading it as a payload would only shadow the Tier-2
+// warn the unquoted form already earns.
+func packedCommand(op string) (string, bool) {
+	if strings.ContainsAny(op, " \t\n\r") {
+		return op, true
+	}
+	return "", false
 }
 
 // classifySegment reports whether a raw segment is an execute-a-string family
@@ -234,6 +298,15 @@ func classifySegment(s segment) (kind int, family, payload string, trailing []st
 			return kindShellWarn, familyShell, "", nil, true
 		}
 	}
+	// watch/parallel hand a single quoted operand to `sh -c`, so the packed
+	// command string is inspected exactly as a shell payload is (gh-354). The
+	// lookup is folded for the same reason isShellFamily is: `WATCH` runs on a
+	// case-insensitive filesystem (gh-315).
+	if flags, ok := singleStringLaunchers[strings.ToLower(cmd)]; ok {
+		if p, ok := launcherPayload(args, flags); ok {
+			return kindShell, familyShell, p, nil, true
+		}
+	}
 	return 0, "", "", nil, false
 }
 
@@ -253,7 +326,11 @@ func splitStringValue(tokens []string) (string, []string, bool) {
 			i++
 			continue
 		}
-		w := path.Base(tok)
+		// Folded to lower case before lookup: `ENV -S` / `SUDO env -S` resolve to
+		// the real binaries on a case-insensitive filesystem, so a case-varied
+		// wrapper or env must be walked exactly as its lowercase spelling is, or
+		// the split-string value it carries is never read (gh-315).
+		w := strings.ToLower(path.Base(tok))
 		if w == "env" {
 			if v, end, found := scanEnvSplit(tokens, i+1); found {
 				return v, tokens[end:], true

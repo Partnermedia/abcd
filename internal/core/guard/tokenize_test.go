@@ -73,6 +73,30 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cd|x", "0:rm|-rf|*"},
 		},
 		{
+			// Backtick command substitution runs its inner command exactly as
+			// `$( … )` does, so the tokenizer must split it into command position
+			// the same way — otherwise the hazard is swallowed into a token and
+			// never matched (gh-312).
+			name: "backtick command substitution splits into command position",
+			line: "echo `gh repo delete owner/repo`",
+			want: []string{"0:echo", "0:gh|repo|delete|owner/repo"},
+		},
+		{
+			name: "a bare backtick substitution is a command-position segment",
+			line: "`git push --force origin main`",
+			want: []string{"0:git|push|--force|origin|main"},
+		},
+		{
+			name: "an assignment carrying a backtick substitution splits it out",
+			line: "x=`git push --force origin main`",
+			want: []string{"0:x=", "0:git|push|--force|origin|main"},
+		},
+		{
+			name: "a backtick inside single quotes stays literal",
+			line: "echo '`gh repo delete owner/repo`'",
+			want: []string{"0:echo|`gh repo delete owner/repo`"},
+		},
+		{
 			name: "newline starts a new chain",
 			line: "cd x\nrm -rf *",
 			want: []string{"0:cd|x", "1:rm|-rf|*"},
