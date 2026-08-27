@@ -93,6 +93,15 @@ type PayloadRenderResult struct {
 // pinned location was missed), not that the caller's input was.
 var ErrPayloadDrift = errors.New("the rendered payload failed the public lockstep check")
 
+// ErrPayloadScanRefused reports that the payload the render would materialise
+// carries a secret/PII hard-fail, an unscannable coverage gap, or was scanned by
+// an unavailable scanner — the fail-closed secret/PII gate the materialising path
+// must pass before any write (gh-328). It is the render's twin of the ship gate's
+// scan refusal: DryRun runs the scan advisory-only and Ship (the gated path) has
+// no production caller, so the live `launch ship --payload-dir` render was the
+// sole materialising door that never invoked the scanner.
+var ErrPayloadScanRefused = errors.New("the payload failed the secret/PII scan gate")
+
 // ErrPayloadUninstallable reports that the rendered payload declares a surface
 // it does not carry. It is distinct from ErrPayloadDrift because the fault is
 // the payload's CONTENTS, not the version stamp: the manifests agree perfectly
@@ -196,6 +205,18 @@ func PrecheckPayload(repoRoot, dest string) (PayloadPrecheck, error) {
 	pre.Bundle = bundle
 	if bundle.HasViolation() {
 		return pre, fmt.Errorf("the payload carries %d rejected file(s); resolve them before rendering a release", len(bundle.Rejected))
+	}
+
+	// The secret/PII scan gate, run on the MATERIALISING path so the render fails
+	// closed BEFORE any write — the design record pins the scan as "hard-fail
+	// (absent/fail-closed, never a silent skip)", but until gh-328 the scan lived
+	// only in DryRun (advisory, exit-0) and Ship (no production caller), so the
+	// live `launch ship --payload-dir` render staged the payload unscanned. This
+	// runs the SAME scanner over the SAME resolved bundle and refuses on exactly
+	// the scan verdict wouldRefuseOn reports — no second scanner.
+	scan := scanBundle(pre.Root, bundle)
+	if reasons := scanRefusals(scan); len(reasons) > 0 {
+		return pre, fmt.Errorf("%w: %s", ErrPayloadScanRefused, strings.Join(reasons, "; "))
 	}
 
 	included := make(map[string]struct{}, len(bundle.Included))

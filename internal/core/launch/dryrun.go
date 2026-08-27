@@ -137,10 +137,13 @@ func computeRetentionForReport(version string, req DryRunRequest) RetentionPlan 
 	return ComputeRetention(pub, existing)
 }
 
-// wouldRefuseOn collects everything a real ship WOULD block on: scan hard-fails,
-// bundle rejections, lockstep drift/unreadable, retention refusal, and an
-// uninstallable declared surface.
-func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResult, retention RetentionPlan, smoke SmokeReport) []string {
+// scanRefusals collects the secret/PII scan gate's refusals: scanner
+// unavailability, secret/PII hard-fails, and fail-closed coverage gaps. It is
+// the scan slice of wouldRefuseOn, extracted so the render's MATERIALISING path
+// (PrecheckPayload) fails closed on exactly the same scan verdict the dry-run and
+// ship gates report — one scanner, one notion of "what the scan refuses"
+// (gh-328).
+func scanRefusals(scan scanner.ScanResult) []string {
 	var reasons []string
 	if scan.Unavailable {
 		reasons = append(reasons, "scanner unavailable: "+scan.UnavailableReason)
@@ -157,6 +160,14 @@ func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResu
 	for _, p := range scan.Unscanned {
 		reasons = append(reasons, "unscanned payload file (fail-closed coverage gap): "+p)
 	}
+	return reasons
+}
+
+// wouldRefuseOn collects everything a real ship WOULD block on: scan hard-fails,
+// bundle rejections, lockstep drift/unreadable, retention refusal, and an
+// uninstallable declared surface.
+func wouldRefuseOn(bundle Bundle, scan scanner.ScanResult, lockstep LockstepResult, retention RetentionPlan, smoke SmokeReport) []string {
+	reasons := scanRefusals(scan)
 	for _, r := range bundle.Rejected {
 		reasons = append(reasons, "bundle rejected: "+r.LogicalPath+" ("+string(r.Reason)+")")
 	}
