@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -96,7 +97,7 @@ func parseIntent(relPath, content, bucket string) (Intent, error) {
 // spec_id — is chosen so that (kind=standalone, spec_id=null) is the only
 // transient frontmatter, and that shape is valid in BOTH drafts and planned.
 func Plan(repoRoot, intentID string) (PlanResult, error) {
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return PlanResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
 	corpus, err := Load(repoRoot)
@@ -195,10 +196,10 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 // reciprocal intent: itd-N side); a spec that realises a different intent is a
 // mismatch and fails closed rather than forging a one-sided link.
 func Link(repoRoot, intentID, specID string) (LinkResult, error) {
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return LinkResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
-	if !specIDRe.MatchString(specID) {
+	if !recordid.ValidSpecID(specID) {
 		return LinkResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", specID)
 	}
 	corpus, err := Load(repoRoot)
@@ -261,7 +262,7 @@ func Link(repoRoot, intentID, specID string) (LinkResult, error) {
 // regexes before any path is built. The intent's `## Audit Notes` are left
 // untouched (the fidelity audit is a later phase; the intent ships with them empty).
 func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
-	if !specIDRe.MatchString(specID) {
+	if !recordid.ValidSpecID(specID) {
 		return ReconcileResult{}, fmt.Errorf("intent: spec id %q must match ^spc-[0-9]+$", specID)
 	}
 	store, err := spec.Load(repoRoot)
@@ -276,7 +277,7 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 	// Resolve the linked intent from the spec's intent: field, validated before it
 	// is ever used to build a path.
 	intentID := sp.Intent
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return ReconcileResult{}, fmt.Errorf("intent: spec %s has no well-formed intent link (got %q); refusing to reconcile", specID, intentID)
 	}
 	// Ambiguity guard: cross-check the spec's link against the whole store. If more

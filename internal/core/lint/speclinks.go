@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // IntentLink is one intent record as the link index sees it: which bucket holds
@@ -126,7 +128,7 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 		}
 		fields := frontmatterFields(strings.Split(string(content), "\n"))
 		id := fields["id"].value
-		if !intentIDFullRe.MatchString(id) {
+		if !recordid.ValidIntentID(id) {
 			id = intentIDRe.FindString(d.Name())
 		}
 		if id == "" {

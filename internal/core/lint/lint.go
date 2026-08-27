@@ -21,6 +21,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/launch"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -104,10 +105,13 @@ var (
 	// adr-9999`. record_schema is what closes that — it reads every store and
 	// resolves cross-store targets — so the two rules are armed together.
 	supersededRe = regexp.MustCompile(`^(itd|adr)-\d+`)
-	// spec_lifecycle: anchored id/link/filename matchers for the spec store.
-	specFileRe     = regexp.MustCompile(`^spc-\d+.*\.md$`)
-	specIDFullRe   = regexp.MustCompile(`^spc-\d+$`)
-	intentIDFullRe = regexp.MustCompile(`^itd-\d+$`)
+	// spec_lifecycle: anchored id/filename matchers for the spec store. The
+	// well-formed-ID predicates themselves are NOT restated here: they are
+	// recordid.ValidIntentID / recordid.ValidSpecID, the same call the intent and
+	// spec loaders make, so this gate refuses exactly the set they refuse
+	// (iss-2608270500198764).
+	specFileRe   = regexp.MustCompile(`^spc-\d+.*\.md$`)
+	specIDFullRe = regexp.MustCompile(`^spc-\d+$`)
 	// The lifecycle directories each store declares. They are spelled ONCE, as
 	// ordered slices, because record_schema enumerates them to catch an undeclared
 	// bucket — a second, divergent copy would let a bucket be "known" to one rule
@@ -1894,6 +1898,19 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 		})
 	}
 
+	// ANY bucket: the id must be the one the loader will accept. intent.Load
+	// fail-closes the WHOLE corpus on a malformed id, so a record this rule passed
+	// with an absent/empty/null id merged green and then broke every intent verb —
+	// `abcd spec close` included — for everyone who pulled it. The predicate is
+	// recordid.ValidIntentID, the same call intent.Validate makes, never a second
+	// pattern that could drift (iss-2608270500198764). The filename↔id agreement
+	// check in record_schema does NOT cover this: it returns early on an absent
+	// value, a tolerance that is load-bearing for filename-derived ADR ids.
+	idField := fields["id"]
+	if !recordid.ValidIntentID(idField.value) {
+		add(idField.line, "intent id must be present and match ^itd-\\d+$ (got '"+idField.value+"')")
+	}
+
 	// ANY bucket: lifecycle state is the directory, never a status: field.
 	if st, ok := fields["status"]; ok {
 		add(st.line, "status: key forbidden; lifecycle state is the bucket directory, not a field")
@@ -2083,7 +2100,7 @@ func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]
 	}
 
 	intent := fields["intent"]
-	if !intentIDFullRe.MatchString(intent.value) {
+	if !recordid.ValidIntentID(intent.value) {
 		add(intent.line, "spec intent link must be present and match ^itd-\\d+$ (got '"+intent.value+"')")
 		return out // no existence/agreement check possible without a well-formed link
 	}
