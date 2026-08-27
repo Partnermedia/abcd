@@ -104,7 +104,10 @@ func execStringPayload(tokens []string) (verb, value string, resolved, found boo
 			i++
 			continue
 		}
-		name := path.Base(tok)
+		// Folded to lower case: `SU -c` / `FLOCK … -c` resolve to the real binary
+		// on a case-insensitive filesystem, so a case-varied exec-string verb must
+		// be read exactly as its lowercase spelling is (gh-315).
+		name := strings.ToLower(path.Base(tok))
 		if flags, ok := execStringVerbs[name]; ok {
 			if v, resolved, found := scanExecString(tokens[i+1:], flags,
 				execStringOtherValueFlags[name], execStringCommandOperand[name]); found {

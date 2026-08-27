@@ -263,15 +263,25 @@ func tokenize(line string) ([]segment, error) {
 			// `$` so the double-quote branch reads the string; the same silent
 			// allow as $'...' otherwise.
 			i++
-		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')':
+		case c == '&' || c == '|' || c == ';' || c == '(' || c == ')' || c == '`':
+			// A backtick is command substitution, identical to `$( … )`: the inner
+			// command EXECUTES before its output is used. `$( … )` already splits
+			// into command position via the `(`/`)` operators above; a backtick is
+			// the same hazard in its other spelling, so it splits the same way —
+			// both the opening and the closing backtick end the current segment,
+			// leaving the substituted command as its own command-position segment.
+			// Without this the byte fell into the default word branch and a
+			// top-level `` `gh repo delete owner/repo` `` was a silent allow while
+			// its `$( … )` twin blocked (gh-312). Inside single quotes the byte is
+			// literal and never reaches here, matching the shell.
 			flushSegment()
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
 				lastList = true
 				i += 2
 				continue
 			}
-			// A single pipe continues the list across a newline; `;`, `&`, and
-			// the grouping parens do not.
+			// A single pipe continues the list across a newline; `;`, `&`, the
+			// grouping parens, and a backtick boundary do not.
 			lastList = c == '|'
 			i++
 		default:

@@ -179,7 +179,12 @@ func commandOf(s segment) (string, []string) {
 			i = skipCoproc(s.tokens, i+1)
 			continue
 		}
-		if w := path.Base(tok); wrappers[w] {
+		// The wrapper name is folded to lower case before lookup: on a
+		// case-insensitive filesystem (macOS's default) `SUDO`/`ENV`/`NICE`
+		// resolve to and run the real binary, so a case-varied wrapper must be
+		// stepped over exactly as its lowercase spelling is, or the command it
+		// launches never reaches command position (gh-315).
+		if w := strings.ToLower(path.Base(tok)); wrappers[w] {
 			i = skipWrapperArgs(s.tokens, i+1, w)
 			continue
 		}
@@ -279,7 +284,13 @@ func isAssignment(tok string) bool {
 // to one command-position segment.
 func matchSegment(p Pattern, s segment) bool {
 	cmd, args := commandOf(s)
-	if cmd == "" || cmd != p.Command {
+	// The command NAME is folded: a case-insensitive filesystem resolves `GIT`,
+	// `RM`, `GH` to the real binaries and executes the hazard, so a byte-exact
+	// compare here was a silent allow on macOS (gh-315). Only the name is folded —
+	// subcommands, flags and values stay case-sensitive below, because git/gh/rm
+	// parse THOSE case-sensitively, so a case-varied subcommand does not run the
+	// hazard and must not be blocked.
+	if cmd == "" || !strings.EqualFold(cmd, p.Command) {
 		return false
 	}
 	ops := operands(args, p.ValueFlags)

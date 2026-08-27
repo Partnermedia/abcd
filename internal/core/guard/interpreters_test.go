@@ -13,7 +13,10 @@ import (
 //
 // `eval` is deliberately absent: it is a builtin rather than an interpreter, is
 // handled by its own branch, and has its own end-of-options rule.
-var posixShellFamily = []string{"sh", "bash", "dash", "zsh", "ksh", "mksh", "ash"}
+// rbash (restricted bash, a bash symlink) and yash (Yet Another Shell) are real
+// POSIX shells whose `-c` runs the same grammar; they were the unswept siblings
+// of the closed zsh/ksh fix (gh-353).
+var posixShellFamily = []string{"sh", "bash", "dash", "zsh", "ksh", "mksh", "ash", "rbash", "yash"}
 
 // guardVerdict runs one candidate through the bundled registry, failing the test
 // on an evaluation fault rather than letting it read as a verdict.
