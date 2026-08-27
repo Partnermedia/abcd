@@ -2722,7 +2722,12 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 			if err := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd memory ingest — %s\n", res.Status)
 				fmt.Fprintf(w, "  content hash: %s\n", res.ContentHash)
-				fmt.Fprintf(w, "  licence:      %s\n", res.Licence)
+				// The licence is free text lifted verbatim from the ingested
+				// source's bytes (an SPDX line or an HTTP License: header), not a
+				// validated SPDX token, so it can carry raw terminal control/escape/
+				// bidi/zero-width runes and must be defanged like the sibling memory
+				// render fields before it reaches the TTY (gh-262).
+				fmt.Fprintf(w, "  licence:      %s\n", termsafe.Sanitize(res.Licence))
 				if len(res.Pages) > 0 {
 					fmt.Fprintf(w, "  pages:        %s\n", strings.Join(res.Pages, ", "))
 				}
