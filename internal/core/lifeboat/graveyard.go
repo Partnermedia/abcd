@@ -311,6 +311,42 @@ func idClean(s string) string {
 	return b.String()
 }
 
+// ---------------------------------------------------------------------------
+// Finding caps. ONE capping primitive, shared by both layers: every signal that
+// drops findings at maxGraveyardFindingsPerSignal announces the drop on the last
+// retained finding, so a packed graveyard file never presents a truncated signal
+// as complete. Layer 2 used to carry its own silent variant, which broke the
+// contract stated on the constant for six of the ten signals.
+// ---------------------------------------------------------------------------
+
+// capSignalFindings bounds one signal's findings at maxGraveyardFindingsPerSignal
+// so a pathological or hostile history cannot balloon a graveyard file. When it
+// truncates, the last retained finding notes the cap, so the file honestly
+// declares that more was dropped rather than silently hiding it.
+func capSignalFindings(fs []Finding) []Finding {
+	if len(fs) <= maxGraveyardFindingsPerSignal {
+		return fs
+	}
+	return noteFindingsOmitted(fs[:maxGraveyardFindingsPerSignal], len(fs)-maxGraveyardFindingsPerSignal)
+}
+
+// noteFindingsOmitted writes the cap notice onto the last retained finding. It is
+// the announcing half of capSignalFindings, split out for the one signal
+// (unmerged-branch) whose list is bounded BEFORE its findings are built: there
+// the count dropped is known only at the probe, so a findings-level cap can never
+// see it. The evidence slice is copied before the append because fs may share its
+// array with the caller's untruncated slice. A drop with no retained finding to
+// carry it has nowhere to be announced and leaves fs untouched.
+func noteFindingsOmitted(fs []Finding, omitted int) []Finding {
+	if omitted <= 0 || len(fs) == 0 {
+		return fs
+	}
+	last := &fs[len(fs)-1]
+	last.Evidence = append(append([]string(nil), last.Evidence...),
+		fmt.Sprintf("(+%d further findings omitted; capped at %d)", omitted, maxGraveyardFindingsPerSignal))
+	return fs
+}
+
 // collectFindingIDs builds the set of live finding ids from any number of finding
 // groups (layer 1 + layer 2), the membership set a layer-3 lesson's evidence must
 // hit to be written.

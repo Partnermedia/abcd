@@ -126,8 +126,13 @@ func gvUnmergedBranches(ctx *SourceContext) []Finding {
 	var branches []branch
 	// Bound the branches probed BEFORE the per-branch fan-out (merge-base +
 	// rev-list + log, three execs each). The list arrives refname-sorted and
-	// deterministic, so truncating it keeps a stable, reproducible subset.
-	probe := boundProbeList(ctx.GitLines("branch", "--format=%(refname:short)", "--no-merged", db), maxGraveyardFindingsPerSignal)
+	// deterministic, so truncating it keeps a stable, reproducible subset. The
+	// count dropped here is the ONLY place this signal's truncation is visible:
+	// findings are built from the bounded probe, so the findings-level cap can
+	// never see it — hence noteFindingsOmitted below.
+	all := ctx.GitLines("branch", "--format=%(refname:short)", "--no-merged", db)
+	probe := boundProbeList(all, maxGraveyardFindingsPerSignal)
+	unprobed := len(all) - len(probe)
 	for _, name := range probe {
 		name = strings.TrimSpace(name)
 		if name == db || !refIsSafe(name) {
@@ -166,7 +171,9 @@ func gvUnmergedBranches(ctx *SourceContext) []Finding {
 			},
 		})
 	}
-	return capSignalFindings(out)
+	// The findings-level cap still runs (it holds the invariant if the probe bound
+	// ever changes); the probe-level notice announces what it cannot see.
+	return noteFindingsOmitted(capSignalFindings(out), unprobed)
 }
 
 // gvDeletedPaths reports paths deleted after substantial history — sustained
@@ -430,20 +437,4 @@ func boundProbeList(names []string, n int) []string {
 		return names[:n]
 	}
 	return names
-}
-
-// capSignalFindings bounds one signal's findings at maxGraveyardFindingsPerSignal
-// so a pathological or hostile history cannot balloon a graveyard file. When it
-// truncates, the last retained finding notes the cap, so the file honestly
-// declares that more was dropped rather than silently hiding it.
-func capSignalFindings(fs []Finding) []Finding {
-	if len(fs) <= maxGraveyardFindingsPerSignal {
-		return fs
-	}
-	extra := len(fs) - maxGraveyardFindingsPerSignal
-	kept := fs[:maxGraveyardFindingsPerSignal]
-	last := &kept[maxGraveyardFindingsPerSignal-1]
-	last.Evidence = append(append([]string(nil), last.Evidence...),
-		fmt.Sprintf("(+%d further findings omitted; capped at %d)", extra, maxGraveyardFindingsPerSignal))
-	return kept
 }
