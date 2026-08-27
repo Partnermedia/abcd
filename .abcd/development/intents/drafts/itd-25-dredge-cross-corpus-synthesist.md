@@ -26,6 +26,8 @@ Once the ledger has months of usage across the corpus repos, the synthesist has 
 
 The maritime metaphor lands cleanly here: `/abcd:dredge` is the cross-corpus counterpart to `/abcd:disembark`'s lifeboat (per-project rescue ↔ cross-corpus latent-value rescue). Three meta-development surfaces total once both are shipped: `intent` frames product, `capture` ingests signal, `dredge` surfaces patterns.
 
+**Day-one local subset.** The cross-corpus synthesist is deferred until the corpus has scale, but a lightweight single-repo view earns its keep immediately: an `abcd capture list --dedupe` form renders likely-duplicate captures within one repo at implementation time — the same clustering signal (category, file proximity, similarity) applied to one ledger and shown, rather than synthesised into candidate intents. It is the local, non-agentic subset of this intent, and it pairs with the per-capture form recorded as iss-2608270550201935 (a non-blocking advisory-dedup echo on write) that catches the duplicate one step earlier.
+
 ## What's In Scope
 
 - **`/abcd:dredge` command** — cross-corpus synthesis, with sub-verbs (bare invocation = status+help only per the universal convention):
