@@ -549,9 +549,41 @@ func TestGvCanonADRIDStripsPadding(t *testing.T) {
 		"adr-x":    "",
 		"itd-12":   "",
 		"":         "",
+		// All zeros is one handle, not the empty id.
+		"adr-0":   "adr-0",
+		"adr-000": "adr-0",
+		// Wider than any integer type: still a well-formed id, so it must keep an
+		// identity rather than canonicalise to "" and be skipped in silence.
+		"adr-99999999999999999999":   "adr-99999999999999999999",
+		"adr-0099999999999999999999": "adr-99999999999999999999",
 	} {
 		if got := gvCanonADRID(in); got != want {
 			t.Errorf("gvCanonADRID(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestAbandonedSupersededADROversizeOrdinalKeepsIdentity: an ADR ordinal wider
+// than any integer type is still a well-formed adr-N and must keep an identity.
+// Canonicalising through an integer parse would fail on it and return "", and a
+// record with no id is skipped in silence — the drop this file's dedup exists to
+// announce, reintroduced at the identity step.
+func TestAbandonedSupersededADROversizeOrdinalKeepsIdentity(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	huge := "99999999999999999999" // 20 digits: beyond int64
+	// Filenames start with a letter, so the frontmatter id is the only id source.
+	write("docs/adr/a-padded.md", "---\nid: adr-00"+huge+"\nstatus: superseded\n---\n\n# padded\n")
+	write("docs/adr/b-bare.md", "---\nid: adr-"+huge+"\nstatus: superseded\n---\n\n# bare\n")
+
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededADR) != 1 {
+		t.Fatalf("padded and bare spellings of one huge ordinal must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	f, ok := gvFindingByID(fs, "adr-"+huge)
+	if !ok {
+		t.Fatalf("want the canonical id adr-%s, got %v", huge, fs)
+	}
+	if !gvEvidenceContains(f, "docs/adr/b-bare.md") {
+		t.Errorf("the shadowed claimant was dropped silently: evidence = %v", f.Evidence)
 	}
 }
