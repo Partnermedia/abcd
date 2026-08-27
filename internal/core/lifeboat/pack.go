@@ -206,22 +206,18 @@ func realExistingPath(p string) string {
 
 // pathOverlaps reports whether a and b are the same directory or one contains
 // the other. Either way a lifeboat write would touch the source tree.
-func pathOverlaps(a, b string) bool {
-	return fsutil.PathsOverlap(a, b, caseFoldingFS())
-}
-
-// within reports whether child is equal to or nested inside parent. On a
-// case-folding filesystem (macOS, Windows by default) the comparison is
+//
+// On a case-folding filesystem (macOS, Windows by default) the comparison is
 // case-insensitive: otherwise a destination like ".../REPO/lifeboat" computes as
-// an out-of-tree sibling of source ".../repo" and slips the overlap gate, even
-// though the two resolve to the SAME directory on disk — and the pack then writes
-// into the source tree. Erring toward "overlaps" on these platforms is the safe
+// an out-of-tree sibling of source ".../repo" and slips this gate, even though
+// the two resolve to the SAME directory on disk — and the pack then writes into
+// the source tree. Erring toward "overlaps" on these platforms is the safe
 // direction for a destructive-write gate.
 //
 // The comparison itself lives in fsutil — the one canonical home, shared with
 // the launch payload-destination gate — and this is its lifeboat-side spelling.
-func within(child, parent string) bool {
-	return fsutil.PathWithin(child, parent, caseFoldingFS())
+func pathOverlaps(a, b string) bool {
+	return fsutil.PathsOverlap(a, b, caseFoldingFS())
 }
 
 // caseFoldingFS reports whether the platform's default filesystem folds case.
