@@ -10,3 +10,4 @@ found_at: "internal/core/frontmatter/frontmatter.go"
 ---
 
 five delimiter-compare variants remain beside the canonical frontmatter.IsDelimiter: gate-side TrimSpace compares in lint and glossary accept an indented delimiter the canonical rule refuses, intent and changelog carry tolerant local copies, memory keeps its own close predicate, and site tests a bare HasPrefix — one consolidation pass onto the canonical predicate closes the family
+Re-verification note: a record whose block is closed only by a mid-file ZWNBSP delimiter is capture-refused but frontmatter.Fields-green, and no lint rule runs the strict ledger parser — record-lint passes what capture refuses until the consolidation lands.
