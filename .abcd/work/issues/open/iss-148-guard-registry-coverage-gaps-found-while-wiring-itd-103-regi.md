@@ -54,6 +54,19 @@ the LITERAL ask here — parity with `$( … )` as it actually behaves — is me
 neither form having moved, and the gap is disclosed as a v1 limit on all four
 coverage surfaces again.
 
+**Update (v0.6.7 — gh-312 / iss-2608270500192596).** Backtick following was
+re-implemented and this time it holds: `$(…)` and backticks are both followed
+into command position, and the three revert-era regressions are gone —
+empirically, a leading-position substitution no longer defeats the registry
+(`$(true) gh repo delete` blocks), the newline-in-substitution chain blocks, an
+unterminated backtick blocks rather than failing OPEN, and a nested paren blocks.
+The four coverage surfaces now state backticks ARE followed. What stays OPEN here
+is therefore narrowed to the deep sub-part below ONLY: a substitution written
+before an enclosing command's trailing flags still truncates them for BOTH forms
+(`cd s && rm $(true) -rf *` allows), the pre-existing `$(…)` gap this record
+already names — the "neither form followed" framing above is superseded by this
+update and retained only as history.
+
 Carried forward as its own work, not as a patch to this one: a design that
 follows the payload AND preserves the enclosing command's tokens, chain index and
 command position across the substitution boundary. Note for whoever takes it that

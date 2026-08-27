@@ -148,7 +148,11 @@ at all:
   depth check. Matching a root segment wherever it appeared would close the
   remainder and falsely refuse `DELETE /teams/{id}/repos/{owner}/{repo}`, which
   removes a repository from a team and destroys nothing;
-- one inside a backtick substitution (`$(…)` is followed, backticks are not);
+- one whose enclosing command carries flags AFTER a substitution — `$(…)` and
+  backticks are both followed into command position now, but a substitution
+  written before an enclosing command's trailing flags truncates them, so
+  `cd s && rm $(true) -rf *` reads as neither form's hazard (the deep gap
+  iss-148 still tracks);
 - a dangerous form no entry describes.
 
 A wrapper's own arguments are stepped over with it, including the mandatory

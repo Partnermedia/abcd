@@ -428,8 +428,8 @@ under a prefix (a GitHub Enterprise Server install mounts the same endpoints
 under `/api/v3/`; the api.github.com URL form IS read), a bare `$VAR` inside
 an interpreter payload (an execute-a-string payload IS read — `sh -c`,
 `env -S`; one the guard cannot read is warned or, for `env -S`, blocked),
-a hazard inside a top-level backtick substitution (`$(…)` is followed,
-backticks are not — a disclosed v1 limit, iss-148),
+a hazard inside a top-level command substitution (`$(…)` and
+backticks are both followed into command position),
 a hazard inside a NON-shell interpreter's payload (`python -c`, `perl -e`) —
 one opaque token the tokenizer cannot read, today a silent allow (a warn for
 it is a recorded design target, not yet raised),
