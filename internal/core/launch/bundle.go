@@ -531,7 +531,17 @@ func checkIgnoredStrict(root string, candidates []string) (map[string]struct{}, 
 	if !gitutil.InRepo(root) {
 		return out, nil
 	}
-	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
+	// The same exec pins gitutil.isolatedGit forces (core.hooksPath=/dev/null,
+	// core.fsmonitor=false; core.quotePath=false for path fidelity). This probe's
+	// --no-index skips the index refresh that consults core.fsmonitor, so the pin
+	// is defence-in-depth here rather than the live hole (GHSA-h2gm-w3hm-8xpq) —
+	// but a probe pointed at a possibly-hostile clone must not depend on one flag
+	// to stay non-executing. A clone's own .git/config is fully trusted by git.
+	cmd := exec.Command("git", "-C", root,
+		"-c", "core.hooksPath=/dev/null",
+		"-c", "core.fsmonitor=false",
+		"-c", "core.quotePath=false",
+		"-c", "core.excludesFile=",
 		"check-ignore", "-z", "--no-index", "-v", "--stdin")
 	// Scrub the environment: appending to os.Environ() left GIT_DIR/GIT_WORK_TREE/
 	// GIT_CONFIG_* intact, and those override `-C root`, silently redirecting this

@@ -10,7 +10,6 @@
 package gitutil
 
 import (
-	"os/exec"
 	"strings"
 )
 
@@ -32,9 +31,14 @@ func CheckIgnored(root string, candidates []string) map[string]struct{} {
 	if len(candidates) == 0 {
 		return out
 	}
-	cmd := exec.Command("git", "-C", root, "-c", "core.excludesFile=",
+	// Route through isolatedGit so the two exec pins it forces —
+	// core.hooksPath=/dev/null and core.fsmonitor=false — apply here too. This
+	// probe reads the index (no --no-index), and an index refresh consults
+	// core.fsmonitor; a clone's own .git/config is fully trusted by git and
+	// cannot be disabled by env, so a hostile repo-local core.fsmonitor would
+	// otherwise be SPAWNED against an untrusted tree (GHSA-h2gm-w3hm-8xpq).
+	cmd := isolatedGit(root, "-c", "core.excludesFile=",
 		"check-ignore", "-z", "-v", "--stdin")
-	cmd.Env = gitEnv()
 	cmd.Stdin = strings.NewReader(strings.Join(candidates, "\x00") + "\x00")
 	data, err := cmd.Output()
 	if err != nil {
