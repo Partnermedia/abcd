@@ -15,6 +15,14 @@ disclosure uses an `Assisted-by:` trailer; the human contributor is the author o
 record and is responsible for all AI-assisted output — its correctness, licensing,
 and fit for the project. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+External reports sharpen the record, and fix commits credit their reporters with
+a `Reported-by:` trailer. [Andy Woods (@andytwoods)](https://github.com/andytwoods)
+reported the README's undocumented git requirement and proposed the route-scoped
+shape of the Requirements section the README carries
+([#496](https://github.com/intentdriven/abcd/issues/496)), and surfaced the
+failed-provisioning fallback whose guidance framed Go as a requirement it is not
+([#494](https://github.com/intentdriven/abcd/issues/494)).
+
 ## Inspirations
 
 Ideas and methodologies that shaped the design — not code abcd depends on.
