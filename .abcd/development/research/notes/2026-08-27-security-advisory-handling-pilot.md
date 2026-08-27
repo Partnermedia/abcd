@@ -517,6 +517,19 @@ how a security release represents a boundary: ship the sound improvement, disclo
 the residual gap honestly, keep the deep-gap issue open — do not erase a real gap to
 make a doc "clean".
 
+## F-W — adopt an external contributor's commit; re-authoring with Reported-by is the fallback
+
+Surfaced by the second operator. The issue-sweep's default was to re-author an
+external contributor's fix and add a `Reported-by:` trailer. For @andytwoods
+(#496, #494), who had a working branch, that default cost them contributor-graph
+AUTHORSHIP: `Reported-by` credits the report, not the code, so the commit author
+stayed the maintainer. The better default for a contributor who has a ready
+branch is to ADOPT their commit (preserving their authorship) or ask for their
+PR; re-author-with-`Reported-by` is the honest fallback only when there is no
+branch to adopt. Corollary already in play: the same-change credit convention
+means the `ACKNOWLEDGEMENTS.md` entry should ride the fix — a missing one is a
+follow-up debt (the second operator is filing @andytwoods's now).
+
 ## Verdict (final — the cut shipped)
 
 The protocol survived contact end to end and across two independent operators:
