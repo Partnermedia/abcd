@@ -35,3 +35,13 @@ Adjacent, and the reason to settle the shape first: `specstory-import` already
 names a tool where the sibling value names a route, so the vocabulary conflates
 ingest path with source. iss-217 plans the cross-agent import over exactly this
 seam, so the shape is better decided before that work than during it.
+
+Additional evidence (2026-08-26, second-harness adaptor lab, local tier): the
+lab's capture path exercises this defect live. Transcripts exported from a
+non-native host reach the store through `hook session-end` and are recorded as
+`source_kind: "native"` — the exact misdeclaration this issue predicts, now
+demonstrated rather than hypothetical. The rest of the pipeline held: the
+store treated the foreign transcripts as opaque bytes and redacted them end to
+end (twelve sessions stored in one drain), confirming the kind field is the
+sole remaining harness coupling and must be settled before any second-harness
+capture ships.
