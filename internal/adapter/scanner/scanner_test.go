@@ -105,7 +105,7 @@ func TestIdentityHomeSelfCaseInsensitive(t *testing.T) {
 // the redacted text must find no surviving hard_fail (the store's fail-closed
 // guarantee). The old substring-replace Redact left the JWT's tail verbatim.
 func TestRedactSealsOverlappingSecrets(t *testing.T) {
-	line := "sk-ant-" + strings.Repeat("X", 34) + "-eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	line := "sk-ant-" + strings.Repeat("X", 34) + "-eyJ" + "ABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
 	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "f")
 	redacted, _ := Redact(line, findings)
 	for _, raw := range []string{"KLMNOPQRST", "UVWXYZ0123456"} {
@@ -127,7 +127,7 @@ func TestRE2LookaroundPorts(t *testing.T) {
 	if hasKind(scanLine("AKIAIOSFODNN7EXAMPLE"), "token:aws_access_key") {
 		t.Error("AWS docs example must NOT be flagged")
 	}
-	if !hasKind(scanLine("AKIA1234567890ABCDEF"), "token:aws_access_key") {
+	if !hasKind(scanLine("AKIA"+"1234567890ABCDEF"), "token:aws_access_key") {
 		t.Error("a real AKIA key must be flagged")
 	}
 	// A redacted sessionKey value is not re-flagged; a real one is.
@@ -136,6 +136,63 @@ func TestRE2LookaroundPorts(t *testing.T) {
 	}
 	if !hasKind(scanLine(`"sessionKey": "abc-123-def-456"`), "rp_session_key") {
 		t.Error("a real sessionKey value must be flagged")
+	}
+}
+
+// TestAWSAccessKeyPrefixFamily proves the aws_access_key gate covers the whole
+// documented AWS access-key-ID prefix family, not just long-term AKIA keys
+// (gh-358). A temporary STS key ID (ASIA) is shape-identical to its AKIA sibling
+// and equally a hard_fail credential; the same holds for ABIA (STS service
+// bearer token), ACCA (context-specific credential) and the legacy A3T access
+// key. All FAKE shapes. The exclusions guard against over-broadening onto AWS
+// RESOURCE identifiers (roles, users, groups, …), which are not credentials and
+// appear openly in ARNs and policy documents.
+func TestAWSAccessKeyPrefixFamily(t *testing.T) {
+	r := strings.Repeat
+	// Positives: every credential-bearing prefix, all FAKE shapes, must be
+	// flagged as token:aws_access_key AND classified hard_fail.
+	positives := []struct {
+		name string
+		key  string
+	}{
+		{"AKIA_longterm", "AKIA" + r("A", 16)},
+		{"ASIA_sts_temporary", "ASIA" + r("B", 16)},
+		{"ABIA_sts_bearer", "ABIA" + r("C", 16)},
+		{"ACCA_context", "ACCA" + r("D", 16)},
+		{"A3T_legacy", "A3T" + r("E", 17)}, // A3T + [0-9A-Z] + [0-9A-Z]{16}
+	}
+	for _, p := range positives {
+		t.Run("positive/"+p.name, func(t *testing.T) {
+			got := scanLine("cred = " + p.key + " end")
+			if !hasKind(got, "token:aws_access_key") {
+				t.Fatalf("AWS key %q (%s) not flagged: %+v", p.key, p.name, got)
+			}
+			for _, f := range got {
+				if f.Kind == "token:aws_access_key" && f.Severity != SeverityHardFail {
+					t.Errorf("AWS key %q flagged but severity %s, want hard_fail", p.key, f.Severity)
+				}
+			}
+		})
+	}
+	// Negatives: must NOT be flagged. AROA/AIDA/AGPA/… are AWS resource
+	// identifiers, not credentials — deliberately excluded to avoid false
+	// positives on ARNs and policy docs. The dash cases break the 16-char body.
+	negatives := []struct {
+		name string
+		s    string
+	}{
+		{"AROA_role_resource_id", "AROA" + r("A", 16)},
+		{"AIDA_user_resource_id", "AIDA" + r("A", 16)},
+		{"AGPA_group_resource_id", "AGPA" + r("A", 16)},
+		{"ASIA_dash_not_a_key", "ASIA-not-a-key"},
+		{"bare_AsiaBanana_word", "AsiaBananaRepublic"},
+	}
+	for _, n := range negatives {
+		t.Run("negative/"+n.name, func(t *testing.T) {
+			if got := scanLine("value = " + n.s + " end"); hasKind(got, "token:aws_access_key") {
+				t.Errorf("non-credential %q wrongly flagged as AWS access key: %+v", n.s, got)
+			}
+		})
 	}
 }
 
@@ -616,7 +673,7 @@ func TestSerializedFindingRedactsSiblingSecret(t *testing.T) {
 // window of either token may survive in the serialized snippet.
 func TestSerializedFindingRedactsOverlappingSecret(t *testing.T) {
 	key := "sk-ant-" + strings.Repeat("X", 34)
-	jwt := "eyJABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
+	jwt := "eyJ" + "ABCDEFGHIJ.KLMNOPQRST.UVWXYZ0123456"
 	line := key + "-" + jwt // the `-` lets the key run into the JWT head; both fire
 
 	findings := ScanText(line, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "commands/x.md")
