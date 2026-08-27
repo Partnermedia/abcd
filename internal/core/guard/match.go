@@ -128,6 +128,15 @@ var wrapperOperands = map[string]int{
 // than being one: without stepping over them, `if cd scratch; then rm -rf *; fi`
 // reads `then` as argv[0] and every hazard inside a conditional or a loop body
 // escapes command position.
+//
+// `coproc` belongs to this family — `coproc [NAME] command` runs the following
+// command exactly like `{`, `!`, or the `time` wrapper — but it is NOT a member
+// of this map, because its optional coprocess NAME has to be stepped over
+// conditionally (only in the `coproc NAME { …; }` compound form). commandOf
+// handles it in its own branch via skipCoproc. It is a bash/zsh/ksh keyword;
+// POSIX sh/dash treats `coproc` as an ordinary not-found command, so the wrapped
+// hazard never runs there — the same shell-specific scope accepted for the
+// `zsh -c`/`ksh -c` payload bypass (gh-318, gh-297).
 var reserved = map[string]bool{
 	"if":    true,
 	"then":  true,
@@ -164,6 +173,10 @@ func commandOf(s segment) (string, []string) {
 		tok := s.tokens[i]
 		if isAssignment(tok) || reserved[tok] {
 			i++
+			continue
+		}
+		if tok == "coproc" {
+			i = skipCoproc(s.tokens, i+1)
 			continue
 		}
 		if w := path.Base(tok); wrappers[w] {
@@ -205,6 +218,43 @@ func skipWrapperArgs(tokens []string, pos int, wrapper string) int {
 		pos++
 	}
 	return pos
+}
+
+// skipCoproc advances past the `coproc` keyword's own tokens, from pos (the
+// token just after `coproc`), and returns the index where the command it launches
+// begins. `coproc <simple-command>` has no coprocess NAME — the token at pos is
+// the command. `coproc NAME { …; }` names the coprocess: the NAME must be stepped
+// over so the command inside the `{ }` body reaches command position. The NAME is
+// only present when the token at pos is a shell identifier AND the token after it
+// opens the compound body with `{` (which reserved then steps over); a lone
+// `coproc word` leaves `word` in command position, matching bash's own parse.
+func skipCoproc(tokens []string, pos int) int {
+	if pos+1 < len(tokens) && isShellName(tokens[pos]) && tokens[pos+1] == "{" {
+		return pos + 1 // step over the coprocess NAME; `{` is stepped over as reserved
+	}
+	return pos
+}
+
+// isShellName reports whether a token is a shell identifier — a letter or
+// underscore followed by letters, digits, or underscores — the only shape a
+// coprocess NAME may take.
+func isShellName(tok string) bool {
+	if tok == "" {
+		return false
+	}
+	for i := 0; i < len(tok); i++ {
+		c := tok[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
+		case c >= '0' && c <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // isAssignment reports whether a token is a NAME=VALUE environment prefix,
