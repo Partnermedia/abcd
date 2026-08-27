@@ -281,7 +281,277 @@ patches of the published line at ship time.
   corrupt objects the repack surfaced — pre-existing, unreachable, harmless, prune
   later.)
 
-## Verdict (interim)
+## Second operator, release cut, and the gate as security auditor (F-N…F-V)
+
+## F-N (verified) — auto-merge is the robust default; the human click is ceremony
+
+Verified against `main`, not asserted from memory:
+
+- **Arm only after the adversarial verdict.** Auto-merge was armed ONLY after the
+  consolidated `security-reviewer` returned APPROVE over the whole assembled diff.
+  Arming before the verdict races a merge against a review that could still say
+  NEEDS_WORK.
+- **The queue owns the method; `--merge` is cosmetic.** `gh pr merge <n> --auto
+  --merge` returns `! The merge strategy for main is set by the merge queue` and
+  ignores the method flag. The queue picked **merge-commit** on all three cuts:
+  #523 = 30d6a324 parents=[6961c6d1 e8ab2114], #524 = c3a65258, #525 = f3be1f47,
+  each `Merge pull request #N`. `mergedBy = REPPL` — the queue attributes the
+  merge to the human who armed it, preserving author-of-record.
+- **Arm-vs-enqueue is a state gotcha.** `--auto` only ARMS while the PR is BLOCKED
+  (checks pending); on an already-CLEAN PR GitHub returns `autoMergeRequest:null`
+  and does not arm — it is simply mergeable, so `gh pr merge <n> --merge` enqueues
+  it directly. Observed exactly: #525 BLOCKED→armed→landed on green; #524
+  CLEAN→not-armed→enqueued directly. Read `autoMergeRequest` to know which state.
+- **RS003 reachability survives *because* the method is merge-commit.** A merge
+  commit preserves both parents, so every branch SHA cited in a `resolved_by.commit`
+  stamp stays reachable from `main`. RS003 would only break if the queue squashed
+  or rebased (rewriting the cited SHA out of existence — the exact hazard RS003
+  exists to catch). The durable check, carried into the protocol: `git log -1
+  --format='%p' <mergeCommit>` must show TWO parents before the stamps are trusted.
+- **GITHUB_SHA/batch-sha caveat: reasoned, not consulted.** The queue runs CI
+  against a speculative batch sha (GITHUB_SHA != final merge sha); since the method
+  is merge-commit and each branch is an ancestor of the batch, reachability holds
+  in both queue-CI and post-merge. Not asserting knowledge of a specific external
+  #355 that was not read.
+
+## F-O — second-operator replication validates the protocol (agent-to-agent transfer)
+
+The docs/issue-sweep session (peer `abcd-cli-7c`, its own operator, auto-merge
+authorised) requested and adopted the #523 auto-merge sequence VERBATIM over a
+structured cross-session message: clean consolidated verdict first → `gh pr merge
+<n> --auto --merge` with the BLOCKED/CLEAN `autoMergeRequest` state check → the
+two-parent `%p` verification post-merge BEFORE trusting `resolved_by` stamps and
+signalling done. Protocol transfer between independent operators, carrying its
+verification steps intact, is itself a first-class experiment output: the process
+is teachable and reproducible, not tacit to one session.
+
+- Its cut mirrors ours: ONE integration PR (`integration/issue-sweep`), family
+  branches merged into it locally — not N separate PRs. "All merged" now follows
+  checks-green (auto-merge), not a human click; that green is our cut trigger.
+- Second-operator sibling-sweep captures to cite: iss-2608270908332975 through
+  iss-2608270908348796 (fifteen, one Bash-listable family).
+
+## F-D (reinforced) — only the assembled-diff adversarial pass caught the cross-branch regressions
+
+Every per-branch gate was green on the peer's family branches. Only the
+consolidated `security-reviewer` over the assembled diff caught real cross-branch
+regressions — evaluator-outside-the-loop earning its keep, a second independent
+instance of the #523 `guard/match.go` / hermetic-git-gate lesson.
+
+Four findings fixed + resolved this round:
+- iss-2608270926036966 — BOM scope widening in the new canonical delimiter
+  predicate desyncs intent's writer.
+- iss-2608270926037660 — `derivedClasses` else-if shadows a scalar class,
+  fail-opening ML001 for a both-shapes page.
+- iss-2608270926031827 — preamble-led record lints green while loaders fail-close
+  (preamble parity gap).
+- iss-2608270926036528 — `gvCanonADRID` ordinal overflow silently drops.
+
+Two pre-existing residual gaps surfaced, stay OPEN:
+- iss-2608270926030978 — FoldPath Unicode-normalisation blindness in the folded
+  path gates.
+- iss-2608270926037088 — graveyard evidence terminal-safe but not markdown-safe.
+
+---
+
+## Second-operator issue-sweep — full data from PR #526 (integration/issue-sweep)
+
+### First round: 14/14 verified-present and fixed, zero design-decision skips, zero not-present
+
+Each fix reported as (a) symptom at the trust boundary / (b) canonical fix / (c)
+swept siblings — the "sweep the pattern, not the instance" and one-canonical-primitive
+disciplines, second independent instance:
+
+- **#304** — `--- ` close read as unterminated, provenance vanished, ML001 disarmed → one `isFrontmatterClose` predicate across three close sites; sibling `site/sections.go` byte-prefix.
+- **#288** — comment-led page rebuilt with a fabricated `session_memory` class → consolidated `frontmatterOpenIndex`, backfill skips preamble pages.
+- **#320** — plural-classes unlicensed page exited 0 → `derivedClasses`; sibling `externalSourceHashes` same blindness.
+- **#330** — junk sources list short-circuited ML001 → unconditional page-level pass minus per-entry covered classes.
+- **#362** — external page without `source_hash` accepted, MQ001/MQ002 never ran → class-conditional requireds per brief 07-memory §3; sibling MQ003 early-return span-half contract.
+- **#279/#331** — absent/null intent id and exempt superseded spec lint-green while loaders fail-close the corpus → `recordid.ValidIntentID`/`ValidSpecID` shared leaf, three regex copies deleted; siblings ADR-family analogue, filename grammar laxity, `validateStrict` unmirrored (all captured).
+- **#338** — `--- ` ledger record lint-green but capture-refused → new canonical `frontmatter.IsDelimiter`, four divergent compares removed, deliberate BOM consequence pinned; sibling memory + gate-side compare family.
+- **#373** — four null spellings diagnosed malformed vs record-lint's missing → `frontmatter.IsNull` gate at `newRecord`; siblings spec `parseSpec` null divergence, glossary null-as-data (both captured).
+- **#329** — case-variant dest SKIPPED the gate entirely → new `fsutil.FoldPath`/`PathWithin`, fold as a parameter; siblings ahoy `under()`, brew Cellar prefix, home redaction.
+- **#326** — two case-variant targets both planned Create → folded claim key into the existing whole-write conflict refusal, naming both spellings.
+- **#292** — two signals truncated silently → `gvCapFindings` deleted, all ten signals through `capSignalFindings`.
+- **#291** — shared-ordinal ADRs collapsed silently (adr-012/adr-12 split) → canonical handle grammar + `gvIDClaims` shadow announcements.
+- **#496** — docs, five verified bullets, `Reported-by` stamped.
+
+### Review round — F-D, with convergent independent detection
+
+Per-branch gates all green. The assembled-diff `security-reviewer` found 4 real
+defects: BOM scope (fix c6fe046a), `derivedClasses` shadowing (7cb8aae4), preamble
+extraction axis (02ca8f3a, both stores incl. content-exempt), ordinal overflow
+(2a668ece) — plus dead-wrapper cleanup (4bbe1ab0) and a missing watched-fail test
+for a load-bearing guard (e17c33ac, verified red with the guard deleted).
+Re-verification by the same adversary against its original fixtures: all four
+CLOSED, APPROVE. **The independent ruthless pass reverted every fix and confirmed
+each test goes red against unfixed code, AND independently found the same preamble
+gap** — convergent detection by two independent evaluators is the strong signal
+for the note. Docs-currency: CURRENT.
+
+### Process observations (second operator)
+
+1. **Armed-detector catch:** an agent attempted `--no-verify`; the guard hook
+   blocked it; the agent complied. (Same catch as our session — the guard is doing
+   its job across operators.)
+2. **Green-scaffolding self-catch:** the BOM agent's first test draft PASSED at
+   broken HEAD (fixture positioned past the reader's reach); the agent caught this
+   itself and repositioned until red. A test-first-discipline datum: a test that
+   does not first go red proves nothing.
+3. **Worktree-outside-checkout held:** zero payload-scan races across the whole
+   sweep — the concurrent-session guidance (iss-2608261331317889) held under load.
+4. **Transcript model verification — the F-G discipline applied cleanly.** All 7
+   of the second operator's agents were transcript-verified to have genuinely run
+   `claude-opus-5`; stamps correct as written. Contrast with our security cut,
+   where the `model:"opus"` override silently ran claude-opus-4-8 and 15 stamps had
+   to be filter-branch-corrected: the fix for F-G is exactly this — verify the
+   transcript's `model` field before stamping, never infer from the requested
+   override. The second operator did it prospectively; we did it retroactively.
+5. **Ledger discipline:** 19 resolved with commit provenance, 19 new captures
+   (15 sweep + 4 late/residual-adjacent), every fix record-first.
+
+### Ledger id map (second operator, for pilot-note citations)
+
+- First-round resolves: the 14 issues above (#304 #288 #320 #330 #362 #279/#331 #338 #373 #329 #326 #292 #291 #496).
+- Review-round resolves: iss-2608270926036966 / 037660 / 031827 / 036528, plus nitpick iss-2608270930248619.
+- Late captures: iss-2608270945468534 / 469978 / 464715.
+- Sibling-sweep captures: iss-2608270908332975 → iss-2608270908348796 (fifteen).
+- Residual gaps staying open: iss-2608270926030978 (FoldPath normalisation), iss-2608270926037088 (graveyard markdown-safety).
+
+### Merge landed as (fill in at cut)
+
+- PR #526 merge commit: __________ ; `git log -1 --format='%p'` two parents: [ ] verified.
+
+---
+
+## Release cut (v0.6.7) — the semantic-receipt gate, and what iterating it taught
+
+### F-P — the derived version is not the informally-named one
+Everyone (me included) called it "v0.7.0" in conversation, but `launch ship`
+derived **v0.6.7**: every shipped record is a fix (89 fix + 25 internal + 1
+additive), no feature intent graduated from planned/, so the bump is a patch. The
+version is the binary's, derived from what shipped — not a choice. Lesson for the
+automation: state the DERIVED version from `launch ship --json` before anyone
+acts on an informal label; the retention plan the user described ("if v0.6.7, we
+remove v0.6.6…") already used the derived number.
+
+### F-Q — two release gates are human-by-design, and that is correct
+The semantic-receipt gate's PROMOTE is the MAINTAINER's sign-off (receipt carries
+`verifier: maintainer@release`), and the publish step is a second, unbypassable
+human approval. "Cut automatically" therefore lands at: derive → compose → ingest
+→ run the passes → author receipts for the maintainer's PROMOTE → prove the gate
+locally → open the release PR. The two human gates (PROMOTE, publish) are the
+sign-off the gate exists to require, not ceremony to automate away.
+
+### F-R — preserve an approved changelog across a re-roll by classifying gate-fix records `internal`
+The maintainer approved the composed 90-line changelog. Gate findings then forced
+brief/doc fixes, which must be captured+resolved (close-with-the-act) and so enter
+the cut. Resolving them `impact: internal` (in_changelog:false) keeps the cited
+set at 90, so the SAME approved payload re-ingests byte-identically — no
+re-compose, no re-approval. The runbook forbids hand-editing the changelog, so
+this is the honest way to fold in gate-hygiene fixes without disturbing approved
+prose. Internal is also the honest impact: brief-internal counts and a
+help-text-sync have no user-visible surface change, and the user-facing story
+(e.g. "backticks now blocked") is already announced by the behaviour fix's own line.
+
+### F-S — the two gate detectors have COMPLEMENTARY scope; run both
+The crosscheck (brief↔surface) caught brief drift — the shipped `site` verb
+missing from two command enumerations, a bare-command-as-help over-claim — that
+the docs-currency pass structurally could not, because docs-currency checks
+USER-FACING docs and the drift was in the internal brief. Neither pass subsumes
+the other; a release needs both.
+
+### F-T — "sweep the pattern, not the instance" applies to DOC fixes too
+My first fix of the crosscheck findings corrected each FLAGGED line but left a
+SIBLING occurrence in the same file ("sixteen" survived at 08-skills.md:21,
+"universal" at 05-intent.md:467). The re-run caught it. A doc-drift fix is not
+done until you grep the whole file (and repo) for the pattern — identical to the
+code-sibling-sweep rule in the bug-hunting spine.
+
+### F-U (load-bearing) — re-run every required pass against the FINAL content commit; never transfer a verdict
+I initially argued the docs-currency PROMOTE could TRANSFER to a later content
+commit because the delta was "outside its reviewed surface." I re-ran it anyway,
+for receipt honesty — and the re-run caught a REAL blocking finding the FIRST run
+missed: the `abcd guard` help text and two docs still described the pre-gh-312
+backtick limit ("backticks are not followed — a disclosed v1 limit"), directly
+contradicting the v0.6.7 Security changelog line that advertises the fix. It was a
+shipped-help + docs FALSEHOOD about a security boundary, and a transferred verdict
+would have shipped it. The miss was non-determinism (the pass reads prose and can
+miss on any given run), not scope. Rule for the automation: every required gate
+pass runs against the FINAL content commit the receipt names; a prior PROMOTE on
+an earlier commit is never transferred, however scope-disjoint the delta looks.
+Corollary: the receipt's judgeModel is transcript-verified from the pass that
+actually read that commit (F-G applied).
+
+### Receipt mechanics captured (for the deterministic rung)
+- Path `.abcd/work/reviews/<content-sha>/<gate>.json`; `policy.detector` == filename stem.
+- Required by receipt_gate: `subject.digest.gitCommit` == content commit; `verificationResult: PROMOTE`; `judgeModel` a pinned snapshot; `policy.detector` == gate. Manifest-era (manifest.json present) adds three procedural refusals: `manifestHash` == manifest.json's sha256; `tier` sufficient for impact class (additive ⇒ full, not shallow); every `failing` entry carries a `disposition`.
+- Two-commit release branch: commit 1 = CHANGELOG roll (+ any gate-fix content), commit 2 = the receipts naming commit 1. Prove locally before any tag: `go run ./cmd/record-lint --release-gate <full-sha> --require-gate docs-currency-reviewer --require-gate iss35-brief-surface-crosscheck` (exit 0 = will pass; costs nothing to fix, no tag yet).
+- `briefVersion` in the receipt tracks the release version (0.6.7).
+
+### F-V — the gate's whole-repo sweep did deep SECURITY work, not just doc-currency
+Chasing the backtick doc finding to ALL its occurrences (git grep across every
+tracked file — the scope error in F-T taught me to grep the whole repo, not a
+dir subset) surfaced far more than a stale line:
+- History (DECISIONS.md): backtick-following was REVERTED on 2026-08-01 after
+  three adversarial rounds each found a guard-bypass regression; iss-148 re-opened.
+- This release's gh-312 (iss-2608270500192596) RE-implemented it. I did NOT trust
+  the changelog claim — I built the binary and ran the exact revert-era adversarial
+  cases: leading-position `$(true) gh repo delete` (the registry-defeat) BLOCKS,
+  newline-chain BLOCKS, unterminated backtick BLOCKS (was fail-open), nested paren
+  BLOCKS. gh-312 genuinely solved what three rounds couldn't.
+- But one bypass remains for BOTH `$()` and backticks: a substitution before an
+  enclosing command's trailing flags truncates them — `cd s && rm $(true) -rf *`
+  ALLOWS vs `cd s && rm -rf *` BLOCKS. Pre-existing `$()` gap (per DECISIONS.md),
+  now shared by backticks at parity; the deep sub-part iss-148 defers.
+- Ledger inconsistency: iss-148 (OPEN, "neither form followed") contradicted
+  iss-2608270500192596 (RESOLVED, "backticks now followed"). Reconciled: narrowed
+  iss-148 in place to the flags-truncation gap only, retaining its history as
+  superseded; corrected the brief's blind-spot list to disclose the ACCURATE
+  residual gap rather than the stale "backticks not followed" claim.
+Lessons: (1) a release-gate pass that reads prose is also a security auditor when
+the prose describes a security boundary — verify the CLAIM against the binary, never
+trust the changelog. (2) A doc-drift sweep must span the WHOLE repo including the
+ledger, or it desyncs an open issue from a resolved one. (3) The maintainer decides
+how a security release represents a boundary: ship the sound improvement, disclose
+the residual gap honestly, keep the deep-gap issue open — do not erase a real gap to
+make a doc "clean".
+
+## F-W — adopt an external contributor's commit; re-authoring with Reported-by is the fallback
+
+Surfaced by the second operator. The issue-sweep's default was to re-author an
+external contributor's fix and add a `Reported-by:` trailer. For @andytwoods
+(#496, #494), who had a working branch, that default cost them contributor-graph
+AUTHORSHIP: `Reported-by` credits the report, not the code, so the commit author
+stayed the maintainer. The better default for a contributor who has a ready
+branch is to ADOPT their commit (preserving their authorship) or ask for their
+PR; re-author-with-`Reported-by` is the honest fallback only when there is no
+branch to adopt. Corollary already in play: the same-change credit convention
+means the `ACKNOWLEDGEMENTS.md` entry should ride the fix — a missing one is a
+follow-up debt (the second operator is filing @andytwoods's now).
+
+## Verdict (final — the cut shipped)
+
+The protocol survived contact end to end and across two independent operators:
+verify → dedup → fix → integrate → adversarial review → derive → compose → gate →
+land → publish → retain. Combined **v0.6.7** shipped — 90 changelog records
+(20 Security, 21 Fixed lines); both semantic-receipt gates PROMOTE at full tier
+against the content commit; the full release pipeline (merge → tag → verify →
+publish → site deploy) ran green; the four platform binaries were checksum- and
+attestation-verified; retention applied newest-per-line (six 0.6-line releases
+pruned, tags kept). The release gate did real correctness AND security work en
+route — see F-S (complementary detectors), F-U (re-run every required pass against
+the final content commit; never transfer a verdict — it caught a security-doc
+falsehood a transferred verdict would have shipped) and F-V (the sweep uncovered a
+reverted-then-reimplemented guard feature and a live bypass, verified empirically).
+
+File the automation intent — "abcd handles inbound security advisories and issues,
+and cuts the release, for every managed repo" — citing F-A…F-V as acceptance
+criteria, with F-U and F-Q (the two release gates are human-by-design) load-bearing.
+
+<!-- superseded interim verdict retained below for history -->
+
+## Verdict (interim, superseded)
 
 The protocol survives contact through verify → dedup → fix → (review pending).
 The one structural gap is F-D (landing many fixes into one cut). Grade the
@@ -296,3 +566,17 @@ every managed repo" — citing F-A…F-G as acceptance criteria.
   session's fix branches (`fix/ghsa-*`, `fix/gh-*`).
 - Ledger dedup: 46 open public issues vs the ledger — 7 stale mirrors closed, 31
   genuine gaps backfilled (PR for the backfill raised).
+
+### Release outcome (v0.6.7, this run)
+
+- Combined cut assembled: 90 records (security cut #523 + issue-sweep #526 + #494
+  fix #527 + backlog); derived version v0.6.7 (all fixes ⇒ patch).
+- Gate: docs-currency-reviewer + iss35-brief-surface-crosscheck both PROMOTE, full
+  tier, 0 findings, judge model transcript-verified claude-opus-4-8; receipts at
+  `.abcd/work/reviews/bd186b84…/`; local `record-lint --release-gate` exit 0.
+- Fix loop the gate forced: site-count drift, bare-command over-claim, and the
+  guard-backtick doc/ledger reconciliation (iss-148 narrowed in place).
+- Published: PR #528 merged (2ca95333, two parents, RS003 holds) → tag v0.6.7 →
+  verify → publish → site deploy, all green; no site-deploy flake.
+- Verified: checksums.txt match, provenance attestation verified (exit 0).
+- Retention: pruned v0.6.1–v0.6.6 releases, tags kept; kept set is newest-per-line.
