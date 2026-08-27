@@ -93,6 +93,25 @@ func discoverRepoRoot(start string) string {
 
 var reNonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
+// deriveSlug produces a filename-safe slug from free text: lowercase, collapse
+// every non-[a-z0-9] run to a single hyphen, trim, then truncate to 60 chars.
+//
+// It lives in core, not on the CLI, precisely so it runs on the ALREADY-REDACTED
+// text (Capture redacts its inputs before it calls this). A caller that
+// kebab-cased the raw text first — which the CLI used to do — hands the ledger
+// redactor "users-alice-local-bin-abcd", where nothing looks like a path any
+// more, so the username survives into the committed filename even though the body
+// is redacted (gh-485). Deriving here, after redaction, closes that seam and
+// mirrors the intent engine's deriveIntentSlug, which likewise keeps derivation
+// in core rather than trusting a pre-kebab'd slug.
+func deriveSlug(text string) string {
+	collapsed := strings.Trim(reNonSlug.ReplaceAllString(strings.ToLower(text), "-"), "-")
+	if len(collapsed) > 60 {
+		collapsed = strings.Trim(collapsed[:60], "-")
+	}
+	return collapsed
+}
+
 // normaliseSlug lowercases, collapses non-alphanumeric runs to a single hyphen,
 // and trims hyphens, mirroring _normalise_slug. Empty result is an error.
 func normaliseSlug(slug string) (string, error) {
