@@ -94,6 +94,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-145` — The acknowledgement convention arms itself: a record citing an external source, standard, or tool without its ACKNOWLEDGEMENTS entry fails the record gate
 - `itd-146` — abcd's help renders in labelled command groups, gated by a group field in the surface snapshot and an ungrouped-verb test (the reframed survivor of the verb-taxonomy ideate verdict; no verb renamed, moved or hidden)
 - `itd-147` — The brief's surface chapters carry a generated shape block derived from the command tree, so flags, sub-verbs, exit codes and counts cannot drift while the prose keeps saying why (filed from the 0.6.2 release gate's 147-finding crosscheck; the CLI reference, generated and drift-tested, returned zero the same day)
+- `itd-149` — abcd handles inbound security advisories and issues, and cuts the release, for every managed repo (the 2026-08-27 pilot's loop automated; findings F-A…F-W are the acceptance-criteria source, F-U and F-Q load-bearing; filed after the itd-84 SPLIT, awaiting the planning interview)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

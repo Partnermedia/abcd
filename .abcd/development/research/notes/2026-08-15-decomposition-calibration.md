@@ -863,3 +863,27 @@ Per hand-run, append:
   "requirement whose mechanism lives in another draft": neither `refines`
   nor `duplicates` fits; recorded here as *layered* pending the enum
   question.
+
+### 2026-08-27 — the pilot-note automation proposal (hand-run at filing)
+
+- **Proposal:** the security-advisory pilot's closing instruction — "abcd
+  handles inbound security advisories and issues, and cuts the release, for
+  every managed repo", citing F-A…F-W as acceptance criteria with F-U and
+  F-Q load-bearing.
+- **Initial routing:** four parts — the end-to-end loop (capability | new
+  intent); the verified gate-arming trust rules F-N/F-Q/F-U (trust rule |
+  ADR + brief invariant, held as iss-2608271817300337 until the ADR's own
+  filing); the F-W authorship default — adopt an external contributor's
+  commit, `Reported-by` is the fallback (stance | principle, held as
+  iss-2608271817309715); receipt mechanics, F-S detector pairing, F-R
+  re-roll classification and the S1–S6 intake stages (plumbing | brief at
+  spec time). Typed links: **refines itd-93** (planned release-gate
+  scaffolding), **refines itd-82** (draft ledger triage), **refines** the
+  intake.md S1–S6 protocol, whose graduation is already recorded as
+  iss-2608271702469341.
+- **Confirmed routing:** adopted unchanged.
+- **Verdict:** SPLIT, proposed and confirmed; filed as itd-149.
+- **Notes:** no reversal candidates; the standing stances the loop relies on
+  (evaluator-outside-the-loop, record-before-fix, sweep-the-pattern) are
+  cited, not re-homed — only F-W's authorship default was a genuinely
+  unhoused stance.
