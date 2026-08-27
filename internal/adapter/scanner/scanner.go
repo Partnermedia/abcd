@@ -30,11 +30,19 @@ type ScanResult struct {
 	HardFails         int       `json:"hard_fails"`
 	Unavailable       bool      `json:"unavailable"`
 	UnavailableReason string    `json:"unavailable_reason,omitempty"`
-	// Unscanned lists bundle files that were present but classified
-	// binary/unscannable by the content sniff (e.g. a leading-NUL file). They
-	// are surfaced, never silently dropped, so a crafted binary cannot smuggle
-	// unscanned content into a source bundle without being visible.
+	// Unscanned lists bundle files that were present but could NOT be covered:
+	// unreadable, or classified binary/unscannable by the content sniff (e.g. a
+	// leading-NUL file) WITHOUT a reviewed skip explaining it. They are the
+	// fail-closed coverage gap — the launch gate refuses on them, so a crafted
+	// binary cannot smuggle unscanned content into a source bundle
+	// (GHSA-5mmm-3whv-3rqp).
 	Unscanned []string `json:"unscanned,omitempty"`
+	// Skipped lists bundle files intentionally not scanned because they matched
+	// the reviewed skip sets (a binary media extension, a skip filename, or a
+	// skip fragment). Unlike Unscanned they are an accepted allow, not a refusal
+	// — but they are surfaced rather than silently dropped, so what the skip
+	// list actually excluded is visible.
+	Skipped []string `json:"skipped,omitempty"`
 }
 
 // Config is the on-disk scanner configuration (the per-repo pii.json override
@@ -74,8 +82,14 @@ type Scanner struct {
 // defaultSkipExtensions / defaultSkipFilenames mirror the bundled pii.json
 // binary/noise skip sets.
 var (
+	// defaultSkipExtensions are media/archive/artefact extensions treated as
+	// reviewed skips. It deliberately omits .svg: an SVG is XML text and can
+	// carry a secret in a comment or attribute (GHSA-5mmm-3whv-3rqp), so it is
+	// scanned like any other text file rather than waved through by extension.
+	// (.lock is retained as a pre-existing skip; a text lockfile is the same
+	// class as .svg and a candidate for the same treatment, tracked separately.)
 	defaultSkipExtensions = []string{
-		".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf", ".ico", ".webp",
+		".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".webp",
 		".mp3", ".mp4", ".mov", ".webm", ".wav",
 		".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z",
 		".pyc", ".pyo", ".so", ".dylib", ".dll", ".exe",
@@ -759,6 +773,10 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 	var res ScanResult
 	for _, f := range files {
 		if s.skipByName(f.LogicalPath) || s.skipByFragment(f.LogicalPath) {
+			// A reviewed skip (binary media extension, skip filename, skip
+			// fragment) is an accepted allow — but recorded so the skip is
+			// VISIBLE rather than an invisible `continue` (GHSA-5mmm-3whv-3rqp).
+			res.Skipped = append(res.Skipped, f.LogicalPath)
 			continue
 		}
 		data, err := os.ReadFile(f.ResolvedPath)
