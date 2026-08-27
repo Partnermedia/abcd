@@ -43,14 +43,25 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 	if trimmed == "" {
 		return Intent{}, "", fmt.Errorf("intent: refusing to create from empty text")
 	}
-	slug, err := deriveIntentSlug(trimmed)
+	// Redact the caller's text through the one canonical scanner BEFORE anything
+	// derived from it is built (gh-486). The slug becomes the filename and is
+	// derived straight from this text, so a secret/home-path in the prose would
+	// otherwise reach the committed filename too (the capture-slug leak shape):
+	// redacting first and deriving the slug from the redacted text is what keeps a
+	// finding out of the path as well as the body. CreateDraft redacts title and
+	// body again as its own boundary guard; that second pass is idempotent here.
+	redacted, _, err := redactIntentText(repoRoot, trimmed)
+	if err != nil {
+		return Intent{}, "", err
+	}
+	slug, err := deriveIntentSlug(redacted)
 	if err != nil {
 		return Intent{}, "", err
 	}
 	return CreateDraft(repoRoot, DraftOptions{
 		Slug:     slug,
-		Title:    titleLine(trimmed),
-		SeedBody: trimmed,
+		Title:    titleLine(redacted),
+		SeedBody: redacted,
 		Impact:   impact,
 	})
 }
@@ -105,9 +116,28 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		}
 	}
 
+	// Boundary redaction (gh-486): CreateDraft is the ONE canonical draft-mint
+	// primitive, so the "no unredacted secret/home-path in a committed intent"
+	// invariant lives HERE, where every caller (quoted-text create AND
+	// capture-promote) passes through it — never once per caller, where a future
+	// caller would reopen the leak. Title and SeedBody are the two free-text
+	// members; the structural fields (slug, ids, impact) are validated/enum-
+	// constrained above and carry nothing to redact. Fail-closed on a degraded
+	// scanner; the pass is idempotent for text a caller already redacted.
+	rTitle, _, err := redactIntentText(repoRoot, opts.Title)
+	if err != nil {
+		return Intent{}, "", err
+	}
+	rBody, _, err := redactIntentText(repoRoot, opts.SeedBody)
+	if err != nil {
+		return Intent{}, "", err
+	}
+	opts.Title = rTitle
+	opts.SeedBody = rBody
+
 	var created Intent
 	var mintWarning string
-	err := withIntentMintLock(repoRoot, func() error {
+	err = withIntentMintLock(repoRoot, func() error {
 		id, warn, err := nextIntentID(repoRoot)
 		if err != nil {
 			return err
