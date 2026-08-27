@@ -181,10 +181,11 @@ func TestDuplicates(t *testing.T) {
 }
 
 // GitHub #338: IsDelimiter is the ONE delimiter rule every reader of a record's
-// bytes shares. It is tolerant of trailing whitespace, of the end-of-line bytes
-// a keep-ends splitter leaves on, and of a leading BOM; it is intolerant of
-// everything else, so a fat-fingered `----`, a delimiter carrying content, and
-// an indented `---` stay non-delimiters.
+// bytes shares. It is tolerant of trailing whitespace and of the end-of-line
+// bytes a keep-ends splitter leaves on; it is intolerant of everything else, so
+// a fat-fingered `----`, a delimiter carrying content, an indented `---`, and a
+// U+FEFF-prefixed line all stay non-delimiters. BOM tolerance is the caller's,
+// applied to line 0 only (iss-2608270926036966).
 func TestIsDelimiter(t *testing.T) {
 	for _, ln := range []string{
 		"---",
@@ -195,8 +196,6 @@ func TestIsDelimiter(t *testing.T) {
 		"---\r\n",
 		"--- \n",
 		"--- \r\n",
-		"\ufeff---",
-		"\ufeff--- \n",
 	} {
 		if !IsDelimiter(ln) {
 			t.Fatalf("IsDelimiter(%q) = false, want true", ln)
@@ -212,9 +211,75 @@ func TestIsDelimiter(t *testing.T) {
 		"\t---",
 		" --- ",
 		"# ---",
+		// U+FEFF is a BOM only at byte 0 of a file, which is a property of the
+		// POSITION, not of the character. The predicate sees a bare line and
+		// cannot know the position, so callers trim it at line 0 themselves.
+		"\ufeff---",
+		"\ufeff--- \n",
 	} {
 		if IsDelimiter(ln) {
 			t.Fatalf("IsDelimiter(%q) = true, want false", ln)
 		}
+	}
+}
+
+// iss-2608270926036966: U+FEFF is a byte-order mark ONLY at the very start of a
+// file. Anywhere else it is ZERO WIDTH NO-BREAK SPACE, an ordinary character, and
+// a line spelled "\ufeff---" is not a delimiter to any other reader of the file.
+//
+// Trimming it on every line made Fields close the block early at such a line
+// while intent's writer (setFrontmatterFields, which trims only " \t\r") read on
+// to the NEXT bare `---` — the body's thematic break — and inserted keys there.
+// The record stayed lint-green, `abcd intent plan` reported success, and the
+// value it wrote was invisible on reload: two readers, one file, different block
+// boundaries. The tolerance belongs to line 0's position, not to the character.
+func TestMidFileZWNBSPIsNotADelimiter(t *testing.T) {
+	lines := []string{
+		"---",
+		"id: itd-9",
+		"\ufeff---", // ZWNBSP, not a BOM: an ordinary body-ish line
+		"kind: intent",
+		"impact: fix",
+		"impact: banana",
+		"---",
+		"# Body",
+	}
+
+	fields := Fields(lines)
+	// The block does NOT end at the ZWNBSP line, so every key up to the real
+	// closing `---` is in scope — exactly what the writer sees.
+	for _, key := range []string{"id", "kind", "impact"} {
+		if _, ok := fields[key]; !ok {
+			t.Fatalf("Fields stopped early at a mid-file ZWNBSP line: %q missing from %v", key, fields)
+		}
+	}
+	if got := fields["kind"].Value; got != "intent" {
+		t.Fatalf("kind = %q, want %q", got, "intent")
+	}
+
+	// Duplicates must scan the same span, or a gate armed on the second `impact:`
+	// is silently disarmed by one invisible character.
+	dups := Duplicates(lines)
+	if len(dups) != 1 || dups[0].Key != "impact" || dups[0].Line != 6 {
+		t.Fatalf("Duplicates = %+v, want one impact duplicate at line 6", dups)
+	}
+
+	// And the delimiter predicate itself says so.
+	if IsDelimiter("\ufeff---") {
+		t.Fatal(`IsDelimiter("\ufeff---") = true; U+FEFF is only a BOM at file position 0`)
+	}
+}
+
+// A BOM ahead of the OPENING delimiter is still tolerated — that is the position
+// where U+FEFF really is a byte-order mark. Callers trim it at line 0 themselves;
+// Fields and Duplicates do it before their scan.
+func TestBOMBeforeOpeningDelimiter(t *testing.T) {
+	lines := []string{"\ufeff---", "id: itd-9", "---", "# Body"}
+	if got := Fields(lines); got["id"].Value != "itd-9" {
+		t.Fatalf("a BOM before the opening delimiter must not hide the block: %v", got)
+	}
+	dupLines := []string{"\ufeff---", "id: a", "id: b", "---"}
+	if got := Duplicates(dupLines); len(got) != 1 {
+		t.Fatalf("Duplicates = %+v, want one duplicate past a leading BOM", got)
 	}
 }

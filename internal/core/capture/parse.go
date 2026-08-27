@@ -28,7 +28,10 @@ import (
 // string, int, []string, or map[string]any.
 func parseFrontmatterAndBody(text string) (map[string]any, string, error) {
 	lines := splitKeepEnds(text)
-	if len(lines) == 0 || !frontmatter.IsDelimiter(lines[0]) {
+	// TrimBOM applies to lines[0] and nowhere else: U+FEFF is a byte-order mark
+	// only at the file's first position, and a mid-file "\ufeff---" is an
+	// ordinary body line (iss-2608270926036966).
+	if len(lines) == 0 || !frontmatter.IsDelimiter(frontmatter.TrimBOM(lines[0])) {
 		return nil, "", fmt.Errorf("%w: frontmatter must start with '---' on the first line", ErrMalformedFrontmatter)
 	}
 	closeIdx := -1

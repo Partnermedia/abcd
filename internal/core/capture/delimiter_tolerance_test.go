@@ -48,9 +48,10 @@ func TestDelimiterToleranceMatchesCanonicalScanner(t *testing.T) {
 		{"trailing tab on close", "---", "---\t"},
 		{"trailing spaces and tabs", "---  \t", "---\t "},
 		// A BOM sits invisibly ahead of the opening delimiter. The canonical
-		// scanner trims it (TrimBOM) so every frontmatter-keyed gate still reads
-		// the record; capture refused the same bytes outright. Same class, same
-		// rule, so it comes along with the shared predicate.
+		// scanner trims it at line 0 so every frontmatter-keyed gate still reads
+		// the record; capture refused the same bytes outright. Same class, so
+		// capture trims it in the same one position — and nowhere else, see the
+		// mid-file ZWNBSP case below (iss-2608270926036966).
 		{"BOM before open", "\ufeff---", "---"},
 	}
 	for _, tc := range cases {
@@ -104,6 +105,10 @@ func TestDelimiterStrictnessPreserved(t *testing.T) {
 		{"open carries content", buildRecord("--- yaml", "---")},
 		{"close carries content", buildRecord("---", "--- yaml")},
 		{"indented close is not a close", "---\nid: 7\n  ---\nbody\n"},
+		// U+FEFF mid-file is ZERO WIDTH NO-BREAK SPACE, not a BOM: this line is
+		// body prose, so the block is simply unterminated to BOTH readers
+		// (iss-2608270926036966).
+		{"mid-file ZWNBSP is not a close", "---\nid: 7\n\ufeff---\nbody\n"},
 		{"no close at all", "---\nid: 7\n"},
 		{"leading blank line before open", "\n---\nid: 7\n---\n"},
 	}
@@ -125,7 +130,9 @@ func TestDelimiterStrictnessPreserved(t *testing.T) {
 // rewrites, not just readable. A reader that accepts bytes the writer refuses is
 // the same split verdict in the other direction.
 func TestDelimiterToleranceSurvivesRewrite(t *testing.T) {
-	text := buildRecord("---", "--- ")
+	// A BOM on the opening delimiter too: the reader accepts it, so the writer
+	// must, or capture desyncs against itself (iss-2608270926036966).
+	text := buildRecord("\ufeff---", "--- ")
 
 	out, err := setScalarField(text, "status", "resolved")
 	if err != nil {
