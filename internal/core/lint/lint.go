@@ -105,13 +105,12 @@ var (
 	// adr-9999`. record_schema is what closes that — it reads every store and
 	// resolves cross-store targets — so the two rules are armed together.
 	supersededRe = regexp.MustCompile(`^(itd|adr)-\d+`)
-	// spec_lifecycle: anchored id/filename matchers for the spec store. The
+	// spec_lifecycle: the anchored filename matcher for the spec store. The
 	// well-formed-ID predicates themselves are NOT restated here: they are
 	// recordid.ValidIntentID / recordid.ValidSpecID, the same call the intent and
 	// spec loaders make, so this gate refuses exactly the set they refuse
 	// (iss-2608270500198764).
-	specFileRe   = regexp.MustCompile(`^spc-\d+.*\.md$`)
-	specIDFullRe = regexp.MustCompile(`^spc-\d+$`)
+	specFileRe = regexp.MustCompile(`^spc-\d+.*\.md$`)
 	// The lifecycle directories each store declares. They are spelled ONCE, as
 	// ordered slices, because record_schema enumerates them to catch an undeclared
 	// bucket — a second, divergent copy would let a bucket be "known" to one rule
@@ -2006,6 +2005,11 @@ func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([
 	var out []Finding
 	for _, spec := range idx.Specs {
 		if spec.exempt {
+			// A content-exempt spec is excused from how it is WRITTEN, never from
+			// being well-formed: spec.Load validates id and intent on every file and
+			// aborts the whole store on one failure, with no exemption concept at all
+			// (iss-2608270500207987).
+			out = append(out, validateSpecWellFormed(spec.Path, spec.fields, cfg.Severity)...)
 			continue
 		}
 		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, cfg.Severity)...)
@@ -2050,7 +2054,7 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 			continue
 		}
 		raw := spec.fields["id"].value
-		if !specIDFullRe.MatchString(raw) {
+		if !recordid.ValidSpecID(raw) {
 			continue
 		}
 		// Canonical key so spc-005 and spc-5 collide as one id (iss-392's
@@ -2065,7 +2069,7 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 			continue
 		}
 		raw := spec.fields["id"].value
-		if !specIDFullRe.MatchString(raw) {
+		if !recordid.ValidSpecID(raw) {
 			continue
 		}
 		out = append(out, validateIDUnique(repoRoot, spec.Path, canonRecordID(raw), "spec", "spec_id_unique", cfg.Severity, spec.fields, idFiles)...)
@@ -2073,8 +2077,44 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 	return out, nil
 }
 
-func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]bool, intentSpecID map[string]string, severity string) []Finding {
+// validateSpecWellFormed is the loader-parity subset of spec_lifecycle: exactly
+// what spec.Validate enforces before spec.Load will trust the record — a
+// well-formed id and a well-formed intent back-link — and nothing about how the
+// record is WRITTEN.
+//
+// It is split out because it is the one part of this rule the content exemption
+// must not reach. spec.Load has no exemption concept: it validates every spec's
+// id and intent unconditionally and aborts the WHOLE store on one failure, so a
+// `status: superseded` spec that skipped this rule entirely merged green and
+// then broke `abcd <spc-N>` dispatch, spec minting and every intent verb that
+// loads specs (iss-2608270500207987). Being historical excuses a record from how
+// it is written, never from being well-formed (iss-39).
+func validateSpecWellFormed(rel string, fields map[string]fmField, severity string) []Finding {
 	var out []Finding
+	add := func(line int, msg string) {
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: rel, Line: line, RuleID: "spec_lifecycle",
+			Severity: severity, Message: msg,
+		})
+	}
+	id := fields["id"]
+	if !recordid.ValidSpecID(id.value) {
+		add(id.line, "spec id must be present and match ^spc-\\d+$ (got '"+id.value+"')")
+	}
+	intent := fields["intent"]
+	if !recordid.ValidIntentID(intent.value) {
+		add(intent.line, "spec intent link must be present and match ^itd-\\d+$ (got '"+intent.value+"')")
+	}
+	return out
+}
+
+func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]bool, intentSpecID map[string]string, severity string) []Finding {
+	// The well-formedness subset first, so the id/intent patterns are stated once
+	// for both the exempt and the non-exempt path.
+	out := validateSpecWellFormed(rel, fields, severity)
 	add := func(line int, msg string) {
 		if line == 0 {
 			line = 1
@@ -2091,17 +2131,13 @@ func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]
 	}
 
 	id := fields["id"]
-	idValid := specIDFullRe.MatchString(id.value)
-	if !idValid {
-		add(id.line, "spec id must be present and match ^spc-\\d+$ (got '"+id.value+"')")
-	}
+	idValid := recordid.ValidSpecID(id.value)
 	if slug, ok := fields["slug"]; !ok || isNull(slug.value) {
 		add(slug.line, "spec slug must be present")
 	}
 
 	intent := fields["intent"]
 	if !recordid.ValidIntentID(intent.value) {
-		add(intent.line, "spec intent link must be present and match ^itd-\\d+$ (got '"+intent.value+"')")
 		return out // no existence/agreement check possible without a well-formed link
 	}
 	if !knownIntent[canonRecordID(intent.value)] {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
 // intentParityCfg is the record-lint config the parity tests run: the intent
@@ -91,5 +92,91 @@ func TestIntentLintAcceptsWhatTheLoaderAccepts(t *testing.T) {
 	}
 	if n := countRule(fs, "intent_lifecycle"); n != 0 {
 		t.Fatalf("well-formed intent must be lint-clean; got %+v", fs)
+	}
+}
+
+// specParityCfg is the spec-side mirror: the spec store and the intent tree at
+// their real repo-relative homes, with the committed repo's own content
+// exemption armed (a `status: superseded` record skips the content-AUTHORING
+// checks).
+func specParityCfg() Config {
+	return Config{
+		Roots:          []string{".abcd/development"},
+		ExemptIfStatus: []string{"superseded"},
+		Rules: map[string]RuleConfig{
+			"spec_lifecycle": {Enabled: true, Severity: severityBlocker, SpecsDir: "specs", IntentsDir: "intents"},
+		},
+	}
+}
+
+// TestSpecLintRefusesEveryIDTheLoaderRefusesWhenExempt pins the same contract on
+// the spec store, through the content exemption: a `status: superseded` line
+// makes a spec content-exempt, and spec_lifecycle skipped such a file entirely —
+// so the ONE rule that checks a spec's id and intent back-link never ran.
+// spec.Load has no exemption concept and validates both unconditionally, so a
+// lint-green historical spec aborted the WHOLE store: `abcd <spc-N>` dispatch,
+// NextID minting, and every intent verb that loads specs
+// (iss-2608270500207987). Being historical excuses a record from how it is
+// WRITTEN, never from being well-formed (iss-39).
+func TestSpecLintRefusesEveryIDTheLoaderRefusesWhenExempt(t *testing.T) {
+	cases := []struct {
+		name string
+		spec string
+	}{
+		{"bad-intent", "---\nid: spc-99\nslug: foo\nintent: itd-bogus\nstatus: superseded\n---\n# foo\n"},
+		{"absent-intent", "---\nid: spc-99\nslug: foo\nstatus: superseded\n---\n# foo\n"},
+		{"null-intent", "---\nid: spc-99\nslug: foo\nintent: null\nstatus: superseded\n---\n# foo\n"},
+		{"bad-id", "---\nid: spc-\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n"},
+		{"absent-id", "---\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n"},
+	}
+	const rel = ".abcd/development/specs/open/spc-99-foo.md"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, ".abcd/development/intents/shipped/itd-10-alpha.md",
+				"---\nid: itd-10\nslug: alpha\nkind: standalone\nspec_id: spc-99\n---\n# ok\n")
+			writeFile(t, root, rel, tc.spec)
+
+			// Half one: the loader refuses the file (and with it the whole store).
+			if _, err := spec.Load(root); err == nil {
+				t.Fatalf("spec.Load accepted %s: the fixture no longer pins the loader's rule", tc.name)
+			}
+
+			// Half two: the lint must therefore refuse it too, exemption or not.
+			fs, err := Lint(specParityCfg(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var blocked bool
+			for _, f := range fs {
+				if f.File == rel && f.RuleID == "spec_lifecycle" && f.Severity == severityBlocker {
+					blocked = true
+				}
+			}
+			if !blocked {
+				t.Fatalf("lint passed a content-exempt spec the loader refuses (%s); findings: %+v", tc.name, fs)
+			}
+		})
+	}
+}
+
+// TestSpecLintKeepsTheContentExemptionForAuthoring is the guard on the other
+// side of the same change: the exemption still excuses a historical spec from
+// the AUTHORING checks — the forbidden `status:` field that made it exempt in
+// the first place, and the bidirectional-agreement and intent-existence checks
+// — so arming well-formedness cannot turn the historical record red.
+func TestSpecLintKeepsTheContentExemptionForAuthoring(t *testing.T) {
+	root := t.TempDir()
+	const rel = ".abcd/development/specs/open/spc-99-foo.md"
+	// Well-formed id and intent link, but: a forbidden status: field, an intent
+	// that exists in no bucket, and hence no back-link agreement.
+	writeFile(t, root, rel, "---\nid: spc-99\nslug: foo\nintent: itd-404\nstatus: superseded\n---\n# foo\n")
+
+	fs, err := Lint(specParityCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "spec_lifecycle"); n != 0 {
+		t.Fatalf("content-exempt spec must keep its authoring exemption; got %+v", fs)
 	}
 }
