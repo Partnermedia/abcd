@@ -37,6 +37,19 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		return InstallResult{Status: "aborted"}, nil
 	}
 
+	// A committed `.abcd` that exists but is NOT a real directory — a symlink
+	// (git mode 120000) or any non-directory — gates the whole install
+	// (GHSA-xrf8-4432-gw2f). classify keys ManagedRepo off a marker block alone, so
+	// a hostile clone can classify managed while `.abcd` is a symlink pointing
+	// outside the tree; the config/rules/identity writers would then resolve
+	// cwd/.abcd/... through it and land attacker-chosen JSON outside the clone.
+	// The IsRealDir result is a WRITE GATE here, not merely a detection signal: the
+	// install refuses up front so nothing is half-written, and the InRoot writers
+	// below are the second, structural line of defence.
+	if reason := abcdDirHazard(abs); reason != "" {
+		return InstallResult{Status: "refused", Notes: []string{reason}}, nil
+	}
+
 	// Adoption gate for an unmanaged repo.
 	adopted := false
 	if det.FolderKind == UnmanagedRepo {
@@ -150,6 +163,28 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		Notes:              ac.notes,
 		OptionalSkipped:    optionalSkipped(opts, final.Gaps),
 	}, nil
+}
+
+// abcdDirHazard reports a committed `.abcd` that exists but is not a real
+// directory — a symlink or any non-directory a hostile clone plants so the
+// repo-.abcd writers escape the working tree (GHSA-xrf8-4432-gw2f). It returns a
+// human-facing refusal reason for that state, and "" when `.abcd` is absent (a
+// fresh install creates it, contained) or a real directory (the ordinary managed
+// repo). Lstat, never Stat: a dangling symlink and one that resolves must both
+// read as the symlink they are, not as their target.
+func abcdDirHazard(cwd string) string {
+	fi, err := os.Lstat(filepath.Join(cwd, ".abcd"))
+	if err != nil {
+		// Absent (or unstattable): there is nothing to escape through, and the
+		// InRoot writers create `.abcd` contained under the repo root.
+		return ""
+	}
+	if fi.IsDir() && fi.Mode()&os.ModeSymlink == 0 {
+		return "" // a real directory: the ordinary managed repo
+	}
+	return "refused to install: .abcd exists but is not a real directory (it is a symlink or a non-directory). " +
+		"A committed .abcd symlink would redirect config, rules, and identity writes outside the clone. " +
+		"Remove or replace .abcd with a real directory and re-run."
 }
 
 // resolveInstallTarget decides where the PATH entry goes, before any write.
@@ -996,10 +1031,11 @@ func (a *applyCtx) stepRules() {
 	if !a.approved[SafeAutocreate] || !a.has("rules.missing") {
 		return
 	}
-	path := filepath.Join(a.cwd, ".abcd", "rules.json")
 	rules := map[string]any{"schema_version": 1, "disabled": false, "domains": map[string]any{}}
-	if err := writeJSON(path, rules); err == nil {
-		a.note(path)
+	// Contained through an os.Root opened at the repo: a committed `.abcd` ancestor
+	// symlink must not land rules.json outside the working tree (GHSA-xrf8-4432-gw2f).
+	if err := writeRepoJSON(a.cwd, rulesRelPath, rules); err == nil {
+		a.note(filepath.Join(a.cwd, ".abcd", "rules.json"))
 	}
 }
 
