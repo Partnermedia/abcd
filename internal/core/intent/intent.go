@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
@@ -48,12 +49,13 @@ var Buckets = []string{BucketDrafts, BucketPlanned, BucketShipped, BucketDiscipl
 // maxIntentFileBytes caps any intent markdown file read (trust boundary).
 const maxIntentFileBytes = 256 * 1024
 
+// An intent id and a spec id constrain what path this package will build
+// (path-traversal defence); the predicates that decide it live in
+// internal/core/recordid, because the record-lint gate has to refuse exactly the
+// set this package refuses and a second copy of the pattern is a copy that can
+// drift (iss-2608270500198764).
+
 var (
-	// intentIDRe constrains an intent id so it can never build a path that
-	// escapes the store (path-traversal defence).
-	intentIDRe = regexp.MustCompile(`^itd-[0-9]+$`)
-	// specIDRe constrains a spec id the same way.
-	specIDRe = regexp.MustCompile(`^spc-[0-9]+$`)
 	// slugRe constrains a slug to kebab-case, since a slug becomes a filename.
 	slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	// intentFileRe matches an intent-store filename.
@@ -98,7 +100,7 @@ func (c Corpus) Lookup(id string) (Intent, bool) {
 // Validate enforces the id regex — the fail-closed guard Load runs before
 // trusting a record's id in a filesystem path.
 func Validate(it Intent) error {
-	if !intentIDRe.MatchString(it.ID) {
+	if !recordid.ValidIntentID(it.ID) {
 		return fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", it.ID)
 	}
 	return nil

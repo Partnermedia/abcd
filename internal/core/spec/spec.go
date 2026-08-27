@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // Bucket directory names. The directory a spec file lives in is its status.
@@ -46,12 +48,13 @@ const maxSpecFileBytes = 256 * 1024
 // spec_id values.
 var intentBuckets = []string{"drafts", "planned", "shipped", "disciplines", "superseded"}
 
+// A spec id and its load-bearing intent link constrain what path this package
+// will build (path-traversal defence); the predicates that decide it live in
+// internal/core/recordid, because the record-lint gate has to refuse exactly the
+// set this package refuses — content exemption or not — and a second copy of the
+// pattern is a copy that can drift (iss-2608270500207987).
+
 var (
-	// specIDRe constrains a spec id so it can never be used to build a path that
-	// escapes the store (path-traversal defence).
-	specIDRe = regexp.MustCompile(`^spc-[0-9]+$`)
-	// intentIDRe constrains the load-bearing intent link the same way.
-	intentIDRe = regexp.MustCompile(`^itd-[0-9]+$`)
 	// slugRe constrains a slug to kebab-case, since a slug becomes a filename.
 	slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	// specNumRe extracts the numeric N from a spec id or a spec_id value that may
@@ -117,10 +120,10 @@ func (s Store) ByIntent(intentID string) (Spec, bool) {
 // is the fail-closed guard both Load and the minting path run before trusting a
 // record's id in a filesystem path.
 func Validate(s Spec) error {
-	if !specIDRe.MatchString(s.ID) {
+	if !recordid.ValidSpecID(s.ID) {
 		return fmt.Errorf("spec: id %q must match ^spc-[0-9]+$", s.ID)
 	}
-	if !intentIDRe.MatchString(s.Intent) {
+	if !recordid.ValidIntentID(s.Intent) {
 		return fmt.Errorf("spec %s: intent %q must match ^itd-[0-9]+$", s.ID, s.Intent)
 	}
 	return nil
