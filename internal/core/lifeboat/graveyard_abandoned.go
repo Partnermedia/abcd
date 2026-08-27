@@ -28,12 +28,22 @@ import (
 
 // Record-id shapes. A finding is keyed by the record's own id only when that id
 // has the expected shape; a record whose id is malformed (or whose id must be
-// derived) is validated against these before it can key a finding.
+// derived) is validated against these before it can key a finding. Intents and
+// issues spell their id one way, so the shape gate is the whole check; ADRs go
+// through gvCanonADRID below, which gates AND canonicalises.
 var (
 	gvIntentIDRe = regexp.MustCompile(`^itd-[0-9]+$`)
-	gvADRIDRe    = regexp.MustCompile(`^adr-[0-9]+$`)
 	gvIssueIDRe  = regexp.MustCompile(`^iss-[0-9]+$`)
 )
+
+// gvADRHandleRe parses an ADR id into its zero-stripped number. ADRs are the one
+// family whose id is routinely written both padded and bare (`adr-0012` in a
+// frontmatter block, `0012-slug.md` in a filename), and the rest of the record
+// treats those as ONE handle — record dispatch (record.adrHandleRe) and the
+// citation resolver (recordid.fileID) both compare the parsed number. Layer 2
+// must agree, or one ADR keys two findings and the cross-home dedup this file
+// documents cannot fire.
+var gvADRHandleRe = regexp.MustCompile(`^adr-0*([0-9]+)$`)
 
 // gvRejectionVerbs is the deliberately narrow set of verbs that mark a
 // DECISIONS.md bullet as recording a rejected option. It is conservative on
@@ -45,10 +55,13 @@ var gvRejectionVerbs = []string{
 	"rejected", "dropped", "discarded", "abandoned", "ruled out", "deferred",
 }
 
-// maxAbandonedEvidencePerFinding bounds the evidence lines one layer-2 finding
-// may carry. Only the alternatives-considered signal can produce an unbounded
-// count (one line per bullet); the cap keeps a hostile or pathological ADR from
-// ballooning a single finding.
+// maxAbandonedEvidencePerFinding bounds each unbounded evidence source a layer-2
+// finding draws on: the alternatives-considered bullets (one line per bullet) and
+// the shadowed-claimant notes gvIDClaims records. The cap keeps a hostile or
+// pathological record home from ballooning a single finding. Unlike
+// maxGraveyardFindingsPerSignal it promises no notice of its own — it bounds the
+// evidence of a finding that is itself reported, not the findings a signal
+// reports.
 const maxAbandonedEvidencePerFinding = 32
 
 // buildAbandoned reads what the project explicitly declared dead and returns the
@@ -101,12 +114,13 @@ func gvSupersededIntents(ctx *SourceContext) []Finding {
 
 // gvSupersededADRs reports every ADR the record marks superseded — by an
 // explicit status: superseded or a non-null superseded_by — across the native
-// ADR home and each conventional home. Keyed by the ADR's own adr-N id (derived
-// from the NNNN- filename when the frontmatter carries none), deduped first-wins
-// across homes (native wins), sorted numerically by id.
+// ADR home and each conventional home. Keyed by the ADR's own canonical adr-N id
+// (derived from the NNNN- filename when the frontmatter carries none), deduped
+// first-wins across homes (native wins) with every shadowed claimant named in the
+// retained finding's evidence, sorted numerically by id.
 func gvSupersededADRs(ctx *SourceContext) []Finding {
 	var out []Finding
-	seen := map[string]bool{}
+	claims := newGvIDClaims()
 	gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
 		status := strings.ToLower(gvUnquote(fields["status"].Value))
 		supBy := gvUnquote(fields["superseded_by"].Value)
@@ -114,10 +128,10 @@ func gvSupersededADRs(ctx *SourceContext) []Finding {
 			return
 		}
 		id := gvADRID(fields, name)
-		if id == "" || seen[id] {
+		if id == "" || claims.shadowed(out, id, path) {
 			return
 		}
-		seen[id] = true
+		claims.take(id, len(out))
 		var ev []string
 		if !frontmatter.IsNull(supBy) {
 			ev = append(ev, sanitize("superseded_by: "+supBy))
@@ -140,10 +154,10 @@ func gvSupersededADRs(ctx *SourceContext) []Finding {
 // the underlying ADR id.
 func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 	var out []Finding
-	seen := map[string]bool{}
+	claims := newGvIDClaims()
 	gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
 		id := gvADRID(fields, name)
-		if id == "" || seen[id] {
+		if id == "" {
 			return
 		}
 		data, ok := ctx.ReadFile(path)
@@ -154,7 +168,12 @@ func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 		if !found {
 			return
 		}
-		seen[id] = true
+		// The claim is tested only once the record has something to contribute:
+		// an ADR sharing an id but carrying no such section shadows nothing here.
+		if claims.shadowed(out, id, path) {
+			return
+		}
+		claims.take(id, len(out))
 		if len(bullets) > maxAbandonedEvidencePerFinding {
 			bullets = bullets[:maxAbandonedEvidencePerFinding]
 		}
@@ -253,6 +272,48 @@ func gvRejectedOptions(ctx *SourceContext) []Finding {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// gvIDClaims tracks which finding holds which record id while a signal is being
+// built, so a second record claiming an id already taken is ANNOUNCED rather than
+// dropped in silence. Two records genuinely can claim one ADR id — the same ADR
+// copied into a second home (the dedup this file documents) and, because a number
+// is not a unique name, two distinct ADRs numbered alike (adr-tools branches
+// colliding, or log4brains' YYYYMMDD- filenames for two ADRs written the same
+// day). Nothing in the id can tell those apart, so both still dedupe first-wins;
+// what the loud-staging rule forbids is the drop leaving no marker at all, since
+// a shadowed record is then permanently uncitable by the layer-3 interpreter and
+// nothing in the packed lifeboat says why.
+type gvIDClaims struct {
+	at      map[string]int // canonical id -> index of the finding that holds it
+	shadows map[string]int // canonical id -> notes already recorded against it
+}
+
+func newGvIDClaims() *gvIDClaims {
+	return &gvIDClaims{at: map[string]int{}, shadows: map[string]int{}}
+}
+
+// take records that the finding at index i in the signal's slice holds id.
+func (c *gvIDClaims) take(id string, i int) { c.at[id] = i }
+
+// shadowed reports whether id is already claimed and, when it is, notes path on
+// the finding that holds it — the retained finding names every claimant it
+// shadowed. The notes are bounded like any other unbounded evidence source, so a
+// hostile record home carrying thousands of same-numbered files cannot balloon
+// one finding.
+func (c *gvIDClaims) shadowed(out []Finding, id, path string) bool {
+	i, dup := c.at[id]
+	if !dup {
+		return false
+	}
+	if c.shadows[id] < maxAbandonedEvidencePerFinding {
+		c.shadows[id]++
+		f := out[i]
+		f.Evidence = append(append([]string(nil), f.Evidence...),
+			sanitize(fmt.Sprintf("(shadowed: %s also claims %s and is not separately reported)", path, id)))
+		out[i] = f
+	}
+	return true
+}
+
 // gvADRHomes lists the ADR directories in dedup priority order: the native home
 // first (so it wins a first-writer-wins tie), then the conventional homes.
 func gvADRHomes() []string {
@@ -280,15 +341,32 @@ func gvEachADR(ctx *SourceContext, fn func(name, path string, fields map[string]
 }
 
 // gvADRID resolves an ADR's id: its frontmatter id when it is a valid adr-N,
-// else the id derived from a leading NNNN- filename, else "" (skip).
+// else the id derived from a leading NNNN- filename, else "" (skip). BOTH paths
+// return the canonical spelling — an id read verbatim from the frontmatter while
+// the filename path stripped padding made `id: adr-012` and a filename-derived
+// `adr-12` two ids for one ADR, which is precisely the case the cross-home dedup
+// exists to collapse.
 func gvADRID(fields map[string]frontmatter.Field, name string) string {
-	if id := gvUnquote(fields["id"].Value); gvADRIDRe.MatchString(id) {
+	if id := gvCanonADRID(gvUnquote(fields["id"].Value)); id != "" {
 		return id
 	}
-	if id := gvADRIDFromFilename(name); gvADRIDRe.MatchString(id) {
-		return id
+	return gvCanonADRID(gvADRIDFromFilename(name))
+}
+
+// gvCanonADRID canonicalises an ADR id to the one spelling every claimant of that
+// ADR resolves to: adr-<n>, zero-stripped and rebuilt from the parsed integer
+// (never from the matched text, so a padded spelling cannot mint a second id).
+// "" when the string is not an ADR id at all.
+func gvCanonADRID(id string) string {
+	m := gvADRHandleRe.FindStringSubmatch(id)
+	if m == nil {
+		return ""
 	}
-	return ""
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return ""
+	}
+	return "adr-" + strconv.Itoa(n)
 }
 
 // gvADRIDFromFilename derives adr-N from a leading run of digits in an NNNN-slug
