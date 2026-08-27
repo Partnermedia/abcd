@@ -280,7 +280,6 @@ func (l *memoryLinter) checkQuotation() {
 // ---------------------------------------------------------------------------
 
 func runMemoryCoverageLint(repoRoot string) ([]Finding, map[string]any, error) {
-	mem := Dir(repoRoot)
 	indexPath := CoverageIndexPath(repoRoot)
 	report := map[string]any{
 		"path":            indexPath,
@@ -289,12 +288,19 @@ func runMemoryCoverageLint(repoRoot string) ([]Finding, map[string]any, error) {
 		"new_fingerprint": nil,
 		"written":         false,
 	}
-	if fi, err := os.Stat(mem); err != nil || !fi.IsDir() {
+	// Refuse a symlinked store DIRECTORY before the coverage index is written
+	// (GHSA-72rp): writeCoverageIndex would otherwise MkdirAll + write into the
+	// symlink target, escaping the repo.
+	mem, present, err := safeMemoryDir(repoRoot)
+	if err != nil {
+		return nil, report, err
+	}
+	if !present {
 		return nil, report, nil
 	}
 
 	var pages []crawledPage
-	err := filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
@@ -400,10 +406,21 @@ func Lint(req LintRequest) (LintResult, error) {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	mem := Dir(root)
+	// Refuse a symlinked store DIRECTORY before any crawl or coverage write
+	// (GHSA-72rp): the leaf O_NOFOLLOW guards do not contain a symlinked ancestor,
+	// and runMemoryCoverageLint would otherwise write .coverage_index.json into
+	// the symlink target.
+	mem, present, err := safeMemoryDir(root)
+	if err != nil {
+		return LintResult{}, err
+	}
+	if !present {
+		// Keep the reported store_path canonical when the store is simply absent.
+		mem = Dir(root)
+	}
 
 	var findings []Finding
-	if fi, err := os.Stat(mem); err == nil && fi.IsDir() {
+	if present {
 		var pagePaths []string
 		err := filepath.WalkDir(mem, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {

@@ -105,6 +105,39 @@ func validatedMemoryDir(repoRoot string) (string, error) {
 	return current, nil
 }
 
+// safeMemoryDir is the read/lint counterpart of validatedMemoryDir: it resolves
+// <repoRoot>/.abcd/memory while refusing any owned segment that is a symlink or
+// a non-directory, so a committed `.abcd/memory` DIRECTORY symlink (git mode
+// 120000 pointing at an out-of-repo tree) can neither be walked, read, nor
+// written into. Unlike validatedMemoryDir it NEVER creates a missing segment —
+// a read or a health-check must not materialise the store — so it returns
+// (path, present, err): present=false when the store (or an ancestor) is simply
+// absent, and a typed *UnsafeStorePathError when a segment is a symlink or
+// non-directory.
+//
+// The leaf-guarded reads (fsutil.ReadGuarded, O_NOFOLLOW) only bind the LEAF;
+// they do NOT contain a symlinked ANCESTOR directory, which is exactly the shape
+// this guards. Callers resolve the store through this once, up front, and refuse
+// on error before any WalkDir/ReadDir/ReadFile/MkdirAll touches the path
+// (GHSA-72rp-qxm2-r8vq).
+func safeMemoryDir(repoRoot string) (string, bool, error) {
+	current := repoRoot
+	for _, segment := range []string{".abcd", "memory"} {
+		current = filepath.Join(current, segment)
+		fi, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", false, nil
+			}
+			return "", false, err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+			return "", false, &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
+		}
+	}
+	return current, true, nil
+}
+
 // RegistryMerge recomputes the COMPLETE new registry from the registry as
 // freshly read under the store lock. WritePages calls it with the on-disk
 // registry loaded INSIDE the lock, so the merged result is never derived from a

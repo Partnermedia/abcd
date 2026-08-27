@@ -202,7 +202,16 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 	for _, t := range tokens {
 		tokenSet[t] = true
 	}
-	mem := Dir(repoRoot)
+	// Refuse a symlinked store DIRECTORY up front (GHSA-72rp): the leaf-guarded
+	// reads below only bind the leaf, so a committed `.abcd/memory` symlink would
+	// otherwise be walked and its out-of-repo pages disclosed.
+	mem, present, err := safeMemoryDir(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	if !present {
+		return nil, nil
+	}
 	entries, err := os.ReadDir(mem)
 	if err != nil {
 		if os.IsNotExist(err) {
