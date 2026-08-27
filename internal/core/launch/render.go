@@ -373,6 +373,12 @@ func stampPointer(dest, rel, pointer string, value any) error {
 // the payload copy rather than the original is what makes "the source tree is
 // never mutated" structural rather than a convention a later edit could break.
 func editManifest(dest, rel string, mutate func(any) error) error {
+	// rel is a payload-relative manifest path that gets WRITTEN back. Contain it
+	// lexically before the join so an absolute path or a ".." traversal can never
+	// stamp a file outside dest, whatever its source (gh-488).
+	if !fsutil.ValidRelPath(rel) {
+		return fmt.Errorf("%s: manifest path is not a contained payload-relative path", rel)
+	}
 	path := filepath.Join(dest, filepath.FromSlash(rel))
 	doc, err := loadJSON(path)
 	if err != nil {

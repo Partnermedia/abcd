@@ -231,6 +231,37 @@ func TestRenderPayloadRefusesAnUnstampableMarketplace(t *testing.T) {
 	}
 }
 
+// TestEditManifestRefusesUncontainedRel proves the payload-write primitive itself
+// contains its relative path: a ".." traversal is refused before any join/write,
+// so a stamped manifest can never land outside dest (gh-488). A sibling target is
+// pre-created with valid JSON so the read succeeds — without the guard,
+// filepath.Join(dest, "../escape.json") then walks out of dest and
+// WriteFileAtomic stamps the sibling, mutating a file the payload never owned.
+func TestEditManifestRefusesUncontainedRel(t *testing.T) {
+	parent := t.TempDir()
+	dest := filepath.Join(parent, "payload")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const original = `{"version":"0.0.0"}` + "\n"
+	escape := filepath.Join(parent, "escape.json")
+	if err := os.WriteFile(escape, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := stampPointer(dest, "../escape.json", "/version", "9.9.9")
+	if err == nil {
+		t.Errorf("stampPointer accepted an uncontained rel; want refusal")
+	}
+	// The sibling outside dest must be byte-for-byte untouched.
+	after, readErr := os.ReadFile(escape)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(after) != original {
+		t.Fatalf("a stamp escaped dest and mutated %s: %q", escape, string(after))
+	}
+}
+
 // TestRenderPayloadRefusesOnItsOwnDrift proves the backstop: if the public check
 // over the rendered payload ever disagrees — the shape a newly-pinned location
 // the render does not stamp would take — the render REFUSES and carries the
