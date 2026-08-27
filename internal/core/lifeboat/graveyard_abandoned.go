@@ -96,7 +96,7 @@ func gvSupersededIntents(ctx *SourceContext) []Finding {
 		})
 	}
 	gvSortByID(out)
-	return gvCapFindings(out)
+	return capSignalFindings(out)
 }
 
 // gvSupersededADRs reports every ADR the record marks superseded — by an
@@ -131,7 +131,7 @@ func gvSupersededADRs(ctx *SourceContext) []Finding {
 		})
 	})
 	gvSortByID(out)
-	return gvCapFindings(out)
+	return capSignalFindings(out)
 }
 
 // gvAlternativesConsidered reports every ADR carrying an Alternatives-Considered
@@ -174,7 +174,7 @@ func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 	})
 	// Sort by the ADR id embedded in the <adr-id>-alt finding id.
 	gvSortByID(out)
-	return gvCapFindings(out)
+	return capSignalFindings(out)
 }
 
 // gvWontfixIssues reports every issue in the wontfix/ ledger bucket, keyed by its
@@ -211,7 +211,7 @@ func gvWontfixIssues(ctx *SourceContext) []Finding {
 		out = append(out, f)
 	}
 	gvSortByID(out)
-	return gvCapFindings(out)
+	return capSignalFindings(out)
 }
 
 // gvRejectedOptions reports every top-level DECISIONS.md bullet whose text
@@ -246,7 +246,7 @@ func gvRejectedOptions(ctx *SourceContext) []Finding {
 			Evidence: []string{sanitize(strings.TrimSpace(line))},
 		})
 	}
-	return gvCapFindings(out)
+	return capSignalFindings(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -397,13 +397,4 @@ func gvIDNum(id string) int {
 	}
 	n, _ := strconv.Atoi(id[start:end])
 	return n
-}
-
-// gvCapFindings bounds a single signal's findings so a hostile or pathological
-// record cannot balloon abandoned.json.
-func gvCapFindings(fs []Finding) []Finding {
-	if len(fs) > maxGraveyardFindingsPerSignal {
-		return fs[:maxGraveyardFindingsPerSignal]
-	}
-	return fs
 }

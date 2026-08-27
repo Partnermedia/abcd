@@ -2,6 +2,7 @@ package lifeboat
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,4 +444,29 @@ func abandonedFullFixture(t *testing.T) string {
 	write(".abcd/work/DECISIONS.md",
 		"# DECISIONS\n\n- 2026-07-08 — RAG rejected at this scale.\n")
 	return dir
+}
+
+// --- 9. the cap notice -------------------------------------------------------
+
+// TestAbandonedSupersededADRCapNotesTruncation pins the contract stated on
+// maxGraveyardFindingsPerSignal — "the last retained finding for a truncated
+// signal notes the cap" — for a layer-2 signal. Layer 1's capSignalFindings
+// already honours it; a layer-2 signal that truncated silently would present a
+// truncated abandoned.json as complete.
+func TestAbandonedSupersededADRCapNotesTruncation(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	for i := 1; i <= maxGraveyardFindingsPerSignal+2; i++ {
+		write(fmt.Sprintf("docs/adr/%04d-thing.md", i),
+			fmt.Sprintf("---\nid: adr-%d\nstatus: superseded\n---\n\n# %d\n", i, i))
+	}
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if len(fs) != maxGraveyardFindingsPerSignal {
+		t.Fatalf("findings = %d, want the cap %d", len(fs), maxGraveyardFindingsPerSignal)
+	}
+	last := fs[len(fs)-1]
+	want := fmt.Sprintf("(+2 further findings omitted; capped at %d)", maxGraveyardFindingsPerSignal)
+	if !gvEvidenceContains(last, want) {
+		t.Errorf("truncated signal did not note the cap: last finding %s evidence = %v, want a line containing %q",
+			last.ID, last.Evidence, want)
+	}
 }

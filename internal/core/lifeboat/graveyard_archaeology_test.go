@@ -600,7 +600,14 @@ func TestArchRevertCapTruncates(t *testing.T) {
 	a := gvArch(t, r.dir)
 	rev := bySignal(a, SignalRevert)
 	if len(rev) != maxGraveyardFindingsPerSignal {
-		t.Errorf("revert findings = %d, want the cap %d", len(rev), maxGraveyardFindingsPerSignal)
+		t.Fatalf("revert findings = %d, want the cap %d", len(rev), maxGraveyardFindingsPerSignal)
+	}
+	// The cap contract: the last retained finding of a truncated signal says so.
+	last := rev[len(rev)-1]
+	want := fmt.Sprintf("(+2 further findings omitted; capped at %d)", maxGraveyardFindingsPerSignal)
+	if !gvEvidenceContains(last, want) {
+		t.Errorf("truncated signal did not note the cap: last finding %s evidence = %v, want a line containing %q",
+			last.ID, last.Evidence, want)
 	}
 	j, err := json.Marshal(a)
 	if err != nil || !json.Valid(j) {
@@ -644,5 +651,51 @@ func TestRefIsSafeRejectsOptionLikeRefs(t *testing.T) {
 		if !refIsSafe(ok) {
 			t.Errorf("refIsSafe(%q) = false; a legitimate branch name must pass", ok)
 		}
+	}
+}
+
+// TestArchUnmergedBranchProbeCapNotesTruncation pins the same cap contract for
+// the one signal whose list is bounded BEFORE the findings are built: the probe
+// is cut to maxGraveyardFindingsPerSignal ahead of the per-branch git fan-out, so
+// capSignalFindings never sees an over-cap slice and the notice can only come
+// from the probe bound itself.
+func TestArchUnmergedBranchProbeCapNotesTruncation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping cap test in -short mode (builds many branches)")
+	}
+	r := gvNewRepo(t)
+	// One fast-import stream: a root commit on main, then cap+2 branches each one
+	// commit ahead of it (so every branch is unmerged).
+	var stream strings.Builder
+	stamp := 1700000000
+	fmt.Fprintf(&stream, "commit refs/heads/main\nmark :1\ncommitter t <t@e> %d +0000\ndata 4\nroot\nM 644 inline f.txt\ndata 2\nx\n\n", stamp)
+	extra := 2
+	for i := 0; i < maxGraveyardFindingsPerSignal+extra; i++ {
+		msg := fmt.Sprintf("work %d", i)
+		fmt.Fprintf(&stream, "commit refs/heads/b%04d\ncommitter t <t@e> %d +0000\ndata %d\n%s\nfrom :1\nM 644 inline b%04d.txt\ndata 2\ny\n\n",
+			i, stamp+1, len(msg), msg, i)
+	}
+	fi := exec.Command("git", "fast-import", "--quiet")
+	fi.Dir = r.dir
+	fi.Env = r.env
+	fi.Stdin = strings.NewReader(stream.String())
+	if out, err := fi.CombinedOutput(); err != nil {
+		t.Fatalf("git fast-import: %v: %s", err, out)
+	}
+
+	ctx, err := newSourceContext(r.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ctx.Close)
+	br := gvUnmergedBranches(ctx)
+	if len(br) != maxGraveyardFindingsPerSignal {
+		t.Fatalf("unmerged-branch findings = %d, want the probe bound %d", len(br), maxGraveyardFindingsPerSignal)
+	}
+	last := br[len(br)-1]
+	want := fmt.Sprintf("(+%d further findings omitted; capped at %d)", extra, maxGraveyardFindingsPerSignal)
+	if !gvEvidenceContains(last, want) {
+		t.Errorf("pre-truncated probe did not note the cap: last finding %s evidence = %v, want a line containing %q",
+			last.ID, last.Evidence, want)
 	}
 }
