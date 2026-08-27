@@ -116,6 +116,14 @@ var ErrPayloadUninstallable = errors.New("the rendered payload failed the instal
 // prove the backstop refuses rather than publishes.
 var payloadLockstep = CheckLockstep
 
+// caseFoldsPaths reports whether the payload-destination gate compares paths
+// case-insensitively. It is a package var for the same reason payloadLockstep
+// is: the gate's fail-closed direction cannot be provoked on a case-SENSITIVE
+// host, so substituting the predicate is the only way to prove the refusal
+// happens — and on a case-folding host, the only way to prove two genuinely
+// distinct directories are still accepted.
+var caseFoldsPaths = fsutil.CaseFoldingFS
+
 // PayloadPrecheck is everything a render refuses on WITHOUT knowing the version:
 // the resolved locations, the payload the render would write, and the light
 // installability verdict over it.
@@ -164,10 +172,17 @@ func PrecheckPayload(repoRoot, dest string) (PayloadPrecheck, error) {
 	if pre.Dest == "" || pre.Root == "" {
 		return pre, errors.New("both the repository root and the payload destination must be named")
 	}
-	if pre.Dest == pre.Root || strings.HasPrefix(pre.Dest, pre.Root+string(filepath.Separator)) {
+	// Containment is compared through the canonical primitive, case-folded on a
+	// filesystem that folds case: resolveExistingPrefix does not case-canonicalise
+	// (Go's darwin EvalSymlinks keeps the caller's spelling for every non-symlink
+	// component), so a byte-sensitive prefix test reads a case-variant
+	// --payload-dir — or a case-variant $PWD-derived root — as out-of-tree and
+	// lets the render stage the payload inside the working tree.
+	fold := caseFoldsPaths()
+	if fsutil.PathWithin(pre.Dest, pre.Root, fold) {
 		return pre, errors.New("the payload destination is inside the repository — the payload is an output, not a tracked directory")
 	}
-	if strings.HasPrefix(pre.Root, pre.Dest+string(filepath.Separator)) {
+	if fsutil.PathWithin(pre.Root, pre.Dest, fold) {
 		return pre, errors.New("the payload destination contains the repository")
 	}
 	// An existing NON-directory is refused explicitly: DirHasEntries reads it as
