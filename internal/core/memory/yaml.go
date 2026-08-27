@@ -25,6 +25,19 @@ func yamlErrf(format string, a ...any) *yamlError {
 
 var keyRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)`)
 
+// isFrontmatterClose reports whether line closes a frontmatter block. The two
+// ends of the same block are held to one rule: the open is matched after a
+// whitespace trim, so the close trims too. A trailing space or tab on the close
+// ("--- ") is a common editor artefact, and comparing it byte-exact made the
+// parsers report "frontmatter not terminated" and every reader fall back to its
+// empty default — silently dropping the page's source: provenance and the lint
+// gates that read it. This is the rule the canonical primitive already applies
+// (internal/core/frontmatter.Fields). Callers normalise \r\n -> \n first, so
+// only spaces and tabs remain to trim.
+func isFrontmatterClose(line string) bool {
+	return strings.TrimRight(line, " \t") == "---"
+}
+
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
@@ -53,7 +66,7 @@ func parseFrontmatter(text string) (map[string]any, error) {
 	i := start + 1
 	found := false
 	for i < len(lines) {
-		if lines[i] == "---" {
+		if isFrontmatterClose(lines[i]) {
 			found = true
 			break
 		}
@@ -629,7 +642,7 @@ func splitFileFrontmatter(text string) (string, string, error) {
 	var fm []string
 	i := start + 1
 	for i < len(lines) {
-		if lines[i] == "---" {
+		if isFrontmatterClose(lines[i]) {
 			var region strings.Builder
 			for _, l := range fm {
 				region.WriteString(l)
@@ -674,7 +687,7 @@ func frontmatterKeyLine(text, key string) int {
 	out := 0
 	for i := start + 1; i < len(lines); i++ {
 		raw := lines[i]
-		if raw == "---" {
+		if isFrontmatterClose(raw) {
 			break
 		}
 		if raw != "" && raw[0] != ' ' && raw[0] != '\t' {
