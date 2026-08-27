@@ -20,32 +20,49 @@ func intentParityCfg() Config {
 	}
 }
 
-// TestIntentLintRefusesEveryIDTheLoaderRefuses pins the lint↔loader contract for
-// the intent store: any intent file intent.Load rejects must be a record-lint
-// BLOCKER, so it can never merge green.
+// TestIntentLintRefusesEveryRecordTheLoaderRefuses pins the lint↔loader contract
+// for the intent store: any intent file intent.Load rejects must be a record-lint
+// BLOCKER, so it can never merge green. Both halves are driven from the SAME
+// fixture, so the contract cannot be asserted against a fixture the loader does
+// not actually refuse.
 //
-// The asymmetry this closes: intent.Load fail-closes the whole CORPUS on one
-// malformed id (Validate → ^itd-[0-9]+$), while intent_lifecycle validated
-// status/kind/spec_id/superseded_by and never the id itself — so a hand-edited
-// record whose `id:` line was absent, empty, or a YAML null passed every merge
-// gate and then bricked every intent verb, `abcd spec close` included, for
-// everyone who pulled it (iss-2608270500198764).
-func TestIntentLintRefusesEveryIDTheLoaderRefuses(t *testing.T) {
+// The contract has two axes, and a record has to survive both to load:
+//
+//   - the id VALUE (iss-2608270500198764): intent.Load fail-closes the whole
+//     CORPUS on one malformed id (Validate → ^itd-[0-9]+$), while
+//     intent_lifecycle validated status/kind/spec_id/superseded_by and never the
+//     id itself.
+//   - the field EXTRACTION (iss-2608270926031827): the loader calls
+//     frontmatter.Fields on the RAW lines, which requires `---` on line 0, while
+//     the lint's frontmatterFields skips a leading preamble (blank lines, an
+//     attribution comment) first. A preamble-led record therefore carried a
+//     perfectly good id to the lint and NO fields at all to the loader.
+//
+// Either way the record merged green and then bricked every intent verb,
+// `abcd spec close` included, for everyone who pulled it.
+func TestIntentLintRefusesEveryRecordTheLoaderRefuses(t *testing.T) {
+	const good = "id: itd-999\nslug: thing\nkind: standalone\nspec_id: spc-10-thing\n"
 	cases := []struct {
-		name        string
-		frontmatter string
+		name    string
+		content string
+		want    string // substring the blocker's message must carry
 	}{
-		{"absent", "---\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n"},
-		{"empty", "---\nid:\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n"},
-		{"null", "---\nid: null\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n"},
-		{"tilde", "---\nid: ~\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n"},
-		{"not-an-id", "---\nid: TBD\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n"},
+		// The VALUE axis: the delimiter is where the loader wants it, the id is not.
+		{"absent-id", "---\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n", "id"},
+		{"empty-id", "---\nid:\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n", "id"},
+		{"null-id", "---\nid: null\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n", "id"},
+		{"tilde-id", "---\nid: ~\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n", "id"},
+		{"not-an-id", "---\nid: TBD\nkind: standalone\nspec_id: spc-10-thing\n---\n# x\n", "id"},
+		// The EXTRACTION axis: the id is perfect, but the loader never sees it.
+		{"blank-line-led", "\n---\n" + good + "---\n# x\n", "frontmatter"},
+		{"comment-led", "<!-- generated -->\n---\n" + good + "---\n# x\n", "frontmatter"},
+		{"multiline-comment-led", "<!--\nnote\n-->\n---\n" + good + "---\n# x\n", "frontmatter"},
 	}
 	const rel = ".abcd/development/intents/shipped/itd-999-thing.md"
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			writeFile(t, root, rel, tc.frontmatter)
+			writeFile(t, root, rel, tc.content)
 
 			// Half one: the loader refuses the file (and with it the whole corpus).
 			if _, err := intent.Load(root); err == nil {
@@ -60,12 +77,12 @@ func TestIntentLintRefusesEveryIDTheLoaderRefuses(t *testing.T) {
 			var blocked bool
 			for _, f := range fs {
 				if f.File == rel && f.RuleID == "intent_lifecycle" &&
-					f.Severity == severityBlocker && strings.Contains(f.Message, "id") {
+					f.Severity == severityBlocker && strings.Contains(f.Message, tc.want) {
 					blocked = true
 				}
 			}
 			if !blocked {
-				t.Fatalf("lint passed an intent id the loader refuses (%s); findings: %+v", tc.name, fs)
+				t.Fatalf("lint passed an intent record the loader refuses (%s); findings: %+v", tc.name, fs)
 			}
 		})
 	}
@@ -109,25 +126,39 @@ func specParityCfg() Config {
 	}
 }
 
-// TestSpecLintRefusesEveryIDTheLoaderRefusesWhenExempt pins the same contract on
-// the spec store, through the content exemption: a `status: superseded` line
-// makes a spec content-exempt, and spec_lifecycle skipped such a file entirely —
-// so the ONE rule that checks a spec's id and intent back-link never ran.
-// spec.Load has no exemption concept and validates both unconditionally, so a
-// lint-green historical spec aborted the WHOLE store: `abcd <spc-N>` dispatch,
-// NextID minting, and every intent verb that loads specs
-// (iss-2608270500207987). Being historical excuses a record from how it is
-// WRITTEN, never from being well-formed (iss-39).
-func TestSpecLintRefusesEveryIDTheLoaderRefusesWhenExempt(t *testing.T) {
+// TestSpecLintRefusesEveryRecordTheLoaderRefuses pins the same two-axis contract
+// on the spec store, and mostly through the content exemption, because that is
+// where the spec side failed open:
+//
+//   - the VALUE axis (iss-2608270500207987): a `status: superseded` line makes a
+//     spec content-exempt, and spec_lifecycle skipped such a file entirely — so
+//     the ONE rule that checks a spec's id and intent back-link never ran.
+//     spec.Load has no exemption concept and validates both unconditionally.
+//   - the EXTRACTION axis (iss-2608270926031827): a preamble before `---` hides
+//     the whole block from spec.Load while the lint reads it happily. Exempt or
+//     not, the record is lint-green and the store aborts.
+//
+// A lint-green spec of either shape aborted the WHOLE store: `abcd <spc-N>`
+// dispatch, NextID minting, and every intent verb that loads specs. Being
+// historical excuses a record from how it is WRITTEN, never from being
+// well-formed (iss-39).
+func TestSpecLintRefusesEveryRecordTheLoaderRefuses(t *testing.T) {
 	cases := []struct {
 		name string
 		spec string
+		want string // substring the blocker's message must carry
 	}{
-		{"bad-intent", "---\nid: spc-99\nslug: foo\nintent: itd-bogus\nstatus: superseded\n---\n# foo\n"},
-		{"absent-intent", "---\nid: spc-99\nslug: foo\nstatus: superseded\n---\n# foo\n"},
-		{"null-intent", "---\nid: spc-99\nslug: foo\nintent: null\nstatus: superseded\n---\n# foo\n"},
-		{"bad-id", "---\nid: spc-\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n"},
-		{"absent-id", "---\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n"},
+		{"bad-intent", "---\nid: spc-99\nslug: foo\nintent: itd-bogus\nstatus: superseded\n---\n# foo\n", "intent"},
+		{"absent-intent", "---\nid: spc-99\nslug: foo\nstatus: superseded\n---\n# foo\n", "intent"},
+		{"null-intent", "---\nid: spc-99\nslug: foo\nintent: null\nstatus: superseded\n---\n# foo\n", "intent"},
+		{"bad-id", "---\nid: spc-\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n", "id"},
+		{"absent-id", "---\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n", "id"},
+		// The EXTRACTION axis, on both sides of the exemption: everything the lint
+		// reads is well-formed, and the loader sees no fields at all.
+		{"blank-line-led-exempt", "\n---\nid: spc-99\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n", "frontmatter"},
+		{"comment-led-exempt", "<!-- generated -->\n---\nid: spc-99\nslug: foo\nintent: itd-10\nstatus: superseded\n---\n# foo\n", "frontmatter"},
+		{"blank-line-led", "\n---\nid: spc-99\nslug: foo\nintent: itd-10\n---\n# foo\n", "frontmatter"},
+		{"comment-led", "<!-- generated -->\n---\nid: spc-99\nslug: foo\nintent: itd-10\n---\n# foo\n", "frontmatter"},
 	}
 	const rel = ".abcd/development/specs/open/spc-99-foo.md"
 	for _, tc := range cases {
@@ -149,14 +180,42 @@ func TestSpecLintRefusesEveryIDTheLoaderRefusesWhenExempt(t *testing.T) {
 			}
 			var blocked bool
 			for _, f := range fs {
-				if f.File == rel && f.RuleID == "spec_lifecycle" && f.Severity == severityBlocker {
+				if f.File == rel && f.RuleID == "spec_lifecycle" &&
+					f.Severity == severityBlocker && strings.Contains(f.Message, tc.want) {
 					blocked = true
 				}
 			}
 			if !blocked {
-				t.Fatalf("lint passed a content-exempt spec the loader refuses (%s); findings: %+v", tc.name, fs)
+				t.Fatalf("lint passed a spec the loader refuses (%s); findings: %+v", tc.name, fs)
 			}
 		})
+	}
+}
+
+// TestSpecLintAcceptsWhatTheLoaderAccepts is the spec side of the other
+// direction: a well-formed record whose frontmatter opens on line 1 loads and
+// must stay lint-clean, so arming the preamble refusal cannot turn a healthy
+// store red.
+func TestSpecLintAcceptsWhatTheLoaderAccepts(t *testing.T) {
+	root := t.TempDir()
+	const rel = ".abcd/development/specs/open/spc-99-foo.md"
+	writeFile(t, root, ".abcd/development/intents/shipped/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nkind: standalone\nspec_id: spc-99\n---\n# ok\n")
+	writeFile(t, root, rel, "---\nid: spc-99\nslug: foo\nintent: itd-10\n---\n# foo\n")
+
+	store, err := spec.Load(root)
+	if err != nil {
+		t.Fatalf("spec.Load refused a well-formed record: %v", err)
+	}
+	if len(store.Specs) != 1 {
+		t.Fatalf("expected 1 spec, got %d", len(store.Specs))
+	}
+	fs, err := Lint(specParityCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, "spec_lifecycle"); n != 0 {
+		t.Fatalf("well-formed spec must be lint-clean; got %+v", fs)
 	}
 }
 

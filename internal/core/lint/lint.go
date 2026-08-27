@@ -1535,6 +1535,9 @@ type intentRecord struct {
 	bucket string
 	name   string
 	fields map[string]fmField
+	// preamble is the 1-based line the leading `---` sits on when something
+	// precedes it, 0 otherwise — the extraction half of the loader contract.
+	preamble int
 }
 
 // intentTree is ONE scan of the intent buckets, shared by every rule that reads
@@ -1612,9 +1615,11 @@ func scanIntentTree(repoRoot, rootAbs, intentsDir string) (intentTree, error) {
 				return intentTree{}, err
 			}
 			rel := repoRel(repoRoot, fileAbs)
-			fields := frontmatterFields(strings.Split(string(content), "\n"))
+			lines := strings.Split(string(content), "\n")
+			fields := frontmatterFields(lines)
 			tree.records = append(tree.records, intentRecord{
 				rel: rel, bucket: bucket, name: e.Name(), fields: fields,
+				preamble: preambleLine(lines),
 			})
 		}
 	}
@@ -1625,7 +1630,7 @@ func scanIntentTree(repoRoot, rootAbs, intentsDir string) (intentTree, error) {
 func checkIntentLifecycle(repoRoot string, tree intentTree, cfg RuleConfig) []Finding {
 	var out []Finding
 	for _, r := range tree.records {
-		out = append(out, validateIntent(r.rel, r.bucket, r.fields, tree.known, cfg.Severity)...)
+		out = append(out, validateIntent(r.rel, r.bucket, r.fields, tree.known, r.preamble, cfg.Severity)...)
 		out = append(out, validateIntentIDUnique(repoRoot, r.rel, r.name, r.fields, tree.idFiles, cfg.Severity)...)
 	}
 	return out
@@ -1885,7 +1890,7 @@ func checkIssueImpact(ledger issueLedger, cfg RuleConfig) []Finding {
 	return out
 }
 
-func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, severity string) []Finding {
+func validateIntent(rel, bucket string, fields map[string]fmField, known map[string]bool, preamble int, severity string) []Finding {
 	var out []Finding
 	add := func(line int, msg string) {
 		if line == 0 {
@@ -1895,6 +1900,15 @@ func validateIntent(rel, bucket string, fields map[string]fmField, known map[str
 			File: rel, Line: line, RuleID: "intent_lifecycle",
 			Severity: severity, Message: msg,
 		})
+	}
+
+	// ANY bucket: the frontmatter must open on line 1, because that is the only
+	// place intent.Load looks for it. This rule reads the record through the
+	// tolerant scanner, so without this check a preamble-led record hands a
+	// perfect id to the gate and nothing at all to the loader
+	// (iss-2608270926031827).
+	if preamble > 0 {
+		add(1, preambleMessage("intent", preamble))
 	}
 
 	// ANY bucket: the id must be the one the loader will accept. intent.Load
@@ -2009,10 +2023,10 @@ func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([
 			// being well-formed: spec.Load validates id and intent on every file and
 			// aborts the whole store on one failure, with no exemption concept at all
 			// (iss-2608270500207987).
-			out = append(out, validateSpecWellFormed(spec.Path, spec.fields, cfg.Severity)...)
+			out = append(out, validateSpecWellFormed(spec.Path, spec.fields, spec.preamble, cfg.Severity)...)
 			continue
 		}
-		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, cfg.Severity)...)
+		out = append(out, validateSpec(spec.Path, spec.fields, knownIntent, intentSpecID, spec.preamble, cfg.Severity)...)
 	}
 	return out, nil
 }
@@ -2089,7 +2103,7 @@ func checkSpecIDUnique(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([]
 // then broke `abcd <spc-N>` dispatch, spec minting and every intent verb that
 // loads specs (iss-2608270500207987). Being historical excuses a record from how
 // it is written, never from being well-formed (iss-39).
-func validateSpecWellFormed(rel string, fields map[string]fmField, severity string) []Finding {
+func validateSpecWellFormed(rel string, fields map[string]fmField, preamble int, severity string) []Finding {
 	var out []Finding
 	add := func(line int, msg string) {
 		if line == 0 {
@@ -2099,6 +2113,9 @@ func validateSpecWellFormed(rel string, fields map[string]fmField, severity stri
 			File: rel, Line: line, RuleID: "spec_lifecycle",
 			Severity: severity, Message: msg,
 		})
+	}
+	if preamble > 0 {
+		add(1, preambleMessage("spec", preamble))
 	}
 	id := fields["id"]
 	if !recordid.ValidSpecID(id.value) {
@@ -2111,10 +2128,11 @@ func validateSpecWellFormed(rel string, fields map[string]fmField, severity stri
 	return out
 }
 
-func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]bool, intentSpecID map[string]string, severity string) []Finding {
-	// The well-formedness subset first, so the id/intent patterns are stated once
-	// for both the exempt and the non-exempt path.
-	out := validateSpecWellFormed(rel, fields, severity)
+func validateSpec(rel string, fields map[string]fmField, knownIntent map[string]bool, intentSpecID map[string]string, preamble int, severity string) []Finding {
+	// The well-formedness subset first, so the id/intent patterns and the
+	// frontmatter-placement rule are stated once for both the exempt and the
+	// non-exempt path.
+	out := validateSpecWellFormed(rel, fields, preamble, severity)
 	add := func(line int, msg string) {
 		if line == 0 {
 			line = 1
@@ -2521,6 +2539,35 @@ func frontmatterFields(lines []string) map[string]fmField {
 		fields[key] = fmField{value: f.Value, line: f.Line + offset}
 	}
 	return fields
+}
+
+// preambleLine reports the 1-based line the leading `---` sits on when anything
+// precedes it (blank lines, an attribution comment), and 0 when the delimiter
+// opens the file or is absent altogether.
+//
+// It is the ONE place the extraction half of the lint↔loader contract is
+// expressed. frontmatterFields deliberately tolerates a preamble so a
+// comment-led file still yields its fields to every rule — but the intent and
+// spec loaders call frontmatter.Fields on the RAW lines, which requires the
+// delimiter on line 0 and otherwise returns NO fields at all. Reading the id
+// through the tolerant scanner and never noticing the loader could not is how a
+// record with a perfectly good id stayed lint-green and fail-closed the whole
+// store (iss-2608270926031827). The two stores whose loaders fail closed refuse
+// the shape; every other family keeps the tolerance, which is deliberate there.
+func preambleLine(lines []string) int {
+	if start := frontmatterOpen(lines); start > 0 {
+		return start + 1
+	}
+	return 0
+}
+
+// preambleMessage is the finding text for a record whose frontmatter does not
+// open on line 1, in the two stores whose loaders refuse it. It names the fix.
+func preambleMessage(store string, at int) string {
+	return store + " frontmatter must open on line 1: the `---` is on line " +
+		strconv.Itoa(at) + ", and the loader reads the delimiter at the top of the " +
+		"file only — it sees NO fields here and fails closed over the whole store. " +
+		"Move the `---` to line 1 (delete the leading blank lines or comment)."
 }
 
 // frontmatterDuplicates reports the duplicated top-level frontmatter keys in a
