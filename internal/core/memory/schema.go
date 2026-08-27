@@ -610,12 +610,10 @@ type PageInfo struct {
 func pageInfoFrom(filename, text string) PageInfo {
 	var fm map[string]any
 	body := text
-	if strings.HasPrefix(text, "---") {
-		if region, b, err := splitFileFrontmatter(text); err == nil {
-			if parsed, err := parseFrontmatter("---\n" + region + "---\n"); err == nil {
-				fm = parsed
-				body = b
-			}
+	if region, b, err := splitFileFrontmatter(text); err == nil {
+		if parsed, err := parseFrontmatter("---\n" + region + "---\n"); err == nil {
+			fm = parsed
+			body = b
 		}
 	}
 	var classes []string

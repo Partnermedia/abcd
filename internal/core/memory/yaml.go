@@ -38,6 +38,44 @@ func isFrontmatterClose(line string) bool {
 	return strings.TrimRight(line, " \t") == "---"
 }
 
+// normaliseNewlines folds \r\n and \r to \n, the first step of every parser here
+// (so a CRLF delimiter is seen as a delimiter — iss-30).
+func normaliseNewlines(text string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
+}
+
+// frontmatterOpenIndex returns the index of the line that opens the frontmatter
+// block, skipping the tolerated preamble (leading HTML-comment lines, and blank
+// lines after the first), and whether an opening delimiter was found. When it
+// was not, the index is the offending line — which is len(lines) when the scan
+// ran off the end. This is the single scan the parsers below share, and the one
+// gate a caller must ask instead of testing the leading bytes of the document.
+func frontmatterOpenIndex(lines []string) (int, bool) {
+	start := 0
+	for start < len(lines) {
+		s := strings.TrimSpace(lines[start])
+		if s == "---" {
+			return start, true
+		}
+		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
+			start++
+			continue
+		}
+		return start, false
+	}
+	return start, false
+}
+
+// textOpensFrontmatter reports whether text opens a frontmatter block by the
+// parsers' own rule. A reader that instead tests strings.HasPrefix(text, "---")
+// disagrees with them on exactly the pages they tolerate — one led by an HTML
+// comment, or opening on an indented delimiter — and treats a page that carries
+// declared provenance as though it carried none.
+func textOpensFrontmatter(text string) bool {
+	_, ok := frontmatterOpenIndex(strings.Split(normaliseNewlines(text), "\n"))
+	return ok
+}
+
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
@@ -45,20 +83,12 @@ func isFrontmatterClose(line string) bool {
 // parseFrontmatter extracts and parses the YAML frontmatter at the top of text
 // (between --- delimiters, tolerating leading HTML-comment / blank lines).
 func parseFrontmatter(text string) (map[string]any, error) {
-	lines := strings.Split(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n"), "\n")
-	start := 0
-	for start < len(lines) {
-		s := strings.TrimSpace(lines[start])
-		if s == "---" {
-			break
+	lines := strings.Split(normaliseNewlines(text), "\n")
+	start, ok := frontmatterOpenIndex(lines)
+	if !ok {
+		if start < len(lines) {
+			return nil, yamlErrf("line %d: unexpected content before frontmatter '---': %q", start+1, lines[start])
 		}
-		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
-			start++
-			continue
-		}
-		return nil, yamlErrf("line %d: unexpected content before frontmatter '---': %q", start+1, lines[start])
-	}
-	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
 		return nil, yamlErrf("document must start with '---'")
 	}
 	// Extract inner lines up to closing ---.
@@ -622,21 +652,13 @@ func splitFileFrontmatter(text string) (string, string, error) {
 	// frontmatterKeyLine do — otherwise a CRLF closing delimiter ("---\r")
 	// never equals "---" and the whole document is wrongly rejected, diverging
 	// from the parser that accepts it and degrading hashes/summaries (iss-30).
-	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
+	text = normaliseNewlines(text)
 	lines := strings.Split(text, "\n")
-	start := 0
-	for start < len(lines) {
-		s := strings.TrimSpace(lines[start])
-		if s == "---" {
-			break
+	start, ok := frontmatterOpenIndex(lines)
+	if !ok {
+		if start < len(lines) {
+			return "", "", yamlErrf("unexpected content before frontmatter '---': %q", lines[start])
 		}
-		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
-			start++
-			continue
-		}
-		return "", "", yamlErrf("unexpected content before frontmatter '---': %q", lines[start])
-	}
-	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
 		return "", "", yamlErrf("document must start with '---' frontmatter")
 	}
 	var fm []string
@@ -668,20 +690,9 @@ func joinFileFrontmatter(region, body string) string {
 // frontmatterKeyLine returns the 1-based file line of top-level key, or 1 when
 // absent — a best-effort positional helper for lint findings (never errors).
 func frontmatterKeyLine(text, key string) int {
-	lines := strings.Split(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n"), "\n")
-	start := 0
-	for start < len(lines) {
-		s := strings.TrimSpace(lines[start])
-		if s == "---" {
-			break
-		}
-		if strings.HasPrefix(s, "<!--") || strings.HasSuffix(s, "-->") || (start > 0 && s == "") {
-			start++
-			continue
-		}
-		return 1
-	}
-	if start >= len(lines) || strings.TrimSpace(lines[start]) != "---" {
+	lines := strings.Split(normaliseNewlines(text), "\n")
+	start, ok := frontmatterOpenIndex(lines)
+	if !ok {
 		return 1
 	}
 	out := 0
