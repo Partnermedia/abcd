@@ -36,14 +36,14 @@ var (
 	gvIssueIDRe  = regexp.MustCompile(`^iss-[0-9]+$`)
 )
 
-// gvADRHandleRe parses an ADR id into its zero-stripped number. ADRs are the one
-// family whose id is routinely written both padded and bare (`adr-0012` in a
-// frontmatter block, `0012-slug.md` in a filename), and the rest of the record
-// treats those as ONE handle — record dispatch (record.adrHandleRe) and the
-// citation resolver (recordid.fileID) both compare the parsed number. Layer 2
-// must agree, or one ADR keys two findings and the cross-home dedup this file
+// gvADRHandleRe captures an ADR id's ordinal digits. ADRs are the one family
+// whose id is routinely written both padded and bare (`adr-0012` in a frontmatter
+// block, `0012-slug.md` in a filename), and the rest of the record treats those
+// as ONE handle — record dispatch (record.adrHandleRe) and the citation resolver
+// (recordid.fileID) both compare the number, not the spelling. Layer 2 must
+// agree, or one ADR keys two findings and the cross-home dedup this file
 // documents cannot fire.
-var gvADRHandleRe = regexp.MustCompile(`^adr-0*([0-9]+)$`)
+var gvADRHandleRe = regexp.MustCompile(`^adr-([0-9]+)$`)
 
 // gvRejectionVerbs is the deliberately narrow set of verbs that mark a
 // DECISIONS.md bullet as recording a rejected option. It is conservative on
@@ -354,19 +354,24 @@ func gvADRID(fields map[string]frontmatter.Field, name string) string {
 }
 
 // gvCanonADRID canonicalises an ADR id to the one spelling every claimant of that
-// ADR resolves to: adr-<n>, zero-stripped and rebuilt from the parsed integer
-// (never from the matched text, so a padded spelling cannot mint a second id).
-// "" when the string is not an ADR id at all.
+// ADR resolves to: adr-<ordinal> with its leading zeros trimmed (an all-zero
+// ordinal collapsing to adr-0). "" when the string is not an ADR id at all.
+//
+// The trim is TEXTUAL, never an integer parse: an ordinal wider than an int is
+// still a well-formed adr-N, but a parse of it fails, and an id that canonicalises
+// to "" is a record dropped in silence — the very failure the dedup around it
+// exists to announce. Trimming text has no such edge, and agrees with
+// record.adrHandleRe and recordid.fileID for every ordinal they can represent.
 func gvCanonADRID(id string) string {
 	m := gvADRHandleRe.FindStringSubmatch(id)
 	if m == nil {
 		return ""
 	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil {
-		return ""
+	ordinal := strings.TrimLeft(m[1], "0")
+	if ordinal == "" { // the id was all zeros; adr-000 and adr-0 are one handle
+		ordinal = "0"
 	}
-	return "adr-" + strconv.Itoa(n)
+	return "adr-" + ordinal
 }
 
 // gvADRIDFromFilename derives adr-N from a leading run of digits in an NNNN-slug
