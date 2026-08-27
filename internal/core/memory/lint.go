@@ -218,11 +218,18 @@ func (l *memoryLinter) checkLicence() {
 		}
 		return
 	}
-	if isExternalClass(src["class"]) && !hasLicence(src) {
-		l.emit("ML001",
-			fmt.Sprintf("memory page with `source.class: %v` has no `licence` field; explicit `licence: unknown` is acceptable — missing is the violation.", src["class"]),
-			l.sourceLine,
-			"Add `licence: <spdx-id|declared-by-user|unknown>` under `source:`.")
+	// Derive the page's classes the way every sibling check does (MS001/MS002,
+	// SourceClasses, the index rendering): the scalar `class` AND the plural
+	// `classes` list. Reading only the scalar let an external_* page declared
+	// `classes: [external_pdf]` with no licence pass the blocker unseen, while
+	// MS001 in the same run asserted the page carried an external class.
+	for _, cls := range l.derivedClasses() {
+		if isExternalClass(cls) && !hasLicence(src) {
+			l.emit("ML001",
+				fmt.Sprintf("memory page with source class `%s` has no `licence` field; explicit `licence: unknown` is acceptable — missing is the violation.", cls),
+				l.sourceLine,
+				"Add `licence: <spdx-id|declared-by-user|unknown>` under `source:`.")
+		}
 	}
 }
 
