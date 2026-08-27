@@ -244,6 +244,13 @@ func setMapField(content, key string, members []kv) (string, error) {
 func frontmatterBounds(lines []string) (openIdx, closeIdx int, err error) {
 	openIdx, closeIdx = -1, -1
 	for i, ln := range lines {
+		// A BOM is only a BOM at the file's first line; past it, U+FEFF is an
+		// ordinary character and must not make a body line a delimiter
+		// (iss-2608270926036966). Trimming it at i == 0 keeps this writer able to
+		// rewrite exactly the BOM'd records parseFrontmatterAndBody accepts.
+		if i == 0 {
+			ln = frontmatter.TrimBOM(ln)
+		}
 		if strings.TrimRight(ln, "\r\n") == "" {
 			continue
 		}

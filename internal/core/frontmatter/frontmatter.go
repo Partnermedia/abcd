@@ -32,9 +32,19 @@ type Field struct {
 // IsDelimiter reports whether a line is a frontmatter `---` delimiter.
 //
 // This is the ONE delimiter rule. It is deliberately tolerant of trailing
-// whitespace and of a leading BOM, and deliberately intolerant of everything
-// else: `----`, `--- yaml` and an indented `  ---` are not delimiters, because
-// leading whitespace survives the trim.
+// whitespace, and deliberately intolerant of everything else: `----`,
+// `--- yaml` and an indented `  ---` are not delimiters, because leading
+// whitespace survives the trim.
+//
+// It does NOT trim a BOM, and must not. U+FEFF is a byte-order mark only at
+// byte 0 of a file; anywhere else it is ZERO WIDTH NO-BREAK SPACE, an ordinary
+// character, and a line spelled "\ufeff---" is a body line to every other
+// reader. Trimming it here made Fields close a block early at such a line while
+// intent's writer read on to the next bare `---` and inserted keys into the body
+// — a lint-green record, a write that reports success, and a value invisible on
+// reload (iss-2608270926036966). The BOM is a property of the FILE's first
+// position, not of the character, so callers strip it from line 0 themselves
+// (see TrimBOM) before asking this predicate anything.
 //
 // Tolerance here is about the delimiter LINE, not about the block's content —
 // capture's strictness about what is inside the block (duplicate top-level keys
@@ -54,7 +64,7 @@ type Field struct {
 // ends (internal/core/capture) pass them in, and callers that split on "\n" do
 // not, so both are trimmed.
 func IsDelimiter(line string) bool {
-	return strings.TrimRight(TrimBOM(line), " \t\r\n") == "---"
+	return strings.TrimRight(line, " \t\r\n") == "---"
 }
 
 // Fields returns the top-level keys of the leading frontmatter block (the block
@@ -67,8 +77,10 @@ func Fields(lines []string) map[string]Field {
 	fields := map[string]Field{}
 	// A delimiter line may carry trailing whitespace ("--- "); IsDelimiter trims
 	// it, so a trailing-space closing delimiter is still seen as the close and
-	// body lines after it do not leak in as fields.
-	if len(lines) == 0 || !IsDelimiter(lines[0]) {
+	// body lines after it do not leak in as fields. The BOM is trimmed HERE, at
+	// line 0 — the only position where U+FEFF is a byte-order mark rather than an
+	// ordinary ZWNBSP character (iss-2608270926036966).
+	if len(lines) == 0 || !IsDelimiter(TrimBOM(lines[0])) {
 		return fields
 	}
 	closed := false
@@ -116,7 +128,8 @@ type Dup struct {
 // refuses (GitHub #357). The block-boundary contract is Fields': no leading `---`
 // or no closing `---` yields nothing, so body prose is never scanned.
 func Duplicates(lines []string) []Dup {
-	if len(lines) == 0 || !IsDelimiter(lines[0]) {
+	// The BOM is trimmed at line 0 only; see Fields.
+	if len(lines) == 0 || !IsDelimiter(TrimBOM(lines[0])) {
 		return nil
 	}
 	seen := map[string]bool{}
