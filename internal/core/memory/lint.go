@@ -149,17 +149,28 @@ func (l *memoryLinter) sourceBlock() map[string]any {
 	return map[string]any{}
 }
 
+// derivedClasses returns every source class the page declares — the UNION of
+// the scalar `source.class` and the plural `source.classes` list, scalar first,
+// deduplicated. The two shapes are mutually exclusive only on the write path,
+// where validateSourceBlock refuses a block that mixes them; lint reads a page's
+// raw on-disk bytes by design and never runs that validator. Reading the plural
+// list in an else-if therefore let it SHADOW the scalar: a page declaring
+// `class: external_pdf` beside `classes: [session_memory]` presented only the
+// harmless internal class to every check sharing this derivation, and slipped
+// past the ML001 licence blocker. The union is the fail-closed reading, and the
+// honest one — the page really does declare both.
 func (l *memoryLinter) derivedClasses() []string {
 	src := l.sourceBlock()
 	var raw []string
+	if single, ok := src["class"].(string); ok {
+		raw = append(raw, single)
+	}
 	if classes, ok := src["classes"].([]any); ok {
 		for _, c := range classes {
 			if s, ok := c.(string); ok {
 				raw = append(raw, s)
 			}
 		}
-	} else if single, ok := src["class"].(string); ok {
-		raw = []string{single}
 	}
 	var out []string
 	for _, c := range raw {
