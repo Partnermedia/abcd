@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-2608270655498099"
+slug: "site-build-s-two-lint-loadconfig-joinrepo-reads-delegate-int"
+severity: "nitpick"
+category: "security"
+source: "agent-finding"
+found_during: "security-cut-agent-flagged-siblings-2026-08-27"
+found_at: "internal/core/lint"
+---
+
+site build's two lint.LoadConfig(joinRepo(...)) reads delegate into the external lint package and are not ancestor-symlink contained like the rest of site's reads now are (post-#487). A committed directory symlink ancestor of the lint config path is followed. Separate hardening in the lint package. Flagged by the #487 fix agent.
