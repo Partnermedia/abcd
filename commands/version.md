@@ -44,4 +44,23 @@ binary on `PATH`, run `ahoy install` through whichever rung just resolved:
 `"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install`, `abcd ahoy install`, or
 `go run ./cmd/abcd ahoy install` in a source checkout.
 
+**When no binary resolves.** If every rung fails, the fix is **not** to install
+Go. A compiler is a dependency of neither supported install route, which both
+provision a prebuilt, checksum-verified binary. Tell the user to recover in this
+order, no toolchain needed:
+
+1. Restart a session with network access. `hooks/bootstrap.sh` re-provisions the
+   plugin-root binary at the start of every session that can reach the release
+   origin; an empty `.bootstrap.attempt` marker with no binary beside it means a
+   previous provisioning began and did not finish, so a networked restart lands it.
+2. Reinstall the plugin from its marketplace when its remote is stale (for example
+   one predating an organisation rename). Re-adding the marketplace re-points it at
+   the live release origin; the install guide gives the exact steps.
+3. Install the CLI binary with the one-liner in the README, which downloads and
+   SHA-256-verifies the same prebuilt binary into `~/.local/bin`.
+
+`go run ./cmd/abcd` and `go build ./cmd/abcd` serve only a source checkout of this
+repo (contributors) or a platform carrying no released binary; they are never a
+prerequisite for a plugin or CLI user.
+
 **User input:** $ARGUMENTS
