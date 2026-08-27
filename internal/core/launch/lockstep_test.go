@@ -107,6 +107,54 @@ func TestResolvePointerOverflowIndex(t *testing.T) {
 	}
 }
 
+// TestValidateVersionLocationContainsManifestPath proves manifest_path is held to
+// the same lexical containment launch include patterns are (gh-488): a ".."
+// traversal or an absolute path is refused, so it can never be joined onto a
+// trusted root and walked outside it. A well-formed repo-relative path still
+// passes.
+func TestValidateVersionLocationContainsManifestPath(t *testing.T) {
+	uncontained := []string{
+		"../outside.json",
+		"../../etc/passwd.json",
+		".claude-plugin/../../escape.json",
+		"/etc/evil.json",
+		"a/../../b.json",
+	}
+	for _, mp := range uncontained {
+		decision := map[string]any{"manifest_path": mp, "json_pointer": "/version"}
+		_, _, verr := validateVersionLocation(decision)
+		if verr == "" {
+			t.Errorf("validateVersionLocation accepted an uncontained manifest_path %q; want refusal", mp)
+		}
+	}
+	// A normal in-tree manifest_path is still accepted.
+	ok := map[string]any{"manifest_path": ".claude-plugin/plugin.json", "json_pointer": "/version"}
+	if gotMP, gotPtr, verr := validateVersionLocation(ok); verr != "" || gotMP != ".claude-plugin/plugin.json" || gotPtr != "/version" {
+		t.Errorf("validateVersionLocation rejected a valid contract: mp=%q ptr=%q verr=%q", gotMP, gotPtr, verr)
+	}
+}
+
+// TestLockstepRefusesUncontainedManifestPath proves the containment holds through
+// the CheckLockstep consumer, which joins manifest_path onto repoRoot and reads
+// it. A valid manifest sits OUTSIDE the tree (a sibling of root): without the
+// guard CheckLockstep would happily read and version-check that arbitrary file;
+// with it, the path is refused lexically as unreadable/2 (gh-488).
+func TestLockstepRefusesUncontainedManifestPath(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	// A perfectly readable, well-formed manifest outside the repo tree.
+	writeFile(t, parent, "outside.json", `{"version": "1.2.3"}`)
+	writeFile(t, root, ".abcd/config/version-location.json",
+		`{"manifest_path": "../outside.json", "json_pointer": "/version"}`)
+	writeFile(t, root, ".claude-plugin/marketplace.json",
+		`{"plugins":[{"name":"abcd","source":"./","version":"1.2.3","changelog":{"version":"1.2.3"}}]}`)
+	vl := filepath.Join(root, ".abcd/config/version-location.json")
+	res := CheckLockstep(TreePublic, root, vl)
+	if !res.Unreadable || res.ExitCode != 2 {
+		t.Fatalf("expected an uncontained manifest_path to be refused (unreadable/2), got %+v", res)
+	}
+}
+
 // TestLockstepUnreadableDetailHasNoAbsolutePath proves an unreadable pinned input
 // yields a path-free detail: the dry-run report carrying it is a success envelope
 // that never passes through cli.scrubPaths, so an embedded os.PathError absolute
