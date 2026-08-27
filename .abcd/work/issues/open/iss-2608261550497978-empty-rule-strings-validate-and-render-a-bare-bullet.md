@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-2608261550497978"
+slug: "empty-rule-strings-validate-and-render-a-bare-bullet"
+severity: "minor"
+category: "bug"
+source: "impl-review"
+found_during: "second-harness adaptor lab review (2026-08-24/26)"
+found_at: "internal/core/rules/rules.go"
+---
+
+An empty or all-whitespace rule string passes rules.json validation and renders as a bare contentless bullet in the injected block: the loader validates domain names and states but not rule bodies. Refuse empty or whitespace-only rules at load, or drop them at render loudly.
