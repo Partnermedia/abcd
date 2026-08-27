@@ -299,7 +299,8 @@ func TestRenderRefusesOutOfSubset(t *testing.T) {
 // TestRenderRefusesRemoteImage keeps adr-47's every-picture-is-committed rule
 // enforceable at render time rather than at review time.
 func TestRenderRefusesRemoteImage(t *testing.T) {
-	pipe := newAssetPipe(t.TempDir())
+	dir := t.TempDir()
+	pipe := newAssetPipe(dir, mustOpenRoot(t, dir))
 	r := testRenderer()
 	r.Image = func(src, alt string, at Source) (string, error) { return pipe.render("docs", src, alt, at) }
 	_, err := r.RenderBlocks("docs/page.md", Blocks("![alt](https://example.invalid/x.png)", 1))

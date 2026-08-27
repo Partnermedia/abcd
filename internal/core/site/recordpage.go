@@ -118,7 +118,7 @@ func (e *explorer) recordPage(n ExportNode) (string, error) {
 // other heading keeps its own level and its anchor, so a link into the middle of
 // a record still lands where it points.
 func (e *explorer) recordBody(n ExportNode) (string, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(e.c.repoRoot, n.Path), maxRecordBodyBytes)
+	data, err := fsutil.ReadGuardedInRoot(e.c.root, n.Path, maxRecordBodyBytes)
 	if err != nil {
 		return "", err
 	}

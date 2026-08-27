@@ -17,6 +17,7 @@ package site
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -55,6 +56,13 @@ var LinkedBinaryAssets = []string{AssetDarwinARM64, AssetDarwinAMD64, AssetLinux
 // composer holds everything the landing page is composed from.
 type composer struct {
 	repoRoot string
+	// root is repoRoot opened as an os.Root containment scope. Every read of a
+	// repo-relative source path resolves through it, so a committed directory
+	// symlink (git mode 120000) planted as an ANCESTOR of a composed page cannot
+	// walk the read outside the repository — the counterpart of the build's
+	// destination os.Root, and the ancestor-safe form fsutil.ReadGuardedInRoot
+	// gives that leaf-only fsutil.ReadGuarded cannot (gh #487).
+	root     *os.Root
 	manifest Manifest
 	ui       UI
 	repo     RepoMeta
@@ -85,7 +93,7 @@ func (c *composer) loadPage(rel string) (*docPage, error) {
 	if p, ok := c.pages[rel]; ok {
 		return p, nil
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, rel, maxPageBytes)
 	if err != nil {
 		return nil, fmt.Errorf("site: composing %s: %w", rel, err)
 	}
@@ -387,7 +395,7 @@ func (c *composer) footer() string {
 	}
 	if c.repo.Repository != "" {
 		for _, f := range []string{"SECURITY.md", "ACKNOWLEDGEMENTS.md", "CITATION.cff", "CHANGELOG.md"} {
-			if ok, _ := fsutil.Exists(joinRepo(c.repoRoot, f)); !ok {
+			if _, err := c.root.Stat(f); err != nil {
 				continue
 			}
 			b.WriteString(`<a href="` + escapeAttr(c.repo.Repository+"/blob/main/"+f) + `">` + escapeText(f) + `</a>`)
@@ -986,7 +994,8 @@ func (c *composer) install(p *docPage, ch Chapter) (string, error) {
 	row.WriteString(`</div>`)
 
 	lead := p.Sections[leadIdx]
-	servesInstallScript, _ := fsutil.Exists(joinRepo(c.repoRoot, installTemplateRelPath))
+	_, installStatErr := c.root.Stat(installTemplateRelPath)
+	servesInstallScript := installStatErr == nil
 	var panels strings.Builder
 	for _, t := range tabs {
 		s := p.Sections[t.idx]
@@ -1100,7 +1109,7 @@ func (c *composer) featureBlock(f *Feature) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, node.Path), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, node.Path, maxPageBytes)
 	if err != nil {
 		return "", err
 	}
@@ -1233,7 +1242,7 @@ func (c *composer) newestMetIntent() (lint.RecordNode, bool) {
 // release nobody went back and wrote. Quoting the template at a reader is worse
 // than quoting the next intent down.
 func (c *composer) pressReleaseIsUnwritten(rel string) bool {
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, rel, maxPageBytes)
 	if err != nil {
 		return false
 	}
@@ -1277,7 +1286,7 @@ func plainPressReleaseText(body string) string {
 // summary (`internal/core/intent`), so this reads what the auditor wrote rather
 // than re-grading anything.
 func (c *composer) auditIsMet(rel string) bool {
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, rel, maxPageBytes)
 	if err != nil {
 		return false
 	}
@@ -1310,7 +1319,7 @@ func (c *composer) auditIsMet(rel string) bool {
 // entry says which promise it delivered, so the version is a lookup rather than
 // a thing anyone types onto the page.
 func (c *composer) releaseOf(id string) string {
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, "CHANGELOG.md"), changelog.MaxChangelogBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, "CHANGELOG.md", changelog.MaxChangelogBytes)
 	if err != nil {
 		return ""
 	}
