@@ -68,6 +68,100 @@ func TestCommandOfStepsOverWrapperArguments(t *testing.T) {
 	}
 }
 
+// TestCoprocDoesNotDefangAnEntry pins the command-position fix for the bash
+// `coproc` keyword (gh-318): `coproc [NAME] command` runs the following command
+// exactly like `{`, `!`, or the `time` wrapper, so a blocker launched through
+// coproc must fire on the same entry its unwrapped form does. Both the
+// `coproc <simple-command>` form and the `coproc NAME { ...; }` compound form
+// are covered; the unwrapped forms and a benign coproc must be unaffected.
+func TestCoprocDoesNotDefangAnEntry(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		verdict Verdict
+		entryID string
+	}{
+		{
+			name:    "coproc wrapping git push --force still shows the command",
+			command: "coproc git push --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "coproc wrapping gh repo delete still shows the command",
+			command: "coproc gh repo delete owner/repo --yes",
+			verdict: VerdictBlock,
+			entryID: "gh-repo-delete",
+		},
+		{
+			name:    "named coproc with a compound body still shows the command",
+			command: "coproc CO { gh repo delete owner/repo --yes; }",
+			verdict: VerdictBlock,
+			entryID: "gh-repo-delete",
+		},
+		{
+			name:    "the unwrapped git push --force still blocks",
+			command: "git push --force origin main",
+			verdict: VerdictBlock,
+			entryID: "git-push-force",
+		},
+		{
+			name:    "the unwrapped gh repo delete still blocks",
+			command: "gh repo delete owner/repo --yes",
+			verdict: VerdictBlock,
+			entryID: "gh-repo-delete",
+		},
+		{
+			name:    "a benign command through coproc stays harmless",
+			command: "coproc git status --porcelain",
+			verdict: VerdictAllow,
+		},
+		{
+			name:    "a benign named coproc stays harmless",
+			command: "coproc CO { git status --porcelain; }",
+			verdict: VerdictAllow,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := checkOK(t, tc.command)
+			if d.Verdict != tc.verdict {
+				t.Fatalf("Check(%q).Verdict = %q, want %q (matches: %v)", tc.command, d.Verdict, tc.verdict, d.Matches)
+			}
+			if d.EntryID != tc.entryID {
+				t.Fatalf("Check(%q).EntryID = %q, want %q", tc.command, d.EntryID, tc.entryID)
+			}
+		})
+	}
+}
+
+// TestCommandOfStepsOverCoproc pins the matcher-level fix: `coproc` and an
+// optional coprocess NAME (when the NAME opens a `{ }` compound body) are
+// stepped over so the real command reaches command position, while
+// `coproc <simple-command>` leaves the command's own name in place.
+func TestCommandOfStepsOverCoproc(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{"coproc before a simple command", "coproc git push --force origin main", "git"},
+		{"coproc before gh", "coproc gh repo delete owner/repo --yes", "gh"},
+		{"named coproc with a compound body", "coproc CO { gh repo delete owner/repo --yes; }", "gh"},
+		// A `coproc NAME` with no compound body: NAME is the command, not a coproc
+		// name, so it must NOT be skipped.
+		{"coproc with a lone word is that word", "coproc mycmd", "mycmd"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _ := commandOf(firstSegment(t, tc.line))
+			if got != tc.want {
+				t.Fatalf("commandOf(%q) = %q, want %q", tc.line, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestPathOfNormalisesAnOperand pins the normalisation a resource constraint
 // reads through: a fully-qualified URL is the same API call as the path it
 // carries, and a query or fragment is not part of that path. Everything else
