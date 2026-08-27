@@ -207,7 +207,7 @@ Later phase — intent-auditor (shape-classification role) scans the corpus
 
 **No aggregator verb.** A `check` subverb that runs `audit` + `consistency` + `shape` together is *not* provided — the three primitives have very different runtime costs (the audit is code+oracle expensive; consistency is corpus-wide expensive; shape is cheap on demand). Bundling them produces a slow verb users avoid. Release-readiness is `/abcd:launch`'s pre-flight job. (Note: a scheduled / pre-commit shape leg is a **deferred follow-up**; the predecessor's spc-29 shape surface is on demand only.)
 
-**Bare-command-as-help is a universal abcd convention** — every command in the surface set (the enumeration lives in the [surfaces README](README.md)) shows status + suggested next actions when invoked without args. Provides discoverability without forcing the user to remember subcommand names.
+**Bare-command-as-help is a common abcd convention, not a universal one** — many commands in the surface set (the enumeration lives in the [surfaces README](README.md)) show a status board when invoked without args, while others print a plain block instead: `version` renders a version/install/vintage/staleness block, and the `docs`/`history`/`disembark` cobra parents print help or usage with no board. Suggested-next-actions is a design target rather than a shipped guarantee on every bare invocation. It provides discoverability without forcing the user to remember subcommand names.
 
 ## 3. Press-release format (standalone + bundle-member kinds)
 
@@ -464,4 +464,4 @@ The later-phase review/audit verbs write their per-run receipts under the local 
 - `/abcd:audit chain` → `audit/chain-<ts>/` (conversation/edit-history Merkle, default application per itd-16 — a later phase)
 - `/abcd:audit lifeboat <path>` → `audit/lifeboat-<ts>/` (lifeboat-artefact integrity per itd-35 — a later phase)
 
-`chain` and `lifeboat` are later-phase sub-verbs of the reserved `/abcd:audit` (their backing intents itd-16 and itd-35 sit in `intents/drafts/`); the read-only working-conventions conformance check is `abcd lint`. `audit` is a shipped sub-verb of `/abcd:intent`; `consistency` and `shape` are later phases. Bare `/abcd:intent` is status+help per the universal bare-command-as-help convention.
+`chain` and `lifeboat` are later-phase sub-verbs of the reserved `/abcd:audit` (their backing intents itd-16 and itd-35 sit in `intents/drafts/`); the read-only working-conventions conformance check is `abcd lint`. `audit` is a shipped sub-verb of `/abcd:intent`; `consistency` and `shape` are later phases. Bare `/abcd:intent` is status+help per the common (not universal) bare-command-as-help convention.

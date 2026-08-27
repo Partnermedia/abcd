@@ -13,6 +13,55 @@ earlier were rolled by hand and some carry a **Breaking** heading.
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-08-27
+
+### Fixed
+
+- The memory licence gate (ML001) now holds where it previously waved a page through: a licence declared as a plural classes list, a page carrying both a scalar class and a classes list, a missing source hash, an empty or junk sources list, a trailing-space or HTML-comment-led frontmatter delimiter, and a legacy body demoted by a leading comment are all caught. (iss-2608270500191643, iss-2608270500197290, iss-2608270500202696, iss-2608270926037660, iss-2608270500199536, iss-2608270500194738)
+- Null and quoted-null impact values are now judged the same way across capture, record-lint and the release derivation, so a quoted, uppercase, or NULL/Null-spelt impact no longer passes one gate while another rejects it. (iss-285, iss-286, iss-287, iss-2608261132593151)
+- record-lint now refuses records the capture parser and the record loaders reject but it used to pass: a duplicated or space-before-colon key, a .MD extension, a trailing-space or preamble-led frontmatter delimiter, an unvalidated intent or spec id, and a record missing its schema version. This closes the gap where a lint-green record broke every capture verb or fail-closed the whole store. (iss-2608270500206633, iss-2608270500207078, iss-2608270500208672, iss-2608270500198764, iss-2608270500207987, iss-2608270926031827, iss-2608261437041050)
+- docs-lint and record-lint no longer pass with zero findings when a configured roots entry points at a directory that does not exist, which had silently disarmed every per-file rule for that tree. (iss-2608270500208736)
+- A record-lint or docs-lint rule whose severity is missing or off-enum now fails the gate, instead of printing findings while the gate exits zero. (iss-2608261533033894)
+- A zero-width no-break space mid-record no longer closes frontmatter early, which had let abcd intent plan write kind and spec_id into the record body and report a success that a reload showed empty. (iss-2608270926036966)
+- The graveyard interpretation now canonicalises ADR ids by text, so adr-012 and adr-12 dedupe and an overlong id no longer drops its finding, and it notes every signal it truncates at the per-signal cap instead of dropping findings silently. (iss-2608270926036528, iss-2608270500195431, iss-2608270500190007)
+- The issue-resolution and reviews gates no longer mis-report: they run from the repository root rather than the current directory, guard against a shallow checkout that read every commit as unreachable (which also made the reviews gate pass vacuously), refuse a bare deletion of an open record as a resolution, treat a git failure or a pathspec-scoped run as a real result, and run their self-test under a hermetic git environment that cannot corrupt the caller's repository. (iss-2608261040378346, iss-2608261132596224, iss-2608261133091276, iss-2608261437044382, iss-2608261041020040)
+- A release cut now distinguishes a back-filled resolution from a fresh one, so a ledger hygiene sweep no longer re-announces old work as the current release's content. (iss-2608241612087533)
+- **SessionStart notices reach the user again.** The hook now writes its text to stderr and exits zero rather than relying on a non-zero exit the harness rendered as an opaque banner with the text dropped; fixed in both the binary and the bundled bootstrap.sh and hooks.json. (iss-2608241115201044, iss-2608251011427187)
+- abcd intent's spec-link scan now propagates an intent-tree read error instead of swallowing it, matching the spec half. (iss-2608261437049307)
+- abcd intent reconcile and ready now canonicalise the spec id the way lint does, so a lint-green slug or zero-padded spelling no longer bricks them. (iss-2608261437047643)
+- abcd capture --blocked-by now verifies the referenced record the way its own blocker check does, so it cannot write a cross-reference it would then refuse. (iss-2608261437046287)
+- Lifeboat lesson prose is now cleaned through the consolidated prose path, so the pre-migration body is no longer retained. (iss-2608261437040578)
+- The served install-script template now carries the eol=lf pin its committed siblings have, so it is not delivered with CRLF line endings. (iss-2608261437040448)
+- Unpacking a lifeboat on a case-insensitive filesystem no longer lets two files differing only in case both plan a create, silently overwriting the first. (iss-2608270500193735)
+- The documentation now states that git is a required runtime dependency, under a Requirements heading it previously lacked. (iss-2608270500210055)
+- The version-recovery guidance no longer tells a user to install Go, which neither supported install route needs; it points at the prebuilt-binary routes instead. (iss-2608271014245874)
+- The CHANGELOG no longer advertises a Breaking-changes section the derived release ingest cannot emit. (iss-2608261437046261)
+- Corrected stale user-facing documentation: the install guide no longer attributes an ahoy-install warning to the plain one-liners, the README plugin-command count and the superseded issue-resolution rule are current, CONTRIBUTING and the CI header no longer understate the Linux leg and the record-lint job, the site README drops a theme control nothing ships, the site command description names the write posture of every form, the terminology reference no longer claims the sources corpus ships, and the preflight gate list is now derived from the recipe so it cannot drift. (iss-2608261133090830, iss-2608261437042550, iss-2608261437041111, iss-2608261437047992, iss-2608261437047965, iss-2608261533419396, iss-2608261533174500, iss-2608242043243131)
+- Corrected stale references in the design record: a phantom task-classes enum and a retired review token in itd-5, work specified against a retired terminology tree in itd-43, a retired glossary term in itd-24, and an unswept intent-auditor rename across the disciplines bucket. (iss-2608261437043962, iss-2608261437044340, iss-2608261437046944, iss-2608261437043634)
+
+### Security
+
+- **abcd guard sees through more ways of hiding a blocked command.** A blocked command concealed in backtick substitution, launched through coproc, run under a restricted or alternative shell (rbash, yash), wrapped in a single-string launcher (watch, GNU parallel), or spelt with case-variant capitals on a case-insensitive filesystem is now flagged instead of passing unchecked. (iss-2608270500192596, iss-2608270500198285, iss-2608270500198416, iss-2608270500200205, iss-2608270500205262)
+- **Transcript redaction catches secrets it previously wrote raw.** A live token embedded after a percent-encoded URL delimiter, and an ASIA-prefixed temporary AWS access key, are now redacted before a session transcript is written rather than committed in the clear. (iss-2608270500202144, iss-2608270500209138)
+- abcd capture now redacts the home path before it forms the slug, so a username no longer lands in the issue filename even though the body was already redacted. (iss-2608270500209352)
+- **Terminal output sanitises attacker-controlled text before printing it.** Memory-ask citations, the memory-ingest licence value, and docs-lint config severity and rule ids are now escaped, so a control or escape sequence held in a stored page or a committed config file can no longer reach the terminal raw. (iss-2608270500184205, iss-2608270500186632, iss-2608261533033587)
+- Every memory-store read, and the memory lint and coverage passes, now resolve within the store root, so a committed page symlink can no longer redirect a read out of the store or hang the CLI on a device file. (iss-2608261532379188, iss-2608270735427309)
+- abcd memory ingest now scans and redacts acquired source text before it is written to the store. (iss-2608270735436138)
+- **Working with an untrusted lifeboat stays bounded.** A lifeboat built purely of directories, a single very wide directory, and an unbounded git read on the probe path can no longer exhaust memory before the file cap fires. (iss-2608270500202786, iss-2608270500203019, iss-2608261437048689)
+- The disembark scan no longer reads files git ignores or leaves untracked, no longer falls open to a wide read on an all-ignored repository, and no longer mis-sorts the first entry of a NUL-delimited ignore list, so a packed lifeboat cannot cite or carry work kept out of git. (iss-2608241828356533, iss-2608261206490430, iss-2608261533297309)
+- Persisted disembark review notes now neutralise CommonMark HTML-block openers in untrusted provenance fields, so a hostile lifeboat cannot inject markdown structure into the durable review file. (iss-2608270500196428)
+- abcd launch now scans the payload on the render path that actually materialises the files, and fails closed on any include-selected file it did not scan, so a secret in an included file cannot ship unscanned. (iss-2608270735422516, iss-2608270735433799)
+- launch's structural deny of the reserved namespace now applies per path segment and case-insensitively, so a nested or case-varied denied path cannot enter the release payload. (iss-2608270735428304)
+- Reads a committed symlink could redirect out of the tree are now contained: site build resolves repository sources through an os.Root, and the secret scanner's config read is guarded against a symlinked .abcd ancestor. (iss-2608270735422697, iss-2608261133204171)
+- urlguard now blocks the host-platform magic IP, so a fetch cannot be steered into an SSRF against the provider platform's metadata endpoint. (iss-2608270735423546)
+- abcd intent now redacts caller-supplied text before persisting a draft, so a secret or home path is not committed. (iss-2608270735422415)
+- The git check-ignore probes now run under the same isolated-exec pins (core.hooksPath, core.fsmonitor) as abcd's other git calls. (iss-2608270735420161)
+- The published install one-liners now match the bootstrap curl lockdown: quiet-first, proxy and CA scrub, and protocol pins. (iss-2608270735421311)
+- abcd ahoy install now contains its writes within the repository root, refuses a non-real .abcd directory, and no longer writes a self-referential or dangling PATH entry from a relative plugin-root setting. (iss-2608270735428527, iss-2608270500201901)
+- Payload write paths are now contained: a manifest path from version-location.json is rejected when it escapes the destination, and the destination-inside-repository gate compares paths case-insensitively so a case-variant payload directory cannot slip it and write inside the working tree. (iss-2608270500214438, iss-2608270500192615)
+- abcd banlist add --private now refuses to write the secret-pattern store when git cannot confirm the file is ignored, instead of writing it unignored and reporting success. (iss-2608261132593030)
+- **The privacy-hygiene scan no longer reports a repository clean when it scanned nothing.** A git-unanswerable tree, an unreadable tracked file, and the audit rule's dead degradation fallback now surface as a finding rather than passing silently. (iss-203, iss-2608261132597732, iss-2608261533290815)
+
 ## [0.6.6] - 2026-08-25
 
 ### Fixed
