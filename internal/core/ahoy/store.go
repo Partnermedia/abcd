@@ -120,8 +120,23 @@ func resolvePluginRoot() (string, bool) {
 		candidates = append(candidates, rec.pluginRoot)
 	}
 	for _, c := range candidates {
-		if pluginRootValid(c) {
-			return c, true
+		// Absolutise before validating OR returning. A relative candidate — the
+		// shape a `cd abcd-cli && ABCD_PLUGIN_ROOT=.` user produces, and the env
+		// var is first in the ladder — otherwise means one file to os.Stat (the
+		// anti-dangling guard, resolving against the process CWD) and a different
+		// file to os.Symlink (the kernel, resolving the stored string against the
+		// LINK's directory). The guard then validates one path and links another,
+		// writing a self-referential or dangling PATH entry it later reclassifies
+		// as foreign so neither doctor nor uninstall can repair it (gh-334). The
+		// sibling routes (executable-ancestor, --bin-dir, banlist scaffold) are
+		// already absolutised; this closes the one gap. The exe-ancestor
+		// candidates are already absolute, so filepath.Abs is a no-op for them.
+		abs, err := filepath.Abs(c)
+		if err != nil {
+			continue
+		}
+		if pluginRootValid(abs) {
+			return abs, true
 		}
 	}
 	return "", false
