@@ -105,6 +105,15 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 		return IngestResult{}, newIngestError("ingest requires a Distiller")
 	}
 	root := req.RepoRoot
+	// Refuse a symlinked store DIRECTORY before the pre-write dedup reads
+	// (pageHashSet / existingPageFrontmatter) touch it (GHSA-72rp): their leaf
+	// O_NOFOLLOW guards do not contain a symlinked ancestor. The write path is
+	// already refused at WritePages -> validatedMemoryDir, but that fires only
+	// after these reads; guarding here closes the pre-write read. A missing store
+	// is fine (present=false) — WritePages materialises it.
+	if _, _, err := safeMemoryDir(root); err != nil {
+		return IngestResult{}, err
+	}
 	now := req.Now
 	if now.IsZero() {
 		now = time.Now().UTC()
