@@ -49,19 +49,37 @@ var reservedV4 = func() []net.IPNet {
 	return nets
 }()
 
+// platformMagicV4 lists fixed, provider-owned cloud-platform/metadata addresses
+// that live in GLOBALLY-ROUTABLE public IPv4 space, so — unlike everything in
+// reservedV4 — none of Go's net.IP predicates nor the reserved ranges above flag
+// them, yet each serves a VM's platform/metadata plane and is exactly what this
+// guard exists to keep out of reach. Azure's 168.63.129.16 is the WireServer /
+// host-platform endpoint (goal-state, extension config incl. protected settings,
+// provided DNS/DHCP/health-probe) — a single static IP across every Azure region
+// and national cloud (gh-324). The siblings the sweep surfaced, Alibaba
+// 100.100.100.200 and Oracle OCI 192.0.0.192, need no entry here: they already
+// fall inside reservedV4 (CGNAT 100.64/10 and the 192.0.0.0/24 protocol block).
+var platformMagicV4 = map[string]struct{}{
+	"168.63.129.16": {}, // Azure WireServer / host platform (gh-324)
+}
+
 // BlockedIP reports whether ip is in a range that must never be fetched:
 // loopback (127/8, ::1), link-local (169.254/16, fe80::/10 unicast and
 // multicast), private (10/8, 172.16/12, 192.168/16, fc00::/7 via
-// net.IP.IsPrivate), the unspecified address, any multicast address, and the
-// reserved non-private IPv4 ranges above — notably CGNAT 100.64/10. This is
-// what keeps cloud metadata endpoints (e.g. 169.254.169.254) and internal
-// services out of reach.
+// net.IP.IsPrivate), the unspecified address, any multicast address, the
+// reserved non-private IPv4 ranges above — notably CGNAT 100.64/10 — and the
+// fixed provider platform magic IPs in public space (platformMagicV4). This is
+// what keeps cloud metadata endpoints (e.g. 169.254.169.254, 168.63.129.16) and
+// internal services out of reach.
 func BlockedIP(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
 		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
 		return true
 	}
 	if v4 := ip.To4(); v4 != nil {
+		if _, ok := platformMagicV4[v4.String()]; ok {
+			return true
+		}
 		for _, n := range reservedV4 {
 			if n.Contains(v4) {
 				return true
