@@ -155,6 +155,72 @@ func TestDetectStrandedEntryIsDanglingNotForeign(t *testing.T) {
 	}
 }
 
+// TestInstallRelativePluginRootWritesResolvableEntry is gh-334: a RELATIVE
+// ABCD_PLUGIN_ROOT (the variable abcd's own fix hint tells users to set, with no
+// absoluteness contract) must not defeat the anti-dangling guard. The guard
+// stats the symlink source against the process CWD while the kernel resolves the
+// same relative string against the LINK's directory (~/.local/bin), so a relative
+// root wrote a dangling PATH entry (nested root) or a self-referential
+// abcd -> abcd loop (root "."), reported it as written, then reclassified its own
+// link as FOREIGN so neither doctor nor uninstall could repair it. The entry abcd
+// writes must resolve to the real plugin binary and be recognised as owned.
+func TestInstallRelativePluginRootWritesResolvableEntry(t *testing.T) {
+	home, pluginRoot := setupUserScope(t)
+	binDir := filepath.Join(home, ".local", "bin")
+	t.Setenv("PATH", binDir)
+
+	// Point ABCD_PLUGIN_ROOT at the very same plugin root, but by a RELATIVE path
+	// from the process CWD — the shape a `cd abcd-cli && ABCD_PLUGIN_ROOT=.` user
+	// produces. resolvePluginRoot takes it first in the ladder.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel, err := filepath.Rel(cwd, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.IsAbs(rel) {
+		t.Fatalf("test setup: %q is not relative", rel)
+	}
+	t.Setenv("ABCD_PLUGIN_ROOT", rel)
+
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target := filepath.Join(binDir, "abcd")
+	// The link the guard was supposed to protect: it must resolve to an existing
+	// file when the kernel resolves it (against the link's own directory), not
+	// dangle or loop. os.Stat follows the link exactly as the kernel would.
+	if fi, serr := os.Stat(target); serr != nil {
+		dest, _ := os.Readlink(target)
+		t.Fatalf("install wrote a broken PATH entry from a relative plugin root: %s -> %s does not resolve (%v); notes: %v",
+			target, dest, serr, res.Notes)
+	} else if !fi.Mode().IsRegular() {
+		t.Fatalf("PATH entry %s did not resolve to a regular file (mode %v)", target, fi.Mode())
+	}
+
+	// And abcd must still own the link it wrote — not misclassify it as foreign,
+	// which is what wedges doctor and uninstall.
+	det, err := Detect(managedRepo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasGap(det.Gaps, "symlink.foreign") {
+		t.Errorf("abcd misclassified its own relative-root link as foreign: %+v", det.Gaps)
+	}
+	if m, _ := det.Signals["install_mode"].(string); m != "pinned" {
+		t.Errorf("install_mode = %q, want pinned (a mis-owned link reports '')", m)
+	}
+}
+
 // TestInstallRepointsEntryStrandedByPluginUpdate is iss-345's repair half: with
 // the fresh plugin root holding a binary, install repoints the stranded entry
 // in place — no refusal, and no second entry planted at the default location.
