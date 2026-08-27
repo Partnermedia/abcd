@@ -213,20 +213,32 @@ func TestPackGateRefusesOverlapWithSource(t *testing.T) {
 	}
 }
 
-// TestWithinCaseFolding proves that on a case-folding filesystem a
-// differently-cased child still counts as inside the parent, so the pack
+// TestPathOverlapsCaseFolding proves that on a case-folding filesystem a
+// differently-cased child still counts as overlapping the parent, so the pack
 // overlap gate cannot be bypassed by re-casing a path segment.
-func TestWithinCaseFolding(t *testing.T) {
-	if !caseFoldingFS() {
-		t.Skip("case-sensitive filesystem platform; overlap re-casing is not exploitable")
-	}
+//
+// It asserts on pathOverlaps — the symbol the gate itself calls — and
+// substitutes the fold predicate rather than skipping on a case-sensitive host,
+// so the folding branch is proven wherever the suite runs. The unfolded branch
+// states the other half: two genuinely distinct directories must still pass.
+func TestPathOverlapsCaseFolding(t *testing.T) {
 	parent := "/Users/x/repo"         // abcd-audit:allow
 	child := "/Users/x/REPO/lifeboat" // abcd-audit:allow
-	if !within(child, parent) {
-		t.Errorf("within(%q, %q) = false; a re-cased child must still be contained on a case-folding FS", child, parent)
-	}
+
+	restore := caseFoldingFS
+	t.Cleanup(func() { caseFoldingFS = restore })
+
+	caseFoldingFS = func() bool { return true }
 	if !pathOverlaps(child, parent) {
 		t.Errorf("pathOverlaps(%q, %q) = false; overlap gate is bypassable via case", child, parent)
+	}
+	if !pathOverlaps(parent, child) {
+		t.Errorf("pathOverlaps(%q, %q) = false; the overlap gate must answer the same either way round", parent, child)
+	}
+
+	caseFoldingFS = func() bool { return false }
+	if pathOverlaps(child, parent) {
+		t.Errorf("pathOverlaps(%q, %q) = true; on a case-sensitive filesystem these are distinct directories", child, parent)
 	}
 }
 
