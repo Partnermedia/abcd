@@ -130,6 +130,9 @@ func TestAddPublicEntryGatesUserFacingContent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The public config's roots are ["docs", "README.md"]; both must resolve now
+	// that an unresolvable configured root fails loud (GitHub #360).
+	write("README.md", "# readme\n")
 	write("docs/named.md", "# t\n\nBuilt with widgetworks.\n")
 	write("docs/allowed.md", "# t\n\n<!-- docs-lint: allow --> widgetworks is named deliberately.\n")
 	write("docs/clean.md", "# t\n\nBuilt with a generic term.\n")
@@ -423,6 +426,11 @@ func TestAddPublicIsCaseInsensitiveLikeTheCuratedEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(p, []byte("# t\n\nBuilt with WidgetWorks.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The public config's roots are ["docs", "README.md"]; README.md must resolve
+	// now that an unresolvable configured root fails loud (GitHub #360).
+	if err := os.WriteFile(filepath.Join(docs, "README.md"), []byte("# readme\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	findings, err := lint.Lint(cfg, docs)
