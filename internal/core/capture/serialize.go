@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 // kv is one ordered frontmatter entry. val is a string, int, or []string.
@@ -126,38 +128,9 @@ func setScalarField(content, key string, value any) (string, error) {
 	}
 
 	lines := splitKeepEnds(content)
-
-	// Locate the opening delimiter — must be the first non-empty line.
-	openIdx := -1
-	for i, ln := range lines {
-		stripped := strings.TrimRight(ln, "\r\n")
-		if stripped == "" {
-			continue
-		}
-		if stripped == "---" {
-			openIdx = i
-			break
-		}
-		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
-	}
-	if openIdx == -1 {
-		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
-	}
-
-	// Locate the closing delimiter.
-	closeIdx := -1
-	for j := openIdx + 1; j < len(lines); j++ {
-		ln := lines[j]
-		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
-			continue
-		}
-		if strings.TrimRight(ln, "\r\n") == "---" {
-			closeIdx = j
-			break
-		}
-	}
-	if closeIdx == -1 {
-		return "", fmt.Errorf("%w: frontmatter not terminated", ErrMalformedFrontmatter)
+	openIdx, closeIdx, err := frontmatterBounds(lines)
+	if err != nil {
+		return "", err
 	}
 
 	eol := "\n"
@@ -213,34 +186,9 @@ func setMapField(content, key string, members []kv) (string, error) {
 	}
 
 	lines := splitKeepEnds(content)
-	openIdx := -1
-	for i, ln := range lines {
-		stripped := strings.TrimRight(ln, "\r\n")
-		if stripped == "" {
-			continue
-		}
-		if stripped == "---" {
-			openIdx = i
-			break
-		}
-		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
-	}
-	if openIdx == -1 {
-		return "", fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
-	}
-	closeIdx := -1
-	for j := openIdx + 1; j < len(lines); j++ {
-		ln := lines[j]
-		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
-			continue
-		}
-		if strings.TrimRight(ln, "\r\n") == "---" {
-			closeIdx = j
-			break
-		}
-	}
-	if closeIdx == -1 {
-		return "", fmt.Errorf("%w: frontmatter not terminated", ErrMalformedFrontmatter)
+	openIdx, closeIdx, err := frontmatterBounds(lines)
+	if err != nil {
+		return "", err
 	}
 
 	// Refuse a duplicate top-level key rather than replace: the one caller
@@ -280,6 +228,48 @@ func setMapField(content, key string, members []kv) (string, error) {
 	out = append(out, block...)
 	out = append(out, lines[closeIdx:]...)
 	return strings.Join(out, ""), nil
+}
+
+// frontmatterBounds locates the leading frontmatter block's opening and closing
+// delimiter lines in lines (as produced by splitKeepEnds, so ends are kept). The
+// open must be the first non-empty line; the close is the next un-indented
+// delimiter after it.
+//
+// The two rewrite paths (setScalarField, setMapField) held byte-identical copies
+// of this scan, and both matched `---` byte-exact — the same divergence from the
+// canonical reader that parseFrontmatterAndBody carried (GitHub #338). One copy,
+// one delimiter rule (frontmatter.IsDelimiter), so a record capture can read is a
+// record capture can also rewrite: a reader that accepts bytes its writer refuses
+// is the same split verdict pointing the other way.
+func frontmatterBounds(lines []string) (openIdx, closeIdx int, err error) {
+	openIdx, closeIdx = -1, -1
+	for i, ln := range lines {
+		if strings.TrimRight(ln, "\r\n") == "" {
+			continue
+		}
+		if frontmatter.IsDelimiter(ln) {
+			openIdx = i
+			break
+		}
+		return -1, -1, fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
+	}
+	if openIdx == -1 {
+		return -1, -1, fmt.Errorf("%w: content has no frontmatter block", ErrMalformedFrontmatter)
+	}
+	for j := openIdx + 1; j < len(lines); j++ {
+		ln := lines[j]
+		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
+			continue
+		}
+		if frontmatter.IsDelimiter(ln) {
+			closeIdx = j
+			break
+		}
+	}
+	if closeIdx == -1 {
+		return -1, -1, fmt.Errorf("%w: frontmatter not terminated", ErrMalformedFrontmatter)
+	}
+	return openIdx, closeIdx, nil
 }
 
 // splitKeepEnds splits s into lines preserving their trailing newline(s),

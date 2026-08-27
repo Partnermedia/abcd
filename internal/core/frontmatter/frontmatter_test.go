@@ -179,3 +179,42 @@ func TestDuplicates(t *testing.T) {
 		t.Fatalf("no leading --- must yield no duplicates, got %+v", got)
 	}
 }
+
+// GitHub #338: IsDelimiter is the ONE delimiter rule every reader of a record's
+// bytes shares. It is tolerant of trailing whitespace, of the end-of-line bytes
+// a keep-ends splitter leaves on, and of a leading BOM; it is intolerant of
+// everything else, so a fat-fingered `----`, a delimiter carrying content, and
+// an indented `---` stay non-delimiters.
+func TestIsDelimiter(t *testing.T) {
+	for _, ln := range []string{
+		"---",
+		"--- ",
+		"---\t",
+		"---  \t ",
+		"---\n",
+		"---\r\n",
+		"--- \n",
+		"--- \r\n",
+		"\ufeff---",
+		"\ufeff--- \n",
+	} {
+		if !IsDelimiter(ln) {
+			t.Fatalf("IsDelimiter(%q) = false, want true", ln)
+		}
+	}
+	for _, ln := range []string{
+		"",
+		"----",
+		"--",
+		"--- yaml",
+		"---x",
+		"  ---",
+		"\t---",
+		" --- ",
+		"# ---",
+	} {
+		if IsDelimiter(ln) {
+			t.Fatalf("IsDelimiter(%q) = true, want false", ln)
+		}
+	}
+}
