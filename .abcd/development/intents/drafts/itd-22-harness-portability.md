@@ -49,6 +49,23 @@ adr-23's portability promise — front doors over an unchanged core — needs sh
 - Testing strategy for parity: run the entire acceptance matrix on every adopted host, or a pinned sample per release?
 - Where does the parity report live — a dated research note per run, or a receipt-shaped artefact beside the release gates?
 
+### Evidence (2026-08-26, second-harness adaptor lab, local tier)
+
+A local lab drove the existing hook entrypoints end to end from a second
+host's native plugin runtime: prompt-router injection with per-domain dedup,
+guard block-with-reason, session-start notices, and session-end capture all
+worked over an unchanged core. The cost was exactly what this intent
+predicts: the adaptor had to re-derive the stdin payload schema, the
+exit-code semantics, and the stderr contracts by reading the CLI hook source
+— the hand-derivation the host profile seam exists to remove. Two seam
+requirements the lab surfaced now sit in the ledger: the prompt-router has no
+removal signal for snapshotting clients (iss-2608261550580260), and
+`hook session-end` has no machine-readable result channel, only a stderr
+string contract (iss-2608261550596333). The lab's verification battery —
+injection proven from logs rather than model claims, forged-heading and
+separator red-team vectors, guard exit-mapping exhaustiveness, capture
+watermark invariants — is a concrete seed for the parity conformance suite.
+
 ## Audit Notes
 
 _Empty. Populated by intent-fidelity-reviewer when intent moves to shipped/._
