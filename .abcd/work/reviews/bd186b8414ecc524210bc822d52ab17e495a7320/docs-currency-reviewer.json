@@ -1,0 +1,29 @@
+{
+  "subject": {
+    "digest": {
+      "gitCommit": "bd186b8414ecc524210bc822d52ab17e495a7320"
+    }
+  },
+  "verifier": {
+    "id": "maintainer@release"
+  },
+  "timeVerified": "2026-08-27T12:06:17Z",
+  "verificationResult": "PROMOTE",
+  "judgeModel": "claude-opus-4-8",
+  "tier": "full",
+  "manifestHash": "sha256:20b7f07e8a676e6515d01e98aa2ca8da21465166550ee250bc616f6527ed9ef7",
+  "policy": {
+    "detector": "docs-currency-reviewer",
+    "version": "1",
+    "promptHash": "sha256:host-run-agent-harness-review-no-pinned-prompt",
+    "briefVersion": "0.6.7"
+  },
+  "categories": {
+    "false-claim": 0,
+    "undocumented-surface": 0,
+    "fictional-layout": 0,
+    "criterion-violation": 0,
+    "stale-count": 0
+  },
+  "failing": []
+}
