@@ -29,6 +29,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/termsafe"
 	"syscall"
 )
 
@@ -508,9 +510,54 @@ func renderDomain(d ResolvedDomain) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s\n", d.Name)
 	for _, r := range d.Rules {
-		fmt.Fprintf(&b, "- %s\n", r)
+		fmt.Fprintf(&b, "- %s\n", sanitizeRuleBody(r))
 	}
 	return b.String()
+}
+
+// sanitizeRuleBody makes a repo-controlled rule body safe to embed under its
+// domain heading. The rendered "## NAME" lines are the injection contract
+// host-side parsers rely on, and a rule body is untrusted input: control
+// characters are stripped (newline and tab kept) and any line the body tries
+// to start with "#" is indented one space, so a hostile rules.json cannot
+// forge domain headings or smuggle escapes into the rendered block.
+func sanitizeRuleBody(r string) string {
+	// CRLF collapses to LF (editor-neutral signatures); a lone CR, LINE
+	// SEPARATOR and PARAGRAPH SEPARATOR become LF — they are line starts to
+	// the host-side parser's multiline split (or overprint terminals), so the
+	// heading-defusing indent below must apply everywhere a line starts.
+	//
+	// The normalisation runs BEFORE the trailing-whitespace trim: a body ending
+	// in a raw CR/LS/PS would otherwise sail past a newline-only trim and gain
+	// a stray terminator on the next render, breaking the fixed point.
+	r = strings.ReplaceAll(r, "\r\n", "\n")
+	r = strings.Map(func(c rune) rune {
+		if c == '\n' {
+			return c
+		}
+		if c == '\r' || c == '\u2028' || c == '\u2029' {
+			return '\n'
+		}
+		return c
+	}, r)
+	// Trailing whitespace carries no meaning in a rule body, and the renderer
+	// adds its own terminator — trimming here makes render a fixed point
+	// across the pipeline boundary: rendered text written back as a rule body
+	// re-renders byte-identically instead of gaining a newline per round-trip.
+	r = strings.TrimRight(r, " \t\n")
+	lines := strings.Split(r, "\n")
+	for i, line := range lines {
+		// The first line is already defused by the "- " bullet prefix; only a
+		// continuation line would sit flush-left and could forge a heading.
+		if i > 0 && strings.HasPrefix(line, "#") {
+			lines[i] = " " + line
+		}
+		// Terminal-display safety is the canonical termsafe mask: C0/C1
+		// controls, bidi overrides and zero-width runes become '?', so a
+		// hostile rule body cannot recolour, reorder, or hide rendered text.
+		lines[i] = termsafe.Sanitize(lines[i])
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Signature is the per-domain dedup key: an FNV-1a hash of the rendered block,
