@@ -66,6 +66,17 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	req.Text, req.Slug, req.FoundAt, req.FoundDuring, redacted, degraded =
 		redactCaptureInputs(repoRoot, req.Text, req.Slug, req.FoundAt, req.FoundDuring)
 
+	// When no explicit slug was supplied, derive it HERE — from the text that
+	// redaction has already rewritten — never from the raw caller text upstream. A
+	// caller that kebab-cased the raw text first would smuggle a home path's
+	// username past the redactor (which no longer sees a path shape) and into the
+	// committed filename (gh-485). Deriving after redaction is what keeps a finding
+	// out of the filename; an explicit slug still flows through redactCaptureInputs
+	// above.
+	if strings.TrimSpace(req.Slug) == "" {
+		req.Slug = deriveSlug(req.Text)
+	}
+
 	slugNorm, err := normaliseSlug(req.Slug)
 	if err != nil {
 		return CaptureResult{}, err

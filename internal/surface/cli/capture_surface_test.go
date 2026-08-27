@@ -401,6 +401,54 @@ func TestCaptureEmptyTextNeverWrites(t *testing.T) {
 	}
 }
 
+// TestCaptureDerivedSlugNeverCarriesHomePathUsername is the regression for
+// GH #485 (reported by @jogrun): `abcd capture <text>` derived the issue slug
+// from the RAW text before redaction ran, so a /Users/<name>/… home path in the abcd-audit:allow
+// capture text put the caller's username into the committed issue filename even
+// though the body was redacted. deriveSlug kebab-cased the path first, so nothing
+// left looked like a path and the ledger redactor never saw it — the body was
+// clean but open/iss-N-users-alice-….md still carried the name. Redaction must
+// run BEFORE the slug is derived, so a finding can never reach the filename.
+func TestCaptureDerivedSlugNeverCarriesHomePathUsername(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	// A fake home path — deliberately NOT the caller's own HOME — so the
+	// assertion turns on the ordering of redaction vs slug derivation, not on the
+	// test host's identity. The generic /Users|/home matcher (home_path_other)
+	// redacts it either way.
+	const username = "alice"
+	body := "the key at /Users/" + username + "/.ssh/id_rsa leaked into the log" // abcd-audit:allow
+
+	out := runCLI(t, "capture", body, "--json")
+	var r struct {
+		ID   string `json:"id"`
+		Slug string `json:"slug"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture output not JSON: %v\n%s", err, out)
+	}
+	if strings.Contains(r.Slug, username) {
+		t.Fatalf("derived slug %q carries the home-path username %q", r.Slug, username)
+	}
+	if strings.Contains(r.Path, username) {
+		t.Fatalf("reported path %q carries the home-path username %q", r.Path, username)
+	}
+	// And no committed issue filename on disk carries it either.
+	if err := filepath.WalkDir(repo, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && reIssueFile.MatchString(d.Name()) && strings.Contains(d.Name(), username) {
+			t.Fatalf("committed issue filename %q carries the home-path username %q", d.Name(), username)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk %s: %v", repo, err)
+	}
+}
+
 // TestCaptureStatusBoardRendersSkipped (iss-2608261437041050): a ledger record
 // the reader refuses is counted by none of the board's three totals, so a board
 // that printed the totals alone would report a ledger smaller than the one on

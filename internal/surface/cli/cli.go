@@ -2250,10 +2250,13 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			}
 			// Fast path: append a structured issue from the free-form text.
 			text := strings.Join(args, " ")
-			sl := slug
-			if sl == "" {
-				sl = deriveSlug(text)
-			}
+			// The slug is NOT derived here. Deriving it from the raw text before
+			// core redacts the inputs kebab-cases a /Users/<name>/… home path into
+			// "users-<name>-…", where nothing looks like a path any more, so the
+			// ledger redactor leaves the username in the committed filename even as
+			// it scrubs the body (gh-485). Core derives from the redacted text when
+			// this is empty; an explicit --slug is passed through and redacted there
+			// too.
 			blocked, err := parseBlockedBy(blockedBy)
 			if err != nil {
 				return err
@@ -2264,7 +2267,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				Severity:    capture.Severity(orDefault(severity, "minor")),
 				Category:    capture.Category(orDefault(category, "observation")),
 				Source:      capture.Source(orDefault(source, "user-observation")),
-				Slug:        sl,
+				Slug:        slug,
 				FoundDuring: orDefault(foundDuring, "manual-capture"),
 				FoundAt:     foundAt,
 				BlockedBy:   blocked,
@@ -2481,19 +2484,6 @@ func listState(open, resolved, wontfix, all bool) (capture.State, error) {
 	}
 	return chosen, nil
 }
-
-// deriveSlug ports scripts/abcd/_slug._normalize_core: lowercase, collapse every
-// non-[a-z0-9] run to a single hyphen, trim, then truncate to 60 chars.
-func deriveSlug(text string) string {
-	lowered := strings.ToLower(text)
-	collapsed := strings.Trim(slugNonAlnumRe.ReplaceAllString(lowered, "-"), "-")
-	if len(collapsed) > 60 {
-		collapsed = strings.Trim(collapsed[:60], "-")
-	}
-	return collapsed
-}
-
-var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 // issIDRe validates a --blocked-by token at the CLI boundary (mirrors the core
 // ^iss-[0-9]+$ schema constraint).
