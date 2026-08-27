@@ -127,7 +127,7 @@ func newExplorer(c *composer, export RecordExport, bib *Bibliography, recordRoot
 	}
 	if recordRoot != "" {
 		rel := recordRoot + "/README.md"
-		if data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes); err == nil {
+		if data, err := fsutil.ReadGuardedInRoot(c.root, rel, maxPageBytes); err == nil {
 			if h := firstHeading(rel, string(data), ""); h != "" {
 				e.eyebrow, e.eyebrowSrc = h, srcAttr(rel, "")
 			}
@@ -760,7 +760,7 @@ func (e *explorer) policyQuote() (string, error) {
 		return fmt.Errorf("site: record_pages.contributors.policy names %s § %s, and %s — the assistance tallies are not published without the rule beside them",
 			p.File, p.Heading, why)
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(e.c.repoRoot, p.File), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(e.c.root, p.File, maxPageBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", bad("the repository does not carry it")
@@ -856,7 +856,7 @@ func (e *explorer) href(fromPath, target string) string {
 		return target
 	}
 	kind := "blob"
-	if dir, err := os.Stat(joinRepo(e.c.repoRoot, rel)); err == nil && dir.IsDir() {
+	if dir, err := e.c.root.Stat(rel); err == nil && dir.IsDir() {
 		kind = "tree"
 	} else if err != nil {
 		// The tree does not carry it. The record's own text stands: inventing a

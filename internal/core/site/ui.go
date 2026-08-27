@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -256,7 +257,12 @@ func (t Tiles) ForType(typ string) string {
 
 // LoadUI reads the interface-string allowlist named by the manifest.
 func LoadUI(repoRoot, rel string) (UI, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, rel), maxUIBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return UI{}, err
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, rel, maxUIBytes)
 	if err != nil {
 		return UI{}, err
 	}

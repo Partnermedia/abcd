@@ -122,7 +122,12 @@ type Bibliography struct {
 // entry — the citations in the record's prose are numbers, and a number pointing
 // at the wrong source is worse than no page at all.
 func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
-	data, err := fsutil.ReadGuarded(joinRepo(repoRoot, cslRel), maxBibliographyBytes)
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	data, err := fsutil.ReadGuardedInRoot(root, cslRel, maxBibliographyBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -155,7 +160,7 @@ func LoadBibliography(repoRoot, cslRel, ackRel string) (*Bibliography, error) {
 	// render (adr-47 decision 2): a page that fell back to its own literal would
 	// print a heading the repository never wrote, under which it would then
 	// publish that repository's sources.
-	ack, err := fsutil.ReadGuarded(joinRepo(repoRoot, ackRel), maxBibliographyBytes)
+	ack, err := fsutil.ReadGuardedInRoot(root, ackRel, maxBibliographyBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No file, no heading, no page. The bibliography is still exported;

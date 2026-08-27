@@ -224,6 +224,11 @@ func (r CheckResult) OK() bool { return len(r.Findings) == 0 }
 // checker carries everything the seven checks read, gathered once.
 type checker struct {
 	repoRoot string
+	// root is repoRoot as an os.Root containment scope, shared by every read of a
+	// repo-relative source below, so a symlinked ancestor cannot walk a check read
+	// outside the repository — the same containment the build's reads carry (gh
+	// #487).
+	root     *os.Root
 	outDir   string
 	manifest Manifest
 	ui       UI
@@ -309,8 +314,14 @@ func Check(req CheckRequest) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 
+	srcRoot, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	defer srcRoot.Close()
+
 	c := &checker{
-		repoRoot: repoRoot, outDir: outDir, manifest: manifest, ui: ui, repo: repo,
+		repoRoot: repoRoot, root: srcRoot, outDir: outDir, manifest: manifest, ui: ui, repo: repo,
 		tokens: tokens, pages: map[string]*htmlNode{}, sources: map[string]*sourceFile{},
 		styles: map[string]*styleSheet{}, res: &res,
 	}
@@ -471,7 +482,7 @@ func (c *checker) source(rel string) *sourceFile {
 		c.sources[rel] = s
 		return s
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, rel), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, rel, maxPageBytes)
 	if err != nil {
 		s.Missing = true
 	} else {
@@ -804,8 +815,8 @@ func (c *checker) generatorWords() generatorWords {
 		if !fsutil.ValidRelPath(token) {
 			return false
 		}
-		ok, _ := fsutil.Exists(joinRepo(c.repoRoot, token))
-		return ok
+		_, err := c.root.Stat(token)
+		return err == nil
 	}
 	return g
 }
@@ -1184,7 +1195,7 @@ func (c *checker) checkSnippets() {
 			"docs.cli names no CLI reference, so no `abcd …` snippet on the site is pinned to anything")
 		return
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(c.repoRoot, ref), maxPageBytes)
+	data, err := fsutil.ReadGuardedInRoot(c.root, ref, maxPageBytes)
 	if err != nil {
 		c.fail(CheckSnippets, ref, "", "the manifest names %s as the CLI reference, and the repository does not carry it", quote(ref))
 		return

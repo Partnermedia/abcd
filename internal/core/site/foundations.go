@@ -54,11 +54,23 @@ func LoadPrinciples(repoRoot, dir string) ([]lint.RecordNode, error) {
 	if dir == "" {
 		return nil, nil
 	}
-	entries, err := os.ReadDir(joinRepo(repoRoot, dir))
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	// The listing itself resolves inside the root, so a symlinked ancestor of the
+	// principle store cannot redirect the crawl outside the repository (gh #487).
+	d, err := root.Open(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
+		return nil, err
+	}
+	entries, err := d.ReadDir(-1)
+	d.Close()
+	if err != nil {
 		return nil, err
 	}
 	var out []lint.RecordNode
@@ -72,7 +84,7 @@ func LoadPrinciples(repoRoot, dir string) ([]lint.RecordNode, error) {
 			continue
 		}
 		rel := dir + "/" + name
-		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, rel), maxPrincipleBytes)
+		data, err := fsutil.ReadGuardedInRoot(root, rel, maxPrincipleBytes)
 		if err != nil {
 			return nil, err
 		}

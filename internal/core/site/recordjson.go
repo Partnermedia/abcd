@@ -16,6 +16,7 @@ package site
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -354,8 +355,16 @@ func scanMentions(repoRoot string, nodes []lint.RecordNode, index map[string]int
 	var out []ExportMention
 	var pairs [][2]int
 	seen := map[[2]int]bool{}
+	// One containment root for the whole body scan: each record path resolves
+	// inside it, so a symlinked ancestor cannot pull a body from outside the
+	// repository into the mentions pass (gh #487).
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer root.Close()
 	for _, n := range nodes {
-		data, err := fsutil.ReadGuarded(joinRepo(repoRoot, n.Path), maxRecordBodyBytes)
+		data, err := fsutil.ReadGuardedInRoot(root, n.Path, maxRecordBodyBytes)
 		if err != nil {
 			// A record the scan listed but cannot read is a fault worth naming:
 			// the graph came from the same tree a moment ago.

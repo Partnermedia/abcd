@@ -40,6 +40,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -250,12 +251,16 @@ func checkSVGAttr(a xml.Attr, element string, bad func(string, ...any) error) er
 // assetPipe resolves image references and records what the build must copy.
 type assetPipe struct {
 	repoRoot string
+	// root is repoRoot as an os.Root containment scope: an asset read resolves
+	// every path component inside it, so a symlinked ancestor cannot pull a
+	// picture from outside the repository into the published tree (gh #487).
+	root *os.Root
 	// copies maps a repo-relative source to its output-relative destination.
 	copies map[string]string
 }
 
-func newAssetPipe(repoRoot string) *assetPipe {
-	return &assetPipe{repoRoot: repoRoot, copies: map[string]string{}}
+func newAssetPipe(repoRoot string, root *os.Root) *assetPipe {
+	return &assetPipe{repoRoot: repoRoot, root: root, copies: map[string]string{}}
 }
 
 // Copies lists the rasters to copy, sorted, as (source, destination) pairs.
@@ -293,7 +298,7 @@ func (a *assetPipe) render(pageDir, src, alt string, at Source) (string, error) 
 		return "", fmt.Errorf("%s:%d: image %q is a %q file, which is not a picture the build publishes",
 			at.Path, at.Line, src, ext)
 	}
-	data, err := fsutil.ReadGuarded(joinRepo(a.repoRoot, rel), maxAssetBytes)
+	data, err := fsutil.ReadGuardedInRoot(a.root, rel, maxAssetBytes)
 	if err != nil {
 		return "", fmt.Errorf("%s:%d: image %q (%s): %w", at.Path, at.Line, src, rel, err)
 	}
