@@ -328,7 +328,19 @@ func newRecord(root, ref, baseRef, relPath string) Record {
 	// the cut, so it stayed and refused the release as unlabelled with no way to
 	// honour the exclusion.
 	rec.ShippedIn, rec.ShippedInErr = parseShippedIn(root, baseRef, fields["shipped_in"].Value)
-	impact, err := ParseImpact(fields["impact"].Value)
+	// A YAML null is an ABSENT impact, not a malformed one. ParseImpact is a value
+	// validator and knows only the empty string as absent, so the null spellings
+	// ("~", "null", "Null", "NULL") reached it as values and came back as "invalid
+	// impact" — while record-lint, which gates on frontmatter.IsNull first, called
+	// the same line "impact must be set explicitly". Two diagnoses for one field,
+	// one of them telling the operator to fix a typo in a field that has no value
+	// at all. Normalising here routes every null to the one missing-impact message
+	// (iss-286). frontmatter.IsNull is the single null predicate; no local test.
+	raw := fields["impact"].Value
+	if frontmatter.IsNull(raw) {
+		raw = ""
+	}
+	impact, err := ParseImpact(raw)
 	if err != nil {
 		rec.ImpactErr = err.Error()
 		return rec
