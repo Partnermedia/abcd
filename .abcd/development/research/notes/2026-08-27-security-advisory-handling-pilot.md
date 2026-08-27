@@ -281,9 +281,9 @@ patches of the published line at ship time.
   corrupt objects the repack surfaced — pre-existing, unreachable, harmless, prune
   later.)
 
-## Second operator, release cut, and the gate as security auditor (F-N…F-V)
+## Second operator, release cut, and the gate as security auditor (F-N…F-W)
 
-## F-N (verified) — auto-merge is the robust default; the human click is ceremony
+### F-N (verified) — auto-merge is the robust default; the human click is ceremony
 
 Verified against `main`, not asserted from memory:
 
@@ -314,7 +314,7 @@ Verified against `main`, not asserted from memory:
   in both queue-CI and post-merge. Not asserting knowledge of a specific external
   #355 that was not read.
 
-## F-O — second-operator replication validates the protocol (agent-to-agent transfer)
+### F-O — second-operator replication validates the protocol (agent-to-agent transfer)
 
 The docs/issue-sweep session (peer `abcd-cli-7c`, its own operator, auto-merge
 authorised) requested and adopted the #523 auto-merge sequence VERBATIM over a
@@ -331,7 +331,7 @@ is teachable and reproducible, not tacit to one session.
 - Second-operator sibling-sweep captures to cite: iss-2608270908332975 through
   iss-2608270908348796 (fifteen, one Bash-listable family).
 
-## F-D (reinforced) — only the assembled-diff adversarial pass caught the cross-branch regressions
+### F-D (reinforced) — only the assembled-diff adversarial pass caught the cross-branch regressions
 
 Every per-branch gate was green on the peer's family branches. Only the
 consolidated `security-reviewer` over the assembled diff caught real cross-branch
@@ -418,9 +418,9 @@ for the note. Docs-currency: CURRENT.
 - Sibling-sweep captures: iss-2608270908332975 → iss-2608270908348796 (fifteen).
 - Residual gaps staying open: iss-2608270926030978 (FoldPath normalisation), iss-2608270926037088 (graveyard markdown-safety).
 
-### Merge landed as (fill in at cut)
+### Merge landed as
 
-- PR #526 merge commit: __________ ; `git log -1 --format='%p'` two parents: [ ] verified.
+- PR #526 merge commit: fcb5102f ; `git log -1 --format='%p'` two parents: [x] verified (f3be1f47 99561443).
 
 ---
 
@@ -517,7 +517,7 @@ how a security release represents a boundary: ship the sound improvement, disclo
 the residual gap honestly, keep the deep-gap issue open — do not erase a real gap to
 make a doc "clean".
 
-## F-W — adopt an external contributor's commit; re-authoring with Reported-by is the fallback
+### F-W — adopt an external contributor's commit; re-authoring with Reported-by is the fallback
 
 Surfaced by the second operator. The issue-sweep's default was to re-author an
 external contributor's fix and add a `Reported-by:` trailer. For @andytwoods
@@ -546,7 +546,7 @@ falsehood a transferred verdict would have shipped) and F-V (the sweep uncovered
 reverted-then-reimplemented guard feature and a live bypass, verified empirically).
 
 File the automation intent — "abcd handles inbound security advisories and issues,
-and cuts the release, for every managed repo" — citing F-A…F-V as acceptance
+and cuts the release, for every managed repo" — citing F-A…F-W as acceptance
 criteria, with F-U and F-Q (the two release gates are human-by-design) load-bearing.
 
 <!-- superseded interim verdict retained below for history -->
