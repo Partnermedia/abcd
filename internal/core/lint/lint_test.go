@@ -275,6 +275,9 @@ func TestDocsLintHarnessNameGate(t *testing.T) {
 		t.Fatalf("LoadConfig: %v", err)
 	}
 	root := t.TempDir()
+	// The real docs-lint.json roots are ["docs", "README.md"]; both must resolve
+	// now that an unresolvable configured root fails loud (GitHub #360).
+	writeFile(t, root, "README.md", "# readme\n")
 	writeFile(t, root, "docs/named.md", "# t\n\nRun this in Claude Code.\n")
 	writeFile(t, root, "docs/allowed.md", "# t\n\n<!-- docs-lint: allow --> Claude Code is named deliberately.\n")
 	writeFile(t, root, "docs/clean.md", "# t\n\nUse the agent harness.\n")

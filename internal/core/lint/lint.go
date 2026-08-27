@@ -221,6 +221,19 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
 				"; the lint reads only inside the repository"}
 		}
+		// A configured root that does not resolve is misconfiguration, not a clean
+		// tree: every per-file family walks this root, so a missing one would report
+		// zero findings at exit 0 and silently disarm every blocker for it — the
+		// shipped scaffold's `roots: ["docs", …]` does exactly this in an adopter
+		// whose docs live elsewhere. Fail loud instead (os.Stat, not IsDir: `roots`
+		// legitimately admits files such as README.md) — GitHub #360.
+		if _, err := os.Stat(rootAbs); err != nil {
+			if os.IsNotExist(err) {
+				return nil, &configError{"roots entry " + quote(root) +
+					" does not exist; a configured root that does not resolve silently disarms every per-file rule for that tree — fix the roots list or create the tree"}
+			}
+			return nil, err
+		}
 		mdFiles, err := markdownFiles(rootAbs)
 		if err != nil {
 			return nil, err
@@ -526,7 +539,7 @@ func checkStrayRootDocs(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	var out []Finding
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".md") {
+		if e.IsDir() || !hasMarkdownExt(name) {
 			continue
 		}
 
@@ -2457,6 +2470,28 @@ func frontmatterFields(lines []string) map[string]fmField {
 	return fields
 }
 
+// frontmatterDuplicates reports the duplicated top-level frontmatter keys in a
+// record, applying the same leading-comment offset frontmatterFields does so the
+// reported line stays absolute. It is the record-lint side of the strict/lenient
+// agreement (GitHub #357): the lenient scanner keeps the FIRST occurrence of a
+// duplicated key and drops the rest silently, while the strict ledger parser the
+// record's consumers use refuses the file outright — so a second `impact:` line
+// can silence the value the armed issue_impact_valid blocker is set to reject, or
+// a merge that lands the same key twice drops the record out of capture's corpus.
+// The gate reports the duplicate so its parse agrees with its consumers'.
+func frontmatterDuplicates(lines []string) []frontmatter.Dup {
+	offset := 0
+	if start := frontmatterOpen(lines); start > 0 {
+		offset = start
+		lines = lines[start:]
+	}
+	dups := frontmatter.Duplicates(lines)
+	for i := range dups {
+		dups[i].Line += offset
+	}
+	return dups
+}
+
 // contentExempt reports whether a file is excused from the content-AUTHORING
 // checks (banned_tokens, persona_registry) because it is part of the historical
 // record: its repo-relative path begins with a configured prefix, or its leading
@@ -2509,21 +2544,40 @@ func fenceMask(lines []string) []bool {
 	return mask
 }
 
+// hasMarkdownExt reports whether name ends in the markdown extension, folding
+// case. A record renamed to `.MD`/`.Md`/`.mD` is the same record to every
+// discovery filter — otherwise a casing slip makes the file INVISIBLE to every
+// blocking rule (which then all report clean) while the lifeboat still packs it
+// as a live record (GitHub #333). The filename-WELLFORMEDNESS matchers
+// (store.fileNumRe, intentFileRe) stay strict lowercase `.md`, so a `.MD` file is
+// DISCOVERED and then reported as a malformed filename rather than silently
+// skipped — the file is gated, not invisible.
+func hasMarkdownExt(name string) bool {
+	return strings.EqualFold(filepath.Ext(name), ".md")
+}
+
 func markdownFiles(rootAbs string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(rootAbs, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			// A genuinely-absent root is "unpopulated, not a fault" for the
+			// optional-directory callers (forbidden_synonyms, context currency),
+			// whose trees need not exist; the roots loop stats the root itself and
+			// fails loud (GitHub #360) before reaching here. A file that vanishes
+			// MID-walk — a git checkout/clean racing the gate — is a different
+			// event: swallowing it would discard the whole root's accumulated
+			// results silently, so only the root's OWN ENOENT is tolerated.
+			if os.IsNotExist(err) && path == rootAbs {
+				return nil
+			}
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(d.Name(), ".md") {
+		if !d.IsDir() && hasMarkdownExt(d.Name()) {
 			files = append(files, path)
 		}
 		return nil
 	})
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	sort.Strings(files)

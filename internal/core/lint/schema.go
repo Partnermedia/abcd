@@ -411,7 +411,7 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					}
 					continue
 				}
-				if !strings.HasSuffix(e.Name(), ".md") || strings.EqualFold(e.Name(), "README.md") {
+				if !hasMarkdownExt(e.Name()) || strings.EqualFold(e.Name(), "README.md") {
 					continue
 				}
 				m := store.fileNumRe.FindStringSubmatch(e.Name())
@@ -429,6 +429,21 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					return err
 				}
 				lines := strings.Split(string(content), "\n")
+				// A duplicated top-level key is malformed to every record consumer:
+				// the strict ledger parser refuses the file (dropping it out of the
+				// corpus its surfaces read), while the lenient scanner keeps only the
+				// first value — so a second line can hide the value a blocker is armed
+				// to reject. The lenient read below is what the rest of this rule
+				// needs; the duplicate is reported alongside it so the gate refuses
+				// what its consumers refuse (GitHub #357).
+				for _, dup := range frontmatterDuplicates(lines) {
+					out = append(out, Finding{
+						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+						Message: "frontmatter has a duplicate top-level key '" + dup.Key +
+							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
+							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides",
+					})
+				}
 				fields := frontmatterFields(lines)
 				records = append(records, schemaRecord{
 					rel:    rel,

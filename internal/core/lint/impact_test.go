@@ -24,6 +24,11 @@ func runImpactCases(t *testing.T, ruleID string, rule RuleConfig, cases []impact
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := t.TempDir()
+			// The rule under test reads its own store (the issue ledger / intent
+			// tree), which for issue_impact_valid sits OUTSIDE the "rec" root — so
+			// materialise the configured root, which must resolve now that an
+			// unresolvable root fails loud (GitHub #360).
+			writeFile(t, root, "rec/.keep", "")
 			writeFile(t, root, c.rel, c.body)
 			cfg := Config{
 				Roots: []string{"rec"},

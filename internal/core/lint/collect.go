@@ -13,6 +13,7 @@ package lint
 // (markdownFiles, fenceMask, parseCitations) rather than new parsing.
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -63,6 +64,19 @@ func CollectCitedURLs(cfg Config, repoRoot string) ([]CitedURL, error) {
 		if err := resolvedInsideRoot(repoRoot, rootAbs); err != nil {
 			return nil, &configError{"roots entry " + quote(root) + " " + err.Error() +
 				"; the citation collector reads only inside the repository"}
+		}
+		// A missing configured root here is worse than a wrong verdict: a
+		// scope-collapsed root yields zero cited URLs, so the refresh's
+		// wholesale-failure guard (gated on Fetched > 0) does not bind and an empty
+		// baseline is written, dropping every entry including human confirm receipts.
+		// Fail loud on a root that does not resolve (os.Stat: `roots` admits files) —
+		// GitHub #360.
+		if _, err := os.Stat(rootAbs); err != nil {
+			if os.IsNotExist(err) {
+				return nil, &configError{"roots entry " + quote(root) +
+					" does not exist; a configured root that does not resolve would collect zero cited URLs and write an empty baseline — fix the roots list or create the tree"}
+			}
+			return nil, err
 		}
 		mdFiles, err := markdownFiles(rootAbs)
 		if err != nil {
