@@ -64,6 +64,25 @@ never mutate a remote uninvited; identity from caller-local facts only.
 - The live-vs-mirror drift diff against `.abcd/work/rulesets/` (closes
   iss-277), normalising server-assigned ids and timestamps so a re-apply is
   not a false drift.
+- The fence-piece registry extends beyond branch rulesets to the full
+  API-visible repo configuration. Repo settings (merge options,
+  `delete_branch_on_merge`, auto-merge), Actions permissions with the default
+  workflow-token scope, and the security-and-analysis toggles (secret scanning,
+  push protection, Dependabot) each get a verdict from the same vocabulary. A
+  setting the public API cannot read or set is reported **unsupported (API)**
+  with the manual step named, never a false green. The fork-PR
+  outside-collaborator approval policy is the known case, its Actions `/access`
+  endpoint being private/internal-only. The live-vs-mirror drift diff extends to
+  a `repo-settings.json` mirror sibling (iss-2608270512210664). Applying any of
+  this stays the separate adr-44-bound apply intent below.
+- The pull-request-review verdict is maintainer-count-aware. A solo repo where
+  the author cannot self-approve is correctly served by
+  `required_approving_review_count: 0`, whereas a repo with multiple maintainers
+  expects a non-author approval (`count >= 1`, with GitHub blocking
+  self-approval). The doctor reports this piece against that context rather than
+  a fixed threshold; setting the value is the apply intent's job. (GitHub's
+  `require_extra_approval_for_unattributed_changes` already dovetails with the
+  four-role attribution model.)
 - The tier summary: which rung this repository stands on, and what that rung
   does not hold, in plain words.
 - Loud degradation throughout ([`loud-staging`](../../principles/loud-staging.md)):
