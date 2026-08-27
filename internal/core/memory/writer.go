@@ -411,7 +411,12 @@ func backfillLegacy(mem string) ([]string, error) {
 		if !present {
 			continue
 		}
-		if strings.HasPrefix(text, "---") {
+		// Ask the parser, not the leading bytes. A page led by an HTML comment or
+		// opening on an indented delimiter has frontmatter as far as every reader
+		// in this package is concerned; wrapping it as the body of a synthetic
+		// block would demote its declared source: provenance into prose and
+		// replace it with a fabricated session_memory class.
+		if textOpensFrontmatter(text) {
 			region, body, err := splitFileFrontmatter(text)
 			if err != nil {
 				continue
@@ -421,6 +426,12 @@ func backfillLegacy(mem string) ([]string, error) {
 				continue
 			}
 			if _, ok := fm["source"]; ok {
+				continue
+			}
+			// Rebuilding the file from (region, body) cannot carry a tolerated
+			// preamble across, so a page that has one is left alone rather than
+			// backfilled lossily.
+			if !strings.HasPrefix(text, "---") {
 				continue
 			}
 			newRegion := region + "source:\n  class: " + backfillSourceClass + "\n"
@@ -493,9 +504,6 @@ func pruneOrphans(repoRoot, mem string) ([]string, error) {
 }
 
 func pageSourceBlock(text string) map[string]any {
-	if !strings.HasPrefix(text, "---") {
-		return map[string]any{}
-	}
 	region, _, err := splitFileFrontmatter(text)
 	if err != nil {
 		return map[string]any{}

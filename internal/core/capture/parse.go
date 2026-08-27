@@ -12,23 +12,35 @@ import (
 // opening --- line; the next un-indented --- closes the block. At most one
 // leading blank line after the closing delimiter is stripped from the body.
 //
+// Delimiter lines are recognised by frontmatter.IsDelimiter, the ONE rule every
+// reader of these bytes shares (GitHub #338). This parser used to match `---`
+// byte-exact while record-lint's ledger gate and the lifeboat graveyard read the
+// same file through the canonical trimming scanner, so a `--- ` close made a
+// lint-green record that every capture verb refused. The strictness that IS
+// deliberate here — the restricted YAML subset, indented lines refused,
+// duplicate top-level keys refused — is about the block's CONTENT and is
+// untouched; only the delimiter compare moves to the shared primitive.
+//
 // The frontmatter is parsed with a restricted YAML subset matching what
 // buildIssueText/setScalarField emit: top-level `key: value` scalars, inline
 // lists (`[]`, `[itd-4, fn-12]`, `["a", "b"]`), and a single level of nested
 // object (used only by the optional resolved_by field). Values decode to
 // string, int, []string, or map[string]any.
 func parseFrontmatterAndBody(text string) (map[string]any, string, error) {
-	if !strings.HasPrefix(text, "---\n") && !strings.HasPrefix(text, "---\r\n") {
+	lines := splitKeepEnds(text)
+	// TrimBOM applies to lines[0] and nowhere else: U+FEFF is a byte-order mark
+	// only at the file's first position, and a mid-file "\ufeff---" is an
+	// ordinary body line (iss-2608270926036966).
+	if len(lines) == 0 || !frontmatter.IsDelimiter(frontmatter.TrimBOM(lines[0])) {
 		return nil, "", fmt.Errorf("%w: frontmatter must start with '---' on the first line", ErrMalformedFrontmatter)
 	}
-	lines := splitKeepEnds(text)
 	closeIdx := -1
 	for i := 1; i < len(lines); i++ {
 		ln := lines[i]
 		if strings.HasPrefix(ln, " ") || strings.HasPrefix(ln, "\t") {
 			continue
 		}
-		if strings.TrimRight(ln, "\r\n") == "---" {
+		if frontmatter.IsDelimiter(ln) {
 			closeIdx = i
 			break
 		}

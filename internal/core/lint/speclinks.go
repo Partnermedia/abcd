@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // IntentLink is one intent record as the link index sees it: which bucket holds
@@ -37,6 +39,10 @@ type SpecLink struct {
 
 	fields map[string]fmField
 	exempt bool
+	// preamble is the 1-based line the leading `---` sits on when something
+	// precedes it, 0 otherwise. spec.Load reads the delimiter at line 0 only, so
+	// a preamble hides the whole block from the loader (iss-2608270926031827).
+	preamble int
 }
 
 // SpecLinkIndex is ONE traversal of the intent buckets and the spec store,
@@ -126,7 +132,7 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 		}
 		fields := frontmatterFields(strings.Split(string(content), "\n"))
 		id := fields["id"].value
-		if !intentIDFullRe.MatchString(id) {
+		if !recordid.ValidIntentID(id) {
 			id = intentIDRe.FindString(d.Name())
 		}
 		if id == "" {
@@ -170,7 +176,8 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 				return SpecLinkIndex{}, err
 			}
 			rel := repoRel(repoRoot, fileAbs)
-			fields := frontmatterFields(strings.Split(string(content), "\n"))
+			lines := strings.Split(string(content), "\n")
+			fields := frontmatterFields(lines)
 			idx.Specs = append(idx.Specs, SpecLink{
 				ID:       fields["id"].value,
 				Bucket:   bucket,
@@ -178,6 +185,7 @@ func ScanSpecLinks(repoRoot, intentsDir, specsDir string, top Config) (SpecLinkI
 				IntentID: fields["intent"].value,
 				fields:   fields,
 				exempt:   contentExempt(rel, fields, top),
+				preamble: preambleLine(lines),
 			})
 		}
 	}

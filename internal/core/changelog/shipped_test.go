@@ -2,6 +2,7 @@ package changelog
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -266,6 +267,56 @@ func TestShippedSinceNamesUnlabelledRecords(t *testing.T) {
 		if rec.ImpactErr == "" {
 			t.Errorf("%s: unlabelled record carries no reason", rec.ID)
 		}
+	}
+}
+
+// TestShippedSinceDiagnosesANullImpactAsMissing pins MESSAGE PARITY with
+// record-lint (iss-286). A YAML null is an ABSENT impact, not a malformed one,
+// and record-lint says so — "impact must be set explicitly". Ungated, the
+// release cut handed the raw scalar to ParseImpact, which knows only the empty
+// string as absent, so `impact: NULL` came back as "invalid impact" and one line
+// carried two diagnoses: the operator is told to fix a typo in a field that in
+// fact has no value at all. The verdicts never diverged — both paths reject —
+// so what is pinned here is the wording an operator has to act on.
+//
+// Every null spelling in the YAML 1.2 core schema must therefore reach the same
+// missing-class diagnosis as the absent field, which is the baseline this table
+// measures against.
+func TestShippedSinceDiagnosesANullImpactAsMissing(t *testing.T) {
+	// The absent-field diagnosis, taken from the boundary validator rather than
+	// copied, so the two cannot drift apart.
+	_, absentErr := ParseImpact("")
+	if absentErr == nil {
+		t.Fatalf("ParseImpact(%q) unexpectedly succeeded; the missing-impact baseline is gone", "")
+	}
+	want := absentErr.Error()
+
+	// The YAML 1.2 core schema's null set, exactly as frontmatter.IsNull holds
+	// it: the empty value, "~", and the three spellings of null.
+	for _, spelling := range []string{"", "~", "null", "Null", "NULL"} {
+		t.Run("impact-"+spelling, func(t *testing.T) {
+			r := baseRepo(t)
+			r.record(shippedDir+"itd-4-null-impact.md", "itd-4", spelling)
+			r.commit("ship an intent whose impact is a YAML null")
+
+			set, err := ShippedSince(r.root, "v0.1.0")
+			if err != nil {
+				t.Fatalf("ShippedSince: %v", err)
+			}
+			unlabelled := set.UnlabelledAdded()
+			if got := ids(unlabelled); !reflect.DeepEqual(got, []string{"itd-4"}) {
+				t.Fatalf("unlabelled-added = %v, want [itd-4]", got)
+			}
+			got := unlabelled[0].ImpactErr
+			if got != want {
+				t.Errorf("impact: %q diagnosed as\n  %q\nwant the missing-impact diagnosis record-lint gives\n  %q",
+					spelling, got, want)
+			}
+			if strings.Contains(got, "invalid impact") {
+				t.Errorf("impact: %q diagnosed as malformed (%q); a YAML null is an absent value, not a bad one",
+					spelling, got)
+			}
+		})
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 
@@ -207,39 +206,28 @@ func realExistingPath(p string) string {
 
 // pathOverlaps reports whether a and b are the same directory or one contains
 // the other. Either way a lifeboat write would touch the source tree.
-func pathOverlaps(a, b string) bool {
-	return within(a, b) || within(b, a)
-}
-
-// within reports whether child is equal to or nested inside parent. On a
-// case-folding filesystem (macOS, Windows by default) the comparison is
+//
+// On a case-folding filesystem (macOS, Windows by default) the comparison is
 // case-insensitive: otherwise a destination like ".../REPO/lifeboat" computes as
-// an out-of-tree sibling of source ".../repo" and slips the overlap gate, even
-// though the two resolve to the SAME directory on disk — and the pack then writes
-// into the source tree. Erring toward "overlaps" on these platforms is the safe
+// an out-of-tree sibling of source ".../repo" and slips this gate, even though
+// the two resolve to the SAME directory on disk — and the pack then writes into
+// the source tree. Erring toward "overlaps" on these platforms is the safe
 // direction for a destructive-write gate.
-func within(child, parent string) bool {
-	if caseFoldingFS() {
-		child = strings.ToLower(child)
-		parent = strings.ToLower(parent)
-	}
-	rel, err := filepath.Rel(parent, child)
-	if err != nil {
-		return false
-	}
-	if rel == "." {
-		return true
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+//
+// The comparison itself lives in fsutil — the one canonical home, shared with
+// the launch payload-destination gate — and this is its lifeboat-side spelling.
+func pathOverlaps(a, b string) bool {
+	return fsutil.PathsOverlap(a, b, caseFoldingFS())
 }
 
 // caseFoldingFS reports whether the platform's default filesystem folds case.
 // macOS (APFS/HFS+ default) and Windows do; abcd assumes this default rather than
 // probing each volume, and the only cost of a false assumption is a stricter
-// overlap gate.
-func caseFoldingFS() bool {
-	return runtime.GOOS == "darwin" || runtime.GOOS == "windows"
-}
+// guard.
+//
+// It is a package var, not a function, so a test can prove the folding branch of
+// a fail-closed guard on a host whose own filesystem does not fold.
+var caseFoldingFS = fsutil.CaseFoldingFS
 
 // notPresent reports whether err means the path does not exist (ENOENT or a
 // non-directory component along the way). ENOTDIR — a prefix component of dest is

@@ -1,0 +1,12 @@
+---
+schema_version: 1
+id: "iss-2608270908344367"
+slug: "synthesis-principles-dedups-principles-by-adr-id-with-a-sile"
+severity: "minor"
+category: "bug"
+source: "agent-finding"
+found_during: "issue-sweep-2026-08-27"
+found_at: "internal/core/lifeboat/synthesis_principles.go"
+---
+
+synthesis_principles dedups principles by ADR id with a silent first-wins map, so a genuine ADR-number collision drops a prn-adr-N with no marker while the neighbouring review and lessons ingests announce their drops

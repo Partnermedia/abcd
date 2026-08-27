@@ -29,6 +29,44 @@ type Field struct {
 	Line  int
 }
 
+// IsDelimiter reports whether a line is a frontmatter `---` delimiter.
+//
+// This is the ONE delimiter rule. It is deliberately tolerant of trailing
+// whitespace, and deliberately intolerant of everything else: `----`,
+// `--- yaml` and an indented `  ---` are not delimiters, because leading
+// whitespace survives the trim.
+//
+// It does NOT trim a BOM, and must not. U+FEFF is a byte-order mark only at
+// byte 0 of a file; anywhere else it is ZERO WIDTH NO-BREAK SPACE, an ordinary
+// character, and a line spelled "\ufeff---" is a body line to every other
+// reader. Trimming it here made Fields close a block early at such a line while
+// intent's writer read on to the next bare `---` and inserted keys into the body
+// — a lint-green record, a write that reports success, and a value invisible on
+// reload (iss-2608270926036966). The BOM is a property of the FILE's first
+// position, not of the character, so callers strip it from line 0 themselves
+// (see TrimBOM) before asking this predicate anything.
+//
+// Tolerance here is about the delimiter LINE, not about the block's content —
+// capture's strictness about what is inside the block (duplicate top-level keys
+// refused, indented lines refused, a restricted YAML subset) is a separate and
+// deliberate policy, unaffected by this predicate.
+//
+// Every reader of a record's bytes comes here rather than re-deriving the
+// compare. capture kept a private byte-exact match (`--- ` was not a delimiter)
+// while record-lint's ledger gate and the lifeboat graveyard read the same file
+// through Fields, which trims: a trailing-space delimiter produced a lint-green
+// issue file that every capture verb refused as malformed and that `abcd iss-N`
+// reported as "not found in the issue ledger" while it sat in open/ — one format,
+// two parsers, opposite verdicts, with the permissive one on the gate side
+// (GitHub #338, the class iss-69 opened and left capture out of).
+//
+// The line may still carry its end-of-line bytes: callers that split keeping
+// ends (internal/core/capture) pass them in, and callers that split on "\n" do
+// not, so both are trimmed.
+func IsDelimiter(line string) bool {
+	return strings.TrimRight(line, " \t\r\n") == "---"
+}
+
 // Fields returns the top-level keys of the leading frontmatter block (the block
 // between the first two `---` lines). Nested keys and list items are ignored,
 // and the first occurrence of a key wins. An input whose first line is not `---`
@@ -37,16 +75,18 @@ type Field struct {
 // never harvested as fields.
 func Fields(lines []string) map[string]Field {
 	fields := map[string]Field{}
-	// A delimiter line may carry trailing whitespace ("--- "); trim spaces/tabs/CR
-	// before comparing, so a trailing-space closing delimiter is still seen as the
-	// close and body lines after it do not leak in as fields.
-	if len(lines) == 0 || strings.TrimRight(TrimBOM(lines[0]), " \t\r") != "---" {
+	// A delimiter line may carry trailing whitespace ("--- "); IsDelimiter trims
+	// it, so a trailing-space closing delimiter is still seen as the close and
+	// body lines after it do not leak in as fields. The BOM is trimmed HERE, at
+	// line 0 — the only position where U+FEFF is a byte-order mark rather than an
+	// ordinary ZWNBSP character (iss-2608270926036966).
+	if len(lines) == 0 || !IsDelimiter(TrimBOM(lines[0])) {
 		return fields
 	}
 	closed := false
 	for i := 1; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r")
-		if strings.TrimRight(line, " \t") == "---" {
+		if IsDelimiter(line) {
 			closed = true
 			break
 		}
@@ -88,7 +128,8 @@ type Dup struct {
 // refuses (GitHub #357). The block-boundary contract is Fields': no leading `---`
 // or no closing `---` yields nothing, so body prose is never scanned.
 func Duplicates(lines []string) []Dup {
-	if len(lines) == 0 || strings.TrimRight(TrimBOM(lines[0]), " \t\r") != "---" {
+	// The BOM is trimmed at line 0 only; see Fields.
+	if len(lines) == 0 || !IsDelimiter(TrimBOM(lines[0])) {
 		return nil
 	}
 	seen := map[string]bool{}
@@ -96,7 +137,7 @@ func Duplicates(lines []string) []Dup {
 	closed := false
 	for i := 1; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r")
-		if strings.TrimRight(line, " \t") == "---" {
+		if IsDelimiter(line) {
 			closed = true
 			break
 		}

@@ -204,7 +204,7 @@ func maxIntentSpecNum(repoRoot string) (int, error) {
 // The returned mintWarning is non-empty when the refs-union scan degraded to
 // working-tree-only minting; the caller MUST surface it (never swallow it).
 func Create(repoRoot, intentID, slug string) (Spec, string, error) {
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return Spec{}, "", fmt.Errorf("spec: intent id %q must match ^itd-[0-9]+$", intentID)
 	}
 	if !slugRe.MatchString(slug) {
@@ -288,7 +288,7 @@ func withMintLock(repoRoot string, fn func() error) error {
 // missing or already closed. The linked intent is deliberately left untouched:
 // moving it is a later reconcile concern that consumes Spec.Intent.
 func Close(repoRoot, specID string) (Spec, error) {
-	if !specIDRe.MatchString(specID) {
+	if !recordid.ValidSpecID(specID) {
 		return Spec{}, fmt.Errorf("spec: id %q must match ^spc-[0-9]+$", specID)
 	}
 	store, err := Load(repoRoot)

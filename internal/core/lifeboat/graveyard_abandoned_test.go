@@ -2,6 +2,7 @@ package lifeboat
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,4 +444,146 @@ func abandonedFullFixture(t *testing.T) string {
 	write(".abcd/work/DECISIONS.md",
 		"# DECISIONS\n\n- 2026-07-08 — RAG rejected at this scale.\n")
 	return dir
+}
+
+// --- 9. the cap notice -------------------------------------------------------
+
+// TestAbandonedSupersededADRCapNotesTruncation pins the contract stated on
+// maxGraveyardFindingsPerSignal — "the last retained finding for a truncated
+// signal notes the cap" — for a layer-2 signal. Layer 1's capSignalFindings
+// already honours it; a layer-2 signal that truncated silently would present a
+// truncated abandoned.json as complete.
+func TestAbandonedSupersededADRCapNotesTruncation(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	for i := 1; i <= maxGraveyardFindingsPerSignal+2; i++ {
+		write(fmt.Sprintf("docs/adr/%04d-thing.md", i),
+			fmt.Sprintf("---\nid: adr-%d\nstatus: superseded\n---\n\n# %d\n", i, i))
+	}
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if len(fs) != maxGraveyardFindingsPerSignal {
+		t.Fatalf("findings = %d, want the cap %d", len(fs), maxGraveyardFindingsPerSignal)
+	}
+	last := fs[len(fs)-1]
+	want := fmt.Sprintf("(+2 further findings omitted; capped at %d)", maxGraveyardFindingsPerSignal)
+	if !gvEvidenceContains(last, want) {
+		t.Errorf("truncated signal did not note the cap: last finding %s evidence = %v, want a line containing %q",
+			last.ID, last.Evidence, want)
+	}
+}
+
+// --- 10. one ADR identity, every claimant announced --------------------------
+
+// TestAbandonedSupersededADRDuplicateNumberAnnouncesShadow: an ADR number is not
+// a unique name — adr-tools branches collide on one, and log4brains' YYYYMMDD-
+// filenames collide for every ADR written the same day. The colliding records
+// still dedupe to one finding (a reader cannot tell a genuine duplicate from the
+// same ADR copied into two homes), but the drop must be announced on the finding
+// that won rather than vanishing with no marker anywhere in the lifeboat.
+func TestAbandonedSupersededADRDuplicateNumberAnnouncesShadow(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	write("docs/adr/0007-use-kafka.md", "---\nstatus: superseded\n---\n\n# 7. Kafka\n")
+	write("docs/adr/0007-use-rabbitmq.md", "---\nstatus: superseded\n---\n\n# 7. RabbitMQ\n")
+
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededADR) != 1 {
+		t.Fatalf("two records claiming adr-7 must yield one finding, got %d (%v)", len(fs), fs)
+	}
+	f, ok := gvFindingByID(fs, "adr-7")
+	if !ok {
+		t.Fatalf("want adr-7, got %v", fs)
+	}
+	if !gvEvidenceContains(f, "docs/adr/0007-use-rabbitmq.md") {
+		t.Errorf("the shadowed claimant was dropped silently: evidence = %v", f.Evidence)
+	}
+}
+
+// TestAbandonedSupersededADRPaddedFrontmatterIDDedupesAcrossHomes is the inverse
+// failure: gvSupersededADRs documents a first-wins dedup across homes, but the
+// two id-derivation paths canonicalised differently — a native `id: adr-012` and
+// a filename-derived adr-12 for the SAME ADR read as two records, so the copy was
+// reported twice. adr-0012 and adr-12 are one handle everywhere else in the
+// repository (record dispatch, the citation resolver); layer 2 must agree.
+func TestAbandonedSupersededADRPaddedFrontmatterIDDedupesAcrossHomes(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	write(".abcd/development/decisions/adrs/0012-thing.md",
+		"---\nid: adr-012\nstatus: superseded\n---\n\n# Native copy\n")
+	write("docs/adr/0012-thing.md",
+		"---\nstatus: superseded\n---\n\n# Conventional copy\n")
+
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededADR) != 1 {
+		t.Fatalf("one ADR in two homes must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	if _, ok := gvFindingByID(fs, "adr-12"); !ok {
+		t.Errorf("want the canonical id adr-12, got %v", fs)
+	}
+}
+
+// TestAbandonedAlternativesConsideredDuplicateNumberAnnouncesShadow: the
+// alternatives signal shares gvADRID and shadowed identically.
+func TestAbandonedAlternativesConsideredDuplicateNumberAnnouncesShadow(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	body := "\n## Alternatives Considered\n\n- %s — rejected.\n\n## Decision\n\nx.\n"
+	write("docs/adr/20200926-use-log4brains.md",
+		"---\nstatus: accepted\n---\n\n# log4brains\n"+fmt.Sprintf(body, "a docs folder"))
+	write("docs/adr/20200926-use-markdown-adrs.md",
+		"---\nstatus: accepted\n---\n\n# markdown adrs\n"+fmt.Sprintf(body, "a wiki"))
+
+	fs := gvAlternativesConsidered(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalAlternativesConsidered) != 1 {
+		t.Fatalf("two records claiming one ADR number must yield one finding, got %d (%v)", len(fs), fs)
+	}
+	if !gvEvidenceContains(fs[0], "docs/adr/20200926-use-markdown-adrs.md") {
+		t.Errorf("the shadowed claimant was dropped silently: evidence = %v", fs[0].Evidence)
+	}
+}
+
+// TestGvCanonADRIDStripsPadding pins the canonical spelling both derivation paths
+// must resolve to, rebuilt from the parsed integer so a padded id can never mint
+// a second spelling of one record.
+func TestGvCanonADRIDStripsPadding(t *testing.T) {
+	for in, want := range map[string]string{
+		"adr-12":   "adr-12",
+		"adr-012":  "adr-12",
+		"adr-0012": "adr-12",
+		"adr-x":    "",
+		"itd-12":   "",
+		"":         "",
+		// All zeros is one handle, not the empty id.
+		"adr-0":   "adr-0",
+		"adr-000": "adr-0",
+		// Wider than any integer type: still a well-formed id, so it must keep an
+		// identity rather than canonicalise to "" and be skipped in silence.
+		"adr-99999999999999999999":   "adr-99999999999999999999",
+		"adr-0099999999999999999999": "adr-99999999999999999999",
+	} {
+		if got := gvCanonADRID(in); got != want {
+			t.Errorf("gvCanonADRID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestAbandonedSupersededADROversizeOrdinalKeepsIdentity: an ADR ordinal wider
+// than any integer type is still a well-formed adr-N and must keep an identity.
+// Canonicalising through an integer parse would fail on it and return "", and a
+// record with no id is skipped in silence — the drop this file's dedup exists to
+// announce, reintroduced at the identity step.
+func TestAbandonedSupersededADROversizeOrdinalKeepsIdentity(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	huge := "99999999999999999999" // 20 digits: beyond int64
+	// Filenames start with a letter, so the frontmatter id is the only id source.
+	write("docs/adr/a-padded.md", "---\nid: adr-00"+huge+"\nstatus: superseded\n---\n\n# padded\n")
+	write("docs/adr/b-bare.md", "---\nid: adr-"+huge+"\nstatus: superseded\n---\n\n# bare\n")
+
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededADR) != 1 {
+		t.Fatalf("padded and bare spellings of one huge ordinal must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	f, ok := gvFindingByID(fs, "adr-"+huge)
+	if !ok {
+		t.Fatalf("want the canonical id adr-%s, got %v", huge, fs)
+	}
+	if !gvEvidenceContains(f, "docs/adr/b-bare.md") {
+		t.Errorf("the shadowed claimant was dropped silently: evidence = %v", f.Evidence)
+	}
 }

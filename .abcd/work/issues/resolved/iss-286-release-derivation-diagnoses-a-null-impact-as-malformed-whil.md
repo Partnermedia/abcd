@@ -7,6 +7,10 @@ category: "inconsistency"
 source: "impl-review"
 found_during: "pr-294-review"
 found_at: "internal/core/changelog/shipped.go"
+resolution: "newRecord gates ParseImpact on frontmatter.IsNull so every null spelling is classified as missing, agreeing with record-lint (the two messages spell the diagnosis differently)"
+impact: fix
+resolved_by:
+  commit: "a0c6fccb"
 ---
 
 Release derivation diagnoses a null impact as malformed while record-lint calls it missing

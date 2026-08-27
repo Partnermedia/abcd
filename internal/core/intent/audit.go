@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -177,7 +178,7 @@ func receiptFor(intentID, specID, content string) string {
 // receipt already exists (OWED/INGESTED/DEAD_LETTER) the Audit Notes are left
 // untouched. All ids are validated before any path is built.
 func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
-	if !intentIDRe.MatchString(it.ID) {
+	if !recordid.ValidIntentID(it.ID) {
 		return AuditEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", it.ID)
 	}
 	// The stored spec_id is checked the tolerant way (a number must be readable
@@ -243,7 +244,7 @@ func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 // discard the recorded audit), so the caller learns the review is already
 // resolved rather than silently receiving a fresh stub.
 func ReEmitAudit(repoRoot, intentID string) (AuditEmitResult, error) {
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return AuditEmitResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
 	corpus, err := Load(repoRoot)

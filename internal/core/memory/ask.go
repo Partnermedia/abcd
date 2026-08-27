@@ -147,9 +147,6 @@ func parseQuestion(question string) ([]string, string, string) {
 }
 
 func pageBody(text string) string {
-	if !strings.HasPrefix(text, "---") {
-		return text
-	}
 	_, body, err := splitFileFrontmatter(text)
 	if err != nil {
 		return text

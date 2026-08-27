@@ -58,6 +58,17 @@ You can interrogate `abcd`'s development process at [abcdev.app/record/](https:/
 At this stage, `abcd` remains **experimental**, and you should expect the surface to keep moving: Verbs change, and the plugin surface currently targets a single harness (the command-line app is host-agnostic and runs in any repository with no harness at all). What's not experimental is the [record](https://abcdev.app/record/).
 
 
+## Requirements
+
+Only the first of these applies to every use; the rest are scoped to one route.
+
+- **Git**: Always. `abcd` shells out to the `git` binary and anchors every record it keeps to a repository.
+- **A released platform**: macOS or Linux, on amd64 or arm64. Windows runs the Linux route inside WSL.
+- **An agent harness**: The plugin route and the verbs that hand their work to a model, and nothing else. The deterministic verbs need no harness, and the command-line app runs in any repository without one.
+- **`curl` and a SHA-256 tool**: The CLI one-liner below only. It fetches over HTTPS and checks the binary against the release's `checksums.txt` with `sha256sum` or `shasum`.
+- **Go 1.26 or later**: A source build only. Both install routes provision a prebuilt binary, so installing `abcd` needs no Go toolchain.
+
+
 ## Install
 
 The easiest route to get started is to install `abcd` as a [Claude Code](https://claude.ai/claude-code) plugin. <!-- docs-lint: allow -->

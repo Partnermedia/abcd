@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 )
 
@@ -47,7 +48,7 @@ type ReadyResult struct {
 // faults (malformed id, unknown intent, unreadable record, store load failure),
 // so a surface can map result vs error to distinct exit codes.
 func Ready(repoRoot, intentID string) (ReadyResult, error) {
-	if !intentIDRe.MatchString(intentID) {
+	if !recordid.ValidIntentID(intentID) {
 		return ReadyResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
 	corpus, err := Load(repoRoot)

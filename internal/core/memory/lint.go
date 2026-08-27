@@ -149,17 +149,28 @@ func (l *memoryLinter) sourceBlock() map[string]any {
 	return map[string]any{}
 }
 
+// derivedClasses returns every source class the page declares — the UNION of
+// the scalar `source.class` and the plural `source.classes` list, scalar first,
+// deduplicated. The two shapes are mutually exclusive only on the write path,
+// where validateSourceBlock refuses a block that mixes them; lint reads a page's
+// raw on-disk bytes by design and never runs that validator. Reading the plural
+// list in an else-if therefore let it SHADOW the scalar: a page declaring
+// `class: external_pdf` beside `classes: [session_memory]` presented only the
+// harmless internal class to every check sharing this derivation, and slipped
+// past the ML001 licence blocker. The union is the fail-closed reading, and the
+// honest one — the page really does declare both.
 func (l *memoryLinter) derivedClasses() []string {
 	src := l.sourceBlock()
 	var raw []string
+	if single, ok := src["class"].(string); ok {
+		raw = append(raw, single)
+	}
 	if classes, ok := src["classes"].([]any); ok {
 		for _, c := range classes {
 			if s, ok := c.(string); ok {
 				raw = append(raw, s)
 			}
 		}
-	} else if single, ok := src["class"].(string); ok {
-		raw = []string{single}
 	}
 	var out []string
 	for _, c := range raw {
@@ -203,7 +214,11 @@ func hasLicence(block map[string]any) bool {
 
 func (l *memoryLinter) checkLicence() {
 	src := l.sourceBlock()
+	// Classes accounted for by a per-source entry: those carry their licence on
+	// the entry, so the page-level pass below must not demand a second one.
+	var covered []string
 	if sources, ok := src["sources"].([]any); ok {
+		covered = deriveClasses(sources)
 		for idx, e := range sources {
 			em, ok := e.(map[string]any)
 			if !ok {
@@ -216,13 +231,28 @@ func (l *memoryLinter) checkLicence() {
 					fmt.Sprintf("Add `licence: <spdx-id|declared-by-user|unknown>` to source.sources[%d].", idx))
 			}
 		}
-		return
 	}
-	if isExternalClass(src["class"]) && !hasLicence(src) {
-		l.emit("ML001",
-			fmt.Sprintf("memory page with `source.class: %v` has no `licence` field; explicit `licence: unknown` is acceptable — missing is the violation.", src["class"]),
-			l.sourceLine,
-			"Add `licence: <spdx-id|declared-by-user|unknown>` under `source:`.")
+	// Derive the page's classes the way every sibling check does (MS001/MS002,
+	// SourceClasses, the index rendering): the scalar `class` AND the plural
+	// `classes` list. Reading only the scalar let an external_* page declared
+	// `classes: [external_pdf]` with no licence pass the blocker unseen, while
+	// MS001 in the same run asserted the page carried an external class.
+	//
+	// This pass runs even when a `sources` list is present. The two shapes are
+	// mutually exclusive only on the write path (validateSourceBlock), which the
+	// lint path never runs — so returning out of the branch above let a page
+	// carrying a scalar `class: external_pdf` alongside an empty or junk
+	// `sources: []` skip the page-level check entirely.
+	for _, cls := range l.derivedClasses() {
+		if contains(covered, cls) {
+			continue
+		}
+		if isExternalClass(cls) && !hasLicence(src) {
+			l.emit("ML001",
+				fmt.Sprintf("memory page with source class `%s` has no `licence` field; explicit `licence: unknown` is acceptable — missing is the violation.", cls),
+				l.sourceLine,
+				"Add `licence: <spdx-id|declared-by-user|unknown>` under `source:`.")
+		}
 	}
 }
 
