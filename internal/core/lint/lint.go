@@ -196,6 +196,12 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 	citeParseOn := citeFootOn || citeURLOn || citePolicyOn || citeBaseOn
 	var citedRefs []citedRef
 
+	// The harness-leak class rides the same per-file walk. It is NOT a
+	// content-authoring rule: a session URL in a superseded record is as much a
+	// leak as one in a live page, so it does not consult contentExempt.
+	leakCfg, leakOn := cfg.Rules[ruleHarnessLeak]
+	leakOn = leakOn && leakCfg.Enabled
+
 	personaCfg, personaOn := cfg.Rules["persona_registry"]
 	personaOn = personaOn && personaCfg.Enabled
 	var personaRoster map[string]bool
@@ -276,6 +282,9 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			}
 			if brittleOn {
 				findings = append(findings, checkBrittleRefs(rel, lines, mask, brittleCfg)...)
+			}
+			if leakOn {
+				findings = append(findings, checkHarnessLeak(rel, lines, mask, leakCfg)...)
 			}
 
 			if citeParseOn {

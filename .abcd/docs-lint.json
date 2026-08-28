@@ -250,6 +250,10 @@
       "enabled": true,
       "severity": "blocker"
     },
+    "harness_leak": {
+      "enabled": true,
+      "severity": "blocker"
+    },
     "stray_root_docs": {
       "enabled": true,
       "severity": "blocker",

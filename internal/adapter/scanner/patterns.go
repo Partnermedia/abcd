@@ -178,7 +178,13 @@ func DefaultPatterns() []Pattern {
 	// Network identifiers are part of the baseline, not a bolt-on: folding them
 	// in here is what makes every consumer (launch dry-run, lifeboat pack,
 	// history Stage-1 redaction) inherit the same detection from one definition.
-	return append(p, NetworkPatterns()...)
+	// The harness-leak class (harnessleak.go) is folded in on the same reasoning:
+	// a session URL and a tool's attribution footer are content that must not
+	// leave the machine, and defining them anywhere else would give the
+	// store-before-commit paths a weaker notion of a leak than the surfaces that
+	// judge committed text.
+	p = append(p, NetworkPatterns()...)
+	return append(p, HarnessLeakPatterns()...)
 }
 
 // defaultPatternFloors captures the built-in severity floor per bundled pattern

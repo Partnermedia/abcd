@@ -205,6 +205,10 @@
       "enabled": true,
       "severity": "warn"
     },
+    "harness_leak": {
+      "enabled": true,
+      "severity": "blocker"
+    },
     "directory_coverage": {
       "enabled": true,
       "severity": "warn",
