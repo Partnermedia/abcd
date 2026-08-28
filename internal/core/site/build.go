@@ -358,7 +358,12 @@ func Build(req Request) (Result, error) {
 		return Result{}, err
 	}
 
-	lintCfg, err := lint.LoadConfig(joinRepo(repoRoot, ".abcd/record-lint.json"))
+	lintRoot, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return Result{}, err
+	}
+	lintCfg, err := lint.LoadConfigInRoot(lintRoot, ".abcd/record-lint.json")
+	lintRoot.Close()
 	if err != nil && !os.IsNotExist(err) {
 		return Result{}, err
 	}

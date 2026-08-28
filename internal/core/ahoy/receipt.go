@@ -3,7 +3,6 @@ package ahoy
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -60,17 +59,24 @@ func receiptPath(cwd, p string) string {
 	return p
 }
 
+// caseFoldingFS is the package's view of fsutil.CaseFoldingFS, a var so a test
+// can provoke the case-folding branch of the receipt-classification containment
+// on a case-sensitive host — the seam launch and lifeboat use for the same
+// reason.
+var caseFoldingFS = fsutil.CaseFoldingFS
+
 // under reports whether p lies at or inside the absolute directory root. It is
 // lexical: both sides come from the same source in every caller (the cwd Install
 // absolutised, or the HOME the store itself reads), so resolving symlinks here
 // would compare a resolved path against an unresolved root and answer no.
+//
+// The containment routes through fsutil.PathWithin — the one canonical compare —
+// so on a case-folding filesystem a case-variant repo or home root still
+// classifies as "under" and the receipt is redacted, while a case-sensitive host
+// keeps byte-exact semantics (iss-2608270908340925).
 func under(root, p string) bool {
 	if root == "" || !filepath.IsAbs(root) {
 		return false
 	}
-	rel, err := filepath.Rel(root, p)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+	return fsutil.PathWithin(p, root, caseFoldingFS())
 }
