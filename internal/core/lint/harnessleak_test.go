@@ -2,9 +2,28 @@ package lint
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/testsecret"
 )
+
+// The session-identifier fixture is GENERATED AT RUNTIME, seeded per test, for
+// the reason the scanner's own fixtures are (internal/adapter/scanner/
+// harnessleak_test.go, and the secret-shaped-fixtures-at-runtime principle):
+// this repository scans full history and main cannot be force-pushed, so an
+// identifier written down as a literal is in the history for good. Nothing here
+// is split, waived, or hidden behind a reserved documentation host — the
+// generated value is not real, so it needs no escape and the rule under test can
+// read this file and find nothing.
+func synthSessionURL(t *testing.T, seed uint64) string {
+	t.Helper()
+	return "https://agent-host.dev/code/session_" + testsecret.Synthetic(seed, 22)
+}
+
+// harnessFooter is the banned attribution shape, spelled out. It needs no
+// evasion either: a Go source line puts prose before the match, and the pattern
+// requires a footer to occupy its own line.
+const harnessFooter = "Generated with [Some Tool](https://tool.dev)"
 
 func harnessLeakCfg() Config {
 	return Config{
@@ -20,11 +39,9 @@ func harnessLeakCfg() Config {
 // scanner defines reaches the documents the lint walks.
 func TestHarnessLeakInLintedProse(t *testing.T) {
 	root := t.TempDir()
-	// Assembled at runtime so this repository's own tree carries no specimen.
-	footer := strings.Join([]string{"Generated", "with"}, " ") + " [Some Tool](https://tool.dev)"
-	sessionURL := "https://agent-host.dev/code/" + strings.Join([]string{"session", "01Gy4Zo93PdMmggA8sfGyb"}, "_")
+	sessionURL := synthSessionURL(t, 17)
 	writeFile(t, root, filepath.Join("docs", "release.md"),
-		"# Release\n\nShipped.\n\n"+footer+"\n")
+		"# Release\n\nShipped.\n\n"+harnessFooter+"\n")
 	writeFile(t, root, filepath.Join("docs", "run.md"),
 		"# Run\n\nRecorded at "+sessionURL+"\n")
 
@@ -48,9 +65,8 @@ func TestHarnessLeakInLintedProse(t *testing.T) {
 // cannot be written about is one people route around.
 func TestHarnessLeakSparesFencedExamples(t *testing.T) {
 	root := t.TempDir()
-	footer := strings.Join([]string{"Generated", "with"}, " ") + " [Some Tool](https://tool.dev)"
 	writeFile(t, root, filepath.Join("docs", "policy.md"),
-		"# Policy\n\nThe banned shape:\n\n```\n"+footer+"\n```\n\nUse the trailer instead.\n")
+		"# Policy\n\nThe banned shape:\n\n```\n"+harnessFooter+"\n```\n\nUse the trailer instead.\n")
 
 	fs, err := Lint(harnessLeakCfg(), root)
 	if err != nil {
@@ -66,9 +82,8 @@ func TestHarnessLeakSparesFencedExamples(t *testing.T) {
 // whole page into a fence.
 func TestHarnessLeakHonoursTheWaiver(t *testing.T) {
 	root := t.TempDir()
-	footer := strings.Join([]string{"Generated", "with"}, " ") + " [Some Tool](https://tool.dev)"
 	writeFile(t, root, filepath.Join("docs", "policy.md"),
-		"# Policy\n\n"+footer+" <!-- abcd-lint:allow -->\n")
+		"# Policy\n\n"+harnessFooter+" <!-- abcd-lint:allow -->\n")
 
 	fs, err := Lint(harnessLeakCfg(), root)
 	if err != nil {
@@ -83,8 +98,7 @@ func TestHarnessLeakHonoursTheWaiver(t *testing.T) {
 // config that does not name it changes nothing.
 func TestHarnessLeakDisabledByDefault(t *testing.T) {
 	root := t.TempDir()
-	footer := strings.Join([]string{"Generated", "with"}, " ") + " [Some Tool](https://tool.dev)"
-	writeFile(t, root, filepath.Join("docs", "release.md"), "# Release\n\n"+footer+"\n")
+	writeFile(t, root, filepath.Join("docs", "release.md"), "# Release\n\n"+harnessFooter+"\n")
 
 	fs, err := Lint(Config{Roots: []string{"docs"}}, root)
 	if err != nil {
@@ -101,7 +115,7 @@ func TestHarnessLeakDisabledByDefault(t *testing.T) {
 // the exact drift the class exists to prevent.
 func TestHarnessLeakSecondMatchOnALine(t *testing.T) {
 	root := t.TempDir()
-	sessionURL := "https://agent-host.dev/code/" + strings.Join([]string{"session", "01Gy4Zo93PdMmggA8sfGyb"}, "_")
+	sessionURL := synthSessionURL(t, 23)
 	writeFile(t, root, filepath.Join("docs", "run.md"),
 		"# Run\n\nBackground https://agent-host.dev/blog/using-agent-session-management-and-1m and the run at "+sessionURL+"\n")
 
