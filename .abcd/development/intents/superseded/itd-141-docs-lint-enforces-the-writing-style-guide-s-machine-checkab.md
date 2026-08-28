@@ -2,13 +2,17 @@
 id: itd-141
 slug: docs-lint-enforces-the-writing-style-guide-s-machine-checkab
 spec_id: null
-kind: null
-suggested_kind: null
+kind: standalone
+suggested_kind: standalone
 reclassification_history: []
 builds_on: []
+superseded_by: adr-54
+kind_at_supersession: standalone
 severity: minor
 impact: additive
 ---
+
+> **⚠️ Superseded by [ADR-54](../../decisions/adrs/0054-punctuation-enforcement-stays-mechanical-only.md)** (the em-dash core shipped as the `punctuation/em-dash-in-list-item` banned token via iss-2608280706531199; corpus evidence showed the casing rules have zero true positives with unclosable false-positive classes, so they are `review` by nature and the staged lint is not built; the continuation-line residual has zero instances and reopens as a fresh intent on first regression). Retired 2026-08-28 from `drafts/` at the planning interview — never planned, never specced. Preserved as historical record per the supersession lifecycle.
 
 # docs-lint enforces the writing style guide's machine-checkable rules: an em dash inside a list item, a lower-case letter opening a list lead-in after its colon, and a capital letter after a semicolon are flagged as findings, with code spans and fenced blocks masked, so the canonical style guide's machine-enforceable subset is a shipped gate rather than a review habit — and the guide marks a rule machine-enforced only once its lint ships
 

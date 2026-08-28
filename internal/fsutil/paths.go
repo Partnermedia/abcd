@@ -47,6 +47,13 @@ func CaseFoldingFS() bool {
 	return runtime.GOOS == "darwin" || runtime.GOOS == "windows"
 }
 
+// caseFoldingFS is the package's own view of CaseFoldingFS, held as a var for the
+// same reason launch and lifeboat keep one: a redactor's case-folding branch
+// cannot be provoked on a case-SENSITIVE host, so substituting the predicate is
+// the only way a test can prove a case-variant root is redacted — and, with it
+// false, that a case-sensitive host keeps exact-match semantics.
+var caseFoldingFS = CaseFoldingFS
+
 // FoldPath returns p in the spelling a path comparison uses: lower-cased when
 // fold is set, unchanged otherwise. It is the single place a case-folding
 // comparison key is minted, so a containment gate and a duplicate-target map
@@ -130,13 +137,61 @@ func RepoRel(base, target string) string {
 // redacts the same two roots out of every write it reports (iss-177). Callers
 // pass the root and the replacement because the polarity differs — "." for the
 // repo, "~" for home — but the boundary rule must not.
+//
+// On a case-folding filesystem the match is case-insensitive: a message that
+// echoes $HOME in a case variant (as a shell or a syscall may on macOS/APFS)
+// names the same directory, so the identity must still be scrubbed. The original
+// casing of any UNREDACTED text is preserved, and on a case-sensitive host the
+// match stays byte-exact so two distinct paths are never merged (iss-2608270908341622).
 func RedactRoot(s, root, repl string) string {
 	if len(root) <= 1 || !filepath.IsAbs(root) {
 		return s
 	}
+	fold := caseFoldingFS()
 	sep := string(os.PathSeparator)
-	s = strings.ReplaceAll(s, root+sep, repl+sep)
-	return replaceBareRoot(s, root, repl)
+	s = replaceAllFold(s, root+sep, repl+sep, fold)
+	return replaceBareRoot(s, root, repl, fold)
+}
+
+// indexFold is strings.Index, comparing case-insensitively when fold is set so a
+// case-variant root spelling is still located on a case-folding filesystem. The
+// scan advances one byte at a time and compares equal-length windows with
+// EqualFold, so the returned index always addresses the ORIGINAL string — a
+// ToLower of the whole haystack could shift byte offsets when a fold changes a
+// rune's width.
+func indexFold(s, sub string, fold bool) int {
+	if !fold {
+		return strings.Index(s, sub)
+	}
+	if sub == "" {
+		return 0
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if strings.EqualFold(s[i:i+len(sub)], sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+// replaceAllFold replaces every occurrence of old in s with repl, matching
+// case-insensitively when fold is set. The matched span is dropped and repl
+// written in its place; the surrounding text keeps its original casing.
+func replaceAllFold(s, old, repl string, fold bool) string {
+	if old == "" {
+		return s
+	}
+	var b strings.Builder
+	for {
+		i := indexFold(s, old, fold)
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i])
+		b.WriteString(repl)
+		s = s[i+len(old):]
+	}
 }
 
 // RedactHome replaces the user's home directory in s with "~" wherever it
@@ -154,21 +209,24 @@ func RedactHome(s string) string {
 
 // replaceBareRoot replaces occurrences of root that end at a path boundary (end
 // of string or a character that cannot continue a path segment), leaving a longer
-// path that merely shares this prefix untouched.
-func replaceBareRoot(s, root, repl string) string {
+// path that merely shares this prefix untouched. With fold set the match is
+// case-insensitive; a span that is not redacted is re-emitted in its own original
+// casing (the matched bytes), never rewritten to root's spelling.
+func replaceBareRoot(s, root, repl string, fold bool) string {
 	var b strings.Builder
 	for {
-		i := strings.Index(s, root)
+		i := indexFold(s, root, fold)
 		if i < 0 {
 			b.WriteString(s)
 			return b.String()
 		}
 		after := i + len(root)
+		matched := s[i:after]
 		b.WriteString(s[:i])
 		if after >= len(s) || isPathBoundary(s[after]) {
 			b.WriteString(repl)
 		} else {
-			b.WriteString(root)
+			b.WriteString(matched)
 		}
 		s = s[after:]
 	}
