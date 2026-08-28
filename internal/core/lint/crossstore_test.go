@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // crossStoreCfg builds a config with the cross-store rule armed and the ADR store
@@ -174,5 +176,64 @@ func TestCrossStoreIDClaimIgnoresFencedStatus(t *testing.T) {
 	}
 	if n := countRule(fs, ruleCrossStoreIDClaim); n != 0 {
 		t.Fatalf("expected a fenced example not to count as a decision shape; got %d: %+v", n, fs)
+	}
+}
+
+// TestCrossStoreIDClaimIgnoresFrontmatterStatus: a `status:` frontmatter key is
+// ordinary record metadata on a great many documents, and reading it as the
+// decision shape made the fire condition "an H1 claiming a taken id, plus almost
+// any record-shaped file" — a verbatim copy of a real ADR fired with no Status
+// section in it at all. The signal is a Status SECTION, not a metadata key.
+func TestCrossStoreIDClaimIgnoresFrontmatterStatus(t *testing.T) {
+	root := t.TempDir()
+	writeTakenADR(t, root, "0023-transport-agnostic-core.md", "adr-23", "Transport-agnostic core")
+	writeFile(t, root, filepath.Join("notes", "copy.md"),
+		"---\nid: adr-23\nstatus: accepted\n---\n\n# ADR-23: Transport-agnostic core\n\nA copy with no Status section.\n")
+
+	fs, err := Lint(crossStoreCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleCrossStoreIDClaim); n != 0 {
+		t.Fatalf("frontmatter metadata is not a decision section; got %d: %+v", n, fs)
+	}
+}
+
+// TestCrossStoreIDClaimSkipsUntrackedFiles: in a git repository the candidate set
+// is the TRACKED files. A bare walk read the gitignored local tier AGENTS.md
+// tells agents to default to for scratch output, and a `git worktree` made inside
+// the checkout, turning both into blockers over files the repository does not
+// carry.
+func TestCrossStoreIDClaimSkipsUntrackedFiles(t *testing.T) {
+	repo := gittest.NewRepo(t)
+	root := repo.Root()
+	writeTakenADR(t, root, "0023-transport-agnostic-core.md", "adr-23", "Transport-agnostic core")
+	writeFile(t, root, ".gitignore", ".abcd/.work.local/\n")
+	repo.Commit("seed")
+
+	// The gitignored local tier, and a sibling checkout's record tree.
+	writeFile(t, root, filepath.Join(".abcd", ".work.local", "scratch", "oracle-output.md"), probeNote)
+	writeFile(t, root, filepath.Join("wt", "x", ".abcd", "development", "decisions", "adrs", "0023-copy.md"), probeNote)
+
+	fs, err := Lint(crossStoreCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleCrossStoreIDClaim); n != 0 {
+		t.Fatalf("untracked content is not a claim on an id; got %d: %+v", n, fs)
+	}
+
+	// The same content, TRACKED, is a claim. Staged explicitly rather than with
+	// `add -A`, so the sibling checkout above stays untracked — which is what it
+	// is in a real tree.
+	writeFile(t, root, filepath.Join("research", "notes", "zz-recurrence-probe.md"), probeNote)
+	repo.Git("add", "research/notes/zz-recurrence-probe.md")
+	repo.Git("commit", "-m", "add the probe")
+	fs, err = Lint(crossStoreCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleCrossStoreIDClaim); n != 1 {
+		t.Fatalf("expected the tracked probe to fire, got %d: %+v", n, fs)
 	}
 }

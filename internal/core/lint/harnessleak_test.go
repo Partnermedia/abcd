@@ -94,3 +94,22 @@ func TestHarnessLeakDisabledByDefault(t *testing.T) {
 		t.Fatalf("expected an unconfigured rule to be inert, got %d: %+v", n, fs)
 	}
 }
+
+// TestHarnessLeakSecondMatchOnALine: a benign leftmost candidate must not disarm
+// the pattern for the rest of the line. Stopping at the first skipped match made
+// this blocker strictly weaker than the scanner it shares a definition with —
+// the exact drift the class exists to prevent.
+func TestHarnessLeakSecondMatchOnALine(t *testing.T) {
+	root := t.TempDir()
+	sessionURL := "https://agent-host.dev/code/" + strings.Join([]string{"session", "01Gy4Zo93PdMmggA8sfGyb"}, "_")
+	writeFile(t, root, filepath.Join("docs", "run.md"),
+		"# Run\n\nBackground https://agent-host.dev/blog/using-agent-session-management-and-1m and the run at "+sessionURL+"\n")
+
+	fs, err := Lint(harnessLeakCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleHarnessLeak); n != 1 {
+		t.Fatalf("a skipped leftmost candidate hid a real session URL; got %d: %+v", n, fs)
+	}
+}

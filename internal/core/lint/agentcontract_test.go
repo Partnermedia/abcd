@@ -143,6 +143,7 @@ func TestAgentContractUndeclaredUntrustedInput(t *testing.T) {
 func TestAgentContractDeclaredTrustedAgentNeedsNoCanary(t *testing.T) {
 	root := t.TempDir()
 	writeAgent(t, root, "composer", "prompt_version: 0.1.0\nreads_untrusted_input: false\n")
+	writeChangelog(t, root, "composer 0.1.0")
 
 	fs, err := Lint(agentCfg(), root)
 	if err != nil {
@@ -201,20 +202,50 @@ func TestAgentContractChangelogEntryRequiredOverDiff(t *testing.T) {
 	}
 }
 
-// TestAgentContractChangelogSkippedWithoutDiffRange pins the no-op: a full-tree
-// lint outside a git range checks the frontmatter and the canary but says
-// nothing about the changelog, because it has no diff to say it about.
-func TestAgentContractChangelogSkippedWithoutDiffRange(t *testing.T) {
-	root := newAgentRepo(t)
-	writeAgent(t, root, "ruthless-reviewer", strings.Replace(conformingAgent,
-		"prompt_version: 0.2.0", "prompt_version: 0.3.0", 1))
+// TestAgentContractChangelogEntryIsTreeShaped: the entry requirement holds on
+// every invocation, with no git and no armed range. It was diff-only at first,
+// which meant the sub-check never ran outside a test: nothing in the Makefile,
+// the hooks or CI passes a range, so a new prompt with no entry sailed through
+// `make record-lint` while the README said the contract was enforced.
+func TestAgentContractChangelogEntryIsTreeShaped(t *testing.T) {
+	root := t.TempDir()
+	writeAgent(t, root, "ruthless-reviewer", conformingAgent)
+	writeCanary(t, root, "ruthless-reviewer")
+	writeChangelog(t, root, "ruthless-reviewer 0.1.0") // the PREVIOUS version only
 
 	fs, err := Lint(agentCfg(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !messageContains(fs, "0.2.0") {
+		t.Fatalf("expected the current version to require its own entry; got %+v", fs)
+	}
+}
+
+// TestAgentContractUnbumpedChangeOverDiff is what the armed range adds and the
+// tree cannot say: a prompt edited without a version bump. The entry is keyed on
+// the version, so an unbumped edit is a change that can never acquire one.
+func TestAgentContractUnbumpedChangeOverDiff(t *testing.T) {
+	root := newAgentRepo(t)
+	// Edit the body, leave prompt_version alone.
+	writeFile(t, root, filepath.Join("agents", "ruthless-reviewer.md"),
+		"---\nname: ruthless-reviewer\n"+conformingAgent+"---\n\n# ruthless-reviewer\n\nA changed prompt body.\n")
+
+	fs, err := Lint(ArmAgentDiff(agentCfg(), "HEAD"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !messageContains(fs, "without a 'prompt_version' bump") {
+		t.Fatalf("expected the unbumped edit to be reported; got %+v", fs)
+	}
+
+	// Unarmed, the same tree is clean: there is no diff to make the statement about.
+	fs, err = Lint(agentCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if n := countRule(fs, ruleAgentContract); n != 0 {
-		t.Fatalf("expected no changelog finding without a diff range; got %d: %+v", n, fs)
+		t.Fatalf("expected no bump finding without a diff range; got %d: %+v", n, fs)
 	}
 }
 
@@ -227,6 +258,13 @@ func TestAgentContractRefusesHostileDiffRange(t *testing.T) {
 	if _, err := Lint(ArmAgentDiff(agentCfg(), "--output=/tmp/pwned"), root); err == nil {
 		t.Fatal("expected an option-shaped diff range to be refused")
 	}
+}
+
+// writeChangelog writes a per-agent changelog carrying one "<agent> <version>" entry.
+func writeChangelog(t *testing.T, root, entry string) {
+	t.Helper()
+	writeFile(t, root, filepath.Join("agents", "CHANGELOG.md"),
+		"# Agent prompt changelog\n\n### "+entry+"\n\nEntry.\n")
 }
 
 // newAgentRepo builds a git repository holding one conforming agent, its canary
@@ -242,4 +280,45 @@ func newAgentRepo(t *testing.T) string {
 		"# Agent prompt changelog\n\n### ruthless-reviewer 0.2.0\n\nFirst entry.\n")
 	repo.Commit("seed")
 	return root
+}
+
+// TestAgentContractReadsBlockSequenceScope: a capability_scope written with a
+// YAML block sequence is a contract-complete prompt. The first parser flipped out
+// of the block on the list item and then reported a missing designed_for that was
+// plainly in the file — a gate telling an author to add what they already added.
+func TestAgentContractReadsBlockSequenceScope(t *testing.T) {
+	root := t.TempDir()
+	writeAgent(t, root, "ruthless-reviewer", "prompt_version: 0.2.0\n"+
+		"reads_untrusted_input: true\n"+
+		"capability_scope:\n"+
+		"  task_classes:\n"+
+		"    - oracle_review\n"+
+		"  designed_for: \"Family-1 change judgement\"\n")
+	writeCanary(t, root, "ruthless-reviewer")
+	writeChangelog(t, root, "ruthless-reviewer 0.2.0")
+
+	fs, err := Lint(agentCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleAgentContract); n != 0 {
+		t.Fatalf("a block-sequence scope is complete; got %d: %+v", n, fs)
+	}
+}
+
+// TestAgentContractRefusesAnEmptyCanary: a bare existence test is satisfied by an
+// empty file, and a canary that carries no payload reports the contract met
+// without testing anything.
+func TestAgentContractRefusesAnEmptyCanary(t *testing.T) {
+	root := t.TempDir()
+	writeAgent(t, root, "security-reviewer", conformingAgent)
+	writeFile(t, root, filepath.Join("agents", "security-reviewer", "fixtures", "injection-canary.json"), "")
+
+	fs, err := Lint(agentCfg(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !messageContains(fs, "is empty") {
+		t.Errorf("expected an empty canary to be reported; got %+v", fs)
+	}
 }

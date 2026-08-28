@@ -36,10 +36,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 const ruleCrossStoreIDClaim = "cross_store_id_claim"
@@ -112,13 +114,78 @@ func checkCrossStoreIDClaim(repoRoot string, cfg Config, rc RuleConfig) ([]Findi
 		storeDirs = append(storeDirs, filepath.ToSlash(strings.TrimSuffix(filepath.ToSlash(dir), "/"))+"/")
 	}
 
+	candidates, err := crossStoreCandidates(repoRoot, storeDirs)
+	if err != nil {
+		return nil, err
+	}
+
 	var out []Finding
-	err = filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, walkErr error) error {
+	for _, rel := range candidates {
+		// The rule reads files whose content AND paths a cloned repo controls, so
+		// each leaf is contained and guarded the way the roots walk contains and
+		// guards its own: a `docs/leak.md -> /etc/passwd` link must not be read, and
+		// a `-> /dev/zero` one must not be read unbounded.
+		realPath, err := containedRealPath(repoRoot, filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			continue // a leaf resolving outside the repo is not this rule's finding
+		}
+		content, err := fsutil.ReadGuarded(realPath, maxCrossStoreBytes)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(content), "\n")
+		if f, ok := crossStoreClaim(rel, lines, taken, rc.Severity); ok {
+			out = append(out, f)
+		}
+	}
+	sortFindings(out)
+	return out, nil
+}
+
+// crossStoreCandidates lists the markdown OUTSIDE the record stores that the rule
+// judges, repo-relative and slash-separated.
+//
+// In a git repository the candidate set is the TRACKED files, the same scope
+// `abcd lint`'s privacy rule uses. This rule is the only one in the package that
+// reasons about a whole tree rather than a configured root, and a bare walk of
+// the root was wrong in both directions. It read the gitignored local tier —
+// which AGENTS.md tells agents to default to for oracle output, traces and
+// intermediate analysis — so a scratch copy of a record turned the gate into a
+// blocker over a file that is not in the repository; and it read a `git worktree`
+// made INSIDE the checkout, which AGENTS.md's concurrent-sessions guidance
+// contemplates, turning every record in the sibling checkout into a finding. An
+// untracked file is also not yet a claim on an id: nothing outside this working
+// tree can resolve to it.
+//
+// Outside a repository (a fixture tree, an unpacked archive) there is no tracked
+// set to ask for, so the walk is the fallback. It skips `.git` and the stores.
+func crossStoreCandidates(repoRoot string, storeDirs []string) ([]string, error) {
+	if gitutil.InRepo(repoRoot) {
+		tracked, err := gitutil.TrackedFiles(repoRoot)
+		if err != nil {
+			return nil, err
+		}
+		var out []string
+		for _, rel := range tracked {
+			rel = filepath.ToSlash(rel)
+			if hasMarkdownExt(rel) && !hasAnyPrefix(rel, storeDirs) {
+				out = append(out, rel)
+			}
+		}
+		sort.Strings(out)
+		return out, nil
+	}
+
+	var out []string
+	err := filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			// A tree that vanishes MID-walk (a checkout racing the gate) is an
-			// error; the root's own absence is not reachable here, since the
-			// caller resolved it.
-			return walkErr
+			// One unreadable directory must not abort the whole lint: this rule
+			// walks the entire tree, so a permission fault anywhere in it would
+			// take every other rule down with it. Skip the subtree instead.
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		rel := filepath.ToSlash(repoRel(repoRoot, path))
 		if d.IsDir() {
@@ -131,32 +198,15 @@ func checkCrossStoreIDClaim(repoRoot string, cfg Config, rc RuleConfig) ([]Findi
 			}
 			return nil
 		}
-		if !hasMarkdownExt(d.Name()) || hasAnyPrefix(rel, storeDirs) {
-			return nil
-		}
-		// The walk reads committed files, so the leaf is contained and guarded the
-		// way the roots walk contains and guards its own (a `docs/leak.md ->
-		// /etc/passwd` link must not be read, and a `-> /dev/zero` one must not be
-		// read unbounded).
-		realPath, err := containedRealPath(repoRoot, path)
-		if err != nil {
-			return nil // a leaf resolving outside the repo is not this rule's finding
-		}
-		content, err := fsutil.ReadGuarded(realPath, maxCrossStoreBytes)
-		if err != nil {
-			return nil
-		}
-		lines := strings.Split(string(content), "\n")
-		f, ok := crossStoreClaim(rel, lines, taken, rc.Severity)
-		if ok {
-			out = append(out, f)
+		if hasMarkdownExt(d.Name()) && !hasAnyPrefix(rel, storeDirs) {
+			out = append(out, rel)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	sortFindings(out)
+	sort.Strings(out)
 	return out, nil
 }
 
@@ -195,7 +245,15 @@ func crossStoreClaim(rel string, lines []string, taken map[string]bool, severity
 // decision.
 func hasDecisionShape(lines []string) bool {
 	mask := fenceMask(lines)
-	for i, line := range lines {
+	// Start at the BODY. The comment on decisionStatusKeyRe says frontmatter is
+	// not read for this, and it has to be true: a `status:` frontmatter key is
+	// ordinary record metadata on a great many documents, so reading it made the
+	// fire condition "an H1 claiming a taken id, plus almost any record-shaped
+	// file" — wide enough that a verbatim copy of an ADR in a scratch directory
+	// fired, with no Status section anywhere in it. A decision SECTION is how a
+	// decision announces itself; a metadata key is not.
+	for i := recordBodyStart(lines); i < len(lines); i++ {
+		line := lines[i]
 		if mask[i] {
 			continue
 		}

@@ -199,28 +199,89 @@ func checkAgentTrustContract(repoRoot, dir string, p agentPrompt, severity strin
 		}
 	}
 
+	// The canary must be a REGULAR, non-empty file. A bare existence test is
+	// satisfied by an empty file or by a symlink to anything at all, and a canary
+	// that asserts nothing is worse than an absent one: it reports the contract as
+	// met. Lstat, so a symlink is judged as the link it is rather than as its
+	// target.
 	canaryRel := filepath.Join(dir, p.name, "fixtures", agentCanaryFixture)
-	if _, err := os.Stat(filepath.Join(repoRoot, canaryRel)); err != nil {
+	info, err := os.Lstat(filepath.Join(repoRoot, canaryRel))
+	switch {
+	case err != nil:
 		out = append(out, add("agent prompt reads untrusted input but ships no "+agentCanaryFixture+
 			" fixture (expected at "+filepath.ToSlash(canaryRel)+"): the canary is the only thing that asserts the "+
 			"prompt quotes hostile input as data rather than obeying it"))
+	case !info.Mode().IsRegular():
+		out = append(out, add("agent prompt's "+filepath.ToSlash(canaryRel)+
+			" is not a regular file; a canary that is a link or a directory asserts nothing"))
+	case info.Size() == 0:
+		out = append(out, add("agent prompt's "+filepath.ToSlash(canaryRel)+
+			" is empty; a canary that carries no hostile payload and no expectation reports the contract met without testing it"))
 	}
 	return out
 }
 
-// checkAgentChangelog is sub-check 3: every agent ADDED OR CHANGED in the diff
-// under lint must have gained its per-agent CHANGELOG entry in the same change.
+// checkAgentChangelog is sub-check 3, in two parts.
 //
-// It is diff-scoped by construction, and that is the whole design: the invariant
-// is "a prompt change is announced", which is a statement about a CHANGE, not
-// about a tree. A full-tree lint has no diff to make it about, so the sub-check
-// is a no-op there rather than a guess — the frontmatter and canary checks still
-// run, because those ARE statements about a tree.
+// The TREE-shaped part runs always: every prompt's current prompt_version must
+// have its own entry in the per-agent CHANGELOG. That is the itd-5 contract
+// stated as a property of the tree ("one entry per agent per version bump"), and
+// it needs no git, so it holds on every invocation — a new prompt with no entry
+// and a bumped version with no entry are both caught by `make record-lint`.
+//
+// The DIFF-shaped part runs only when a range is armed, and it does the one thing
+// the tree cannot say: a prompt whose body changed in the range without its
+// prompt_version changing. The version is what the entry is keyed on, so an
+// unbumped edit is a change that can never acquire an entry — it is invisible to
+// the tree-shaped part by construction.
 //
 // The range is supplied by the CALLER (ArmAgentDiff, from a CI invocation), never
 // read out of the in-tree config, for the reason ArmReceiptGate states: a gate a
 // committer can point at an empty range is a gate a committer can disarm.
 func checkAgentChangelog(repoRoot, dir string, prompts []agentPrompt, cfg RuleConfig) ([]Finding, error) {
+	changelogRel := cfg.Changelog
+	if changelogRel == "" {
+		changelogRel = filepath.ToSlash(filepath.Join(dir, "CHANGELOG.md"))
+	}
+	data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(changelogRel)))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	entries := agentChangelogEntries(string(data))
+
+	var out []Finding
+	for _, p := range prompts {
+		version := promptVersionOf(p)
+		if version == "" {
+			continue // already reported by the frontmatter sub-check
+		}
+		if entries[p.name+" "+version] {
+			continue
+		}
+		out = append(out, Finding{
+			File: changelogRel, Line: 0, RuleID: ruleAgentContract, Severity: cfg.Severity,
+			Message: changelogRel + " carries no entry for " + p.name + " " + version +
+				"; the itd-5 contract announces every prompt version in the changelog (add a '### " +
+				p.name + " " + version + "' entry)",
+		})
+	}
+
+	unbumped, err := checkAgentVersionBump(repoRoot, changelogRel, prompts, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, unbumped...), nil
+}
+
+// checkAgentVersionBump is the diff-armed half: a prompt changed in the range
+// whose diff adds no prompt_version line changed without a bump, so the entry the
+// tree-shaped half demands can never be written for it.
+//
+// The bump is read out of the DIFF rather than by resolving the range's base
+// revision and reading the file there: `git diff --unified=0 <range> -- <path>`
+// already answers "did this line change" in one call, and parsing a base out of
+// the three range spellings would be a second, avoidable grammar.
+func checkAgentVersionBump(repoRoot, changelogRel string, prompts []agentPrompt, cfg RuleConfig) ([]Finding, error) {
 	if cfg.DiffRange == "" {
 		return nil, nil
 	}
@@ -232,43 +293,53 @@ func checkAgentChangelog(repoRoot, dir string, prompts []agentPrompt, cfg RuleCo
 		return nil, nil
 	}
 
-	changelogRel := cfg.Changelog
-	if changelogRel == "" {
-		changelogRel = filepath.ToSlash(filepath.Join(dir, "CHANGELOG.md"))
-	}
 	changed, err := changedPaths(repoRoot, cfg.DiffRange)
 	if err != nil {
 		return nil, &configError{ruleAgentContract + ": reading the diff for " + quote(cfg.DiffRange) +
 			": " + err.Error()}
 	}
 
-	data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(changelogRel)))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	entries := agentChangelogEntries(string(data))
-
 	var out []Finding
 	for _, p := range prompts {
-		if !changed[filepath.ToSlash(p.rel)] {
+		rel := filepath.ToSlash(p.rel)
+		if !changed[rel] {
 			continue
 		}
-		version := strings.Trim(strings.TrimSpace(p.fields["prompt_version"].value), `"'`)
-		if version == "" {
-			continue // already reported by the frontmatter sub-check
+		bumped, err := promptVersionChanged(repoRoot, cfg.DiffRange, rel)
+		if err != nil {
+			return nil, &configError{ruleAgentContract + ": reading the diff for " + quote(rel) + ": " + err.Error()}
 		}
-		if entries[p.name+" "+version] {
+		if bumped {
 			continue
 		}
 		out = append(out, Finding{
-			File: changelogRel, Line: 0, RuleID: ruleAgentContract, Severity: cfg.Severity,
-			Message: "agent '" + p.name + "' changed in this diff but " + changelogRel +
-				" carries no entry for " + p.name + " " + version +
-				"; the itd-5 contract announces every prompt change in the same change (add a '### " +
-				p.name + " " + version + "' entry, bumping prompt_version if the change is behavioural)",
+			File: rel, Line: 1, RuleID: ruleAgentContract, Severity: cfg.Severity,
+			Message: "agent '" + p.name + "' changed in this diff without a 'prompt_version' bump, so no new " +
+				changelogRel + " entry can be written for it; bump the version (MAJOR schema break, MINOR " +
+				"behaviour, PATCH edit) and add the matching entry",
 		})
 	}
 	return out, nil
+}
+
+// promptVersionChanged reports whether the range's diff for one path adds a
+// prompt_version line.
+func promptVersionChanged(repoRoot, rangeSpec, rel string) (bool, error) {
+	diff, err := gitutil.Run(repoRoot, "diff", "--unified=0", rangeSpec, "--", rel)
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(diff, "\n") {
+		if strings.HasPrefix(line, "+prompt_version:") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// promptVersionOf reads a prompt's declared version, unquoted.
+func promptVersionOf(p agentPrompt) string {
+	return strings.Trim(strings.TrimSpace(p.fields["prompt_version"].value), `"'`)
 }
 
 // agentChangelogHeadingRe matches a per-agent entry heading — "### <name>
@@ -306,8 +377,17 @@ func changedPaths(repoRoot, rangeSpec string) (map[string]bool, error) {
 }
 
 // agentCapabilityScope reads the members of the nested `capability_scope` block
-// out of a prompt's leading frontmatter. The block ends at the first line that is
-// not indented (the next top-level key, or the closing delimiter).
+// out of a prompt's leading frontmatter. The block runs from `capability_scope:`
+// to the next TOP-LEVEL key (a line at column 0) or the closing delimiter.
+//
+// Membership is decided by column, not by "did this line parse as a nested key".
+// The first cut flipped out of the block on any line the nested-key pattern did
+// not match — which a YAML BLOCK SEQUENCE item (`  - oracle_review`) does not —
+// so a prompt whose task_classes is written as a block list lost every member
+// after it, and the gate told its author to add a `designed_for` that was
+// plainly there. A member written as a block sequence takes its items as its
+// value, so it reads as present either way; the inline-list convention
+// (agents/README.md) is a style rule this parser does not adjudicate.
 func agentCapabilityScope(lines []string) map[string]string {
 	if start := frontmatterOpen(lines); start > 0 {
 		lines = lines[start:]
@@ -316,23 +396,33 @@ func agentCapabilityScope(lines []string) map[string]string {
 		return nil
 	}
 	scope := map[string]string{}
-	inScope := false
+	inScope, member := false, ""
 	for i := 1; i < len(lines); i++ {
 		line := strings.TrimRight(lines[i], "\r")
 		if strings.TrimSpace(line) == "---" {
 			break
 		}
+		indented := line != "" && (line[0] == ' ' || line[0] == '\t')
+		if !indented {
+			inScope, member = strings.HasPrefix(line, "capability_scope:"), ""
+			continue
+		}
+		if !inScope {
+			continue
+		}
 		if m := agentNestedKeyRe.FindStringSubmatch(line); m != nil {
-			if inScope {
-				if _, seen := scope[m[1]]; !seen {
-					scope[m[1]] = strings.TrimSpace(m[2])
-				}
+			member = m[1]
+			if _, seen := scope[member]; !seen {
+				scope[member] = strings.TrimSpace(m[2])
 			}
 			continue
 		}
-		inScope = strings.HasPrefix(line, "capability_scope:")
+		// A block-sequence item belongs to the member it sits under.
+		if item := strings.TrimSpace(line); member != "" && strings.HasPrefix(item, "- ") {
+			scope[member] = strings.TrimSpace(scope[member] + " " + strings.TrimSpace(item[2:]))
+		}
 	}
-	if !inScope && len(scope) == 0 {
+	if len(scope) == 0 {
 		return nil
 	}
 	return scope

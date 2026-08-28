@@ -39,11 +39,13 @@ const OutboundPolicy = "Never put a live session URL or a tool's own attribution
 // survived.
 //
 // It is the ScanText → Redact → residual-rescan shape the store-before-commit
-// paths already use (history, memory), with one difference: a harness-leak
-// finding takes its whole LINE, rather than being masked in place. Masking is
+// paths already use (history, memory), with one difference: an attribution
+// FOOTER takes its whole line rather than being masked in place. Masking is
 // right for a secret, where the surrounding text is the artefact's own content;
-// a footer or a session link IS the whole line the harness added, and leaving a
-// masked stub behind would post the shape of the thing the policy bans.
+// a footer IS the whole line the harness added, and leaving a masked stub behind
+// would post the shape of the thing the policy bans. A session URL is masked
+// like any other span, because it can sit inside a sentence the artefact meant
+// to say.
 //
 // repoRoot supplies the per-repo scanner config, so a repository that raised a
 // severity in .abcd/config/pii.json is honoured here exactly as in Stage-1
@@ -53,16 +55,34 @@ func ScrubOutbound(repoRoot, text, label string) (string, []Finding, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	// The degraded-config refusal every write-time redactor in this repository
+	// makes (capture, memory, intent, history, and the audit rule). New() returns
+	// a usable scanner on every degradation path, so an unreadable or unparseable
+	// .abcd/config/pii.json silently drops the repo's OWN detectors and leaves the
+	// built-in set — and this is the one surface whose output a forge keeps the
+	// pre-edit revision of. Sanitising with a weakened set and reporting success
+	// is worse here than refusing.
+	if degraded, reason := sc.Unavailable(); degraded {
+		return "", nil, fmt.Errorf("outbound artefact %q: refusing to sanitise with a degraded scanner config: %s", label, reason)
+	}
 
 	findings := sc.ScanText(text, label)
 	if len(findings) == 0 {
 		return text, nil, nil
 	}
 
-	// Stage one: drop the lines the harness added whole.
+	// Stage one: drop the lines a FOOTER occupies. A footer is a whole line by
+	// construction — its own pattern refuses a match with prose before it — so
+	// removing the line removes exactly the thing that was appended, and leaving a
+	// masked stub behind would post the shape the policy bans.
+	//
+	// A session URL is NOT dropped this way. It can sit mid-sentence in text the
+	// artefact genuinely wanted to say, and taking its line then deletes the
+	// author's content — in the limit returning an empty artefact, which the
+	// routine would post. It is masked in place by Redact below instead.
 	drop := map[int]bool{}
 	for _, f := range findings {
-		if IsHarnessLeakKind(f.Kind) {
+		if f.Kind == kindHarnessFooter {
 			drop[f.Line] = true
 		}
 	}

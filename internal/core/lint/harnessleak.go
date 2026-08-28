@@ -42,24 +42,40 @@ func checkHarnessLeak(rel string, lines []string, mask []bool, cfg RuleConfig) [
 		if mask[i] || strings.Contains(line, harnessLeakWaiver) || strings.Contains(line, harnessLeakAuditWaiver) {
 			continue
 		}
-		for _, p := range scanner.HarnessLeakPatterns() {
-			loc := p.Re.FindStringIndex(line)
-			if loc == nil {
-				continue
-			}
+		if f, ok := harnessLeakOnLine(rel, i+1, line, cfg.Severity); ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// harnessLeakOnLine reports the first leak on one line, or false.
+//
+// EVERY match of each pattern is tested, not just the leftmost. A pattern's Skip
+// guards are per-MATCH judgements — a documentation URL, a footer quoted in prose
+// — and stopping at the first skipped match let a benign leading candidate disarm
+// the pattern for the rest of the line. That is precisely how this gate came to
+// be weaker than the scanner it shares its definition with, which is the failure
+// this file's header says must not happen; the scanner's own scan
+// (scanAllPatterns) and the audit rule both iterate all matches.
+//
+// At most one finding per line, as the audit rule does: the citation points a
+// reader at the line, and the line is what gets fixed.
+func harnessLeakOnLine(rel string, lineNo int, line, severity string) (Finding, bool) {
+	for _, p := range scanner.HarnessLeakPatterns() {
+		for _, loc := range p.Re.FindAllStringIndex(line, -1) {
 			if p.Skip != nil && p.Skip(line[loc[0]:loc[1]]) {
 				continue
 			}
 			if p.SkipAt != nil && p.SkipAt(line, loc[0], loc[1]) {
 				continue
 			}
-			out = append(out, Finding{
-				File: rel, Line: i + 1, RuleID: ruleHarnessLeak, Severity: cfg.Severity,
+			return Finding{
+				File: rel, Line: lineNo, RuleID: ruleHarnessLeak, Severity: severity,
 				Message: "committed text carries a " + p.Label + "; " + scanner.OutboundPolicy +
 					" (add `" + harnessLeakWaiver + "` on the line if it is deliberately illustrative)",
-			})
-			break // one finding per line: the citation points at the line, and the line is what gets fixed
+			}, true
 		}
 	}
-	return out
+	return Finding{}, false
 }

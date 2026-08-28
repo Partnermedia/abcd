@@ -52,9 +52,12 @@ var (
 	// contains '-', so a boundary after the last character can be unsatisfiable
 	// and would silently drop the whole match. The leading \b, the scheme, and the
 	// id minimum bound it; greedy matching redacts the full URL.
-	harnessSessionURLRe = regexp.MustCompile(`(?i)\bhttps?://[a-z0-9.-]+/[a-z0-9._~%/+-]*session[_/-][A-Za-z0-9-]{12,}`)
+	// The optional :port and the `?session_id=` query spelling are both covered:
+	// a harness that puts the id in a query parameter or serves from a non-default
+	// port leaks exactly as much as one that puts it in the path.
+	harnessSessionURLRe = regexp.MustCompile(`(?i)\bhttps?://[a-z0-9.-]+(?::[0-9]{1,5})?/[a-z0-9._~%/+?&=-]*session[_/=-](?:id=)?[A-Za-z0-9-]{12,}`)
 	// The id a candidate URL ends in, for the opacity test.
-	sessionIDTailRe = regexp.MustCompile(`(?i)session[_/-]([A-Za-z0-9-]+)$`)
+	sessionIDTailRe = regexp.MustCompile(`(?i)session[_/=-](?:id=)?([A-Za-z0-9-]+)$`)
 	// A UUID session id, the other spelling a harness uses.
 	sessionUUIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
@@ -68,6 +71,10 @@ var (
 
 	// The host of any http(s) URL in a span, for the reserved-documentation check.
 	urlHostRe = regexp.MustCompile(`(?i)\bhttps?://([a-z0-9.-]+)`)
+	// What may precede a footer on its own line: indentation, blockquote markers,
+	// and at most one list marker. Anything else is prose, and prose quoting the
+	// banned shape is documentation.
+	footerLinePrefixRe = regexp.MustCompile(`^[ \t>]*(?:(?:[-*+]|[0-9]{1,3}\.)[ \t]+)?[ \t>]*$`)
 )
 
 // reservedDocTLDs are the documentation/test TLDs an example may use (RFC
@@ -103,12 +110,23 @@ func HarnessLeakPatterns() []Pattern {
 			Re:       harnessFooterRe,
 			Severity: SeverityHardFail,
 			// Line-start, expressed where RE2 cannot: a real footer OCCUPIES its
-			// own line (only whitespace before it), while prose about the ban
-			// quotes it mid-sentence and a bullet describes it. Without this the
-			// repository could not document its own rule. The reserved-host arm
-			// spares a worked example pointing at a documentation domain.
+			// own line, while prose about the ban quotes it mid-sentence. Without
+			// this the repository could not document its own rule.
+			//
+			// "Its own line" ADMITS a list marker and a blockquote marker, which
+			// the shell gate's `[[:space:]]*` anchor does not. That gate guards
+			// commit messages and pull-request bodies against a harness APPEND,
+			// which always lands at column 0; this class also covers the
+			// model-authored footer, which naturally lands in a bullet or inside
+			// a quoted reply. Prose before the match is still a skip, so the
+			// writable-about property is unchanged.
+			//
+			// The reserved-host arm reads the footer's OWN link target, not the
+			// rest of the line: scanning the remainder let an unrelated
+			// example.com link later in the line disarm a genuine footer.
 			SkipAt: func(line string, start, end int) bool {
-				return strings.TrimSpace(line[:start]) != "" || hasReservedDocHost(line[end:])
+				return !footerLinePrefixRe.MatchString(line[:start]) ||
+					hasReservedDocHost(footerLinkTarget(line, end))
 			},
 			Suggestion: "replace the tool footer with the repository's own disclosure trailer " +
 				"(Assisted-by: <Vendor>:<model-version>)",
@@ -125,6 +143,23 @@ func IsHarnessLeakKind(kind string) bool {
 		return true
 	}
 	return false
+}
+
+// footerLinkTarget returns the target of the markdown link the footer opens —
+// the `…](TARGET)` that follows the matched `generated with [`. It is the only
+// URL the reserved-documentation test may consider: a footer is not excused by
+// some other link further along the line.
+func footerLinkTarget(line string, end int) string {
+	rest := line[end:]
+	i := strings.Index(rest, "](")
+	if i < 0 {
+		return ""
+	}
+	target := rest[i+2:]
+	if j := strings.IndexAny(target, ") \t"); j >= 0 {
+		target = target[:j]
+	}
+	return target
 }
 
 // hasOpaqueSessionID reports whether a candidate session URL ends in an id that

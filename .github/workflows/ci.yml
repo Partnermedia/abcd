@@ -255,9 +255,25 @@ jobs:
       # Drift gate for the .abcd/development design record. Blocking: a
       # blocker-severity finding exits non-zero and fails the job; warn-level
       # findings surface in the log only.
+      #
+      # `-agent-diff` additionally arms agent_contract's unbumped-edit check,
+      # which needs a base revision to compare against. The checkout here is
+      # shallow, so the base commit may simply be absent — the guard falls back to
+      # the unarmed run rather than failing, and every tree-shaped rule (the
+      # agent-prompt frontmatter, the canary, the changelog entry) runs either way.
       - name: Record-lint (drift gate)
         if: matrix.os == 'ubuntu-latest'
-        run: go run ./cmd/record-lint
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_SHA:-}" ] &&
+            [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
+            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            go run ./cmd/record-lint -agent-diff "${BASE_SHA}...HEAD"
+          else
+            go run ./cmd/record-lint
+          fi
 
       # Docs-currency gate (itd-60): the internal/core/lint engine over docs/ and
       # the repo root, driven via the `abcd docs lint` verb. Blocking — a doc-body

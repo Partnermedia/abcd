@@ -100,11 +100,17 @@ dedicated `agent_contract` rule, which walks this tree directly (`agents_dir` in
 2. **The injection canary.** An untrusted-input prompt ships
    `<name>/fixtures/injection-canary.json`. This is the one check that reaches
    outside `*.md`.
-3. **The per-agent changelog entry**, over a diff: a prompt added or changed in
-   the range under lint must have gained its `### <agent> <version>` entry in
-   `CHANGELOG.md` in the same change. It is armed by the caller
-   (`record-lint -agent-diff <range>`), because it asks whether a CHANGE announced
-   itself; a full-tree lint has no diff to ask it about, so it is a no-op there.
+3. **The per-agent changelog entry.** Every prompt's current `prompt_version` has
+   its own `### <agent> <version>` entry in `CHANGELOG.md`. This holds on every
+   invocation — no git needed — so a new prompt, or a bump with no entry, fails
+   `make record-lint`. Over an armed range (`record-lint -agent-diff <range>`) one
+   further thing is checked, the only one a tree cannot say: a prompt whose body
+   changed without its `prompt_version` changing, which is an edit that can never
+   acquire an entry because the entry is keyed on the version.
+
+The canary must be a regular, non-empty file: a bare existence test is satisfied
+by an empty file or a symlink, and a canary that asserts nothing reports the
+contract met without testing it.
 
 The prompt bodies stay **host-agnostic** — no AI vendor or tool name — matching the
 docs-lint discipline the rest of the surface is held to.
