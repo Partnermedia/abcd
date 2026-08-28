@@ -92,6 +92,7 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	if len(actionable(det.Gaps)) == 0 &&
 		!(!opts.Yes && pinAdoptable(det.Gaps)) &&
 		!overridesWouldChange(abs, opts.ValueOverrides) &&
+		!attributionWouldChange(abs, opts) &&
 		!modeForced {
 		return InstallResult{
 			Status:          "already_up_to_date",
@@ -102,16 +103,17 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	approved, declined := resolveApproval(det.Gaps, opts, p)
 
 	ac := &applyCtx{
-		cwd:        abs,
-		det:        det,
-		approved:   approved,
-		overrides:  opts.ValueOverrides,
-		prompter:   p,
-		gapPresent: gapIDSet(det.Gaps),
-		autoYes:    opts.Yes,
-		devMode:    opts.Dev,
-		modeForced: modeForced,
-		binTarget:  binTargetPath,
+		cwd:         abs,
+		det:         det,
+		approved:    approved,
+		overrides:   opts.ValueOverrides,
+		prompter:    p,
+		gapPresent:  gapIDSet(det.Gaps),
+		autoYes:     opts.Yes,
+		devMode:     opts.Dev,
+		modeForced:  modeForced,
+		binTarget:   binTargetPath,
+		attribution: opts.Attribution,
 	}
 
 	// itd-111 refusal: a binary that is stale against its own source tip, or
@@ -134,6 +136,9 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	// After stepVisibility, never before: the private stub is only written once the
 	// .gitignore fence that keeps it untracked is on disk.
 	ac.stepBanlist()
+	// Beside the guard hooks, and after them: both land in the same committed hooks
+	// directory, and the EOL pin stepBanlist appends covers `.githooks/*`.
+	ac.stepAttributionHook()
 	ac.stepHistory()
 	ac.stepMarker(cfg)
 	ac.stepSymlink()
@@ -261,19 +266,20 @@ func adoptedBinTarget(pluginRoot string) string {
 // applyCtx threads the approved-category set and accumulated writes through the
 // ordered apply steps.
 type applyCtx struct {
-	cwd        string
-	det        DetectionResult
-	approved   map[GapCategory]bool
-	overrides  map[string]string
-	prompter   Prompter
-	gapPresent map[string]bool
-	writes     []string
-	changes    []string // human-readable value changes an explicit override forced
-	notes      []string // loud refusals: what abcd deliberately did not do, and why
-	autoYes    bool     // --yes: every category auto-approved without interaction
-	devMode    bool     // --dev: install the track-latest shim instead of the symlink
-	modeForced bool     // the requested install mode differs from the on-disk state
-	binTarget  string   // the resolved PATH entry this run installs (never re-derived)
+	cwd         string
+	det         DetectionResult
+	approved    map[GapCategory]bool
+	overrides   map[string]string
+	prompter    Prompter
+	gapPresent  map[string]bool
+	writes      []string
+	changes     []string // human-readable value changes an explicit override forced
+	notes       []string // loud refusals: what abcd deliberately did not do, and why
+	autoYes     bool     // --yes: every category auto-approved without interaction
+	devMode     bool     // --dev: install the track-latest shim instead of the symlink
+	modeForced  bool     // the requested install mode differs from the on-disk state
+	attribution bool     // --attribution: opt this repo into the committed prompt hook
+	binTarget   string   // the resolved PATH entry this run installs (never re-derived)
 
 	visibilityForced bool     // an explicit --visibility override overwrote a valid value
 	docsTargetForced bool     // an explicit --docs-target override overwrote a valid value

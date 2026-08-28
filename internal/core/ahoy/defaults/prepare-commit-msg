@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# abcd-attribution: v1
+# abcd attribution prompt, commit-message half — scaffolded by
+# `abcd ahoy install --attribution` into this repo's committed hooks.
+#
+# It exists because a disclosure convention that relies on remembering is a
+# convention that is silently half-applied: an absent trailer and a forgotten one
+# are the same bytes, so nothing downstream can tell an unassisted commit from an
+# undisclosed one. This hook puts the question in front of the committer on every
+# commit it can, as a COMMENT in the message being edited.
+#
+# It never writes a value. Which tool assisted, and which version of it, is a fact
+# only the committer has; a hook that guessed would be manufacturing the disclosure
+# the convention exists to obtain. The two accepted forms are offered and the
+# committer picks one:
+#
+#     Assisted-by: <Vendor>:<model-version>
+#     Assisted-by: None
+#
+# Point this repo's hooks at the directory holding this file, once per clone:
+#
+#     git config core.hooksPath .githooks
+set -euo pipefail
+# The environment pin the sibling name guard uses, for the same reasons: an
+# inherited xtrace would trace this hook's handling of a message that is not yet
+# public, an inherited shell function wins over PATH lookup, and an inherited IFS
+# changes how every unquoted expansion splits. See .githooks/pre-commit for the
+# full reasoning; this half runs fewer commands, not weaker ones.
+case $- in *x*) set +x ;; esac
+unset -f git grep printf cat command read echo exit test [ 2>/dev/null || true
+IFS=$' \t\n'
+LC_ALL=C
+export LC_ALL
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
+msg_file="${1:-}"
+msg_source="${2:-}"
+
+# No message file is not this hook's business (and `cat >> ""` would be a silent
+# no-op that looks like success).
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+  exit 0
+fi
+
+# WHICH SOURCES. Only the two that are editor-bound.
+#
+#   ""         an ordinary commit whose message the committer is about to edit.
+#   "template" a -t/commit.template message, likewise edited.
+#
+# Every other source is skipped, and the skip is load-bearing rather than tidy.
+# git strips '#' comments only from a message it opens an editor for
+# (`commit.cleanup=default`), so a prompt appended to a `-m` message — source
+# "message" — is NOT stripped and goes into history verbatim. "merge", "squash"
+# and "commit" (an amend or a -c/-C reuse) carry a message that is already settled
+# or already carries its own trailer, and re-prompting on each would train the
+# committer to delete the block unread.
+case "$msg_source" in
+  '' | template) ;;
+  *) exit 0 ;;
+esac
+
+# Already disclosed: say nothing. A prompt repeated over an answer that is already
+# there is noise, and noise is how a prompt stops being read.
+if grep -qiE '^[[:space:]]*Assisted-by:[[:space:]]*[^[:space:]]' -- "$msg_file"; then
+  exit 0
+fi
+
+# WILL GIT ACTUALLY STRIP THIS? The whole design rests on the appended block being
+# removed before the message is recorded. Two settings decide that, and BOTH are
+# read rather than assumed — an assumption here does not degrade the prompt, it
+# writes a wall of boilerplate into the project's history, permanently.
+#
+#   commit.cleanup   `default` and `strip` remove comment lines; `verbatim`,
+#                    `whitespace` and `scissors` do not (scissors truncates at its
+#                    own marker and leaves every other comment standing).
+#   the comment    which bytes begin a comment. A repo that set it to ';' has no
+#   marker         comment lines beginning '#', so this block would be message text.
+#                  git 2.45 added core.commentString, which SUPERSEDES
+#                  core.commentChar and may be several characters ('//'), so reading
+#                  only the older key leaves the newer one's repos writing the block
+#                  into history. `auto` — accepted by both keys — picks a marker from
+#                  the message's own content and cannot be predicted from here.
+#
+# A skip is announced, never silent: a disclosure prompt that quietly stopped
+# appearing is the failure this hook exists to prevent, one level up.
+cleanup=$(git config --get commit.cleanup 2>/dev/null || true)
+case "$cleanup" in
+  '' | default | strip) ;;
+  *)
+    echo "prepare-commit-msg: attribution prompt SKIPPED — commit.cleanup is '$cleanup', which does not" >&2
+    echo "                    strip comment lines, so the prompt would enter the commit message verbatim." >&2
+    echo "                    Add the Assisted-by: trailer by hand, or set commit.cleanup to default." >&2
+    exit 0
+    ;;
+esac
+# commentString first: where both are set it is the one git honours.
+comment_marker=$(git config --get core.commentString 2>/dev/null || true)
+if [ -z "$comment_marker" ]; then
+  comment_marker=$(git config --get core.commentChar 2>/dev/null || true)
+fi
+if [ -z "$comment_marker" ]; then
+  comment_marker='#'
+fi
+if [ "$comment_marker" = "auto" ]; then
+  echo "prepare-commit-msg: attribution prompt SKIPPED — the comment marker is 'auto', so this hook cannot" >&2
+  echo "                    know which lines git will strip. Add the Assisted-by: trailer by hand." >&2
+  exit 0
+fi
+
+# Appended as comments, so an untouched message commits exactly as it would have.
+# The convention this asks for is disclosure, not authorship: a tool is not an
+# author, and a co-author trailer would assert a standing the tool does not hold.
+#
+# The comment marker is substituted rather than hard-coded, so the block is still
+# comments in a repo that chose a different one — of any length, since
+# core.commentString may be several characters. `printf` with a single format string
+# and no expansion of the body: the text is a constant here, and a heredoc could not
+# carry the variable prefix without also expanding the trailer examples' angle
+# brackets.
+{
+  printf '%s\n' ""
+  printf '%s This repository asks every commit to declare whether a tool assisted it.\n' "$comment_marker"
+  printf '%s Add ONE of these lines to the message above (this block is a comment and is\n' "$comment_marker"
+  printf '%s stripped, so leaving it as-is discloses nothing):\n' "$comment_marker"
+  printf '%s\n' "$comment_marker"
+  printf '%s     Assisted-by: <Vendor>:<model-version>\n' "$comment_marker"
+  printf '%s     Assisted-by: None\n' "$comment_marker"
+  printf '%s\n' "$comment_marker"
+  printf '%s `None` is the positive form for work no tool touched — silence cannot say so,\n' "$comment_marker"
+  printf '%s because an absent trailer and a forgotten one look identical. Claiming it for\n' "$comment_marker"
+  printf '%s assisted work is a false disclosure, which is what this convention exists to\n' "$comment_marker"
+  printf '%s prevent. Disclosure is not authorship: never a co-author trailer for a tool.\n' "$comment_marker"
+} >>"$msg_file"
+exit 0

@@ -19,13 +19,15 @@ cannot drift apart.
 | `dry-run` | — | shipped |
 | `identity-check` | — | shipped |
 | `install` | — | shipped |
+| `remote` | audit | shipped |
+| `remote apply` | gate | shipped |
 | `uninstall` | — | shipped |
 
 
 Bare `/abcd:ahoy` shows read-only status only — never mutates state. The
 `/abcd:ahoy` slash command dispatches every sub-verb (`status | install |
-uninstall | doctor | dry-run`), the two write verbs included — each announces
-that it writes before it runs — and each also ships on the CLI as
+uninstall | doctor | dry-run | remote`), the write verbs included — each
+announces that it writes before it runs — and each also ships on the CLI as
 `abcd ahoy <sub-verb>`. Current sub-verbs:
 
 - **`/abcd:ahoy install`** — install or update the plugin in this repo
@@ -47,6 +49,27 @@ that it writes before it runs — and each also ships on the CLI as
   Distinct from bare invocation, which shows the status board (folder kind,
   plugin-root status, root SHA, binary vintage/staleness, citations on a
   managed repo, gap count, guard health, and the banlist block).
+- **`/abcd:ahoy remote`** — report the GitHub-native secret-scanning toggles on
+  the repository this checkout's own origin remote names, and the changes an
+  apply would make. Read-only: it writes nothing on the remote and nothing in
+  the tree. A toggle it could not read reports `unknown`, never `disabled`.
+- **`/abcd:ahoy remote apply`** — the one abcd verb that mutates state **outside
+  this machine**: it enables GitHub's native secret scanning and then
+  secret-scanning push protection (that order, because GitHub refuses push
+  protection on a repository whose secret scanning is off), and mirrors the
+  desired state into `.abcd/work/rulesets/repo-settings.json`. It answers to
+  adr-44 and invariant 10 — no uninvited remote mutation, through a verb the user
+  invokes AND confirms — with four gates that refuse rather than guess: the folder
+  must be a repo abcd manages, the repository must be the one this checkout's
+  origin names, the repo's config must not set `scan.native_secret_scanning` to
+  `false`, and the caller must confirm the specific toggles named (an unanswered
+  run declines; `--yes` is the explicit advance answer, and a run that changed
+  nothing exits non-zero). Every request pins the API host explicitly, so an
+  ambient `GH_HOST` cannot send the write to an endpoint the origin never named.
+  The call goes through `gh`, so the
+  write is made by the caller's own authenticated identity and abcd never holds
+  a token. Idempotent: a repository already in the desired state takes no write,
+  and a re-run rewrites nothing.
 - **`abcd ahoy identity-check`** — exit non-zero if the git commit identity
   does not match `.abcd/config/identity.json` (the commit-identity gate).
   Read-only; a CLI-only operator/CI check with no slash-command surface.

@@ -944,3 +944,92 @@ func TestScaffoldedGuardHookResistsEnvironmentSubversion(t *testing.T) {
 		mustGit(nil, "reset")
 	})
 }
+
+// TestScaffoldedGuardHookInheritsThePrimaryStoreInAWorktree pins itd-150 on the
+// SCAFFOLDED template rather than on this repo's own dogfood copy. The private
+// store lives in the gitignored per-worktree local tier, so every commit made from
+// a `git worktree add` checkout ran with the banlist absent — the isolated-agent
+// pattern systematically bypassing a protection the main checkout has (iss-370).
+// The guard resolves the primary checkout's store through the common git dir and
+// enforces it there, naming the key alone as ever.
+func TestScaffoldedGuardHookInheritsThePrimaryStoreInAWorktree(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	setupHermetic(t)
+	repo := t.TempDir()
+	env := gittest.Env(t)
+	gitIn := func(dir string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	git := func(args ...string) (string, error) { return gitIn(repo, args...) }
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.name", "Alice Example"},
+		{"config", "user.email", "alice@example.com"},
+	} {
+		if out, err := git(args...); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	// git runs the hook the COMMON git dir carries, which a linked worktree shares
+	// with its primary — the same wiring `core.hooksPath .githooks` gives a clone.
+	src, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(GuardHookRelPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksDir := filepath.Join(repo, ".git", "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// One real entry in the PRIMARY checkout's store, and nothing in the worktree's.
+	store := filepath.Join(repo, filepath.FromSlash(banlist.PrivateRelPath))
+	if err := os.WriteFile(store, []byte("# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := git("add", "-A"); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	if out, err := git("-c", "core.hooksPath=/dev/null", "commit", "-m", "seed"); err != nil {
+		t.Fatalf("seed commit: %v\n%s", err, out)
+	}
+
+	linked := filepath.Join(t.TempDir(), "linked")
+	if out, err := git("worktree", "add", "-b", "linked", linked); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(linked, ".abcd", ".work.local", "private-names.txt")); err == nil {
+		t.Fatal("the linked worktree already carries a store; the fixture proves nothing")
+	}
+	if err := os.WriteFile(filepath.Join(linked, "notes.md"), []byte("ssh carol-server.example.net\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := gitIn(linked, "add", "notes.md"); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	out, err := gitIn(linked, "commit", "-m", "leak")
+	if err == nil {
+		t.Fatalf("a linked worktree committed a name the primary checkout's store bans:\n%s", out)
+	}
+	if !strings.Contains(out, "lab-host") {
+		t.Errorf("the refusal does not name the key:\n%s", out)
+	}
+	if strings.Contains(out, "carol-server") {
+		t.Errorf("the refusal echoes the pattern or the matched text:\n%s", out)
+	}
+	if !strings.Contains(out, "primary checkout") {
+		t.Errorf("the refusal does not say the entry was inherited from the primary checkout:\n%s", out)
+	}
+}

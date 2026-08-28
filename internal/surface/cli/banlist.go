@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/ahoy"
 	"github.com/intentdriven/abcd/internal/core/banlist"
+	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
@@ -46,6 +48,7 @@ func newBanlistCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, rep, func(w io.Writer) {
 				renderPrivateLayer(w, rep.Private)
+				renderInheritedPrivateLayer(w, rep.Inherited)
 				fmt.Fprintln(w)
 				renderPublicLayer(w, rep.Public)
 			})
@@ -80,7 +83,15 @@ func newBanlistListCommand(asJSON *bool) *cobra.Command {
 				if err != nil {
 					return usageError("abcd banlist list", err)
 				}
-				return render(cmd.OutOrStdout(), *asJSON, rep, func(w io.Writer) { renderPrivateLayer(w, rep) })
+				inherited, err := banlist.InheritedPrivate(root)
+				if err != nil {
+					return usageError("abcd banlist list", err)
+				}
+				view := privateView{PrivateReport: rep, Inherited: inherited}
+				return render(cmd.OutOrStdout(), *asJSON, view, func(w io.Writer) {
+					renderPrivateLayer(w, rep)
+					renderInheritedPrivateLayer(w, inherited)
+				})
 			case public:
 				rep, err := banlist.ListPublic(root)
 				if err != nil {
@@ -94,6 +105,7 @@ func newBanlistListCommand(asJSON *bool) *cobra.Command {
 			}
 			return render(cmd.OutOrStdout(), *asJSON, rep, func(w io.Writer) {
 				renderPrivateLayer(w, rep.Private)
+				renderInheritedPrivateLayer(w, rep.Inherited)
 				fmt.Fprintln(w)
 				renderPublicLayer(w, rep.Public)
 			})
@@ -292,6 +304,56 @@ func renderPrivateLayer(w io.Writer, rep banlist.PrivateReport) {
 	fmt.Fprintln(w, "  reach: "+banlist.PrivateReachNote)
 }
 
+// privateView is the JSON envelope `abcd banlist list --private` renders: the
+// private layer of the checkout the verb ran in, plus — in a LINKED git worktree —
+// the layer it inherits from its primary checkout.
+//
+// PrivateReport is EMBEDDED, so its fields stay at the top level and a standalone
+// checkout's envelope is byte-for-byte what it always was; the inherited half is
+// omitted entirely where there is nothing to inherit.
+type privateView struct {
+	banlist.PrivateReport
+	Inherited *banlist.InheritedReport `json:"inherited,omitempty"`
+}
+
+// renderInheritedPrivateLayer prints the layer a LINKED git worktree inherits from
+// its primary checkout, and prints NOTHING where there is nothing to inherit.
+//
+// The local tier is per-worktree and gitignored, so a `git worktree add` checkout
+// has no store of its own — and the committed guard resolves and enforces the
+// primary checkout's there (itd-150). Omitting the layer here would leave this
+// render saying "INACTIVE on this machine" about a worktree whose every commit is
+// being checked, which is the one disagreement between a board and its guard that
+// cannot be allowed to stand.
+func renderInheritedPrivateLayer(w io.Writer, rep *banlist.InheritedReport) {
+	if rep == nil {
+		return
+	}
+	// RedactHome, like every other absolute path this front door renders: a
+	// checkout's directory name is very often a private name its own store bans.
+	fmt.Fprintf(w, "  inherited from the primary checkout — %s\n",
+		termsafe.Sanitize(fsutil.RedactHome(filepath.Join(rep.PrimaryRoot, filepath.FromSlash(rep.Private.Path)))))
+	fmt.Fprintln(w, "  this is a linked git worktree; the guard reads the primary checkout's store as a")
+	fmt.Fprintln(w, "  fallback, so these entries are enforced here too. The fallback is READ-SIDE only:")
+	fmt.Fprintln(w, "  `add --private` here writes to THIS worktree's store, which the primary checkout's")
+	fmt.Fprintln(w, "  own guard does not read — declare a name in the checkout that must enforce it")
+	for _, e := range rep.Private.Entries {
+		fmt.Fprintf(w, "    %s (line %d)\n", termsafe.Sanitize(e.Key), e.Line)
+	}
+	if len(rep.Private.Entries) == 0 {
+		fmt.Fprintln(w, "    no entries")
+	}
+	// The same two failure directions the local layer reports, for the same reason:
+	// an unusable line in the INHERITED store stops every commit in this worktree,
+	// and the remedy is in the other checkout.
+	for _, line := range rep.Private.Malformed {
+		fmt.Fprintf(w, "    line %d is not usable by the guard's engine — the pre-commit guard refuses every commit until it is fixed in the primary checkout\n", line)
+	}
+	for _, line := range rep.Private.Inert {
+		fmt.Fprintf(w, "    line %d uses a Perl-style escape or a `(?…)` group; the guard's POSIX grep may match it differently than written — verify it against the guard's grep\n", line)
+	}
+}
+
 // banlistHealthLines renders ahoy's name-guard verdict: what occupies each hook
 // path, whether the public family can actually be enforced, and what shape the
 // private layer is in on this machine. It never reads an entry — the store's
@@ -437,6 +499,15 @@ const maxPatternBytes = 8 << 10
 // and the root-anchored gitignore does not match it — leaving the layer inactive
 // while `add` reports a repo-relative path. Falls back to rulesRoot (then cwd) only
 // when git cannot answer, so a non-git use still resolves.
+//
+// In a LINKED git worktree it stays the WORKTREE's own root, deliberately. This is
+// the write root, and itd-150 is read-side resolution only: an `add` run in a
+// worktree writes the entry into the store of the checkout the user is standing in,
+// never reaching across into another working tree they did not name. The inherited
+// layer the guard also enforces there is composed on the read paths above, from
+// banlist.InheritedPrivate — the same primary-checkout resolution the committed
+// pre-commit guard makes, kept in lockstep so the board and the guard cannot
+// disagree about which entries are in force.
 func banlistRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {

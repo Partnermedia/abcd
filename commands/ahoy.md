@@ -1,15 +1,16 @@
 ---
 name: ahoy
 description: Detect and repair abcd's install/update state for the current repo — folder kind, plugin-root status, and outstanding gaps — by invoking the abcd binary. Bare invocation performs zero writes.
-argument-hint: "[install | uninstall | doctor | dry-run]"
+argument-hint: "[install | uninstall | doctor | dry-run | remote]"
 ---
 
 # `/abcd:ahoy` install/update detector
 
 Run abcd's install/update engine for the current repo and present the result.
-Bare invocation and the `doctor` and `dry-run` sub-verbs perform **zero writes**;
-`install` and `uninstall` are the two that change the repo, and each says so
-before it runs.
+Bare invocation and the `doctor`, `dry-run` and `remote` sub-verbs perform **zero
+writes**; `install`, `uninstall` and `remote apply` are the three that change
+something, and each says so before it runs — `remote apply` is the only one that
+changes state outside this machine, and it asks before it does.
 
 Read `$ARGUMENTS` for the sub-verb. No argument, or `status`, is the bare
 read-only detection pass below.
@@ -118,6 +119,17 @@ git-identity pin, because the pin records whatever git identity is currently
 configured. When the result carries `optional_skipped`, report it and offer the
 `yes |` form above as the way to apply it.
 
+`--attribution` is its own approval and works on an already-installed repo (the
+step the adopt phase runs it in). It opts the repo into the committed
+`prepare-commit-msg` prompt,
+which seeds a commented disclosure line into every commit message an editor
+opens. It is opt-in and never a default — the hook stamps a convention onto
+every commit message, which is a repo's choice to make — and it writes no
+value, because which tool assisted is a fact only the committer has. The choice
+is recorded in `.abcd/config.json`, so a later `install` without the flag keeps
+the hook and restores a hand-deleted one; a `prepare-commit-msg` hook abcd did
+not write is reported, never replaced.
+
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned owned copy: the `PATH` entry rebuilds abcd from
 the source tip on every call and fails loudly on a broken build. Re-running
@@ -150,6 +162,61 @@ gap, including user-scope state the bare render leaves out. Writes nothing.
 Report the folder kind, the detection-gap count, and the audit-gap count, then
 the per-gap detail from the JSON. This is the sub-verb to reach for when the bare
 render says a repo is healthy and the user's experience says otherwise.
+
+## `remote` — the repo's GitHub security settings
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy remote --json
+```
+
+Reports GitHub's two native secret-scanning toggles on the repository this
+checkout's own origin remote names — `secret_scanning` and
+`secret_scanning_push_protection` — and the changes an apply would make. It
+writes nothing, on the remote or in the tree. A toggle it could not read is
+reported `unknown`, never `disabled`: the two need opposite responses.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy remote apply --json
+```
+
+**This writes, and it is the one abcd verb that changes state outside this
+machine.** It enables both toggles — secret scanning first, because GitHub
+refuses push protection on a repository whose secret scanning is off — and
+mirrors the desired state into `.abcd/work/rulesets/repo-settings.json`, so a
+later verify reads the same intent from the tree rather than from a web console.
+Push protection blocks a secret at push time, earlier than any CI scan, and
+secret scanning covers the default branch continuously; both are free on public
+repositories.
+
+Never run it unasked. Four gates stand before any change leaves the machine, and
+each refuses rather than guesses: the folder must be a repo abcd manages, the
+repository must be the one this checkout's own origin names (no other repository
+can be addressed, and a name that is not a plain GitHub name is refused before it
+reaches an API path), the repo's config must not carry the opt-out, and the
+caller must CONFIRM the specific toggles named. A repo that sets
+`scan.native_secret_scanning` to `false` in `.abcd/config.json` is left exactly
+as it is and is not contacted at all.
+
+The confirmation is the fourth gate, not a formality: an unanswered run declines
+and changes nothing, so present the question and the repository it names before
+answering it. `--yes` says yes in advance, and it is the user's word to give —
+never pass it on their behalf. A run that changed nothing exits NON-ZERO
+(`refused` or `aborted`), so a failed invocation is never mistaken for a write
+that landed; `opted_out` is the one non-change that exits clean, because leaving
+the repo alone is what the repo asked for.
+
+The API host is pinned to github.com on every request. `gh` would otherwise take
+it from `GH_HOST` or from whichever host the caller is authenticated to, which
+would send this verb's authenticated write to a machine the origin URL never
+named.
+
+The call goes through the GitHub CLI (`gh`), so the write is made by the user's
+own authenticated identity and abcd never holds a token; if `gh` is absent the
+verb refuses and says so. It is idempotent — a repository already in the desired
+state takes no write, and a re-run rewrites nothing in the tree — and it stops
+at the first failed step rather than attempting one that cannot succeed. Relay
+`status`, the resolved `repo`, every `change`, and every `note`: a note is a
+thing abcd deliberately did not do, and the reason.
 
 ## `dry-run` — the canonical detection envelope
 
