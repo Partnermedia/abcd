@@ -976,3 +976,74 @@ func TestPreCommitHook_LinkedWorktreeWithNoStoreAnywhereStillWarns(t *testing.T)
 		}
 	}
 }
+
+// TestPreCommitHook_BareRepoWorktreeDoesNotInheritASiblingStore is the false
+// positive the common-dir arithmetic opens if it is trusted alone. A worktree of a
+// BARE repository (or one made with `--separate-git-dir`) has a common dir whose
+// parent is not a working tree at all — it is whatever directory happens to hold
+// the git dir — so the guard would read `<that dir>/.abcd/.work.local/…` and
+// enforce a store belonging to some unrelated repository that merely lives next
+// door. The primary root is therefore required to BE a working tree.
+func TestPreCommitHook_BareRepoWorktreeDoesNotInheritASiblingStore(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	locateHook(t)
+	env := gittest.Env(t)
+	parent := t.TempDir()
+	git := func(dir string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+
+	// A neighbour repository's private store, sitting in the directory that holds
+	// the bare git dir. Nothing about this worktree entitles it to that list.
+	neighbour := filepath.Join(parent, ".abcd", ".work.local")
+	if err := os.MkdirAll(neighbour, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(neighbour, "private-names.txt"), []byte(keyedBanlist), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// A source repo with one commit, then a bare clone whose worktree we take.
+	src := newHookRepo(t, "")
+	src.write("seed.md", "nothing sensitive here\n")
+	src.git("add", "seed.md")
+	src.git("-c", "core.hooksPath=/dev/null", "commit", "-m", "seed")
+	bare := filepath.Join(parent, "repo.git")
+	if out, err := git(parent, "clone", "--bare", src.dir, bare); err != nil {
+		t.Skipf("bare clone unavailable: %v\n%s", err, out)
+	}
+	linkedDir := filepath.Join(t.TempDir(), "linked")
+	if out, err := git(bare, "worktree", "add", linkedDir, "HEAD"); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+	// Install the hook where a worktree of the bare repo resolves it.
+	hooksDir := filepath.Join(bare, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src2, err := os.ReadFile(locateHook(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), src2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	linked := &hookRepo{t: t, dir: linkedDir, env: env}
+	linked.git("config", "user.name", "Alice Example")
+	linked.git("config", "user.email", "alice@example.com")
+	linked.write("note.md", "the widgetworks deal closes friday\n")
+	linked.git("add", "note.md")
+	blocked, out := linked.commit()
+	if blocked {
+		t.Fatalf("the guard enforced a store belonging to a repository next door to the git dir\n%s", out)
+	}
+	if strings.Contains(out, "inheriting") {
+		t.Errorf("the guard claimed to inherit a store from a directory that is not a working tree\n%s", out)
+	}
+}

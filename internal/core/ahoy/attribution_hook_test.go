@@ -225,6 +225,7 @@ func TestAttributionHookHoldsItsContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		cmd := exec.Command("bash", hook, msg, source)
+		cmd.Dir = repo
 		cmd.Env = env
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("hook failed for source %q: %v\n%s", source, err, out)
@@ -261,6 +262,52 @@ func TestAttributionHookHoldsItsContract(t *testing.T) {
 			if got := run(t, "subject line\n", source); got != "subject line\n" {
 				t.Errorf("source %q: the hook touched a message it must leave alone:\n%q", source, got)
 			}
+		}
+	})
+
+	t.Run("a cleanup mode that does not strip comments is left alone", func(t *testing.T) {
+		// The whole design rests on git stripping '#' lines. Under
+		// commit.cleanup=verbatim (or whitespace) it strips nothing, so an appended
+		// prompt would go into history verbatim — the one outcome this hook must never
+		// produce. It asks git rather than assuming the default.
+		for _, mode := range []string{"verbatim", "whitespace", "scissors"} {
+			if out, err := git("config", "commit.cleanup", mode); err != nil {
+				t.Fatalf("git config: %v\n%s", err, out)
+			}
+			if got := run(t, "subject line\n", ""); got != "subject line\n" {
+				t.Errorf("cleanup=%s: the hook appended a prompt git will not strip:\n%q", mode, got)
+			}
+		}
+		if out, err := git("config", "--unset", "commit.cleanup"); err != nil {
+			t.Fatalf("git config --unset: %v\n%s", err, out)
+		}
+	})
+
+	t.Run("a different comment character is honoured, and auto is refused", func(t *testing.T) {
+		// core.commentChar decides which lines git strips. Hard-coding '#' in a repo
+		// that chose ';' would put this block into the message as text; `auto` picks a
+		// character from the message's own content, which the hook cannot predict.
+		if out, err := git("config", "core.commentChar", ";"); err != nil {
+			t.Fatalf("git config: %v\n%s", err, out)
+		}
+		got := run(t, "subject line\n", "")
+		for _, line := range strings.Split(strings.TrimPrefix(got, "subject line\n"), "\n") {
+			if line != "" && !strings.HasPrefix(line, ";") {
+				t.Errorf("commentChar=';': the hook appended a live line %q", line)
+			}
+		}
+		if !strings.Contains(got, "Assisted-by:") {
+			t.Errorf("commentChar=';': no prompt was seeded:\n%q", got)
+		}
+
+		if out, err := git("config", "core.commentChar", "auto"); err != nil {
+			t.Fatalf("git config: %v\n%s", err, out)
+		}
+		if got := run(t, "subject line\n", ""); got != "subject line\n" {
+			t.Errorf("commentChar=auto: the hook guessed a comment character:\n%q", got)
+		}
+		if out, err := git("config", "--unset", "core.commentChar"); err != nil {
+			t.Fatalf("git config --unset: %v\n%s", err, out)
 		}
 	})
 

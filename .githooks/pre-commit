@@ -200,10 +200,17 @@ if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ];
   # Pure parameter expansion, never `dirname`: one fewer external command on a path
   # the environment pin above exists to keep unsubstitutable.
   primary_root="${common_dir%/*}"
-  # A common dir with no slash left to strip names no directory, and a primary root
-  # that resolves back to THIS working tree is not a second store to inherit — both
-  # leave the hook single-store, exactly as it is in a standalone checkout.
-  if [ -n "$primary_root" ] && [ "$primary_root" != "$common_dir" ] && [ "$primary_root" != "$toplevel" ]; then
+  # Three tests, and the third is the one that matters. A common dir with no slash
+  # left to strip names no directory, and a primary root that resolves back to THIS
+  # working tree is not a second store to inherit. But the arithmetic alone is wrong
+  # for a BARE repository (and for `--separate-git-dir`): there the common dir's
+  # parent is not a working tree at all, it is whatever directory happens to hold the
+  # git dir — so the guard would read `<that directory>/.abcd/.work.local/…` and
+  # enforce the private list of an unrelated repository that merely lives next door.
+  # A real primary working tree always carries a `.git` entry, so require one; when
+  # it is missing the hook stays single-store, exactly as in a standalone checkout.
+  if [ -n "$primary_root" ] && [ "$primary_root" != "$common_dir" ] &&
+     [ "$primary_root" != "$toplevel" ] && [ -e "$primary_root/.git" ]; then
     primary_dir="$primary_root/$banlist_dir"
     primary_banlist="$primary_root/$banlist"
   else
@@ -625,9 +632,12 @@ fi
 scratch_dir="$banlist_dir"
 scratch_tmp=""
 if [ ! -d "$banlist_dir" ]; then
-  # A store PRESENT implies the tier exists, so this is exactly the not-opted-in
-  # case. The explicit template is portable: bare `mktemp -d` is a GNU extension that
-  # BSD and macOS do not accept.
+  # No tier in THIS working tree: either this machine has not opted in, or this is a
+  # linked worktree whose store is inherited from the primary checkout. Both take the
+  # temp directory — a guard must not create an abcd directory in a tree that has
+  # none, and it must not write a copy of the staged content into someone else's
+  # checkout. The explicit template is portable: bare `mktemp -d` is a GNU extension
+  # that BSD and macOS do not accept.
   scratch_tmp=$(mktemp -d "${TMPDIR:-/tmp}/abcd-guard.XXXXXX") || {
     echo "pre-commit: BLOCKED — could not create a private scratch directory for the guard." >&2
     exit 1
