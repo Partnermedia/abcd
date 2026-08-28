@@ -204,8 +204,23 @@ func newGuardHookCommand() *cobra.Command {
 				}
 			}
 			reg, err := guard.Load(rulesRoot(cwd))
+			// A repo-layer error is fail-SAFE, not fail-open: guard.Load returns the
+			// bundled defaults alongside the error, so the built-in hazards stay
+			// armed even though the repo's own overrides were dropped. We check
+			// against that bundled registry rather than running unguarded, and
+			// announce the dropped repo layer loudly so a human learns their
+			// committed guard config is broken (iss-2608261551087492). Only an
+			// EMPTY registry — the bundled layer itself somehow unavailable, which
+			// cannot happen with an embedded default — is the remaining fail-open.
+			repoDropped := false
 			if err != nil {
-				return failOpen("the hazard registry did not load (%s)", scrubPaths(err))
+				if len(reg.Entries) == 0 {
+					return failOpen("the hazard registry did not load (%s)", scrubPaths(err))
+				}
+				repoDropped = true
+				fmt.Fprintf(cmd.ErrOrStderr(),
+					"abcd guard: the repo %s did not load (%s); its overrides are DROPPED, but the bundled hazards remain armed.\n",
+					guard.RepoRelPath, scrubPaths(err))
 			}
 			// A disabled registry allows everything, which makes it an unguarded
 			// session — and it is the CHEAPEST one to reach: the other unguarded
@@ -236,6 +251,15 @@ func newGuardHookCommand() *cobra.Command {
 				fmt.Fprintln(cmd.ErrOrStderr(), termsafe.Sanitize(dec.Message))
 				return &exitError{Code: 1}
 			default:
+				// Allow. Normally silent and cheap — but when the repo layer was
+				// dropped, exit 0 would DISCARD the stderr drop notice above, so a
+				// human would never learn their guard config is broken. Exit 1
+				// (loud, non-blocking) is the one channel that lets the command run
+				// while keeping the notice in front of a human, exactly as a warn
+				// does.
+				if repoDropped {
+					return &exitError{Code: 1}
+				}
 				return nil // allow: silent, and cheap
 			}
 		},

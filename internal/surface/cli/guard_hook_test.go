@@ -101,12 +101,10 @@ func TestGuardHookFailsOpenLoud(t *testing.T) {
 		{"command the tokenizer cannot split", func(t *testing.T, dir string) string {
 			return preToolUse(t, "Bash", `rm -rf "unterminated`, dir)
 		}},
-		{"malformed per-repo registry", func(t *testing.T, dir string) string {
-			if err := os.WriteFile(filepath.Join(dir, ".abcd", "guard.json"), []byte("{not json"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			return preToolUse(t, "Bash", "cd scratch && rm -rf *", dir)
-		}},
+		// A malformed per-repo registry is NOT a fail-open case any more: it is
+		// fail-SAFE (bundled hazards stay armed). Its behaviour is pinned by
+		// TestGuardHookBrokenRepoConfigKeepsBundledHazardsArmed below
+		// (iss-2608261551087492).
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,6 +122,56 @@ func TestGuardHookFailsOpenLoud(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGuardHookBrokenRepoConfigKeepsBundledHazardsArmed pins the fail-SAFE
+// doctrine of iss-2608261551087492. A malformed repo .abcd/guard.json must NOT
+// disable the whole guard: the repo's own overrides are dropped, but the bundled
+// hazards stay armed and keep BLOCKING. The drop is announced loudly so a human
+// learns their committed guard config is broken and that bundled protection is
+// still active — the exact opposite of the old fail-open behaviour.
+func TestGuardHookBrokenRepoConfigKeepsBundledHazardsArmed(t *testing.T) {
+	writeBroken := func(t *testing.T, dir string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, ".abcd", "guard.json"), []byte("{not json"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("bundled blocker still blocks", func(t *testing.T) {
+		dir := guardRepo(t)
+		writeBroken(t, dir)
+		// git commit --no-verify is a bundled blocker that never depended on the
+		// repo layer; a broken repo config must not defang it.
+		_, stderr, code := runGuard(preToolUse(t, "Bash", `git commit --no-verify -m "wip"`, dir), "guard", "hook")
+		if code != 2 {
+			t.Fatalf("a bundled blocker must still exit 2 when only the repo layer is broken; got %d, stderr = %q", code, stderr)
+		}
+		if !strings.Contains(stderr, guard.RepoRelPath) {
+			t.Errorf("the dropped repo layer must be announced by name; stderr = %q", stderr)
+		}
+		if !strings.Contains(stderr, "DROPPED") {
+			t.Errorf("the broken repo layer must be announced loudly as dropped; stderr = %q", stderr)
+		}
+	})
+
+	t.Run("allowed command still announces the drop loudly", func(t *testing.T) {
+		dir := guardRepo(t)
+		writeBroken(t, dir)
+		// An innocuous command the bundled registry allows. The drop notice must
+		// still reach a human — exit 0 would discard it — so the hook exits 1
+		// (loud, non-blocking), never 0, and never the blocking 2.
+		_, stderr, code := runGuard(preToolUse(t, "Bash", "ls -la", dir), "guard", "hook")
+		if code == 2 {
+			t.Fatalf("an allowed command must not be blocked; got exit 2, stderr = %q", stderr)
+		}
+		if code == 0 {
+			t.Fatalf("exit 0 discards stderr, so the broken-repo notice would be lost; stderr = %q", stderr)
+		}
+		if !strings.Contains(stderr, "DROPPED") || !strings.Contains(stderr, "bundled hazards remain armed") {
+			t.Errorf("the notice must say the repo layer dropped and the bundled hazards remain armed; stderr = %q", stderr)
+		}
+	})
 }
 
 // TestGuardHookAnnouncesADisabledRegistry is AC 1 applied to the escape hatch.
