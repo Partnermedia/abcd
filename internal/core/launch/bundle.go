@@ -899,12 +899,16 @@ func parseCharClass(pattern string, i int) (body string, negated bool, adv int, 
 	return pattern[start:j], negated, j + 1, true
 }
 
-// platformBinaryRe matches the basename of a released abcd platform artefact —
-// the `abcd-<goos>-<goarch>` names the release workflow publishes, plus the
-// `.exe` spelling. It is deliberately the WHOLE basename: a document about the
-// artefact (`docs/abcd-darwin-arm64.md`) is prose, not a binary, and denying by
-// substring would take it too.
-var platformBinaryRe = regexp.MustCompile(`^abcd-[a-z0-9]+-[a-z0-9]+(\.exe)?$`)
+// platformBinaryRe matches the basename of a built abcd binary — the
+// `abcd-<goos>-<goarch>` names the release workflow publishes, plus the `.exe`
+// spelling, AND the bare `abcd` that `go build ./cmd/abcd` produces. The bare
+// name matters most of the three: it is the name the bootstrap's own refusal
+// text tells a user to build, and the name the binary runs under inside the
+// plugin root, so a control that covered only the cross-compiled spellings had
+// its hole at the most likely file. The match is the WHOLE basename: a document
+// about an artefact (`docs/abcd-darwin-arm64.md`) is prose, not a binary, and
+// denying by substring would take it too.
+var platformBinaryRe = regexp.MustCompile(`^abcd(-[a-z0-9]+-[a-z0-9]+)?(\.exe)?$`)
 
 // isPlatformBinaryName reports whether base is a released platform artefact's
 // file name.

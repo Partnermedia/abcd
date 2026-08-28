@@ -73,10 +73,10 @@ root_tmp=''
 path_tmp=''
 auth_tmp=''
 
-# staged records that provisioning was ANNOUNCED, and terminal that the run has
-# already had its last word (a notice or a refusal). Together they are the
-# contract this script owes a reader: once it says it is provisioning, exactly
-# one terminal line follows, always. The §4 fresh-machine gate failed because
+# staged records that provisioning BEGAN, and terminal that the run has already
+# had its last word (a notice or a refusal). Together they are the contract this
+# script owes a reader: once it starts provisioning, exactly one terminal line
+# follows, always. The §4 fresh-machine gate failed because
 # neither half held — on a cloud-synced home the run produced no output at all,
 # neither success nor refusal, and every UserPromptSubmit and PreToolUse hook
 # then failed as a raw "No such file or directory" for an entire evening with
@@ -120,16 +120,6 @@ refuse() {
 	exit 1
 }
 
-# stage announces that provisioning is starting. It is printed BEFORE the
-# network and the environment-sensitive filesystem work, so a run that hangs or
-# dies in the middle of them still leaves evidence of what it was doing — the
-# thing the §4 transcript had none of. It does not exit: it opens the contract
-# on_exit closes.
-stage() {
-	staged=yes
-	printf '%s\n' "$(safe "$1")" >&2
-}
-
 # notice is a reported condition rather than a fault: the install succeeded, or
 # the platform has no released binary. It exits ZERO.
 #
@@ -159,10 +149,9 @@ notice() {
 }
 
 # on_exit is the EXIT trap: it cleans up, and it converts a SILENT death into a
-# refusal. Everything below announces itself through stage() and then finishes
-# through notice() or refuse() — so reaching the end of the run with the
-# announcement made and no terminal line means the script died somewhere it does
-# not know about (a signal, an unwritable filesystem faulting a command whose
+# refusal. Provisioning below raises `staged` and then finishes through notice()
+# or refuse() — so reaching the end of the run with provisioning begun and no
+# terminal line means the script died somewhere it does not know about (a signal, an unwritable filesystem faulting a command whose
 # failure nothing checks, a killed pipeline). That is precisely the §4 failure
 # mode, and the only thing worse than failing is failing quietly: the reader is
 # left with hooks that error "No such file or directory" on every prompt and
@@ -172,7 +161,7 @@ notice() {
 on_exit() {
 	cleanup
 	if [ -n "$staged" ] && [ -z "$terminal" ]; then
-		say_refusal 'provisioning ended without installing the binary and without reporting why — the run was interrupted or a step failed in a way this script could not see'
+		say_refusal 'provisioning the abcd binary for this plugin root ended without installing it and without reporting why — the run was interrupted, or a step failed in a way this script could not see'
 	fi
 	return 0
 }
@@ -373,19 +362,31 @@ fi
 # firing again after it is a no-op.
 trap on_exit EXIT
 trap 'on_exit; exit 1' HUP INT TERM
-# 4b. Loud staging. Everything from here on is the work that produced nothing at
-#     all on the §4 machine: a directory sweep of a plugin root holding a full
-#     source checkout on a cloud-synced filesystem (anomalous stat results,
-#     65535 link counts, multi-minute tree walks), then three network fetches.
-#     The announcement goes out BEFORE any of it, so a run that hangs or is
-#     killed there still leaves a reader something that names what was happening
-#     — and from here the EXIT trap guarantees exactly one terminal line
-#     follows, a success notice or a refusal, whichever way the run ends.
+# 4b. Provisioning starts here, and from here the run owes the reader exactly
+#     one terminal line — a success notice or a refusal — whichever way it ends.
+#     Everything below is the work that produced nothing at all on the §4
+#     machine: a directory sweep of a plugin root holding a full source checkout
+#     on a cloud-synced filesystem (anomalous stat results, 65535 link counts,
+#     multi-minute tree walks), then three network fetches. The EXIT trap is what
+#     closes the contract when one of them kills the run.
 #
-#     It is placed after the lock rather than before it so a session that merely
-#     lost the race stays genuinely silent: it is not provisioning, so it must
-#     not announce that it is.
-stage "$(printf 'abcd bootstrap: provisioning the abcd binary for this plugin root (%s %s) — fetching the checksum-verified release…' "$os" "$arch")"
+#     There is deliberately NO eager "provisioning…" line printed here, loud as
+#     that would be. Only the FIRST line of a hook's stderr reaches the
+#     transcript (iss-208, measured on the first manual install), and this
+#     script's success notice already spends that line on the one-time
+#     `ahoy install` instruction, placed first for exactly that reason
+#     (iss-207). An announcement ahead of it would take the line from the
+#     success and — far worse — from the REFUSAL's reason on the failing path,
+#     which is precisely the silence itd-154 exists to end: the reader would
+#     learn that provisioning started and never learn why it did not finish. The
+#     announcement is therefore held and spent only where it is the only thing a
+#     reader would otherwise have: on_exit's report of a run that died without a
+#     word of its own.
+#
+#     The flag is raised after the lock rather than before it so a session that
+#     merely lost the race is not reported as a failed provision: it never
+#     provisioned at all.
+staged=yes
 
 # SIGKILL runs no trap, so a killed run leaves its PID-stamped temp directory
 # behind holding a partially downloaded, UNVERIFIED binary. The lock is held from

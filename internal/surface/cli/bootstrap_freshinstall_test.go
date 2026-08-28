@@ -20,32 +20,18 @@ import (
 // into a gate — the §4 assertions, run on every build, against the script that
 // actually ships.
 
-// bootstrapStageMarker is the loud provisioning announcement the script emits
-// before it touches the network or the plugin root's filesystem. It is the ONLY
-// line permitted before a terminal one.
-const bootstrapStageMarker = "abcd bootstrap: provisioning the abcd binary"
-
-// firstTerminalLine returns the first line of out that is not the provisioning
-// announcement — the line the script means as its last word. It exists because
-// the transcript renders only a hook's first stderr line (iss-208), which is
-// what makes the ORDER of these two lines a real contract rather than cosmetics.
-func firstTerminalLine(out string) string {
-	for _, line := range strings.Split(strings.TrimLeft(out, "\n"), "\n") {
-		if strings.HasPrefix(line, bootstrapStageMarker) {
-			continue
-		}
-		return line
-	}
-	return ""
-}
-
 // bootstrapTerminalLines returns every line that opens a terminal message — a
-// success notice or a refusal. The contract is exactly one: a run that announced
-// itself must finish, once, out loud.
+// success notice or a refusal. The contract is exactly one, and it must be the
+// FIRST line of the run's stderr: the transcript renders only that one line
+// (iss-208), which is why the script prints nothing ahead of it, loud as a
+// "provisioning…" announcement would be. Anything printed first would take the
+// line from the success — whose `ahoy install` instruction sits there for
+// exactly this reason (iss-207) — and from a refusal's cause, which is the
+// silence itd-154 exists to end.
 func bootstrapTerminalLines(out string) []string {
 	var lines []string
 	for _, line := range strings.Split(out, "\n") {
-		if !strings.HasPrefix(line, "abcd bootstrap: ") || strings.HasPrefix(line, bootstrapStageMarker) {
+		if !strings.HasPrefix(line, "abcd bootstrap: ") {
 			continue
 		}
 		lines = append(lines, line)
@@ -123,7 +109,7 @@ func TestBootstrapFreshInstallSelfCheck(t *testing.T) {
 		t.Fatalf("a fresh install must succeed on a machine with no Go, got exit %d (output %q)", code, out)
 	}
 
-	// §4 assertion 3a: one bootstrap success line, and exactly one.
+	// §4 assertion 3a: one bootstrap success line, and exactly one, leading.
 	terminal := bootstrapTerminalLines(out)
 	if len(terminal) != 1 {
 		t.Fatalf("a run must have exactly one last word, got %d: %q", len(terminal), terminal)
@@ -131,11 +117,8 @@ func TestBootstrapFreshInstallSelfCheck(t *testing.T) {
 	if !strings.HasPrefix(terminal[0], "abcd bootstrap: installed") {
 		t.Errorf("the one terminal line must be the success; got %q", terminal[0])
 	}
-	if got := firstTerminalLine(out); got != terminal[0] {
-		t.Errorf("the success must lead the terminal output; first terminal line = %q", got)
-	}
-	if !strings.Contains(out, bootstrapStageMarker) {
-		t.Errorf("provisioning must announce itself before it starts; output %q", out)
+	if got := firstLine(out); got != terminal[0] {
+		t.Errorf("the success must be the FIRST line of stderr, the only one the transcript renders; first line = %q", got)
 	}
 
 	// §4 assertion 3b: a PROVISIONED binary at the plugin root — a regular,
@@ -175,32 +158,28 @@ func TestBootstrapFreshInstallSelfCheck(t *testing.T) {
 	}
 }
 
-// TestBootstrapAnnouncesProvisioningBeforeItCanFail is AC2 and AC4 together: the
-// announcement is emitted BEFORE the work that can fail, a failure is loud and
-// says why, and nothing half-installed is left behind for the hooks to trip
-// over. A partial binary would be worse than none — the fast path would take it
-// next session and every hook would fail on a corrupt executable instead.
-func TestBootstrapAnnouncesProvisioningBeforeItCanFail(t *testing.T) {
+// TestBootstrapFailsLoudlyAndLeavesNothingHalfInstalled is AC4: a failure is
+// loud, says why in the one line a reader gets, and leaves nothing
+// half-installed for the hooks to trip over. A partial binary would be worse
+// than none — the fast path would take it next session and every hook would fail
+// on a corrupt executable instead of on an absent one.
+func TestBootstrapFailsLoudlyAndLeavesNothingHalfInstalled(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("payload")
 	// A manifest listing a DIFFERENT hash: the download succeeds and the
-	// verification refuses, which is the failure the announcement has to precede.
+	// verification refuses — a failure at the far end of the provisioning run.
 	fx := bootstrapServer(t, body, bootstrapManifest([]byte("something else entirely")))
 
 	out, code := runBootstrapNoGo(t, root, fx)
 	if code == 0 {
 		t.Fatalf("a checksum mismatch must fail loudly, got exit 0 (output %q)", out)
 	}
-	stageAt := strings.Index(out, bootstrapStageMarker)
-	if stageAt < 0 {
-		t.Fatalf("the provisioning announcement must appear even when the step after it fails; output %q", out)
-	}
 	terminal := bootstrapTerminalLines(out)
 	if len(terminal) != 1 {
 		t.Fatalf("a failed run must have exactly one last word, got %d: %q", len(terminal), terminal)
 	}
-	if failAt := strings.Index(out, terminal[0]); failAt < stageAt {
-		t.Errorf("the announcement must precede the refusal it stages; output %q", out)
+	if got := firstLine(out); got != terminal[0] {
+		t.Errorf("the refusal's cause must be the FIRST line of stderr, the only one the transcript renders; first line = %q", got)
 	}
 	if !strings.Contains(out, "does not match its SHA-256 checksum") {
 		t.Errorf("the refusal must name the checksum mismatch; output %q", out)
@@ -250,11 +229,11 @@ func TestBootstrapConvertsASilentDeathIntoARefusal(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("a run killed mid-provision must not report success, got exit 0 (output %q)", out)
 	}
-	if !strings.Contains(out, bootstrapStageMarker) {
-		t.Errorf("the announcement must survive the death it precedes; output %q", out)
-	}
 	if !strings.Contains(out, "shell commands run UNGUARDED") {
 		t.Fatalf("a death mid-provision must still produce the refusal, not silence; output %q", out)
+	}
+	if got := firstLine(out); !strings.Contains(got, "provisioning the abcd binary") {
+		t.Errorf("the refusal must name what the run was doing when it died, in the one line the transcript renders; first line = %q", got)
 	}
 	if terminal := bootstrapTerminalLines(out); len(terminal) != 1 {
 		t.Errorf("even a death gets exactly one last word, got %d: %q", len(terminal), terminal)

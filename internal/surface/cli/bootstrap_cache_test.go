@@ -132,11 +132,8 @@ func TestBootstrapProvisionsRootFromCacheWithoutDownload(t *testing.T) {
 	if err != nil || fi.Mode().Perm() != 0o755 {
 		t.Errorf("the provisioned binary must be mode 0755: %v (%v)", fi, err)
 	}
-	// The success leads the TERMINAL output: itd-154 puts one provisioning
-	// announcement ahead of it so a run that dies mid-provision still leaves a
-	// reader something (iss-253). Nothing else may come between them.
-	if got := firstTerminalLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
-		t.Errorf("the success must lead the terminal output; first terminal line = %q", got)
+	if got := firstLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
+		t.Errorf("the success must lead the first visible line; first line = %q", got)
 	}
 	// An online cache hit is authenticated against the published manifest, and
 	// the notice says which trust it rests on (adr-46 decision 3).

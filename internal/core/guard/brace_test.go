@@ -1,6 +1,10 @@
 package guard
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 // TestUnquotedBraceGroupIsRefused is the repro for iss-2608221457227161. Bash
 // expands `{--force,}` to byte-identical `--force` argv, but the guard's
@@ -25,6 +29,19 @@ func TestUnquotedBraceGroupIsRefused(t *testing.T) {
 		// The group hidden one execute-a-string layer down, where the outer
 		// quotes exempt it but the payload's own tokenize does not.
 		`sh -c 'git push {--force,} origin main'`,
+		// An alternative holding a command substitution. `(`, `)` and a
+		// backtick do NOT end a bash word when they open one, and bash
+		// brace-expands straight through: `printf '[%s]' {--force,$(true)}`
+		// prints `[--force]`. A scan that treated them as word terminators read
+		// "no group here" exactly where bash reads one, leaving the reported
+		// bypass open under a nine-character variant of itself.
+		"git push {--force,$(true)} origin main",
+		"git push {--force,`echo x`} origin main",
+		"git push {--force,<(true)} origin main",
+		"git push {--force,$(echo a)$(echo b)} origin main",
+		// A dollar that is itself escaped is a literal `$`, so `${` after it is
+		// NOT parameter expansion and bash expands the group.
+		`git push \${--force,} origin main`,
 	} {
 		t.Run(cmd, func(t *testing.T) {
 			if d := verdictOf(t, cmd); d.Verdict != VerdictBlock {
@@ -87,6 +104,10 @@ func TestBraceHandlingLeavesEveryOtherShapeAlone(t *testing.T) {
 		// A brace with no alternative is a literal in bash too.
 		{`echo {a}`, VerdictAllow},
 		{`echo {`, VerdictAllow},
+		// A command substitution with no alternative beside it is still no
+		// group: the substitution is skipped for STRUCTURE, not treated as one.
+		{`echo {$(true)}`, VerdictAllow},
+		{"echo {`true`}", VerdictAllow},
 		{`awk {print}`, VerdictAllow},
 		// Ordinary commands, unaffected.
 		{`git status`, VerdictAllow},
@@ -128,5 +149,49 @@ func TestBraceGroupIsRecordedOnTheSegment(t *testing.T) {
 	}
 	if !segs[1].braceGroup {
 		t.Errorf("the segment carrying the brace group was not marked: %v", segs[1].tokens)
+	}
+}
+
+// TestBraceScanStaysLinear is the cost guard on the forward brace scan. The scan
+// looks ahead from every structural `{`, so a word made of nothing but `{` bytes
+// re-scans the same tail once per byte — quadratic, and measured at over six
+// minutes on a 1 MiB command, which is inside the guard's own stdin cap. That is
+// a hang on the PreToolUse path, reachable by any command the agent is asked to
+// run. A shared budget bounds the total look-ahead per tokenize call, and
+// exhausting it is fail-closed.
+func TestBraceScanStaysLinear(t *testing.T) {
+	line := "echo " + strings.Repeat("{", 1<<20)
+	start := time.Now()
+	segs, err := tokenize(line)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("tokenize: %v", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("tokenizing a %d-byte word of braces took %v, want well under 5s (quadratic-scan regression)", len(line), elapsed)
+	}
+	// Exhausting the budget means the scan can no longer tell a group from a
+	// literal, and a guard that cannot tell says group.
+	if len(segs) == 0 || !segs[0].braceGroup {
+		t.Errorf("a brace word past the scan budget must be refused, not waved through: %+v", segs)
+	}
+}
+
+// TestReservedBraceIDCannotBeClaimed pins the invariant the brace id's own
+// comment states: a repo registry may not dress an ordinary entry up as the
+// guard's own voice. Validate refuses the reserved ids, and the brace id is one.
+func TestReservedBraceIDCannotBeClaimed(t *testing.T) {
+	r := Registry{
+		SchemaVersion: 1,
+		Entries: map[string]Entry{
+			braceEntryID: {
+				ID: braceEntryID, Tier: TierWarn,
+				Why: "not the guard's voice", Successor: "something",
+				Pattern: Pattern{Command: "ls"},
+			},
+		},
+	}
+	if err := Validate(r); err == nil {
+		t.Errorf("Validate accepted a registry entry claiming the reserved id %q", braceEntryID)
 	}
 }

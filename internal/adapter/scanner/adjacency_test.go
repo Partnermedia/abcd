@@ -507,7 +507,8 @@ func TestGallopingProbeCostClass(t *testing.T) {
 	t.Run("short_match_costs_one_fixed_window", func(t *testing.T) {
 		line := "ghp_" + r("a", 36) + " " + r("x", 100000)
 		c := &countingMatcher{re: probe}
-		loc := gallopingFind(c, line, 0, 0)
+		budget := gallopBudget(line)
+		loc := gallopingFind(c, line, 0, 0, &budget)
 		if loc == nil || loc[1] != 40 {
 			t.Fatalf("gallopingFind = %v, want the 40-byte match", loc)
 		}
@@ -519,7 +520,8 @@ func TestGallopingProbeCostClass(t *testing.T) {
 	t.Run("non_match_costs_one_fixed_window", func(t *testing.T) {
 		line := r("x", 100000)
 		c := &countingMatcher{re: probe}
-		if loc := gallopingFind(c, line, 0, 0); loc != nil {
+		budget := gallopBudget(line)
+		if loc := gallopingFind(c, line, 0, 0, &budget); loc != nil {
 			t.Fatalf("gallopingFind = %v, want no match", loc)
 		}
 		if len(c.sizes) != 1 || c.sizes[0] != maxAdjacencyProbeWindow {
@@ -532,7 +534,8 @@ func TestGallopingProbeCostClass(t *testing.T) {
 		line := "ghp_" + r("a", n) + " " + r("x", 100000)
 		want := 4 + n
 		c := &countingMatcher{re: probe}
-		loc := gallopingFind(c, line, 0, 0)
+		budget := gallopBudget(line)
+		loc := gallopingFind(c, line, 0, 0, &budget)
 		if loc == nil || loc[1] != want {
 			t.Fatalf("gallopingFind = %v, want the whole %d-byte match", loc, want)
 		}
@@ -584,6 +587,15 @@ func TestGallopingProbeStaysBoundedOnLongLines(t *testing.T) {
 		// The iss-189 shape repeated: every junction's probe runs into its edge
 		// and has to grow before the boundary can be judged.
 		{"window_edge_boundaries_back_to_back", r("AKIA"+r("Q", 16)+r("b", maxAdjacencyProbeWindow-6)+".local"+"zzz ", n(400))},
+		// The shape an adversarial review found the FIRST galloping pass
+		// quadratic on, and the reason gallopBudget exists: every fixed-length
+		// google_api match ends inside a continuous open-ended anthropic_key
+		// class run, so each of the line's Theta(n) junctions starts a probe
+		// match that reaches the far end — and each such match is then
+		// re-validated up to maxAdjacencyBacktrack times at its own length.
+		// Unbudgeted it measured 1.3s / 5.0s / 19.1s at 14KB / 29KB / 59KB,
+		// where the fixed window had been 0.6s / 1.3s / 2.5s.
+		{"long_matches_at_every_junction", r("AIza"+r("a", 35)+"sk-ant-", n(2000))},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -593,5 +605,38 @@ func TestGallopingProbeStaysBoundedOnLongLines(t *testing.T) {
 				t.Errorf("scan of a %d-byte line took %v, want well under 15s (galloping-probe cost regression)", len(c.line), elapsed)
 			}
 		})
+	}
+}
+
+// TestGallopingProbeCostIsLinearInLineLength is the cost-CLASS guard the
+// wall-clock budgets above cannot be: it doubles the input twice and asserts the
+// time grows like the input rather than like its square. A wall-clock ceiling
+// only catches a regression once it is slow enough on the machine that happens
+// to run it; a ratio catches the class itself, which is what the first pass at
+// this fix got wrong (linear before, quadratic after, both comfortably under
+// any fixed bar at the sizes the other guards use).
+//
+// The shape is the one that broke: every junction on the line starts a match
+// that reaches the far end. The bar is deliberately loose — quadratic growth
+// quadruples per doubling, so anything under 3x per doubling separates the two
+// classes without tracking machine speed — and the smallest size is skipped as a
+// timing baseline when it is too fast to measure reliably.
+func TestGallopingProbeCostIsLinearInLineLength(t *testing.T) {
+	r := strings.Repeat
+	unit := "AIza" + r("a", 35) + "sk-ant-"
+	measure := func(m int) time.Duration {
+		line := r(unit, m)
+		start := time.Now()
+		scanLine(line)
+		return time.Since(start)
+	}
+	base := scaleAdversarial(320)
+	small, large := measure(base), measure(4*base)
+	if small < 50*time.Millisecond {
+		t.Skipf("baseline %v is too small to measure a growth ratio against", small)
+	}
+	// Four times the input: linear work is ~4x, quadratic ~16x.
+	if ratio := float64(large) / float64(small); ratio > 8 {
+		t.Errorf("quadrupling the line multiplied the scan by %.1fx (%v -> %v), want about 4x: the scan is no longer linear in line length", ratio, small, large)
 	}
 }

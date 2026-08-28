@@ -1,8 +1,9 @@
 package launch
 
 import (
-	"os"
-	"path/filepath"
+	"os/exec"
+	"path"
+	"strings"
 	"testing"
 )
 
@@ -20,6 +21,10 @@ func TestBundleNeverShipsAPlatformBinary(t *testing.T) {
 	writeFile(t, root, "bin/abcd-darwin-arm64", "MZ-ish")
 	writeFile(t, root, "bin/abcd-linux-amd64", "MZ-ish")
 	writeFile(t, root, "bin/abcd-windows-amd64.exe", "MZ-ish")
+	// The bare name `go build ./cmd/abcd` produces, and the name the binary runs
+	// under in the plugin root — the likeliest of the three to be committed by
+	// accident, so the deny would have had its hole at its most dangerous name.
+	writeFile(t, root, "bin/abcd", "MZ-ish")
 	writeFile(t, root, "bin/README.md", "what lives here")
 	writeFile(t, root, "docs/abcd-darwin-arm64.md", "prose about the artefact")
 
@@ -31,6 +36,7 @@ func TestBundleNeverShipsAPlatformBinary(t *testing.T) {
 		"bin/abcd-darwin-arm64",
 		"bin/abcd-linux-amd64",
 		"bin/abcd-windows-amd64.exe",
+		"bin/abcd",
 	} {
 		if included(b, rel) {
 			t.Errorf("%s entered the payload: the binary must arrive only by checksum-verified download", rel)
@@ -63,13 +69,19 @@ func TestCommittedPayloadNamesNoBinaryDirectory(t *testing.T) {
 			t.Errorf("the committed payload include %q reaches the cross-compiled binaries; they ship as release assets only", inc)
 		}
 	}
-	// And nothing that IS committed carries a released artefact's name.
-	entries, err := os.ReadDir(filepath.Join(root, "bin"))
-	if err == nil {
-		for _, e := range entries {
-			if isPlatformBinaryName(e.Name()) {
-				t.Logf("bin/%s is present locally and would be rejected by the payload deny", e.Name())
-			}
+	// And nothing TRACKED carries a built binary's name anywhere in the tree —
+	// asserted against git rather than the working directory, so a developer's
+	// untracked `bin/` build output is not mistaken for a committed one.
+	out, err := exec.Command("git", "-C", root, "ls-files", "-z").Output()
+	if err != nil {
+		t.Skipf("git ls-files unavailable in %s: %v", root, err)
+	}
+	for _, rel := range strings.Split(strings.TrimRight(string(out), "\x00"), "\x00") {
+		if rel == "" {
+			continue
+		}
+		if isPlatformBinaryName(path.Base(rel)) {
+			t.Errorf("%s is committed and carries a built binary's name, so it would fail every ship", rel)
 		}
 	}
 }

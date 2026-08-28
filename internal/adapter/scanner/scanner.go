@@ -491,7 +491,7 @@ type matcher interface {
 // sums to under twice the final window, and the final window is under twice the
 // match, so one probe costs a small constant multiple of the match's OWN length
 // — the amortised class the top-level unbounded match already pays.
-func gallopingFind(re matcher, line string, at, base int) []int {
+func gallopingFind(re matcher, line string, at, base int, budget *int) []int {
 	for w := maxAdjacencyProbeWindow; ; w *= 2 {
 		hi := base + w
 		if hi > len(line) {
@@ -501,7 +501,36 @@ func gallopingFind(re matcher, line string, at, base int) []int {
 		if hi == len(line) || loc == nil || at+loc[1] < hi {
 			return loc
 		}
+		// Growing is what the shared budget pays for; when it is gone the probe
+		// keeps the fixed window it already has. See gallopBudget.
+		if *budget < hi-at {
+			return loc
+		}
+		*budget -= hi - at
 	}
+}
+
+// gallopBudget returns the total growth gallopingFind may spend on one line.
+//
+// Per probe the doubling is cheap — a constant multiple of the match's own
+// length — but the SUM across a line is not automatically bounded, and the
+// unbounded sum is a cost class, not a constant. Removing the fixed cap also
+// removed the cap on how long a probe-recovered match may be, and every
+// recovered match is then re-validated up to maxAdjacencyBacktrack times by
+// stolenJunctions at O(match length) each. A line crafted so that Θ(n) probe
+// positions each start a Θ(n)-long match therefore turns a linear scan
+// quadratic: measured at 1.3s / 5.0s / 19.1s over 14KB / 29KB / 59KB, where the
+// fixed window was 0.6s / 1.3s / 2.5s. That is a resource-exhaustion cliff on
+// input this scanner exists to read from strangers.
+//
+// The budget restores the class without giving the fix back. It is a multiple
+// of the line's own length, so a single long token — the shape the galloping
+// probe exists for — is captured whole with room to spare, while a line
+// engineered to grow the window at every junction exhausts it after a few and
+// reverts to exactly the fixed-window behaviour, which is bounded and was never
+// worse than correct-but-truncated.
+func gallopBudget(line string) int {
+	return 4*len(line) + 8*maxAdjacencyProbeWindow
 }
 
 // scanAllPatterns returns every match of every pattern in line, plus any
@@ -527,6 +556,9 @@ func gallopingFind(re matcher, line string, at, base int) []int {
 // something this function claims to close.
 func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *regexp.Regexp, line string) []patMatch {
 	var all []patMatch
+	// One growth budget for the whole line, shared by every probe and the
+	// junction search: see gallopBudget.
+	budget := gallopBudget(line)
 	seen := map[patMatch]bool{}
 	add := func(m patMatch) {
 		if seen[m] {
@@ -539,7 +571,7 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 	// starting exactly at byte offset at.
 	probeAt := func(at int) {
 		for j := range patterns {
-			m := gallopingFind(probes[j], line, at, at)
+			m := gallopingFind(probes[j], line, at, at, &budget)
 			if m == nil || m[0] != 0 || m[1] == 0 {
 				continue
 			}
@@ -557,7 +589,7 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 	for qi := 0; qi < len(all); qi++ {
 		m := all[qi]
 		probeAt(m.end)
-		for _, cut := range stolenJunctions(probes[m.patIdx], junctions, line, m) {
+		for _, cut := range stolenJunctions(probes[m.patIdx], junctions, line, m, &budget) {
 			probeAt(cut)
 		}
 	}
@@ -590,7 +622,7 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 // junction probe over that window, not from re-probing every byte in it with
 // every pattern — the difference between one window-bounded search per
 // candidate and a full window scan per pattern per match.
-func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) []int {
+func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch, budget *int) []int {
 	if m.end-m.start < 2 || !wholeMatch(probe, line[m.start:m.end-1]) {
 		return nil
 	}
@@ -612,7 +644,7 @@ func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) [
 	// window-bounded search per match — a constant, still independent of the
 	// line's length.
 	for off := lo; off < m.end; {
-		loc := gallopingFind(junctions, line, off, m.end)
+		loc := gallopingFind(junctions, line, off, m.end, budget)
 		if loc == nil {
 			break
 		}
