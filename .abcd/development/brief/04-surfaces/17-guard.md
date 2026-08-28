@@ -66,10 +66,16 @@ by a broken guard, and never silently unprotected either — and a binary that r
 and reported is never described as having failed to run.
 
 The outside-the-session half is `abcd ahoy`'s `guard:` line, which reports the
-three things that can independently be false: whether the hook is installed,
-whether the binary it calls is reachable, and whether the registry loads. Each
-also surfaces as a gap (`guard.hook_missing`, `guard.binary_unreachable`,
-`guard.registry_unloadable`).
+things that can independently be false: whether the hook is installed, whether
+the binary it calls is reachable, and whether a hazard registry is armed. The
+registry check distinguishes two states, because `guard.Load` fails safe: a
+repo `.abcd/guard.json` that does not load drops only the repo's overrides
+while the bundled hazards stay armed — reported as `repo_overrides_dropped`, a
+mild but loud state — whereas `registry_loadable: false` means no registry at
+all, the only genuinely-unguarded registry state, which the embedded defaults
+make unreachable in practice. Each fault also surfaces as a gap
+(`guard.hook_missing`, `guard.binary_unreachable`, `guard.registry_unloadable`
+for the dropped repo layer, `guard.registry_empty` for an absent registry).
 
 ## Registry and overrides
 

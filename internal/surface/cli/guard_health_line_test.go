@@ -65,3 +65,36 @@ func TestGuardHealthLineArmedAndDisabled(t *testing.T) {
 		t.Errorf("a disabled guard must never read as protection; got %q", line)
 	}
 }
+
+// TestGuardHealthLineRepoOverridesDropped pins the fail-safe degraded state to
+// the human line: the repo's guard.json does not load, its overrides are
+// dropped, and the bundled hazards remain armed — so the line must say armed
+// AND name the broken file, never "NOT ARMED" or a clean bill of health.
+func TestGuardHealthLineRepoOverridesDropped(t *testing.T) {
+	line := guardHealthLine(ahoy.GuardHealth{
+		PluginRootResolved: true, HookInstalled: true, BinaryReachable: true,
+		RegistryLoadable: true, RepoOverridesDropped: true, Entries: 6,
+	})
+	if !strings.Contains(line, "armed") || strings.Contains(line, "NOT ARMED") {
+		t.Errorf("the bundled hazards are armed and the line must say so; got %q", line)
+	}
+	if !strings.Contains(line, "overrides dropped") || !strings.Contains(line, ".abcd/guard.json") {
+		t.Errorf("the broken repo file must stay visible on the line; got %q", line)
+	}
+	if strings.Contains(line, "unchecked") {
+		t.Errorf("commands are still checked on the fail-safe path; got %q", line)
+	}
+}
+
+// TestGuardHealthLineEmptyRegistry pins the only genuinely-unguarded registry
+// state — no registry loaded at all — to the unarmed wording, distinct from the
+// repo-layer failure above.
+func TestGuardHealthLineEmptyRegistry(t *testing.T) {
+	line := guardHealthLine(ahoy.GuardHealth{
+		PluginRootResolved: true, HookInstalled: true, BinaryReachable: true,
+		RegistryLoadable: false,
+	})
+	if !strings.Contains(line, "NOT ARMED") || !strings.Contains(line, "no hazard registry loaded") {
+		t.Errorf("an absent registry must read as unguarded; got %q", line)
+	}
+}

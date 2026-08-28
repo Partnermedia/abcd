@@ -34,10 +34,20 @@ type GuardHealth struct {
 	// is executable. When it is not, the shim fails open on every command.
 	// Meaningful only when PluginRootResolved.
 	BinaryReachable bool `json:"binary_reachable"`
-	// RegistryLoadable reports whether the bundled defaults merged with this
-	// repo's .abcd/guard.json parse and validate. When they do not, the guard
-	// declines to answer and every command runs unchecked.
+	// RegistryLoadable reports whether ANY hazard registry is armed — the
+	// bundled defaults, with this repo's .abcd/guard.json merged in when it
+	// loads. Since the fail-safe load (iss-2608261551087492) a broken repo file
+	// no longer clears this: guard.Load falls back to the bundled defaults, so
+	// false here means no registry at all — the only genuinely-unguarded
+	// registry state, which the embedded defaults make unreachable in practice.
+	// A broken repo layer over an armed bundle is RepoOverridesDropped instead.
 	RegistryLoadable bool `json:"registry_loadable"`
+	// RepoOverridesDropped reports the fail-safe degraded state: this repo's
+	// .abcd/guard.json does not load, so its overrides are dropped while the
+	// bundled hazards stay armed. Mild and expected — commands are still
+	// checked — but never silent: the broken committed file needs fixing, and
+	// hiding it would let a repo's own tightened hazards quietly lapse.
+	RepoOverridesDropped bool `json:"repo_overrides_dropped,omitempty"`
 	// Disabled reports a deliberately switched-off registry. It is not a fault —
 	// .abcd/guard.json is the only route, so the change lands in a diff — but the
 	// file is read from the WORKING TREE, so this can be true before anyone has
@@ -47,8 +57,9 @@ type GuardHealth struct {
 	// Entries is how many hazards the loaded registry holds, so "loadable" is
 	// backed by a number rather than a boolean nobody can check.
 	Entries int `json:"entries"`
-	// Detail is a one-line human reason when something is false; empty when the
-	// guard is healthy.
+	// Detail is a one-line human reason when something needs attention; empty
+	// when there is nothing to report. It can be non-empty while Healthy() is
+	// true: dropped repo overrides leave commands checked but still need fixing.
 	Detail string `json:"detail,omitempty"`
 }
 
@@ -79,24 +90,53 @@ func detectGuardHealth(cwd, pluginRoot string, pluginOK bool) GuardHealth {
 		}
 	}
 
-	if reg, err := guard.Load(cwd); err != nil {
-		// The raw error can name a per-repo path, and the action a human takes is
-		// the same whatever the parse failure was: `abcd guard check` prints it.
-		reasons = append(reasons, guardRegistryUnloadableReason)
-	} else {
-		h.RegistryLoadable = true
-		h.Disabled = reg.Disabled
-		h.Entries = len(reg.Entries)
+	reg, err := guard.Load(cwd)
+	if reason := applyRegistryHealth(&h, reg, err); reason != "" {
+		reasons = append(reasons, reason)
 	}
 
 	h.Detail = strings.Join(reasons, "; ")
 	return h
 }
 
-// guardRegistryUnloadableReason is the one reason string for a registry that will
-// not load, shared by the health detail and the gap so a reader is never told two
-// different things about one fault.
-const guardRegistryUnloadableReason = guard.RepoRelPath + " does not load, so the guard declines to answer and commands run unchecked"
+// applyRegistryHealth folds one guard.Load result into the health report and
+// returns the human reason ("" when nothing needs saying). Since the fail-safe
+// load (iss-2608261551087492) the two registry faults are distinguishable from
+// the pair Load returns: an error ALONGSIDE a non-empty registry is the mild
+// state — the repo layer is broken, its overrides are dropped, and the bundled
+// hazards stay armed — while an empty registry is the only genuinely-unguarded
+// state, which the embedded defaults make unreachable in practice. Split out so
+// that unreachable state stays testable (iss-2608281222011114).
+func applyRegistryHealth(h *GuardHealth, reg guard.Registry, err error) string {
+	h.Entries = len(reg.Entries)
+	if h.Entries == 0 {
+		// No bundled layer to fall back to: the guard declines to answer.
+		return guardRegistryEmptyReason
+	}
+	h.RegistryLoadable = true
+	h.Disabled = reg.Disabled
+	if err != nil {
+		// The raw error can name a per-repo path, and the action a human takes is
+		// the same whatever the parse failure was: `abcd guard check` prints it.
+		h.RepoOverridesDropped = true
+		return guardRepoOverridesDroppedReason
+	}
+	return ""
+}
+
+// guardRepoOverridesDroppedReason is the one reason string for a repo guard file
+// that will not load, shared by the health detail and the gap so a reader is
+// never told two different things about one fault. It is deliberately NOT the
+// old "commands run unchecked" claim: the fail-safe load keeps the bundled
+// hazards armed, and a health check that overstates a fault in the dangerous
+// direction teaches readers to ignore it.
+const guardRepoOverridesDroppedReason = guard.RepoRelPath + " does not load; its overrides are dropped, but the bundled hazards remain armed"
+
+// guardRegistryEmptyReason names the only genuinely-unguarded registry state:
+// nothing loaded at all, bundled layer included. The embedded defaults make it
+// unreachable in practice, but a health check earns trust by stating what it
+// would say if the impossible happened.
+const guardRegistryEmptyReason = "no hazard registry loaded at all, so the guard declines to answer and commands run unchecked"
 
 // bootstrapRecovery names the committed script that re-provisions the plugin-root
 // binary, shared by the health reason and the gap for the same reason
@@ -137,20 +177,32 @@ func detectGuardGaps(h GuardHealth) []Gap {
 	return append(gaps, registryGap(h)...)
 }
 
-// registryGap is the repo-scoped half of the guard report. It is separate because
+// registryGap is the registry half of the guard report. It is separate because
 // it stays answerable whatever the plugin state is: the registry is read from the
-// repo, not from the plugin.
+// repo and the binary's own embed, not from the plugin install. The two faults it
+// can report are deliberately distinct: a broken repo layer is a repo-scoped
+// config fix over hazards that are still armed, while an empty registry — were it
+// ever reachable — would be the genuinely-unguarded state.
 func registryGap(h GuardHealth) []Gap {
-	if h.RegistryLoadable {
-		return nil
+	if !h.RegistryLoadable {
+		return []Gap{{
+			ID: "guard.registry_empty", Category: PluginOwned, Scope: "machine",
+			Title:    "no hazard registry at all",
+			Detail:   guardRegistryEmptyReason,
+			FixHint:  "Reinstall or update the abcd binary; the bundled hazard registry ships inside it.",
+			Required: false, Resolvable: false,
+		}}
 	}
-	return []Gap{{
-		ID: "guard.registry_unloadable", Category: ConfigChange, Scope: "repo",
-		Title:    "hazard registry does not load",
-		Detail:   guardRegistryUnloadableReason,
-		FixHint:  "Fix or remove " + guard.RepoRelPath + "; `abcd guard check --command ls` names the parse error.",
-		Required: false, Resolvable: false,
-	}}
+	if h.RepoOverridesDropped {
+		return []Gap{{
+			ID: "guard.registry_unloadable", Category: ConfigChange, Scope: "repo",
+			Title:    "repo hazard overrides do not load",
+			Detail:   guardRepoOverridesDroppedReason,
+			FixHint:  "Fix or remove " + guard.RepoRelPath + "; `abcd guard check --command ls` names the parse error.",
+			Required: false, Resolvable: false,
+		}}
+	}
+	return nil
 }
 
 // manifestArmsGuard reports whether the plugin's hook manifest declares a
