@@ -1558,8 +1558,8 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
-				fmt.Fprintf(w, "  intent: %s\n", res.Intent.Path)
-				fmt.Fprintf(w, "  spec:   %s\n", res.Spec.Path)
+				fmt.Fprintf(w, "  intent: %s\n", termsafe.Sanitize(res.Intent.Path))
+				fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
 			})
 		},
 	})
@@ -1623,7 +1623,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 				return &exitError{Code: 2, Msg: "abcd intent link: " + err.Error()}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd intent link — %s -> %s\n  intent: %s\n", res.Intent.ID, res.Spec.ID, res.Intent.Path)
+				fmt.Fprintf(w, "abcd intent link — %s -> %s\n  intent: %s\n", res.Intent.ID, res.Spec.ID, termsafe.Sanitize(res.Intent.Path))
 			})
 		},
 	})
@@ -1659,7 +1659,7 @@ func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON b
 	}
 	emitMintWarning(cmd, mintWarning)
 	return render(cmd.OutOrStdout(), asJSON, it, func(w io.Writer) {
-		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, it.Path)
+		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, termsafe.Sanitize(it.Path))
 	})
 }
 
@@ -1800,7 +1800,7 @@ func newSpecCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: abcd spec close — fidelity-review emit failed for %s (intent shipped anyway): %s\n", res.Intent.ID, res.AuditEmitError)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", res.Spec.ID, res.Spec.Path)
+				fmt.Fprintf(w, "abcd spec close — %s open -> closed\n  %s\n", res.Spec.ID, termsafe.Sanitize(res.Spec.Path))
 				if res.IntentMoved {
 					fmt.Fprintf(w, "  reconciled intent %s: %s -> %s\n", res.Intent.ID, res.From, res.To)
 				} else {
@@ -2277,7 +2277,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, res.Path)
+				fmt.Fprintf(w, "captured %s (%s) — %s\n", res.ID, res.Status, termsafe.Sanitize(res.Path))
 				// Redaction alters what the caller filed, so it is never silent: the
 				// text on disk differs from the text handed in, and only the caller
 				// can judge whether the redacted record still says what they meant.
@@ -2357,7 +2357,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, res.Path, resolvedByNote(res.ResolvedBy))
+				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path), resolvedByNote(res.ResolvedBy))
 			})
 		},
 	}
@@ -2430,7 +2430,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, res.Path)
+				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path))
 			})
 		},
 	})

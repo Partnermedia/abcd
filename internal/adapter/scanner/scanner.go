@@ -83,17 +83,17 @@ type Scanner struct {
 // binary/noise skip sets.
 var (
 	// defaultSkipExtensions are media/archive/artefact extensions treated as
-	// reviewed skips. It deliberately omits .svg: an SVG is XML text and can
-	// carry a secret in a comment or attribute (GHSA-5mmm-3whv-3rqp), so it is
-	// scanned like any other text file rather than waved through by extension.
-	// (.lock is retained as a pre-existing skip; a text lockfile is the same
-	// class as .svg and a candidate for the same treatment, tracked separately.)
+	// reviewed skips. It deliberately omits .svg AND .lock: both are text — an
+	// SVG is XML that can carry a secret in a comment or attribute, and a
+	// lockfile is the same class, carrying secrets in a pinned URL, a path, or a
+	// comment (GHSA-5mmm-3whv-3rqp; iss-2608270655490511). Each is scanned like
+	// any other text file rather than waved through by extension.
 	defaultSkipExtensions = []string{
 		".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".webp",
 		".mp3", ".mp4", ".mov", ".webm", ".wav",
 		".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z",
 		".pyc", ".pyo", ".so", ".dylib", ".dll", ".exe",
-		".sqlite", ".db", ".lock",
+		".sqlite", ".db",
 	}
 	defaultSkipFilenames = []string{".DS_Store", "Thumbs.db", ".gitignore"}
 	defaultSkipFragments = []string{".abcd/.work.local/logs/pii-scan/", ".abcd/.work.local/logs/audit-history/"}
@@ -625,7 +625,7 @@ func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Se
 		// leading \b so the raw scan above never fires. Scan bounded
 		// percent-decoded copies of the line and map every hit back to its raw
 		// byte span, so Redact masks the live token where it sits on disk.
-		findings = append(findings, decodedLineFindings(patterns, probes, junctions, line, lineno, file)...)
+		findings = append(findings, decodedLineFindings(patterns, probes, junctions, matchers, id2sev, line, lineno, file)...)
 	}
 	findings = dedupFindings(findings)
 	sealSnippets(findings)

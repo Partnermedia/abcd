@@ -53,6 +53,17 @@ var wrappers = map[string]bool{
 	// A multiplexer: its first operand is the applet, so stepping it leaves
 	// `sh -c …` in command position and the interpreter path takes over.
 	"busybox": true,
+
+	// zsh precommand modifiers: `noglob <cmd>` and `nocorrect <cmd>` run the
+	// following command with globbing / spelling-correction turned off, exactly
+	// like the exec/command/nohup family above. Each takes NO options of its own,
+	// so the token right after it is command position — no wrapperValueFlags or
+	// wrapperOperands entry is needed. Missing here, a Tier-1 blocker behind
+	// `noglob rm -rf *` never reached command position and evaded to a mere
+	// Tier-2 warn (iss-2608270655497992). zsh-specific, like the zsh `-c`
+	// payload scope.
+	"noglob":    true,
+	"nocorrect": true,
 }
 
 // wrapperValueFlags names, per wrapper, that wrapper's OWN flags which consume

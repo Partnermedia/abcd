@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // schema.go — the page-side schema of the memory store (07-memory.md §1–§3):
@@ -707,7 +709,12 @@ func RenderIndex(pages []PageInfo) string {
 			if summary == "" {
 				summary = "(no summary)"
 			}
-			lines = append(lines, fmt.Sprintf("- `%s` — %s | %s | %s", p.Filename, cls, domain, summary))
+			// Every interpolated field is page CONTENT (a filename tail, a derived
+			// domain/summary), masked through CleanProse so a control/bidi rune cannot
+			// replay when the committed index.md is `cat`/paged (iss-2608270655495573).
+			// The `- ` / backtick / ` | ` structure is the render's own and stays raw.
+			lines = append(lines, fmt.Sprintf("- `%s` — %s | %s | %s",
+				cleanPageField(p.Filename), cleanPageField(cls), cleanPageField(domain), cleanPageField(summary)))
 		}
 	}
 	return strings.Join(lines, "\n") + "\n"
@@ -723,7 +730,10 @@ func RenderContradictions(pages []PageInfo) string {
 		targets := append([]string(nil), p.Contradicts...)
 		sort.Strings(targets)
 		for _, t := range targets {
-			entries = append(entries, fmt.Sprintf("- `%s` contradicts `%s`", p.Filename, t))
+			// Both filenames are page CONTENT (frontmatter-supplied `contradicts:`
+			// targets, hostile-clone filename tails) — masked so the committed
+			// contradictions.md cannot replay an escape (iss-2608270655495573).
+			entries = append(entries, fmt.Sprintf("- `%s` contradicts `%s`", cleanPageField(p.Filename), cleanPageField(t)))
 		}
 	}
 	if len(entries) == 0 {
@@ -735,7 +745,20 @@ func RenderContradictions(pages []PageInfo) string {
 }
 
 func renderLogEvent(timestamp, classLabel, slug, summary string) string {
-	return fmt.Sprintf("\n## [%s] %s | %s — %s\n", timestamp, classLabel, slug, summary)
+	// classLabel/slug/summary are page CONTENT (class enum, filename-derived slug,
+	// body-derived summary); mask them so an appended log.md event cannot smuggle a
+	// terminal escape into the committed record (iss-2608270655495573). The stamp is
+	// caller-produced and the `## [...] ... | ... — ...` structure stays raw.
+	return fmt.Sprintf("\n## [%s] %s | %s — %s\n",
+		timestamp, cleanPageField(classLabel), cleanPageField(slug), cleanPageField(summary))
+}
+
+// cleanPageField masks one untrusted CONTENT field emitted into a committed
+// derived page (index.md, contradictions.md, log.md), mirroring the write-time
+// masking dumpString applies to frontmatter values. It is the single seam so the
+// three renderers cannot drift on how content is neutralised.
+func cleanPageField(s string) string {
+	return termsafe.CleanProse(s, maxPageValueBytes)
 }
 
 // ---------------------------------------------------------------------------

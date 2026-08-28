@@ -6,7 +6,20 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
+
+// maxPageValueBytes caps one rendered committed-page field — an index.md,
+// contradictions.md or log.md value (schema.go's cleanPageField). It is generous
+// — every real value (a filename, a domain, a summary, a slug, a class label)
+// sits far below it — and exists only so a hostile distiller cannot make one
+// rendered field unbounded. It is applied by CleanProse, which also masks the
+// terminal control/bidi/zero-width runes a `cat`/`git diff`/pager over the
+// committed derived page would otherwise replay (iss-2608270655495573). The
+// frontmatter scalar path (dumpString/doubleQuote) masks in place instead, to
+// keep its exact-round-trip escaping of \n \t \r intact.
+const maxPageValueBytes = 8192
 
 // yaml.go — a stdlib-only YAML frontmatter parser/producer scoped to the shapes
 // the memory store uses (mirrors scripts/abcd/_yaml.py). It is a reader/writer
@@ -993,6 +1006,19 @@ func dumpString(s string) string {
 	if strings.ContainsAny(s, "\n\r\t") {
 		return doubleQuote(s)
 	}
+	// A value carrying a terminal-display attack rune that is NOT one of the
+	// line-structure characters above — an ESC, a C1 control, a bidi override, a
+	// zero-width or DEL — reaches this point unquoted. dumpString would emit it raw
+	// and a `cat`/`git diff`/pager over the committed page would replay it (the
+	// write residue of #250/#262's read-path fix, iss-2608270655495573). Route it
+	// through doubleQuote, whose default arm masks exactly those runes via the
+	// canonical termsafe.Sanitize while the \n \t \r ESCAPING above is left intact —
+	// so the provenance/exact-round-trip invariant for the line-structure characters
+	// is untouched. termsafe.Sanitize(s) differs from s here only for an attack rune,
+	// since s already contains no \n \r \t.
+	if termsafe.Sanitize(s) != s {
+		return doubleQuote(s)
+	}
 	return s
 }
 
@@ -1012,7 +1038,13 @@ func doubleQuote(s string) string {
 		case '\r':
 			b.WriteString(`\r`)
 		default:
-			b.WriteRune(ch)
+			// Every other rune is emitted as-is EXCEPT the terminal-display attack
+			// runes (C0/DEL, C1, bidi overrides, zero-width), which are masked to a
+			// visible '?' via the canonical sanitiser rather than written raw into
+			// the committed page (iss-2608270655495573). \n \t \r never reach here —
+			// their explicit arms above escape them losslessly — so the exact
+			// round-trip of the line-structure characters is preserved.
+			b.WriteString(termsafe.Sanitize(string(ch)))
 		}
 	}
 	b.WriteByte('"')

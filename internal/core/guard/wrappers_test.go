@@ -467,4 +467,9 @@ var wrappersWithoutProbes = []string{
 	"busybox",
 	// A loader shim with no options of its own.
 	"proxychains",
+	// zsh precommand modifiers, not programs: `noglob`/`nocorrect` are reserved
+	// words the shell interprets, there is no binary to probe, and each takes no
+	// options of its own — the token after it is command position (like `command`
+	// and `exec` above). iss-2608270655497992.
+	"noglob", "nocorrect",
 }
