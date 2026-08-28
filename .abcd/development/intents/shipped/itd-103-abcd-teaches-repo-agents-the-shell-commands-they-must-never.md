@@ -15,7 +15,7 @@ related_adrs: [adr-42]
 
 ## Press Release
 
-> _Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._
+> **abcd teaches repository agents which shell commands are dangerous — and blocks them at the moment one is about to run.** abcd ships a hazard registry in which each entry pairs a dangerous command pattern with its severity, its safe successor, and a plain-language reason. One registry drives two planes. Before shell-heavy work the rules loader injects the matching safety rules, so the agent learns the safe form up front; at execution time a deterministic guard — a core verb any harness hook can call — refuses a matching command and answers with the safe successor, so the block itself is the lesson. A host without hook support still gets the teaching plane; a host with hooks gets both, wired in at install. The registry grows from reality: a facilitator who sees something alarming has exactly one move — capture it — and recurring captures promote patterns into the bundled defaults, each entry shipping with a fixture that proves its guard fires.
 
 ## Why This Matters
 
