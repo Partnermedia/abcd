@@ -8,8 +8,8 @@ import (
 )
 
 // InheritedReport is the private layer a LINKED git worktree inherits from its
-// primary checkout: which checkout it came from, and that checkout's private layer
-// exactly as ListPrivate reads it there.
+// primary checkout: that checkout's private layer exactly as ListPrivate reads it
+// there.
 //
 // It exists because the local-ephemeral tier is PER-WORKTREE and gitignored, so a
 // checkout made with `git worktree add` starts with no private store at all. The
@@ -17,12 +17,21 @@ import (
 // worktree (itd-150); a status surface that did not report the same layer would
 // call a worktree unprotected while every commit made in it is being checked, which
 // is the one thing a board about a guard must never do.
+//
+// It carries NO absolute path, and that is the point. A checkout's directory name
+// is very often the private name its own store bans — a project codename is the
+// commonest entry there is — and this layer's whole contract is that no pattern
+// value reaches output. The report is the datum that crosses to a front door, and
+// every front door writes it somewhere durable: stdout, an agent transcript, a CI
+// log, a redirected `--json` file. So the location the reader needs is said in
+// words ("the primary checkout's <store path>"), exactly as the committed shell
+// guard says it; the resolved root stays inside PrimaryWorktreeRoot's caller, where
+// it is used to read the store and nothing else. Withholding the field is a
+// stronger restraint than redacting it: RedactHome only rewrites a `$HOME` prefix
+// and leaves the directory name — the banned string — standing.
 type InheritedReport struct {
-	// PrimaryRoot is the primary working tree's absolute root — the remedy's
-	// location. An inherited entry is not in the store this checkout carries, so its
-	// key alone reads as a phantom without it.
-	PrimaryRoot string `json:"primary_root"`
-	// Private is the primary checkout's private layer, read there.
+	// Private is the primary checkout's private layer, read there. Its Path is
+	// repo-relative, so it names the store's location without naming the checkout.
 	Private PrivateReport `json:"private"`
 }
 
@@ -141,5 +150,5 @@ func InheritedPrivate(repoRoot string) (*InheritedReport, error) {
 		// every status render in every worktree, which teaches a reader to skip them.
 		return nil, nil
 	}
-	return &InheritedReport{PrimaryRoot: primary, Private: rep}, nil
+	return &InheritedReport{Private: rep}, nil
 }

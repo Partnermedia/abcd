@@ -118,8 +118,11 @@ func TestInheritedPrivateReportsThePrimaryStore(t *testing.T) {
 	if len(inh.Private.Entries) != 1 || inh.Private.Entries[0].Key != "widget-partner" {
 		t.Errorf("inherited entries = %+v, want the primary's one key", inh.Private.Entries)
 	}
-	if resolve(t, inh.PrimaryRoot) != resolve(t, primary) {
-		t.Errorf("PrimaryRoot = %q, want %q", inh.PrimaryRoot, primary)
+	// The REPORT names no checkout: the resolution is pinned on PrimaryWorktreeRoot
+	// above, and the path is deliberately not carried across to a front door (a
+	// checkout's directory name is very often a name its own store bans).
+	if got, ok := PrimaryWorktreeRoot(linked); !ok || resolve(t, got) != resolve(t, primary) {
+		t.Errorf("PrimaryWorktreeRoot = %q (ok=%v), want %q", got, ok, primary)
 	}
 
 	// A standalone checkout inherits nothing, whatever its own store holds.
