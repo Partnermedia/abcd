@@ -334,9 +334,18 @@ func externalSourceHashes(source map[string]any) []string {
 		}
 		return out
 	}
-	if isExternalClass(source["class"]) {
-		if sh, ok := source["source_hash"].(string); ok && sh != "" {
-			out = append(out, sh)
+	// Non-`sources` shape: a scalar `class` and/or a plural `classes` list, with a
+	// single top-level source_hash. This read only the scalar `class`, so a page
+	// declaring `classes: [external_pdf]` dropped its source_hash out of coverage
+	// accounting even as the lint's derivedClasses counted the external class — the
+	// coverage sibling of the plural-classes licence gap (iss-2608270908341877).
+	// Read the class union the way SourceClasses/derivedClasses do.
+	for _, cls := range SourceClasses(source) {
+		if isExternalClass(cls) {
+			if sh, ok := source["source_hash"].(string); ok && sh != "" {
+				out = append(out, sh)
+			}
+			break
 		}
 	}
 	return out
