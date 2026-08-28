@@ -1,8 +1,8 @@
 ---
 id: itd-152
 slug: autonomous-cloud-runs-in-sibling-repos-leaked-harness-attrib
-spec_id: null
-kind: null
+spec_id: spc-45
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,11 @@ Graduated from `iss-178`: Autonomous cloud runs in sibling repos leaked harness 
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** an outbound PR body that carries a harness-appended attribution footer, **when** the scanner evaluates the artefact before it is posted, **then** the footer is caught and stripped so the posted text carries the repo's `Assisted-by:`-only attribution.
+- **Given** an outbound issue comment containing a live session URL, **when** the scanner evaluates it, **then** the session URL is caught, whether the model authored it or the harness appended it.
+- **Given** an outbound artefact whose text is already clean, **when** the scanner evaluates it, **then** it passes unchanged with no finding.
+- **Given** the shared privacy pattern set, **when** it is applied by `abcd audit` and `docs-lint`, **then** the session-URL and harness-footer patterns are flagged in any committed or posted text, not only in freshly created PR bodies.
+- **Given** an autonomous routine prompt assembled for a managed repo, **when** the prompt is composed, **then** it carries the policy that bans session URLs and harness footers in public text and mandates a post-create re-read-and-strip of every PR, issue and comment the loop creates.
 
 ## Open Questions
 

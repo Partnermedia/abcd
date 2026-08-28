@@ -1,8 +1,8 @@
 ---
 id: itd-157
 slug: by-links-layout-publishes-overlapping-positions
-spec_id: null
-kind: null
+spec_id: spc-50
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,10 @@ Graduated from `iss-2608231350127745`: The by-links arrangement's non-settling h
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** the by-links arrangement produces node positions that overlap after its spring settle, **when** the post-settle collision-resolution pass runs, **then** the published layout separates the overlapping nodes and reports zero overlaps.
+- **Given** the overlap gate, **when** it evaluates a rendered chart, **then** it measures the by-links layout, not only the by-date coil.
+- **Given** a by-links layout that still contains overlapping positions, **when** the overlap gate runs, **then** it flags the by-links overlap as a red result.
+- **Given** the by-date arrangement, which already comes to rest, **when** the overlap gate runs, **then** it continues to pass.
 
 ## Open Questions
 

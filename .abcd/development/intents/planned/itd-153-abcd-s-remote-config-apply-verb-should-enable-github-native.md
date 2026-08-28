@@ -1,8 +1,8 @@
 ---
 id: itd-153
 slug: abcd-s-remote-config-apply-verb-should-enable-github-native
-spec_id: null
-kind: null
+spec_id: spc-46
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,10 @@ Graduated from `iss-2608270636272755`: abcd's remote-config apply verb should en
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** a managed repo whose GitHub native secret scanning and secret-scanning push protection are both disabled, **when** the remote config-apply verb runs with no opt-out, **then** both are enabled, and secret scanning is enabled before push protection because push protection requires it first.
+- **Given** a managed repo whose config declares an opt-out for native secret scanning, **when** config-apply runs, **then** the toggles are left as they are and neither is enabled.
+- **Given** a managed repo where both toggles are already enabled, **when** config-apply runs, **then** the verb is idempotent: it reports no change, makes no API write that alters state, and exits cleanly.
+- **Given** config-apply has enabled the toggles, **when** the desired state is recorded, **then** it is mirrored in the repo-settings.json sibling so a later verify reads the same intended state.
 
 ## Open Questions
 

@@ -1,8 +1,8 @@
 ---
 id: itd-160
 slug: dangling-supersedes-and-spec-targets-nothing-checks-them
-spec_id: null
-kind: null
+spec_id: spc-52
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,10 @@ Graduated from `iss-2608220150157498`: Eight typed cross-references point at tar
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** a record that introduces a new `supersedes` reference naming a record absent from the tree, **when** the site-baseline reference detector runs, **then** it fails as a red gate.
+- **Given** a record whose `spec_id` names a `spc-N` that has no file, **when** the reference detector runs, **then** it fails as a red gate.
+- **Given** the existing backlog of dangling supersedes and spec-target references, **when** it is seeded into `.abcd/site-baseline.json`, **then** those references are baselined and do not newly fail the gate.
+- **Given** a dangling reference that has been baselined, **when** its target is later added to the tree, **then** the detector still passes and the reference no longer counts as dangling.
 
 ## Open Questions
 

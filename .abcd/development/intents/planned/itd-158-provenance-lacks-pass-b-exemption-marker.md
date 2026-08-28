@@ -1,8 +1,8 @@
 ---
 id: itd-158
 slug: provenance-lacks-pass-b-exemption-marker
-spec_id: null
-kind: null
+spec_id: spc-51
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,10 @@ Graduated from `iss-136`: itd-88's fidelity gap audit found a missing press-rele
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** a lifeboat package in which Pass B is exempt, **when** its `_provenance.json` is written, **then** the Provenance record carries an explicit Pass-B exemption marker rather than a silent gap.
+- **Given** a Provenance record that carries the exemption marker, **when** the consumer reads it, **then** it recognises the record as exempt rather than treating it as an unmarked gap.
+- **Given** a Provenance record that carries no exemption marker, **when** the consumer reads it, **then** it is treated exactly as before, as an unexempt record.
+- **Given** the Provenance struct in the lifeboat package, **when** it is marshalled, **then** the exemption field is present, closing the promised-but-unimplemented claim recorded in itd-88's Audit Notes.
 
 ## Open Questions
 

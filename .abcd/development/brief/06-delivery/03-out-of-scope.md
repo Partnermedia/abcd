@@ -94,21 +94,9 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-146` — abcd's help renders in labelled command groups, gated by a group field in the surface snapshot and an ungrouped-verb test (the reframed survivor of the verb-taxonomy ideate verdict; no verb renamed, moved or hidden)
 - `itd-147` — The brief's surface chapters carry a generated shape block derived from the command tree, so flags, sub-verbs, exit codes and counts cannot drift while the prose keeps saying why (filed from the 0.6.2 release gate's 147-finding crosscheck; the CLI reference, generated and drift-tested, returned zero the same day)
 - `itd-149` — abcd handles inbound security advisories and issues, and cuts the release, for every managed repo (the 2026-08-27 pilot's loop automated; findings F-A…F-W are the acceptance-criteria source, F-U and F-Q load-bearing; filed after the itd-84 SPLIT, awaiting the planning interview)
-- `itd-150` — isolated agent worktrees carry the private name-guard, so a per-worktree checkout cannot commit past the banlist a main checkout enforces (graduated from iss-370)
-- `itd-151` — the agent-prompt trust contract (itd-5) is enforced by a detector, so a prompt reading attacker-influenceable input without its declared handling fails a gate rather than passing silently (graduated from iss-278)
-- `itd-152` — autonomous runs keep harness attribution and session identifiers out of public artefacts, closing the sibling-repo leak of internal footers and URLs (graduated from iss-178)
-- `itd-153` — abcd's remote config-apply verb enables the platform's native secret-scanning and push-protection by default for a managed repo (graduated from iss-2608270636272755)
 - `itd-163` — Reference-closure and acknowledgements-mirror gate: every citation resolves to the CSL references, the references and acknowledgements mirror both ways, and a committed influence registry backs the Inspirations list (supersedes itd-145; filed from the 2026-08-28 attribution review with the backfill issue iss-2608280824478819)
 - `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
-- `itd-154` — fresh-machine plugin provisioning is reliable: a plugin-first install on a Go-less, cloud-synced checkout provisions a working binary and the SessionStart chain, or fails loudly (graduated from iss-253)
-- `itd-155` — the secret scanner uses a galloping/exponential-doubling match probe in place of the fixed adjacency window, so a match past the window is not silently truncated (graduated from iss-229)
-- `itd-156` — the shell guard expands brace lists before matching, so `{--force,}` cannot smuggle a Tier-1 blocker past tokenisation (graduated from iss-2608221457227161)
-- `itd-157` — the site's by-links layout settles without overlapping positions, measured by a collision gate that spans both layouts (graduated from iss-2608231350127745)
-- `itd-158` — provenance carries a Pass-B exemption marker so an exempt record is recognised rather than silently treated as unmarked (graduated from iss-136)
 - `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
-- `itd-160` — a detector refuses a dangling supersedes/spec target so a record cannot cite a record that does not exist (graduated from iss-2608220150157498)
-- `itd-161` — record-lint sees a decision-shaped document filed outside the record stores, closing the general form of the outside-store blind spot (graduated from iss-2608230752354926)
-- `itd-162` — the prepare-this-repo flow is self-contained: its templates ride the record or binary rather than a machine-local path (graduated from iss-87)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief
