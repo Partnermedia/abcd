@@ -8,6 +8,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // knownFields is the additionalProperties:false allow-list from
@@ -171,12 +172,32 @@ func validateInvariants(fm map[string]any, status State, path string) error {
 		return fmt.Errorf("%w: id %q does not match ^iss-[0-9]+$", ErrInvariantViolation, id)
 	}
 	name := filepath.Base(path)
-	m := reFilenameID.FindStringSubmatch(name)
-	if m == nil {
+	fnID, fnSlug, ok := recordid.SplitRecordFilename(issFamily, name)
+	if !ok {
 		return fmt.Errorf("%w: filename %q does not match iss-N[-slug].md", ErrInvariantViolation, name)
 	}
-	if m[1] != id {
-		return fmt.Errorf("%w: filename id %q does not match frontmatter id %q", ErrInvariantViolation, m[1], id)
+	if fnID != id {
+		return fmt.Errorf("%w: filename id %q does not match frontmatter id %q", ErrInvariantViolation, fnID, id)
+	}
+	// The slug is the other half of the same agreement, and it is checked the
+	// same way: exactly, not leniently. Capture derives the slug once (deriveSlug
+	// is where the 60-char cap is applied), normalises it once, and hands that one
+	// string to both writers — reservePath builds issID+"-"+slug+".md" while
+	// commitCapture stores the identical variable as fm["slug"]. The cap therefore
+	// lands BEFORE the fork, so a filename is never a truncated form of a longer
+	// field, and a prefix match would only license the drift this check exists to
+	// catch. A name with no slug segment at all likewise disagrees: the schema
+	// requires a non-empty slug, so "" is a value that names a different record.
+	//
+	// Without this, a record renamed by hand keeps a stale handle in its filename
+	// while its frontmatter says something else, and the readers that locate a
+	// record by name and the readers that trust the field part company in silence.
+	// record-lint's record_schema asks the SAME question of the committed corpus
+	// through the same splitter, so the drift is a red gate rather than a silent
+	// skip here.
+	slug, _ := fm["slug"].(string)
+	if fnSlug != slug {
+		return fmt.Errorf("%w: filename slug %q does not match frontmatter slug %q", ErrInvariantViolation, fnSlug, slug)
 	}
 
 	_, hasResolution := fm["resolution"]

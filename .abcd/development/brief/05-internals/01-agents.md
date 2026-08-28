@@ -8,7 +8,7 @@ The catalog below declares the **16-agent design roster** (not all are shipped y
 |---|---|---|---|---|
 | `flow-essence` | A | design target — Phase 6 | native spec store (newest-first) | `spec-essence.json` |
 | `decision-archaeologist` | A | design target — Phase 6 | ADRs, CLAUDE.md, git log | `decisions-timeline.json` |
-| `review-collator` | A | design target — Phase 6 | `.abcd/work/reviews/oracle-review-*` | `reviews-consolidated.json` |
+| `review-collator` | A | design target — Phase 6 | `.abcd/.work.local/logs/<verb>/<ts>/` (per-invocation oracle artefacts; the reviews charter excludes them from `work/reviews/`) | `reviews-consolidated.json` |
 | `code-rescuer` | A | design target — Phase 6 | codemap adapter (when wired) or spec-window file selection | `code-principles.json` |
 | `chat-distiller` | B | design target — Phase 6 | spine entry + time-windowed transcript subset (per call) | per-call: emits `rationale-fill`, `unrecorded-decision`, `pitfall` delta entries; aggregated across calls into `research/rationale-fills.json`, `research/unrecorded-decisions.json`, `research/pitfalls.json` (delta). Density measured on user-message denominator per Phase 0 Measurement Deviation; see `research/phase/0/transcript-sampling.md`. |
 | `principle-distiller` | C | **shipped** — `disembark principles` | `.abcd/memory/`, ADRs, conventions, `spec-essence.json` (spine), `code-principles.json`, `candidate-pitfalls.json` (from review-collator), Pass B distiller deltas | `principles.json` (domain-grouped, with four-source pitfall dedup by topic-hash) |

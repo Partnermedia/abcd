@@ -148,8 +148,9 @@ over the same bytes that are uploaded.
 ## Build
 
 ```bash
-make preflight   # the pre-push gate: lint-reviews, lint-issues, record-lint,
-                 # docs-lint and site-render, then build, vet, test and race
+make preflight   # the pre-push gate: lint-reviews, lint-issues, lint-decisions,
+                 # record-lint, docs-lint and site-render, then build, vet, test
+                 # and race
 go run ./cmd/abcd            # bare status board for the current directory
 go run ./cmd/abcd version    # print the version
 make build                   # cross-compile bin/abcd-<goos>-<arch>

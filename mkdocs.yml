@@ -7,6 +7,9 @@ site_url: https://abcdev.app
 repo_url: https://github.com/intentdriven/abcd
 repo_name: intentdriven/abcd
 docs_dir: docs
+exclude_docs: |
+  requirements.txt
+  .*
 
 theme:
   name: material

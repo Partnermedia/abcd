@@ -107,6 +107,13 @@ type recordStore struct {
 	buckets []string
 	// fileNumRe extracts the id number from a filename (submatch 1).
 	fileNumRe *regexp.Regexp
+	// fileFamily is the family prefix a filename in this store carries, spelled
+	// without its hyphen — the argument recordid.SplitRecordFilename takes. It is
+	// NOT always the store's prefix: an ADR filename is the bare zero-padded
+	// number (0022-<slug>.md), so its family is empty. Held as data rather than
+	// derived from prefix with a special case, because a store that spells its
+	// filenames differently is a property of the store.
+	fileFamily string
 	// filename describes the convention a finding message quotes.
 	filename string
 	// requiredFields are the frontmatter properties every record in this store
@@ -128,16 +135,16 @@ var recordStores = []recordStore{
 	// green (iss-2608270908344426). This is parity with the prose-handle stores,
 	// whose loaders (intent.Load) fail closed on a missing id: the id is a required
 	// property, and its absence must be a finding, not silent invisibility.
-	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md",
+	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, fileFamily: "", filename: "<NNNN>-<slug>.md",
 		requiredFields: []string{"id"}},
-	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, filename: "itd-<N>-<slug>.md"},
-	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, filename: "spc-<N>-<slug>.md"},
+	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, fileFamily: "itd", filename: "itd-<N>-<slug>.md"},
+	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, fileFamily: "spc", filename: "spc-<N>-<slug>.md"},
 	// The issue store's required properties come from the schema's ONE definition
 	// (core/issueschema), the same list the ledger reader validates against — a
 	// hand-copied list here would drift the moment the schema gains a field, and
 	// the drift would show up as a silently unread record, which is the defect
 	// this invariant exists to catch.
-	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, filename: "iss-<N>-<slug>.md",
+	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
 		requiredFields: issueschema.Required},
 }
 
@@ -177,8 +184,9 @@ type recordRef struct {
 func (h recordRef) String() string { return h.prefix + "-" + strconv.Itoa(h.num) }
 
 // checkRecordSchema implements the record_schema family. It reads each configured
-// store once and asserts four invariants across them: bucket coverage, filename ↔
-// id agreement, cross-reference resolution, and bidirectional supersession. A
+// store once and asserts five invariants across them: bucket coverage, filename ↔
+// id agreement, filename ↔ slug agreement, cross-reference resolution, and
+// bidirectional supersession. A
 // store that is not configured, or whose directory is absent, contributes nothing
 // and is not an error — an unpopulated repository is a state, not a fault.
 func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
@@ -248,6 +256,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 
 	for _, r := range records {
 		out = append(out, checkRecordFilename(r, cfg.Severity)...)
+		out = append(out, checkRecordFilenameSlug(r, cfg.Severity)...)
 		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
 		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
 
@@ -353,6 +362,68 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
 		Message: "filename claims id '" + want + "' but frontmatter declares '" + got +
 			"'; a " + r.noun() + " filename is " + r.store.filename,
+	}}
+}
+
+// checkRecordFilenameSlug asserts that a record's frontmatter slug agrees with
+// the slug its filename carries — the other half of the agreement
+// checkRecordFilename pins for the id. Both halves are one value the store wrote
+// twice, and a record renamed by hand keeps a stale handle in its name while its
+// field says something else: readers that locate a record by filename and readers
+// that trust the field then describe two different records, and neither says so.
+//
+// Until this landed the question was asked only by the LEDGER READER
+// (core/capture's validateInvariants), which means a drifted record passed
+// record-lint and every CI gate and then dropped to a Skipped line at read time —
+// invisible to `capture list`, `capture status` and every other surface. Turning
+// that silent skip into a red gate is why the check belongs in the structural
+// rule as well as in the reader, exactly as checkRecordRequiredFields does.
+//
+// The filename is split by recordid.SplitRecordFilename, the SAME call the reader
+// makes, so the gate and the reader cannot reach different verdicts on one record.
+// The comparison is exact, with no prefix tolerance: every store applies its slug
+// length cap while DERIVING the slug, before that one value forks into the
+// filename and the frontmatter, so a filename is never a truncated form of a
+// longer field and tolerating a prefix would license the drift this catches.
+//
+// Two cases are silent here, for different reasons. A record carrying no slug is
+// a different (and larger) schema question, owned by checkRecordRequiredFields
+// for the stores that declare the property — absence is not disagreement.
+//
+// A filename this splitter cannot read is silent too, and that one is a KNOWN
+// GAP, not a delegation. The store's own filename rule in scanRecordStores does
+// not cover it: that rule matches store.fileNumRe, whose issue pattern
+// (`^iss-(\d+).*\.md$`) accepts an ARBITRARY tail, so a non-kebab name like
+// iss-2-another_finding.md clears it, produces no id finding either (the id is
+// compared numerically), and is skipped here — while capture's own reader holds
+// it to the strict grammar. That divergence between the gate's filename grammar
+// and the reader's is recorded as iss-2608270908346617 and owns the fix; the
+// reader half of it (such a file reaching neither Issues nor Skipped) is closed,
+// so the ledger at least reports the name it cannot read. Tightening this rule's
+// filename grammar to match belongs on that record, because it changes what the
+// gate refuses across all four stores.
+func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
+	f := r.fields["slug"]
+	if isAbsentValue(f.value) {
+		return nil
+	}
+	_, fnSlug, ok := recordid.SplitRecordFilename(r.store.fileFamily, filepath.Base(r.rel))
+	if !ok {
+		return nil
+	}
+	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	if fnSlug == got {
+		return nil
+	}
+	line := f.line
+	if line == 0 {
+		line = 1
+	}
+	return []Finding{{
+		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
+		Message: "filename carries slug '" + fnSlug + "' but frontmatter declares '" + got +
+			"'; a " + r.noun() + " filename is " + r.store.filename +
+			", and the two spellings must be the same value",
 	}}
 }
 

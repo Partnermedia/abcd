@@ -45,8 +45,16 @@ func TestRecordSchemaFilenameGrammarMatchesRecordid(t *testing.T) {
 }
 
 // TestRecordSchemaFilenameGrammarAcceptsKebab is the control: a well-formed name
-// with a kebab slug (and the bare ordinal form) stays silent, so the tightened
-// grammar refuses only what capture refuses.
+// with a kebab slug stays silent, so the tightened grammar refuses only what
+// capture refuses. The bare-ordinal name (iss-6.md) is still grammatically a
+// record — the tightened filename grammar draws no "not a well-formed issue
+// filename" finding on it — but the issue schema requires a slug the filename
+// must carry, so the slug-agreement check (checkRecordFilenameSlug) reports its
+// empty filename slug against the frontmatter slug. That mirrors the capture
+// reader exactly: validateInvariants refuses the same record because "" is a
+// value that names a different record. The two capabilities compose — the
+// grammar accepts the bare ordinal, and the reader-mirroring slug check still
+// catches the disagreement — so lint refuses only what capture refuses.
 func TestRecordSchemaFilenameGrammarAcceptsKebab(t *testing.T) {
 	root := t.TempDir()
 	issues := "work/issues"
@@ -58,8 +66,18 @@ func TestRecordSchemaFilenameGrammarAcceptsKebab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := countRule(fs, ruleRecordSchema); n != 0 {
-		t.Fatalf("well-formed kebab and bare-ordinal names must stay clean, got %d: %+v", n, fs)
+	// The kebab name agrees on every count and must stay completely silent.
+	if findingWith(fs, filepath.Join(issues, "open", "iss-5-a-good-slug.md"), ruleRecordSchema, "") {
+		t.Fatalf("well-formed kebab name must stay clean: %+v", fs)
+	}
+	// The bare-ordinal name is grammatically a record: no malformed-filename finding.
+	if findingWith(fs, filepath.Join(issues, "open", "iss-6.md"), ruleRecordSchema, "not a well-formed issue filename") {
+		t.Fatalf("bare-ordinal name must clear the filename grammar: %+v", fs)
+	}
+	// But its empty filename slug disagrees with the required frontmatter slug, the
+	// same record the capture reader refuses — so slug-agreement reports it.
+	if !findingWith(fs, filepath.Join(issues, "open", "iss-6.md"), ruleRecordSchema, "must be the same value") {
+		t.Fatalf("bare-ordinal name with a frontmatter slug must trip slug-agreement, mirroring capture: %+v", fs)
 	}
 }
 
