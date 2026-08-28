@@ -2026,6 +2026,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 		},
 	})
 
+	ahoyCmd.AddCommand(newAhoyRemoteCommand(asJSON))
+
 	// identity-check — the iss-62 gate's canonical, testable entrypoint. Exits
 	// non-zero when the commit identity diverges from the committed pin, so a
 	// pre-commit hook (or CI) can fail closed. A match, or an un-pinned repo,
@@ -2053,6 +2055,114 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	})
 
 	return ahoyCmd
+}
+
+// newAhoyRemoteCommand builds `ahoy remote` — abcd's remote config surface for a
+// managed repo (itd-153). Bare invocation READS: it reports GitHub's native
+// secret-scanning toggles and what an apply would change, and contacts nothing
+// else. `apply` is the write, and it is the only thing in abcd that mutates state
+// outside this machine, so it is a verb a person types rather than a step any
+// other command performs.
+func newAhoyRemoteCommand(asJSON *bool) *cobra.Command {
+	remoteCmd := &cobra.Command{
+		Use:   "remote",
+		Short: "Report the managed repo's GitHub secret-scanning settings (read-only); apply enables them",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			res, err := ahoy.RemoteRead(cwd)
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				renderRemoteResult(w, "abcd ahoy remote", res)
+			})
+		},
+	}
+	var remoteYes bool
+	applyCmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Enable GitHub secret scanning and push protection on this managed repo, and mirror the desired state",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			// adr-44 / invariant 10: the remote write is CONFIRMED as well as
+			// invoked. An unanswered run declines, so a script that pipes nothing
+			// changes nothing; --yes is the explicit way to say yes in advance.
+			p := newPrompter(cmd)
+			if remoteYes {
+				p = alwaysConfirm{}
+			}
+			res, err := ahoy.RemoteApply(cwd, p)
+			if err != nil {
+				return err
+			}
+			if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				renderRemoteResult(w, "abcd ahoy remote apply", res)
+			}); rerr != nil {
+				return rerr
+			}
+			if res.Status == "refused" {
+				// A refusal exits non-zero. A remote write that did not happen must not
+				// look to a script exactly like one that did; the reason is on stdout
+				// above, where it is legible whether or not anyone reads stderr.
+				return &exitError{Code: 1, Msg: "abcd ahoy remote apply: refused (the reason is in the result's notes above)"}
+			}
+			return nil
+		},
+	}
+	applyCmd.Flags().BoolVar(&remoteYes, "yes", false, "confirm the remote change without being asked; without it an unanswered run declines and changes nothing")
+	remoteCmd.AddCommand(applyCmd)
+	return remoteCmd
+}
+
+// alwaysConfirm is the --yes answer to the remote apply's confirmation. It lives
+// in the front door rather than beside RefusingPrompter in the core, because a
+// core type that says yes to everything is a seam any future caller could reach
+// for by accident — and the one thing this confirmation guards is the only abcd
+// operation that changes state outside the machine.
+type alwaysConfirm struct{}
+
+func (alwaysConfirm) Confirm(string) bool                            { return true }
+func (alwaysConfirm) Prompt(_ string, _ []string, def string) string { return def }
+
+// renderRemoteResult prints one remote result. Every path is sanitised: the repo
+// name comes from a git remote and the notes carry a subprocess's own stderr, both
+// of which are input rather than abcd's own words.
+func renderRemoteResult(w io.Writer, verb string, res ahoy.RemoteResult) {
+	fmt.Fprintf(w, "%s — %s\n", verb, res.Status)
+	if res.Repo != "" {
+		fmt.Fprintf(w, "  repo:     %s\n", termsafe.Sanitize(res.Repo))
+	}
+	fmt.Fprintf(w, "  observed: secret scanning %s, push protection %s\n",
+		termsafe.Sanitize(remoteStatusWord(res.Observed.SecretScanning)),
+		termsafe.Sanitize(remoteStatusWord(res.Observed.PushProtection)))
+	for _, c := range res.Changes {
+		fmt.Fprintf(w, "  change:   %s\n", termsafe.Sanitize(c))
+	}
+	for _, p := range res.Writes {
+		fmt.Fprintf(w, "  wrote:    %s\n", termsafe.Sanitize(p))
+	}
+	// A refusal that showed up only as an unchanged toggle would read as a silent
+	// failure, so the reason is printed whatever the status.
+	for _, n := range res.Notes {
+		fmt.Fprintf(w, "  note:     %s\n", termsafe.Sanitize(n))
+	}
+}
+
+// remoteStatusWord words a toggle abcd could not read. "unknown" and "disabled"
+// need opposite responses, so they are never collapsed into one word.
+func remoteStatusWord(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	return s
 }
 
 // installOptionsFromFlags validates the install flags and builds InstallOptions.

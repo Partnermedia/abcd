@@ -125,6 +125,24 @@
       ]
     },
     {
+      "path": "abcd ahoy remote",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy remote apply",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "yes",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd ahoy uninstall",
       "hidden": false,
       "flags": [

@@ -1,15 +1,16 @@
 ---
 name: ahoy
 description: Detect and repair abcd's install/update state for the current repo — folder kind, plugin-root status, and outstanding gaps — by invoking the abcd binary. Bare invocation performs zero writes.
-argument-hint: "[install | uninstall | doctor | dry-run]"
+argument-hint: "[install | uninstall | doctor | dry-run | remote]"
 ---
 
 # `/abcd:ahoy` install/update detector
 
 Run abcd's install/update engine for the current repo and present the result.
-Bare invocation and the `doctor` and `dry-run` sub-verbs perform **zero writes**;
-`install` and `uninstall` are the two that change the repo, and each says so
-before it runs.
+Bare invocation and the `doctor`, `dry-run` and `remote` sub-verbs perform **zero
+writes**; `install`, `uninstall` and `remote apply` are the three that change
+something, and each says so before it runs — `remote apply` is the only one that
+changes state outside this machine, and it asks before it does.
 
 Read `$ARGUMENTS` for the sub-verb. No argument, or `status`, is the bare
 read-only detection pass below.
@@ -159,6 +160,53 @@ gap, including user-scope state the bare render leaves out. Writes nothing.
 Report the folder kind, the detection-gap count, and the audit-gap count, then
 the per-gap detail from the JSON. This is the sub-verb to reach for when the bare
 render says a repo is healthy and the user's experience says otherwise.
+
+## `remote` — the repo's GitHub security settings
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy remote --json
+```
+
+Reports GitHub's two native secret-scanning toggles on the repository this
+checkout's own origin remote names — `secret_scanning` and
+`secret_scanning_push_protection` — and the changes an apply would make. It
+writes nothing, on the remote or in the tree. A toggle it could not read is
+reported `unknown`, never `disabled`: the two need opposite responses.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" ahoy remote apply --json
+```
+
+**This writes, and it is the one abcd verb that changes state outside this
+machine.** It enables both toggles — secret scanning first, because GitHub
+refuses push protection on a repository whose secret scanning is off — and
+mirrors the desired state into `.abcd/work/rulesets/repo-settings.json`, so a
+later verify reads the same intent from the tree rather than from a web console.
+Push protection blocks a secret at push time, earlier than any CI scan, and
+secret scanning covers the default branch continuously; both are free on public
+repositories.
+
+Never run it unasked. Four gates stand before any change leaves the machine, and
+each refuses rather than guesses: the folder must be a repo abcd manages, the
+repository must be the one this checkout's own origin names (no other repository
+can be addressed, and a name that is not a plain GitHub name is refused before it
+reaches an API path), the repo's config must not carry the opt-out, and the
+caller must CONFIRM the specific toggles named. A repo that sets
+`scan.native_secret_scanning` to `false` in `.abcd/config.json` is left exactly
+as it is and is not contacted at all.
+
+The confirmation is the fourth gate, not a formality: an unanswered run declines
+and changes nothing, so present the question and the repository it names before
+answering it. `--yes` says yes in advance, and it is the user's word to give —
+never pass it on their behalf.
+
+The call goes through the GitHub CLI (`gh`), so the write is made by the user's
+own authenticated identity and abcd never holds a token; if `gh` is absent the
+verb refuses and says so. It is idempotent — a repository already in the desired
+state takes no write, and a re-run rewrites nothing in the tree — and it stops
+at the first failed step rather than attempting one that cannot succeed. Relay
+`status`, the resolved `repo`, every `change`, and every `note`: a note is a
+thing abcd deliberately did not do, and the reason.
 
 ## `dry-run` — the canonical detection envelope
 

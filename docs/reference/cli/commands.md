@@ -76,6 +76,24 @@ Install or update abcd in this repo (idempotent)
       --yes                     approve every resolvable change category without prompting; excludes the optional git-identity pin, which needs an answered prompt (run without --yes, or answer every prompt with: yes | abcd ahoy install)
 ```
 
+#### `abcd ahoy remote`
+
+Report the managed repo's GitHub secret-scanning settings (read-only); apply enables them
+
+**Usage:** `abcd ahoy remote`
+
+##### `abcd ahoy remote apply`
+
+Enable GitHub secret scanning and push protection on this managed repo, and mirror the desired state
+
+**Usage:** `abcd ahoy remote apply [flags]`
+
+**Flags:**
+
+```
+      --yes   confirm the remote change without being asked; without it an unanswered run declines and changes nothing
+```
+
 #### `abcd ahoy uninstall`
 
 Remove the marker block, abcd's owned PATH copy, and its provenance record (leaves .abcd/ intact)
