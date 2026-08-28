@@ -45,16 +45,21 @@ const (
 	// decompressPercentile is the radius the dense middle of an island is
 	// normalised against before the square-root easing spreads it out.
 	decompressPercentile = 97.0
-	// islandScale is the largest island's radius; otherIslandScale the rest.
-	islandScale      = 0.72
-	otherIslandScale = 0.09
-	// ringRadius is where pairs and the smaller islands sit; rimRow0 and rimRow1
-	// are the two rows of records that carry no typed cross-reference at all.
-	ringRadius = 0.80
-	rimRow0    = 0.905
-	rimRow1    = 0.97
-	// pairOffset is half the gap between the two members of a pair.
-	pairOffset = 0.012
+	// islandDensity is how much of an island's disk its bubbles are allowed to
+	// fill. It is what sizes an island from what it holds rather than from a
+	// fraction of the stage fixed in advance, which is how the old arrangement
+	// came to draw sixty records inside a circle with room for six.
+	islandDensity = 0.7
+	// rimOuter is where the outermost row of records with no typed
+	// cross-reference sits.
+	rimOuter = 0.97
+	// settleRays is how many rays either side of its own the settling pass will
+	// try for a bubble whose own ray is congested, and settleSweep the widest
+	// step between two of them. Together they are what lets a crowded region
+	// spread sideways into the room beside it rather than push the picture off
+	// the stage.
+	settleRays  = 24
+	settleSweep = math.Pi / 6
 	// mentionWeight is what a body mention contributes to a bubble's size,
 	// relative to a typed link. A mention is evidence of relevance, not of a
 	// declared relationship, and the size difference says so.
@@ -112,8 +117,9 @@ type Arrangements struct {
 	// Months marks where each month begins along the coil.
 	Months []MonthMark `json:"months"`
 	// Overlaps is the packing's own sanity check: the number of bubble pairs
-	// that intersect. It must be zero, and it is published so a reader can see
-	// that it is rather than take the claim on trust.
+	// that intersect, summed over BOTH arrangements. It must be zero, and it is
+	// published so a reader can see that it is rather than take the claim on
+	// trust.
 	Overlaps int `json:"overlaps"`
 	// CoilRadius is the packed radius before normalisation to the unit disk.
 	CoilRadius float64 `json:"coil_radius"`
@@ -207,8 +213,41 @@ func ComputeArrangements(nodes []LayoutNode, typed, mentions [][2]int) Arrangeme
 
 	a.coil(nodes)
 	a.byLinks(nodes, typed)
+	a.Overlaps = a.overlapCount()
 	a.round()
 	return a
+}
+
+// overlapCount is the gate the build publishes and the CLI prints: the bubble
+// pairs that intersect in EITHER arrangement. It used to be the coil's count
+// alone, computed inside the coil packer, so a by-links arrangement could ship
+// with hundreds of overlapping bubbles and the gate would report zero.
+func (a *Arrangements) overlapCount() int {
+	return countOverlaps(a.Coil, a.Radius, a.CoilRadius) +
+		countOverlaps(a.Links, a.Radius, a.CoilRadius)
+}
+
+// countOverlaps is one arrangement's sanity count: the bubble pairs that
+// intersect. Both arrangements publish positions normalised to the unit disk
+// while radii are quoted in reference pixels, and the renderer reconciles the
+// two by drawing a point at point × coil_radius (site-src/record.js). The count
+// has to be taken in that same space: comparing a unit-disk distance against a
+// pixel radius reports an overlap for very nearly every pair and says nothing
+// about the picture a reader sees.
+func countOverlaps(points []Point, radii []float64, scale float64) int {
+	overlaps := 0
+	for i := range points {
+		if i >= len(radii) {
+			break
+		}
+		for j := i + 1; j < len(points) && j < len(radii); j++ {
+			d := math.Hypot(points[i].X-points[j].X, points[i].Y-points[j].Y) * scale
+			if d < radii[i]+radii[j]-0.01 {
+				overlaps++
+			}
+		}
+	}
+	return overlaps
 }
 
 // round publishes the arrangement at the precision the chart draws it, as the
@@ -287,34 +326,7 @@ func (a *Arrangements) coil(nodes []LayoutNode) {
 		}
 		phi += clear
 		ux, uy := math.Cos(phi), math.Sin(phi)
-		rho := math.Max(0, prho-inwardDip*need)
-
-		// Every placed bubble forbids an interval of rho along the ray. Walk
-		// them in order, jumping past each one the current rho falls inside,
-		// until a pass changes nothing — a later interval can push rho back into
-		// an earlier one, so a single pass is not enough.
-		type interval struct{ lo, hi float64 }
-		var forbidden []interval
-		for _, j := range placed {
-			rr := pr[j] + r + coilGap
-			proj := pos[j].X*ux + pos[j].Y*uy
-			perp2 := pos[j].X*pos[j].X + pos[j].Y*pos[j].Y - proj*proj
-			if perp2 >= rr*rr {
-				continue
-			}
-			half := math.Sqrt(math.Max(rr*rr-perp2, 0))
-			forbidden = append(forbidden, interval{proj - half, proj + half})
-		}
-		sort.SliceStable(forbidden, func(x, y int) bool { return forbidden[x].lo < forbidden[y].lo })
-		for changed := true; changed; {
-			changed = false
-			for _, iv := range forbidden {
-				if iv.lo <= rho && rho < iv.hi {
-					rho = iv.hi
-					changed = true
-				}
-			}
-		}
+		rho := clearOutward(math.Max(0, prho-inwardDip*need), ux, uy, r, placed, pos, pr)
 
 		pos[i] = Point{X: rho * ux, Y: rho * uy}
 		pr[i] = r
@@ -328,15 +340,6 @@ func (a *Arrangements) coil(nodes []LayoutNode) {
 		}
 	}
 	a.CoilRadius = rhoMax
-
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			d := math.Hypot(pos[i].X-pos[j].X, pos[i].Y-pos[j].Y)
-			if d < pr[i]+pr[j]-0.01 {
-				a.Overlaps++
-			}
-		}
-	}
 
 	seen := map[string]bool{}
 	for _, i := range a.Order {
@@ -359,10 +362,178 @@ func (a *Arrangements) coil(nodes []LayoutNode) {
 	}
 }
 
+// clearOutward walks a bubble outward along a ray from the centre until it
+// clears every bubble already at rest. Each resting bubble forbids an interval
+// of rho along the ray; the walk jumps past each interval the current rho falls
+// inside and repeats until a pass changes nothing, because a later interval can
+// push rho back into an earlier one. It is the coil's packing rule, and the
+// by-links arrangement settles under the same one.
+func clearOutward(rho, ux, uy, r float64, placed []int, pos []Point, pr []float64) float64 {
+	type interval struct{ lo, hi float64 }
+	var forbidden []interval
+	for _, j := range placed {
+		rr := pr[j] + r + coilGap
+		proj := pos[j].X*ux + pos[j].Y*uy
+		perp2 := pos[j].X*pos[j].X + pos[j].Y*pos[j].Y - proj*proj
+		if perp2 >= rr*rr {
+			continue
+		}
+		half := math.Sqrt(math.Max(rr*rr-perp2, 0))
+		forbidden = append(forbidden, interval{proj - half, proj + half})
+	}
+	sort.SliceStable(forbidden, func(x, y int) bool { return forbidden[x].lo < forbidden[y].lo })
+	for changed := true; changed; {
+		changed = false
+		for _, iv := range forbidden {
+			if iv.lo <= rho && rho < iv.hi {
+				rho = iv.hi
+				changed = true
+			}
+		}
+	}
+	return rho
+}
+
+// settle is the one packing rule the whole by-links arrangement comes to rest
+// under, and it is the coil's. Innermost first, each of the named bubbles is
+// walked outward along its own ray until it clears every bubble already at rest;
+// where its own ray is congested the walk is retried on the rays either side, so
+// a crowded region spreads sideways into the room beside it rather than pushing
+// the picture off the stage. Every bubble is cleared against every bubble
+// already placed, so what comes out has no overlapping pair left in it — the
+// invariant the old arrangement could only hope for, since it had no collision
+// pass at all.
+//
+// compact says whether a bubble may move toward the centre as well as away from
+// it. A region seeded tighter than its bubbles fit needs to, or it stays a third
+// wider than it has to be; an arrangement already laid out does not, or the rim
+// falls into the holes in the middle.
+func settle(pos []Point, radii []float64, members []int, compact bool) {
+	order := append([]int(nil), members...)
+	rho := make([]float64, len(pos))
+	for _, i := range order {
+		rho[i] = math.Hypot(pos[i].X, pos[i].Y)
+	}
+	sort.SliceStable(order, func(x, y int) bool { return rho[order[x]] < rho[order[y]] })
+
+	placed := make([]int, 0, len(order))
+	for _, i := range order {
+		theta := 0.0
+		if rho[i] > 0 {
+			theta = math.Atan2(pos[i].Y, pos[i].X)
+		}
+		// A ray a bubble's width away is the next distinct place to try; on a
+		// tight ring that is a small step and near the centre a large one, so it
+		// is capped.
+		step := settleSweep
+		if rho[i] > 0 {
+			step = math.Min(settleSweep, (2*radii[i]+coilGap)/rho[i])
+		}
+		from := rho[i]
+		if compact {
+			// Walking from the centre rather than from where the seed left it
+			// lets a bubble drop into a gap an earlier one left behind, which is
+			// what keeps a crowded region as dense as the coil instead of a third
+			// again as wide.
+			from = 0
+		}
+		best, cost := pos[i], math.Inf(1)
+		for k := 0; k <= settleRays; k++ {
+			for _, side := range [2]float64{1, -1} {
+				th := theta + side*float64(k)*step
+				ux, uy := math.Cos(th), math.Sin(th)
+				d := clearOutward(from, ux, uy, radii[i], placed, pos, radii)
+				p := Point{X: d * ux, Y: d * uy}
+				// Compacting, the ray that leaves the bubble nearest the centre
+				// wins, so the region closes over its own gaps; settling, the one
+				// that moves it least, so it stays where its region put it.
+				score := math.Hypot(p.X-pos[i].X, p.Y-pos[i].Y)
+				if compact {
+					score = d
+				}
+				if score < cost {
+					best, cost = p, score
+				}
+				if k == 0 {
+					// At k = 0 the ray and its mirror are the same ray.
+					break
+				}
+			}
+			// A bubble's width from what it was reaching for — the centre when
+			// compacting, its seeded place when settling — is near enough;
+			// sweeping further only costs time.
+			if cost <= radii[i] {
+				break
+			}
+		}
+		pos[i] = best
+		placed = append(placed, i)
+	}
+}
+
+// islandRadius is the radius an island's spring layout has to be drawn at for
+// its members to have room: the area its bubbles occupy, at the density the
+// arrangement packs an island to, spread over the unit disk the layout
+// produced. Sizing an island from what it holds is what stops a fixed fraction
+// of the stage being asked to hold whatever the record happens to put in it.
+func islandRadius(members []int, radii []float64) float64 {
+	area := 0.0
+	for _, i := range members {
+		area += bubbleArea(radii[i])
+	}
+	return math.Sqrt(area / (math.Pi * islandDensity))
+}
+
+// bubbleArea is the room one bubble takes up, its share of the breathing room
+// between neighbours included. It is what the core and the rim divide the stage
+// by.
+func bubbleArea(r float64) float64 {
+	w := r + coilGap/2
+	return math.Pi * w * w
+}
+
+// spreadOnCircle seats a row of things around a circle, each taking an arc in
+// proportion to its own width, and returns the angle of each. A row whose widths
+// sum to less than the circumference therefore ends up with more room between
+// its members than they need, never less.
+func spreadOnCircle(widths []float64) []float64 {
+	total := 0.0
+	for _, w := range widths {
+		total += w
+	}
+	angles := make([]float64, len(widths))
+	if total <= 0 {
+		return angles
+	}
+	run := 0.0
+	for q, w := range widths {
+		angles[q] = 2*math.Pi*(run+w/2)/total - math.Pi/2
+		run += w
+	}
+	return angles
+}
+
+// region is one group placed as a unit: an island or a pair, its members held at
+// offsets from its own centre.
+type region struct {
+	members []int
+	local   []Point
+	extent  float64
+	centre  Point
+}
+
 // byLinks arranges records by their typed links alone: connected work forms
 // islands, pairs ring the main island, and records with no typed
 // cross-reference sit on the rim in date order — so a bubble travels a short,
 // readable path when the viewer switches arrangement.
+//
+// Every region is sized from what it holds rather than from a fraction of the
+// stage fixed in advance, and the whole arrangement then comes to rest under the
+// coil's own packing rule. The old arrangement did neither: its islands were
+// settled by a spring layout with no collision pass at all, and its two rim rows
+// mapped each record's arc-width onto a circle whose circumference was smaller
+// than the sum of those widths, so it published overlapping positions by
+// construction and the chart never came to rest on it.
 func (a *Arrangements) byLinks(nodes []LayoutNode, typed [][2]int) {
 	n := len(nodes)
 	adj := make([][]int, n)
@@ -404,29 +575,99 @@ func (a *Arrangements) byLinks(nodes []LayoutNode, typed [][2]int) {
 	a.Pairs = len(pairs)
 	a.Unlinked = len(iso)
 
+	// Both arrangements are drawn at one scale: the renderer puts a published
+	// point at point × coil_radius (site-src/record.js), and quotes every radius
+	// in reference pixels. Packing in that space, against the radii as they are
+	// actually drawn, is what makes the arrangement's own overlap count mean
+	// anything.
+	world := a.CoilRadius
+	if world <= 0 {
+		world = 1
+	}
+	pos := make([]Point, n)
+
 	rng := rand.New(rand.NewSource(layoutSeed))
-	for j, c := range big {
-		cx, cy := 0.0, 0.0
-		if j > 0 {
-			ang := 2*math.Pi*float64(j-1)/math.Max(float64(len(big)-1), 1) - math.Pi/2 + 0.8
-			cx, cy = math.Cos(ang)*ringRadius, math.Sin(ang)*ringRadius
-		}
-		scale := islandScale
-		if j > 0 {
-			scale = otherIslandScale
-		}
+	regions := make([]region, 0, len(big)+len(pairs))
+	for _, c := range big {
 		p := springLayout(c, adj, deg, rng)
 		decompress(p)
+		scale := islandRadius(c, a.Radius)
+		ext := 0.0
 		for q, i := range c {
-			a.Links[i] = Point{X: cx + p[q].X*scale, Y: cy + p[q].Y*scale}
+			p[q] = Point{X: p[q].X * scale, Y: p[q].Y * scale}
+			ext = math.Max(ext, math.Hypot(p[q].X, p[q].Y)+a.Radius[i])
+		}
+		regions = append(regions, region{members: c, local: p, extent: ext})
+	}
+	for _, c := range pairs {
+		// A pair is two bubbles side by side, far enough apart to clear each
+		// other — which the fixed offset it used to be placed at was not.
+		half := (a.Radius[c[0]] + a.Radius[c[1]] + coilGap) / 2
+		regions = append(regions, region{
+			members: c,
+			local:   []Point{{X: -half}, {X: half}},
+			extent:  half + math.Max(a.Radius[c[0]], a.Radius[c[1]]),
+		})
+	}
+
+	// The largest island holds the middle; every other island and every pair
+	// takes an arc of a ring around it, as wide as the region itself is.
+	ring := regions
+	middle := 0.0
+	if len(big) > 0 {
+		ring = regions[1:]
+		middle = regions[0].extent
+	}
+	if len(ring) > 0 {
+		widths := make([]float64, len(ring))
+		widest := 0.0
+		total := 0.0
+		for k, g := range ring {
+			widths[k] = 2*g.extent + coilGap
+			total += widths[k]
+			widest = math.Max(widest, g.extent)
+		}
+		rr := math.Max(middle+widest+coilGap, total/(2*math.Pi))
+		for k, ang := range spreadOnCircle(widths) {
+			ring[k].centre = Point{X: math.Cos(ang) * rr, Y: math.Sin(ang) * rr}
 		}
 	}
 
-	for j, c := range pairs {
-		ang := 2*math.Pi*float64(j)/math.Max(float64(len(pairs)), 1) - math.Pi/2 + 0.2
-		cx, cy := math.Cos(ang)*ringRadius, math.Sin(ang)*ringRadius
-		a.Links[c[0]] = Point{X: cx - math.Sin(ang)*pairOffset, Y: cy + math.Cos(ang)*pairOffset}
-		a.Links[c[1]] = Point{X: cx + math.Sin(ang)*pairOffset, Y: cy - math.Cos(ang)*pairOffset}
+	core := make([]int, 0, n)
+	for _, g := range regions {
+		for q, i := range g.members {
+			pos[i] = Point{X: g.centre.X + g.local[q].X, Y: g.centre.Y + g.local[q].Y}
+			core = append(core, i)
+		}
+	}
+	// The core and the rim divide the stage between them in proportion to the
+	// bubbles each has to hold. A core seeded larger than its share is drawn back
+	// to it, so the rim is never left packing itself into whatever room the core
+	// happened to ask for — which is the shape of the fault the old arrangement
+	// had, with its rim pinned to two circles the core took no account of.
+	coreEdge, coreArea, rimArea := 0.0, 0.0, 0.0
+	for _, i := range core {
+		coreEdge = math.Max(coreEdge, math.Hypot(pos[i].X, pos[i].Y)+a.Radius[i])
+		coreArea += bubbleArea(a.Radius[i])
+	}
+	for _, i := range iso {
+		rimArea += bubbleArea(a.Radius[i])
+	}
+	if share := coreArea + rimArea; share > 0 {
+		budget := rimOuter * world * math.Sqrt(coreArea/share)
+		if coreEdge > budget {
+			for _, i := range core {
+				pos[i] = Point{X: pos[i].X * budget / coreEdge, Y: pos[i].Y * budget / coreEdge}
+			}
+		}
+	}
+
+	// The core comes to rest before the rim is laid, so the rim is laid outside
+	// what the core actually cost rather than outside what it asked for.
+	settle(pos, a.Radius, core, true)
+	coreOuter := 0.0
+	for _, i := range core {
+		coreOuter = math.Max(coreOuter, math.Hypot(pos[i].X, pos[i].Y)+a.Radius[i])
 	}
 
 	sort.SliceStable(iso, func(x, y int) bool {
@@ -442,29 +683,59 @@ func (a *Arrangements) byLinks(nodes []LayoutNode, typed [][2]int) {
 		}
 		return p.Num < q.Num
 	})
-	rows := [2][]int{}
-	for j, i := range iso {
-		rows[j%2] = append(rows[j%2], i)
+	// The rim: every record with no typed cross-reference at all, wound outward
+	// around the core in date order under the very rule the coil places by. The
+	// old rim mapped each record's arc-width onto one of two circles fixed in
+	// advance, whose circumference was smaller than the sum of those widths, so
+	// it was overpacked by construction; a band that winds is packed by what it
+	// actually holds.
+	placed := append([]int(nil), core...)
+	phi, prev := 0.0, -1
+	for _, i := range iso {
+		r := a.Radius[i]
+		// The core's own edge is the floor: a rim record clears every core bubble
+		// on the way past it, but it never winds back inside the core.
+		rho := coreOuter
+		if prev >= 0 {
+			prho := math.Hypot(pos[prev].X, pos[prev].Y)
+			need := a.Radius[prev] + r + coilGap
+			// The ray must clear the record placed before it.
+			clear := math.Pi / 2
+			if prho >= need {
+				clear = math.Asin(need / prho)
+			}
+			phi += clear
+			rho = math.Max(coreOuter, prho-inwardDip*need)
+		}
+		ux, uy := math.Cos(phi), math.Sin(phi)
+		rho = clearOutward(rho, ux, uy, r, placed, pos, a.Radius)
+		pos[i] = Point{X: rho * ux, Y: rho * uy}
+		placed = append(placed, i)
+		prev = i
 	}
-	for row, members := range rows {
-		rr := rimRow0
-		if row == 1 {
-			rr = rimRow1
+
+	// The arrangement is now as big as its own content needs and no bigger.
+	// Where the stage has room left over it is grown to fill it, which can never
+	// bring two bubbles closer together; where the record's links need more room
+	// than the coil's disk, the arrangement says so rather than publishing an
+	// overlap.
+	edge := 0.0
+	all := make([]int, n)
+	for i := range pos {
+		all[i] = i
+		edge = math.Max(edge, math.Hypot(pos[i].X, pos[i].Y)+a.Radius[i])
+	}
+	if grow := rimOuter * world / edge; edge > 0 && grow > 1 {
+		for i := range pos {
+			pos[i] = Point{X: pos[i].X * grow, Y: pos[i].Y * grow}
 		}
-		total := 0.0
-		for _, i := range members {
-			total += 2*a.Radius[i] + coilGap
-		}
-		if total == 0 {
-			continue
-		}
-		run := 0.0
-		for _, i := range members {
-			w := 2*a.Radius[i] + coilGap
-			ang := 2*math.Pi*(run+w/2)/total - math.Pi/2
-			a.Links[i] = Point{X: math.Cos(ang) * rr, Y: math.Sin(ang) * rr}
-			run += w
-		}
+	}
+
+	// The last word on the invariant: every bubble cleared against every other,
+	// so what is published has no overlapping pair left in it.
+	settle(pos, a.Radius, all, false)
+	for i := range pos {
+		a.Links[i] = Point{X: pos[i].X / world, Y: pos[i].Y / world}
 	}
 }
 

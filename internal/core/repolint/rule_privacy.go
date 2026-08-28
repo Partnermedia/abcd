@@ -25,9 +25,12 @@ const maxScanBytes = 4 << 20 // 4 MiB
 func MaxScanBytesForTest() int { return maxScanBytes }
 
 // privacyHygiene scans committed files for content that must never leave the
-// machine: absolute local home paths (/Users/<name>, /home/<name>, C:\Users\)
-// and network identifiers outside the reserved documentation ranges (addresses,
-// LAN hostnames, device names). A line carrying the waiver escape
+// machine: absolute local home paths (/Users/<name>, /home/<name>, C:\Users\),
+// network identifiers outside the reserved documentation ranges (addresses,
+// LAN hostnames, device names), and the harness-leak class — a live agent-session
+// URL and a tool's own attribution footer, which reached public artefacts in
+// sibling repositories and, model-authored, this one (iss-178). A line carrying
+// the waiver escape
 // `abcd-lint:allow` (or the legacy `abcd-audit:allow`) is exempt, so a
 // deliberately illustrative value can be kept.
 //
@@ -76,7 +79,8 @@ func (privacyHygiene) Meta() RuleMeta {
 		Fix: "replace the absolute local path with a repo-relative one, and any network identifier with a reserved documentation value " +
 			"(RFC 5737/3849/2606/7042, or a persona-derived device name); or add `abcd-lint:allow` on the line if it is deliberately illustrative",
 		PolicyInfo: "an absolute local path or a real network identifier in a committed file leaks a username, a machine, or a network layout; " +
-			"committed content uses repo-relative paths and reserved documentation identifiers",
+			"committed content uses repo-relative paths and reserved documentation identifiers. A live session URL or a tool's own " +
+			"attribution footer leaks the same way and overrides the repository's disclosure convention, so both are refused wherever they are committed",
 	}
 }
 
@@ -121,6 +125,19 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The harness-leak class joins the network set, and only that class: a live
+	// session URL and a tool's attribution footer are content that must not be
+	// committed, on the same footing as a leaked address (iss-178). The rest of
+	// DefaultPatterns — the API keys and PATs — deliberately stays out, because
+	// widening this rule to every secret shape is a different behavioural change
+	// with its own false-positive budget over deliberately redacted fixtures.
+	//
+	// These two come from the package-level set rather than the merged one: the
+	// severity is not something a repo has a reason to move (there is no reading
+	// under which either belongs in public text), and reading them from the
+	// canonical set means the degraded-config path below cannot silently drop
+	// them.
+	leakPatterns := scanner.HarnessLeakPatterns()
 	if degraded, reason := sc.Unavailable(); degraded {
 		out = append(out, Finding{
 			RuleID:   "privacy-hygiene",
@@ -133,6 +150,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 	} else {
 		patterns = sc.NetworkPatterns()
 	}
+	patterns = append(patterns, leakPatterns...)
 
 	for _, rel := range tracked {
 		data, ok, oversizeText, openErr := readTrackedFile(root, filepath.FromSlash(rel))
@@ -173,7 +191,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 			if strings.Contains(line, lintWaiver) || strings.Contains(line, auditWaiver) {
 				continue
 			}
-			msg, sev, leaked := privacyLeak(line, patterns)
+			msg, fix, sev, leaked := privacyLeak(line, patterns)
 			if !leaked {
 				continue
 			}
@@ -183,6 +201,7 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 				File:     rel,
 				Line:     i + 1,
 				Message:  msg,
+				Fix:      fix,
 			})
 		}
 	}
@@ -190,21 +209,26 @@ func (privacyHygiene) Eval(ctx Context) ([]Finding, error) {
 }
 
 // privacyLeak reports whether one line carries content that must never be
-// committed, the message naming the class, and the severity that class carries.
-// At most one finding per line is reported (the absolute-path class first),
-// matching the rule's v1 behaviour: the citation points a reader at the line,
-// and the line is what gets fixed.
+// committed, the message naming the class, the fix that class calls for, and the
+// severity it carries. At most one finding per line is reported (the
+// absolute-path class first), matching the rule's v1 behaviour: the citation
+// points a reader at the line, and the line is what gets fixed.
 //
 // The severity comes from the PATTERN, not from the rule: the canonical set
 // draws a deliberate line between addresses, which are range-checked and block,
 // and the two hostname shapes, which are heuristics and warn. Flattening
 // everything to error here would have made that documented split a fiction at
 // the one surface a reader meets it.
-func privacyLeak(line string, networkPatterns []scanner.Pattern) (string, Severity, bool) {
+//
+// The fix likewise comes from the pattern where it has one. The rule's own Fix
+// speaks about paths and addresses, which is no use to somebody looking at a
+// tool footer, and the harness class has an operational half — the post-create
+// re-read — that only its own policy states (scanner.OutboundPolicy).
+func privacyLeak(line string, patterns []scanner.Pattern) (msg, fix string, sev Severity, leaked bool) {
 	if hasAbsHomePath(line) {
-		return "committed file contains an absolute local path", SeverityError, true
+		return "committed file contains an absolute local path", "", SeverityError, true
 	}
-	for _, p := range networkPatterns {
+	for _, p := range patterns {
 		for _, loc := range p.Re.FindAllStringIndex(line, -1) {
 			matched := line[loc[0]:loc[1]]
 			if p.Skip != nil && p.Skip(matched) {
@@ -213,10 +237,13 @@ func privacyLeak(line string, networkPatterns []scanner.Pattern) (string, Severi
 			if p.SkipAt != nil && p.SkipAt(line, loc[0], loc[1]) {
 				continue
 			}
-			return "committed file contains a " + p.Label, lintSeverity(p.Severity), true
+			if scanner.IsHarnessLeakKind(p.Kind) {
+				return "committed file contains a " + p.Label, scanner.OutboundPolicy, lintSeverity(p.Severity), true
+			}
+			return "committed file contains a " + p.Label, "", lintSeverity(p.Severity), true
 		}
 	}
-	return "", SeverityError, false
+	return "", "", SeverityError, false
 }
 
 // lintSeverity maps a scanner severity onto the lint surface's two levels. A

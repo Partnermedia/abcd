@@ -1,0 +1,19 @@
+{
+  "managed": {
+    "security_and_analysis": {
+      "secret_scanning": {
+        "status": "enabled"
+      },
+      "secret_scanning_push_protection": {
+        "status": "enabled"
+      }
+    }
+  },
+  "observed": {
+    "delete_branch_on_merge": true,
+    "allow_merge_commit": true,
+    "allow_squash_merge": true,
+    "allow_rebase_merge": true
+  },
+  "repo": "intentdriven/abcd"
+}

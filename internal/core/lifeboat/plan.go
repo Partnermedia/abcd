@@ -77,6 +77,52 @@ type Provenance struct {
 	// re-deriving the families. It carries no timestamp, so a re-plan stays stable.
 	RecordManifestSHA256 string     `json:"record_manifest_sha256,omitempty"`
 	Omissions            []Omission `json:"omissions,omitempty"`
+	// PassBExemption declares that the transcript pass did not contribute to this
+	// package. Nil means it did, or that the package predates the field: an
+	// unmarked record marshals exactly as it always has, which is why the field
+	// is an omitempty pointer rather than a bool.
+	PassBExemption *PassBExemption `json:"pass_b_exemption,omitempty"`
+}
+
+// PassBExemption is the lifeboat's declaration that Pass B did not run for it.
+//
+// Pass B is the pass that mines chat transcripts for the rationale nobody wrote
+// down. The roadmap promises it "ships as a declared exemption in
+// _provenance.json" (phase-6-lifeboat.md), never a silent gap — and until it had
+// this field the promise had no implementing code, so a section Pass B would
+// have grounded arrived as a blank indistinguishable from one nothing could ever
+// ground. The declaration carries its reason rather than being a bare flag,
+// because what the roadmap promised is a DECLARED exemption: a reader of the
+// artefact has to be able to see why the pass is absent.
+type PassBExemption struct {
+	Reason string `json:"reason"`
+}
+
+// passBReason is what a package with no transcript source has to say for itself.
+const passBReason = "no transcript source was read for this package, so the rationale Pass B would have mined is absent rather than omitted"
+
+// transcriptTiers names the source tiers that carry the chat transcripts Pass B
+// mines. It is EMPTY, and that is the fact the exemption rests on: the probe's
+// tiers are git, conventions and abcd-native (Tiers()), none of them a
+// transcript store, so no lifeboat this build packs was grounded by a pass that
+// read one. Registering a transcript adapter means adding its tier here as well
+// as to Tiers() and tiersPresent — and if it is added here, the declaration
+// stops being written for a pack that tier grounded.
+var transcriptTiers = map[Tier]bool{}
+
+// passBExemption declares Pass B exempt for a package no transcript tier
+// grounded. The set is a parameter rather than read from the package var so the
+// branch that STOPS the declaration can be exercised before any adapter exists:
+// an exemption that could not stop would become a false claim in a durable
+// artefact the day Pass B ships, which is worse than the silent gap it was
+// written to close.
+func passBExemption(present []Tier, transcript map[Tier]bool) *PassBExemption {
+	for _, t := range present {
+		if transcript[t] {
+			return nil
+		}
+	}
+	return &PassBExemption{Reason: passBReason}
 }
 
 // planBuilder assembles a lifeboat's file set with three invariants the review
@@ -256,6 +302,7 @@ func Plan(repoRoot string, opts ...ProbeOption) (Lifeboat, error) {
 		ManifestSHA256:       ManifestSHA256(files),
 		RecordManifestSHA256: RecordManifestSHA256(files),
 		Omissions:            pb.omissions,
+		PassBExemption:       passBExemption(cov.TiersPresent, transcriptTiers),
 	}
 	pj, err := json.MarshalIndent(prov, "", "  ")
 	if err != nil {

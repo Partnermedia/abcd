@@ -205,6 +205,10 @@
       "enabled": true,
       "severity": "warn"
     },
+    "harness_leak": {
+      "enabled": true,
+      "severity": "blocker"
+    },
     "directory_coverage": {
       "enabled": true,
       "severity": "warn",
@@ -251,6 +255,16 @@
         "spc": ".abcd/development/specs",
         "iss": ".abcd/work/issues"
       }
+    },
+    "agent_contract": {
+      "enabled": true,
+      "severity": "blocker",
+      "agents_dir": "agents",
+      "changelog": "agents/CHANGELOG.md"
+    },
+    "cross_store_id_claim": {
+      "enabled": true,
+      "severity": "blocker"
     },
     "persona_registry": {
       "enabled": true,

@@ -11,6 +11,11 @@ details: "A markdown file anywhere under .abcd/development/ can title itself '# 
 suggested_fix: "Add a rule that flags a record-id claim made outside that id's store: a heading or status block asserting adr-/itd-/spc-/iss-N in a file the corresponding record store does not contain. The id-collision half is the sharp edge and the cheap win; the looser 'reads as a decision but is not one' half can follow. Weigh against the grandfathered undated Phase 0 notes so the rule does not fire on filenames alone."
 related_issues: ["iss-2608221457227162"]
 promoted_to: itd-161
+resolution: "record-lint's cross_store_id_claim rule flags a decision-shaped document filed outside the record stores that claims an already-taken id, weighing the claim against the record graph rather than against a filename (itd-161)"
+impact: internal
+resolved_by:
+  intent: "itd-161"
+  spec: "spc-53"
 ---
 
 record-lint cannot see a decision-shaped document filed outside the record stores

@@ -421,16 +421,28 @@ type patMatch struct {
 // window is generously larger than every bundled FIXED-LENGTH pattern's
 // real match (the longest, github_pat_finegrained, is 93 bytes) and than a
 // realistic DNS hostname (~253 bytes) — the class of match this function
-// exists to recover. An open-ended-quantifier pattern (jwt_shaped, ghp_,
-// etc.) recovered here can still exceed the window, in which case its span is
-// truncated to it and the recovered token's far tail stays raw — and for a
-// pattern whose earliest REQUIRED structural marker can itself fall past the
-// window (jwt_shaped needs two literal '.' separators, both of which a long
-// header pushes out of reach), the anchored probe finds no match at all, so
-// such a token can be missed ENTIRELY rather than merely truncated. That is
-// the standing cost of bounding the probe (iss-185), not a defect of the
-// junction search that feeds it; the alternative — letting one probe attempt
-// run to the end of the line — is the hang this constant exists to prevent.
+// exists to recover.
+//
+// It is the FIRST window, not a cap. A fixed cap made every match end that
+// reached it an artefact of the edge rather than of the text: a probe's own
+// trailing `\b` was satisfied by the artificial end of the slice, reporting a
+// token the full line does not contain (iss-189), and an open-ended token
+// longer than the window was recorded with an artificial end that put the next
+// probe and the next junction search mid-token, breaking the chain that unwinds
+// a run of abutting tokens (iss-190). gallopingFind keeps the bound where it
+// pays — a FAILING attempt never grows — and doubles the window only while a
+// match is still running into its edge, which costs a constant multiple of that
+// match's own length.
+//
+// Keeping the bound on a failing attempt keeps one standing cost with it, and
+// it is the half of iss-185's trade that survives: a pattern whose earliest
+// REQUIRED structural marker falls past this first window matches nothing at
+// all there, so such a token is still missed ENTIRELY rather than merely
+// truncated — jwt_shaped needs two literal '.' separators, and a long enough
+// header pushes both out of reach. Growing the window for a failure is what
+// cannot be afforded (it is the O(matches × remaining line length) hang this
+// constant exists to prevent), so that case is a known limit, not a defect of
+// the search that feeds the probe.
 const maxAdjacencyProbeWindow = 512
 
 // maxAdjacencyBacktrack bounds how far BACK from an open-ended match's
@@ -447,6 +459,79 @@ const maxAdjacencyProbeWindow = 512
 // back than that would need a crafted multi-kilobyte token, which no bundled
 // pattern can produce.
 const maxAdjacencyBacktrack = 512
+
+// matcher is the single regexp operation the adjacency probes need. Production
+// always passes a compiled *regexp.Regexp; taking the interface is what lets the
+// cost guard hand gallopingFind a counting stand-in and assert the doubling
+// schedule exactly rather than time it.
+type matcher interface {
+	FindStringIndex(s string) []int
+}
+
+// gallopingFind runs re against a window of line that begins at at, and returns
+// the leftmost match's offsets RELATIVE TO at (nil for no match). The window
+// ends maxAdjacencyProbeWindow past base and DOUBLES that extent only while the
+// answer is still an artefact of the window's own edge — the match ran right
+// into it — stopping the moment the answer can no longer change.
+//
+// base is the offset the extent is measured from. It is at for the anchored
+// adjacency probe; the junction search behind a match passes the match's end
+// instead, because that search walks its start offset backwards while its
+// forward reach has to stay measured from the end it is looking behind.
+//
+// Three stop conditions, and each one says the slice end is NOT an artefact:
+// the window already reaches the real end of the line (whatever it found is
+// what the full line holds); the match ended short of the edge (real content,
+// not the edge, ended it); or nothing matched inside a bounded window. That
+// last one is the cost bound the fixed window was introduced for and is
+// deliberately kept: a FAILING attempt is what two bundled patterns'
+// unbounded internal quantifiers make expensive, and growing the window for a
+// failure would restore exactly the O(matches × remaining line length) cost.
+// Growing it for a match that is genuinely still running does not: doubling
+// sums to under twice the final window, and the final window is under twice the
+// match, so one probe costs a small constant multiple of the match's OWN length
+// — the amortised class the top-level unbounded match already pays.
+func gallopingFind(re matcher, line string, at, base int, budget *int) []int {
+	for w := maxAdjacencyProbeWindow; ; w *= 2 {
+		hi := base + w
+		if hi > len(line) {
+			hi = len(line)
+		}
+		loc := re.FindStringIndex(line[at:hi])
+		if hi == len(line) || loc == nil || at+loc[1] < hi {
+			return loc
+		}
+		// Growing is what the shared budget pays for; when it is gone the probe
+		// keeps the fixed window it already has. See gallopBudget.
+		if *budget < hi-at {
+			return loc
+		}
+		*budget -= hi - at
+	}
+}
+
+// gallopBudget returns the total growth gallopingFind may spend on one line.
+//
+// Per probe the doubling is cheap — a constant multiple of the match's own
+// length — but the SUM across a line is not automatically bounded, and the
+// unbounded sum is a cost class, not a constant. Removing the fixed cap also
+// removed the cap on how long a probe-recovered match may be, and every
+// recovered match is then re-validated up to maxAdjacencyBacktrack times by
+// stolenJunctions at O(match length) each. A line crafted so that Θ(n) probe
+// positions each start a Θ(n)-long match therefore turns a linear scan
+// quadratic: measured at 1.3s / 5.0s / 19.1s over 14KB / 29KB / 59KB, where the
+// fixed window was 0.6s / 1.3s / 2.5s. That is a resource-exhaustion cliff on
+// input this scanner exists to read from strangers.
+//
+// The budget restores the class without giving the fix back. It is a multiple
+// of the line's own length, so a single long token — the shape the galloping
+// probe exists for — is captured whole with room to spare, while a line
+// engineered to grow the window at every junction exhausts it after a few and
+// reverts to exactly the fixed-window behaviour, which is bounded and was never
+// worse than correct-but-truncated.
+func gallopBudget(line string) int {
+	return 4*len(line) + 8*maxAdjacencyProbeWindow
+}
 
 // scanAllPatterns returns every match of every pattern in line, plus any
 // further token — of the SAME pattern or a DIFFERENT one — that immediately
@@ -471,6 +556,9 @@ const maxAdjacencyBacktrack = 512
 // something this function claims to close.
 func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *regexp.Regexp, line string) []patMatch {
 	var all []patMatch
+	// One growth budget for the whole line, shared by every probe and the
+	// junction search: see gallopBudget.
+	budget := gallopBudget(line)
 	seen := map[patMatch]bool{}
 	add := func(m patMatch) {
 		if seen[m] {
@@ -482,13 +570,8 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 	// probeAt records every pattern whose boundary-free variant matches
 	// starting exactly at byte offset at.
 	probeAt := func(at int) {
-		limit := at + maxAdjacencyProbeWindow
-		if limit > len(line) {
-			limit = len(line)
-		}
-		window := line[at:limit]
 		for j := range patterns {
-			m := probes[j].FindStringIndex(window)
+			m := gallopingFind(probes[j], line, at, at, &budget)
 			if m == nil || m[0] != 0 || m[1] == 0 {
 				continue
 			}
@@ -506,7 +589,7 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 	for qi := 0; qi < len(all); qi++ {
 		m := all[qi]
 		probeAt(m.end)
-		for _, cut := range stolenJunctions(probes[m.patIdx], junctions, line, m) {
+		for _, cut := range stolenJunctions(probes[m.patIdx], junctions, line, m, &budget) {
 			probeAt(cut)
 		}
 	}
@@ -531,22 +614,21 @@ func scanAllPatterns(patterns []Pattern, probes []*regexp.Regexp, junctions *reg
 // one test — that is how a fixed-length pattern is told from an open-ended one
 // without hand-annotating either, and a pattern added later inherits the
 // classification for free. The search window is capped at maxAdjacencyBacktrack
-// behind the end and maxAdjacencyProbeWindow past it, so the number of
-// candidates is capped too. And candidates come from the single COMBINED
+// behind the end, so the number of candidates is capped too — the FORWARD reach
+// past the end is the galloping one (gallopingFind), which grows only while a
+// candidate hit is still running into its own edge, so a junction whose hit is
+// longer than one fixed window is found rather than truncated away. And
+// candidates come from the single COMBINED
 // junction probe over that window, not from re-probing every byte in it with
 // every pattern — the difference between one window-bounded search per
 // candidate and a full window scan per pattern per match.
-func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) []int {
+func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch, budget *int) []int {
 	if m.end-m.start < 2 || !wholeMatch(probe, line[m.start:m.end-1]) {
 		return nil
 	}
 	lo := m.end - maxAdjacencyBacktrack
 	if lo < m.start+1 {
 		lo = m.start + 1
-	}
-	hi := m.end + maxAdjacencyProbeWindow
-	if hi > len(line) {
-		hi = len(line)
 	}
 	var cuts []int
 	// Walk the window one hit at a time, resuming one byte past each hit's
@@ -562,7 +644,7 @@ func stolenJunctions(probe, junctions *regexp.Regexp, line string, m patMatch) [
 	// window-bounded search per match — a constant, still independent of the
 	// line's length.
 	for off := lo; off < m.end; {
-		loc := junctions.FindStringIndex(line[off:hi])
+		loc := gallopingFind(junctions, line, off, m.end, budget)
 		if loc == nil {
 			break
 		}

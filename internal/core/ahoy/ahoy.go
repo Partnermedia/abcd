@@ -121,6 +121,15 @@ type InstallOptions struct {
 	// abcd NEVER escalates privileges: a BinDir it cannot write to is a loud
 	// error, never a silent skip and never a re-run under sudo.
 	BinDir string
+	// Attribution opts this repo into the committed prepare-commit-msg prompt that
+	// asks every commit to declare whether a tool assisted it. --attribution.
+	//
+	// Opt-IN, never a default: the hook stamps a convention onto every commit
+	// message, which is an opinion a repo adopts rather than one abcd may assume.
+	// The choice is PERSISTED (`attribution.hook` in config.json), so a later plain
+	// install keeps the hook instead of making the maintainer re-pass the flag to
+	// keep something they already chose.
+	Attribution bool
 	// AllowStaleBinary overrides the itd-111 staleness refusal: an install run
 	// through a binary that is stale against its source tip, or whose vintage
 	// cannot be determined, otherwise refuses before any write. The override is

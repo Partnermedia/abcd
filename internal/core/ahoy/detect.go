@@ -91,6 +91,9 @@ func Detect(cwd string) (DetectionResult, error) {
 		banlistHealth := detectBanlistHealth(abs)
 		res.Banlist = &banlistHealth
 		gaps = append(gaps, detectBanlistScaffold(banlistHealth)...)
+		// The attribution prompt is opt-in, so this reports nothing at all for a repo
+		// that never adopted it — and a hand-deleted hook for one that did.
+		gaps = append(gaps, detectAttributionHook(abs)...)
 	}
 
 	sortGaps(gaps)

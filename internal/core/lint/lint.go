@@ -196,6 +196,12 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 	citeParseOn := citeFootOn || citeURLOn || citePolicyOn || citeBaseOn
 	var citedRefs []citedRef
 
+	// The harness-leak class rides the same per-file walk. It is NOT a
+	// content-authoring rule: a session URL in a superseded record is as much a
+	// leak as one in a live page, so it does not consult contentExempt.
+	leakCfg, leakOn := cfg.Rules[ruleHarnessLeak]
+	leakOn = leakOn && leakCfg.Enabled
+
 	personaCfg, personaOn := cfg.Rules["persona_registry"]
 	personaOn = personaOn && personaCfg.Enabled
 	var personaRoster map[string]bool
@@ -276,6 +282,9 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			}
 			if brittleOn {
 				findings = append(findings, checkBrittleRefs(rel, lines, mask, brittleCfg)...)
+			}
+			if leakOn {
+				findings = append(findings, checkHarnessLeak(rel, lines, mask, leakCfg)...)
 			}
 
 			if citeParseOn {
@@ -378,6 +387,17 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, sr...)
 	}
 
+	// agent_contract walks the agent-prompt tree (agents/ — outside cfg.Roots and
+	// outside the docs-lint roots too, which is how the class went undetected),
+	// so it runs once here as well.
+	if acCfg, ok := cfg.Rules[ruleAgentContract]; ok && acCfg.Enabled {
+		ac, err := checkAgentContract(repoRoot, acCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ac...)
+	}
+
 	// context_status_free targets one work-tier file (CONTEXT.md) that lives
 	// outside cfg.Roots, so it too runs once, outside the per-root loop.
 	if ctxCfg, ok := cfg.Rules["context_status_free"]; ok && ctxCfg.Enabled {
@@ -426,6 +446,17 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, rs...)
+	}
+
+	// cross_store_id_claim is the other half of the same cross-store question: it
+	// walks the markdown OUTSIDE those stores, which is every tree at once, so it
+	// too runs once here.
+	if csCfg, ok := cfg.Rules[ruleCrossStoreIDClaim]; ok && csCfg.Enabled {
+		cs, err := checkCrossStoreIDClaim(repoRoot, cfg, csCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, cs...)
 	}
 
 	// index_drift reads documents that live beside the code they index (a package

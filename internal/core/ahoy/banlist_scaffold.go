@@ -203,11 +203,17 @@ const (
 	HookUnreadable HookState = "unreadable"
 )
 
-// classifyGuardHook reports what occupies rel. Identity comes from the marker line,
-// never from mere presence: a repo's own pre-commit hook is legitimate, and calling
-// it "the abcd guard" would mean nothing checks the banlist while the status board
-// says something does.
-func classifyGuardHook(root *os.Root, rel string) HookState {
+// classifyHook reports what occupies rel, judged against the marker line that
+// identifies a hook abcd wrote. Identity comes from that line, never from mere
+// presence: a repo's own hook at one of these paths is legitimate, and calling it
+// "abcd's" would mean nothing runs the check while the status board says something
+// does.
+//
+// It takes the marker as a parameter because abcd scaffolds hooks for two
+// unrelated conventions — the name guard and the attribution prompt — and a repo
+// may adopt either without the other. One classifier, two markers; a second copy of
+// this function is how the two would drift into judging containment differently.
+func classifyHook(root *os.Root, rel string, marker *regexp.Regexp) HookState {
 	fi, err := root.Lstat(rel)
 	switch {
 	case err != nil && os.IsNotExist(err):
@@ -225,10 +231,16 @@ func classifyGuardHook(root *os.Root, rel string) HookState {
 	if err != nil {
 		return HookUnreadable
 	}
-	if guardHookMarkerRe.Match(data) {
+	if marker.Match(data) {
 		return HookInstalled
 	}
 	return HookForeign
+}
+
+// classifyGuardHook is classifyHook against the name guard's marker — the form
+// every guard call site reads better as.
+func classifyGuardHook(root *os.Root, rel string) HookState {
+	return classifyHook(root, rel, guardHookMarkerRe)
 }
 
 // PublicFamilyState classifies the public layer's config for detection.

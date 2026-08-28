@@ -65,6 +65,7 @@ Install or update abcd in this repo (idempotent)
 ```
       --adopt                   adopt an unmanaged repo without prompting
       --allow-stale-binary      proceed even when the running binary is stale against its source tip or its vintage cannot be determined; the default is to refuse before any write and name the rebuild fix
+      --attribution             opt this repo into the committed prepare-commit-msg prompt asking every commit to declare whether a tool assisted it; the choice is recorded, so a later install without the flag keeps the hook
       --bin-dir string          directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges
       --dev                     track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary
       --docs-target string      marker target: claude_md | agents_md | both | skip
@@ -73,6 +74,24 @@ Install or update abcd in this repo (idempotent)
       --scan-deep string        enable deep scan: true | false
       --visibility string       repo visibility: private | public
       --yes                     approve every resolvable change category without prompting; excludes the optional git-identity pin, which needs an answered prompt (run without --yes, or answer every prompt with: yes | abcd ahoy install)
+```
+
+#### `abcd ahoy remote`
+
+Report the managed repo's GitHub secret-scanning settings (read-only); apply enables them
+
+**Usage:** `abcd ahoy remote`
+
+##### `abcd ahoy remote apply`
+
+Enable GitHub secret scanning and push protection on this managed repo, and mirror the desired state
+
+**Usage:** `abcd ahoy remote apply [flags]`
+
+**Flags:**
+
+```
+      --yes   confirm the remote change without being asked; without it an unanswered run declines and changes nothing
 ```
 
 #### `abcd ahoy uninstall`

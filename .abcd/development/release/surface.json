@@ -60,6 +60,13 @@
           "hidden": false
         },
         {
+          "name": "attribution",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "bin-dir",
           "shorthand": "",
           "type": "string",
@@ -108,6 +115,24 @@
           "required": false,
           "hidden": false
         },
+        {
+          "name": "yes",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "path": "abcd ahoy remote",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd ahoy remote apply",
+      "hidden": false,
+      "flags": [
         {
           "name": "yes",
           "shorthand": "",

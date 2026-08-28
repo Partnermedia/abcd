@@ -65,6 +65,13 @@ type AddPublicRequest struct {
 type Report struct {
 	Private PrivateReport `json:"private"`
 	Public  PublicReport  `json:"public"`
+	// Inherited is the private layer a LINKED git worktree inherits from its primary
+	// checkout, and nil everywhere else — so a standalone checkout's envelope is
+	// exactly what it always was. It is carried on the one read every status surface
+	// makes, rather than left for each to remember to ask: the guard enforces that
+	// layer in a worktree (itd-150), and a surface that forgot it would report a
+	// worktree unprotected while every commit made in it is checked.
+	Inherited *InheritedReport `json:"inherited,omitempty"`
 }
 
 // List reports both layers. It is the read-only status render's single call.
@@ -77,7 +84,11 @@ func List(repoRoot string) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	return Report{Private: priv, Public: pub}, nil
+	inherited, err := InheritedPrivate(repoRoot)
+	if err != nil {
+		return Report{}, err
+	}
+	return Report{Private: priv, Public: pub, Inherited: inherited}, nil
 }
 
 // publicPath resolves the docs-lint config's absolute path under repoRoot.

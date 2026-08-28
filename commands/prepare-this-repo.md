@@ -168,15 +168,34 @@ target's `.abcd/.work.local/scratch/` (create the directory via
    diff. abcd never rewrites a surface itself — adopting a proposal is always
    the maintainer's move.
 
-5. **Commit gates.** If the repo has no `.pre-commit-config.yaml`, offer the
-   secrets + absolute-path gate config (template at
-   `~/ABCDevelopment/.agents/templates/pre-commit-config.yaml`, if present);
-   activate with `pre-commit install`.
-6. **Attribution (opt-in only).** If the user says this repo requires AI
-   disclosure, install the `prepare-commit-msg` hook from
-   `~/ABCDevelopment/.agents/templates/` (if present) into `.githooks/`, set
-   `core.hooksPath`, and add the AI-attribution section to `AGENTS.md`.
-   Otherwise the workspace default is no attribution.
+5. **Commit gates.** Scaffold them from the binary — every hook it writes is
+   embedded in it, so the step applies the same artefacts on a fresh clone as on
+   the machine that wrote them:
+
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install
+   git config core.hooksPath .githooks
+   ```
+
+   That writes the committed private name guard (`.githooks/pre-commit` and its
+   `pre-merge-commit` half), the gitignored local banlist stub, and the
+   `.gitattributes` line pinning the hooks to LF. The second command is once per
+   clone: a committed hook is not a running hook until git is pointed at it.
+   Report the hooks as scaffolded but unarmed if the user declines that config
+   change — never silently.
+6. **Attribution (opt-in only).** If the user says this repo requires
+   AI disclosure, scaffold the prompt hook from the binary and add the
+   attribution section to `AGENTS.md`:
+
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/abcd" ahoy install --attribution
+   ```
+
+   That writes `.githooks/prepare-commit-msg`, which seeds a commented
+   disclosure prompt into every commit message an editor opens, and records the
+   opt-in so a later plain `ahoy install` keeps the hook. It never writes a
+   value: which tool assisted, and which version, is a fact only the committer
+   has. Otherwise the default is no attribution, and nothing is written.
 
 ### The working-conventions section
 
@@ -226,3 +245,8 @@ record. Commit only content that is about this repository.
   to the maintainer with the proposed diff.
 - Nothing from `private-names.txt` and no abcd-internal content appears in any
   committed or published artefact.
+- Every asset the adopt phase applied resolved from this record or from the
+  binary. A step that reaches for a path only one machine has does not fail —
+  it silently does nothing, and the adoption degrades against loud-staging, so
+  this file carries no home-relative path and the onboarding self-containment
+  check refuses one.

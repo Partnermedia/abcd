@@ -550,7 +550,9 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 		}
 		// A2's contract, held here because this test rewrites the same sentence:
 		// the transcript renders only the first line of a hook's stderr, so the
-		// success has to lead it.
+		// success has to lead it. itd-154 deliberately does NOT put a
+		// provisioning announcement ahead of it for that reason — nothing may
+		// take this line, from the success or from a refusal's cause.
 		if got := firstLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
 			t.Errorf("the success must still lead the first visible line; first line = %q", got)
 		}
