@@ -2153,3 +2153,12 @@ parallel-agent merge contention bites.
   itd-43's glossary reconcile, itd-24's core/epic entry, and the
   install-template eol pin. Recorded open: the unknown-property half of the
   ledger-visibility gap and itd-5's struck-tiebreak residue.
+
+- 2026-08-28 — Punctuation enforcement stays mechanical-only (adr-54): the
+  em-dash core shipped as the punctuation/em-dash-in-list-item banned token,
+  corpus evidence (0 TP, unclosable FP classes) rules the colon/semicolon
+  casing lints unbuildable under the warn-then-promote policy, and itd-141
+  is superseded at its planning interview. Same session: audience-by-
+  placement ratified (adr-53) with the Audience section landing in the
+  writing-style guide; both decisions rest on the 2026-08-28 docs-audience
+  research note.

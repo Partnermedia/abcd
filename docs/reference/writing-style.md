@@ -12,10 +12,11 @@ shipped machinery, never an aspiration:
 - **review**: Humans (and reviewing agents) check it. A rule stays labelled
   `review` until its lint ships, however firmly it is agreed.
 
-The colon and semicolon casing rules below are staged in the development
-record as `itd-141`; until that lint ships, those rules are `review`. The
-list-item em-dash rule is machine-enforced as a banned token, with the one
-residual case its line-based pattern cannot see noted in its row.
+The list-item em-dash rule is machine-enforced as a banned token. The colon
+and semicolon casing rules are `review` by nature — no machine check holds
+them without misfiring on legitimate prose, and
+[adr-54](https://github.com/intentdriven/abcd/blob/main/.abcd/development/decisions/adrs/0054-punctuation-enforcement-stays-mechanical-only.md)
+records the corpus evidence.
 
 A machine check is promoted, not born, blocking: a new rule enters as a
 `warn`, the corpus is fixed, and only a corpus-clean rule is promoted to
@@ -58,12 +59,9 @@ reference page documenting a `--color` flag spells the flag as the code does. <!
 | Rule | Enforcement |
 |---|---|
 | Em dashes are allowed in running prose. | n/a (permission, not a check) |
-| Em dashes are not used inside list items: A pivot in a list item takes a colon instead. | machine-enforced (`punctuation/em-dash-in-list-item`); an em dash on a list item's wrapped continuation line is the residual `review` case until the `itd-141` lint ships |
-| After a colon: A capital letter. | review (lint staged in `itd-141`) |
-| After a semicolon: lower case (the semicolon joins clauses of one sentence). | review (lint staged in `itd-141`) |
-
-The staged lints mask code spans and fenced blocks; a `--flag: value` example
-never trips a prose rule.
+| Em dashes are not used inside list items: A pivot in a list item takes a colon instead. | machine-enforced (`punctuation/em-dash-in-list-item`); an em dash on a list item's wrapped continuation line is outside the line-based pattern's sight and stays `review` (adr-54) |
+| After a colon: A capital letter. | review, permanently: a lowercase-by-design name (abcd, gofmt, macOS) legitimately follows a colon, and no machine check tells it from a violation (adr-54) |
+| After a semicolon: lower case (the semicolon joins clauses of one sentence). | review, permanently: proper nouns and citation reference lists legitimately open with a capital after a semicolon (adr-54) |
 
 ## Structure
 
