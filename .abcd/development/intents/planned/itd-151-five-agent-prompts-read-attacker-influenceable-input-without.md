@@ -1,8 +1,8 @@
 ---
 id: itd-151
 slug: five-agent-prompts-read-attacker-influenceable-input-without
-spec_id: null
-kind: null
+spec_id: spc-44
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,11 @@ Graduated from `iss-278`: Five agent prompts read attacker-influenceable input w
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** the record-lint configuration, **when** it runs, **then** it walks the `agents/` tree, which previously sat outside every lint root.
+- **Given** an agent prompt under `agents/` that reads attacker-influenceable input but lacks its itd-5 trust-contract frontmatter, **when** record-lint evaluates it, **then** the gate fails and names the missing frontmatter.
+- **Given** an untrusted-input agent that declares the itd-5 frontmatter but ships no injection-canary fixture, **when** the detector runs, **then** the gate fails and names the missing canary fixture.
+- **Given** an agent added or changed in a diff without a matching per-agent changelog entry, **when** record-lint runs over that diff, **then** the gate fails and names the missing changelog entry.
+- **Given** an agent that carries its itd-5 frontmatter, an injection-canary fixture, and a per-agent changelog entry, **when** record-lint runs, **then** the gate passes with no finding raised against that agent.
 
 ## Open Questions
 

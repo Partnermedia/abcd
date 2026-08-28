@@ -2171,3 +2171,24 @@ together (the script's header says why there is no escape hatch).
   research note.
 - 2026-08-27: `.abcd/work/attribution-rewrite-2026-08-06/` promoted to `.abcd/development/research/data/` (iss-2608271707587825) — the tables are historical and complete, durable-record shape; this supersedes the highlight-not-inventory adjudication for that path (intake.md's clearance stands unchanged).
 - 2026-08-28 — Transcript deep-secret coverage lands as an OPT-IN gitleaks adapter, off by default (iss-96). The native scanner stays the always-on default; a repo arms deeper coverage by dropping an enabled `.abcd/config/gitleaks.json`, whereupon `internal/adapter/gitleaks` shells out to a gitleaks binary (PATH or configured path) over the transcript and its findings AUGMENT native redaction through the same `scanner.Redact` discipline. This realises option (c) of the iss-96 grill (labelled+delimited+high-entropy reach the prefix-anchored native set misses) as the host-delegated/opt-in-adapter pattern (adr: LLM/CLI oracles are opt-in adapters), NOT an always-on entropy detector (option (a), rejected for its redaction false-positive cost on prose) and NOT a hard gitleaks dependency in the default build. Fail-closed, never a silent no-op: an armed-but-absent binary makes capture refuse the write with `gitleaks configured but not found`. Default-off invokes nothing — no lookup, no process, no cost — so the unopted path is byte-for-byte unchanged. iss-96's residue beyond (c)'s reach (bare no-keyname values, sub-entropy-floor tokens) stays open.
+- 2026-08-28 — Release-pipeline gates: two decisions land together. (a) The
+  semantic `receipt_gate` moves to the safe side of the tag (adr-52,
+  Alternative 1 accepted): its arming — content-commit resolution plus the
+  fail-closed `record-lint --release-gate` — now runs in release.yml's `verify`
+  job, alongside the deterministic gates, gated off the rehearsal path
+  (`github.event_name != 'workflow_dispatch'`) so a receipt-less rehearsal never
+  refuses. The `release` job keeps only provenance signing (re-derive + attest),
+  and the tag itself is untouched — only the gate moved (iss-2608231226347380).
+  Caveat recorded for a real-release run: auto-release.yml still mints the tag in
+  its `tag` job before it calls release.yml, so fully eliminating a consumed
+  version on the auto-release path also needs auto-release's `tag` gated on
+  verify — out of this change's scope, maintainer-verified separately. (b) The
+  reviewed content commit is now derived from the RECEIPTS DIRECTORY
+  (`record-lint --derive-content-sha`, reading `.abcd/work/reviews/<sha>/` of the
+  released tree) rather than `HEAD^2^`/`HEAD^` ancestry, because a batched
+  merge-queue push makes `github.sha` the batch tip and `HEAD^2^` can resolve an
+  unrelated PR's commit past the ancestry guard (iss-355). New Go derivation
+  (`lint.DeriveReleaseContentSha` + `gitutil.IsAncestor`) with tests covering the
+  merge, batched-queue, nearest-ancestor, stray/off-lineage, and fail-closed
+  cases; release.yml and the scaffold template (self-scaffold parity held) and
+  the rehearsal (now a batched-queue regression) all use it.

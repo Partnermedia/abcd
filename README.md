@@ -4,7 +4,7 @@
 
   <h1>Agent-Based Configuration for Development</h1>
 
-  <p>A host-agnostic configuration layer for intent-driven development.</p>
+  <p>For people who know what they want to build and need help shipping it.</p>
 
   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: experimental">
   <a href="https://github.com/intentdriven/abcd/releases"><img src="https://img.shields.io/github/v/release/intentdriven/abcd?cacheSeconds=300" alt="Release"></a>
@@ -21,59 +21,63 @@
 
 ## What it is for
 
-`abcd` is for people who know what they want to build and need help shipping it. While agents are good at producing work, they're not very good at remembering *why* it was built: *What was decided*, *what was rejected*, and on *what evidence*. All of that reasoning lives in transcripts nobody reads.
+AI agents are very good at coding but not always at remembering *human intentions* for why the code was written. `abcd` is a host-agnostic configuration layer for intent-driven development, there to help you actually ship what you set out to build, including *what was decided*, *what was rejected*, and on *what evidence*.
 
-`abcd` keeps that reasoning as structured records agents and humans *do* read: The *intent* that says what shipping looks like, the *decision* that says what was chosen and what was refused, the *specification*, and the *issue ledger*. They are plain files in the repository, checked by gates that refuse rather than warn, so what these records claim about the product stays true as the product moves.
-
-
-## How it works
-
-Two mechanisms carry the record into the work:
-
-**Rules reach the agent selectively.** On each prompt a hook matches what you
-typed against the keyword triggers every rule domain declares, and injects
-only the domains that matched: A prompt about committing gets the commit conventions,
-and a prompt that matches nothing adds no tokens at all.
-
-**Gates refuse rather than warn.** A warning is advice, and advice is what a
-hurried author skips. The gates run before the push leaves the machine, and they
-stop it:
-
-```text
-$ git push
-check-issue-resolution: RS001 commit c1e2c4c3d915 declares 'Resolves: iss-317', but iss-317 does not enter .abcd/work/issues/resolved/ or .abcd/work/issues/wontfix/ in origin/main..HEAD. Resolve it in this change (abcd capture resolve iss-317 ...) or drop the trailer.
-check-issue-resolution: FAILED — 1 violation(s)
-```
+In AI-assisted development, this (human) reasoning typically lives in transcripts that are hard to decipher after the fact. `abcd` keeps it as structured records agents and humans *do* read: The *intent* that says what shipping looks like, the *decision* that says what was chosen and what was refused, the *specification* that says how to build it, and the *issue ledger* that says what must be revisited. In `abcd`, these structured records are plain files that live *inside* the repository; they are checked by gates that *refuse* rather than warn, so what these records claim about the product being built stays true as the product moves.
 
 
 ## Built in the open
 
-`abcd` is built with `abcd`, and its own record is public and complete: Every decision, intent, specification and issue, from the first commit onward, with
-the reasoning attached.
+`abcd` is an *experiment*. First, it is an experiment of *building itself*, which is why its documented development record is public and complete: Every decision, intent, specification, and issue, from the first commit onward, with the reasoning attached. That record *is* the demonstration. Not a claim that the approach works, but the trail of a real product being built this way, including the parts that were wrong: Reversed decisions, abandoned designs, and defects found by the gates and recorded before they were fixed.
 
-That record *is* the demonstration. It is not a claim that the approach works but the trail of a real product being built this way, including the parts that were wrong: Reversed decisions, abandoned designs, and defects found by the gates and recorded before they were fixed.
+`abcd` is also an experiment for the team building it. As self-declared *enthusiastic dilettantes*, we learn best by doing stuff, and `abcd` demonstrates not only what it does, but also how we're learning AI-assisted development while building it.
 
-You can interrogate `abcd`'s development process at [abcdev.app/record/](https://abcdev.app/record/), alongside more details on [who abcd is for](docs/explanation/rationale.md), [roles](docs/explanation/roles.md), [artefacts](docs/explanation/artefacts.md) and the [process](docs/explanation/process.md).
-
-At this stage, `abcd` remains **experimental**, and you should expect the surface to keep moving: Verbs change, and the plugin surface currently targets a single harness (the command-line app is host-agnostic and runs in any repository with no harness at all). What's not experimental is the [record](https://abcdev.app/record/).
+If you want to know more about `abcd`, you can interrogate its entire development record at [abcdev.app/record/](https://abcdev.app/record/), alongside more details on [who abcd is for](docs/explanation/rationale.md), the different [roles](docs/explanation/roles.md), [artefacts](docs/explanation/artefacts.md), and [process](docs/explanation/process.md). If you want to get involved, watch the repository or open a [discussion](https://github.com/intentdriven/abcd/discussions).
 
 
-## Requirements
+## Key principles
 
-Only the first of these applies to every use; the rest are scoped to one route.
+`abcd` is founded on several [principles](https://abcdev.app/record/foundations/), some of which guide its design while others guide how development artefacts are recorded.
 
-- **Git**: Always. `abcd` shells out to the `git` binary and anchors every record it keeps to a repository.
-- **A released platform**: macOS or Linux, on amd64 or arm64. Windows runs the Linux route inside WSL.
-- **An agent harness**: The plugin route and the verbs that hand their work to a model, and nothing else. The deterministic verbs need no harness, and the command-line app runs in any repository without one.
-- **`curl` and a SHA-256 tool**: The CLI one-liner below only. It fetches over HTTPS and checks the binary against the release's `checksums.txt` with `sha256sum` or `shasum`.
-- **Go 1.26 or later**: A source build only. Both install routes provision a prebuilt binary, so installing `abcd` needs no Go toolchain.
 
+### Design principles
+
+What `abcd` is (and, by extension, what it refuses to become):
+
+- **abcd builds abcd**: The framework develops under its own record and gates, so every convention it imposes is one the team lives with *(for better or worse!)*.
+- **Prefer the experiment to the inference**: A claim that can be settled by running the system is settled by running it; reading the files yields a working assumption, never a finding.
+- **Verifier selects, gates decide**: A model's verdict ranks, flags, and proposes; admission to the record is decided by deterministic gates.
+- And: **Less, but better** (Dieter Rams): Reach for the subtraction first, which, in `abcd` translates into fewer verbs, records, and rules.
+
+
+### Record principles
+
+How intents, decisions, specifications, and issues are made and kept true:
+
+- **Work starts from an intent**: A shipping change opens as a press release for the user it serves; the work exists to make that page true.
+- **The record lands with the act**: A record is written by the same commit that makes it true.
+- **Enforcement claims are facts**: A gate is described only where it demonstrably runs; a planned check is an intent.
+- And: **The record is part of the product**: Intents, decisions, specifications, and issues are plain files in the repository, versioned and reviewed like the code they explain.
 
 ## Install
 
+If you wish to experiment with `abcd`, we recommend installing it as a plugin *(but do remember that it's experimental!)*.
+
+
+### Requirements
+
+- **Git**: Always. `abcd` shells out to the `git` binary and anchors every record it keeps to a repository.
+- **A released platform**: macOS or Linux, on amd64 or arm64. *(Windows runs the Linux route inside WSL)*.
+- **An agent harness**: The plugin route and the verbs that hand their work to a model, and nothing else.
+
+At this stage, `abcd` supports a single harness. The command-line app runs in any repository without one.
+
+
+### As a plugin
+
 The easiest route to get started is to install `abcd` as a [Claude Code](https://claude.ai/claude-code) plugin. <!-- docs-lint: allow -->
 
-Run these two from a session in that harness. The first registers this repository as a plugin marketplace; the second installs `abcd` from it.
+Run these two from a session within it. The first registers this repository as a plugin marketplace; the second installs `abcd` from it.
 
 ```
 /plugin marketplace add intentdriven/abcd
@@ -96,19 +100,21 @@ Later, `/plugin update abcd` pulls the marketplace's current state.
 
 ### As a CLI
 
-Support for other harnesses will follow. If your harness isn't supported yet, `abcd` runs from a terminal in any repository, with no harness involved:
+Outside a plugin session, `abcd` runs from a terminal in any repository, with no harness involved. A checksum-verified one-liner provisions it, no administrator rights required:
 
 ```sh
 sh -c 'set -eu; unset HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy CURL_HOME CURL_CA_BUNDLE SSL_CERT_FILE SSL_CERT_DIR; cd "$(mktemp -d)"; os=$(uname -s | tr "[:upper:]" "[:lower:]"); arch=$(uname -m); case "$arch" in x86_64) arch=amd64;; aarch64) arch=arm64;; esac; b="abcd-$os-$arch"; curl -q --proto =https --proto-redir =https -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/$b"; curl -q --proto =https --proto-redir =https -fsSLO "https://github.com/intentdriven/abcd/releases/latest/download/checksums.txt"; grep " $b$" checksums.txt | if command -v sha256sum >/dev/null; then sha256sum -c -; else shasum -a 256 -c -; fi; mkdir -p "$HOME/.local/bin"; install -m 0755 "$b" "$HOME/.local/bin/abcd"; "$HOME/.local/bin/abcd" version'
 ```
 
-Checksum-verified, no administrator rights, installs to `~/.local/bin`. The [install guide](docs/how-to/install.md) covers building from source and what to do when `abcd` isn't found afterwards. Consult the [verb reference](docs/reference/cli/commands.md) for what `abcd` can do.
+The [install guide](docs/how-to/install.md) covers building from source and what to do when `abcd` isn't found afterwards.
 
 
 ## First run
 
-Point `abcd` at a repository you care about and ask where you are. The status
-board is read-only, so it is safe on any tree:
+
+### Setup
+
+In a plugin session, inside a repository you own, `/abcd:prepare-this-repo` audits the tree and adopts the working conventions: The three-tier `.abcd/` layout, an `AGENTS.md` router, and the commit gates. Bare `/abcd` (or `abcd` from a terminal) then shows where you are; the status board is read-only, so it is safe on any tree:
 
 ```text
 $ abcd
@@ -118,13 +124,12 @@ abcd — /path/to/your-repo
   work tiers: [development work work.local]
 ```
 
-The plugin surface adds three commands the CLI does not carry, all host-delegated markdown with no Go verb behind them. The one that matters
-first: `/abcd:prepare-this-repo` gives a repository with no record yet the three-tier `.abcd/` layout, an `AGENTS.md` router, and the commit
-gates. (`/abcd:consult` and `/abcd:ingest` drive a local sources corpus.)
 
-From there, three verbs cover most of a first session. In a plugin session, `/abcd:lint` checks the repository against the working conventions and names what is missing. `/abcd:capture "…"` files a half-formed observation to the issue ledger so it survives the session that noticed it. `/abcd:intent "…"` opens a user-facing change as a press-release intent, which is where a shipping change starts.
+### Recording your first issue
 
-*The [verb reference](docs/reference/cli/commands.md) lists the rest.*
+Issues are everything you wish to revisit: An idea, a user-facing intent, a bug, a thought. `/abcd:capture "..."` files a half-formed observation to the issue ledger so it survives the session. Revisit it with `/abcd iss-N` to report what that record is, where it lives, and its next move, such as graduating it into an intent, or close it with a note.
+
+*(The [verb reference](docs/reference/cli/commands.md) lists the rest.)*
 
 
 ## Citation
@@ -145,5 +150,6 @@ repository* button reads:
 
 ## Resources
 
+- [`LICENSE`](LICENSE): MIT.
 - [`SECURITY.md`](SECURITY.md): Report a vulnerability privately.
-- [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md): The ideas, tools and writing `abcd` stands on.
+- [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md): The ideas, tools, and writing `abcd` stands on.

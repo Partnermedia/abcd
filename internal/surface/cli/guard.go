@@ -327,6 +327,13 @@ func loadGuardRegistry() (guard.Registry, error) {
 func guardHealthLine(h ahoy.GuardHealth) string {
 	if h.Healthy() {
 		state := fmt.Sprintf("armed (%d hazards)", h.Entries)
+		if h.RepoOverridesDropped {
+			// The fail-safe load: the repo's .abcd/guard.json does not load, so
+			// its overrides are dropped while the bundled hazards stay armed.
+			// Commands are still checked — but the line must not read as a clean
+			// bill of health while a committed file is broken.
+			state = fmt.Sprintf("armed (%d bundled hazards) — %s does not load, repo overrides dropped", h.Entries, guard.RepoRelPath)
+		}
 		if h.Disabled {
 			// Loadable and wired, but switched off in .abcd/guard.json. Not a
 			// fault, and not something to report as protection either. The file is
@@ -350,7 +357,9 @@ func guardHealthLine(h ahoy.GuardHealth) string {
 		missing = append(missing, "binary unreachable")
 	}
 	if !h.RegistryLoadable {
-		missing = append(missing, "registry does not load")
+		// Not the repo file — the fail-safe load keeps bundled hazards armed past
+		// that (reported above as dropped overrides). This is no registry at all.
+		missing = append(missing, "no hazard registry loaded")
 	}
 	return "NOT ARMED — " + strings.Join(missing, ", ") + " (shell commands run unchecked)"
 }

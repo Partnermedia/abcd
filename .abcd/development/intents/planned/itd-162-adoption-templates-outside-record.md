@@ -1,8 +1,8 @@
 ---
 id: itd-162
 slug: adoption-templates-outside-record
-spec_id: null
-kind: null
+spec_id: spc-54
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,9 @@ Graduated from `iss-87`: prepare-this-repo adopt phase is not self-contained in 
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** a machine without the machine-local `~/ABCDevelopment/.agents/templates/` directory, **when** prepare-this-repo's adopt phase runs, **then** it applies the templates from the committed record or the embedded binary and the adoption completes rather than silently degrading.
+- **Given** the adopt phase's assets (the pre-commit config, the prepare-commit-msg hook, AGENTS.md, DECISIONS.md and NEXT.md templates), **when** they are resolved, **then** every one resolves from within the abcd record or the binary and never from an external machine-local path.
+- **Given** the onboarding self-containment check, **when** it scans prepare-this-repo, **then** no reference to the `~` machine-local templates path remains.
 
 ## Open Questions
 

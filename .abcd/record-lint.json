@@ -350,7 +350,8 @@
       "job": "verify",
       "ignore_steps": [
         "Check out the pushed commit",
-        "Set up Go"
+        "Set up Go",
+        "Semantic-gate receipts (fail-closed, before tag)"
       ],
       "min_gates": 9
     },

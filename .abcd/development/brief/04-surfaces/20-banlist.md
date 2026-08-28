@@ -239,7 +239,7 @@ and carving an exception into the fence gives up the one-switch property that
 record chose. It stops claiming otherwise instead — detection reports
 `banlist.public_family_ignored` and the status board reads "public family NOT
 ENFORCEABLE". The placement question is
-[`iss-176`](../../../work/issues/open/iss-176-public-banlist-family-unenforceable-under-public-visibility.md),
+[`iss-176`](../../../work/issues/resolved/iss-176-public-banlist-family-unenforceable-under-public-visibility.md),
 for a maintainer to settle.
 
 ## Honest reach

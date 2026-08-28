@@ -62,6 +62,7 @@ reference page documenting a `--color` flag spells the flag as the code does. <!
 | Em dashes are not used inside list items: A pivot in a list item takes a colon instead. | machine-enforced (`punctuation/em-dash-in-list-item`); an em dash on a list item's wrapped continuation line is outside the line-based pattern's sight and stays `review` (adr-54) |
 | After a colon: A capital letter. | review, permanently: a lowercase-by-design name (abcd, gofmt, macOS) legitimately follows a colon, and no machine check tells it from a violation (adr-54) |
 | After a semicolon: lower case (the semicolon joins clauses of one sentence). | review, permanently: proper nouns and citation reference lists legitimately open with a capital after a semicolon (adr-54) |
+| A list of three or more items takes a serial comma before the final conjunction: "brief, intents, and ADRs", not "brief, intents and ADRs". | review |
 
 ## Structure
 

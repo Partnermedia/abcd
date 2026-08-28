@@ -1,7 +1,7 @@
 ---
 id: adr-52
 slug: the-semantic-gate-sits-on-the-wrong-side-of-the-tag
-status: proposed
+status: accepted
 date: 2026-08-23
 supersedes: null
 superseded_by: null
@@ -48,12 +48,29 @@ deterministic gates did not have this problem — they run in `verify`, before
 
 ## Decision
 
-**None yet.** This ADR is `proposed` and records the problem and the option
-space so the next release does not rediscover it. The two surface-level defects
-that made the failure likely are already fixed separately
-(iss-2608231226274000, iss-2608231226342272); this is the structural one
-underneath them, and it is deliberately not being patched during a release
-recovery.
+**Arm `receipt_gate` in `verify` (Alternative 1).** The semantic gate joins the
+deterministic gates that refuse before `tag`, so a semantic refusal blocks the
+release without consuming a version — the tag is minted only after every gate,
+deterministic and semantic, has passed. This keeps the tag-immutability
+guarantee that makes the heal path safe: the fix moves the gate to the safe side
+of the tag rather than weakening the immutability the heal path depends on.
+
+The accepted cost is the one Alternative 1 names: `verify` runs on a commit
+whose relationship to the eventual content commit is the same derivation the
+`release` job makes, so the arming logic moves rather than simplifies, and
+`verify` must no-op the gate on the rehearsal path where no receipts exist
+(rehearsal is not a real release, so a missing receipt there must not refuse).
+Alternative 2 (gate in `detect`) was not chosen because it would move the
+required-gates list out of `release.yml`, which owns it as the trust root, or
+weaken the check to presence-only; Alternative 3 (accept the wedge) was rejected
+because it normalises deleting tags, the exact guarantee the heal path depends
+on. Alternative 4's local pre-merge check (`record-lint --release-gate`) stays in
+the runbook as the belt-and-braces mitigation regardless.
+
+Implementation is a release-workflow change (`.github/workflows/release.yml` and
+the scaffolded template) that CI cannot exercise outside a real release, so it
+lands as its own maintainer-verified change; this ADR is the decision that
+authorises it, and iss-2608231226347380 tracks the implementation.
 
 ## Alternatives Considered
 
@@ -88,10 +105,13 @@ recovery.
 
 ## Consequences
 
-While this stays `proposed`, every release carries the risk that a semantic
-refusal consumes its version, and the mitigation is procedural: run the passes
-and prove the gate locally before merging the release branch.
+Until the workflow change lands, every release still carries the risk that a
+semantic refusal consumes its version, so the procedural mitigation stays in the
+runbook: run the passes and prove the gate locally with `record-lint
+--release-gate` before merging the release branch. Once `receipt_gate` runs in
+`verify`, a semantic refusal blocks the release the way a deterministic gate
+failure already does, and no version is consumed.
 
-Whichever option is adopted, it touches the tag-immutability guarantee that
-makes the heal path safe, so it wants a deliberate decision rather than a patch
-applied mid-recovery — which is why this is recorded rather than fixed.
+The change touches the tag-immutability guarantee that makes the heal path safe,
+so it is deliberately scoped to move the gate to the safe side of the tag, never
+to weaken the immutability itself.
