@@ -319,14 +319,33 @@ func sectionBetween(s, from, to string) string {
 	return rest
 }
 
-// TestBuildLayoutDoesNotOverlap is the coil packing's own sanity check, asserted
+// TestBuildLayoutDoesNotOverlap is the packing's own sanity check, asserted
 // rather than reported: a bubble sitting on top of another means the placement
-// walked into a case it does not handle, and the chart is wrong.
+// walked into a case it does not handle, and the chart is wrong. The count the
+// build publishes covers BOTH arrangements — it was the coil's alone, and an
+// overlapping by-links picture shipped green behind it — so the assertion is
+// re-derived here from each arrangement in turn.
 func TestBuildLayoutDoesNotOverlap(t *testing.T) {
 	f := newFixture(t)
-	res := buildFixture(t, f, t.TempDir())
+	out := t.TempDir()
+	res := buildFixture(t, f, out)
 	if res.Overlaps != 0 {
-		t.Fatalf("coil packing overlaps: %d", res.Overlaps)
+		t.Fatalf("the packing overlaps: %d", res.Overlaps)
+	}
+
+	var export RecordExport
+	if err := json.Unmarshal([]byte(outFile(t, out, "record.json")), &export); err != nil {
+		t.Fatalf("record.json: %v", err)
+	}
+	l := export.Layout
+	coil := countOverlaps(l.Coil, l.Radius, l.CoilRadius)
+	links := countOverlaps(l.Links, l.Radius, l.CoilRadius)
+	if coil != 0 || links != 0 {
+		t.Errorf("published layout overlaps: coil %d, by-links %d", coil, links)
+	}
+	if l.Overlaps != coil+links {
+		t.Errorf("published count %d does not measure both arrangements (coil %d + by-links %d)",
+			l.Overlaps, coil, links)
 	}
 }
 
