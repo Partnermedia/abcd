@@ -697,7 +697,7 @@ func materialFromFetched(rawURL string, fetched FetchedSource, pdf PDFExtractor)
 	// classes) and the returned citation verbatim — the same class the cite fetcher
 	// fixed one door over (iss-359). Percent-encode the hidden runes losslessly here,
 	// once, before finalURL becomes the stored origin/title (iss-357).
-	finalURL = encodeHiddenRunes(finalURL)
+	finalURL = termsafe.EncodeHiddenRunes(finalURL)
 	if ctype == "application/pdf" {
 		text, err := extractPDFText(fetched.Body, pdf)
 		if err != nil {
@@ -759,42 +759,6 @@ func contentType(headers map[string]string) string {
 		}
 	}
 	return ""
-}
-
-// encodeHiddenRunes percent-encodes every rune the terminal sanitizer would mask
-// — C0/DEL, the 2-byte-encoded C1 range, bidi overrides and zero-width runes — so
-// a redirect-supplied origin is recorded losslessly but can no longer smuggle
-// terminal escapes or Trojan-Source reordering into the JSON registry or the
-// returned citation. This mirrors internal/core/cite/fetch.go's fix for the same
-// class (iss-359): a canonical address never carries these runes (net/url rejects
-// C0 outright and percent-encodes the path itself), so encoding them cannot break
-// a legitimate final URL.
-func encodeHiddenRunes(s string) string {
-	if termsafe.Sanitize(s) == s && utf8.ValidString(s) {
-		return s
-	}
-	var b strings.Builder
-	for i := 0; i < len(s); {
-		r, width := utf8.DecodeRuneInString(s[i:])
-		if r == utf8.RuneError && width == 1 {
-			// An invalid byte, which strings.Map would silently rewrite to U+FFFD —
-			// percent-encode the RAW byte so the record stays lossless on non-UTF-8
-			// input too.
-			fmt.Fprintf(&b, "%%%02X", s[i])
-			i++
-			continue
-		}
-		rs := s[i : i+width]
-		if termsafe.Sanitize(rs) != rs {
-			for j := 0; j < width; j++ {
-				fmt.Fprintf(&b, "%%%02X", rs[j])
-			}
-		} else {
-			b.WriteString(rs)
-		}
-		i += width
-	}
-	return b.String()
 }
 
 func safeExt(ext string) string {
