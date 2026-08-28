@@ -179,6 +179,29 @@ func TestHookMalformedStdinExitsZero(t *testing.T) {
 	_ = out
 }
 
+// TestHookPromptRouterLoadErrorHasSinglePrefix pins iss-2608261550491547: a
+// rules-load failure must read once, not twice. rules.Load already prefixes its
+// errors with "rules:", so the hook wrapper must not add a second "rules:" of its
+// own — the user must never see "abcd rules: rules: …".
+func TestHookPromptRouterLoadErrorHasSinglePrefix(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	cwd := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cwd, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Malformed JSON drives rules.Load down its fail-closed error path.
+	if err := os.WriteFile(filepath.Join(cwd, ".abcd", "rules.json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, errlog := runHook(t, hookInputJSON(t, "s-prefix", cwd, "commit and push"), "hook", "prompt-router")
+	if strings.Contains(errlog, "rules: rules:") {
+		t.Fatalf("doubled prefix: the load error must read once, got:\n%s", errlog)
+	}
+	if !strings.Contains(errlog, "injecting nothing") {
+		t.Fatalf("a load error must still say it injected nothing:\n%s", errlog)
+	}
+}
+
 // validHooksJSON is a structurally-sound plugin hook manifest for the hermetic
 // plugin root, so the install path's hook-manifest verification passes.
 const validHooksJSON = `{

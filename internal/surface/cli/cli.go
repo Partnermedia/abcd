@@ -1097,7 +1097,10 @@ func newHookCommand() *cobra.Command {
 			root := rulesRoot(cwd)
 			rs, err := rules.Load(root)
 			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: %v; injecting nothing\n", err)
+				// rules.Load errors already carry their own "rules:" prefix, so
+				// wrap with a bare "abcd" to avoid "abcd rules: rules: …"
+				// (iss-2608261550491547).
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %v; injecting nothing\n", err)
 				return nil
 			}
 			session := hookSession(in)
