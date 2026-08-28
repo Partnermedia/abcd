@@ -60,6 +60,13 @@
           "hidden": false
         },
         {
+          "name": "attribution",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "bin-dir",
           "shorthand": "",
           "type": "string",

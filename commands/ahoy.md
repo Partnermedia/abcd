@@ -118,6 +118,15 @@ git-identity pin, because the pin records whatever git identity is currently
 configured. When the result carries `optional_skipped`, report it and offer the
 `yes |` form above as the way to apply it.
 
+`--attribution` opts the repo into the committed `prepare-commit-msg` prompt,
+which seeds a commented disclosure line into every commit message an editor
+opens. It is opt-in and never a default — the hook stamps a convention onto
+every commit message, which is a repo's choice to make — and it writes no
+value, because which tool assisted is a fact only the committer has. The choice
+is recorded in `.abcd/config.json`, so a later `install` without the flag keeps
+the hook and restores a hand-deleted one; a `prepare-commit-msg` hook abcd did
+not write is reported, never replaced.
+
 For dogfooding abcd itself, `abcd ahoy install --dev` installs a track-latest
 shim instead of the pinned owned copy: the `PATH` entry rebuilds abcd from
 the source tip on every call and fails loudly on a broken build. Re-running

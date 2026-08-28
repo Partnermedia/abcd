@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# abcd-attribution: v1
+# abcd attribution prompt, commit-message half — scaffolded by
+# `abcd ahoy install --attribution` into this repo's committed hooks.
+#
+# It exists because a disclosure convention that relies on remembering is a
+# convention that is silently half-applied: an absent trailer and a forgotten one
+# are the same bytes, so nothing downstream can tell an unassisted commit from an
+# undisclosed one. This hook puts the question in front of the committer on every
+# commit it can, as a COMMENT in the message being edited.
+#
+# It never writes a value. Which tool assisted, and which version of it, is a fact
+# only the committer has; a hook that guessed would be manufacturing the disclosure
+# the convention exists to obtain. The two accepted forms are offered and the
+# committer picks one:
+#
+#     Assisted-by: <Vendor>:<model-version>
+#     Assisted-by: None
+#
+# Point this repo's hooks at the directory holding this file, once per clone:
+#
+#     git config core.hooksPath .githooks
+set -euo pipefail
+# The environment pin the sibling name guard uses, for the same reasons: an
+# inherited xtrace would trace this hook's handling of a message that is not yet
+# public, an inherited shell function wins over PATH lookup, and an inherited IFS
+# changes how every unquoted expansion splits. See .githooks/pre-commit for the
+# full reasoning; this half runs fewer commands, not weaker ones.
+case $- in *x*) set +x ;; esac
+unset -f grep printf cat command read echo exit test [ 2>/dev/null || true
+IFS=$' \t\n'
+LC_ALL=C
+export LC_ALL
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
+msg_file="${1:-}"
+msg_source="${2:-}"
+
+# No message file is not this hook's business (and `cat >> ""` would be a silent
+# no-op that looks like success).
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+  exit 0
+fi
+
+# WHICH SOURCES. Only the two that are editor-bound.
+#
+#   ""         an ordinary commit whose message the committer is about to edit.
+#   "template" a -t/commit.template message, likewise edited.
+#
+# Every other source is skipped, and the skip is load-bearing rather than tidy.
+# git strips '#' comments only from a message it opens an editor for
+# (`commit.cleanup=default`), so a prompt appended to a `-m` message — source
+# "message" — is NOT stripped and goes into history verbatim. "merge", "squash"
+# and "commit" (an amend or a -c/-C reuse) carry a message that is already settled
+# or already carries its own trailer, and re-prompting on each would train the
+# committer to delete the block unread.
+case "$msg_source" in
+  '' | template) ;;
+  *) exit 0 ;;
+esac
+
+# Already disclosed: say nothing. A prompt repeated over an answer that is already
+# there is noise, and noise is how a prompt stops being read.
+if grep -qiE '^[[:space:]]*Assisted-by:[[:space:]]*[^[:space:]]' -- "$msg_file"; then
+  exit 0
+fi
+
+# Appended as comments, so an untouched message commits exactly as it would have.
+# The convention this asks for is disclosure, not authorship: a tool is not an
+# author, and a co-author trailer would assert a standing the tool does not hold.
+cat >>"$msg_file" <<'PROMPT'
+
+# This repository asks every commit to declare whether a tool assisted it.
+# Add ONE of these lines to the message above (this block is a comment and is
+# stripped, so leaving it as-is discloses nothing):
+#
+#     Assisted-by: <Vendor>:<model-version>
+#     Assisted-by: None
+#
+# `None` is the positive form for work no tool touched — silence cannot say so,
+# because an absent trailer and a forgotten one look identical. Claiming it for
+# assisted work is a false disclosure, which is what this convention exists to
+# prevent. Disclosure is not authorship: never a co-author trailer for a tool.
+PROMPT
+exit 0

@@ -1887,6 +1887,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 		adopt         bool
 		refuseAdopt   bool
 		dev           bool
+		attribution   bool
 		allowStale    bool
 		binDir        string
 		visibility    string
@@ -1903,7 +1904,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, allowStale, binDir, visibility, docsTarget, oracleBackend, scanDeep)
+			opts, err := installOptionsFromFlags(cmd, yes, adopt, refuseAdopt, dev, attribution, allowStale, binDir, visibility, docsTarget, oracleBackend, scanDeep)
 			if err != nil {
 				return err
 			}
@@ -1948,6 +1949,7 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 	installCmd.Flags().BoolVar(&adopt, "adopt", false, "adopt an unmanaged repo without prompting")
 	installCmd.Flags().BoolVar(&refuseAdopt, "refuse-adopt", false, "decline to adopt an unmanaged repo")
 	installCmd.Flags().BoolVar(&dev, "dev", false, "track-latest dogfood mode: the PATH entry rebuilds from the source tip on every call instead of pinning the built binary")
+	installCmd.Flags().BoolVar(&attribution, "attribution", false, "opt this repo into the committed prepare-commit-msg prompt asking every commit to declare whether a tool assisted it; the choice is recorded, so a later install without the flag keeps the hook")
 	installCmd.Flags().BoolVar(&allowStale, "allow-stale-binary", false, "proceed even when the running binary is stale against its source tip or its vintage cannot be determined; the default is to refuse before any write and name the rebuild fix")
 	installCmd.Flags().StringVar(&binDir, "bin-dir", "", "directory for the PATH entry (default ~/.local/bin, or an existing abcd install adopted in place); fails when it is not writable — abcd never escalates privileges")
 	installCmd.Flags().StringVar(&visibility, "visibility", "", "repo visibility: private | public")
@@ -2056,8 +2058,8 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 // installOptionsFromFlags validates the install flags and builds InstallOptions.
 // Only explicitly-set value flags become overrides; unset values fall through to
 // the prompter (interactive) or its default (non-interactive).
-func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev, allowStale bool, binDir, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
-	opts := ahoy.InstallOptions{Yes: yes, Dev: dev, BinDir: binDir, AllowStaleBinary: allowStale}
+func installOptionsFromFlags(cmd *cobra.Command, yes, adopt, refuseAdopt, dev, attribution, allowStale bool, binDir, visibility, docsTarget, oracleBackend, scanDeep string) (ahoy.InstallOptions, error) {
+	opts := ahoy.InstallOptions{Yes: yes, Dev: dev, Attribution: attribution, BinDir: binDir, AllowStaleBinary: allowStale}
 	if adopt && refuseAdopt {
 		return opts, fmt.Errorf("abcd ahoy install: --adopt and --refuse-adopt are mutually exclusive")
 	}
