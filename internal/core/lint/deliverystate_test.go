@@ -1,9 +1,11 @@
 package lint
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // deliveryCfg builds a one-rule delivery_state config pointed at a fixture tree.
@@ -248,4 +250,70 @@ func TestDeliveryStateFailsClosed(t *testing.T) {
 			t.Fatal("expected an error when the configured intents store holds no lifecycle bucket")
 		}
 	})
+}
+
+// The delivery_state changelog read is the SIBLING of the agent_contract one:
+// same in-tree config supplying the path, same repo supplying the file, same
+// `go run ./cmd/record-lint` step reading both, and (before this change) the same
+// bare os.ReadFile at the end of it. Both rules are armed as blockers in this
+// repository's own .abcd/record-lint.json, so one guarded read and one unguarded
+// one leaves the step exposed either way.
+
+// A changelog that is a symlink to a character device must be refused, not read.
+// Unguarded, this never returned: it allocated until the CI runner was out of
+// memory.
+func TestDeliveryStateRefusesADeviceChangelog(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero on this platform")
+	}
+	root := t.TempDir()
+	writeIntent(t, root, "drafts", "itd-60-doc-fidelity-anti-drift.md")
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "CHANGELOG.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := Lint(deliveryCfg(), root)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("the lint read a character device as the changelog")
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the lint hung reading a character device as the changelog")
+	}
+}
+
+// A configured changelog that resolves outside the repository must be refused
+// before it is read. The rule already failed closed on a path it could not read,
+// which hid this: point it at a file that IS there and the read succeeded, so the
+// gate was judging a document outside the checkout.
+func TestDeliveryStateRefusesAnEscapingChangelogPath(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "CHANGELOG.md"),
+		[]byte("# Changelog\n\n## [Unreleased]\n\n### Added\n\n- nothing.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	writeIntent(t, root, "drafts", "itd-60-doc-fidelity-anti-drift.md")
+
+	rel, err := filepath.Rel(root, filepath.Join(outside, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := deliveryCfg()
+	rc := cfg.Rules[ruleDeliveryState]
+	rc.Changelog = filepath.ToSlash(rel)
+	cfg.Rules[ruleDeliveryState] = rc
+
+	_, err = Lint(cfg, root)
+	if err == nil {
+		t.Fatal("a changelog outside the repository was read")
+	}
+	if !strings.Contains(err.Error(), "the lint reads only inside the repository") {
+		t.Errorf("expected the containment refusal its sibling read gives; got %v", err)
+	}
 }
