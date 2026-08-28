@@ -157,10 +157,11 @@ type Decision struct {
 	// includes the reserved synthetic id when an execute-a-string payload raised
 	// an entry-less verdict.
 	Matches []string `json:"matches,omitempty"`
-	// Family and Reason describe an entry-less (synthetic) verdict from the
-	// execute-a-string family: the wrapper family that raised it and the
-	// plain-language reason. They are empty on an ordinary registry match. The raw
-	// payload is deliberately not carried — nothing reads it yet.
+	// Family and Reason describe an entry-less (synthetic) verdict — an
+	// execute-a-string wrapper, or a brace group the tokenizer cannot expand:
+	// the family that raised it and the plain-language reason. They are empty on
+	// an ordinary registry match. The raw payload is deliberately not carried —
+	// nothing reads it yet.
 	Family string `json:"family,omitempty"`
 	Reason string `json:"reason,omitempty"`
 }
@@ -373,6 +374,18 @@ func (r Registry) Check(command string) (Decision, error) {
 	// sees the payload segments for free, and any payload the guard cannot read
 	// raises a synthetic (entry-less) signal folded in by severity below.
 	segs, signals := expandPayloads(segs)
+
+	// A brace group the tokenizer could not expand is folded in the same way,
+	// and AFTER the payload expansion so a group hidden inside an inspectable
+	// payload counts too. One signal is enough however many segments carry a
+	// group: the verdict is the whole command's, and repeating the same lesson
+	// per segment would only pad Matches.
+	for _, s := range segs {
+		if s.braceGroup {
+			signals = append(signals, braceExpansionBlockSignal())
+			break
+		}
+	}
 
 	ids := make([]string, 0, len(r.Entries))
 	for id := range r.Entries {

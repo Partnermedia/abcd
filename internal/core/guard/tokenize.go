@@ -15,6 +15,11 @@ import (
 type segment struct {
 	tokens []string
 	chain  int
+	// braceGroup records that this command carried an UNQUOTED brace group —
+	// text bash rewrites into several words before the child ever sees it. The
+	// tokenizer does not expand it, so it cannot say what the argv will be; the
+	// flag is how it says so, and Check turns it into a fail-closed block.
+	braceGroup bool
 }
 
 // tokenize splits a candidate command line into command-position segments,
@@ -38,6 +43,10 @@ func tokenize(line string) ([]segment, error) {
 		hasCur  bool
 		chain   int
 		pending []heredoc
+		// braceGroup rides with the segment being built: an unquoted brace group
+		// anywhere in it makes the whole command unexpandable, so the flag is
+		// raised once and lands on the segment flushSegment emits.
+		braceGroup bool
 		// lastList records that the previous operator was a list operator
 		// (`&&`, `||`, `|`), whose newline is a line continuation rather than a
 		// new command — `cd scratch &&\nrm -rf *` is one chain, not two.
@@ -53,8 +62,9 @@ func tokenize(line string) ([]segment, error) {
 	flushSegment := func() {
 		flushToken()
 		if len(toks) > 0 {
-			segs = append(segs, segment{tokens: toks, chain: chain})
+			segs = append(segs, segment{tokens: toks, chain: chain, braceGroup: braceGroup})
 			toks = nil
+			braceGroup = false
 		}
 	}
 
@@ -284,6 +294,31 @@ func tokenize(line string) ([]segment, error) {
 			// grouping parens, and a backtick boundary do not.
 			lastList = c == '|'
 			i++
+		case c == '{' && braceExpansionAt(line, i):
+			// An unquoted brace group is EXPANSION, not text: bash rewrites
+			// `git push {--force,} origin main` into byte-identical `--force`
+			// argv, while this tokenizer read the literal token `{--force,}`,
+			// which no blocker matches — a silent allow of a Tier-1 hazard, the
+			// same mutate-the-flag-token shape the redirection branch closes.
+			// Expanding it properly (the Cartesian product of the alternatives,
+			// nested groups, `{a..z}` ranges) is a bounded expander this round
+			// does not have, so the group is REFUSED instead: a token whose argv
+			// the guard cannot compute is a token it cannot check, and refusing
+			// what cannot be read is what fail-closed means here.
+			//
+			// The refusal rides on the segment rather than returning
+			// ErrUnparsableCommand, which is the obvious route and the wrong
+			// one: the `guard check` verb maps a tokenize error to a blocking
+			// exit, but the pre-tool-use hook maps it to fail-OPEN, so the
+			// bypass would have survived on the surface that matters. Check
+			// folds the flag into a real VerdictBlock, which blocks on both.
+			// The bytes stay in the word so nothing else about the line's
+			// tokenization changes.
+			braceGroup = true
+			cur = append(cur, c)
+			hasCur = true
+			lastList = false
+			i++
 		default:
 			cur = append(cur, c)
 			hasCur = true
@@ -293,6 +328,100 @@ func tokenize(line string) ([]segment, error) {
 	}
 	flushSegment()
 	return segs, nil
+}
+
+const (
+	// braceEntryID is the reserved id an unexpandable brace group is reported
+	// under. Like syntheticEntryID it names a verdict the Pattern language
+	// cannot express — "this word is not the word that will run" — so no
+	// registry entry may claim it and it must never index Registry.Entries.
+	braceEntryID = "brace-expansion-unexpanded"
+
+	familyBrace = "brace expansion"
+)
+
+// braceExpansionBlockSignal is the fail-closed verdict for a command carrying an
+// unquoted brace group. It is a BLOCK rather than a warn because the group can
+// carry any flag at all — the reported shape, `{--force,}`, expands to argv a
+// Tier-1 blocker names — and the guard has no way to tell a harmless expansion
+// from that one without expanding it.
+func braceExpansionBlockSignal() payloadSignal {
+	return payloadSignal{
+		id:      braceEntryID,
+		verdict: VerdictBlock,
+		family:  familyBrace,
+		reason: "This command carries an unquoted brace group, which the shell expands into different words before the command runs, " +
+			"so the arguments the guard can read are not the arguments that would be passed.",
+		successor: "Spell the words out (`git push --force origin main`), or quote the braces if they are meant literally, " +
+			"so the guard checks the command that actually runs.",
+	}
+}
+
+// braceExpansionAt reports whether the `{` at line[i] — reached as a structural,
+// unquoted byte, so quoted spellings never arrive here — opens a brace group
+// bash would EXPAND into several words, rather than an ordinary literal brace.
+// Three things separate the two, and each is a shape bash itself does not
+// expand:
+//
+//   - `${…}` is parameter expansion. bash's own brace scanner skips it on
+//     exactly this test — the RAW byte before the brace — so `echo ${HOME}` and
+//     `${x:-a,b}` are untouched. The raw line is read rather than the decoded
+//     word so a QUOTED dollar (`'$'{a,b}`, which bash does expand) cannot buy
+//     the exemption.
+//   - A group needs an alternative: a comma, or a `..` range. `{a}`, a lone
+//     `{`, and `awk {print}` are literals in bash and stay literals here.
+//   - A group lives inside ONE word. An unquoted space or operator ends the
+//     word, so the reserved-word group command `{ git push --force; }` is not a
+//     brace group — its inner command still reaches command position, where the
+//     blocker for it already fires.
+//
+// Everything else is read fail-closed. Nested groups count (`{{a,b}}` expands,
+// though the comma is not at the outer group's own level), and an alternative
+// found inside quotes still counts — a comma the scan cannot rule out is one it
+// must assume bash will act on.
+func braceExpansionAt(line string, i int) bool {
+	if i > 0 && line[i-1] == '$' {
+		return false
+	}
+	depth, expands := 0, false
+	for j := i; j < len(line); {
+		switch c := line[j]; {
+		case c == '\\':
+			j += 2
+		case c == '\'' || c == '"':
+			// Scan the quoted run for structure only: its bytes cannot close the
+			// group, but an alternative inside it is still counted.
+			for j++; j < len(line) && line[j] != c; j++ {
+				if line[j] == ',' || (line[j] == '.' && j+1 < len(line) && line[j+1] == '.') {
+					expands = true
+				}
+				if c == '"' && line[j] == '\\' {
+					j++
+				}
+			}
+			j++
+		case c == '{':
+			depth++
+			j++
+		case c == '}':
+			if depth--; depth == 0 {
+				return expands
+			}
+			j++
+		case c == ',':
+			expands = true
+			j++
+		case c == '.' && j+1 < len(line) && line[j+1] == '.':
+			expands = true
+			j += 2
+		case c == ' ' || c == '\t' || c == '\n' || c == ';' ||
+			c == '&' || c == '|' || c == '(' || c == ')':
+			return false
+		default:
+			j++
+		}
+	}
+	return false
 }
 
 // readAnsiCQuote decodes a bash ANSI-C `$'...'` body that begins at start (the
