@@ -17,6 +17,10 @@ record as `itd-141`; until that lint ships, those rules are `review`. The
 list-item em-dash rule is machine-enforced as a banned token, with the one
 residual case its line-based pattern cannot see noted in its row.
 
+A machine check is promoted, not born, blocking: a new rule enters as a
+`warn`, the corpus is fixed, and only a corpus-clean rule is promoted to
+`blocker` — so a gate never lands as a wall of pre-existing findings.
+
 ## Language
 
 | Rule | Enforcement |
@@ -39,6 +43,15 @@ reference page documenting a `--color` flag spells the flag as the code does. <!
 | Rule | Enforcement |
 |---|---|
 | Documentation follows [Diátaxis](https://diataxis.fr/): one type per page (tutorial, how-to, reference, explanation), and each `docs/` folder holds one type. | review |
+
+## Audience
+
+| Rule | Enforcement |
+|---|---|
+| `docs/` is written for human readers, in one register; there are no parallel agent-facing versions of any page ([adr-53](https://github.com/intentdriven/abcd/blob/main/.abcd/development/decisions/adrs/0053-audience-by-placement.md)). The machine audience is served by machine surfaces: `--json` payloads, the generated CLI reference, and the injected rules. | review |
+| A page's density is set by its Diátaxis type, never by an audience guess: A tutorial explains a term at first use; a reference states it and links the crosswalk. A page too dense for its reader is mis-typed or mis-placed, never re-registered. | review |
+| Every section is understandable in isolation: no "as mentioned above", related information kept adjacent, exact error messages quoted verbatim. | review |
+| A repo-specific term of art links its [`terminology.md`](terminology.md) entry at first use on a page. | review |
 
 ## Punctuation
 
