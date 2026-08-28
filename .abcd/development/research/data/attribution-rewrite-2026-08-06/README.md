@@ -24,7 +24,7 @@ translate them, so an old citation stays readable instead of becoming a dead end
 To translate an id, match it as a prefix:
 
 ```sh
-grep ^3377980 .abcd/work/attribution-rewrite-2026-08-06/sha-map-old-to-new.tsv
+grep ^3377980 .abcd/development/research/data/attribution-rewrite-2026-08-06/sha-map-old-to-new.tsv
 ```
 
 Both tables are historical and complete. Nothing appends to them: they describe

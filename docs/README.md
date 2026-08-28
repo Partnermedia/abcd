@@ -6,7 +6,7 @@ under [`../.abcd/development/`](https://github.com/intentdriven/abcd/tree/main/.
 
 | Directory | Diátaxis type | For |
 |-----------|---------------|-----|
-| [`tutorials/`](tutorials/README.md) | Tutorial | Learning-oriented — a guided first run. |
+| [`tutorials/`](tutorials/README.md) | Tutorial | Learning-oriented — a guided first run (not yet populated; the first page is tracked as iss-216). |
 | [`how-to/`](how-to/README.md) | How-to | Task-oriented — accomplish a specific goal. |
 | [`reference/`](reference/README.md) | Reference | Information-oriented — config, schemas, and the [CLI reference](reference/cli/README.md) (generated from the Cobra command tree and gated against drift by a build test). |
 | [`explanation/`](explanation/README.md) | Explanation | Understanding-oriented — the mental model and the why. |
