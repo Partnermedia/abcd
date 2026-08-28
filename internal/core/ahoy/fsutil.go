@@ -3,7 +3,8 @@ package ahoy
 import (
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // displayPath renders p for any surface a human reads or pastes: a path inside
@@ -13,43 +14,27 @@ import (
 // sensitive and shortening it would lose information.
 //
 // This is the same hygiene iss-177 applies inside the install receipt's note
-// seam; it lives here because the two print sites outside that seam (the doctor
-// gap text and the uninstall receipt) render paths of their own. Both can be
-// unified onto one primitive once the receipt scrub lands.
+// seam, and it is now the SAME primitive: displayPath routes through
+// fsutil.RedactHome rather than keeping a bespoke home-prefix compare. Routing
+// through the canonical redactor also folds the comparison on a case-folding
+// filesystem, so a case-variant HOME spelling no longer leaks the username in a
+// doctor gap or an uninstall receipt (iss-2608270908341622).
 func displayPath(p string) string {
-	if p == "" {
-		return p
-	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || home == string(os.PathSeparator) {
-		return p
-	}
-	home = filepath.Clean(home)
-	if p == home {
-		return "~"
-	}
-	if strings.HasPrefix(p, home+string(os.PathSeparator)) {
-		return "~" + string(os.PathSeparator) + p[len(home)+1:]
-	}
-	return p
+	return fsutil.RedactHome(p)
 }
 
 // displayText renders arbitrary text — an OS error string, which embeds whatever
 // absolute path the syscall was given — for the same surfaces displayPath serves.
-// The home prefix is replaced WHEREVER it appears, not only at the start, because
-// an error reads "symlink /a/b /home/u/.local/bin/abcd: permission denied" and the
+// The home prefix is replaced wherever it appears at a path boundary, because an
+// error reads "symlink /a/b /home/u/.local/bin/abcd: permission denied" and the
 // username sits in the middle. A path that merely starts with the home string but
 // continues into another name (/home/user2 against /home/user) is left alone.
+//
+// It is the same canonical redactor displayPath uses (fsutil.RedactHome), so the
+// two never disagree about what home looks like and both fold case on a
+// case-folding filesystem (iss-2608270908341622).
 func displayText(s string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" || home == string(os.PathSeparator) {
-		return s
-	}
-	home = filepath.Clean(home)
-	sep := string(os.PathSeparator)
-	out := strings.ReplaceAll(s, home+sep, "~"+sep)
-	// A bare mention of the home directory itself, with no trailing component.
-	return strings.ReplaceAll(out, home, "~")
+	return fsutil.RedactHome(s)
 }
 
 // errText renders an error for a human-facing note with the same hygiene.

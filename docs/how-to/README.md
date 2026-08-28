@@ -5,4 +5,4 @@ goal for a user who already knows the basics (e.g. "install abcd into a repo",
 "publish a release"). Goal-focused and to the point; background belongs in
 `../explanation/`.
 
-- [`install.md`](install.md) — install abcd as a plugin, as a command-line binary, or from source.
+- [`install.md`](install.md): Install abcd as a plugin, as a command-line binary, or from source.

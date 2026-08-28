@@ -1,34 +1,292 @@
 {
-  "roots": ["docs", "README.md"],
+  "roots": [
+    "docs",
+    "README.md"
+  ],
   "banned_tokens": [
-    {"id":"present_tense/previously","pattern":"(?i)\\bpreviously\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/formerly","pattern":"(?i)\\bformerly\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/to-be-implemented","pattern":"(?i)\\bto be implemented\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/has-been-replaced","pattern":"(?i)\\b(has|have|had)\\s+been\\s+replaced\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/we-switched","pattern":"(?i)\\bwe switched\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/renamed-from","pattern":"(?i)\\brenamed from\\b","severity":"blocker","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."},
-    {"id":"present_tense/no-longer","pattern":"(?i)\\bno longer\\b","severity":"warn","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"possible change-narration; if this states present reality (e.g. 'wait no longer than'), ignore, otherwise rephrase to present tense. Advisory (non-blocking) because it collides with legitimate present-state prose."},
-    {"id":"present_tense/deprecated","pattern":"(?i)\\bdeprecated\\b","severity":"warn","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"possible change-narration; documenting a currently-deprecated external API is present reality, so this is advisory (non-blocking). Rephrase if it narrates a change to abcd itself."},
-    {"id":"present_tense/migrated-from","pattern":"(?i)\\bmigrated from\\b","severity":"warn","successor":"present-tense phrasing","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"possible change-narration; 'records migrated from X are validated' is present-state provenance, so this is advisory (non-blocking). Rephrase if it narrates a one-off migration event."},
-
-    {"id":"harness/claude-code","pattern":"(?i)\\bclaude[ -]?code\\b","severity":"blocker","successor":"a generic term (the agent harness / an MCP host / the plugin surface)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an MCP host, the agent harness, the plugin surface), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/codex","pattern":"(?i)\\bcodex\\b","severity":"blocker","successor":"a generic term (the agent harness)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/gemini","pattern":"(?i)\\bgemini\\b","severity":"blocker","successor":"a generic term (the agent harness)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/repoprompt","pattern":"(?i)\\brepo[ -]?prompt\\b","severity":"blocker","successor":"a generic term (an MCP oracle)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an MCP oracle), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/specstory","pattern":"(?i)\\bspecstory\\b","severity":"blocker","successor":"a generic term (a hosted transcript service)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (a hosted transcript service), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/ralph","pattern":"(?i)\\bralph\\b","severity":"blocker","successor":"a generic term (an autonomous run loop)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an autonomous run loop), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"harness/flow-next","pattern":"(?i)\\bflow-next\\b","severity":"blocker","successor":"a generic term (a spec/task backend)","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (a spec/task backend), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."},
-    {"id":"names/record/glossary-self-identification","pattern":"(?i)this glossary file","severity":"blocker","successor":"a pointer to the canonical glossary at .abcd/development/brief/glossary/","allow_context":["(?i)<!--\\s*docs-lint:\\s*allow\\b"],"message":"names a banned token in user-facing content (names/record/glossary-self-identification); this repo's published surface does not name it. Use a pointer to the canonical glossary at .abcd/development/brief/glossary/, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."}
+    {
+      "id": "present_tense/previously",
+      "pattern": "(?i)\\bpreviously\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/formerly",
+      "pattern": "(?i)\\bformerly\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/to-be-implemented",
+      "pattern": "(?i)\\bto be implemented\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/has-been-replaced",
+      "pattern": "(?i)\\b(has|have|had)\\s+been\\s+replaced\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/we-switched",
+      "pattern": "(?i)\\bwe switched\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/renamed-from",
+      "pattern": "(?i)\\brenamed from\\b",
+      "severity": "blocker",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "change-narration in a doc body; docs state present reality only (git holds history). Rephrase, or add <!-- docs-lint: allow --> if this legitimately describes an external/deprecated thing."
+    },
+    {
+      "id": "present_tense/no-longer",
+      "pattern": "(?i)\\bno longer\\b",
+      "severity": "warn",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "possible change-narration; if this states present reality (e.g. 'wait no longer than'), ignore, otherwise rephrase to present tense. Advisory (non-blocking) because it collides with legitimate present-state prose."
+    },
+    {
+      "id": "present_tense/deprecated",
+      "pattern": "(?i)\\bdeprecated\\b",
+      "severity": "warn",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "possible change-narration; documenting a currently-deprecated external API is present reality, so this is advisory (non-blocking). Rephrase if it narrates a change to abcd itself."
+    },
+    {
+      "id": "present_tense/migrated-from",
+      "pattern": "(?i)\\bmigrated from\\b",
+      "severity": "warn",
+      "successor": "present-tense phrasing",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "possible change-narration; 'records migrated from X are validated' is present-state provenance, so this is advisory (non-blocking). Rephrase if it narrates a one-off migration event."
+    },
+    {
+      "id": "harness/claude-code",
+      "pattern": "(?i)\\bclaude[ -]?code\\b",
+      "severity": "blocker",
+      "successor": "a generic term (the agent harness / an MCP host / the plugin surface)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an MCP host, the agent harness, the plugin surface), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/codex",
+      "pattern": "(?i)\\bcodex\\b",
+      "severity": "blocker",
+      "successor": "a generic term (the agent harness)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/gemini",
+      "pattern": "(?i)\\bgemini\\b",
+      "severity": "blocker",
+      "successor": "a generic term (the agent harness)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific agent harness in user-facing content; abcd's published surface stays host-agnostic. Use a generic term, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/repoprompt",
+      "pattern": "(?i)\\brepo[ -]?prompt\\b",
+      "severity": "blocker",
+      "successor": "a generic term (an MCP oracle)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an MCP oracle), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/specstory",
+      "pattern": "(?i)\\bspecstory\\b",
+      "severity": "blocker",
+      "successor": "a generic term (a hosted transcript service)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (a hosted transcript service), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/ralph",
+      "pattern": "(?i)\\bralph\\b",
+      "severity": "blocker",
+      "successor": "a generic term (an autonomous run loop)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (an autonomous run loop), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "harness/flow-next",
+      "pattern": "(?i)\\bflow-next\\b",
+      "severity": "blocker",
+      "successor": "a generic term (a spec/task backend)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a specific bundled tool in user-facing content; abcd's published surface stays host-agnostic. Use a generic term (a spec/task backend), or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "names/record/glossary-self-identification",
+      "pattern": "(?i)this glossary file",
+      "severity": "blocker",
+      "successor": "a pointer to the canonical glossary at .abcd/development/brief/glossary/",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "names a banned token in user-facing content (names/record/glossary-self-identification); this repo's published surface does not name it. Use a pointer to the canonical glossary at .abcd/development/brief/glossary/, or add <!-- docs-lint: allow --> if naming it is genuinely necessary."
+    },
+    {
+      "id": "punctuation/em-dash-in-list-item",
+      "pattern": "^\\s*(?:[-*+]|[0-9]+\\.)\\s.*\u2014",
+      "severity": "blocker",
+      "successor": "a colon at the pivot (capital letter after it)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "em dash inside a list item; the writing-style guide (docs/reference/writing-style.md) takes a colon at the pivot instead. Rephrase, or add <!-- docs-lint: allow --> with a reason if the em dash is genuinely load-bearing."
+    },
+    {
+      "id": "spelling/behavior",
+      "pattern": "(?i)\\bbehavior\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (behaviour\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use behaviour-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    },
+    {
+      "id": "spelling/color",
+      "pattern": "(?i)\\bcolor\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (colour\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use colour-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    },
+    {
+      "id": "spelling/favor",
+      "pattern": "(?i)\\bfavor\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (favour\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use favour-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    },
+    {
+      "id": "spelling/flavor",
+      "pattern": "(?i)\\bflavor\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (flavour\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use flavour-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    },
+    {
+      "id": "spelling/artifact",
+      "pattern": "(?i)\\bartifact\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (artefact\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use artefact-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    },
+    {
+      "id": "spelling/analyze",
+      "pattern": "(?i)\\banalyze\\w*\\b",
+      "severity": "warn",
+      "successor": "the British spelling (analyse\u2026)",
+      "allow_context": [
+        "(?i)<!--\\s*docs-lint:\\s*allow\\b"
+      ],
+      "message": "US spelling in user-facing prose; this repo writes British English (docs/reference/writing-style.md). Use analyse-family spelling, or add <!-- docs-lint: allow --> for a quoted title, code-side name, or proper noun."
+    }
   ],
   "rules": {
-    "links_resolve": {"enabled": true, "severity": "blocker"},
-    "stray_root_docs": {"enabled": true, "severity": "blocker",
-      "allowlist": ["README","AGENTS","CHANGELOG","CONTRIBUTING","SECURITY","LICENSE","ACKNOWLEDGEMENTS"]},
-    "citation_footnotes": {"enabled": true, "severity": "blocker"},
-    "citation_crosswalk_rows": {"enabled": true, "severity": "blocker"},
-    "citation_url_syntax": {"enabled": true, "severity": "blocker"},
-    "citation_source_policy": {"enabled": true, "severity": "blocker", "refused_domains": []},
-    "citation_baseline": {"enabled": true, "severity": "blocker", "baseline": ".abcd/citations-baseline.json", "warn_after_days": 180, "block_after_days": 365}
+    "links_resolve": {
+      "enabled": true,
+      "severity": "blocker"
+    },
+    "stray_root_docs": {
+      "enabled": true,
+      "severity": "blocker",
+      "allowlist": [
+        "README",
+        "AGENTS",
+        "CHANGELOG",
+        "CONTRIBUTING",
+        "SECURITY",
+        "LICENSE",
+        "ACKNOWLEDGEMENTS"
+      ]
+    },
+    "citation_footnotes": {
+      "enabled": true,
+      "severity": "blocker"
+    },
+    "citation_crosswalk_rows": {
+      "enabled": true,
+      "severity": "blocker"
+    },
+    "citation_url_syntax": {
+      "enabled": true,
+      "severity": "blocker"
+    },
+    "citation_source_policy": {
+      "enabled": true,
+      "severity": "blocker",
+      "refused_domains": []
+    },
+    "citation_baseline": {
+      "enabled": true,
+      "severity": "blocker",
+      "baseline": ".abcd/citations-baseline.json",
+      "warn_after_days": 180,
+      "block_after_days": 365
+    }
   },
   "exempt_paths": [],
   "exempt_if_status": []

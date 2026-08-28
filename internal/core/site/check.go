@@ -305,7 +305,12 @@ func Check(req CheckRequest) (CheckResult, error) {
 	if err != nil {
 		return CheckResult{}, err
 	}
-	docsCfg, err := lint.LoadConfig(joinRepo(repoRoot, docsLintConfigRelPath))
+	docsRoot, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	docsCfg, err := lint.LoadConfigInRoot(docsRoot, docsLintConfigRelPath)
+	docsRoot.Close()
 	if err != nil && !os.IsNotExist(err) {
 		return CheckResult{}, err
 	}
