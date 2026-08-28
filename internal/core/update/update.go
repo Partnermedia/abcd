@@ -78,6 +78,11 @@ var brewCellarPrefixes = []string{
 	"/home/linuxbrew/.linuxbrew/Cellar/",
 }
 
+// caseFoldingFS is the package's view of fsutil.CaseFoldingFS, held as a var so a
+// test can provoke the case-folding branch of the Cellar-prefix match on a
+// case-sensitive host — the seam launch and lifeboat use for the same reason.
+var caseFoldingFS = fsutil.CaseFoldingFS
+
 // Plan maps the resolved PATH target onto the spc-32 dispatch table: only a
 // regular file outside a package manager's tree proceeds; every other shape
 // is a refusal naming the mechanism that owns it.
@@ -91,8 +96,14 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 	// puts the target under ~/.local/bin or a ~-rooted plugin root).
 	targetPath := fsutil.RedactHome(t.Path)
 	resolvedPath := fsutil.RedactHome(t.ResolvedPath)
+	// The prefix match folds case on a case-folding filesystem: macOS/APFS may
+	// echo a case-variant Cellar path, which byte-exact would fall through to the
+	// generic foreign-binary refusal and hand the operator the wrong remedy. The
+	// fold routes through the canonical fsutil.FoldPath key so a case-sensitive
+	// host keeps byte-exact semantics (iss-2608270908349399).
+	fold := caseFoldingFS()
 	for _, p := range brewCellarPrefixes {
-		if t.ResolvedPath != "" && strings.HasPrefix(t.ResolvedPath, p) {
+		if t.ResolvedPath != "" && strings.HasPrefix(fsutil.FoldPath(t.ResolvedPath, fold), fsutil.FoldPath(p, fold)) {
 			return &Refusal{
 				Shape:  "package-manager",
 				Detail: "the binary resolves into " + resolvedPath + ", which Homebrew owns; a self-update there would fight the package manager",
