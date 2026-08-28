@@ -6,7 +6,7 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-prd_path: .abcd/intents/itd-42/prd.md
+prd_path: null
 grilled_at: 2026-05-16T17:21:40Z
 grill_session_id: 1d0ed7a5-b52e-455d-b353-4b30685ad7ae
 grilled_intent_hash: f56308389573c7a4c993da27eeb0243365843713b27dc2c3532b7515ae9d9247

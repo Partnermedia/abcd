@@ -6,7 +6,7 @@ kind: null
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: []
-prd_path: ".abcd/intents/itd-61/prd.md"
+prd_path: null
 grill_session_id: 61d0f1de-0002-4a61-9c0d-000000000061
 glossary_terms_used:
 - core/brief

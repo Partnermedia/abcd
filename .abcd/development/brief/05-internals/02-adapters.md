@@ -57,7 +57,7 @@ not by name.
 **Stability.** Vendor JSON schemas may change between RepoPrompt releases. The
 adapter probes defensively, version-stamps in `_provenance.json`, and on a parse
 failure logs a warning and falls back to the existing
-`.abcd/work/reviews/*.md` — never losing what was already synced.
+`.abcd/work/reviews/<YYYY-MM-DD>-<scope>/*.md` (the charter grammar — see `.abcd/work/reviews/README.md`) — never losing what was already synced.
 
 **Privacy.** Filter strictly by workspace → project-path match before reading any
 chat content.
@@ -84,7 +84,7 @@ structure is ambiguous.
 | spec reader | native spec store (`internal/adapter/spec`) | Reads the native spec/task tree, newest-first; powers spec-essence |
 | transcript reader | native transcript store (`internal/adapter/history`) | Reads the root-SHA-keyed local corpus; merge by timestamp/content hash when an imported specstory source is also present |
 | memory reader | `.abcd/memory/` | Reads the curated memory substrate (repo by default; see [`07-memory.md § 0`](07-memory.md#0-memory-scopes-and-routing)). **Read-only on any vendor harvest source** — see invariant below |
-| reviews reader | `.abcd/work/reviews/*.md` + spec-tied reviews | Reads oracle/review artefacts written by the `oracle` seam's capture side; powers review-collator |
+| reviews reader | `.abcd/work/reviews/<YYYY-MM-DD>-<scope>/*.md` (charter grammar) + spec-tied reviews | Reads oracle/review artefacts written by the `oracle` seam's capture side; powers review-collator |
 | `claude_md` reader | `CLAUDE.md` + `git log -p CLAUDE.md` | Snapshot + history |
 | `adr` reader | ADR location varies per project | Probes common paths: `docs/development/decisions/adrs/`, `docs/adr/`, `docs/architecture/decisions/`, `adrs/`. Newest-first; respects `Superseded-By`. Configurable via `.abcd/config.json` → `adr.path` if non-standard |
 | `git_log` reader | `git log` | Powers spec-window indexing for chat-distiller |

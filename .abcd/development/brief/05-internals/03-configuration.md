@@ -385,7 +385,8 @@ external plug-in — so this brief does not restate it here.
 ```
 .abcd/
 ├── config.json                         # config + the `meta` setup block (schema_version, setup_version, ...)
-├── corpus.json
+├── config/                             # per-surface machine records: identity.json, launch-payload.json, version-location.json
+├── corpus.json                         # validation-corpus manifest — a design target (itd-25); not yet in the tree
 ├── rules.json                          # per-repo override of plugin-bundled rule defaults (per itd-3)
 ├── development/                        # durable design record — flat by artefact type (per adr-30)
 │   ├── personas.json                   # placeholder personas (Alice, Bob, Carol, ...)
@@ -437,8 +438,9 @@ external plug-in — so this brief does not restate it here.
 ```
 docs/
 ├── README.md
+├── assets/                            # shared images and static assets (adr-47)
 ├── tutorials/                          # learning guides
-├── guides/                             # task-oriented how-tos
+├── how-to/                             # task-oriented how-tos
 ├── reference/                          # command reference, config schemas
 └── explanation/                        # conceptual: lifeboats, dev-sync, intents, capture, etc.
 ```
