@@ -1,8 +1,8 @@
 ---
 id: itd-154
 slug: s4-gate-failed-bootstrap-provisioned-no-binary
-spec_id: null
-kind: null
+spec_id: spc-47
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,11 @@ Graduated from `iss-253`: The Cut A §4 manual gate FAILED on assertions 3 and 4
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** a machine with no Go toolchain and no abcd binary present, **when** the plugin is installed and a session starts, **then** bootstrap downloads the release binary built for that platform and `/abcd` answers in about a second.
+- **Given** the bootstrap provisioning step runs, **when** it fetches the binary, **then** it emits a visible, loud-staged `provisioning the abcd binary…` line and never proceeds silently.
+- **Given** a binary has been downloaded, **when** bootstrap installs it into the plugin root, **then** the binary is verified against the release checksum before it is used.
+- **Given** the download fails or the checksum does not match, **when** bootstrap runs, **then** it fails loudly with a clear message rather than leaving the UserPromptSubmit and PreToolUse hooks in a limping `No such file or directory` state.
+- **Given** the plugin release payload, **when** it is inspected, **then** it bundles no platform binaries; the binary arrives only via the checksum-verified download.
 
 ## Open Questions
 

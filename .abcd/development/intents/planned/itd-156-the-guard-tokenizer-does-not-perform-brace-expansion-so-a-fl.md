@@ -1,8 +1,8 @@
 ---
 id: itd-156
 slug: the-guard-tokenizer-does-not-perform-brace-expansion-so-a-fl
-spec_id: null
-kind: null
+spec_id: spc-49
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
@@ -22,7 +22,10 @@ Graduated from `iss-2608221457227161`: The guard tokenizer does not perform brac
 
 ## Acceptance Criteria
 
-> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for "shipped" before this draft can be planned._
+- **Given** the command `git push {--force,} origin main`, whose unquoted brace group expands in bash to byte-identical `--force` argv, **when** the guard tokenizes it, **then** the guard refuses the command fail-closed rather than reading the literal token `{--force,}` and allowing it.
+- **Given** a brace sequence enclosed in quotes (for example `'{--force,}'`), **when** the guard evaluates the command, **then** it is not treated as a brace expression and is not false-positived.
+- **Given** a `${VAR}` parameter expansion in a command, **when** the guard evaluates it, **then** it is not mistaken for a brace group to refuse.
+- **Given** an ordinary command that contains no unquoted brace group, **when** the guard evaluates it, **then** its verdict is unaffected by the new brace handling.
 
 ## Open Questions
 
