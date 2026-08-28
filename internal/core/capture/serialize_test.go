@@ -33,18 +33,49 @@ func TestBuildIssueTextRoundTrip(t *testing.T) {
 			name:   "abcd id list is unquoted inline",
 			fields: []kv{{"related_intents", []string{"itd-4", "fn-12", "iss-3"}}},
 			body:   "b",
-			want:   "---\nrelated_intents: [itd-4, fn-12, iss-3]\n---\n\nb",
+			want:   "---\nrelated_intents: [itd-4, fn-12, iss-3]\n---\n\nb\n",
 		},
 		{
 			name:   "non-id list is per-item quoted",
 			fields: []kv{{"synthesis_clusters", []string{"cluster a", "cluster b"}}},
 			body:   "b",
-			want:   "---\nsynthesis_clusters: [\"cluster a\", \"cluster b\"]\n---\n\nb",
+			want:   "---\nsynthesis_clusters: [\"cluster a\", \"cluster b\"]\n---\n\nb\n",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := buildIssueText(tc.fields, tc.body)
+			if err != nil {
+				t.Fatalf("buildIssueText: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got:\n%q\nwant:\n%q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildIssueTextTrailingNewline pins the on-disk contract: a serialised
+// record ends with exactly one trailing newline, whether or not the caller's body
+// carried one (iss-175 — 170 of 174 ledger files lacked an EOF newline because the
+// writer appended the body verbatim). A body already ending in a newline is not
+// doubled; an empty body keeps the single blank-line separator after the closing
+// delimiter.
+func TestBuildIssueTextTrailingNewline(t *testing.T) {
+	fields := []kv{{"id", "iss-1"}}
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"no trailing newline gets exactly one", "body text", "---\nid: \"iss-1\"\n---\n\nbody text\n"},
+		{"already-terminated body is not doubled", "body text\n", "---\nid: \"iss-1\"\n---\n\nbody text\n"},
+		{"multi-trailing-newline body collapses to one", "body text\n\n\n", "---\nid: \"iss-1\"\n---\n\nbody text\n"},
+		{"empty body keeps the separator only", "", "---\nid: \"iss-1\"\n---\n\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := buildIssueText(fields, tc.body)
 			if err != nil {
 				t.Fatalf("buildIssueText: %v", err)
 			}
