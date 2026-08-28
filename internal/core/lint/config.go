@@ -345,6 +345,39 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, err
 		}
 	}
+	return parseConfig(data)
+}
+
+// LoadConfigInRoot reads and validates a lint config confined to root: every
+// path component is resolved inside root, so a symlinked ancestor cannot walk
+// the read out of the tree, and the leaf is size- and regular-file-guarded the
+// same way LoadConfig's is. Callers that already hold an os.Root for the repo
+// (the site build, for one) use this so their config read matches the
+// ancestor-symlink containment their other reads have, rather than re-opening
+// by absolute path.
+func LoadConfigInRoot(root *os.Root, rel string) (Config, error) {
+	data, err := fsutil.ReadGuardedInRoot(root, rel, maxLintConfigBytes)
+	if err != nil {
+		switch {
+		case os.IsNotExist(err):
+			return Config{}, err
+		case errors.Is(err, syscall.ELOOP):
+			return Config{}, fmt.Errorf("lint: config is a symlink (refusing to follow)")
+		case errors.Is(err, fsutil.ErrNotRegular):
+			return Config{}, fmt.Errorf("lint: config is not a regular file")
+		case errors.Is(err, fsutil.ErrTooBig):
+			return Config{}, fmt.Errorf("lint: config exceeds the %d-byte cap", maxLintConfigBytes)
+		default:
+			return Config{}, err
+		}
+	}
+	return parseConfig(data)
+}
+
+// parseConfig decodes and validates a lint config's bytes. It is the shared
+// body of LoadConfig and LoadConfigInRoot, so the two read paths cannot drift
+// in what they accept.
+func parseConfig(data []byte) (Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err

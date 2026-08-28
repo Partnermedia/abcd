@@ -78,10 +78,16 @@ func loadBucket(repoRoot, bucket string) ([]Spec, error) {
 // frontmatter lacks a well-formed id or intent is malformed and rejected.
 func parseSpec(relPath, content, bucket string) (Spec, error) {
 	fields := frontmatter.Fields(strings.Split(content, "\n"))
+	// A YAML null (`id: NULL`, `~`, `null`, …) is an UNSET field, not a malformed
+	// value. Without this normalisation Validate saw the literal "NULL" and quoted
+	// it back as a bad id — a "malformed shape" diagnosis — while record-lint, which
+	// gates on frontmatter.IsNull first, called the same field unset. Two diagnoses
+	// for one field. Routing every null spelling to the empty string here makes the
+	// two gates agree, the iss-286 direction (iss-2608270908332975).
 	sp := Spec{
-		ID:     fields["id"].Value,
-		Slug:   fields["slug"].Value,
-		Intent: fields["intent"].Value,
+		ID:     nullToUnset(fields["id"].Value),
+		Slug:   nullToUnset(fields["slug"].Value),
+		Intent: nullToUnset(fields["intent"].Value),
 		Status: bucket,
 		Path:   relPath,
 	}
@@ -89,6 +95,17 @@ func parseSpec(relPath, content, bucket string) (Spec, error) {
 		return Spec{}, fmt.Errorf("spec: malformed %s: %w", relPath, err)
 	}
 	return sp, nil
+}
+
+// nullToUnset maps a YAML null scalar to the empty (unset) string via the one
+// canonical null predicate, so a null frontmatter field reads as unset rather
+// than as a malformed literal value. The empty string is itself null, so a
+// genuinely absent field passes through unchanged.
+func nullToUnset(v string) string {
+	if frontmatter.IsNull(v) {
+		return ""
+	}
+	return v
 }
 
 // NextID mints the next spec id. The rule is:

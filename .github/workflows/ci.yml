@@ -380,6 +380,29 @@ jobs:
           fi
           bash scripts/check-issue-resolution.sh commits "$BASE_SHA" HEAD
 
+      # Same shape again for the decisions ledger. The cases first, for the same
+      # reason.
+      - name: Decisions-append gate can fail (cases)
+        run: bash scripts/check-decisions-append-cases.sh
+
+      # DA001-DA004 over the pull request's own range: every line the range adds
+      # to .abcd/work/DECISIONS.md landed after the last line its parent had
+      # (DA001), no committed decision was removed against any parent (DA002),
+      # no merge holds a line more times than its parents hold it between them
+      # (DA003), and no commit introduced a NUL byte (DA004 — one NUL makes git
+      # call the ledger binary, which would leave every rule above with no hunks
+      # to read). Merges are checked, not skipped — a forged conflict resolution
+      # appears in no single-parent commit.
+      - name: Decisions ledger is append-only (DA001-DA004)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "decisions-append: no usable base ref for this event — the range check is skipped."
+            exit 0
+          fi
+          bash scripts/check-decisions-append.sh commits "$BASE_SHA" HEAD
+
   # Self-discovering smoke harness (evals/): builds the binary, walks the Cobra
   # command tree in-process, and runs every command's --help plus the read-only
   # verbs against the built binary. Catches a command that compiles but panics when

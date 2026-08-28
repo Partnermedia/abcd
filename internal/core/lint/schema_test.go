@@ -145,8 +145,11 @@ func TestRecordSchemaFilenameMatchesID(t *testing.T) {
 	adrs := "rec/decisions/adrs"
 	writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-21\n---\n# ADR-12\n")
 	writeFile(t, root, adrs+"/0013-memory.md", "---\nid: adr-13\n---\n# ADR-13\n")
-	// A record with no id at all is a different (larger) schema question, not this
-	// rule's: it must stay silent rather than invent an agreement to check.
+	// A record with no id at all: the filename-AGREEMENT rule still invents no
+	// agreement for it (no "filename claims" mismatch) — but an ADR's id is a
+	// required property, so its absence is now its own finding
+	// (iss-2608270908344426), because the record dispatcher confirms the id before
+	// it will render the record.
 	writeFile(t, root, adrs+"/0007-grill.md", "# ADR-7\n")
 	writeFile(t, root, "rec/intents/planned/itd-4-capture.md", "---\nid: itd-5\nkind: standalone\nspec_id: null\n---\n# x\n")
 
@@ -154,14 +157,23 @@ func TestRecordSchemaFilenameMatchesID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := countRule(fs, ruleRecordSchema); n != 2 {
-		t.Fatalf("expected 2 filename/id findings, got %d: %+v", n, fs)
+	if n := countRule(fs, ruleRecordSchema); n != 3 {
+		t.Fatalf("expected 3 findings (two filename/id mismatches + the id-less ADR), got %d: %+v", n, fs)
 	}
 	if !findingWith(fs, filepath.Join(adrs, "0012-issue-ledger.md"), ruleRecordSchema, "filename claims id 'adr-12'") {
 		t.Errorf("expected the ADR mismatch: %+v", fs)
 	}
 	if !findingWith(fs, filepath.Join("rec", "intents", "planned", "itd-4-capture.md"), ruleRecordSchema, "filename claims id 'itd-4'") {
 		t.Errorf("expected the intent mismatch: %+v", fs)
+	}
+	// The id-less ADR is caught by the required-property check, NOT by an invented
+	// filename agreement.
+	grill := filepath.Join(adrs, "0007-grill.md")
+	if !findingWith(fs, grill, ruleRecordSchema, "missing required property 'id'") {
+		t.Errorf("expected a missing-id finding on the id-less ADR: %+v", fs)
+	}
+	if findingWith(fs, grill, ruleRecordSchema, "filename claims") {
+		t.Errorf("the filename rule must not invent an agreement for an id-less record: %+v", fs)
 	}
 }
 
@@ -622,5 +634,79 @@ func TestRecordSchemaGuardsTheRealRecord(t *testing.T) {
 		if rc.RecordStores[prefix] == "" {
 			t.Errorf("record_schema declares no store for %q", prefix)
 		}
+	}
+}
+
+// TestRecordSchemaFilenameSlugAgrees pins the slug half of the filename ↔
+// frontmatter agreement, the sibling of the id half checkRecordFilename already
+// asserts. Both halves are one value written twice, and until this landed only
+// the CAPTURE READER asked the slug question — so a record renamed by hand
+// passed record-lint and every CI gate, then dropped to a Skipped line at read
+// time. A silent skip is exactly the failure mode this gate exists to convert
+// into a red one.
+//
+// The comparison is EXACT, with no prefix tolerance, because the stores apply
+// their length cap BEFORE the value forks into the two writers, never after:
+// capture derives and caps at internal/core/capture/roots.go:107-113
+// (deriveSlug) and then hands the one capped string to both
+// internal/core/capture/alloc.go:150 (the filename) and
+// internal/core/capture/workflow.go:143 (fm["slug"]); the intent store caps the
+// same way at internal/core/intent/create.go:185-186. A filename is therefore
+// never a truncated form of a longer field, and tolerating a prefix would
+// license precisely the drift this rule catches. Both packages call the ONE
+// splitter (recordid.SplitRecordFilename) rather than restating the pattern, so
+// the gate and the reader cannot reach different verdicts on one record.
+func TestRecordSchemaFilenameSlugAgrees(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	iss := func(id, slug string) string {
+		return "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+			"\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n"
+	}
+	// The control: name and field agree, and the rule must stay silent.
+	writeFile(t, root, issues+"/open/iss-1-broken-thing.md", iss("iss-1", "broken-thing"))
+	// The live ledger defect (iss-2608231237300997): the filename kept a handle
+	// the frontmatter had already moved off.
+	writeFile(t, root, issues+"/open/iss-2-inspirations-lead-removal.md", iss("iss-2", "no-way-to-edit-a-file"))
+	// The live intent defect (itd-47): a stale FOREIGN handle in the field, where
+	// spc-12 now names an unrelated live spec — so the record answers to a name
+	// that points at someone else's record.
+	writeFile(t, root, "rec/intents/superseded/itd-47-oracle-gates-autonomous-mode.md",
+		"---\nid: itd-47\nslug: spc-12-oracle-gates-autonomous-mode\nkind: null\nspec_id: null\nsuperseded_by: adr-22\n---\n# superseded\n")
+	// An ADR whose zero-padded numeric filename agrees with its slug: the check
+	// must read the id half of a bare-numeric name without tripping on it.
+	writeFile(t, root, "rec/decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md",
+		"---\nid: adr-22\nslug: bundled-deps-as-pluggable-adapters\nsupersedes: [itd-47]\nsuperseded_by: null\nrelated_adrs: []\n---\n# ADR-22\n")
+	// A record carrying NO slug at all is a different (and larger) schema
+	// question, owned by checkRecordRequiredFields for the stores that declare
+	// one. Absence must not be read as disagreement, or every ADR-shaped store
+	// without the property turns red.
+	writeFile(t, root, "rec/specs/open/spc-12-something-else.md",
+		"---\nid: spc-12\nintent_id: null\n---\n# spec\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ file, fnSlug, fmSlug string }{
+		{filepath.Join(issues, "open", "iss-2-inspirations-lead-removal.md"),
+			"inspirations-lead-removal", "no-way-to-edit-a-file"},
+		{filepath.Join("rec", "intents", "superseded", "itd-47-oracle-gates-autonomous-mode.md"),
+			"oracle-gates-autonomous-mode", "spc-12-oracle-gates-autonomous-mode"},
+	} {
+		// The message must name BOTH halves: told only that "the slug disagrees",
+		// a reader still has to open the file to learn which side to correct.
+		if !findingWith(fs, c.file, ruleRecordSchema, c.fnSlug) {
+			t.Errorf("no record_schema finding on %s naming the filename slug %q: %+v", c.file, c.fnSlug, fs)
+		}
+		if !findingWith(fs, c.file, ruleRecordSchema, c.fmSlug) {
+			t.Errorf("no record_schema finding on %s naming the frontmatter slug %q: %+v", c.file, c.fmSlug, fs)
+		}
+	}
+	// Exactly the two drifted records — the agreeing issue, the agreeing ADR and
+	// the slugless spec must all stay silent, or the rule is a false-blocker
+	// generator on the committed tree.
+	if n := countRule(fs, ruleRecordSchema); n != 2 {
+		t.Fatalf("expected exactly 2 record_schema findings (the two drifted records), got %d: %+v", n, fs)
 	}
 }

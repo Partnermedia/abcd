@@ -578,7 +578,12 @@ type dirTree struct{ root string }
 func NewDirTree(root string) PayloadTree { return &dirTree{root: root} }
 
 func (t *dirTree) resolve(rel string) (string, bool) {
-	if rel == "" || path.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, "../") {
+	// The canonical lexical guard, not a hand-rolled one: rejecting only an
+	// absolute path or a leading "../" let an embedded a/../../b traversal
+	// through, which filepath.Join then cleans into an escape of t.root
+	// (iss-2608270655490198). ValidRelPath refuses every unclean or escaping
+	// form.
+	if !fsutil.ValidRelPath(rel) {
 		return "", false
 	}
 	return filepath.Join(t.root, filepath.FromSlash(rel)), true

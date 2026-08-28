@@ -4,13 +4,13 @@ How established agentic-AI vocabulary maps onto abcd. Each row gives a term, a
 one-line established meaning cited to a primary source, and abcd's position as
 exactly one of four labels:
 
-- **USES** — the concept is native; the row names the verb, surface, or
+- **USES**: The concept is native; the row names the verb, surface, or
   principle that embodies it.
-- **ADAPTS** — abcd holds the same ground under a different, sharper name; the
+- **ADAPTS**: abcd holds the same ground under a different, sharper name; the
   row says what is sharpened and why.
-- **REJECTS** — abcd deliberately does not do this, for a reason the
+- **REJECTS**: abcd deliberately does not do this, for a reason the
   development record states.
-- **WATCHING** — the position is genuinely open; the row names the record entry
+- **WATCHING**: The position is genuinely open; the row names the record entry
   tracking it.
 
 Admission is deliberately strict: a term appears only with a primary anchor —
@@ -24,16 +24,16 @@ deep-linked.
 
 ## Index by theme
 
-- **Protocols** — Agent Payments Protocol (AP2) · Agent2Agent Protocol (A2A) ·
+- **Protocols**: Agent Payments Protocol (AP2) · Agent2Agent Protocol (A2A) ·
   Model Context Protocol (MCP)
-- **The core loop** — Agent loop · Autonomous agent · Multi-agent systems ·
+- **The core loop**: Agent loop · Autonomous agent · Multi-agent systems ·
   Orchestration · Tool use
-- **Context** — Context engineering · Grounding · Memory ·
+- **Context**: Context engineering · Grounding · Memory ·
   Retrieval-augmented generation (RAG)
-- **Safety** — Guardrails · Human-in-the-loop · Prompt injection · Sandboxing
-- **Governance** — Agent identity · Authorization · Observability ·
+- **Safety**: Guardrails · Human-in-the-loop · Prompt injection · Sandboxing
+- **Governance**: Agent identity · Authorization · Observability ·
   Policy-as-code · Tamper-evidence
-- **Operations** — Agent harness · Agent skills · AGENTS.md ·
+- **Operations**: Agent harness · Agent skills · AGENTS.md ·
   Durable execution · Evaluations (evals)
 
 ## The crosswalk
@@ -99,7 +99,7 @@ deep-linked.
 
 [^hitl]: European Commission High-Level Expert Group on AI, "Ethics Guidelines for Trustworthy AI", 2019, DOI 10.2759/346720, https://digital-strategy.ec.europa.eu/en/library/ethics-guidelines-trustworthy-ai; Regulation (EU) 2024/1689 (the AI Act), Article 14 "Human oversight", https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng. ISO/IEC 22989:2022 is sometimes cited for this term, but its defined-terms clause does not include it.
 
-[^mem]: AWS, "Add memory to your Amazon Bedrock AgentCore agent", https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html; Google, "Memory: Long-term knowledge with MemoryService", Agent Development Kit documentation, https://adk.dev/sessions/memory/; research antecedent: Park, J. S., et al., "Generative Agents: Interactive Simulacra of Human Behavior", UIST 2023, DOI 10.1145/3586183.3606763.
+[^mem]: AWS, "Add memory to your Amazon Bedrock AgentCore agent", https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html; Google, "Memory: Long-term knowledge with MemoryService", Agent Development Kit documentation, https://adk.dev/sessions/memory/; research antecedent: Park, J. S., et al., "Generative Agents: Interactive Simulacra of Human Behavior", UIST 2023, DOI 10.1145/3586183.3606763. <!-- docs-lint: allow — US spelling inside a quoted paper title -->
 
 [^mcp]: Model Context Protocol, "Specification", revision 2025-11-25, https://modelcontextprotocol.io/specification/2025-11-25; stewarded by the Agentic AI Foundation, a directed fund of the Linux Foundation, since 9 December 2025, https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation (donation announcement: https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation).
 

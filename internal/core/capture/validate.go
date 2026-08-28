@@ -8,36 +8,14 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // knownFields is the additionalProperties:false allow-list from
-// issue.schema.json.
-var knownFields = map[string]bool{
-	"schema_version": true, "id": true, "slug": true, "severity": true,
-	"category": true, "source": true, "found_during": true, "found_at": true,
-	"details": true, "suggested_fix": true, "related_intents": true,
-	"promoted_to": true, "related_specs": true, "related_issues": true,
-	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
-	"resolved_by": true, "blocked_by": true,
-	// shipped_in names the release that already carried this record's work, so the
-	// derivation can leave it out of a later cut (iss-2608241612087533). Optional
-	// and rare — only a ledger-hygiene close, for a fix released long ago, has
-	// anything to say here. It must be a KNOWN property or every write carrying
-	// one is refused, which is exactly how the first draft of this feature shipped
-	// a flag that could never execute.
-	"shipped_in": true,
-	// impact is the product judgement the derived version and the generated
-	// changelog are computed from (spc-10). It is optional here — an open issue
-	// has not been judged yet, and the record-lint blocker issue_impact_valid is
-	// what gates the move into resolved/ — but it must be a KNOWN property, or
-	// the reader drops every judged record as malformed.
-	"impact": true,
-	// created/updated are no longer written, but legacy ledgers still carry
-	// them. Tolerate (accept, then drop) them on read so an existing committed
-	// ledger is not rejected as an unknown property; the reader ignores their
-	// values entirely.
-	"created": true, "updated": true,
-}
+// issue.schema.json — the ONE copy in core/issueschema, the same set the record
+// lint reads, so the reader and the committed-ledger gate cannot disagree about
+// which keys a well-formed record may carry.
+var knownFields = issueschema.Known
 
 // uniqueItemsFields are the array properties issue.schema.json flags
 // uniqueItems:true.
@@ -194,12 +172,32 @@ func validateInvariants(fm map[string]any, status State, path string) error {
 		return fmt.Errorf("%w: id %q does not match ^iss-[0-9]+$", ErrInvariantViolation, id)
 	}
 	name := filepath.Base(path)
-	m := reFilenameID.FindStringSubmatch(name)
-	if m == nil {
+	fnID, fnSlug, ok := recordid.SplitRecordFilename(issFamily, name)
+	if !ok {
 		return fmt.Errorf("%w: filename %q does not match iss-N[-slug].md", ErrInvariantViolation, name)
 	}
-	if m[1] != id {
-		return fmt.Errorf("%w: filename id %q does not match frontmatter id %q", ErrInvariantViolation, m[1], id)
+	if fnID != id {
+		return fmt.Errorf("%w: filename id %q does not match frontmatter id %q", ErrInvariantViolation, fnID, id)
+	}
+	// The slug is the other half of the same agreement, and it is checked the
+	// same way: exactly, not leniently. Capture derives the slug once (deriveSlug
+	// is where the 60-char cap is applied), normalises it once, and hands that one
+	// string to both writers — reservePath builds issID+"-"+slug+".md" while
+	// commitCapture stores the identical variable as fm["slug"]. The cap therefore
+	// lands BEFORE the fork, so a filename is never a truncated form of a longer
+	// field, and a prefix match would only license the drift this check exists to
+	// catch. A name with no slug segment at all likewise disagrees: the schema
+	// requires a non-empty slug, so "" is a value that names a different record.
+	//
+	// Without this, a record renamed by hand keeps a stale handle in its filename
+	// while its frontmatter says something else, and the readers that locate a
+	// record by name and the readers that trust the field part company in silence.
+	// record-lint's record_schema asks the SAME question of the committed corpus
+	// through the same splitter, so the drift is a red gate rather than a silent
+	// skip here.
+	slug, _ := fm["slug"].(string)
+	if fnSlug != slug {
+		return fmt.Errorf("%w: filename slug %q does not match frontmatter slug %q", ErrInvariantViolation, fnSlug, slug)
 	}
 
 	_, hasResolution := fm["resolution"]

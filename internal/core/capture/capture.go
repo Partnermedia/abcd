@@ -17,10 +17,20 @@ package capture
 import (
 	"errors"
 	"regexp"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // LedgerRelPath is the ledger root relative to the repo worktree.
 const LedgerRelPath = ".abcd/work/issues"
+
+// issFamily is the ledger's record family, the argument this package hands
+// recordid.SplitRecordFilename. Ledger filenames are split by that ONE shared
+// splitter rather than by a regex restated here: the record-lint gate asks the
+// same filename ↔ frontmatter question of the committed corpus, and two copies
+// of the pattern would let a record pass one side and fail the other — which is
+// precisely the split (lint-green, reader-skipped) this sharing closes.
+const issFamily = "iss"
 
 // Enumerated field types (validated at the boundary; values mirror
 // scripts/abcd/schemas/issue.schema.json).
@@ -51,21 +61,23 @@ const (
 	StateWontfix  State = "wontfix"
 )
 
-var validSeverities = map[Severity]bool{
-	SeverityNitpick: true, SeverityMinor: true,
-	SeverityMajor: true, SeverityCritical: true,
-}
+// The enum-membership sets are derived from the ONE copy of the value lists in
+// core/issueschema, the same lists the record lint reads — so the ledger reader
+// and the committed-ledger gate can never disagree about what a legal value is.
+var (
+	validSeverities = enumSet[Severity](issueschema.Severities)
+	validCategories = enumSet[Category](issueschema.Categories)
+	validSources    = enumSet[Source](issueschema.Sources)
+)
 
-var validCategories = map[Category]bool{
-	"bug": true, "documentation": true, "drift": true, "inconsistency": true,
-	"tech-debt": true, "security": true, "ux": true, "process": true,
-	"architectural-insight": true, "future-work-seed": true, "observation": true,
-}
-
-var validSources = map[Source]bool{
-	"plan-review": true, "impl-review": true, "manual-test": true,
-	"review-followup": true, "agent-finding": true, "agent-observation": true,
-	"user-observation": true, "drift-detection": true, "memory-curation": true,
+// enumSet builds a membership set of a typed-string enum from its canonical
+// string values.
+func enumSet[T ~string](vals []string) map[T]bool {
+	m := make(map[T]bool, len(vals))
+	for _, v := range vals {
+		m[T(v)] = true
+	}
+	return m
 }
 
 // ResolvedBy is an optional structured pointer to what resolved an issue.
@@ -251,15 +263,23 @@ var (
 
 // Field regexes mirroring issue.schema.json.
 var (
-	reIssID       = regexp.MustCompile(`^iss-[0-9]+$`)
-	reItdID       = regexp.MustCompile(`^itd-[0-9]+$`)
-	reSpcID       = regexp.MustCompile(`^spc-[0-9]+$`)
-	reCommitSha   = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
-	reSlug        = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	reFilenameID  = regexp.MustCompile(`^(iss-[0-9]+)(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$`)
-	reAbcdListID  = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
-	reSortIssID   = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
-	reScalarKey   = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	statusDirs    = [3]State{StateOpen, StateResolved, StateWontfix}
-	statusDirName = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
+	reIssID     = regexp.MustCompile(`^iss-[0-9]+$`)
+	reItdID     = regexp.MustCompile(`^itd-[0-9]+$`)
+	reSpcID     = regexp.MustCompile(`^spc-[0-9]+$`)
+	reCommitSha = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+	reSlug      = issueschema.SlugRe // the ONE kebab-slug pattern, shared with record-lint
+	// reIssNameClaim matches a filename that CLAIMS to be a ledger record: the
+	// family prefix followed by an ordinal. It is deliberately LOOSER than
+	// recordid.SplitRecordFilename, and the gap between the two is the point — a
+	// name that claims to be a record and then is not well-formed is reported as a
+	// skip rather than dropped, while a file claiming nothing (README.md,
+	// notes.md, iss-notes.md, the allocator lock) stays silently ignored. The
+	// ordinal is what parts the two: prose that merely starts with the prefix is
+	// not asserting an id.
+	reIssNameClaim = regexp.MustCompile(`^iss-[0-9]`)
+	reAbcdListID   = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
+	reSortIssID    = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
+	reScalarKey    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	statusDirs     = [3]State{StateOpen, StateResolved, StateWontfix}
+	statusDirName  = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
 )

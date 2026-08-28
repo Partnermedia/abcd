@@ -4,6 +4,13 @@ Append-only, one line per decision, newest last. Date-prefixed. Architecture-sha
 decisions graduate to an ADR under [`../development/decisions/adrs/`](../development/decisions/adrs/).
 Graduate this file to per-file `decisions/<date>--<slug>.md` if size or
 parallel-agent merge contention bites.
+The DA001-DA004 gates (`scripts/check-decisions-append.sh`) refuse any commit
+that inserts, rewrites, or deletes a line below this header — the last entry
+included — or introduces a NUL byte: correct an old entry by appending a new
+dated entry, never by editing the old one in place. Redaction and the
+graduation above are deliberate gate-edit-and-review changes: the pull request
+that deletes lines also adjusts or retires the gate in the same diff, reviewed
+together (the script's header says why there is no escape hatch).
 
 - 2026-07-06 — Rebuild abcd from scratch in Go, no external tools (specstory,
   RepoPrompt, flow-next, Ralph, codex); ship an MVP, extend via the companion harness then
@@ -2153,3 +2160,13 @@ parallel-agent merge contention bites.
   itd-43's glossary reconcile, itd-24's core/epic entry, and the
   install-template eol pin. Recorded open: the unknown-property half of the
   ledger-visibility gap and itd-5's struck-tiebreak residue.
+
+- 2026-08-28 — Punctuation enforcement stays mechanical-only (adr-54): the
+  em-dash core shipped as the punctuation/em-dash-in-list-item banned token,
+  corpus evidence (0 TP, unclosable FP classes) rules the colon/semicolon
+  casing lints unbuildable under the warn-then-promote policy, and itd-141
+  is superseded at its planning interview. Same session: audience-by-
+  placement ratified (adr-53) with the Audience section landing in the
+  writing-style guide; both decisions rest on the 2026-08-28 docs-audience
+  research note.
+- 2026-08-27: `.abcd/work/attribution-rewrite-2026-08-06/` promoted to `.abcd/development/research/data/` (iss-2608271707587825) — the tables are historical and complete, durable-record shape; this supersedes the highlight-not-inventory adjudication for that path (intake.md's clearance stands unchanged).

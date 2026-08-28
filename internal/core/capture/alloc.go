@@ -343,8 +343,8 @@ func findIssue(issuesRoot, issID string) (string, State, error) {
 				matches = append(matches, match{filepath.Join(dir, n), sub})
 				continue
 			}
-			m := reFilenameID.FindStringSubmatch(n)
-			if len(n) > len(prefix) && n[:len(prefix)] == prefix && m != nil && m[1] == issID {
+			fnID, _, ok := recordid.SplitRecordFilename(issFamily, n)
+			if len(n) > len(prefix) && n[:len(prefix)] == prefix && ok && fnID == issID {
 				matches = append(matches, match{filepath.Join(dir, n), sub})
 			}
 		}

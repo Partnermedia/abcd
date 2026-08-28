@@ -87,25 +87,31 @@ func IsMemoryPageName(filename string) bool {
 // source: block accessors + validation
 // ---------------------------------------------------------------------------
 
-// SourceClasses returns the class list of either source shape (scalar class to
-// a one-element list).
+// SourceClasses returns the page's declared source classes: the UNION of the
+// scalar `class` and the plural `classes` list (deduplicated). This is the same
+// derivation the lint makes (memoryLinter.derivedClasses) — reading only the
+// scalar when both shapes are present shadowed the plural list in the opposite
+// direction to lint, so a both-shapes page rendered under only its scalar class
+// in the generated index and write log while lint counted the union
+// (iss-2608270945468534). The two shapes are mutually exclusive only on the
+// write path (validateSourceBlock); readers see raw on-disk bytes and must read
+// both.
 func SourceClasses(source map[string]any) []string {
 	if source == nil {
 		return nil
 	}
+	var out []string
 	if s, ok := source["class"].(string); ok {
-		return []string{s}
+		out = append(out, s)
 	}
 	if classes, ok := source["classes"].([]any); ok {
-		var out []string
 		for _, c := range classes {
-			if s, ok := c.(string); ok {
+			if s, ok := c.(string); ok && !contains(out, s) {
 				out = append(out, s)
 			}
 		}
-		return out
 	}
-	return nil
+	return out
 }
 
 // SourceHashes returns the page's full contributing source-hash set:
