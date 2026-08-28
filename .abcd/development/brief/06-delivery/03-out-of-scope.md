@@ -17,8 +17,9 @@ ls .abcd/development/intents/drafts/itd-*.md \
 
 Intents that have left `drafts/` (moved to `planned/`, `shipped/`, `superseded/`,
 or `disciplines/`) are NOT in this list at all — the enumeration command cannot
-emit them. (itd-31 and itd-32, both superseded and moved to `superseded/`, are
-recorded only in the historical note at the end of this section, not here.)
+emit them. (itd-31, itd-32 and itd-145, all superseded and moved to
+`superseded/`, are recorded only in the historical notes at the end of this
+section, not here.)
 
 The list is gated rather than trusted: the `index_drift` record-lint rule holds
 the marked region to the ids in [`drafts/`](../../intents/drafts/), so a capture,
@@ -90,7 +91,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-142` — The brief-creation interview: staged elicitation into the brief and a ledger (frontier rounds, options at conjectural questions, hold register, two-output rule per adr-50); spec waits on the collaborating prototype's first run
 - `itd-143` — The framing chapter under 01-product/: the macro-why home, with its brief↔lifeboat mapping row; receives itd-142's committed framing products
 - `itd-144` — Every livery mark has a surface: the lifeboat on disembark and mirrored on embark, the duckling as the harness mascot, the flag icon for the website (settles itd-112's deferred forge/web logo question)
-- `itd-145` — The acknowledgement convention arms itself: a record citing an external source, standard, or tool without its ACKNOWLEDGEMENTS entry fails the record gate
 - `itd-146` — abcd's help renders in labelled command groups, gated by a group field in the surface snapshot and an ungrouped-verb test (the reframed survivor of the verb-taxonomy ideate verdict; no verb renamed, moved or hidden)
 - `itd-147` — The brief's surface chapters carry a generated shape block derived from the command tree, so flags, sub-verbs, exit codes and counts cannot drift while the prose keeps saying why (filed from the 0.6.2 release gate's 147-finding crosscheck; the CLI reference, generated and drift-tested, returned zero the same day)
 - `itd-149` — abcd handles inbound security advisories and issues, and cuts the release, for every managed repo (the 2026-08-27 pilot's loop automated; findings F-A…F-W are the acceptance-criteria source, F-U and F-Q load-bearing; filed after the itd-84 SPLIT, awaiting the planning interview)
@@ -98,6 +98,8 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-151` — the agent-prompt trust contract (itd-5) is enforced by a detector, so a prompt reading attacker-influenceable input without its declared handling fails a gate rather than passing silently (graduated from iss-278)
 - `itd-152` — autonomous runs keep harness attribution and session identifiers out of public artefacts, closing the sibling-repo leak of internal footers and URLs (graduated from iss-178)
 - `itd-153` — abcd's remote config-apply verb enables the platform's native secret-scanning and push-protection by default for a managed repo (graduated from iss-2608270636272755)
+- `itd-163` — Reference-closure and acknowledgements-mirror gate: every citation resolves to the CSL references, the references and acknowledgements mirror both ways, and a committed influence registry backs the Inspirations list (supersedes itd-145; filed from the 2026-08-28 attribution review with the backfill issue iss-2608280824478819)
+- `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
 - `itd-154` — fresh-machine plugin provisioning is reliable: a plugin-first install on a Go-less, cloud-synced checkout provisions a working binary and the SessionStart chain, or fails loudly (graduated from iss-253)
 - `itd-155` — the secret scanner uses a galloping/exponential-doubling match probe in place of the fixed adjacency window, so a match past the window is not silently truncated (graduated from iss-229)
 - `itd-156` — the shell guard expands brace lists before matching, so `{--force,}` cannot smuggle a Tier-1 blocker past tokenisation (graduated from iss-2608221457227161)
@@ -122,6 +124,8 @@ for a capture pass:
 **Phased-in additions captured post-brief (2026-05-07):** itd-27 (`/abcd:intent grill` sub-verb + glossary), itd-28 (spec-tied reviews in the native spec review store), and itd-34 (three intent kinds with three lifecycle paths) were captured after this brief was written and are scoped into the planned phases. They are listed in `intents/README.md` and the relevant phase docs; this section is canonical for **later-phase** items only and does not enumerate phased-in intents.
 
 **Later-phase additions captured post-brief (2026-05-07):** itd-30, itd-31, itd-32, and itd-33 were captured in the same audit pass. itd-30 and itd-33 remain in the later-phase list above; itd-31 and itd-32 have since been superseded (itd-31 absorbed by itd-48; itd-32 superseded by itd-31) and moved to `intents/superseded/`, so they are no longer in the canonical later-phase set above — this note records their capture timing and supersession for the brief's history. (See `superseded/itd-31-cross-document-fidelity-reviewer.md` and `superseded/itd-32-audit-role-taxonomy.md`.)
+
+**Superseded addition (2026-08-28):** itd-145 (the acknowledgement convention arming itself, captured 2026-08-22) has been superseded by itd-163 in the list above, which delivers its mechanically checkable core, and moved to `intents/superseded/`. (See `superseded/itd-145-an-adopted-idea-cannot-ship-uncredited-abcd-enforces-its-own.md`.)
 
 Each intent captures the press-release-shaped scope and acceptance criteria. A later-phase intent enters work by being scoped into a phase, then promoted to `planned/` via `/abcd:intent plan <itd-N>` and to `shipped/` via `/abcd:intent ship <itd-N>` (or automatically when the linked spec closes).
 

@@ -57,8 +57,10 @@ such.
   extinct or the producers have learned to satisfy the letter of the check —
   either way the response is deliberate: harden the criterion, layer a
   stricter one, or archive the detector as regression-only. The Red Queen
-  Gödel Machine (Iacob et al., 2026) demonstrates the stagnation of a frozen
-  evaluator empirically; the GLM-5 report (2026) shows the corpus-decay
+  Gödel Machine (Iacob et al., 2026, [arXiv:2606.26294](https://arxiv.org/abs/2606.26294))
+  demonstrates the stagnation of a frozen
+  evaluator empirically; the GLM-5 report (2026,
+  [arXiv:2602.15763](https://arxiv.org/abs/2602.15763)) shows the corpus-decay
   side — retire fixtures nothing current fails, and mine fresh cases
   continuously.
 - Succession is anchored, never argued. Challenger and incumbent are scored

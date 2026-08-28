@@ -15,7 +15,8 @@ operating on simplified internal representations bypass the clutter and
 ambiguity real users face. Its decisive case is a page where visual clarity
 masks a functional defect: the internal element is present and correctly
 identified, the flow is broken, and a privileged evaluator passes it. Weng's
-harness-engineering essay (Lil'Log, 2026) gives the loop-shaped version of
+[harness-engineering essay](https://lilianweng.github.io/posts/2026-07-04-harness/)
+(Lil'Log, 2026) gives the loop-shaped version of
 the same failure: a system optimised against a proxy signal overfits the
 proxy — a verdict from unit tests transfers to users only as far as the
 tests model the user surface.
