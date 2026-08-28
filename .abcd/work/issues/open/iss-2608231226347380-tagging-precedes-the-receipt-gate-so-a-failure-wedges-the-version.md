@@ -38,3 +38,5 @@ is to arm `receipt_gate` in `verify`, to gate tagging on receipt presence in
 question rather than a patch: it touches the immutability guarantee that makes
 the heal path safe. Related: iss-2608231226342272 (the preview is silent about
 this gate) and iss-2608231226274000 (the surface never documents the step).
+
+**Decision (adr-52, accepted 2026-08-28): arm the receipt gate in `verify`.** Partially implemented: the gate now runs in `verify` (refusing before build/publish) and the content-commit derivation is receipts-dir based (iss-355). RESIDUAL: the auto-release path's `tag` job still pushes the tag before invoking `release.yml`/`verify`, so to fully stop a version being consumed the `tag` job must also be gated on the semantic verify. That is a maintainer-verified release-workflow change (CI cannot exercise it outside a real release); this record stays open for it.
