@@ -78,6 +78,12 @@ var (
 	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
+	// linkRefDefRe matches a markdown link-reference definition (`[label]: dest`),
+	// up to three leading spaces per CommonMark. A shipped intent can park such a
+	// definition at the tail of its Audit Notes section (itd-114's `[iss-80]:` ref);
+	// a new review block must be inserted ABOVE the trailing run of them rather than
+	// appended below it (iss-2608210737265820).
+	linkRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]]+\]:\s+\S`)
 )
 
 // ---------------------------------------------------------------------------
@@ -610,6 +616,12 @@ func appendToAuditNotes(content, block string) string {
 	for len(section) > 0 && strings.TrimSpace(section[len(section)-1]) == "" {
 		section = section[:len(section)-1]
 	}
+	// Peel a trailing run of link-reference definitions (and any blanks among them)
+	// off the section so the new block is inserted ABOVE them: a `[ref]: url`
+	// definition parked at the end of the Audit Notes belongs below the review
+	// prose, and appending the block after it detaches the block from the section
+	// it documents (iss-2608210737265820).
+	trailingRefs := peelTrailingLinkRefs(&section)
 	rebuilt := make([]string, 0, len(lines)+8)
 	rebuilt = append(rebuilt, lines[:head+1]...)
 	rebuilt = append(rebuilt, "")
@@ -618,9 +630,53 @@ func appendToAuditNotes(content, block string) string {
 		rebuilt = append(rebuilt, "")
 	}
 	rebuilt = append(rebuilt, strings.Split(block, "\n")...)
+	if len(trailingRefs) > 0 {
+		rebuilt = append(rebuilt, "")
+		rebuilt = append(rebuilt, trailingRefs...)
+	}
 	rebuilt = append(rebuilt, "")
 	rebuilt = append(rebuilt, lines[end:]...)
 	return strings.Join(rebuilt, "\n")
+}
+
+// peelTrailingLinkRefs removes a trailing run of markdown link-reference
+// definitions (and any blank lines interspersed with them) from *section and
+// returns that run, so appendToAuditNotes can re-emit it BELOW the new review
+// block. The run must contain at least one real definition — a tail of pure blank
+// lines is not refs and is left to the caller's blank-trimming. Both the newly
+// exposed end of *section and the leading blanks of the returned run are trimmed,
+// so the caller reinstates exactly one separator on each side.
+func peelTrailingLinkRefs(section *[]string) []string {
+	s := *section
+	start := len(s)
+	for i := len(s) - 1; i >= 0; i-- {
+		t := strings.TrimRight(s[i], "\r")
+		if strings.TrimSpace(t) == "" || linkRefDefRe.MatchString(t) {
+			start = i
+			continue
+		}
+		break
+	}
+	hasRef := false
+	for _, ln := range s[start:] {
+		if linkRefDefRe.MatchString(strings.TrimRight(ln, "\r")) {
+			hasRef = true
+			break
+		}
+	}
+	if !hasRef {
+		return nil
+	}
+	refs := s[start:]
+	s = s[:start]
+	for len(s) > 0 && strings.TrimSpace(s[len(s)-1]) == "" {
+		s = s[:len(s)-1]
+	}
+	for len(refs) > 0 && strings.TrimSpace(refs[0]) == "" {
+		refs = refs[1:]
+	}
+	*section = s
+	return refs
 }
 
 // ---------------------------------------------------------------------------
