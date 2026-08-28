@@ -26,12 +26,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/adapter/gitleaks"
 	"github.com/intentdriven/abcd/internal/adapter/scanner"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // recordSchemaVersion is the frontmatter schema stamped into every record.
 const recordSchemaVersion = 1
+
+// scanGitleaks is the OPT-IN gitleaks augmentation seam (iss-96). The default
+// wiring loads the per-repo .abcd/config/gitleaks.json and, ONLY when the repo
+// opted in, shells out to gitleaks over the transcript and returns findings to
+// fold into redaction; a repo that did not opt in gets (nil, nil) and pays
+// nothing — no lookup, no process, no cost. It is a package var so a test can
+// inject a fake without spawning a real binary. When a repo opts in but the
+// binary is absent, the default wiring returns gitleaks.ErrConfiguredNotFound,
+// which Capture surfaces and fails closed on — never a silent skip.
+var scanGitleaks = gitleaks.Scan
 
 // Record is one stored transcript's metadata (its frontmatter). It never
 // carries raw content — the redacted body is fetched separately via Read.
@@ -139,6 +150,21 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	}
 	text := string(raw)
 	findings := sc.ScanText(text, "transcript")
+
+	// Opt-in deeper coverage (iss-96). Off by default: for a repo that has not
+	// armed the gitleaks adapter this returns (nil, nil) and invokes nothing, so
+	// the native path below is byte-for-byte what it was. When armed, the adapter's
+	// findings AUGMENT the native ones — masked by the same Redact discipline and
+	// counted in the same audit buckets. Fail-closed: an armed-but-absent binary
+	// returns an error here and refuses the write, mirroring the degraded-scanner
+	// guard above rather than silently capturing with less coverage than the repo
+	// asked for.
+	extra, err := scanGitleaks(repoRoot, text, "transcript")
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("history: %w", err)
+	}
+	findings = append(findings, extra...)
+
 	redacted, _ := scanner.Redact(text, findings)
 
 	// Stage one-and-a-half — deterministic literal home-path backstop, wholly
