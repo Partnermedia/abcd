@@ -19,6 +19,7 @@ import (
 	"regexp"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // LedgerRelPath is the ledger root relative to the repo worktree.
@@ -277,9 +278,18 @@ var (
 	// ordinal is what parts the two: prose that merely starts with the prefix is
 	// not asserting an id.
 	reIssNameClaim = regexp.MustCompile(`^iss-[0-9]`)
-	reAbcdListID   = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
-	reSortIssID    = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
-	reScalarKey    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	statusDirs     = [3]State{StateOpen, StateResolved, StateWontfix}
-	statusDirName  = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
+	// issFileNumRe is the ONE grammar that decides whether a ledger filename NAMES
+	// a record — the same recordid.FilenameNumRe the read-side resolver and
+	// record-lint's per-store rule match, so capture, the resolver and the gate
+	// agree on which files are records rather than sitting on two detection
+	// grammars (iss-2608280739112123). It is deliberately DISTINCT from the
+	// filename<->frontmatter slug agreement, which stays on the stricter
+	// recordid.SplitRecordFilename (validate.go) because that check EXTRACTS and
+	// compares the slug; detection only needs the ordinal.
+	issFileNumRe  = recordid.FilenameNumRe(issFamily)
+	reAbcdListID  = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
+	reSortIssID   = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
+	reScalarKey   = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	statusDirs    = [3]State{StateOpen, StateResolved, StateWontfix}
+	statusDirName = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
 )

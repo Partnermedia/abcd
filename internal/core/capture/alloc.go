@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"syscall"
 	"time"
 
@@ -31,8 +30,6 @@ var lockTimeout = 5 * time.Second
 // production, zero overhead) used to force the iss-102 commit-in-the-unlink-window
 // interleaving deterministically.
 var beforeOrphanRemoveHook func(cand string)
-
-var rePlaceholderName = regexp.MustCompile(`^iss-[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?\.md$`)
 
 // ensureLedgerDirs provisions issuesRoot and the three status sub-directories,
 // refusing symlinked leaves. Idempotent.
@@ -260,7 +257,7 @@ func cleanOrphanPlaceholders(issuesRoot string) error {
 	}
 	now := time.Now()
 	for _, e := range entries {
-		if !rePlaceholderName.MatchString(e.Name()) {
+		if !issFileNumRe.MatchString(e.Name()) {
 			continue
 		}
 		cand := filepath.Join(openDir, e.Name())
@@ -343,8 +340,8 @@ func findIssue(issuesRoot, issID string) (string, State, error) {
 				matches = append(matches, match{filepath.Join(dir, n), sub})
 				continue
 			}
-			fnID, _, ok := recordid.SplitRecordFilename(issFamily, n)
-			if len(n) > len(prefix) && n[:len(prefix)] == prefix && ok && fnID == issID {
+			m := issFileNumRe.FindStringSubmatch(n)
+			if len(n) > len(prefix) && n[:len(prefix)] == prefix && m != nil && issFamily+"-"+m[1] == issID {
 				matches = append(matches, match{filepath.Join(dir, n), sub})
 			}
 		}
