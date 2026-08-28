@@ -433,6 +433,16 @@ type patMatch struct {
 // pays — a FAILING attempt never grows — and doubles the window only while a
 // match is still running into its edge, which costs a constant multiple of that
 // match's own length.
+//
+// Keeping the bound on a failing attempt keeps one standing cost with it, and
+// it is the half of iss-185's trade that survives: a pattern whose earliest
+// REQUIRED structural marker falls past this first window matches nothing at
+// all there, so such a token is still missed ENTIRELY rather than merely
+// truncated — jwt_shaped needs two literal '.' separators, and a long enough
+// header pushes both out of reach. Growing the window for a failure is what
+// cannot be afforded (it is the O(matches × remaining line length) hang this
+// constant exists to prevent), so that case is a known limit, not a defect of
+// the search that feeds the probe.
 const maxAdjacencyProbeWindow = 512
 
 // maxAdjacencyBacktrack bounds how far BACK from an open-ended match's
