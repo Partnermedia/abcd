@@ -14,6 +14,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 func main() {
@@ -55,8 +56,7 @@ func main() {
 
 	blockers := 0
 	for _, f := range findings {
-		fmt.Printf("%s:%d: [%s %s] %s\n",
-			f.File, f.Line, strings.ToUpper(f.Severity), f.RuleID, f.Message)
+		fmt.Println(renderFinding(f, root))
 		if f.Severity == "blocker" {
 			blockers++
 		}
@@ -67,6 +67,19 @@ func main() {
 	}
 }
 
+// renderFinding formats one finding as `file:line: [SEVERITY RuleID] message`.
+// File and Message are lifted from the linted (possibly hostile-clone) tree, so
+// both are path-scrubbed (iss-29: no absolute developer path in machine output)
+// and masked through termsafe.Sanitize (iss-264: a control byte must not replay a
+// terminal escape into CI logs), mirroring the two path-scrubbed error exits and
+// the main abcd CLI renderer (internal/surface/cli/cli.go:496).
+func renderFinding(f lint.Finding, root string) string {
+	file := termsafe.Sanitize(scrubPathString(f.File, root))
+	msg := termsafe.Sanitize(scrubPathString(f.Message, root))
+	return fmt.Sprintf("%s:%d: [%s %s] %s",
+		file, f.Line, termsafe.Sanitize(strings.ToUpper(f.Severity)), termsafe.Sanitize(f.RuleID), msg)
+}
+
 // scrubPaths strips absolute filesystem paths — the repo root and the caller's
 // home — out of an error message so record-lint's machine output never leaks a
 // developer identity or local layout into CI logs. lint.LoadConfig returns an
@@ -74,7 +87,13 @@ func main() {
 // (whose base segment is often the username) would print verbatim (iss-29: no
 // absolute path in machine output).
 func scrubPaths(err error, root string) string {
-	msg := err.Error()
+	return scrubPathString(err.Error(), root)
+}
+
+// scrubPathString is the shared scrubber for scrubPaths and renderFinding: it
+// rewrites the repo root and the caller's home out of an arbitrary string, so a
+// findings File/Message and an error message are stripped identically.
+func scrubPathString(msg, root string) string {
 	sep := string(os.PathSeparator)
 	if len(root) > 1 && filepath.IsAbs(root) {
 		msg = strings.ReplaceAll(msg, root+sep, "")
