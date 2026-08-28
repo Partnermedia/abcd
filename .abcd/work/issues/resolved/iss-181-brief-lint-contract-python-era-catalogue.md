@@ -7,6 +7,10 @@ category: "documentation"
 source: "user-observation"
 found_during: "2026-08-03 maintainer disposition on iss-37"
 found_at: ".abcd/development/brief/05-internals/06-lint.md"
+resolution: "06-lint.md drops the Python-era rule catalogue for a present-tense pointer at internal/core/lint and the lint configs"
+impact: internal
+resolved_by:
+  commit: "b760a67c"
 ---
 
 06-lint.md section 1 (the lint-code namespace) is a catalogue of a predecessor project's Python-era implementation — the `IL001`–`RC007` code families and the class names they cite (`IntentLinter`, `BundleLinter`, `PromptLinter`, `SpecLinter`) describe code this repo does not carry. Re-filed here from iss-37 (2026-08-03 maintainer disposition), which is re-scoped to its three doc-claim instances.

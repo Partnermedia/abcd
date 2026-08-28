@@ -14,7 +14,7 @@ impact: additive
 
 ## Press Release
 
-> _Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._
+> **abcd gates a new idea before it can mint a single record — researching it against primary sources, grilling it against the existing record, and letting an independent adversary try to kill it.** An idea is cheapest to kill in its first hour and most expensive to kill once it has spawned intents, specs, and branches. `/abcd:ideate` runs the admission interview: state-of-the-art research in which every load-bearing claim is checked against its primary source; a record grill that asks whether the brief, an intent, an ADR, or a principle already covers, contradicts, or supersedes the idea; and an independent adversarial review by an evaluator outside the loop. The output is a verdict and a recorded decision that keeps the rejected alternatives, and only a surviving idea graduates to a draft intent — so the ideas abcd kills leave a reason behind that no one has to re-litigate six months later.
 
 ## Why This Matters
 

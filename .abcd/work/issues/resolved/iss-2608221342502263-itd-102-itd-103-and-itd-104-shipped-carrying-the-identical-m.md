@@ -7,6 +7,10 @@ category: "documentation"
 source: "user-observation"
 found_during: "agent-finding"
 found_at: ".abcd/development/intents/shipped"
+resolution: "itd-102/103/104 carry distinct authored press releases in place of the seeded placeholder"
+impact: internal
+resolved_by:
+  commit: "49785548"
 ---
 
 itd-102, itd-103 and itd-104 shipped carrying the identical minted press-release placeholder; the landing page's featured-quote derivation now skips the two placeholder templates mechanically, and the three intents want their narratives written

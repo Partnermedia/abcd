@@ -14,7 +14,7 @@ impact: additive
 
 ## Press Release
 
-> _Seeded from a quoted-text intent capture. Expand into the full press-release narrative before planning._
+> **Your repo tells one story about itself, everywhere — because abcd asks you once and holds every surface to the answer.** When abcd prepares a repository it interviews the maintainer for the project's identity — its title, its tagline, and a short elevator pitch — and records those answers in a single canonical home in the development record. Every rendered surface, from the README strapline to the plugin manifest description to the agent conventions file, derives from that one home rather than being retyped, and a deterministic positioning check compares each surface against it on every audit. Drift is caught at the exact line: the fix is either a re-render from the record or a deliberate, recorded change to the identity itself — never a silent third variant, and never a rewrite abcd makes on its own.
 
 ## Why This Matters
 
