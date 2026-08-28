@@ -6,7 +6,7 @@ boundary. Discursive and reflective; it illuminates rather than instructs. Deepe
 design rationale for a *decision* lives in an ADR under
 [`../../.abcd/development/decisions/adrs/`](https://github.com/intentdriven/abcd/tree/main/.abcd/development/decisions/adrs/).
 
-- [`rationale.md`](rationale.md) — who abcd is for, and the bet it makes.
-- [`roles.md`](roles.md) — the product thinker and the technical facilitator.
-- [`artefacts.md`](artefacts.md) — the brief, intents, and automated audits, and who owns what.
-- [`process.md`](process.md) — from the first brief to a graded verdict: capturing intents, capturing issues and thoughts.
+- [`rationale.md`](rationale.md): Who abcd is for, and the bet it makes.
+- [`roles.md`](roles.md): The product thinker and the technical facilitator.
+- [`artefacts.md`](artefacts.md): The brief, intents, and automated audits, and who owns what.
+- [`process.md`](process.md): From the first brief to a graded verdict, capturing intents, issues and thoughts along the way.
