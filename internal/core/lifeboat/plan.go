@@ -101,19 +101,24 @@ type PassBExemption struct {
 // passBReason is what a package with no transcript source has to say for itself.
 const passBReason = "no transcript source was read for this package, so the rationale Pass B would have mined is absent rather than omitted"
 
-// passBExemption declares Pass B exempt for a package drawn only from the tiers
-// this build knows. Pass B reads a transcript store, and Tiers() — git,
-// conventions, abcd-native — holds no such tier, so every lifeboat this build
-// packs is exempt. It is derived from the tiers the pack actually drew on rather
-// than asserted as a constant: a pack that drew on a tier outside that set is
-// one a later pass contributed to, and it carries no declaration.
-func passBExemption(present []Tier) *PassBExemption {
-	settled := map[Tier]bool{}
-	for _, t := range Tiers() {
-		settled[t] = true
-	}
+// transcriptTiers names the source tiers that carry the chat transcripts Pass B
+// mines. It is EMPTY, and that is the fact the exemption rests on: the probe's
+// tiers are git, conventions and abcd-native (Tiers()), none of them a
+// transcript store, so no lifeboat this build packs was grounded by a pass that
+// read one. Registering a transcript adapter means adding its tier here as well
+// as to Tiers() and tiersPresent — and if it is added here, the declaration
+// stops being written for a pack that tier grounded.
+var transcriptTiers = map[Tier]bool{}
+
+// passBExemption declares Pass B exempt for a package no transcript tier
+// grounded. The set is a parameter rather than read from the package var so the
+// branch that STOPS the declaration can be exercised before any adapter exists:
+// an exemption that could not stop would become a false claim in a durable
+// artefact the day Pass B ships, which is worse than the silent gap it was
+// written to close.
+func passBExemption(present []Tier, transcript map[Tier]bool) *PassBExemption {
 	for _, t := range present {
-		if !settled[t] {
+		if transcript[t] {
 			return nil
 		}
 	}
@@ -297,7 +302,7 @@ func Plan(repoRoot string, opts ...ProbeOption) (Lifeboat, error) {
 		ManifestSHA256:       ManifestSHA256(files),
 		RecordManifestSHA256: RecordManifestSHA256(files),
 		Omissions:            pb.omissions,
-		PassBExemption:       passBExemption(cov.TiersPresent),
+		PassBExemption:       passBExemption(cov.TiersPresent, transcriptTiers),
 	}
 	pj, err := json.MarshalIndent(prov, "", "  ")
 	if err != nil {

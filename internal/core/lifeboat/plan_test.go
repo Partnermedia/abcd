@@ -821,3 +821,27 @@ func TestProvenanceWithoutTheExemptionIsUnchanged(t *testing.T) {
 		t.Errorf("an unmarked record no longer round-trips:\n got %s\nwant %s", out, unmarked)
 	}
 }
+
+// TestPassBExemptionStopsWhenATranscriptTierGrounds pins the branch the
+// declaration exists to have. Pass B reads a transcript store; the set of tiers
+// that carry one is empty in this build, so every lifeboat it packs is exempt —
+// and the day an adapter lands, the exemption has to STOP being written for a
+// pack that tier grounded, or the artefact carries a false declaration and the
+// promise is worse kept than it was unimplemented. The set is a parameter so
+// that branch can be exercised before the adapter exists.
+func TestPassBExemptionStopsWhenATranscriptTierGrounds(t *testing.T) {
+	const carriesTranscripts Tier = "transcript"
+	future := map[Tier]bool{carriesTranscripts: true}
+
+	if got := passBExemption([]Tier{TierGit, carriesTranscripts}, future); got != nil {
+		t.Errorf("a pack a transcript tier grounded still declares Pass B exempt: %+v", got)
+	}
+	if got := passBExemption([]Tier{TierGit, TierNative}, future); got == nil {
+		t.Error("a pack no transcript tier grounded declares nothing; the gap is silent again")
+	}
+	// The set this build actually ships is empty, which is why every lifeboat it
+	// packs is exempt. If that stops being true, the line above is what changes.
+	if len(transcriptTiers) != 0 {
+		t.Errorf("transcriptTiers is no longer empty (%v); passBExemption's default is no longer 'always exempt'", transcriptTiers)
+	}
+}

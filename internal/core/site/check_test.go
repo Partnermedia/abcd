@@ -746,13 +746,16 @@ The relation is excused; the supersedes declaration is not.
 	if !pruned {
 		t.Fatalf("adr-2 does not read as pruned, so the exception is not under test: %+v", export.Health.Retired)
 	}
+	// Accumulated, not assigned: a record may carry more than one unresolved
+	// reference, and an assignment would let a later one erase the finding this
+	// test is about.
 	var supersedes, related bool
 	for _, e := range export.Health.Unresolved {
 		switch e.From {
 		case "adr-1":
-			supersedes = e.To == "adr-2"
+			supersedes = supersedes || e.To == "adr-2"
 		case "adr-3":
-			related = e.To == "adr-2"
+			related = related || e.To == "adr-2"
 		}
 	}
 	if !supersedes {

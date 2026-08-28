@@ -1114,9 +1114,9 @@ func TestEmbarkCaseVariantTargetIsConflict(t *testing.T) {
 	})
 }
 
-// stripPassBExemption rewrites a packed lifeboat's provenance without the
-// exemption marker — the shape every lifeboat packed before the field existed
-// has — and returns the rewritten bytes.
+// stripPassBExemption rewrites a packed lifeboat's provenance in place without
+// the exemption marker — the shape every lifeboat packed before the field
+// existed has.
 func stripPassBExemption(t *testing.T, lifeboat string) {
 	t.Helper()
 	provPath := filepath.Join(lifeboat, ProvenanceName)

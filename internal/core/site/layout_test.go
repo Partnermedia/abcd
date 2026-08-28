@@ -279,3 +279,41 @@ func TestOverlappingByLinksFlagsRed(t *testing.T) {
 		t.Error("two bubbles at the same position in the by-links arrangement report no overlap")
 	}
 }
+
+// TestSettleClearsAnyOverlap tests the packing rule directly rather than through
+// the arrangement that seeds it. The by-links pipeline hands settle a
+// configuration that is already clear, so the final pass is a no-op on every
+// corpus the other tests reach — and a pass whose whole job is to guarantee an
+// invariant needs the guarantee tested, not the pipeline that happens not to
+// need it today. A seed with every bubble piled on the centre is the worst case
+// there is.
+func TestSettleClearsAnyOverlap(t *testing.T) {
+	for _, n := range []int{2, 25, 200} {
+		pos := make([]Point, n)
+		radii := make([]float64, n)
+		for i := range pos {
+			// A tight spiral of very different sizes, every bubble overlapping
+			// several of its neighbours.
+			ang := float64(i) * 0.7
+			rho := float64(i) * 0.4
+			pos[i] = Point{X: math.Cos(ang) * rho, Y: math.Sin(ang) * rho}
+			radii[i] = 3 + float64(i%7)*3
+		}
+		members := make([]int, n)
+		for i := range members {
+			members[i] = i
+		}
+		if before := countOverlaps(pos, radii, 1); before == 0 {
+			t.Fatalf("n=%d: the seed does not overlap, so the pass is not under test", n)
+		}
+		settle(pos, radii, members, false)
+		if got := countOverlaps(pos, radii, 1); got != 0 {
+			t.Errorf("n=%d: settling left %d overlapping bubbles", n, got)
+		}
+		for i, p := range pos {
+			if math.IsNaN(p.X) || math.IsNaN(p.Y) {
+				t.Fatalf("n=%d: settling put bubble %d nowhere: %+v", n, i, p)
+			}
+		}
+	}
+}
