@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -391,4 +392,206 @@ func scaleAdversarial(n int) int {
 		return 1
 	}
 	return n / 8
+}
+
+// TestAdjacencyProbeWindowEdgeIsNotAWordBoundary is the repro for iss-189: the
+// probe's own trailing `\b` used to be satisfied by the ARTIFICIAL end of the
+// fixed window rather than by real content. The line below places ".local"
+// exactly at the old window's far edge, with the token continuing past it — so
+// a truncated view reports a LAN hostname the full line does not contain, and
+// Redact then rewrites hundreds of bytes of legitimate content. The galloping
+// probe evaluates the boundary against the real end of the line instead, so
+// the finding disappears without a boundary classifier.
+func TestAdjacencyProbeWindowEdgeIsNotAWordBoundary(t *testing.T) {
+	r := strings.Repeat
+	// "AKIA"+16 upper-case establishes the junction the probe runs from; the
+	// filler is sized so the first probe window ends exactly after ".local".
+	filler := r("b", maxAdjacencyProbeWindow-len(".local"))
+	line := "AKIA" + r("Q", 16) + filler + ".local" + "zzz"
+
+	for _, f := range scanLine(line) {
+		if f.Kind == kindNetLANHost {
+			t.Fatalf("a LAN hostname the full line does not contain was reported off the window edge: %+v", f)
+		}
+	}
+}
+
+// TestAdjacencyRecoveryChainSurvivesALongToken is the repro for iss-190: a
+// recovered token longer than the fixed window was recorded with an artificial
+// end AT that window, so the next probe and the next junction search both
+// started mid-token and the chain that unwinds a run of abutting tokens broke —
+// the THIRD token vanished entirely rather than merely being truncated. All
+// three must be found, and none may survive Redact.
+func TestAdjacencyRecoveryChainSurvivesALongToken(t *testing.T) {
+	r := strings.Repeat
+	tail := "ghp_" + r("z", 36)
+	line := "ghp_" + r("a", 36) + "ghp_" + r("m", 600) + tail
+
+	findings := scanLine(line)
+	count := 0
+	for _, f := range findings {
+		if f.Kind == "token:github_pat" {
+			count++
+		}
+	}
+	if count != 3 {
+		t.Fatalf("expected all three abutting tokens detected across a window-length token, got %d: %+v", count, findings)
+	}
+
+	redacted, _ := Redact(line, findings)
+	if strings.Contains(redacted, r("z", 36)) {
+		t.Errorf("the third token survived redaction raw: %q", redacted)
+	}
+	rescan := scanLine(redacted)
+	for _, f := range rescan {
+		if f.Severity == SeverityHardFail {
+			t.Errorf("hard_fail survived redaction of a broken recovery chain: %+v (out=%q)", f, redacted)
+		}
+	}
+}
+
+// TestAdjacencyRecoveryCapturesALongTokenWhole pins the first acceptance
+// criterion: a recovered token whose extent runs well past the old fixed window
+// is captured WHOLE, its end the token's real end rather than a truncation
+// artefact. The AWS key establishes the junction; the `\b` before the abutting
+// PAT can never hold, so the recovery probe is the only thing that can find it.
+func TestAdjacencyRecoveryCapturesALongTokenWhole(t *testing.T) {
+	r := strings.Repeat
+	token := "ghp_" + r("a", 8*maxAdjacencyProbeWindow)
+	line := "AKIA" + r("Q", 16) + token
+
+	var got string
+	for _, f := range scanLine(line) {
+		if f.Kind == "token:github_pat" {
+			got = f.Matched
+		}
+	}
+	if got != token {
+		t.Fatalf("recovered token spans %d bytes, want the whole %d-byte token (a window-edge truncation artefact)", len(got), len(token))
+	}
+}
+
+// countingMatcher wraps a compiled probe and records the length of every string
+// it is run against, so the galloping probe's cost can be asserted exactly
+// rather than timed. It is the whole reason gallopingFind takes a matcher
+// rather than a *regexp.Regexp.
+type countingMatcher struct {
+	re    *regexp.Regexp
+	sizes []int
+}
+
+func (c *countingMatcher) FindStringIndex(s string) []int {
+	c.sizes = append(c.sizes, len(s))
+	return c.re.FindStringIndex(s)
+}
+
+func (c *countingMatcher) total() int {
+	n := 0
+	for _, s := range c.sizes {
+		n += s
+	}
+	return n
+}
+
+// TestGallopingProbeCostClass is the cost guard the structural fix has to carry:
+// an earlier attempt at this repair regressed the scan's cost class, so the
+// doubling schedule is asserted directly. Three properties hold it in place —
+// a short match and a non-match still cost exactly ONE attempt of the same fixed
+// window as before, and a long match costs a logarithmic number of attempts
+// whose total is a small constant multiple of the match's OWN length (never of
+// the line's).
+func TestGallopingProbeCostClass(t *testing.T) {
+	r := strings.Repeat
+	probe := adjacencyProbe(regexp.MustCompile(`\bghp_[A-Za-z0-9]{36,}`))
+
+	t.Run("short_match_costs_one_fixed_window", func(t *testing.T) {
+		line := "ghp_" + r("a", 36) + " " + r("x", 100000)
+		c := &countingMatcher{re: probe}
+		loc := gallopingFind(c, line, 0, 0)
+		if loc == nil || loc[1] != 40 {
+			t.Fatalf("gallopingFind = %v, want the 40-byte match", loc)
+		}
+		if len(c.sizes) != 1 || c.sizes[0] != maxAdjacencyProbeWindow {
+			t.Fatalf("a short match cost %v probe attempts, want exactly one of %d bytes (the fixed-window cost)", c.sizes, maxAdjacencyProbeWindow)
+		}
+	})
+
+	t.Run("non_match_costs_one_fixed_window", func(t *testing.T) {
+		line := r("x", 100000)
+		c := &countingMatcher{re: probe}
+		if loc := gallopingFind(c, line, 0, 0); loc != nil {
+			t.Fatalf("gallopingFind = %v, want no match", loc)
+		}
+		if len(c.sizes) != 1 || c.sizes[0] != maxAdjacencyProbeWindow {
+			t.Fatalf("a failing probe cost %v, want exactly one bounded attempt of %d bytes — the bound the window exists for", c.sizes, maxAdjacencyProbeWindow)
+		}
+	})
+
+	t.Run("long_match_doubles_logarithmically", func(t *testing.T) {
+		const n = 64 * maxAdjacencyProbeWindow
+		line := "ghp_" + r("a", n) + " " + r("x", 100000)
+		want := 4 + n
+		c := &countingMatcher{re: probe}
+		loc := gallopingFind(c, line, 0, 0)
+		if loc == nil || loc[1] != want {
+			t.Fatalf("gallopingFind = %v, want the whole %d-byte match", loc, want)
+		}
+		// The schedule is 512, 1024, … so reaching a match of length L takes
+		// log2(L/512)+1 attempts and never more.
+		maxAttempts := 2
+		for w := maxAdjacencyProbeWindow; w <= want; w *= 2 {
+			maxAttempts++
+		}
+		if len(c.sizes) > maxAttempts {
+			t.Errorf("a %d-byte match cost %d probe attempts (%v), want at most %d — the doubling schedule regressed", want, len(c.sizes), c.sizes, maxAttempts)
+		}
+		// Doubling sums to under twice the final window, and the final window is
+		// under twice the match, so the whole probe stays a small constant
+		// multiple of the match's own length — never of the line's.
+		if budget := 4 * want; c.total() > budget {
+			t.Errorf("a %d-byte match scanned %d bytes, want at most %d; the line is %d bytes, so the cost must not track it", want, c.total(), budget, len(line))
+		}
+	})
+}
+
+// TestGallopingProbeStaysBoundedOnLongLines is the wall-clock half of the cost
+// guard, in the idiom of the three above: the shapes that make the galloping
+// probe grow as far as it ever can, on lines of hundreds of kilobytes. A match
+// only grows the window while it is still running into its edge, so the cost of
+// growing it is a constant multiple of the match's own length — but the shapes
+// below stack that: an open-ended match whose whole backtrack window is packed
+// with junction candidates, each of which starts a hit running to the far end of
+// the line, is the worst case the structural fix can produce. The 15s bar is the
+// same loose one the sibling guards use, separating a cost-class regression from
+// bounded work.
+func TestGallopingProbeStaysBoundedOnLongLines(t *testing.T) {
+	r := strings.Repeat
+	n := scaleAdversarial
+	cases := []struct {
+		name string
+		line string
+	}{
+		// Every offset in the dotted run starts a LAN-hostname hit that runs to
+		// the ".local" at the far end, so every junction candidate inside the
+		// leading match gallops the whole way there.
+		{"junction_hits_run_to_the_far_end", "ghp_" + r("a", 600) + r("ab.", n(70000)) + "local"},
+		// The same, with the leading match's backtrack window packed with
+		// candidates that are all rejected, so the walk runs its full length.
+		{"rejected_candidates_each_gallop", "ghp_" + r("AKIA", 150) + r("ab.", n(70000)) + "local"},
+		// A run of tokens each longer than the first window, so the forward
+		// probe doubles at every junction in a long chain.
+		{"window_length_tokens_back_to_back", r("ghp_"+r("a", 4*maxAdjacencyProbeWindow), n(200))},
+		// The iss-189 shape repeated: every junction's probe runs into its edge
+		// and has to grow before the boundary can be judged.
+		{"window_edge_boundaries_back_to_back", r("AKIA"+r("Q", 16)+r("b", maxAdjacencyProbeWindow-6)+".local"+"zzz ", n(400))},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			start := time.Now()
+			scanLine(c.line)
+			if elapsed := time.Since(start); elapsed > 15*time.Second {
+				t.Errorf("scan of a %d-byte line took %v, want well under 15s (galloping-probe cost regression)", len(c.line), elapsed)
+			}
+		})
+	}
 }
