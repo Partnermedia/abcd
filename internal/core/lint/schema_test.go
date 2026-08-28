@@ -145,8 +145,11 @@ func TestRecordSchemaFilenameMatchesID(t *testing.T) {
 	adrs := "rec/decisions/adrs"
 	writeFile(t, root, adrs+"/0012-issue-ledger.md", "---\nid: adr-21\n---\n# ADR-12\n")
 	writeFile(t, root, adrs+"/0013-memory.md", "---\nid: adr-13\n---\n# ADR-13\n")
-	// A record with no id at all is a different (larger) schema question, not this
-	// rule's: it must stay silent rather than invent an agreement to check.
+	// A record with no id at all: the filename-AGREEMENT rule still invents no
+	// agreement for it (no "filename claims" mismatch) — but an ADR's id is a
+	// required property, so its absence is now its own finding
+	// (iss-2608270908344426), because the record dispatcher confirms the id before
+	// it will render the record.
 	writeFile(t, root, adrs+"/0007-grill.md", "# ADR-7\n")
 	writeFile(t, root, "rec/intents/planned/itd-4-capture.md", "---\nid: itd-5\nkind: standalone\nspec_id: null\n---\n# x\n")
 
@@ -154,14 +157,23 @@ func TestRecordSchemaFilenameMatchesID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := countRule(fs, ruleRecordSchema); n != 2 {
-		t.Fatalf("expected 2 filename/id findings, got %d: %+v", n, fs)
+	if n := countRule(fs, ruleRecordSchema); n != 3 {
+		t.Fatalf("expected 3 findings (two filename/id mismatches + the id-less ADR), got %d: %+v", n, fs)
 	}
 	if !findingWith(fs, filepath.Join(adrs, "0012-issue-ledger.md"), ruleRecordSchema, "filename claims id 'adr-12'") {
 		t.Errorf("expected the ADR mismatch: %+v", fs)
 	}
 	if !findingWith(fs, filepath.Join("rec", "intents", "planned", "itd-4-capture.md"), ruleRecordSchema, "filename claims id 'itd-4'") {
 		t.Errorf("expected the intent mismatch: %+v", fs)
+	}
+	// The id-less ADR is caught by the required-property check, NOT by an invented
+	// filename agreement.
+	grill := filepath.Join(adrs, "0007-grill.md")
+	if !findingWith(fs, grill, ruleRecordSchema, "missing required property 'id'") {
+		t.Errorf("expected a missing-id finding on the id-less ADR: %+v", fs)
+	}
+	if findingWith(fs, grill, ruleRecordSchema, "filename claims") {
+		t.Errorf("the filename rule must not invent an agreement for an id-less record: %+v", fs)
 	}
 }
 
