@@ -73,6 +73,18 @@ root_tmp=''
 path_tmp=''
 auth_tmp=''
 
+# staged records that provisioning was ANNOUNCED, and terminal that the run has
+# already had its last word (a notice or a refusal). Together they are the
+# contract this script owes a reader: once it says it is provisioning, exactly
+# one terminal line follows, always. The §4 fresh-machine gate failed because
+# neither half held — on a cloud-synced home the run produced no output at all,
+# neither success nor refusal, and every UserPromptSubmit and PreToolUse hook
+# then failed as a raw "No such file or directory" for an entire evening with
+# nothing anywhere saying why (iss-253). Silence is the defect these two names
+# exist to make impossible.
+staged=''
+terminal=''
+
 cleanup() {
 	[ -n "$tmp" ] && rm -rf "$tmp"
 	[ -n "$root_tmp" ] && rm -rf "$root_tmp"
@@ -92,13 +104,30 @@ safe() {
 	printf '%s' "$1" | tr -d '\000-\010\013-\037\177'
 }
 
-# refuse is the single failure message every failing path shares: what is
+# say_refusal is the single failure message every failing path shares: what is
 # missing, what it costs, and the three ways out. A raw shell error ("No such
-# file or directory") must never be the whole story a user gets.
-refuse() {
+# file or directory") must never be the whole story a user gets. It is split
+# from refuse() because the EXIT trap has to be able to say it WITHOUT calling
+# exit from inside a trap.
+say_refusal() {
+	terminal=yes
 	printf 'abcd bootstrap: %s\n\nThe abcd binary is not installed in the plugin root, so the abcd hooks cannot run and the shell-hazard guard is inactive — shell commands run UNGUARDED until it is.\n\nAny one of these fixes it:\n  - start a session with network access, and this script retries by itself;\n  - install the release binary by hand (%s#install) and copy it to %s;\n  - build from source for full trust: go build ./cmd/abcd, then copy the binary to %s.\n' \
 		"$(safe "$1")" "$repo_url" "$(safe "$binary")" "$(safe "$binary")" >&2
+}
+
+refuse() {
+	say_refusal "$1"
 	exit 1
+}
+
+# stage announces that provisioning is starting. It is printed BEFORE the
+# network and the environment-sensitive filesystem work, so a run that hangs or
+# dies in the middle of them still leaves evidence of what it was doing — the
+# thing the §4 transcript had none of. It does not exit: it opens the contract
+# on_exit closes.
+stage() {
+	staged=yes
+	printf '%s\n' "$(safe "$1")" >&2
 }
 
 # notice is a reported condition rather than a fault: the install succeeded, or
@@ -124,8 +153,28 @@ refuse() {
 # SHOULD raise an error banner, because something is wrong and the session should
 # say so; a successful install should not.
 notice() {
+	terminal=yes
 	printf '%s\n' "$(safe "$1")" >&2
 	exit 0
+}
+
+# on_exit is the EXIT trap: it cleans up, and it converts a SILENT death into a
+# refusal. Everything below announces itself through stage() and then finishes
+# through notice() or refuse() — so reaching the end of the run with the
+# announcement made and no terminal line means the script died somewhere it does
+# not know about (a signal, an unwritable filesystem faulting a command whose
+# failure nothing checks, a killed pipeline). That is precisely the §4 failure
+# mode, and the only thing worse than failing is failing quietly: the reader is
+# left with hooks that error "No such file or directory" on every prompt and
+# nothing that names the cause. A death is reported with the same three ways out
+# every other refusal carries. SIGKILL still runs no trap; nothing in a shell
+# can cover that.
+on_exit() {
+	cleanup
+	if [ -n "$staged" ] && [ -z "$terminal" ]; then
+		say_refusal 'provisioning ended without installing the binary and without reporting why — the run was interrupted or a step failed in a way this script could not see'
+	fi
+	return 0
 }
 
 # sha256_file prints the lowercase SHA-256 of the file named by $1, or nothing
@@ -201,8 +250,8 @@ if [ -f "$binary" ] && [ -x "$binary" ]; then
 		lock=''
 		exit 0
 	fi
-	trap cleanup EXIT
-	trap 'cleanup; exit 1' HUP INT TERM
+	trap on_exit EXIT
+	trap 'on_exit; exit 1' HUP INT TERM
 	[ ! -f "$cache_binary" ] || exit 0
 	tmp="$data_dir/.bootstrap.tmp.$$"
 	rm -rf "$tmp"
@@ -322,8 +371,22 @@ fi
 # against directories cleanup just deleted and report a checksum mismatch that
 # never happened. Terminate explicitly; cleanup is idempotent, so the EXIT trap
 # firing again after it is a no-op.
-trap cleanup EXIT
-trap 'cleanup; exit 1' HUP INT TERM
+trap on_exit EXIT
+trap 'on_exit; exit 1' HUP INT TERM
+# 4b. Loud staging. Everything from here on is the work that produced nothing at
+#     all on the §4 machine: a directory sweep of a plugin root holding a full
+#     source checkout on a cloud-synced filesystem (anomalous stat results,
+#     65535 link counts, multi-minute tree walks), then three network fetches.
+#     The announcement goes out BEFORE any of it, so a run that hangs or is
+#     killed there still leaves a reader something that names what was happening
+#     — and from here the EXIT trap guarantees exactly one terminal line
+#     follows, a success notice or a refusal, whichever way the run ends.
+#
+#     It is placed after the lock rather than before it so a session that merely
+#     lost the race stays genuinely silent: it is not provisioning, so it must
+#     not announce that it is.
+stage "$(printf 'abcd bootstrap: provisioning the abcd binary for this plugin root (%s %s) — fetching the checksum-verified release…' "$os" "$arch")"
+
 # SIGKILL runs no trap, so a killed run leaves its PID-stamped temp directory
 # behind holding a partially downloaded, UNVERIFIED binary. The lock is held from
 # here on, so sweeping them cannot touch a live run's directory.

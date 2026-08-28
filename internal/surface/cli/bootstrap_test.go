@@ -550,9 +550,14 @@ func TestBootstrapPrintsARunnableInstruction(t *testing.T) {
 		}
 		// A2's contract, held here because this test rewrites the same sentence:
 		// the transcript renders only the first line of a hook's stderr, so the
-		// success has to lead it.
-		if got := firstLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
-			t.Errorf("the success must still lead the first visible line; first line = %q", got)
+		// success has to lead. It now leads the TERMINAL output rather than the
+		// whole stream: itd-154 puts one provisioning announcement ahead of it,
+		// because a run that hangs or is killed mid-provision emits no terminal
+		// line at all and the announcement is then the only thing a reader has
+		// — the §4 evening, where nothing whatsoever appeared (iss-253). Nothing
+		// else may come between them.
+		if got := firstTerminalLine(out); !strings.HasPrefix(got, "abcd bootstrap: installed") {
+			t.Errorf("the success must still lead the terminal output; first terminal line = %q", got)
 		}
 	})
 

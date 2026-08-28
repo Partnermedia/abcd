@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -54,6 +55,7 @@ const (
 	RejectedHardlinkOffrepo RejectedReason = "hardlink_offrepo"
 	RejectedDuplicate       RejectedReason = "duplicate"
 	RejectedControlChar     RejectedReason = "control_char"
+	RejectedPlatformBinary  RejectedReason = "platform_binary"
 	RejectedMissingLiteral  RejectedReason = "missing_literal"
 	RejectedFSError         RejectedReason = "fs_error"
 )
@@ -257,6 +259,18 @@ func (r *resolver) classifyRegular(rel, abs string, info os.FileInfo, deref bool
 	}
 	if pathContainsDeniedSegment(rel) {
 		r.result.Excluded = append(r.result.Excluded, ExcludedFile{LogicalPath: rel, Reason: ExcludedDeniedNamespace})
+		return
+	}
+	// A released platform binary never ships in the payload: the plugin's
+	// bootstrap provisions abcd by checksum-verified download from the release,
+	// so a bundled copy would be an unverified, permanently stale second source
+	// for the very binary that then runs as the shell guard (itd-154). Today the
+	// artefacts are also gitignored and reached by no include — but that is a
+	// config an edit can undo, so the deny sits ABOVE the include list, and it
+	// rejects rather than excluding: naming one is a mistake worth failing on,
+	// not a candidate to drop in silence.
+	if isPlatformBinaryName(path.Base(rel)) {
+		r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: rel, Reason: RejectedPlatformBinary})
 		return
 	}
 	// For a dereferenced candidate the LOGICAL path is benign but the real target
@@ -883,6 +897,19 @@ func parseCharClass(pattern string, i int) (body string, negated bool, adv int, 
 		start = i + 2
 	}
 	return pattern[start:j], negated, j + 1, true
+}
+
+// platformBinaryRe matches the basename of a released abcd platform artefact —
+// the `abcd-<goos>-<goarch>` names the release workflow publishes, plus the
+// `.exe` spelling. It is deliberately the WHOLE basename: a document about the
+// artefact (`docs/abcd-darwin-arm64.md`) is prose, not a binary, and denying by
+// substring would take it too.
+var platformBinaryRe = regexp.MustCompile(`^abcd-[a-z0-9]+-[a-z0-9]+(\.exe)?$`)
+
+// isPlatformBinaryName reports whether base is a released platform artefact's
+// file name.
+func isPlatformBinaryName(base string) bool {
+	return platformBinaryRe.MatchString(base)
 }
 
 // scriptsDenied reports whether a scripts/-tree path matches the closure's own
