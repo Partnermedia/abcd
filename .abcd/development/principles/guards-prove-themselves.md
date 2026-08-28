@@ -26,7 +26,8 @@ mature form of this rule.
   (`ok:`) cases — permitted inputs it must wave through — asserted alongside
   the refusals, and any change to the guard reruns both sides; a change that
   fixes the refusal side while regressing the permitted side is rejected
-  (Weng's harness-engineering essay, Lil'Log, 2026, gives this as the
+  (Weng's [harness-engineering essay](https://lilianweng.github.io/posts/2026-07-04-harness/),
+  Lil'Log, 2026, gives this as the
   must-flag/must-pass corpus pair). A guard proven only against forbidden
   input may simply refuse everything, and that failure is as silent as the
   one this rule exists to catch.

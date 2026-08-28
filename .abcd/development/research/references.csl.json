@@ -69,6 +69,26 @@
     "DOI": "10.1145/2858036.2858323"
   },
   {
+    "id": "dellacqua2023jagged",
+    "type": "report",
+    "author": [
+      {"family": "Dell'Acqua", "given": "Fabrizio"},
+      {"family": "McFowland", "given": "Edward", "suffix": "III"},
+      {"family": "Mollick", "given": "Ethan R."},
+      {"family": "Lifshitz-Assaf", "given": "Hila"},
+      {"family": "Kellogg", "given": "Katherine"},
+      {"family": "Rajendran", "given": "Saran"},
+      {"family": "Krayer", "given": "Lisa"},
+      {"family": "Candelon", "given": "François"},
+      {"family": "Lakhani", "given": "Karim R."}
+    ],
+    "title": "Navigating the jagged technological frontier: Field experimental evidence of the effects of AI on knowledge worker productivity and quality",
+    "collection-title": "Harvard Business School Working Paper",
+    "number": "24-013",
+    "issued": {"date-parts": [[2023]]},
+    "DOI": "10.2139/ssrn.4573321"
+  },
+  {
     "id": "evans2003ddd",
     "type": "book",
     "author": [{"family": "Evans", "given": "Eric"}],

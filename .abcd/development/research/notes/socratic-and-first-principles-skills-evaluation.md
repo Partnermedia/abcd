@@ -1,7 +1,11 @@
 # Evaluation: socratic-grill + first-principles-analysis skills
 
 Two third-party `.skill` archives (each a single `SKILL.md`, MIT-spirit, dated
-2026-05-17) were evaluated for usefulness to abcd. Source archives were on the
+2026-05-17) were evaluated for usefulness to abcd. Both are the work of the
+GitHub user [mglgit](https://github.com/mglgit) (author identification
+supplied by the maintainer, 2026-08-28; the account lists no public
+repositories, so the archives have no resolvable public source and the
+MIT-spirit licence stays unverifiable). Source archives were on the
 author's Desktop; their content is summarized here so the evaluation survives
 independently of those files. This note is the durable record; the actionable
 outcomes are itd-55 (new intent) and an abcd-intent-grill enhancement entry in

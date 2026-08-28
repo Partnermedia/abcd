@@ -15,7 +15,8 @@ that selects them, selection runs on a held-out split the producer never
 sees, and an evaluator is replaced only by beating the incumbent on a fixed
 anchor corpus the contestants cannot touch — without which its ablations
 show producers trivially saturating a gate they can game. Weng's
-harness-engineering essay (Lil'Log, 2026) states the same as a design rule
+[harness-engineering essay](https://lilianweng.github.io/posts/2026-07-04-harness/)
+(Lil'Log, 2026) states the same as a design rule
 for self-improving loops: the evaluator and permission control sit outside
 the loop that evolves, with held-out tests, trace audits, and human review
 at the decision points that matter. The lineage review already carries the

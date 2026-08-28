@@ -45,13 +45,21 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   (itd-100, `docs/reference/terminology.md`). Credited as the prompt, not a
   source: every crosswalk citation is to a primary anchor, and the crosswalk's
   admission rule (no single-author coinages, no aggregators) was formulated in
-  reaction to it.
+  reaction to it. The post's URL was not recoverable when this entry was
+  completed; the credit stands on title, author, platform and year.
 - **Agentic Context Engineering (ACE)** — the append-only-delta model of a
   self-improving instruction record, and the two failure modes it names —
   *brevity bias* and *context collapse* — which itd-81 cites to strike itd-5's
   "shorter by >10%" prompt tiebreak.
 - **Amazon "Working Backwards"** — the press-release format of abcd's intents.
 - **Architecture Decision Records (MADR)** — the shape of the decision record.
+- **CARL (Context Augmentation & Reinforcement Layer, Christopher Kahler,
+  MIT)** — the just-in-time rule-injection mechanism (a prompt hook, a JSON
+  rule source, recall keywords, dedup, down to the `*<DOMAIN>` star-command)
+  that abcd's rules loader re-implements natively with plugin-bundled
+  defaults (itd-3, `internal/core/rules`). The record's own comparison is
+  "structurally identical": the pattern is adopted, the tool never depended
+  on. <https://github.com/ChristopherKahler/carl>
 - **ccpm (Claude Code PM, Automaze)** — the markdown spec/task conventions
   (PRD → epic → issue, directory-as-store) that abcd's native spec layer is
   convention-compatible with, and the designated deeper backend of the spec
@@ -82,7 +90,14 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **DITA subject scheme maps** — the controlled-vocabulary pattern behind the
   persona registry: a field's legal values live in a dedicated registry file
   and a processor flags unbound values (the `persona_registry` lint rule).
-- **Diátaxis** — the four-type model behind the user documentation.
+- **Diátaxis (Daniele Procida, CC-BY-SA 4.0)** — the four-type model behind
+  the user documentation, and the orientation phrasing the docs folder pages
+  adapt in their one-line descriptions — which is why this entry carries the
+  author and the licence, not only the idea. <https://diataxis.fr>
+- **Dieter Rams's "Weniger, aber besser"** — the less-but-better maxim
+  adopted as a guiding principle
+  (`.abcd/development/principles/less-but-better.md`): reach for the
+  subtraction first.
 - **Domain-Driven Design (bounded contexts)** — the surface boundaries.
 - **Doorstop** — the suspect-link fingerprint mechanism adopted for intent
   dependency edges (itd-78), and the store-one-direction/derive-the-reverse
@@ -100,6 +115,11 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   command) and, by its privilege-escalation inclusion criterion, demonstrates
   that no curated list covers abcd's threat: `nice`, `setsid`, `stdbuf` grant no
   privilege and are perfect bypasses (adr-42). <https://gtfobins.github.io>
+- **gitleaks (Zachary Rice, MIT)** — the canonical aws-access-token prefix
+  family the launch scanner's AWS rule deliberately narrows (self-declared
+  at `internal/adapter/scanner/patterns.go`), and the full-history secret
+  scan CI runs as the authoritative backstop behind abcd's own fast
+  pre-push pass. <https://github.com/gitleaks/gitleaks>
 - **Homebrew's auto-update-on-use and the `update-notifier` pattern (npm)** — the
   UX grammar itd-111 keeps (cached comparison, a gentle nudge, a one-command
   fix) while rejecting their implicit background network check: abcd implements
@@ -108,20 +128,36 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
 - **git's "behind upstream" notice** — the disk-only precedent itd-111 follows:
   a comparison against locally cached refs, refreshed only by an explicit fetch,
   never a background poll.
+- **Karpathy's LLM-wiki gist (Andrej Karpathy, 2026)** — the three-layer
+  raw-sources → wiki → schema pattern the `.abcd/memory/` substrate is
+  structured on (itd-36, brief `05-internals/07-memory`), and the
+  no-accumulation critique of query-time retrieval it answers. The gist
+  declares itself "designed to be copy pasted to your own LLM Agent".
+  <https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f>
 - **The Linux kernel's coding-assistants policy** — the `Assisted-by:` attribution
   model abcd adopts for AI-assisted commits.
-- **mattpocock/skills (Matt Pocock, MIT)** — two adaptations: the
+- **mattpocock/skills (Matt Pocock, MIT)** — four adaptations: the
   glossary-file format (each term a frontmattered Markdown file with aliases
-  and forbidden synonyms) behind the brief's terminology glossary, and the
+  and forbidden synonyms) behind the brief's terminology glossary; the
   "grill me" frontier-questioning pattern — an interview that advances by
   asking only what the answers so far cannot settle — adapted as the frontier
-  rounds of the brief-creation interview (itd-142).
+  rounds of the brief-creation interview (itd-142); the three-clause ADR
+  admission test (hard-to-reverse, surprising-without-context, real
+  trade-off) adopted as adr-7's decision gate; and the `to-prd` PRD section
+  shape itd-27's silent synthesis phase follows.
   <https://github.com/mattpocock/skills>
 - **OpenAI Codex's sandbox/approval split** — the vocabulary adr-42 borrows for
   naming what a parse layer is: the OS-enforced sandbox is the boundary, the
   approval policy is "a workflow choice layered on top of" it, and the pattern
   engine carries no threat model.
   <https://github.com/openai/codex>
+- **PAUL (Plan-Apply-Unify Loop, Christopher Kahler, MIT)** — the
+  mandatory-closure loop discipline whose four escalation states itd-1
+  lifts into the intent lifecycle, alongside acceptance-criteria-first
+  development. The patterns are adopted into abcd's own primitives; the
+  tool is never depended on, since two scaffolders fighting over a
+  project's structure would be the wrong outcome.
+  <https://github.com/ChristopherKahler/paul>
 - **Priority inheritance (real-time scheduling)** — the derived-priority rule
   of the intent dependency graph (itd-78): a minor blocker of a major intent
   computes to major.
@@ -130,12 +166,21 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   separate from the evaluator (itd-85). The tool itself is archived and is not a
   dependency.
 - **The Rust RFC process** — the required "Prior Art" section on intents.
+- **SpecStory** — the hosted session-transcript capture the native history
+  store replaced (adr-29), and the named opt-in cloud backend of the history
+  seam; the `specstory-import` provenance kind keeps transcripts it captured
+  importable. The relationship mirrors ccpm's on the spec seam: a designated
+  deeper backend, never a dependency. <https://specstory.com>
 - **sudo's `NOEXEC` tag and the sudoers(5) shell-escape statement** — thirty
   years of the same job, and the normative form of adr-42's conclusion:
   restricting users to programs that offer no shell escape "is often
   unworkable", so the answer is an execution-layer control that revokes the
   capability, not a list of the programs that hold it.
   <https://manpages.ubuntu.com/manpages/noble/en/man5/sudoers.5.html>
+- **TruffleHog (Truffle Security)** — the optional deeper secret scanner the
+  `scan.deep` recommendation keys on when the binary is present
+  (`internal/core/ahoy`); integrated as an opt-in engine, never bundled.
+  <https://github.com/trufflesecurity/trufflehog>
 
 ## References & sources
 
@@ -157,79 +202,85 @@ CSL-JSON: [`.abcd/development/research/references.csl.json`](.abcd/development/r
    conversational programmers: A perspective from the software industry. In
    *Proceedings of the 2016 CHI Conference on Human Factors in Computing
    Systems (CHI '16)*, 1462–1472. [doi:10.1145/2858036.2858323](https://doi.org/10.1145/2858036.2858323)
-6. Eric Evans. 2003. *Domain-Driven Design: Tackling Complexity in the Heart
+6. Fabrizio Dell'Acqua, Edward McFowland III, Ethan R. Mollick, Hila
+   Lifshitz-Assaf, Katherine Kellogg, Saran Rajendran, Lisa Krayer, François
+   Candelon, and Karim R. Lakhani. 2023. Navigating the jagged technological
+   frontier: Field experimental evidence of the effects of AI on knowledge
+   worker productivity and quality. Harvard Business School Working Paper
+   24-013. [doi:10.2139/ssrn.4573321](https://doi.org/10.2139/ssrn.4573321)
+7. Eric Evans. 2003. *Domain-Driven Design: Tackling Complexity in the Heart
    of Software*. Addison-Wesley, Boston.
    <https://openlibrary.org/works/OL4464385W>
-7. Ahmed Fawzy, Amjed Tahir, and Kelly Blincoe. 2026. Vibe coding in practice:
+8. Ahmed Fawzy, Amjed Tahir, and Kelly Blincoe. 2026. Vibe coding in practice:
    Motivations, challenges, and a future outlook — a grey literature review.
    In *Proceedings of the 48th International Conference on Software
    Engineering: Software Engineering in Practice (ICSE-SEIP 2026)*, 212–223.
    [doi:10.1145/3786583.3786866](https://doi.org/10.1145/3786583.3786866)
-8. Alan R. Hevner, Salvatore T. March, Jinsoo Park, and Sudha Ram. 2004.
+9. Alan R. Hevner, Salvatore T. March, Jinsoo Park, and Sudha Ram. 2004.
    Design science in information systems research. *MIS Quarterly* 28, 1
    (2004), 75–105. [doi:10.2307/25148625](https://doi.org/10.2307/25148625)
-9. Ken Huang. 2025. *Secure Vibe Coding Guide*. Cloud Security Alliance.
+10. Ken Huang. 2025. *Secure Vibe Coding Guide*. Cloud Security Alliance.
    <https://cloudsecurityalliance.org/blog/2025/04/09/secure-vibe-coding-guide>
-10. Andrej Karpathy. 2023. The hottest new programming language is English.
+11. Andrej Karpathy. 2023. The hottest new programming language is English.
     Post on X (24 January 2023).
     <https://x.com/karpathy/status/1617979122625712128>
-11. Andrej Karpathy. 2025. Post coining the term "vibe coding". X (February
+12. Andrej Karpathy. 2025. Post coining the term "vibe coding". X (February
     2025). <https://x.com/karpathy/status/1886192184808149383>
-12. Andrej Karpathy. 2026. Post proposing the term "agentic engineering". X
+13. Andrej Karpathy. 2026. Post proposing the term "agentic engineering". X
     (February 2026). <https://x.com/karpathy/status/2019137879310836075>
-13. Amy J. Ko et al. 2011. The state of the art in end-user software
+14. Amy J. Ko et al. 2011. The state of the art in end-user software
     engineering. *ACM Computing Surveys* 43, 3 (2011), 21:1–21:44.
     [doi:10.1145/1922649.1922658](https://doi.org/10.1145/1922649.1922658)
-14. Oliver Kopp, Anita Armbruster, and Olaf Zimmermann. 2018. Markdown
+15. Oliver Kopp, Anita Armbruster, and Olaf Zimmermann. 2018. Markdown
     architectural decision records: Format and tool support. In *Proceedings
     of the 10th ZEUS Workshop* (CEUR-WS Vol. 2072).
     <https://ceur-ws.org/Vol-2072/paper9.pdf>
-15. Alistair Mavin, Philip Wilkinson, Adrian Harwood, and Mark Novak. 2009.
+16. Alistair Mavin, Philip Wilkinson, Adrian Harwood, and Mark Novak. 2009.
     Easy approach to requirements syntax (EARS). In *Proceedings of the 17th
     IEEE International Requirements Engineering Conference (RE '09)*, 317–322.
     [doi:10.1109/RE.2009.9](https://doi.org/10.1109/RE.2009.9)
-16. Bonnie A. Nardi. 1993. *A Small Matter of Programming: Perspectives on End
+17. Bonnie A. Nardi. 1993. *A Small Matter of Programming: Perspectives on End
     User Computing*. MIT Press, Cambridge, MA.
     <https://openlibrary.org/works/OL1923390W>
-17. Peter Naur. 1985. Programming as theory building. *Microprocessing and
+18. Peter Naur. 1985. Programming as theory building. *Microprocessing and
     Microprogramming* 15, 5 (1985), 253–261.
     [doi:10.1016/0165-6074(85)90032-8](https://doi.org/10.1016/0165-6074%2885%2990032-8)
-18. Michael Nygard. 2011. Documenting architecture decisions. Cognitect blog
+19. Michael Nygard. 2011. Documenting architecture decisions. Cognitect blog
     (15 November 2011).
     <https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions>
-19. Hammond Pearce, Baleegh Ahmad, Benjamin Tan, Brendan Dolan-Gavitt, and
+20. Hammond Pearce, Baleegh Ahmad, Benjamin Tan, Brendan Dolan-Gavitt, and
     Ramesh Karri. 2022. Asleep at the keyboard? Assessing the security of
     GitHub Copilot's code contributions. In *Proceedings of the 43rd IEEE
     Symposium on Security and Privacy (S&P 2022)*, 754–768.
     [arXiv:2108.09293](https://arxiv.org/abs/2108.09293)
-20. Neil Perry, Megha Srivastava, Deepak Kumar, and Dan Boneh. 2023. Do users
+21. Neil Perry, Megha Srivastava, Deepak Kumar, and Dan Boneh. 2023. Do users
     write more insecure code with AI assistants? In *Proceedings of the 2023
     ACM SIGSAC Conference on Computer and Communications Security (CCS '23)*,
     2785–2799. [doi:10.1145/3576915.3623157](https://doi.org/10.1145/3576915.3623157)
-21. Ranjan Sapkota, Konstantinos I. Roumeliotis, and Manoj Karkee. 2025. Vibe
+22. Ranjan Sapkota, Konstantinos I. Roumeliotis, and Manoj Karkee. 2025. Vibe
     coding vs. agentic coding: Fundamentals and practical implications of
     agentic AI. [arXiv:2505.19443](https://arxiv.org/abs/2505.19443)
-22. Advait Sarkar, Andrew D. Gordon, Carina Negreanu, Christian Poelitz, Sruti
+23. Advait Sarkar, Andrew D. Gordon, Carina Negreanu, Christian Poelitz, Sruti
     Srinivasa Ragavan, and Ben Zorn. 2022. What is it like to program with
     artificial intelligence? In *Proceedings of the 33rd Annual Conference of
     the Psychology of Programming Interest Group (PPIG 2022)*. [arXiv:2208.06213](https://arxiv.org/abs/2208.06213)
-23. Christopher Scaffidi, Mary Shaw, and Brad A. Myers. 2005. Estimating the
+24. Christopher Scaffidi, Mary Shaw, and Brad A. Myers. 2005. Estimating the
     numbers of end users and end user programmers. In *Proceedings of the 2005
     IEEE Symposium on Visual Languages and Human-Centric Computing (VL/HCC
     '05)*, 207–214. [doi:10.1109/VLHCC.2005.34](https://doi.org/10.1109/VLHCC.2005.34)
-24. Donald A. Schön. 1983. *The Reflective Practitioner: How Professionals
+25. Donald A. Schön. 1983. *The Reflective Practitioner: How Professionals
     Think in Action*. Basic Books, New York.
     <https://openlibrary.org/works/OL3466056W>
-25. Shivani Shukla, Himanshu Joshi, and Romilla Syed. 2025. Security
+26. Shivani Shukla, Himanshu Joshi, and Romilla Syed. 2025. Security
     degradation in iterative
     AI code generation — a systematic analysis of the paradox. In *Proceedings
     of the 2025 IEEE International Symposium on Technology and Society (ISTAS
     2025)*. [arXiv:2506.11022](https://arxiv.org/abs/2506.11022)
-26. U.S. Copyright Office. 2025. *Copyright and Artificial Intelligence,
+27. U.S. Copyright Office. 2025. *Copyright and Artificial Intelligence,
     Part 2: Copyrightability*. <https://www.copyright.gov/ai/>
-27. Gerald M. Weinberg. 1971. *The Psychology of Computer Programming*. Van
+28. Gerald M. Weinberg. 1971. *The Psychology of Computer Programming*. Van
     Nostrand Reinhold, New York.
     <https://openlibrary.org/works/OL1958820W>
-28. Songwen Zhao, Danqing Wang, Kexun Zhang, Jiaxuan Luo, Zhuo Li, and Lei Li.
+29. Songwen Zhao, Danqing Wang, Kexun Zhang, Jiaxuan Luo, Zhuo Li, and Lei Li.
     2025. Is vibe coding safe? Benchmarking vulnerability of agent-generated
     code in real-world tasks. [arXiv:2512.03262](https://arxiv.org/abs/2512.03262)
