@@ -848,3 +848,131 @@ func TestPreCommitHook_BOMHeaderCorpusRefuses(t *testing.T) {
 		t.Errorf("the refusal does not name the misplaced declaration's line\n%s", out)
 	}
 }
+
+// newWorktreeCase builds a primary checkout carrying primaryBody as its private
+// store (an empty body leaves the store absent) and returns a hookRepo bound to a
+// LINKED git worktree of it. It is the exact shape iss-370 was found in: the
+// local-ephemeral tier is per-worktree and gitignored, so a freshly added worktree
+// starts with no store at all while the primary checkout has one, and the SAME
+// committed hook runs in both (a linked worktree resolves its hooks through the
+// common git dir).
+func newWorktreeCase(t *testing.T, primaryBody string) (primary, linked *hookRepo) {
+	t.Helper()
+	primary = newHookRepo(t, primaryBody)
+	// The tier's fence is committed, so the linked worktree inherits it and its own
+	// store is ignored there too — without it a `git add -A` in the worktree would
+	// stage the store and a shape test could pass for the wrong reason.
+	primary.write(".gitignore", ".abcd/.work.local/\n")
+	primary.write("seed.md", "nothing sensitive here\n")
+	primary.git("add", "--", ".gitignore", "seed.md")
+	// The guard is bypassed for the seed alone: `git worktree add` needs a commit to
+	// check out, and the fixture is not what this test is proving.
+	primary.git("-c", "core.hooksPath=/dev/null", "commit", "-m", "seed")
+
+	dir := filepath.Join(t.TempDir(), "linked")
+	if out, err := primary.tryGit("worktree", "add", "-b", "linked", dir); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+	return primary, &hookRepo{t: t, dir: dir, env: primary.env}
+}
+
+// TestPreCommitHook_LinkedWorktreeInheritsThePrimaryStore is iss-370. The private
+// store lives in the gitignored per-worktree local tier, so every commit made from
+// a `git worktree add` checkout ran with the banlist ABSENT — warned, but
+// unprotected, which made the isolated-agent pattern a systematic bypass of a
+// protection the main checkout has. The guard resolves the primary checkout's store
+// as a fallback layer and blocks on it, naming the key alone as ever.
+func TestPreCommitHook_LinkedWorktreeInheritsThePrimaryStore(t *testing.T) {
+	_, linked := newWorktreeCase(t, keyedBanlist)
+	// No per-worktree banlist setup of any kind has been performed here.
+	if _, err := os.Stat(filepath.Join(linked.dir, ".abcd", ".work.local")); err == nil {
+		t.Fatal("the linked worktree already carries a local tier; the fixture proves nothing")
+	}
+	linked.write("note.md", "the widgetworks deal closes friday\n")
+	linked.git("add", "note.md")
+	blocked, out := linked.commit()
+	if !blocked {
+		t.Fatalf("a linked worktree committed a name the primary checkout's store bans\n%s", out)
+	}
+	if !strings.Contains(out, "widget-partner") {
+		t.Errorf("the refusal does not name the entry key\n%s", out)
+	}
+	for _, leak := range []string{"widgetworks", "friday"} {
+		if strings.Contains(strings.ToLower(out), leak) {
+			t.Errorf("output leaks %q; neither the pattern nor the matched line may be echoed\n%s", leak, out)
+		}
+	}
+}
+
+// TestPreCommitHook_LinkedWorktreeStoreWinsOverThePrimary pins the precedence rule:
+// the primary store is a FALLBACK, so an entry the worktree declares for itself is
+// enforced there whether or not the primary knows the name — and the primary's own
+// entries keep being enforced beside it. A fallback that displaced the local layer
+// would silently narrow the guard in the checkout the developer is actually in.
+func TestPreCommitHook_LinkedWorktreeStoreWinsOverThePrimary(t *testing.T) {
+	// Two fixtures rather than two staged files in one: a blocked commit leaves its
+	// file staged, so a second case in the same checkout would be scanned against the
+	// first one's content and could pass for the wrong reason.
+	const localOnly = "# abcd-banlist: keyed\nlocal-only   sprocketco\n"
+
+	t.Run("local entry blocks", func(t *testing.T) {
+		_, linked := newWorktreeCase(t, keyedBanlist)
+		linked.writeBanlist(localOnly)
+		linked.write("local.md", "the sprocketco pilot starts monday\n")
+		linked.git("add", "local.md")
+		blocked, out := linked.commit()
+		if !blocked {
+			t.Fatalf("the worktree's own store did not block\n%s", out)
+		}
+		if !strings.Contains(out, "local-only") {
+			t.Errorf("the refusal does not name the local entry's key\n%s", out)
+		}
+	})
+
+	t.Run("primary entry still blocks beside it", func(t *testing.T) {
+		_, linked := newWorktreeCase(t, keyedBanlist)
+		linked.writeBanlist(localOnly)
+		linked.write("inherited.md", "the widgetworks deal closes friday\n")
+		linked.git("add", "inherited.md")
+		blocked, out := linked.commit()
+		if !blocked {
+			t.Fatalf("a worktree-local store displaced the inherited primary layer\n%s", out)
+		}
+		if !strings.Contains(out, "widget-partner") {
+			t.Errorf("the refusal does not name the inherited entry's key\n%s", out)
+		}
+	})
+}
+
+// TestPreCommitHook_LinkedWorktreeSaysWhereTheEntryCameFrom: an inherited refusal
+// names a key the developer will not find in the checkout they are standing in, so
+// the guard says which store it came from. Without it the remedy — edit the primary
+// checkout's store — is invisible, and the key alone reads as a phantom.
+func TestPreCommitHook_LinkedWorktreeSaysWhereTheEntryCameFrom(t *testing.T) {
+	_, linked := newWorktreeCase(t, keyedBanlist)
+	linked.write("note.md", "the widgetworks deal closes friday\n")
+	linked.git("add", "note.md")
+	_, out := linked.commit()
+	if !strings.Contains(out, "primary checkout") {
+		t.Errorf("the refusal does not say the entry was inherited from the primary checkout\n%s", out)
+	}
+}
+
+// TestPreCommitHook_LinkedWorktreeWithNoStoreAnywhereStillWarns is AC4 in the
+// worktree shape: resolution is a fallback, never a fail-closed error. A linked
+// worktree whose primary checkout has no store either is exactly as unprotected as
+// a standalone checkout with none, and must be exactly as loud about it.
+func TestPreCommitHook_LinkedWorktreeWithNoStoreAnywhereStillWarns(t *testing.T) {
+	_, linked := newWorktreeCase(t, "")
+	linked.write("note.md", "widgetworks ships today\n")
+	linked.git("add", "note.md")
+	blocked, out := linked.commit()
+	if blocked {
+		t.Fatalf("commit blocked with no store in either checkout; want it to proceed\n%s", out)
+	}
+	for _, want := range []string{"WARNING", "INACTIVE"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("hook output does not mention %q; the inactive layer must announce itself\n%s", want, out)
+		}
+	}
+}

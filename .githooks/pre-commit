@@ -173,6 +173,44 @@ example_marker="# abcd-banlist-example"
 tab=$'\t'
 bom=$'\xef\xbb\xbf'
 
+# --- itd-150: the linked-worktree fallback ----------------------------------
+# The local tier is PER-WORKTREE and gitignored, so a checkout made with
+# `git worktree add` starts with no private store at all: every commit from an
+# isolated agent worktree ran with the banlist absent — warned, per design, but
+# unprotected, which turned the isolated-worktree pattern into a systematic bypass
+# of a protection the main checkout has (iss-370).
+#
+# git tells the two shapes apart. In a LINKED worktree `--git-dir` resolves to
+# <primary>/.git/worktrees/<name> while `--git-common-dir` resolves to
+# <primary>/.git; in a standalone checkout the two are the same path. The primary
+# working tree is therefore the common dir's parent, and its store is read below as
+# a FALLBACK layer beneath this worktree's own.
+#
+# Resolution NEVER fails the commit. `--path-format` needs git 2.31, and a repo can
+# be shaped in ways rev-parse will not answer for; every such failure leaves
+# primary_banlist empty, which is exactly today's single-store behaviour and today's
+# loud warning. A guard that refused to run because it could not find a SECOND store
+# would be a worse guard than the one this fixes.
+primary_root=""
+primary_banlist=""
+primary_dir=""
+git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
+  # Pure parameter expansion, never `dirname`: one fewer external command on a path
+  # the environment pin above exists to keep unsubstitutable.
+  primary_root="${common_dir%/*}"
+  # A common dir with no slash left to strip names no directory, and a primary root
+  # that resolves back to THIS working tree is not a second store to inherit — both
+  # leave the hook single-store, exactly as it is in a standalone checkout.
+  if [ -n "$primary_root" ] && [ "$primary_root" != "$common_dir" ] && [ "$primary_root" != "$toplevel" ]; then
+    primary_dir="$primary_root/$banlist_dir"
+    primary_banlist="$primary_root/$banlist"
+  else
+    primary_root=""
+  fi
+fi
+
 # normalise_decl echoes a line with a UTF-8 BOM and surrounding ASCII blanks
 # stripped — the one reading both this hook and abcd's Go parser apply to the
 # format declaration, so neither can accept a line the other rejects.
@@ -285,27 +323,53 @@ fi
 # symlink (which `git add -f` can commit, so a checkout materialises it) swaps or
 # empties the guard, and a directory or FIFO there would take the "absent" branch
 # and read as "this machine has not opted in". Both are refusals, and -L is tested
-# first because -f follows a symlink.
-if [ -L "$banlist" ] || [ -L "$banlist_dir" ]; then
-  echo "pre-commit: BLOCKED — $banlist (or its directory) is a SYMLINK." >&2
-  echo "            the private banlist must be a regular file in this working tree; a link can point" >&2
-  echo "            the guard at an empty or attacker-chosen list. Replace it with the real file." >&2
-  exit 1
-fi
-if [ -e "$banlist" ] && [ ! -f "$banlist" ]; then
-  echo "pre-commit: BLOCKED — $banlist exists but is not a regular file." >&2
-  echo "            a directory, FIFO, or device there cannot be read as a banlist, and must not be" >&2
-  echo "            mistaken for a machine that has not opted in." >&2
-  exit 1
+# first because -f follows a symlink. The INHERITED store is held to the same test:
+# a fallback layer nobody checked would be the softer way in.
+refuse_non_regular_store() {
+  _store="$1"
+  _dir="$2"
+  if [ -L "$_store" ] || [ -L "$_dir" ]; then
+    echo "pre-commit: BLOCKED — $_store (or its directory) is a SYMLINK." >&2
+    echo "            the private banlist must be a regular file in this working tree; a link can point" >&2
+    echo "            the guard at an empty or attacker-chosen list. Replace it with the real file." >&2
+    exit 1
+  fi
+  if [ -e "$_store" ] && [ ! -f "$_store" ]; then
+    echo "pre-commit: BLOCKED — $_store exists but is not a regular file." >&2
+    echo "            a directory, FIFO, or device there cannot be read as a banlist, and must not be" >&2
+    echo "            mistaken for a machine that has not opted in." >&2
+    exit 1
+  fi
+}
+refuse_non_regular_store "$banlist" "$banlist_dir"
+if [ -n "$primary_banlist" ]; then
+  refuse_non_regular_store "$primary_banlist" "$primary_dir"
 fi
 
+# Which stores does this checkout actually have? Two at most: this working tree's
+# own, and — in a linked worktree — the primary checkout's, inherited.
+local_present=0
+primary_present=0
+if [ -f "$banlist" ]; then
+  local_present=1
+fi
+if [ -n "$primary_banlist" ] && [ -f "$primary_banlist" ]; then
+  primary_present=1
+fi
 store_present=1
-if [ ! -f "$banlist" ]; then
+if [ "$local_present" -eq 0 ] && [ "$primary_present" -eq 0 ]; then
   store_present=0
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard is INACTIVE on this machine." >&2
   echo "pre-commit:   $banlist is absent, so NOTHING is checked" >&2
   echo "pre-commit:   against it and this commit proceeds unprotected by that layer." >&2
+  if [ -n "$primary_banlist" ]; then
+    # A linked worktree inherits the primary checkout's store, so name the second
+    # place that was looked at: "absent" here is a claim about both, and a reader who
+    # knows only about this tree would go and populate the wrong one.
+    echo "pre-commit:   (this is a linked worktree; the primary checkout's store at" >&2
+    echo "pre-commit:   $primary_banlist is absent too)" >&2
+  fi
   echo "pre-commit:   Opt in: run 'abcd banlist add --private <key> <pattern>', or" >&2
   echo "pre-commit:   write that file yourself with '$format_decl'" >&2
   echo "pre-commit:   as its first line and one 'KEY<space-or-tab>PATTERN' line per" >&2
@@ -318,170 +382,203 @@ fi
 # file at its path, and an early exit here let exactly that rename through. Only the
 # pattern MATCHING needs entries, and it is skipped naturally when there are none.
 
-# Which format? The FIRST line decides the whole file, once, before any entry is
-# read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
-keyed=0
-decl=""
-if [ "$store_present" -eq 1 ] && { IFS= read -r decl < "$banlist" || [ -n "$decl" ]; }; then
-  # A leading UTF-8 BOM is an encoding artefact an editor can add without telling
-  # anyone, and it must not decide the file's format. Before this strip a BOM'd
-  # declaration matched nothing, so a KEYED store was read as LEGACY: every keyed
-  # entry silently became a whole-line pattern that matches nothing a commit
-  # contains, while the entry count stayed >=1 so the zero-entry warning below
-  # never fired. Stripped here and on line 1 of the parse loop, exactly as the Go
-  # parser does.
-  case $decl in "$bom"*) decl="${decl#"$bom"}" ;; esac
-  while [ -n "$decl" ]; do
-    case $decl in
-      *' ') decl="${decl% }" ;;
-      *"$tab") decl="${decl%"$tab"}" ;;
-      *$'\r') decl="${decl%$'\r'}" ;;
-      *) break ;;
-    esac
-  done
-  if [ "$decl" = "$format_decl" ]; then
-    keyed=1
-  else
-    # A first line that is not the declaration but CARRIES it is a DAMAGED
-    # declaration, never a legacy store. Reading it as legacy is the same silent
-    # downgrade the BOM caused, so it fails closed. Two shapes, one test each:
-    # leading ASCII blanks, and ANY other prefix bytes — a UTF-16/UTF-32 byte-order
-    # mark, a stray editor artefact — which the suffix match catches without this
-    # shell needing a portable byte-class test.
-    damaged=0
-    if declares_format "$decl"; then damaged=1; fi
-    case "$decl" in *"$format_decl") damaged=1 ;; esac
-    if [ "$damaged" -eq 1 ]; then
-      echo "pre-commit: BLOCKED — $banlist line 1 is a DAMAGED format declaration (fail safe)." >&2
-      echo "            it is not exactly '$format_decl' but carries it after a" >&2
-      echo "            prefix, so it declares neither format: every keyed entry below would silently" >&2
-      echo "            become a whole-line pattern that matches nothing. Fix line 1." >&2
-      exit 1
-    fi
-  fi
-fi
-
-# Announce the FORMAT before any line is read, so a refusal below carries the one
-# piece of context that decides what every other line means. The count follows the
-# loop, because it is not known until then.
-if [ "$store_present" -eq 1 ]; then
-  if [ "$keyed" -eq 1 ]; then
-    echo "pre-commit: abcd name-guard: reading a keyed store" >&2
-  else
-    echo "pre-commit: abcd name-guard: reading a legacy store" >&2
-  fi
-fi
-
 rc=0
-lineno=0
 entries=0
-in_header=1
 keys=()
 pats=()
 lines=()
-if [ "$store_present" -eq 1 ]; then
-while IFS= read -r raw || [ -n "$raw" ]; do
-  lineno=$((lineno + 1))
-  line="$raw"
-  # The BOM belongs to the FILE, not to line 1's content: strip it here too, or the
-  # declaration line would fail the comment test below and be read as an entry.
-  if [ "$lineno" -eq 1 ]; then
-    case $line in "$bom"*) line="${line#"$bom"}" ;; esac
-  fi
-  # The declaration must be line 1 or nowhere. Finding it further down the LEADING
-  # blank/comment header means an edit moved it — one inserted blank line above it
-  # silently downgraded a keyed store to legacy, which is the same fail-open by
-  # another route. Once a real entry line is seen the header is over and a line that
-  # merely looks like the declaration is just a comment.
-  if [ "$in_header" -eq 1 ] && [ "$lineno" -gt 1 ] && declares_format "$line"; then
-    echo "pre-commit: BLOCKED — $banlist declares the keyed format on line $lineno, not line 1 (fail safe)." >&2
-    echo "            the declaration decides the whole file and is only read from line 1, so every entry" >&2
-    echo "            below would silently become a whole-line pattern that matches nothing. Move it up." >&2
-    exit 1
-  fi
-  # Trailing, then leading, ASCII space/tab (plus a trailing CR). ASCII ONLY: the Go
-  # parser strips exactly this set, and [[:space:]] does not — it also eats U+000B,
-  # and in a UTF-8 locale a byte class can disagree about U+00A0. A store line either
-  # reader silently ignores is a hole in the layer.
-  while [ -n "$line" ]; do
-    case $line in
-      *' ') line="${line% }" ;;
-      *"$tab") line="${line%"$tab"}" ;;
-      *$'\r') line="${line%$'\r'}" ;;
-      *) break ;;
-    esac
-  done
-  while [ -n "$line" ]; do
-    case $line in
-      ' '*) line="${line# }" ;;
-      "$tab"*) line="${line#"$tab"}" ;;
-      *) break ;;
-    esac
-  done
-  case "$line" in '' | \#*) continue ;; esac
-  in_header=0
+stores=()
 
-  if [ "$keyed" -eq 0 ]; then
-    # LEGACY store: one whole-line pattern, no split, ever. The key is synthetic, so
-    # nothing from the line itself can be printed.
-    key="entry-$lineno"
-    pat="$line"
-  else
-    # KEYED store: the line MUST be KEY<space-or-tab>PATTERN. The first field ends at
-    # the first ASCII space or tab, whichever comes first; an unparseable line gets no
-    # key at all, because its first field may be the secret.
-    key=""
-    pat=""
-    first="${line%%' '*}"
-    upto_tab="${line%%"$tab"*}"
-    if [ ${#upto_tab} -lt ${#first} ]; then first="$upto_tab"; fi
-    rest="${line#"$first"}"
-    while [ -n "$rest" ]; do
-      case $rest in
-        ' '*) rest="${rest# }" ;;
-        "$tab"*) rest="${rest#"$tab"}" ;;
+# load_store reads ONE store and appends its entries to the shared arrays. Each
+# store declares its OWN format on its OWN first line — the declaration decides one
+# file, never two — so the format is read, announced and applied per store, and the
+# store's path travels with every entry so a refusal names the file to fix.
+#
+# The two stores are a UNION, never an override. Letting a worktree-local key REPLACE
+# an inherited one of the same name fails open in two directions: a legacy store's
+# keys are SYNTHETIC (`entry-<line>`), so two legacy stores collide on line numbers
+# and the primary's pattern would be dropped silently, and a local re-declaration of
+# a keyed name could quietly narrow a ban the primary checkout made. Checking both
+# patterns can only ever refuse MORE, which is the direction this guard fails in —
+# and what the fallback must never do, override a worktree-local entry, a union
+# gives unconditionally.
+load_store() {
+  _store="$1"
+  _inherited="$2" # 1 when this is the primary checkout's store, read as a fallback
+  _tag=""
+  if [ "$_inherited" -eq 1 ]; then
+    _tag=" (inherited from the primary checkout)"
+  fi
+
+  # Which format? The FIRST line decides the whole file, once, before any entry is
+  # read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
+  _keyed=0
+  decl=""
+  if IFS= read -r decl < "$_store" || [ -n "$decl" ]; then
+    # A leading UTF-8 BOM is an encoding artefact an editor can add without telling
+    # anyone, and it must not decide the file's format. Before this strip a BOM'd
+    # declaration matched nothing, so a KEYED store was read as LEGACY: every keyed
+    # entry silently became a whole-line pattern that matches nothing a commit
+    # contains, while the entry count stayed >=1 so the zero-entry warning below
+    # never fired. Stripped here and on line 1 of the parse loop, exactly as the Go
+    # parser does.
+    case $decl in "$bom"*) decl="${decl#"$bom"}" ;; esac
+    while [ -n "$decl" ]; do
+      case $decl in
+        *' ') decl="${decl% }" ;;
+        *"$tab") decl="${decl%"$tab"}" ;;
+        *$'\r') decl="${decl%$'\r'}" ;;
         *) break ;;
       esac
     done
-    if [ -n "$rest" ]; then
-      case "$first" in
-        '' | *[!A-Za-z0-9._/-]*) ;;
-        [A-Za-z0-9]*) key="$first"; pat="$rest" ;;
-      esac
-    fi
-    if [ -z "$key" ]; then
-      echo "pre-commit: BLOCKED — $banlist line $lineno is not a KEY<space-or-tab>PATTERN entry (fail safe)." >&2
-      echo "            fix that line; its content is withheld by design. An unparseable entry is never" >&2
-      echo "            skipped: a banlist that cannot be read must not look like a banlist that found" >&2
-      echo "            nothing. (Remove the '$format_decl' first line to read every line as a" >&2
-      echo "            whole-line pattern instead.)" >&2
-      rc=1
-      continue
+    if [ "$decl" = "$format_decl" ]; then
+      _keyed=1
+    else
+      # A first line that is not the declaration but CARRIES it is a DAMAGED
+      # declaration, never a legacy store. Reading it as legacy is the same silent
+      # downgrade the BOM caused, so it fails closed. Two shapes, one test each:
+      # leading ASCII blanks, and ANY other prefix bytes — a UTF-16/UTF-32 byte-order
+      # mark, a stray editor artefact — which the suffix match catches without this
+      # shell needing a portable byte-class test.
+      damaged=0
+      if declares_format "$decl"; then damaged=1; fi
+      case "$decl" in *"$format_decl") damaged=1 ;; esac
+      if [ "$damaged" -eq 1 ]; then
+        echo "pre-commit: BLOCKED — $_store line 1 is a DAMAGED format declaration (fail safe)." >&2
+        echo "            it is not exactly '$format_decl' but carries it after a" >&2
+        echo "            prefix, so it declares neither format: every keyed entry below would silently" >&2
+        echo "            become a whole-line pattern that matches nothing. Fix line 1." >&2
+        exit 1
+      fi
     fi
   fi
-  entries=$((entries + 1))
-  keys+=("$key")
-  pats+=("$pat")
-  lines+=("$lineno")
-done < "$banlist"
-fi
 
-# Announce the entry count actually read, BEFORE the scan; the format was announced
-# before the loop, so a refusal raised inside it already carried the one fact that
-# decides what every other line means. A silent downgrade — a stripped
-# `# abcd-banlist: keyed` first line — turns every keyed entry into a non-matching
-# whole-line pattern while `entries` stays >=1, so the zero-entry warning below never
-# fires. The announced pair makes what the guard actually read visible at commit
-# time, so a downgrade cannot be silent. No line content is printed here — only the
-# count and the format.
-if [ "$store_present" -eq 1 ]; then
-  if [ "$keyed" -eq 1 ]; then
-    if [ "$entries" -eq 1 ]; then noun="entry"; else noun="entries"; fi
-    echo "pre-commit: abcd name-guard: keyed store, $entries $noun" >&2
+  # Announce the FORMAT before any line is read, so a refusal below carries the one
+  # piece of context that decides what every other line means. The count follows the
+  # loop, because it is not known until then.
+  if [ "$_keyed" -eq 1 ]; then
+    echo "pre-commit: abcd name-guard: reading a keyed store$_tag" >&2
   else
-    if [ "$entries" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
-    echo "pre-commit: abcd name-guard: legacy store, $entries $noun" >&2
+    echo "pre-commit: abcd name-guard: reading a legacy store$_tag" >&2
   fi
+
+  _lineno=0
+  _count=0
+  _in_header=1
+  while IFS= read -r raw || [ -n "$raw" ]; do
+    _lineno=$((_lineno + 1))
+    line="$raw"
+    # The BOM belongs to the FILE, not to line 1's content: strip it here too, or the
+    # declaration line would fail the comment test below and be read as an entry.
+    if [ "$_lineno" -eq 1 ]; then
+      case $line in "$bom"*) line="${line#"$bom"}" ;; esac
+    fi
+    # The declaration must be line 1 or nowhere. Finding it further down the LEADING
+    # blank/comment header means an edit moved it — one inserted blank line above it
+    # silently downgraded a keyed store to legacy, which is the same fail-open by
+    # another route. Once a real entry line is seen the header is over and a line that
+    # merely looks like the declaration is just a comment.
+    if [ "$_in_header" -eq 1 ] && [ "$_lineno" -gt 1 ] && declares_format "$line"; then
+      echo "pre-commit: BLOCKED — $_store declares the keyed format on line $_lineno, not line 1 (fail safe)." >&2
+      echo "            the declaration decides the whole file and is only read from line 1, so every entry" >&2
+      echo "            below would silently become a whole-line pattern that matches nothing. Move it up." >&2
+      exit 1
+    fi
+    # Trailing, then leading, ASCII space/tab (plus a trailing CR). ASCII ONLY: the Go
+    # parser strips exactly this set, and [[:space:]] does not — it also eats U+000B,
+    # and in a UTF-8 locale a byte class can disagree about U+00A0. A store line either
+    # reader silently ignores is a hole in the layer.
+    while [ -n "$line" ]; do
+      case $line in
+        *' ') line="${line% }" ;;
+        *"$tab") line="${line%"$tab"}" ;;
+        *$'\r') line="${line%$'\r'}" ;;
+        *) break ;;
+      esac
+    done
+    while [ -n "$line" ]; do
+      case $line in
+        ' '*) line="${line# }" ;;
+        "$tab"*) line="${line#"$tab"}" ;;
+        *) break ;;
+      esac
+    done
+    case "$line" in '' | \#*) continue ;; esac
+    _in_header=0
+
+    if [ "$_keyed" -eq 0 ]; then
+      # LEGACY store: one whole-line pattern, no split, ever. The key is synthetic, so
+      # nothing from the line itself can be printed.
+      key="entry-$_lineno"
+      pat="$line"
+    else
+      # KEYED store: the line MUST be KEY<space-or-tab>PATTERN. The first field ends at
+      # the first ASCII space or tab, whichever comes first; an unparseable line gets no
+      # key at all, because its first field may be the secret.
+      key=""
+      pat=""
+      first="${line%%' '*}"
+      upto_tab="${line%%"$tab"*}"
+      if [ ${#upto_tab} -lt ${#first} ]; then first="$upto_tab"; fi
+      rest="${line#"$first"}"
+      while [ -n "$rest" ]; do
+        case $rest in
+          ' '*) rest="${rest# }" ;;
+          "$tab"*) rest="${rest#"$tab"}" ;;
+          *) break ;;
+        esac
+      done
+      if [ -n "$rest" ]; then
+        case "$first" in
+          '' | *[!A-Za-z0-9._/-]*) ;;
+          [A-Za-z0-9]*) key="$first"; pat="$rest" ;;
+        esac
+      fi
+      if [ -z "$key" ]; then
+        echo "pre-commit: BLOCKED — $_store line $_lineno is not a KEY<space-or-tab>PATTERN entry (fail safe)." >&2
+        echo "            fix that line; its content is withheld by design. An unparseable entry is never" >&2
+        echo "            skipped: a banlist that cannot be read must not look like a banlist that found" >&2
+        echo "            nothing. (Remove the '$format_decl' first line to read every line as a" >&2
+        echo "            whole-line pattern instead.)" >&2
+        rc=1
+        continue
+      fi
+    fi
+    _count=$((_count + 1))
+    entries=$((entries + 1))
+    keys+=("$key")
+    pats+=("$pat")
+    lines+=("$_lineno")
+    stores+=("$_store")
+  done < "$_store"
+
+  # Announce the entry count actually read, BEFORE the scan; the format was announced
+  # before the loop, so a refusal raised inside it already carried the one fact that
+  # decides what every other line means. A silent downgrade — a stripped
+  # `# abcd-banlist: keyed` first line — turns every keyed entry into a non-matching
+  # whole-line pattern while the count stays >=1, so the zero-entry warning below never
+  # fires. The announced pair makes what the guard actually read visible at commit
+  # time, so a downgrade cannot be silent. No line content is printed here — only the
+  # count and the format.
+  if [ "$_keyed" -eq 1 ]; then
+    if [ "$_count" -eq 1 ]; then noun="entry"; else noun="entries"; fi
+    echo "pre-commit: abcd name-guard: keyed store$_tag, $_count $noun" >&2
+  else
+    if [ "$_count" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
+    echo "pre-commit: abcd name-guard: legacy store$_tag, $_count $noun" >&2
+  fi
+}
+
+# The inherited store is read FIRST, so a developer standing in the linked worktree
+# sees what they inherit before what they declared. Its path is named once, here: a
+# refusal below names the entry's key, and the key alone is a phantom in a checkout
+# whose own store does not carry it.
+if [ "$primary_present" -eq 1 ]; then
+  echo "pre-commit: abcd name-guard: inheriting the primary checkout's store at $primary_banlist" >&2
+  load_store "$primary_banlist" 1
+fi
+if [ "$local_present" -eq 1 ]; then
+  load_store "$banlist" 0
 fi
 
 # A store that parsed to NOTHING checks exactly as much as an absent one, so it is
@@ -489,14 +586,17 @@ fi
 # truncates or garbles the store away to nothing must produce this warning, not
 # silence. (An unparseable line is a refusal, handled above, not an empty store.)
 if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ] && [ "$store_present" -eq 1 ]; then
+  empty_store="$banlist"
+  if [ "$local_present" -eq 0 ]; then empty_store="$primary_banlist"; fi
   echo "pre-commit: ****************************************************************" >&2
   echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
-  echo "pre-commit:   $banlist exists but yields no usable entry," >&2
+  echo "pre-commit:   $empty_store exists but yields no usable entry," >&2
   echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
   echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
   echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
   echo "pre-commit: ****************************************************************" >&2
 fi
+
 # --- the candidate content: staged BLOBS, not diff text ----------------------
 # What is checked is the CONTENT of every staged file, read straight out of the
 # index. Parsing `git diff --cached` text instead left four ways to stage a banned
@@ -647,6 +747,7 @@ while [ "$i" -lt "$entries" ]; do
   key="${keys[$i]}"
   pat="${pats[$i]}"
   lineno="${lines[$i]}"
+  store="${stores[$i]}"
   i=$((i + 1))
 
   # The pattern reaches grep on STDIN via `-f -`, NEVER in argv: an argument is
@@ -660,13 +761,20 @@ while [ "$i" -lt "$entries" ]; do
   case "$gr" in
     0)
       echo "pre-commit: BLOCKED — staged content matches private banlist entry '$key'." >&2
+      if [ "$store" != "$banlist" ]; then
+        # An inherited entry is not in the store this checkout carries, so naming the
+        # key alone would send the developer looking for a phantom. The remedy lives in
+        # the primary checkout.
+        echo "            that entry is INHERITED from the primary checkout's store, not this working" >&2
+        echo "            tree's own: $store" >&2
+      fi
       echo "            reword to a generic term before committing; the banlist is untracked and local." >&2
       echo "            (the matched text and the pattern are withheld by design — only the key is named)" >&2
       rc=1
       ;;
     1) ;;
     *)
-      echo "pre-commit: BLOCKED — $banlist line $lineno is not a usable pattern (fail safe)." >&2
+      echo "pre-commit: BLOCKED — $store line $lineno is not a usable pattern (fail safe)." >&2
       echo "            fix that line; its content is withheld by design. An unusable entry is never skipped:" >&2
       echo "            a banlist that cannot be read must not look like a banlist that found nothing." >&2
       rc=1
