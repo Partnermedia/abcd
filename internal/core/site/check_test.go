@@ -11,6 +11,7 @@ package site
 // catch the composer.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -581,6 +582,229 @@ func TestCheckInvitesAShrinkingBaseline(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no shrink invitation for the fixed reference: %+v", res.Notes)
+	}
+}
+
+// supersedesDangle is a decision whose `supersedes` names a record that is not
+// in the tree — the everyday shape of the backlog the ratchet carries, since the
+// ADR lifecycle deletes a superseded file and keeps the trace in its successor.
+const supersedesDangle = `---
+id: adr-3
+status: accepted
+date: 2026-01-04
+supersedes: adr-8
+superseded_by: null
+related_adrs: []
+related_intents: []
+related_rfcs: []
+---
+
+# ADR-3: the third decision
+
+## Context
+
+A decision that names a predecessor no longer in the tree.
+
+## Decision
+
+Keep it.
+
+## Consequences
+
+The reference dangles.
+`
+
+// specTargetDangle is an intent whose `spec_id` names a spec with no file. It is
+// the second kind of dangle the detector has to see, and it reaches the gate by
+// a different route: `supersedes` is a handle field the record rule parses,
+// `spec_id` a graph field it carries without judging.
+const specTargetDangle = `---
+id: itd-1
+slug: the-unspecced-one
+spec_id: spc-404
+kind: standalone
+builds_on: []
+severity: minor
+---
+
+# The Unspecced One
+
+## Press Release
+
+The intent naming a spec that was never written.
+
+## Acceptance Criteria
+
+- Given a named spec, when it has no file, then the reference dangles.
+`
+
+// withIntentStore adds an intent store to the fixture's record-lint
+// configuration, so a record carrying a `spec_id` is scanned at all.
+const withIntentStore = `{
+  "roots": ["records"],
+  "banned_tokens": [],
+  "rules": {
+    "record_schema": {
+      "enabled": true,
+      "severity": "blocker",
+      "record_stores": {"adr": "records/adrs", "itd": "records/intents"}
+    }
+  }
+}
+`
+
+// TestCheckRefusesANewSupersedesDangle is the ratchet's whole purpose: nothing
+// checked supersedes targets, so a decision could name a predecessor that had
+// never existed and the build shipped green. The fixture's own dangle stays
+// admitted, so what fails here is the NEW one and only the new one.
+func TestCheckRefusesANewSupersedesDangle(t *testing.T) {
+	r := newCheckRepo(t)
+	r.write("records/adrs/0003-third.md", supersedesDangle)
+	r.build()
+	res := r.check()
+	wantFinding(t, res, CheckBaseline, "adr-8")
+	for _, f := range res.Findings {
+		if f.Check == CheckBaseline && strings.Contains(f.Detail, "adr-2") {
+			t.Errorf("the admitted backlog entry failed too: %s", f.Detail)
+		}
+	}
+}
+
+// TestCheckRefusesADanglingSpecTarget is the same gate on the other field kind.
+func TestCheckRefusesADanglingSpecTarget(t *testing.T) {
+	r := newCheckRepo(t)
+	r.write(".abcd/record-lint.json", withIntentStore)
+	r.write("records/intents/planned/itd-1-the-unspecced-one.md", specTargetDangle)
+	r.build()
+	wantFinding(t, r.check(), CheckBaseline, "spc-404")
+}
+
+// TestCheckPassesABaselinedBacklog is the ratchet's admitting direction, over
+// both field kinds at once: a dangle the repository has deliberately admitted is
+// carried, not failed. It is what lets a detector be armed at all against a tree
+// that already has a backlog in it.
+func TestCheckPassesABaselinedBacklog(t *testing.T) {
+	r := newCheckRepo(t)
+	r.write(".abcd/record-lint.json", withIntentStore)
+	r.write("records/adrs/0003-third.md", supersedesDangle)
+	r.write("records/intents/planned/itd-1-the-unspecced-one.md", specTargetDangle)
+	r.write(".abcd/site-baseline.json", `{"schema_version": 1, "unresolved_references": [
+		{"from": "adr-1", "to": "adr-2"},
+		{"from": "adr-3", "to": "adr-8"},
+		{"from": "itd-1", "to": "spc-404"}
+	]}`)
+	r.build()
+	wantClean(t, r.check(), CheckBaseline)
+}
+
+// TestSupersedesToAPrunedRecordStillCounts pins the load-bearing exception the
+// whole detector rests on. An absent target is normally excused when some record
+// declares it PRUNED — the ADR lifecycle deletes a superseded file and keeps the
+// trace in its successor — but the declaration itself cannot be excused by what
+// it declares, or `supersedes` would be the one typed reference nothing could
+// ever check. Here adr-3 lifts the store's high-water mark past adr-2, so adr-2
+// reads as pruned: the `related_adrs` reference to it is excused and the
+// `supersedes` one is not.
+func TestSupersedesToAPrunedRecordStillCounts(t *testing.T) {
+	r := newCheckRepo(t)
+	r.write("records/adrs/0003-third.md", `---
+id: adr-3
+status: accepted
+date: 2026-01-04
+supersedes: null
+superseded_by: null
+related_adrs: [adr-2]
+related_intents: []
+related_rfcs: []
+---
+
+# ADR-3: the third decision
+
+## Context
+
+A decision relating itself to one that has been pruned.
+
+## Decision
+
+Keep it.
+
+## Consequences
+
+The relation is excused; the supersedes declaration is not.
+`)
+	r.build()
+	var export RecordExport
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(r.out, "record.json"))), &export); err != nil {
+		t.Fatalf("record.json: %v", err)
+	}
+	var pruned bool
+	for _, id := range export.Health.Retired {
+		if id == "adr-2" {
+			pruned = true
+		}
+	}
+	if !pruned {
+		t.Fatalf("adr-2 does not read as pruned, so the exception is not under test: %+v", export.Health.Retired)
+	}
+	var supersedes, related bool
+	for _, e := range export.Health.Unresolved {
+		switch e.From {
+		case "adr-1":
+			supersedes = e.To == "adr-2"
+		case "adr-3":
+			related = e.To == "adr-2"
+		}
+	}
+	if !supersedes {
+		t.Error("a supersedes naming a pruned record is excused; nothing would ever check one")
+	}
+	if related {
+		t.Error("a related_adrs naming a pruned record counts; every retired id would fail the gate")
+	}
+}
+
+// TestCheckPassesWhenABaselinedTargetArrives is the fourth ratchet behaviour: a
+// baselined reference whose target is later written stops dangling, and the gate
+// says so as an invitation to shrink rather than as a failure. A ratchet that
+// failed here would teach people to stop fixing references.
+func TestCheckPassesWhenABaselinedTargetArrives(t *testing.T) {
+	r := newCheckRepo(t)
+	r.write("records/adrs/0002-second.md", `---
+id: adr-2
+status: superseded
+date: 2026-01-01
+supersedes: null
+superseded_by: adr-1
+related_adrs: []
+related_intents: []
+related_rfcs: []
+---
+
+# ADR-2: the superseded decision
+
+## Context
+
+The decision adr-1 supersedes, back in the tree.
+
+## Decision
+
+Keep it.
+
+## Consequences
+
+The baseline can shrink.
+`)
+	r.build()
+	res := r.check()
+	wantClean(t, res, CheckBaseline)
+	found := false
+	for _, n := range res.Notes {
+		if n.Check == CheckBaseline && strings.Contains(n.Detail, "adr-2") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no shrink invitation once the target arrived: %+v", res.Notes)
 	}
 }
 
