@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -54,6 +55,7 @@ const (
 	RejectedHardlinkOffrepo RejectedReason = "hardlink_offrepo"
 	RejectedDuplicate       RejectedReason = "duplicate"
 	RejectedControlChar     RejectedReason = "control_char"
+	RejectedPlatformBinary  RejectedReason = "platform_binary"
 	RejectedMissingLiteral  RejectedReason = "missing_literal"
 	RejectedFSError         RejectedReason = "fs_error"
 )
@@ -257,6 +259,20 @@ func (r *resolver) classifyRegular(rel, abs string, info os.FileInfo, deref bool
 	}
 	if pathContainsDeniedSegment(rel) {
 		r.result.Excluded = append(r.result.Excluded, ExcludedFile{LogicalPath: rel, Reason: ExcludedDeniedNamespace})
+		return
+	}
+	// A released platform binary never ships in the payload: the plugin's
+	// bootstrap provisions abcd by checksum-verified download from the release,
+	// so a bundled copy would be an unverified, permanently stale second source
+	// for the very binary that then runs as the shell guard (itd-154). Today the
+	// artefacts are also gitignored and reached by no include — but that is a
+	// config an edit can undo, so the deny binds any candidate an include DOES
+	// reach, and it rejects rather than excluding: naming one is a mistake worth
+	// failing on, not a candidate to drop in silence. It sits after the include
+	// match rather than before it so an artefact nobody asked for stays an
+	// ordinary default-deny miss instead of a reported violation.
+	if isPlatformBinaryName(path.Base(rel)) {
+		r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: rel, Reason: RejectedPlatformBinary})
 		return
 	}
 	// For a dereferenced candidate the LOGICAL path is benign but the real target
@@ -883,6 +899,23 @@ func parseCharClass(pattern string, i int) (body string, negated bool, adv int, 
 		start = i + 2
 	}
 	return pattern[start:j], negated, j + 1, true
+}
+
+// platformBinaryRe matches the basename of a built abcd binary — the
+// `abcd-<goos>-<goarch>` names the release workflow publishes, plus the `.exe`
+// spelling, AND the bare `abcd` that `go build ./cmd/abcd` produces. The bare
+// name matters most of the three: it is the name the bootstrap's own refusal
+// text tells a user to build, and the name the binary runs under inside the
+// plugin root, so a control that covered only the cross-compiled spellings had
+// its hole at the most likely file. The match is the WHOLE basename: a document
+// about an artefact (`docs/abcd-darwin-arm64.md`) is prose, not a binary, and
+// denying by substring would take it too.
+var platformBinaryRe = regexp.MustCompile(`^abcd(-[a-z0-9]+-[a-z0-9]+)?(\.exe)?$`)
+
+// isPlatformBinaryName reports whether base is a released platform artefact's
+// file name.
+func isPlatformBinaryName(base string) bool {
+	return platformBinaryRe.MatchString(base)
 }
 
 // scriptsDenied reports whether a scripts/-tree path matches the closure's own

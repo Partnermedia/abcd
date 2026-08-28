@@ -107,7 +107,7 @@ interactive answers persisted),
 
 ## Structural tier — designed, deliberately not next
 
-**[iss-229](../../work/issues/open/iss-229-scanner-adjacency-galloping-probe-structural-fix.md)**
+**[iss-229](../../work/issues/resolved/iss-229-scanner-adjacency-galloping-probe-structural-fix.md)**
 — the galloping-probe (`trueMatchEnd`) replacement for the fixed adjacency
 window, superseding
 [iss-189](../../work/issues/resolved/iss-189-adjacency-probe-window-edge-false-positive.md)
