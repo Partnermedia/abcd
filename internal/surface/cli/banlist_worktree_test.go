@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,10 +93,101 @@ func TestBanlistJSONCarriesTheInheritedLayerOnlyInAWorktree(t *testing.T) {
 	if !ok {
 		t.Fatalf("a linked worktree's envelope carries no inherited layer: %v", worktree)
 	}
-	if inh["primary_root"] == "" || inh["primary_root"] == nil {
-		t.Errorf("the inherited layer does not name the primary checkout: %v", inh)
+	// The layer names the STORE, never the checkout: `private.path` is repo-relative,
+	// and a `primary_root` would be the primary checkout's absolute path — whose
+	// directory name is very often the private name that very store bans.
+	priv, ok := inh["private"].(map[string]any)
+	if !ok || priv["path"] == "" || priv["path"] == nil {
+		t.Errorf("the inherited layer does not name the store it read: %v", inh)
 	}
 	if !strings.Contains(string(runCLI(t, "--json", "banlist")), "widget-partner") {
 		t.Errorf("the inherited layer's key is missing from the envelope")
+	}
+}
+
+// TestBanlistNeverRendersThePrimaryCheckoutsPath is the Go twin of the shell
+// guard's own TestPreCommitHook_NeverPrintsThePrimaryCheckoutsPath, and it holds
+// this front door to the same contract for the same reason.
+//
+// A checkout's directory name is very often the private name its own store bans —
+// a project codename is the commonest entry there is — and this layer's whole
+// contract is that no pattern value reaches output. The inherited layer renders on
+// the SUCCESS path of an ordinary status read, so an absolute path there prints the
+// banned string to stdout, into scrollback, into an agent transcript, into any CI
+// log that captures it, and into whatever file the caller redirected `--json` to.
+// The remedy a reader needs is "the primary checkout's store", which is the same
+// sentence without the leak.
+func TestBanlistNeverRendersThePrimaryCheckoutsPath(t *testing.T) {
+	hermeticEnv(t)
+	env := gittest.Env(t)
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
+	// The primary checkout is NAMED for the very string its own store bans: the
+	// hazard is not the path, it is the directory name inside it.
+	const codename = "widgetworks-platform"
+	primary := filepath.Join(t.TempDir(), codename)
+	if err := os.MkdirAll(primary, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(primary, "init", "--initial-branch=main")
+	git(primary, "config", "user.name", "Alice Example")
+	git(primary, "config", "user.email", "alice@example.com")
+	if err := os.WriteFile(filepath.Join(primary, ".gitignore"), []byte(".abcd/.work.local/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(primary)
+	if _, err := runCLIErr(t, "banlist", "add", "--private", "widget-partner", "widgetworks"); err != nil {
+		t.Fatalf("banlist add: %v", err)
+	}
+	git(primary, "add", "-A")
+	git(primary, "-c", "core.hooksPath=/dev/null", "commit", "-m", "seed")
+	linked := filepath.Join(t.TempDir(), "linked")
+	git(primary, "worktree", "add", "-b", "linked", linked)
+	t.Chdir(linked)
+
+	renders := map[string]string{
+		"text `banlist`":                string(runCLI(t, "banlist")),
+		"text `banlist list --private`": string(runCLI(t, "banlist", "list", "--private")),
+		"json `banlist`":                string(runCLI(t, "--json", "banlist")),
+		"json `banlist list --private`": string(runCLI(t, "--json", "banlist", "list", "--private")),
+	}
+	for name, out := range renders {
+		if strings.Contains(out, primary) {
+			t.Errorf("%s prints the primary checkout's absolute path, whose directory name may itself be a banned string:\n%s", name, out)
+		}
+		if strings.Contains(out, codename) {
+			t.Errorf("%s prints the primary checkout's directory name, which here IS the string the store bans:\n%s", name, out)
+		}
+		// The layer must still be VISIBLE — withholding the path must not withhold the
+		// fact that these entries are enforced here, which is the parity itd-150 exists
+		// for. In text the words say it; in JSON the `inherited` key does.
+		marker := "primary checkout"
+		if strings.HasPrefix(name, "json") {
+			marker = `"inherited"`
+		}
+		if !strings.Contains(out, marker) {
+			t.Errorf("%s does not say the layer was inherited, so the remedy is invisible:\n%s", name, out)
+		}
+		if !strings.Contains(out, "widget-partner") {
+			t.Errorf("%s omits the inherited entry's key:\n%s", name, out)
+		}
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal(runCLI(t, "--json", "banlist"), &envelope); err != nil {
+		t.Fatalf("worktree JSON: %v", err)
+	}
+	inh, ok := envelope["inherited"].(map[string]any)
+	if !ok {
+		t.Fatalf("a linked worktree's envelope carries no inherited layer: %v", envelope)
+	}
+	if v, ok := inh["primary_root"]; ok {
+		t.Errorf("the envelope still carries primary_root = %v; the field is the leak, not a formatting choice", v)
 	}
 }

@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/ahoy"
 	"github.com/intentdriven/abcd/internal/core/banlist"
-	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
@@ -329,10 +327,16 @@ func renderInheritedPrivateLayer(w io.Writer, rep *banlist.InheritedReport) {
 	if rep == nil {
 		return
 	}
-	// RedactHome, like every other absolute path this front door renders: a
-	// checkout's directory name is very often a private name its own store bans.
-	fmt.Fprintf(w, "  inherited from the primary checkout — %s\n",
-		termsafe.Sanitize(fsutil.RedactHome(filepath.Join(rep.PrimaryRoot, filepath.FromSlash(rep.Private.Path)))))
+	// The store is named RELATIVE to the other checkout, and the other checkout is
+	// not named at all — the same restraint the committed shell guard applies, for
+	// the same reason. A checkout's directory name is very often a private name its
+	// own store bans (a project codename is the commonest entry there is), and this
+	// layer's contract is that no pattern value reaches output. RedactHome is not
+	// enough here: it rewrites a `$HOME` prefix and leaves the directory name — the
+	// banned string — printed in full, and this line renders on the success path of
+	// an ordinary status read, into scrollback, transcripts and CI logs.
+	fmt.Fprintf(w, "  inherited from the primary checkout — its %s\n",
+		termsafe.Sanitize(rep.Private.Path))
 	fmt.Fprintln(w, "  this is a linked git worktree; the guard reads the primary checkout's store as a")
 	fmt.Fprintln(w, "  fallback, so these entries are enforced here too. The fallback is READ-SIDE only:")
 	fmt.Fprintln(w, "  `add --private` here writes to THIS worktree's store, which the primary checkout's")

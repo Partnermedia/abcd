@@ -197,24 +197,55 @@ primary_dir=""
 git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)
 common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
 if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
-  # Pure parameter expansion, never `dirname`: one fewer external command on a path
-  # the environment pin above exists to keep unsubstitutable.
-  primary_root="${common_dir%/*}"
-  # Three tests, and the third is the one that matters. A common dir with no slash
-  # left to strip names no directory, and a primary root that resolves back to THIS
-  # working tree is not a second store to inherit. But the arithmetic alone is wrong
-  # for a BARE repository (and for `--separate-git-dir`): there the common dir's
-  # parent is not a working tree at all, it is whatever directory happens to hold the
-  # git dir — so the guard would read `<that directory>/.abcd/.work.local/…` and
-  # enforce the private list of an unrelated repository that merely lives next door.
-  # A real primary working tree always carries a `.git` entry, so require one; when
-  # it is missing the hook stays single-store, exactly as in a standalone checkout.
-  if [ -n "$primary_root" ] && [ "$primary_root" != "$common_dir" ] &&
-     [ "$primary_root" != "$toplevel" ] && [ -e "$primary_root/.git" ]; then
-    primary_dir="$primary_root/$banlist_dir"
-    primary_banlist="$primary_root/$banlist"
-  else
-    primary_root=""
+  # WHICH working tree is the primary one is ASKED OF GIT, never computed from the
+  # common dir's path. Path arithmetic ("the common dir's parent") is wrong wherever
+  # the git dir does not sit inside its own working tree — a BARE repository, or one
+  # made with `--separate-git-dir` — because there the parent is merely the directory
+  # that happens to HOLD the git dir. Requiring that parent to carry a `.git` entry
+  # does NOT close it: clone bare into a directory that sits inside somebody else's
+  # checkout (or point `--separate-git-dir` there) and the parent is a real working
+  # tree with a real `.git`, so the test passes and this guard reads
+  # `<a stranger's checkout>/.abcd/.work.local/…` and enforces THEIR private list on
+  # THIS repository's commits — a match/no-match oracle over their patterns, their
+  # keys printed into this repo's hook output, and every commit here refused by one
+  # malformed line over there.
+  #
+  # `git worktree list --porcelain` names the main working tree in its FIRST record,
+  # read here by parameter expansion alone (no `sed`, no `head`: one fewer external
+  # command on a path the environment pin above exists to keep unsubstitutable).
+  worktree_list=$(git worktree list --porcelain 2>/dev/null || true)
+  first_record="${worktree_list%%$'\n'*}"
+  case $first_record in
+    "worktree "*) candidate="${first_record#worktree }" ;;
+    *) candidate="" ;;
+  esac
+  # Then the candidate must CONFIRM the relationship from its own side, with git
+  # rediscovering the repository from that directory. The git environment variables
+  # git exports into a hook are unset for the probe — inside `$( )`, so the unset is
+  # scoped to the subshell — because an inherited GIT_DIR/GIT_COMMON_DIR overrides
+  # `-C` and would make the probe answer with OUR repository whatever directory it
+  # was pointed at: the check would pass vacuously, which is worse than no check.
+  #
+  #   --show-toplevel must be the candidate itself. No directory that merely holds a
+  #   git dir can satisfy that: git answers "must be run in a work tree" for a bare
+  #   repo and for a `--separate-git-dir` git dir alike.
+  #
+  #   --git-common-dir must be OUR common dir. This is what makes the answer
+  #   unspoofable by layout — a neighbouring checkout discovers its OWN `.git`, never
+  #   the mirror planted inside it, so the two differ and the candidate is refused.
+  #
+  # Any failure leaves primary_root empty, and the hook stays single-store exactly as
+  # in a standalone checkout: resolution never fails the commit.
+  if [ -n "$candidate" ] && [ "$candidate" != "$toplevel" ]; then
+    cand_top=$(unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX
+               git -C "$candidate" rev-parse --path-format=absolute --show-toplevel 2>/dev/null || true)
+    cand_common=$(unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_PREFIX
+                  git -C "$candidate" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+    if [ -n "$cand_top" ] && [ "$cand_top" = "$candidate" ] && [ "$cand_common" = "$common_dir" ]; then
+      primary_root="$candidate"
+      primary_dir="$primary_root/$banlist_dir"
+      primary_banlist="$primary_root/$banlist"
+    fi
   fi
 fi
 # How the inherited store is NAMED in output — and the absolute path is not it. A
