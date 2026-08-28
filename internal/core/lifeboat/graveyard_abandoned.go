@@ -45,6 +45,16 @@ var (
 // documents cannot fire.
 var gvADRHandleRe = regexp.MustCompile(`^adr-([0-9]+)$`)
 
+// gvIntentHandleRe and gvIssueHandleRe capture an intent/issue id's ordinal digits.
+// Intents and issues are not routinely written padded the way ADRs are, but nothing
+// stops itd-7 and itd-007 both reaching a graveyard scan (a hand-edited record, a
+// foreign convention), and they are ONE record — so the canonicaliser trims the
+// padding the same way gvCanonADRID does, and the dedup collapses them.
+var (
+	gvIntentHandleRe = regexp.MustCompile(`^itd-([0-9]+)$`)
+	gvIssueHandleRe  = regexp.MustCompile(`^iss-([0-9]+)$`)
+)
+
 // gvRejectionVerbs is the deliberately narrow set of verbs that mark a
 // DECISIONS.md bullet as recording a rejected option. It is conservative on
 // purpose: a broad list ("no", "instead", "not") would fire on ordinary prose,
@@ -86,8 +96,9 @@ func buildAbandoned(ctx *SourceContext) Abandoned {
 func gvSupersededIntents(ctx *SourceContext) []Finding {
 	dir := intent.IntentsRelDir + "/" + intent.BucketSuperseded
 	var out []Finding
-	seen := map[string]bool{}
-	for _, name := range ctx.ListDir(dir) {
+	claims := newGvIDClaims()
+	names, truncated := ctx.listDirNoted(dir)
+	for _, name := range names {
 		if !strings.HasPrefix(name, "itd-") || !strings.HasSuffix(strings.ToLower(name), ".md") {
 			continue
 		}
@@ -96,17 +107,20 @@ func gvSupersededIntents(ctx *SourceContext) []Finding {
 		if !ok {
 			continue
 		}
-		id := gvUnquote(fields["id"].Value)
-		if !gvIntentIDRe.MatchString(id) || seen[id] {
+		id := gvCanonIntentID(gvUnquote(fields["id"].Value))
+		if id == "" || claims.shadowed(out, id, path) {
 			continue
 		}
-		seen[id] = true
+		claims.take(id, len(out))
 		out = append(out, Finding{
 			ID:       id,
 			Signal:   SignalSupersededIntent,
 			Summary:  "intent superseded",
 			Evidence: []string{sanitize(path)},
 		})
+	}
+	if truncated {
+		out = append(out, gvListingTruncatedFinding(SignalSupersededIntent))
 	}
 	gvSortByID(out)
 	return capSignalFindings(out)
@@ -121,7 +135,7 @@ func gvSupersededIntents(ctx *SourceContext) []Finding {
 func gvSupersededADRs(ctx *SourceContext) []Finding {
 	var out []Finding
 	claims := newGvIDClaims()
-	gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
+	truncated := gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
 		status := strings.ToLower(gvUnquote(fields["status"].Value))
 		supBy := gvUnquote(fields["superseded_by"].Value)
 		if status != "superseded" && frontmatter.IsNull(supBy) {
@@ -144,6 +158,9 @@ func gvSupersededADRs(ctx *SourceContext) []Finding {
 			Evidence: ev,
 		})
 	})
+	if truncated {
+		out = append(out, gvListingTruncatedFinding(SignalSupersededADR))
+	}
 	gvSortByID(out)
 	return capSignalFindings(out)
 }
@@ -155,7 +172,7 @@ func gvSupersededADRs(ctx *SourceContext) []Finding {
 func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 	var out []Finding
 	claims := newGvIDClaims()
-	gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
+	truncated := gvEachADR(ctx, func(name, path string, fields map[string]frontmatter.Field) {
 		id := gvADRID(fields, name)
 		if id == "" {
 			return
@@ -191,6 +208,9 @@ func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 		}
 		out = append(out, f)
 	})
+	if truncated {
+		out = append(out, gvListingTruncatedFinding(SignalAlternativesConsidered))
+	}
 	// Sort by the ADR id embedded in the <adr-id>-alt finding id.
 	gvSortByID(out)
 	return capSignalFindings(out)
@@ -202,8 +222,9 @@ func gvAlternativesConsidered(ctx *SourceContext) []Finding {
 func gvWontfixIssues(ctx *SourceContext) []Finding {
 	dir := capture.LedgerRelPath + "/wontfix"
 	var out []Finding
-	seen := map[string]bool{}
-	for _, name := range ctx.ListDir(dir) {
+	claims := newGvIDClaims()
+	names, truncated := ctx.listDirNoted(dir)
+	for _, name := range names {
 		if !strings.HasPrefix(name, "iss-") || !strings.HasSuffix(strings.ToLower(name), ".md") {
 			continue
 		}
@@ -212,11 +233,11 @@ func gvWontfixIssues(ctx *SourceContext) []Finding {
 		if !ok {
 			continue
 		}
-		id := gvUnquote(fields["id"].Value)
-		if !gvIssueIDRe.MatchString(id) || seen[id] {
+		id := gvCanonIssueID(gvUnquote(fields["id"].Value))
+		if id == "" || claims.shadowed(out, id, path) {
 			continue
 		}
-		seen[id] = true
+		claims.take(id, len(out))
 		var ev []string
 		if reason := gvUnquote(fields["wontfix_reason"].Value); reason != "" {
 			ev = append(ev, sanitize("wontfix_reason: "+reason))
@@ -228,6 +249,9 @@ func gvWontfixIssues(ctx *SourceContext) []Finding {
 			f.Evidence = ev
 		}
 		out = append(out, f)
+	}
+	if truncated {
+		out = append(out, gvListingTruncatedFinding(SignalWontfixIssue))
 	}
 	gvSortByID(out)
 	return capSignalFindings(out)
@@ -314,6 +338,23 @@ func (c *gvIDClaims) shadowed(out []Finding, id, path string) bool {
 	return true
 }
 
+// gvListingTruncatedFinding is the per-scan sibling of noteFindingsOmitted: when a
+// record home holds more entries than the per-directory listing cap, the scanner
+// read only a prefix of it, so the signal it feeds is INCOMPLETE. A cheap synthetic
+// finding says so, so a packed abandoned.json never presents a cap-truncated input
+// as a complete scan (iss-2608270908348796). It carries the signal it belongs to (so
+// it groups and survives capSignalFindings), and a fixed non-numeric id so gvSortByID
+// orders it stably ahead of the signal's record-keyed findings.
+func gvListingTruncatedFinding(sig Signal) Finding {
+	return Finding{
+		ID:      "gv-listing-truncated-" + idClean(string(sig)),
+		Signal:  sig,
+		Summary: "record listing truncated at the per-directory cap; some records were not scanned",
+		Evidence: []string{sanitize(fmt.Sprintf(
+			"a record home held more than %d entries; only the first %d were scanned", maxDirEntries, maxDirEntries))},
+	}
+}
+
 // gvADRHomes lists the ADR directories in dedup priority order: the native home
 // first (so it wins a first-writer-wins tie), then the conventional homes.
 func gvADRHomes() []string {
@@ -323,9 +364,13 @@ func gvADRHomes() []string {
 // gvEachADR calls fn for every ADR document (*.md/*.markdown) under every ADR
 // home, in home order then sorted-name order, having parsed its frontmatter. A
 // file that cannot be read is skipped.
-func gvEachADR(ctx *SourceContext, fn func(name, path string, fields map[string]frontmatter.Field)) {
+func gvEachADR(ctx *SourceContext, fn func(name, path string, fields map[string]frontmatter.Field)) (truncated bool) {
 	for _, dir := range gvADRHomes() {
-		for _, name := range ctx.ListDir(dir) {
+		names, trunc := ctx.listDirNoted(dir)
+		if trunc {
+			truncated = true
+		}
+		for _, name := range names {
 			low := strings.ToLower(name)
 			if !strings.HasSuffix(low, ".md") && !strings.HasSuffix(low, ".markdown") {
 				continue
@@ -338,6 +383,7 @@ func gvEachADR(ctx *SourceContext, fn func(name, path string, fields map[string]
 			fn(name, path, fields)
 		}
 	}
+	return truncated
 }
 
 // gvADRID resolves an ADR's id: its frontmatter id when it is a valid adr-N,
@@ -362,20 +408,39 @@ func gvADRID(fields map[string]frontmatter.Field, name string) string {
 // to "" is a record dropped in silence — the very failure the dedup around it
 // exists to announce. Trimming text has no such edge, and agrees with
 // record.adrHandleRe and recordid.fileID for every ordinal they can represent.
-func gvCanonADRID(id string) string {
-	m := gvADRHandleRe.FindStringSubmatch(id)
+func gvCanonADRID(id string) string { return gvCanonNumID(gvADRHandleRe, "adr-", id) }
+
+// gvCanonIntentID / gvCanonIssueID are the itd/iss twins of gvCanonADRID: they
+// canonicalise a record id to the one spelling every claimant resolves to,
+// trimming leading zeros textually (never an int parse, so an over-int ordinal
+// keeps its identity rather than collapsing to "" and being dropped in silence).
+// "" when the string is not an id of that family.
+func gvCanonIntentID(id string) string { return gvCanonNumID(gvIntentHandleRe, "itd-", id) }
+func gvCanonIssueID(id string) string  { return gvCanonNumID(gvIssueHandleRe, "iss-", id) }
+
+// gvCanonNumID is the shared textual canonicaliser behind gvCanonADRID and its
+// itd/iss twins: it matches <prefix><ordinal>, trims the ordinal's leading zeros
+// (an all-zero ordinal collapsing to <prefix>0), and never parses the ordinal as an
+// integer — so an ordinal wider than any int is still a well-formed handle and keeps
+// its identity. "" when id does not match the family's shape.
+func gvCanonNumID(re *regexp.Regexp, prefix, id string) string {
+	m := re.FindStringSubmatch(id)
 	if m == nil {
 		return ""
 	}
 	ordinal := strings.TrimLeft(m[1], "0")
-	if ordinal == "" { // the id was all zeros; adr-000 and adr-0 are one handle
+	if ordinal == "" { // the id was all zeros; <prefix>000 and <prefix>0 are one handle
 		ordinal = "0"
 	}
-	return "adr-" + ordinal
+	return prefix + ordinal
 }
 
 // gvADRIDFromFilename derives adr-N from a leading run of digits in an NNNN-slug
-// ADR filename (leading zeros stripped), or "" when the name is not numbered.
+// ADR filename, or "" when the name is not numbered. The derivation is TEXTUAL —
+// "adr-" + the raw digit run, leaving the leading-zero trim to gvCanonADRID — and
+// never an strconv.Atoi: a filename ordinal wider than an int is still a well-formed
+// adr-N, but a parse of it fails and an "" id is a record dropped in silence, the
+// very failure the cross-home dedup exists to announce (iss-2608270945469978).
 func gvADRIDFromFilename(name string) string {
 	i := 0
 	for i < len(name) && name[i] >= '0' && name[i] <= '9' {
@@ -384,11 +449,7 @@ func gvADRIDFromFilename(name string) string {
 	if i == 0 {
 		return ""
 	}
-	n, err := strconv.Atoi(name[:i])
-	if err != nil {
-		return ""
-	}
-	return fmt.Sprintf("adr-%d", n)
+	return "adr-" + name[:i]
 }
 
 // gvFields reads a record and parses its leading frontmatter block. ok is false

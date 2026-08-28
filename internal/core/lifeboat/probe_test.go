@@ -277,6 +277,40 @@ func TestWalkFilesStopsAtTheDepthCap(t *testing.T) {
 	}
 }
 
+// TestListDirNotedReportsTruncation: ListDir reads at most the per-directory cap,
+// so a directory past the bound is read only in part. listDirNoted surfaces that
+// truncation so a caller can say its scan saw only a prefix, rather than dropping
+// the tail in silence (iss-2608270908348796). The cap is a field so the overflow
+// path is exercisable on a small tree.
+func TestListDirNotedReportsTruncation(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 5; i++ {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%d.md", i)), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, err := newSourceContext(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ctx.listCap = 3
+	names, truncated := ctx.listDirNoted(".")
+	if !truncated {
+		t.Errorf("5 entries under a 3-cap must report truncation")
+	}
+	if len(names) != 3 {
+		t.Errorf("truncated listing = %d names, want the cap 3", len(names))
+	}
+
+	ctx.listCap = 50
+	names2, truncated2 := ctx.listDirNoted(".")
+	if truncated2 || len(names2) != 5 {
+		t.Errorf("5 entries under a 50-cap = %d names, truncated=%v; want 5 untruncated", len(names2), truncated2)
+	}
+}
+
 // TestProbeLeavesEveryFileByteIdentical is the read-only invariance property at
 // full strength: a probe of a marker-bearing tree must leave every file's
 // contents unchanged and add or remove nothing. The marker adapter reads every
