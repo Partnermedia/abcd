@@ -296,8 +296,8 @@ type Result struct {
 	// for; Baseline the committed ratchet's size.
 	Unresolved int `json:"unresolved"`
 	Baseline   int `json:"baseline"`
-	// Overlaps is the coil packing's sanity count. It is zero or the chart is
-	// wrong, and it is reported rather than assumed.
+	// Overlaps is the packing's sanity count over BOTH arrangements. It is zero
+	// or the chart is wrong, and it is reported rather than assumed.
 	Overlaps int `json:"overlaps"`
 	// Version and Commit are what the footer says the site was built from.
 	Version string `json:"version"`

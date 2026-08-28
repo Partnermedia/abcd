@@ -208,6 +208,12 @@ type CoverageHandoff struct {
 	Note     string        `json:"note,omitempty"`
 	Summary  Summary       `json:"summary"`
 	Blanks   []BlankPrompt `json:"blanks,omitempty"`
+	// PassBExemption is the lifeboat's own declaration that the transcript pass
+	// did not run for it, carried through from _provenance.json. It is part of
+	// the handoff because it is the difference between a gap a human has to close
+	// and a pass that was never there: nil is a lifeboat that declares nothing,
+	// and reads exactly as it did before the field existed.
+	PassBExemption *PassBExemption `json:"pass_b_exemption,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

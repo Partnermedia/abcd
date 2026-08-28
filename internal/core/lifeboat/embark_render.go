@@ -69,12 +69,24 @@ func gap(b *strings.Builder) {
 	}
 }
 
-// renderCoverageBlanks writes the blanks-first handoff: the unanswered brief
-// sections and the questions a human must answer. An absent coverage prints
-// nothing; a degraded one prints a one-line note; a present one with no blanks
-// prints nothing (there is nothing to answer).
+// renderCoverageBlanks writes the blanks-first handoff: any pass the lifeboat
+// declares exempt, then the unanswered brief sections and the questions a human
+// must answer. A declared exemption prints whatever the coverage says, since it
+// is a fact about the package rather than about coverage.json; past it, an
+// absent coverage prints nothing, a degraded one prints a one-line note, and a
+// present one with no blanks prints nothing (there is nothing to answer).
 func renderCoverageBlanks(b *strings.Builder, cov *CoverageHandoff) {
-	if cov == nil || !cov.Present {
+	if cov == nil {
+		return
+	}
+	// A declared exemption comes before the blanks and outlives them: it says
+	// which pass did not run, so a section it would have grounded reads as a
+	// pass that was never there rather than as work a human has been left.
+	if ex := cov.PassBExemption; ex != nil {
+		gap(b)
+		fmt.Fprintf(b, "pass B (transcripts): declared exempt — %s\n", sanitize(ex.Reason))
+	}
+	if !cov.Present {
 		return
 	}
 	if cov.Degraded {

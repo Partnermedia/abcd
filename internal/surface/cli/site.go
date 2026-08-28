@@ -194,7 +194,7 @@ func renderSiteBuild(w io.Writer, res site.Result) {
 	fmt.Fprintf(w, "  pages:   %d rendered from the record\n", res.Pages)
 	fmt.Fprintf(w, "  record:  %d records · %d links · %d mentions\n", res.Records, res.Links, res.Mentions)
 	fmt.Fprintf(w, "  refs:    %d unresolved (baseline %d)\n", res.Unresolved, res.Baseline)
-	fmt.Fprintf(w, "  layout:  %d overlapping bubbles\n", res.Overlaps)
+	fmt.Fprintf(w, "  layout:  %d overlapping bubbles across both arrangements\n", res.Overlaps)
 	stamp := res.Version
 	if stamp != "" {
 		stamp = "v" + stamp

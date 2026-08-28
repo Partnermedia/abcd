@@ -103,7 +103,7 @@ func ReviewLifeboat(lifeboatDir, sourceRepo string, raw []byte) (ReviewResult, e
 	//    core owns in BOTH modes. VerifyManifest is the seal check; a false result
 	//    is a verdict input, never fatal.
 	manifestVerified := VerifyManifest(abs) == nil
-	cov := readCoverageHandoff(abs)
+	cov := readPackedCoverage(abs)
 	coveragePresent := cov.Present && !cov.Degraded
 
 	manifest12 := shortHex(prov.ManifestSHA256)

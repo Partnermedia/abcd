@@ -290,7 +290,7 @@ func runPlanner(lifeboatDir, targetDir string) (plannerResult, error) {
 		planned:     planned,
 		conflicts:   conflicts,
 		ignored:     ignored,
-		coverage:    readCoverageHandoff(lifeboatAbs),
+		coverage:    readCoverageHandoff(lifeboatAbs, prov.PassBExemption),
 	}, nil
 }
 
@@ -506,7 +506,26 @@ func embarkMarker(targetAbs string, dryRun bool) MarkerResult {
 // blanks-first payload. Absent → Present:false; present-but-unparseable →
 // Degraded (a note, never fatal). Only blank sections become BlankPrompts, each
 // sanitised before it can reach a terminal.
-func readCoverageHandoff(abs string) *CoverageHandoff {
+func readCoverageHandoff(abs string, exempt *PassBExemption) *CoverageHandoff {
+	h := readPackedCoverage(abs)
+	// The exemption is a fact about the PACKAGE, not about coverage.json, so it
+	// travels even when the coverage is absent or unreadable: a reader still has
+	// to be told which pass did not run.
+	//
+	// Its reason comes verbatim from _provenance.json, which manifest
+	// verification deliberately excludes, so it is free text in any lifeboat
+	// anyone can hand a user. It is sanitised HERE, where the handoff is built,
+	// like every other string in it — the handoff is also what --json emits, and
+	// a consumer piping that anywhere never sees the human render's own masking.
+	if exempt != nil {
+		h.PassBExemption = &PassBExemption{Reason: sanitize(exempt.Reason)}
+	}
+	return h
+}
+
+// readPackedCoverage reads coverage.json alone. It is what a caller wants when
+// it needs the coverage summary and not the package-level declarations around it.
+func readPackedCoverage(abs string) *CoverageHandoff {
 	p := filepath.Join(abs, "coverage.json")
 	// Guarded read closes the lstat→read TOCTOU and caps the size on the open fd.
 	data, err := fsutil.ReadGuarded(p, maxEmbarkFileBytes)
@@ -523,19 +542,19 @@ func readCoverageHandoff(abs string) *CoverageHandoff {
 	if err := json.Unmarshal(data, &cov); err != nil {
 		return &CoverageHandoff{Present: true, Degraded: true, Note: "coverage.json is present but could not be parsed"}
 	}
-	h := &CoverageHandoff{Present: true, Summary: cov.Summary}
+	out := &CoverageHandoff{Present: true, Summary: cov.Summary}
 	for _, s := range cov.Sections {
 		if s.Status != StatusBlank {
 			continue
 		}
-		h.Blanks = append(h.Blanks, BlankPrompt{
+		out.Blanks = append(out.Blanks, BlankPrompt{
 			Section:  s.Name,
 			Kind:     s.Kind,
 			Question: sanitize(s.Question),
 			Searched: sanitizeAll(s.Searched),
 		})
 	}
-	return h
+	return out
 }
 
 // walkLifeboatFiles returns every regular file's lifeboat-relative POSIX path,
