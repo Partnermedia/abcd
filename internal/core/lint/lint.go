@@ -439,6 +439,17 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, rs...)
 	}
 
+	// cross_store_id_claim is the other half of the same cross-store question: it
+	// walks the markdown OUTSIDE those stores, which is every tree at once, so it
+	// too runs once here.
+	if csCfg, ok := cfg.Rules[ruleCrossStoreIDClaim]; ok && csCfg.Enabled {
+		cs, err := checkCrossStoreIDClaim(repoRoot, cfg, csCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, cs...)
+	}
+
 	// index_drift reads documents that live beside the code they index (a package
 	// or command README), all outside cfg.Roots, so it runs once here too.
 	if idxCfg, ok := cfg.Rules["index_drift"]; ok && idxCfg.Enabled {

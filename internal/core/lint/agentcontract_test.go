@@ -1,13 +1,11 @@
 package lint
 
 import (
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/intentdriven/abcd/internal/gitutil"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // agentCfg builds a one-rule agent_contract config pointed at a fixture tree.
@@ -236,28 +234,12 @@ func TestAgentContractRefusesHostileDiffRange(t *testing.T) {
 // and lint the resulting diff.
 func newAgentRepo(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
+	repo := gittest.NewRepo(t)
+	root := repo.Root()
 	writeAgent(t, root, "ruthless-reviewer", conformingAgent)
 	writeCanary(t, root, "ruthless-reviewer")
 	writeFile(t, root, filepath.Join("agents", "CHANGELOG.md"),
 		"# Agent prompt changelog\n\n### ruthless-reviewer 0.2.0\n\nFirst entry.\n")
-
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		cmd.Env = append(gitutil.IsolatedEnv(),
-			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("add", "-A")
-	run("commit", "-qm", "seed")
-	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
-		t.Fatal(err)
-	}
+	repo.Commit("seed")
 	return root
 }
