@@ -1,10 +1,13 @@
 package ahoy
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/guard"
 )
 
 // hooksJSONWithGuard is a manifest that also arms the execution-time guard.
@@ -128,9 +131,12 @@ func TestGuardHealthBinaryUnreachable(t *testing.T) {
 	}
 }
 
-// TestGuardHealthRegistryUnloadable is the third failure mode: the hook runs, the
-// binary runs, and the registry the repo committed does not parse — so the guard
-// refuses to answer and the session is unguarded. Never silent.
+// TestGuardHealthRegistryUnloadable is the third failure mode, refined by the
+// fail-safe load (iss-2608261551087492): the hook runs, the binary runs, and the
+// registry the repo committed does not parse — so the repo's OVERRIDES are
+// dropped while the bundled hazards stay armed. A mild, expected state: still
+// reported loudly (the broken file needs fixing), but never as "commands run
+// unchecked", because they do not (iss-2608281222011114).
 func TestGuardHealthRegistryUnloadable(t *testing.T) {
 	_, pluginRoot := setupHermetic(t)
 	if err := os.WriteFile(filepath.Join(pluginRoot, "hooks", "hooks.json"), []byte(hooksJSONWithGuard), 0o644); err != nil {
@@ -146,14 +152,86 @@ func TestGuardHealthRegistryUnloadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if det.Guard.RegistryLoadable {
-		t.Error("a malformed .abcd/guard.json must report registry_loadable=false")
+	// Load fell back to the bundled defaults, so a registry IS armed.
+	if !det.Guard.RegistryLoadable {
+		t.Error("a malformed .abcd/guard.json drops only the repo layer; the bundled registry is armed and registry_loadable must say so")
+	}
+	if det.Guard.Entries == 0 {
+		t.Error("the bundled hazards remain armed on the fail-safe path, so entries must be non-zero")
 	}
 	if det.Guard.Detail == "" {
-		t.Error("an unloadable registry must carry a reason a human can act on")
+		t.Error("a dropped repo layer must carry a reason a human can act on")
+	}
+	if strings.Contains(det.Guard.Detail, "unchecked") {
+		t.Errorf("the fail-safe load keeps commands checked; the reason must not claim otherwise: %q", det.Guard.Detail)
+	}
+	if !strings.Contains(det.Guard.Detail, "bundled hazards remain armed") {
+		t.Errorf("the reason must say the bundled hazards remain armed; detail = %q", det.Guard.Detail)
+	}
+	if !det.Guard.RepoOverridesDropped {
+		t.Error("the dropped repo layer must be reported as repo_overrides_dropped, not hidden inside a healthy report")
+	}
+	if !det.Guard.Healthy() {
+		t.Errorf("commands are still checked against the bundled hazards, so the guard is healthy (degraded, not down); got %+v", det.Guard)
 	}
 	if !hasGap(det.Gaps, "guard.registry_unloadable") {
-		t.Errorf("an unloadable registry must surface as a gap; gaps = %v", gapIDs(det.Gaps))
+		t.Errorf("a repo guard file that does not load must still surface as a gap; gaps = %v", gapIDs(det.Gaps))
+	}
+	for _, g := range det.Gaps {
+		if g.ID == "guard.registry_unloadable" && strings.Contains(g.Detail, "unchecked") {
+			t.Errorf("the gap must not claim commands run unchecked when the bundled hazards are armed: %q", g.Detail)
+		}
+	}
+}
+
+// TestGuardHealthEmptyRegistryIsUnguarded pins the second half of the two-state
+// model: an empty registry — no bundled layer to fall back to — is the only
+// genuinely-unguarded registry state. The embedded defaults make it unreachable
+// through guard.Load, so it is injected at the fold-in seam; a health check
+// earns trust by stating what it would say if the impossible happened.
+func TestGuardHealthEmptyRegistryIsUnguarded(t *testing.T) {
+	var h GuardHealth
+	reason := applyRegistryHealth(&h, guard.Registry{}, nil)
+
+	if h.RegistryLoadable {
+		t.Error("an empty registry must report registry_loadable=false")
+	}
+	if h.RepoOverridesDropped {
+		t.Error("an empty registry is not the dropped-overrides state; nothing is armed at all")
+	}
+	if !strings.Contains(reason, "unchecked") {
+		t.Errorf("no registry at all is the unguarded state and the reason must say so; got %q", reason)
+	}
+
+	gaps := registryGap(h)
+	if len(gaps) != 1 || gaps[0].ID != "guard.registry_empty" {
+		t.Fatalf("an empty registry must surface as the guard.registry_empty gap; got %v", gaps)
+	}
+	if !strings.Contains(gaps[0].Detail, "unchecked") {
+		t.Errorf("the empty-registry gap must carry the unguarded reason; got %q", gaps[0].Detail)
+	}
+}
+
+// TestGuardHealthRepoBrokenFoldIn pins the fold-in seam directly: an error
+// alongside a non-empty registry (what guard.Load returns for a broken repo
+// file since the fail-safe change) is the mild state, and an error-free load
+// reports nothing.
+func TestGuardHealthRepoBrokenFoldIn(t *testing.T) {
+	var h GuardHealth
+	reason := applyRegistryHealth(&h, guard.Defaults(), errors.New(".abcd/guard.json: boom"))
+	if !h.RegistryLoadable || !h.RepoOverridesDropped {
+		t.Errorf("error + non-empty registry is the dropped-overrides state; got %+v", h)
+	}
+	if reason != guardRepoOverridesDroppedReason {
+		t.Errorf("the mild state must carry its one shared reason; got %q", reason)
+	}
+
+	var clean GuardHealth
+	if reason := applyRegistryHealth(&clean, guard.Defaults(), nil); reason != "" {
+		t.Errorf("a clean load must report nothing; got %q", reason)
+	}
+	if !clean.RegistryLoadable || clean.RepoOverridesDropped {
+		t.Errorf("a clean load is fully loadable with nothing dropped; got %+v", clean)
 	}
 }
 
