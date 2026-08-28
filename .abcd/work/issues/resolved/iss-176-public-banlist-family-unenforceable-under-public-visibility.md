@@ -7,6 +7,8 @@ category: "inconsistency"
 source: "impl-review"
 found_during: "itd-74-increment-2-review"
 found_at: ".abcd/docs-lint.json"
+resolution: "already mitigated on HEAD: effectiveVisibilityEntries (internal/core/ahoy/gitignore.go, iss-255) narrows the public fence so that when the repo commits any .abcd/ files the wholesale /.abcd/ ignore is replaced by just .abcd/.work.local/ — so .abcd/docs-lint.json is tracked and CI-visible in a normal abcd-managed public repo. The scaffolder (stepBanlist, publicPathIsWritable) additionally withholds the public-family write where the path would be ignored, never writing a config abcd would immediately declare unenforceable. The premise (public family unenforceable under public visibility) no longer holds; no file move needed. Verified during the 2026-08-28 ledger-decision pass; the proposed relocation was built and then abandoned as unnecessary."
+impact: internal
 ---
 
 The public banned-names family lives at .abcd/docs-lint.json, which the installed .gitignore fence ignores under visibility public, so the layer that claims to be committed and CI-enforced is untracked exactly where public exposure is the risk
