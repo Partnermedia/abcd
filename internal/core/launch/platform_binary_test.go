@@ -5,6 +5,8 @@ import (
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 // TestBundleNeverShipsAPlatformBinary pins the structural half of the no-Go
@@ -72,7 +74,9 @@ func TestCommittedPayloadNamesNoBinaryDirectory(t *testing.T) {
 	// And nothing TRACKED carries a built binary's name anywhere in the tree —
 	// asserted against git rather than the working directory, so a developer's
 	// untracked `bin/` build output is not mistaken for a committed one.
-	out, err := exec.Command("git", "-C", root, "ls-files", "-z").Output()
+	cmd := exec.Command("git", "-C", root, "ls-files", "-z")
+	cmd.Env = gittest.Env(t)
+	out, err := cmd.Output()
 	if err != nil {
 		t.Skipf("git ls-files unavailable in %s: %v", root, err)
 	}
