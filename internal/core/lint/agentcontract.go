@@ -66,9 +66,12 @@ var (
 	agentDiffRangeRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/@^~-]*(?:\.{2,3}[A-Za-z0-9][A-Za-z0-9._/@^~-]*)?$`)
 )
 
-// maxAgentPromptBytes caps a prompt read. A prompt is a few kilobytes of
-// markdown; the cap bounds a hostile tree without ever constraining a real one,
-// exactly as maxLintConfigBytes does for the config.
+// maxAgentPromptBytes caps EVERY read this rule makes into the agent tree — the
+// prompts and the per-agent changelog alike. A prompt is a few kilobytes of
+// markdown and a changelog is a few more; the cap bounds a hostile tree without
+// ever constraining a real one, exactly as maxLintConfigBytes does for the
+// config. One cap rather than one per file kind: two constants is how the reads
+// come to disagree about what "too big" means.
 const maxAgentPromptBytes = 1 << 20
 
 // agentPrompt is one agent prompt as this rule sees it.
@@ -243,7 +246,31 @@ func checkAgentChangelog(repoRoot, dir string, prompts []agentPrompt, cfg RuleCo
 	if changelogRel == "" {
 		changelogRel = filepath.ToSlash(filepath.Join(dir, "CHANGELOG.md"))
 	}
-	data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(changelogRel)))
+	// The changelog read is guarded exactly as the prompt read above is, and for
+	// the same reason: BOTH the path and the file it names are repo-controlled —
+	// the path out of the in-tree lint config, the file out of the tree — so a
+	// fork pull request supplies them and CI's `go run ./cmd/record-lint` is what
+	// reads them. Unguarded, `agents/CHANGELOG.md` as a symlink to /dev/zero was
+	// read until the runner ran out of memory, and a configured
+	// `"changelog": "../../../../etc/hosts"` read outside the checkout and echoed
+	// the traversed path into the finding's File field.
+	//
+	// containedRepoPath refuses the configured path, containedRealPath refuses a
+	// symlink out of the tree, and fsutil.ReadGuarded (O_NOFOLLOW, non-regular
+	// refused, size capped) refuses the device. No third mechanism: these are the
+	// primitives the siblings in this function already use.
+	if err := containedRepoPath(changelogRel); err != nil {
+		return nil, &configError{ruleAgentContract + ": changelog " + quote(changelogRel) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
+	realPath, err := containedRealPath(repoRoot, filepath.Join(repoRoot, filepath.FromSlash(changelogRel)))
+	if err != nil {
+		return nil, &configError{ruleAgentContract + ": changelog " + quote(changelogRel) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
+	// A changelog that is simply absent is a state, not a fault: every prompt
+	// then lacks an entry, which is what the loop below reports.
+	data, err := fsutil.ReadGuarded(realPath, maxAgentPromptBytes)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
