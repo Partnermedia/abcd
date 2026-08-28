@@ -63,7 +63,8 @@ Run from the repo root.
 
 ```bash
 make preflight      # the pre-push gate: lint-reviews + lint-issues +
-                    # record-lint + docs-lint + site-render, then build + vet +
+                    # lint-decisions + record-lint + docs-lint + site-render,
+                    # then build + vet +
                     # test + race (internal)
 make build          # cross-compiles bin/abcd-<goos>-<arch> (there is no plain bin/abcd)
 gofmt -l .          # format gate: any output names a file needing `gofmt -w`
@@ -78,7 +79,7 @@ vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
 format gate, the record-lint and docs-lint steps and the site-render gate on
 the Linux leg alone. Separate jobs run the reviews-charter check
 (`scripts/check-reviews.sh`) together with the issue-resolution gates
-(RS001–RS003), full-history secret scanning (`gitleaks`), a workflow audit
+(RS001–RS003) and the decisions-append gate (DA001–DA003), full-history secret scanning (`gitleaks`), a workflow audit
 (`zizmor`), dependency review, `govulncheck`, and the smoke harness
 (`make smoke`). A
 fail-closed classifier stands the macOS leg, the race lane and the `zizmor`,
@@ -97,9 +98,11 @@ Development material lives under `.abcd/`; `docs/` is user-facing only.
   orientation) and `DECISIONS.md` (append-only decision log; architecture-shaping
   decisions graduate to ADRs under `.abcd/development/decisions/adrs/`), plus the
   issue ledger `issues/` (working-tier data per adr-32), the reviews charter
-  `reviews/`, and the branch-ruleset mirror `rulesets/`.
+  `reviews/`, the branch-ruleset mirror `rulesets/`, and `intake.md`, the
+  external-contribution runbook.
 - `.abcd/.work.local/` — **local ephemeral** (gitignored): `NEXT.md` handover,
-  `scratch/`, `logs/`. Per-worktree, so it never merge-conflicts.
+  `scratch/`, `logs/`, `reviews/` (intent-audit receipts), `private-names.txt`
+  (per-machine banlist layer). Per-worktree, so it never merge-conflicts.
 
 **Default to the local tier when in doubt.** Any artefact whose home is unclear —
 tool exports, oracle/review output, traces, intermediate analysis — goes to
@@ -162,8 +165,8 @@ irreversible; guessing downward costs nothing.**
 
 ## Definition of done
 
-- `make preflight` is clean — the five gates (`lint-reviews`, `lint-issues`,
-  `record-lint`, `docs-lint`, `site-render`) plus `go build ./...`,
+- `make preflight` is clean — the six gates (`lint-reviews`, `lint-issues`,
+  `lint-decisions`, `record-lint`, `docs-lint`, `site-render`) plus `go build ./...`,
   `go vet ./...`, `go test ./...`, and `go test -race ./internal/...`.
 - `gofmt -l .` reports nothing. The format gate is CI's own step, outside
   `make preflight`, so run it before pushing.

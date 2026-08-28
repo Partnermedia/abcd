@@ -22,6 +22,14 @@ const ConfigRelPath = ".abcd/positioning.json"
 // committed registry; 256 KiB is far past any real one.
 const maxConfigBytes = 256 << 10
 
+// maxSurfaces bounds how many surfaces a committed registry may declare. The
+// canonical set is three (DefaultSurfaces); a real repo that overrides them adds
+// a handful more. 64 is far past any genuine registry yet closes the
+// amplification: each surface triggers a guarded read capped at maxSurfaceBytes
+// (1 MiB, check.go), so an unbounded count lets one audit run over a hostile
+// repo hold an unbounded multiple of that cap (iss-149).
+const maxSurfaces = 64
+
 // Surface kinds — how a surface's self-description is located in its file.
 const (
 	// KindRegexp locates the text with the first Patterns entry that matches,
@@ -198,6 +206,9 @@ func (c Config) Validate() error {
 	if s := strings.TrimSpace(c.Severity); s != "" && !strings.EqualFold(s, SeverityWarn) && !strings.EqualFold(s, SeverityBlocker) {
 		return fmt.Errorf("%w: severity must be %q or %q, got %q", ErrConfigInvalid, SeverityWarn, SeverityBlocker, c.Severity)
 	}
+	if len(c.Surfaces) > maxSurfaces {
+		return fmt.Errorf("%w: registry declares %d surfaces, more than the %d-surface maximum", ErrConfigInvalid, len(c.Surfaces), maxSurfaces)
+	}
 	seen := map[string]bool{}
 	for i, s := range c.Surfaces {
 		if err := s.validate(i); err != nil {
@@ -223,6 +234,15 @@ func (s Surface) validate(i int) error {
 	for _, f := range s.Files {
 		if !fsutil.ValidRelPath(f) {
 			return fmt.Errorf("%w: %s.files entry %q is not a repo-relative path", ErrConfigInvalid, where, f)
+		}
+		// ValidRelPath accepts ".git/config" — it is clean, relative, and inside
+		// the containment root — but a surface pointed there would quote the
+		// git directory (a credential-bearing remote URL in .git/config) into
+		// identity output. Nothing under .git is a rendered positioning surface.
+		// The first segment is compared case-insensitively because a
+		// case-folding filesystem reaches the same .git through ".GIT" (iss-150).
+		if first, _, _ := strings.Cut(f, "/"); strings.EqualFold(first, ".git") {
+			return fmt.Errorf("%w: %s.files entry %q is inside .git", ErrConfigInvalid, where, f)
 		}
 	}
 	switch s.Kind {

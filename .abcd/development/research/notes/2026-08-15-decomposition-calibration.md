@@ -888,6 +888,37 @@ Per hand-run, append:
   cited, not re-homed — only F-W's authorship default was a genuinely
   unhoused stance.
 
+### 2026-08-28 — itd-141 at its planning interview (hand-run, graded)
+
+- **Proposal:** plan itd-141 (the staged punctuation lint), after the em-dash
+  core had shipped as a banned token in the same session's docs sweep.
+- **Initial routing:** four parts — the casing lints with masking
+  (capability | itd-141, KEEP); the shipped em-dash line rule (capability |
+  already delivered by iss-2608280706531199, REMOVE from the promise, cite as
+  prior art); the continuation-line residual (capability | itd-141, KEEP);
+  the guide-adoption-via-`.abcd/rules.json` open question (capability, a
+  different one | route out to a future record when live). Proposed by the
+  record-discipline reviewer.
+- **Confirmed routing:** the maintainer's interview verdict went further than
+  the proposal: the design review's corpus evidence (0 true positives on
+  every remaining rule; unclosable false-positive classes; promotion
+  impossible under warn-then-promote) collapsed both KEEP parts — the casing
+  rules re-route to a permanent `review` label with recorded reasons, the
+  residual to an accepted non-build. Confirmed home: adr-54 supersedes the
+  intent; the routed-out guide-adoption question is captured to the ledger.
+- **Verdict:** SPLIT proposed, SUPERSEDE confirmed — the first hand-run where
+  the interview's outcome was that the record under decomposition should not
+  exist. The initial routing did not survive, and the miss was systematic:
+  the shape-lens pass routed parts correctly but could not see yield; only
+  the corpus-measuring pass could rule the parts unbuildable.
+- **Notes:** calibration lesson for the automated rung — a decomposition
+  pre-pass that routes without measuring corpus yield will confidently route
+  dead capabilities; the design/feasibility lens is not optional for
+  lint-shaped intents. `enforcement-claims-are-facts` did the closing work
+  twice: it caught the draft's stale claim about the guide, and it forced the
+  guide's forward-claim ("staged lints mask code spans") out in the same
+  change.
+
 ### 2026-08-28 — the deterministic attribution machinery (hand-run at filing)
 
 - **Proposal:** from the 2026-08-28 attribution review's closing

@@ -146,6 +146,16 @@ Ideas and methodologies that shaped the design — not code abcd depends on.
   trade-off) adopted as adr-7's decision gate; and the `to-prd` PRD section
   shape itd-27's silent synthesis phase follows.
   <https://github.com/mattpocock/skills>
+- **GitLab's documentation-testing severity policy** — the warn-then-promote
+  discipline the writing-style guide's preamble adopts: deterministic prose
+  checks may block, heuristics stay advisory, and a rule is promoted to
+  blocking only after every existing occurrence in the corpus is fixed.
+- **kapa.ai's "Writing documentation for AI" guidance** — the position that
+  documentation which works for AI is well-structured human documentation
+  (analogised to screen-reader accessibility), which seeded the
+  audience-by-placement ratification (adr-53) and the guide's
+  self-contained-sections rule.
+  <https://docs.kapa.ai/improving/writing-best-practices>
 - **OpenAI Codex's sandbox/approval split** — the vocabulary adr-42 borrows for
   naming what a parse layer is: the OS-enforced sandbox is the boundary, the
   approval policy is "a workflow choice layered on top of" it, and the pattern

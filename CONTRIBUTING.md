@@ -40,7 +40,8 @@ inbound = outbound statement is the whole of it.
 - **Volume cap.** At most three open pull requests per external author at a
   time — review attention is the scarce resource this protects.
 - **Local gates.** `make preflight` runs the same build, vet, test and race
-  steps locally, together with the lint-reviews, lint-issues, record-lint,
+  steps locally, together with the lint-reviews, lint-issues, lint-decisions,
+  record-lint,
   docs-lint and site-render gates — but not gofmt, so run `gofmt -l .` before pushing. The repository
   ships its hooks in [`.githooks/`](.githooks/); they are per-machine opt-in —
   run `git config core.hooksPath .githooks` once per clone to arm the
