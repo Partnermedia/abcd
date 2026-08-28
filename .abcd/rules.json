@@ -23,7 +23,7 @@
         "Docs are present tense only — what IS, never what was superseded or planned.",
         "One Diataxis type per page (tutorial / how-to / reference / explanation).",
         "User-facing prose in British English; code-side identifiers, comments, strings in US English.",
-        "Writing style: Follow the canonical guide at docs/reference/writing-style.md — em dashes allowed in prose but never in list items (use a colon), a capital letter after a colon, lower case after a semicolon. The guide labels each rule machine-enforced or review (the punctuation lint is staged as itd-141); point at the guide rather than copying it."
+        "Writing style: Follow the canonical guide at docs/reference/writing-style.md — em dashes allowed in prose but never in list items (use a colon), a capital letter after a colon, lower case after a semicolon. The guide labels each rule machine-enforced or review (the list-item em-dash rule is enforced as a docs-lint banned token; adr-54 rules the colon and semicolon casing checks review by nature); point at the guide rather than copying it."
       ]
     },
     "INTENTS": {
