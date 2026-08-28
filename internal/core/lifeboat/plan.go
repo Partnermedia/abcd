@@ -101,12 +101,12 @@ type PassBExemption struct {
 // passBReason is what a package with no transcript source has to say for itself.
 const passBReason = "no transcript source was read for this package, so the rationale Pass B would have mined is absent rather than omitted"
 
-// passBExemption declares Pass B exempt for a package no tier outside this
-// build's own could have grounded. Pass B reads a transcript store, and Tiers()
-// — git, conventions, abcd-native — holds no such tier, so every lifeboat this
-// build packs is exempt. It is derived from the tiers the pack actually drew on
-// rather than asserted as a constant: when a transcript tier is probed and
-// present, the declaration stops being written without this line changing.
+// passBExemption declares Pass B exempt for a package drawn only from the tiers
+// this build knows. Pass B reads a transcript store, and Tiers() — git,
+// conventions, abcd-native — holds no such tier, so every lifeboat this build
+// packs is exempt. It is derived from the tiers the pack actually drew on rather
+// than asserted as a constant: a pack that drew on a tier outside that set is
+// one a later pass contributed to, and it carries no declaration.
 func passBExemption(present []Tier) *PassBExemption {
 	settled := map[Tier]bool{}
 	for _, t := range Tiers() {

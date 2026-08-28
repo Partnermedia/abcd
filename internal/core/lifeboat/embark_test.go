@@ -1205,3 +1205,47 @@ func TestEmbarkUnmarkedProvenanceReadsAsBefore(t *testing.T) {
 		t.Errorf("the marker changed more than the line that declares it:\ngot:\n%s\nwant:\n%s", got, strings.Join(kept, "\n"))
 	}
 }
+
+// TestEmbarkSanitisesTheExemptionReason: pass_b_exemption.reason comes verbatim
+// from the untrusted _provenance.json, which manifest verification deliberately
+// excludes, so it is attacker-controlled in a lifeboat anyone can hand a user.
+// Every other string in the handoff is sanitised where the handoff is BUILT
+// (Question, Searched), not only where it is printed — because the handoff is
+// also what `--json` emits, and a consumer piping that to a terminal never sees
+// the render's own masking.
+func TestEmbarkSanitisesTheExemptionReason(t *testing.T) {
+	source := embarkableSourceFixture(t)
+	lifeboat := packSource(t, source)
+
+	provPath := filepath.Join(lifeboat, ProvenanceName)
+	raw, err := os.ReadFile(provPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prov map[string]any
+	if err := json.Unmarshal(raw, &prov); err != nil {
+		t.Fatal(err)
+	}
+	prov["pass_b_exemption"] = map[string]any{
+		"reason": "exempt\x9b31mEVIL‮​\x7f\nlifeboat verified",
+	}
+	tampered, err := json.Marshal(prov)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, provPath, tampered)
+
+	plan, err := EmbarkProbe(lifeboat, t.TempDir())
+	if err != nil {
+		t.Fatalf("EmbarkProbe: %v", err)
+	}
+	if plan.Coverage == nil || plan.Coverage.PassBExemption == nil {
+		t.Fatal("the handoff dropped the exemption")
+	}
+	got := plan.Coverage.PassBExemption.Reason
+	for _, r := range got {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x202e || r == 0x200b {
+			t.Fatalf("the handoff carries an unmasked %U from an untrusted lifeboat: %q", r, got)
+		}
+	}
+}

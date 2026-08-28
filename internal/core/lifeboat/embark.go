@@ -511,7 +511,15 @@ func readCoverageHandoff(abs string, exempt *PassBExemption) *CoverageHandoff {
 	// The exemption is a fact about the PACKAGE, not about coverage.json, so it
 	// travels even when the coverage is absent or unreadable: a reader still has
 	// to be told which pass did not run.
-	h.PassBExemption = exempt
+	//
+	// Its reason comes verbatim from _provenance.json, which manifest
+	// verification deliberately excludes, so it is free text in any lifeboat
+	// anyone can hand a user. It is sanitised HERE, where the handoff is built,
+	// like every other string in it — the handoff is also what --json emits, and
+	// a consumer piping that anywhere never sees the human render's own masking.
+	if exempt != nil {
+		h.PassBExemption = &PassBExemption{Reason: sanitize(exempt.Reason)}
+	}
 	return h
 }
 
