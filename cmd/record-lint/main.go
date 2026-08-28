@@ -21,6 +21,7 @@ func main() {
 	configPath := flag.String("config", "", "path to record-lint.json (default: <root>/.abcd/record-lint.json)")
 	rootPath := flag.String("root", "", "repo root to lint (default: git toplevel, or cwd)")
 	releaseGate := flag.String("release-gate", "", "arm the receipt_gate rule for a release: fail closed unless a PROMOTE semantic-pass receipt exists for this commit sha (release-time only; a CI workflow supplies the sha)")
+	deriveContentSha := flag.Bool("derive-content-sha", false, "print the reviewed content commit the release's semantic gate must arm against, derived from the receipts directory of the released tree (iss-355: HEAD-ancestry misresolves under a batched merge queue); fails closed with no output on a wrong or absent receipts directory")
 	var requireGates multiFlag
 	flag.Var(&requireGates, "require-gate", "a required semantic gate name for --release-gate (repeatable); overrides the config list so the workflow, not the in-tree file, is the trust root")
 	flag.Parse()
@@ -28,6 +29,28 @@ func main() {
 	root := *rootPath
 	if root == "" {
 		root = resolveRoot()
+	}
+
+	// --derive-content-sha is a standalone resolution mode: it prints the content
+	// commit and exits, doing no linting, so a CI workflow can capture a clean sha
+	// on stdout and arm --release-gate with it. The derivation reads the receipts
+	// directory of the released tree (HEAD), not HEAD^2^/HEAD^ ancestry, so a
+	// batched merge-queue push cannot make it resolve an unrelated PR's commit
+	// (iss-355). It fails closed: any error prints to stderr and exits non-zero
+	// with nothing on stdout, so the caller never arms the gate with a guess.
+	if *deriveContentSha {
+		released, err := gitutil.Run(root, "rev-parse", "--verify", "HEAD^{commit}")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "record-lint: resolve HEAD:", scrubPaths(err, root))
+			os.Exit(2)
+		}
+		content, err := lint.DeriveReleaseContentSha(root, released)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "record-lint:", scrubPaths(err, root))
+			os.Exit(2)
+		}
+		fmt.Println(content)
+		return
 	}
 
 	cfgPath := *configPath

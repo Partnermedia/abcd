@@ -158,6 +158,28 @@ func InRepo(root string) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
+// IsAncestor reports whether ancestor is an ancestor of (or equal to) descendant
+// under root, via `git merge-base --is-ancestor`. git encodes the answer in the
+// exit status — 0 is "yes", 1 is "no", and anything else (128 for a bad object, a
+// missing repository) is a real failure — so a bare Run cannot be used: it folds
+// the informative 1 into a generic error. A caller deriving a release's content
+// commit from the receipts directory needs the three outcomes kept apart: "yes"
+// selects a candidate, "no" skips it, and only a genuine git failure is fatal.
+func IsAncestor(root, ancestor, descendant string) (bool, error) {
+	cmd := isolatedGit(root, "merge-base", "--is-ancestor", ancestor, descendant)
+	e := &capWriter{remaining: 4096}
+	cmd.Stderr = e
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
+}
+
 // RepoShaped reports whether root sits anywhere inside a tree carrying a .git
 // entry — a directory, or the file a worktree or submodule leaves. It is
 // deliberately cruder than InRepo: its job is to tell "not a repository" apart
