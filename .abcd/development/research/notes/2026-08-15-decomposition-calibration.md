@@ -887,3 +887,48 @@ Per hand-run, append:
   (evaluator-outside-the-loop, record-before-fix, sweep-the-pattern) are
   cited, not re-homed — only F-W's authorship default was a genuinely
   unhoused stance.
+
+### 2026-08-28 — the deterministic attribution machinery (hand-run at filing)
+
+- **Proposal:** from the 2026-08-28 attribution review's closing
+  recommendation — cited sources must resolve into the references, credit
+  must surface transparently in the acknowledgements, and a source's licence
+  is vetted before it is used, "deterministically in some way".
+- **Initial routing:** five parts — the reference-closure and
+  acknowledgements-mirror gate with its influence registry (capability |
+  new intent); the licence-vetting admission check (capability | second
+  new intent, since it needs the refresh verb, a baseline schema, and a
+  licence backfill the first gate does not); "no source enters the record
+  without a vetted licence; the gate never dials out" (trust rule | ADR +
+  brief invariant, landed with the second intent); "every design-shaping
+  influence is credited on the canonical surface" (stance | already
+  half-stated in the acknowledgements header; principle line to be
+  confirmed at planning); the acknowledgements backfill itself (not an
+  intent | issue, filed as iss-2608280824478819, resolved by the change
+  that arms the first gate). Typed links: itd-164 **builds_on** itd-163;
+  itd-163 **refines itd-145** (the acknowledgement convention arming
+  itself); both extend the spc-17 citation lint family rather than adding
+  a parallel checker.
+- **Confirmed routing:** the two-intent split and the issue-first order
+  were proposed to the human and confirmed in-session before filing
+  ("yes, capture the issue and draft the two intents"); the stance line's
+  final home is left as a planning question.
+- **Verdict:** SPLIT, proposed and confirmed; filed as itd-163 and
+  itd-164.
+- **Notes:** the ordering follows record-before-fix — the backfill issue
+  is captured ahead of the gate that will refuse its absence, and day-one
+  green is an acceptance criterion of itd-163 so the arming change and
+  the backfill are forced into the same diff. Mint coordination: three
+  peer sessions were consulted before minting (itd-150–162 were taken on
+  queued PRs invisible to this checkout's tree); the binary's mint ledger
+  agreed and produced 163/164 directly. A miss, caught late: the
+  candidate scan over `drafts/` ran only after minting, when the brief's
+  later-phase index refused the new ids — it surfaced itd-145 as an
+  existing owner of the credit-enforcement aim. The overlap filed as
+  itd-163 `refines` itd-145 with an advisory supersession flag left for
+  the human at planning; had the scan run first, the routing might have
+  been PROMOTE itd-145 rather than file-new. Fourth data point for the
+  scan step earning its place, and the first where skipping it cost a
+  mint. **Ruling (same day):** the maintainer ruled itd-145 superseded —
+  the link is `supersedes`, itd-145 moved to `superseded/` with both
+  sides stamped, and itd-163 is the canonical credit-enforcement intent.
