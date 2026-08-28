@@ -378,6 +378,17 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, sr...)
 	}
 
+	// agent_contract walks the agent-prompt tree (agents/ — outside cfg.Roots and
+	// outside the docs-lint roots too, which is how the class went undetected),
+	// so it runs once here as well.
+	if acCfg, ok := cfg.Rules[ruleAgentContract]; ok && acCfg.Enabled {
+		ac, err := checkAgentContract(repoRoot, acCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ac...)
+	}
+
 	// context_status_free targets one work-tier file (CONTEXT.md) that lives
 	// outside cfg.Roots, so it too runs once, outside the per-root loop.
 	if ctxCfg, ok := cfg.Rules["context_status_free"]; ok && ctxCfg.Enabled {

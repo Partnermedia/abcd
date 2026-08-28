@@ -252,6 +252,12 @@
         "iss": ".abcd/work/issues"
       }
     },
+    "agent_contract": {
+      "enabled": true,
+      "severity": "blocker",
+      "agents_dir": "agents",
+      "changelog": "agents/CHANGELOG.md"
+    },
     "persona_registry": {
       "enabled": true,
       "severity": "blocker",
