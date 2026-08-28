@@ -31,9 +31,8 @@ the delegated path.
 ## The itd-5 contract
 
 Every agent prompt here conforms to [itd-5](../.abcd/development/intents/disciplines/itd-5-prompt-quality-additions.md),
-the prompt-quality discipline. (The PQ linter that will *enforce* this contract is
-not yet built — M6 ships conforming files, not the linter; the enum and checks
-remain an itd-5 deliverable.) The frontmatter fields:
+the prompt-quality discipline, and record-lint's `agent_contract` rule enforces it
+(itd-151). The frontmatter fields:
 
 - **`prompt_version: <semver>`** — the prompt's version. It bumps on any prompt
   change: MAJOR for an output-schema break, MINOR for a behaviour change preserving
@@ -88,7 +87,30 @@ nothing resolvable.
 ## Lint interaction
 
 `agents/` is outside both the record-lint roots (`.abcd/development`) and the
-docs-lint roots (`docs`, `README.md`), so neither lint scans these files today, and
-the fixture `*.json` files are never linted (the lint engine scans only `*.md`).
-The prompt bodies nonetheless stay **host-agnostic** — no AI vendor or tool name —
-matching the docs-lint discipline the rest of the surface is held to.
+docs-lint roots (`docs`, `README.md`), so the per-file record and docs rules do not
+reach these files. The itd-5 contract is enforced instead by record-lint's
+dedicated `agent_contract` rule, which walks this tree directly (`agents_dir` in
+`.abcd/record-lint.json`) and holds each prompt to three things:
+
+1. **The trust-contract frontmatter.** Every prompt declares `prompt_version` (a
+   semver) and `reads_untrusted_input` — the declaration is required of ALL of
+   them, because a rule that fires only on `true` is one a prompt opts out of by
+   deleting a line. A prompt that declares `true` also carries
+   `capability_scope.task_classes` and `capability_scope.designed_for`.
+2. **The injection canary.** An untrusted-input prompt ships
+   `<name>/fixtures/injection-canary.json`. This is the one check that reaches
+   outside `*.md`.
+3. **The per-agent changelog entry.** Every prompt's current `prompt_version` has
+   its own `### <agent> <version>` entry in `CHANGELOG.md`. This holds on every
+   invocation — no git needed — so a new prompt, or a bump with no entry, fails
+   `make record-lint`. Over an armed range (`record-lint -agent-diff <range>`) one
+   further thing is checked, the only one a tree cannot say: a prompt whose body
+   changed without its `prompt_version` changing, which is an edit that can never
+   acquire an entry because the entry is keyed on the version.
+
+The canary must be a regular, non-empty file: a bare existence test is satisfied
+by an empty file or a symlink, and a canary that asserts nothing reports the
+contract met without testing it.
+
+The prompt bodies stay **host-agnostic** — no AI vendor or tool name — matching the
+docs-lint discipline the rest of the surface is held to.

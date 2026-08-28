@@ -215,6 +215,20 @@ irreversible; guessing downward costs nothing.**
   `ACKNOWLEDGEMENTS.md`, using the `<!-- docs-lint: allow -->` escape where a lint
   root is involved. Private, unpublished tool names never appear in any committed
   file.
+- **Outward-facing text carries no session URL and no tool footer, and is
+  re-read after it is created.** A pull-request body, an issue, a comment, a
+  commit message and a release note are public the moment they exist, and a forge
+  keeps the pre-edit revision of whatever was posted — so scrubbing later is not a
+  remedy. Two things leak here: a live agent-session URL, and a tool's own
+  "generated with" attribution footer, which overrides the `Assisted-by:`
+  convention above. Both are banned in public text. **After creating any PR, issue
+  or comment, re-read what was actually created and strip either shape from it**
+  — the harness appends them outside the model's own output, so text that left
+  clean can arrive dirty. The policy is a value, not just this paragraph
+  (`scanner.OutboundPolicy`): `scanner.ScrubOutbound` is the primitive an
+  autonomous routine calls before posting, `abcd lint`'s privacy rule refuses
+  either shape in any committed file, and the `harness_leak` lint rule refuses it
+  in the record and the docs. One definition, four surfaces (itd-152).
 - **`ACKNOWLEDGEMENTS.md`** credits ideas, tools, and writing in three parts —
   development, inspirations, references. Add an entry in the same change that lands
   it (adopts a pattern, cites a source in an ADR, integrates a tool), never later.

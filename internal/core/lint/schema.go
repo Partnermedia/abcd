@@ -812,6 +812,26 @@ func recordRefsIn(value string) []recordRef {
 // never be mistaken for a body line. An empty record yields "", and the caller
 // substitutes the handle.
 func recordTitle(lines []string) string {
+	i := recordBodyStart(lines)
+	first := ""
+	for ; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(lines[i], "# "))
+		}
+		if first == "" {
+			if f := strings.Fields(lines[i]); len(f) > 0 {
+				first = strings.Join(f, " ")
+			}
+		}
+	}
+	return first
+}
+
+// recordBodyStart returns the index of the first BODY line: past a leading
+// attribution comment and blank lines, and past the frontmatter block if the
+// document opens one. It is the one place that skip is expressed, so recordTitle
+// and recordH1 can never disagree about where a document's prose begins.
+func recordBodyStart(lines []string) int {
 	i := 0
 	for i < len(lines) {
 		t := strings.TrimSpace(lines[i])
@@ -830,18 +850,24 @@ func recordTitle(lines []string) string {
 			i++
 		}
 	}
-	first := ""
-	for ; i < len(lines); i++ {
+	return i
+}
+
+// recordH1 returns a document's first H1 and its 1-based line, or ("", 0) when it
+// has none.
+//
+// recordTitle's first-body-line fallback is deliberately NOT applied here. That
+// fallback exists for the issue ledger, whose records carry no heading; applied
+// to arbitrary markdown it would read an ordinary opening sentence as a title,
+// and a sentence that happens to open with a record handle is a mention, not a
+// claim on the id.
+func recordH1(lines []string) (string, int) {
+	for i := recordBodyStart(lines); i < len(lines); i++ {
 		if strings.HasPrefix(lines[i], "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(lines[i], "# "))
-		}
-		if first == "" {
-			if f := strings.Fields(lines[i]); len(f) > 0 {
-				first = strings.Join(f, " ")
-			}
+			return strings.TrimSpace(strings.TrimPrefix(lines[i], "# ")), i + 1
 		}
 	}
-	return first
+	return "", 0
 }
 
 // refsContain reports whether a parsed handle set names the given handle.

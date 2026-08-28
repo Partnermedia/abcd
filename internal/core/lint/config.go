@@ -248,6 +248,18 @@ type RuleConfig struct {
 	// substituted for them: a repo names its own headings here to widen the gate,
 	// and a config that could narrow it could silently disarm it.
 	DeliverySections []string `json:"delivery_sections"`
+	// AgentsDir is the agent_contract prompt tree, repo-relative (default
+	// "agents"). It lies outside Roots — an agent prompt is not a record, so the
+	// rule walks the tree itself rather than the tree being added to Roots and
+	// judged by the record stores' schema.
+	AgentsDir string `json:"agents_dir"`
+	// DiffRange is the agent_contract changelog sub-check's git revision range.
+	// It is supplied by the CALLER (ArmAgentDiff, from a CI invocation) rather
+	// than read out of the in-tree config, for the reason ArmReceiptGate states:
+	// the decision to check a diff, and which diff, is trust-rooted to the
+	// workflow, not to the committer-editable file. Empty makes the sub-check a
+	// no-op — there is no diff to make a statement about.
+	DiffRange string `json:"-"`
 }
 
 // IndexSpec is one index_drift pair — a hand-written enumeration of a
@@ -310,6 +322,29 @@ func ArmReceiptGate(cfg Config, commit string, requiredGates []string) Config {
 	// committer-editable config.
 	rc.RequiredGates = requiredGates
 	rules["receipt_gate"] = rc
+	cfg.Rules = rules
+	return cfg
+}
+
+// ArmAgentDiff returns cfg with agent_contract's changelog sub-check pointed at a
+// git revision range. It is the same arming shape as ArmReceiptGate and for the
+// same reason: the sub-check asks whether a CHANGE announced itself, so it needs
+// a diff, and the caller (a CI invocation, `record-lint -agent-diff`) is the one
+// that knows which. It is deliberately NOT a config key — a range read out of the
+// committed file would let a committer point the gate at an empty diff.
+//
+// Arming only WIDENS the rule: an empty range leaves the changelog sub-check a
+// no-op while the frontmatter and canary sub-checks run either way. The rule's
+// own Enabled flag is untouched, so this cannot switch a disabled rule on.
+// The input cfg is not mutated (the Rules map is copied).
+func ArmAgentDiff(cfg Config, diffRange string) Config {
+	rules := make(map[string]RuleConfig, len(cfg.Rules)+1)
+	for k, v := range cfg.Rules {
+		rules[k] = v
+	}
+	rc := rules[ruleAgentContract]
+	rc.DiffRange = diffRange
+	rules[ruleAgentContract] = rc
 	cfg.Rules = rules
 	return cfg
 }

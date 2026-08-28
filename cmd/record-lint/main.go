@@ -24,6 +24,7 @@ func main() {
 	deriveContentSha := flag.Bool("derive-content-sha", false, "print the reviewed content commit the release's semantic gate must arm against, derived from the receipts directory of the released tree (iss-355: HEAD-ancestry misresolves under a batched merge queue); fails closed with no output on a wrong or absent receipts directory")
 	var requireGates multiFlag
 	flag.Var(&requireGates, "require-gate", "a required semantic gate name for --release-gate (repeatable); overrides the config list so the workflow, not the in-tree file, is the trust root")
+	agentDiff := flag.String("agent-diff", "", "a git revision or revision range (e.g. origin/main...HEAD); arms agent_contract's per-agent changelog sub-check over that diff, which is otherwise a no-op because it asks whether a CHANGE announced itself")
 	flag.Parse()
 
 	root := *rootPath
@@ -69,6 +70,15 @@ func main() {
 	// (committer-editable) config, which keeps the rule disabled for ordinary runs.
 	if *releaseGate != "" {
 		cfg = lint.ArmReceiptGate(cfg, *releaseGate, requireGates)
+	}
+
+	// --agent-diff arms the agent_contract changelog sub-check from the CLI
+	// invocation for the same reason: whether a prompt change announced itself is
+	// a question about a DIFF, and the caller (a CI workflow, a pre-push hook) is
+	// what knows which diff. Unarmed, the sub-check is a no-op and the tree-shaped
+	// halves of the rule (frontmatter, canary) still run.
+	if *agentDiff != "" {
+		cfg = lint.ArmAgentDiff(cfg, *agentDiff)
 	}
 
 	findings, err := lint.Lint(cfg, root)
