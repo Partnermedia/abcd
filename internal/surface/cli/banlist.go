@@ -9,6 +9,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/ahoy"
 	"github.com/intentdriven/abcd/internal/core/banlist"
+	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
@@ -328,9 +329,14 @@ func renderInheritedPrivateLayer(w io.Writer, rep *banlist.InheritedReport) {
 	if rep == nil {
 		return
 	}
-	fmt.Fprintf(w, "  inherited from the primary checkout — %s\n", termsafe.Sanitize(filepath.Join(rep.PrimaryRoot, filepath.FromSlash(rep.Private.Path))))
-	fmt.Fprintln(w, "  this is a linked git worktree, which has no store of its own; the guard reads")
-	fmt.Fprintln(w, "  the primary checkout's as a fallback, so these entries are enforced here too")
+	// RedactHome, like every other absolute path this front door renders: a
+	// checkout's directory name is very often a private name its own store bans.
+	fmt.Fprintf(w, "  inherited from the primary checkout — %s\n",
+		termsafe.Sanitize(fsutil.RedactHome(filepath.Join(rep.PrimaryRoot, filepath.FromSlash(rep.Private.Path)))))
+	fmt.Fprintln(w, "  this is a linked git worktree; the guard reads the primary checkout's store as a")
+	fmt.Fprintln(w, "  fallback, so these entries are enforced here too. The fallback is READ-SIDE only:")
+	fmt.Fprintln(w, "  `add --private` here writes to THIS worktree's store, which the primary checkout's")
+	fmt.Fprintln(w, "  own guard does not read — declare a name in the checkout that must enforce it")
 	for _, e := range rep.Private.Entries {
 		fmt.Fprintf(w, "    %s (line %d)\n", termsafe.Sanitize(e.Key), e.Line)
 	}

@@ -414,6 +414,55 @@ func TestRemoteApplyRefusesRatherThanGuess(t *testing.T) {
 		}
 	})
 
+	t.Run("run from a subdirectory, the opt-out still binds", func(t *testing.T) {
+		// The repository identity is resolved by git's UPWARD search, so a run from a
+		// subdirectory still names the enclosing repo — while a consent check read from
+		// the cwd would find no config there and read ABSENCE AS CONSENT, sending two
+		// PATCHes to a repository whose maintainer recorded the opt-out. The verb
+		// anchors every question at the working-tree root, so all of them name the same
+		// repository.
+		setupHermetic(t)
+		logPath := ghFake(t, bothDisabled)
+		repo := managedRepoWithOrigin(t, "https://github.com/example-org/example-repo")
+		writeNativeScanningOptOut(t, repo)
+		sub := filepath.Join(repo, "internal", "deep")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		res, err := RemoteApply(sub, confirmingPrompter{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Status != "opted_out" {
+			t.Errorf("status from a subdirectory = %q, want opted_out", res.Status)
+		}
+		if calls := ghCalls(t, logPath); len(calls) != 0 {
+			t.Errorf("a run from a subdirectory contacted a repo that opted out:\n%s", strings.Join(calls, "\n"))
+		}
+		if _, err := os.Stat(filepath.Join(sub, ".abcd")); err == nil {
+			t.Error("a stray .abcd tree was created in the subdirectory")
+		}
+	})
+
+	t.Run("run from a subdirectory, the mirror lands at the repo root", func(t *testing.T) {
+		setupHermetic(t)
+		ghFake(t, bothDisabled)
+		repo := managedRepoWithOrigin(t, "https://github.com/example-org/example-repo")
+		sub := filepath.Join(repo, "internal", "deep")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := RemoteApply(sub, confirmingPrompter{}); err != nil {
+			t.Fatal(err)
+		}
+		if mirror(t, repo) == "" {
+			t.Error("the mirror did not land at the repo root, so the committed record was not refreshed")
+		}
+		if _, err := os.Stat(filepath.Join(sub, ".abcd")); err == nil {
+			t.Error("the mirror was written into the subdirectory, outside the committed tier")
+		}
+	})
+
 	t.Run("a repo abcd does not manage", func(t *testing.T) {
 		setupHermetic(t)
 		logPath := ghFake(t, bothDisabled)

@@ -130,13 +130,21 @@ func attributionWouldChange(cwd string, opts InstallOptions) bool {
 // did not write is the maintainer's, and a symlink committed at `.githooks` cannot
 // redirect the write out of the tree.
 func (a *applyCtx) stepAttributionHook() {
-	if !a.approved[SafeAutocreate] {
-		return
-	}
 	// Keyed on the REQUEST plus the persisted choice, never on the gap: on a first
 	// opt-in the gap does not exist yet (nothing on disk records the choice), and
 	// keying on it would make the flag a no-op exactly when it is passed.
 	if !a.attribution && !attributionOptedIn(a.cwd) {
+		return
+	}
+	// An explicit --attribution IS the approval. The category gate covers the
+	// restore path — a hook the maintainer opted into once and later deleted — but
+	// applying it to the flag itself makes the flag a silent no-op on any repo with
+	// no OTHER safe-autocreate gap open, because resolveApproval only approves a
+	// category some resolvable gap belongs to. That is every already-installed repo,
+	// which is exactly the one the adopt phase runs `install --attribution` in: the
+	// step would do nothing, report nothing, and reproduce the silent degradation
+	// this whole intent exists to remove.
+	if !a.attribution && !a.approved[SafeAutocreate] {
 		return
 	}
 	root, err := os.OpenRoot(a.cwd)

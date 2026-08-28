@@ -119,7 +119,9 @@ git-identity pin, because the pin records whatever git identity is currently
 configured. When the result carries `optional_skipped`, report it and offer the
 `yes |` form above as the way to apply it.
 
-`--attribution` opts the repo into the committed `prepare-commit-msg` prompt,
+`--attribution` is its own approval and works on an already-installed repo (the
+step the adopt phase runs it in). It opts the repo into the committed
+`prepare-commit-msg` prompt,
 which seeds a commented disclosure line into every commit message an editor
 opens. It is opt-in and never a default — the hook stamps a convention onto
 every commit message, which is a repo's choice to make — and it writes no
@@ -198,7 +200,15 @@ as it is and is not contacted at all.
 The confirmation is the fourth gate, not a formality: an unanswered run declines
 and changes nothing, so present the question and the repository it names before
 answering it. `--yes` says yes in advance, and it is the user's word to give —
-never pass it on their behalf.
+never pass it on their behalf. A run that changed nothing exits NON-ZERO
+(`refused` or `aborted`), so a failed invocation is never mistaken for a write
+that landed; `opted_out` is the one non-change that exits clean, because leaving
+the repo alone is what the repo asked for.
+
+The API host is pinned to github.com on every request. `gh` would otherwise take
+it from `GH_HOST` or from whichever host the caller is authenticated to, which
+would send this verb's authenticated write to a machine the origin URL never
+named.
 
 The call goes through the GitHub CLI (`gh`), so the write is made by the user's
 own authenticated identity and abcd never holds a token; if `gh` is absent the

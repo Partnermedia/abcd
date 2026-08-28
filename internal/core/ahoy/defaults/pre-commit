@@ -217,6 +217,15 @@ if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ];
     primary_root=""
   fi
 fi
+# How the inherited store is NAMED in output — and the absolute path is not it. A
+# checkout's directory name is very often the private name its own store bans (a
+# project codename is the commonest entry there is), and this guard's whole contract
+# is that no pattern value reaches output. The announcement below runs on the SUCCESS
+# path of every commit, so an absolute path there would print the banned string to
+# stderr, into scrollback, into an agent transcript and into any CI log that captures
+# hook output — routinely, and for a commit that passed. The label says where the
+# store is relative to the other checkout, which is what a remedy actually needs.
+primary_label="the primary checkout's $banlist"
 
 # normalise_decl echoes a line with a UTF-8 BOM and surrounding ASCII blanks
 # stripped — the one reading both this hook and abcd's Go parser apply to the
@@ -332,22 +341,34 @@ refuse_store_copy() {
 refuse_non_regular_store() {
   _store="$1"
   _dir="$2"
+  _label="$3"
   if [ -L "$_store" ] || [ -L "$_dir" ]; then
-    echo "pre-commit: BLOCKED — $_store (or its directory) is a SYMLINK." >&2
+    echo "pre-commit: BLOCKED — $_label (or its directory) is a SYMLINK." >&2
     echo "            the private banlist must be a regular file in this working tree; a link can point" >&2
     echo "            the guard at an empty or attacker-chosen list. Replace it with the real file." >&2
     exit 1
   fi
   if [ -e "$_store" ] && [ ! -f "$_store" ]; then
-    echo "pre-commit: BLOCKED — $_store exists but is not a regular file." >&2
+    echo "pre-commit: BLOCKED — $_label exists but is not a regular file." >&2
     echo "            a directory, FIFO, or device there cannot be read as a banlist, and must not be" >&2
     echo "            mistaken for a machine that has not opted in." >&2
     exit 1
   fi
+  # A store that exists and cannot be READ is the same class, and it must refuse the
+  # same way. Left to `set -e` on the parse loop's redirect it surfaces as a bare
+  # "Permission denied" and a mute non-zero exit — which reads like a broken repo,
+  # not like a guard that refused, and this file already holds a missing TOOL to that
+  # standard.
+  if [ -f "$_store" ] && [ ! -r "$_store" ]; then
+    echo "pre-commit: BLOCKED — $_label exists but cannot be read." >&2
+    echo "            the guard cannot check against a list it cannot open, so it refuses rather than" >&2
+    echo "            pass. Fix its permissions (it is a 0600 file owned by you)." >&2
+    exit 1
+  fi
 }
-refuse_non_regular_store "$banlist" "$banlist_dir"
+refuse_non_regular_store "$banlist" "$banlist_dir" "$banlist"
 if [ -n "$primary_banlist" ]; then
-  refuse_non_regular_store "$primary_banlist" "$primary_dir"
+  refuse_non_regular_store "$primary_banlist" "$primary_dir" "$primary_label"
 fi
 
 # Which stores does this checkout actually have? Two at most: this working tree's
@@ -371,8 +392,8 @@ if [ "$local_present" -eq 0 ] && [ "$primary_present" -eq 0 ]; then
     # A linked worktree inherits the primary checkout's store, so name the second
     # place that was looked at: "absent" here is a claim about both, and a reader who
     # knows only about this tree would go and populate the wrong one.
-    echo "pre-commit:   (this is a linked worktree; the primary checkout's store at" >&2
-    echo "pre-commit:   $primary_banlist is absent too)" >&2
+    echo "pre-commit:   (this is a linked worktree, and $primary_label" >&2
+    echo "pre-commit:   is absent too)" >&2
   fi
   echo "pre-commit:   Opt in: run 'abcd banlist add --private <key> <pattern>', or" >&2
   echo "pre-commit:   write that file yourself with '$format_decl'" >&2
@@ -408,11 +429,16 @@ stores=()
 # gives unconditionally.
 load_store() {
   _store="$1"
-  _inherited="$2" # 1 when this is the primary checkout's store, read as a fallback
+  _label="$2"     # how this store is NAMED in output; never its absolute path
+  _inherited="$3" # 1 when this is the primary checkout's store, read as a fallback
   _tag=""
   if [ "$_inherited" -eq 1 ]; then
     _tag=" (inherited from the primary checkout)"
   fi
+  # Refusals raised while parsing THIS store belong to it. Compared against the
+  # entering value, so the zero-entry warning below is not suppressed by a refusal
+  # the OTHER store raised.
+  _rc_before="$rc"
 
   # Which format? The FIRST line decides the whole file, once, before any entry is
   # read. Trailing ASCII blanks and a CR are tolerated so a CRLF store reads the same.
@@ -448,7 +474,7 @@ load_store() {
       if declares_format "$decl"; then damaged=1; fi
       case "$decl" in *"$format_decl") damaged=1 ;; esac
       if [ "$damaged" -eq 1 ]; then
-        echo "pre-commit: BLOCKED — $_store line 1 is a DAMAGED format declaration (fail safe)." >&2
+        echo "pre-commit: BLOCKED — $_label line 1 is a DAMAGED format declaration (fail safe)." >&2
         echo "            it is not exactly '$format_decl' but carries it after a" >&2
         echo "            prefix, so it declares neither format: every keyed entry below would silently" >&2
         echo "            become a whole-line pattern that matches nothing. Fix line 1." >&2
@@ -483,7 +509,7 @@ load_store() {
     # another route. Once a real entry line is seen the header is over and a line that
     # merely looks like the declaration is just a comment.
     if [ "$_in_header" -eq 1 ] && [ "$_lineno" -gt 1 ] && declares_format "$line"; then
-      echo "pre-commit: BLOCKED — $_store declares the keyed format on line $_lineno, not line 1 (fail safe)." >&2
+      echo "pre-commit: BLOCKED — $_label declares the keyed format on line $_lineno, not line 1 (fail safe)." >&2
       echo "            the declaration decides the whole file and is only read from line 1, so every entry" >&2
       echo "            below would silently become a whole-line pattern that matches nothing. Move it up." >&2
       exit 1
@@ -539,7 +565,7 @@ load_store() {
         esac
       fi
       if [ -z "$key" ]; then
-        echo "pre-commit: BLOCKED — $_store line $_lineno is not a KEY<space-or-tab>PATTERN entry (fail safe)." >&2
+        echo "pre-commit: BLOCKED — $_label line $_lineno is not a KEY<space-or-tab>PATTERN entry (fail safe)." >&2
         echo "            fix that line; its content is withheld by design. An unparseable entry is never" >&2
         echo "            skipped: a banlist that cannot be read must not look like a banlist that found" >&2
         echo "            nothing. (Remove the '$format_decl' first line to read every line as a" >&2
@@ -553,7 +579,7 @@ load_store() {
     keys+=("$key")
     pats+=("$pat")
     lines+=("$_lineno")
-    stores+=("$_store")
+    stores+=("$_label")
   done < "$_store"
 
   # Announce the entry count actually read, BEFORE the scan; the format was announced
@@ -571,6 +597,23 @@ load_store() {
     if [ "$_count" -eq 1 ]; then noun="pattern"; else noun="patterns"; fi
     echo "pre-commit: abcd name-guard: legacy store$_tag, $_count $noun" >&2
   fi
+
+  # A store that parsed to NOTHING checks exactly as much as an absent one, so it is
+  # exactly as loud — and the test is PER STORE, not on the total. Summing the two
+  # would silence this banner for an emptied store whenever the other one still has
+  # an entry: every entry the developer declared there would stop being checked with
+  # nothing loud about it, which is precisely the failure the banner exists to catch
+  # (a refresh that truncates the store). An unparseable line is a refusal, raised
+  # above, not an empty store.
+  if [ "$_count" -eq 0 ] && [ "$rc" -eq "$_rc_before" ]; then
+    echo "pre-commit: ****************************************************************" >&2
+    echo "pre-commit: WARNING — the private name guard has NO ENTRIES in this store." >&2
+    echo "pre-commit:   $_label exists but yields no usable entry," >&2
+    echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
+    echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
+    echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
+    echo "pre-commit: ****************************************************************" >&2
+  fi
 }
 
 # The inherited store is read FIRST, so a developer standing in the linked worktree
@@ -578,27 +621,13 @@ load_store() {
 # refusal below names the entry's key, and the key alone is a phantom in a checkout
 # whose own store does not carry it.
 if [ "$primary_present" -eq 1 ]; then
-  echo "pre-commit: abcd name-guard: inheriting the primary checkout's store at $primary_banlist" >&2
-  load_store "$primary_banlist" 1
+  echo "pre-commit: abcd name-guard: inheriting $primary_label" >&2
+  load_store "$primary_banlist" "$primary_label" 1
 fi
 if [ "$local_present" -eq 1 ]; then
-  load_store "$banlist" 0
+  load_store "$banlist" "$banlist" 0
 fi
 
-# A store that parsed to NOTHING checks exactly as much as an absent one, so it is
-# exactly as loud. (An unparseable line is a refusal, handled above, not an empty
-# store.)
-if [ "$entries" -eq 0 ] && [ "$rc" -eq 0 ] && [ "$store_present" -eq 1 ]; then
-  empty_store="$banlist"
-  if [ "$local_present" -eq 0 ]; then empty_store="$primary_banlist"; fi
-  echo "pre-commit: ****************************************************************" >&2
-  echo "pre-commit: WARNING — the private name guard has NO ENTRIES on this machine." >&2
-  echo "pre-commit:   $empty_store exists but yields no usable entry," >&2
-  echo "pre-commit:   so NOTHING is checked against it and this commit proceeds" >&2
-  echo "pre-commit:   unprotected by that layer. If you did not empty it deliberately," >&2
-  echo "pre-commit:   check it before committing: 'abcd banlist list --private'." >&2
-  echo "pre-commit: ****************************************************************" >&2
-fi
 
 # --- the candidate content: staged BLOBS, not diff text ----------------------
 # What is checked is the CONTENT of every staged file, read straight out of the
@@ -774,8 +803,8 @@ while [ "$i" -lt "$entries" ]; do
         # An inherited entry is not in the store this checkout carries, so naming the
         # key alone would send the developer looking for a phantom. The remedy lives in
         # the primary checkout.
-        echo "            that entry is INHERITED from the primary checkout's store, not this working" >&2
-        echo "            tree's own: $store" >&2
+        echo "            that entry is INHERITED from $store, not from this working tree's own —" >&2
+        echo "            the remedy is in the primary checkout." >&2
       fi
       echo "            reword to a generic term before committing; the banlist is untracked and local." >&2
       echo "            (the matched text and the pattern are withheld by design — only the key is named)" >&2

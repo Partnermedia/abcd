@@ -1047,3 +1047,80 @@ func TestPreCommitHook_BareRepoWorktreeDoesNotInheritASiblingStore(t *testing.T)
 		t.Errorf("the guard claimed to inherit a store from a directory that is not a working tree\n%s", out)
 	}
 }
+
+// TestPreCommitHook_AnEmptiedWorktreeStoreStillWarns is the fail-quiet the
+// two-store guard opens if the zero-entry banner is keyed on the SUM. The
+// worktree's own store is truncated to its declaration line — the shape a refresh
+// that garbles the store produces — while the inherited store still has an entry.
+// Summed, the count is 1 and the banner never fires: every entry the developer
+// declared in this worktree has stopped being checked, silently, which is exactly
+// what the banner exists to catch.
+func TestPreCommitHook_AnEmptiedWorktreeStoreStillWarns(t *testing.T) {
+	_, linked := newWorktreeCase(t, keyedBanlist)
+	linked.writeBanlist("# abcd-banlist: keyed\n")
+	linked.write("note.md", "nothing sensitive here\n")
+	linked.git("add", "note.md")
+	blocked, out := linked.commit()
+	if blocked {
+		t.Fatalf("clean content was refused\n%s", out)
+	}
+	if !strings.Contains(out, "NO ENTRIES") {
+		t.Errorf("an emptied worktree store was silent because the inherited one had an entry\n%s", out)
+	}
+}
+
+// TestPreCommitHook_NeverPrintsThePrimaryCheckoutsPath is the guard's own
+// confidentiality contract applied to the new fallback. A checkout's directory name
+// is very often the private name its store bans — a project codename is the
+// commonest entry there is — and the inheritance announcement runs on the SUCCESS
+// path of EVERY commit, so an absolute path there prints the banned string to
+// stderr, scrollback and any log that captures hook output, routinely.
+func TestPreCommitHook_NeverPrintsThePrimaryCheckoutsPath(t *testing.T) {
+	primary, linked := newWorktreeCase(t, keyedBanlist)
+	linked.write("note.md", "nothing sensitive here\n")
+	linked.git("add", "note.md")
+	if blocked, out := linked.commit(); blocked {
+		t.Fatalf("clean content was refused\n%s", out)
+	}
+	_, clean := linked.commit()
+	linked.write("banned.md", "the widgetworks deal closes friday\n")
+	linked.git("add", "banned.md")
+	blocked, refusal := linked.commit()
+	if !blocked {
+		t.Fatalf("the inherited entry did not block\n%s", refusal)
+	}
+	for name, out := range map[string]string{"clean commit": clean, "refusal": refusal} {
+		if strings.Contains(out, primary.dir) {
+			t.Errorf("the %s prints the primary checkout's absolute path, whose directory name may itself be a banned string\n%s", name, out)
+		}
+		if !strings.Contains(out, "primary checkout") {
+			t.Errorf("the %s does not say the store was inherited, so the remedy is invisible\n%s", name, out)
+		}
+	}
+}
+
+// TestPreCommitHook_UnreadableStoreRefusesLoudly: a store that cannot be OPENED
+// checks exactly as little as one that cannot be parsed, and it must refuse the
+// same way. Left to `set -e` it surfaced as a bare "Permission denied" and a mute
+// non-zero exit, which reads like a broken repo rather than a guard that refused —
+// the standard this file already holds a missing TOOL to.
+func TestPreCommitHook_UnreadableStoreRefusesLoudly(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: an unreadable file is still readable")
+	}
+	r := newHookRepo(t, keyedBanlist)
+	store := filepath.Join(r.dir, ".abcd", ".work.local", "private-names.txt")
+	if err := os.Chmod(store, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(store, 0o600) })
+	r.write("note.md", "nothing sensitive here\n")
+	r.git("add", "note.md")
+	blocked, out := r.commit()
+	if !blocked {
+		t.Fatalf("an unreadable store let a commit through\n%s", out)
+	}
+	if !strings.Contains(out, "BLOCKED") || !strings.Contains(out, "cannot be read") {
+		t.Errorf("the refusal does not name the cause; a check that could not run must say so\n%s", out)
+	}
+}

@@ -103,6 +103,33 @@ func TestAttributionHookIsOptInAndIdempotent(t *testing.T) {
 		}
 	})
 
+	t.Run("opting in on an already-installed repo", func(t *testing.T) {
+		// The exact two-step sequence prepare-this-repo's adopt phase prescribes:
+		// scaffold the commit gates, then opt into attribution. On the second run
+		// there is no other safe-autocreate gap open, so a step keyed on the
+		// CATEGORY's approval writes nothing — the flag becomes a silent no-op in the
+		// one flow that exists to use it, which is the failure itd-162 shipped to fix.
+		setupHermetic(t)
+		repo := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+			t.Fatal(err)
+		}
+		res, err := Install(repo, attributionOpts(), RefusingPrompter{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(AttributionHookRelPath))); err != nil {
+			t.Fatalf("--attribution wrote nothing on an already-installed repo (status=%q writes=%v): %v",
+				res.Status, res.Writes, err)
+		}
+		if !attributionOptedIn(repo) {
+			t.Error("the opt-in was not recorded, so a later install would drop the hook")
+		}
+	})
+
 	t.Run("a hand-deleted hook is restored", func(t *testing.T) {
 		setupHermetic(t)
 		repo := t.TempDir()
@@ -298,6 +325,26 @@ func TestAttributionHookHoldsItsContract(t *testing.T) {
 		}
 		if !strings.Contains(got, "Assisted-by:") {
 			t.Errorf("commentChar=';': no prompt was seeded:\n%q", got)
+		}
+
+		if out, err := git("config", "--unset", "core.commentChar"); err != nil {
+			t.Fatalf("git config --unset: %v\n%s", err, out)
+		}
+		// git 2.45 added core.commentString, which SUPERSEDES commentChar and may be
+		// several characters. A hook reading only the older key falls back to '#' and
+		// writes the whole block into the message as text.
+		if out, err := git("config", "core.commentString", "//"); err == nil {
+			got := run(t, "subject line\n", "")
+			for _, line := range strings.Split(strings.TrimPrefix(got, "subject line\n"), "\n") {
+				if line != "" && !strings.HasPrefix(line, "//") {
+					t.Errorf("commentString='//': the hook appended a live line %q", line)
+				}
+			}
+			if out, err := git("config", "--unset", "core.commentString"); err != nil {
+				t.Fatalf("git config --unset: %v\n%s", err, out)
+			}
+		} else {
+			t.Logf("core.commentString unsupported by this git: %s", out)
 		}
 
 		if out, err := git("config", "core.commentChar", "auto"); err != nil {

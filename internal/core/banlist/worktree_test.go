@@ -154,3 +154,53 @@ func TestListCarriesTheInheritedLayer(t *testing.T) {
 		t.Errorf("List carried an inherited layer in a standalone checkout: %+v", rep.Inherited)
 	}
 }
+
+// TestPrimaryWorktreeRootRefusesABareRepoWorktree pins the lockstep the guard and
+// the board must keep. A worktree of a BARE clone has a common dir whose parent is
+// not a working tree — it is whatever directory holds the git dir. The committed
+// hook refuses to inherit there; if this resolver did not, the status board would
+// list an unrelated neighbouring repository's entries as "enforced here too" while
+// the guard enforced nothing, which is a board announcing protection that is not
+// running.
+func TestPrimaryWorktreeRootRefusesABareRepoWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	src, _ := worktreePair(t)
+	parent := t.TempDir()
+	env := gittest.Env(t)
+	git := func(dir string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	// A neighbouring repository's private store, in the directory that will hold the
+	// bare git dir. Nothing entitles a worktree of that bare repo to this list.
+	neighbour := filepath.Join(parent, filepath.FromSlash(PrivateDirRelPath))
+	if err := os.MkdirAll(neighbour, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, filepath.FromSlash(PrivateRelPath)),
+		[]byte("# abcd-banlist: keyed\nneighbour-secret  somethingelse\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bare := filepath.Join(parent, "repo.git")
+	if out, err := git(parent, "clone", "--bare", src, bare); err != nil {
+		t.Skipf("bare clone unavailable: %v\n%s", err, out)
+	}
+	linked := filepath.Join(t.TempDir(), "bare-linked")
+	if out, err := git(bare, "worktree", "add", linked, "HEAD"); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+	if got, ok := PrimaryWorktreeRoot(linked); ok {
+		t.Errorf("a worktree of a bare repo resolved %q as its primary checkout; that directory is not a working tree", got)
+	}
+	inh, err := InheritedPrivate(linked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inh != nil {
+		t.Errorf("a neighbouring repository's private store was reported as inherited: %+v", inh)
+	}
+}

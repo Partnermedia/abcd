@@ -74,10 +74,13 @@ fi
 #   commit.cleanup   `default` and `strip` remove comment lines; `verbatim`,
 #                    `whitespace` and `scissors` do not (scissors truncates at its
 #                    own marker and leaves every other comment standing).
-#   core.commentChar which byte begins a comment. A repo that set it to ';' has no
-#                    comment lines beginning '#', so this block would be message
-#                    text. `auto` picks a character from the message's own content,
-#                    which cannot be predicted from here.
+#   the comment    which bytes begin a comment. A repo that set it to ';' has no
+#   marker         comment lines beginning '#', so this block would be message text.
+#                  git 2.45 added core.commentString, which SUPERSEDES
+#                  core.commentChar and may be several characters ('//'), so reading
+#                  only the older key leaves the newer one's repos writing the block
+#                  into history. `auto` — accepted by both keys — picks a marker from
+#                  the message's own content and cannot be predicted from here.
 #
 # A skip is announced, never silent: a disclosure prompt that quietly stopped
 # appearing is the failure this hook exists to prevent, one level up.
@@ -91,13 +94,17 @@ case "$cleanup" in
     exit 0
     ;;
 esac
-comment_char=$(git config --get core.commentChar 2>/dev/null || true)
-if [ -z "$comment_char" ]; then
-  comment_char='#'
+# commentString first: where both are set it is the one git honours.
+comment_marker=$(git config --get core.commentString 2>/dev/null || true)
+if [ -z "$comment_marker" ]; then
+  comment_marker=$(git config --get core.commentChar 2>/dev/null || true)
 fi
-if [ "$comment_char" = "auto" ] || [ ${#comment_char} -ne 1 ]; then
-  echo "prepare-commit-msg: attribution prompt SKIPPED — core.commentChar is '$comment_char', so this hook" >&2
-  echo "                    cannot know which lines git will strip. Add the Assisted-by: trailer by hand." >&2
+if [ -z "$comment_marker" ]; then
+  comment_marker='#'
+fi
+if [ "$comment_marker" = "auto" ]; then
+  echo "prepare-commit-msg: attribution prompt SKIPPED — the comment marker is 'auto', so this hook cannot" >&2
+  echo "                    know which lines git will strip. Add the Assisted-by: trailer by hand." >&2
   exit 0
 fi
 
@@ -105,23 +112,24 @@ fi
 # The convention this asks for is disclosure, not authorship: a tool is not an
 # author, and a co-author trailer would assert a standing the tool does not hold.
 #
-# The comment character is substituted rather than hard-coded, so the block is
-# still comments in a repo that chose a different one. `printf` with a single
-# format string and no expansion of the body: the text is a constant here, and a
-# heredoc could not carry the variable prefix without also expanding the trailer
-# examples' angle brackets.
+# The comment marker is substituted rather than hard-coded, so the block is still
+# comments in a repo that chose a different one — of any length, since
+# core.commentString may be several characters. `printf` with a single format string
+# and no expansion of the body: the text is a constant here, and a heredoc could not
+# carry the variable prefix without also expanding the trailer examples' angle
+# brackets.
 {
   printf '%s\n' ""
-  printf '%s This repository asks every commit to declare whether a tool assisted it.\n' "$comment_char"
-  printf '%s Add ONE of these lines to the message above (this block is a comment and is\n' "$comment_char"
-  printf '%s stripped, so leaving it as-is discloses nothing):\n' "$comment_char"
-  printf '%s\n' "$comment_char"
-  printf '%s     Assisted-by: <Vendor>:<model-version>\n' "$comment_char"
-  printf '%s     Assisted-by: None\n' "$comment_char"
-  printf '%s\n' "$comment_char"
-  printf '%s `None` is the positive form for work no tool touched — silence cannot say so,\n' "$comment_char"
-  printf '%s because an absent trailer and a forgotten one look identical. Claiming it for\n' "$comment_char"
-  printf '%s assisted work is a false disclosure, which is what this convention exists to\n' "$comment_char"
-  printf '%s prevent. Disclosure is not authorship: never a co-author trailer for a tool.\n' "$comment_char"
+  printf '%s This repository asks every commit to declare whether a tool assisted it.\n' "$comment_marker"
+  printf '%s Add ONE of these lines to the message above (this block is a comment and is\n' "$comment_marker"
+  printf '%s stripped, so leaving it as-is discloses nothing):\n' "$comment_marker"
+  printf '%s\n' "$comment_marker"
+  printf '%s     Assisted-by: <Vendor>:<model-version>\n' "$comment_marker"
+  printf '%s     Assisted-by: None\n' "$comment_marker"
+  printf '%s\n' "$comment_marker"
+  printf '%s `None` is the positive form for work no tool touched — silence cannot say so,\n' "$comment_marker"
+  printf '%s because an absent trailer and a forgotten one look identical. Claiming it for\n' "$comment_marker"
+  printf '%s assisted work is a false disclosure, which is what this convention exists to\n' "$comment_marker"
+  printf '%s prevent. Disclosure is not authorship: never a co-author trailer for a tool.\n' "$comment_marker"
 } >>"$msg_file"
 exit 0

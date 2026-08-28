@@ -2,6 +2,7 @@ package banlist
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 
 	"github.com/intentdriven/abcd/internal/gitutil"
@@ -53,6 +54,21 @@ func PrimaryWorktreeRoot(repoRoot string) (string, bool) {
 	// A common dir with no parent left to take names no directory, and a primary
 	// that resolves back to THIS working tree is not a second store to inherit.
 	if primary == "" || primary == commonDir || primary == repoRoot {
+		return "", false
+	}
+	// The arithmetic alone is WRONG for a bare repository, and for one made with
+	// `--separate-git-dir`: there the common dir's parent is not a working tree at
+	// all, it is whatever directory happens to hold the git dir — so this would
+	// resolve, read and RENDER the private store of an unrelated repository that
+	// merely lives next door. Worse, the committed guard applies this same test, so
+	// without it here the board would list entries as "enforced here too" that the
+	// guard does not enforce: a status surface announcing protection that is not
+	// running is the one failure this layer's whole design forbids.
+	//
+	// A real primary working tree always carries a `.git` entry. Lstat, not Stat: a
+	// dangling symlink there is not a working tree either, and following it is how a
+	// crafted layout would answer the question for us.
+	if _, err := os.Lstat(filepath.Join(primary, ".git")); err != nil {
 		return "", false
 	}
 	return primary, true

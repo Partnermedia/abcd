@@ -63,7 +63,10 @@ announces that it writes before it runs — and each also ships on the CLI as
   must be a repo abcd manages, the repository must be the one this checkout's
   origin names, the repo's config must not set `scan.native_secret_scanning` to
   `false`, and the caller must confirm the specific toggles named (an unanswered
-  run declines; `--yes` is the explicit advance answer). The call goes through `gh`, so the
+  run declines; `--yes` is the explicit advance answer, and a run that changed
+  nothing exits non-zero). Every request pins the API host explicitly, so an
+  ambient `GH_HOST` cannot send the write to an endpoint the origin never named.
+  The call goes through `gh`, so the
   write is made by the caller's own authenticated identity and abcd never holds
   a token. Idempotent: a repository already in the desired state takes no write,
   and a re-run rewrites nothing.

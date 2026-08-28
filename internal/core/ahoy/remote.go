@@ -45,6 +45,16 @@ const (
 // statusEnabled is the only value either toggle is driven to.
 const statusEnabled = "enabled"
 
+// githubHost is the API host every request names EXPLICITLY. Without it `gh api`
+// picks its host from GH_HOST, or from whichever single host the caller's gh is
+// authenticated to — so the github.com-only rule parseGitHubRemote enforces would
+// constrain the PATH while the environment chose the ENDPOINT. An ambient GH_HOST
+// (a repo direnv file, a CI job, an agent harness) would then send this verb's
+// authenticated PATCH, with whatever credential gh holds for that host, to a
+// machine the origin URL never named. The decision is made once, where the origin
+// is validated, and applied where the request is built.
+const githubHost = "github.com"
+
 // RemoteSecurity is the pair of GitHub-native secret-scanning toggles, as observed
 // or as desired. A toggle GitHub did not report reads "unknown", never "disabled":
 // the two demand opposite responses, and reporting an unread state as off would
@@ -115,13 +125,38 @@ var ownerRepoRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 // repositories), so only a deliberate false opts out. A config that cannot be read
 // is NOT an opt-out — but it is not consent either, which is why the caller refuses
 // on it rather than proceeding.
-func nativeScanningOptedOut(cwd string) (optedOut, readable bool) {
+func nativeScanningOptedOut(cwd string) (optedOut, answerable bool) {
 	cfg, err := readConfig(cwd)
-	if err != nil {
+	if err != nil || cfg == nil {
+		// ABSENT is not consent, and neither is unreadable. readConfig reports an
+		// absent file as (nil, nil), and treating that as "no opt-out recorded" would
+		// make a missing file authorise a remote write — the exact direction a consent
+		// check must never fail in. Every other abcd verb may treat an absent config as
+		// unset; this one holds a remote write behind it.
 		return false, false
 	}
 	v, ok := boolVal(subMap(cfg, "scan"), "native_secret_scanning")
 	return ok && !v, true
+}
+
+// worktreeRoot resolves the WORKING-TREE root for cwd. Every question this verb
+// asks must be answered about the same repository, and they are not naturally: git
+// resolves a repository by searching UPWARD, so `Detect` and the origin read find
+// the enclosing repo from any subdirectory, while a config read rooted at cwd finds
+// nothing there. Anchoring all of them here is what stops a run from a subdirectory
+// resolving its identity from the repo and its CONSENT from an empty directory —
+// and what keeps the os.Root the mirror is written through pointed at the tier the
+// mirror belongs in rather than at a stray `.abcd` two levels down.
+func worktreeRoot(cwd string) (string, bool) {
+	out, err := runGit(cwd, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", false
+	}
+	top := strings.TrimSpace(out)
+	if top == "" {
+		return "", false
+	}
+	return top, true
 }
 
 // resolveGitHubRepo returns the owner/name this repo's origin remote points at, or
@@ -259,9 +294,11 @@ func RemoteApply(cwd string, p Prompter) (RemoteResult, error) {
 		res.Changes = append(res.Changes, step.key+": "+displayStatus(step.have)+" -> "+statusEnabled)
 	}
 
-	// The mirror is written only once every toggle actually reached the desired
-	// state: a mirror is a claim about the remote, and one written over a partial
-	// apply would be a claim nobody checked.
+	// The mirror is written only once every enable step this run needed RETURNED
+	// SUCCESS — never over a partial apply, whose failed step returns above. It is
+	// not a re-read: the claim it records is "abcd drove these toggles and GitHub
+	// accepted", which is what a later verify diffs the live state against, and a
+	// confirming GET here would only move the same trust one request along.
 	wrote, err := writeRepoSettingsMirror(abs, res.Repo, merge)
 	if err != nil {
 		res.Status = "refused"
@@ -288,6 +325,17 @@ func remotePrepare(cwd string) (res RemoteResult, abs string, done bool) {
 	if err != nil {
 		return refuseRemote(res, "could not resolve this directory: "+errText(err)), "", true
 	}
+	// Anchor EVERYTHING that follows at the working-tree root, before the first
+	// question is asked. Run from a subdirectory, git answers the identity questions
+	// about the enclosing repository while a cwd-rooted config read answers the
+	// consent question about an empty directory — so the verb would resolve WHICH
+	// repository to write from one place and WHETHER it may from another.
+	top, ok := worktreeRoot(abs)
+	if !ok {
+		return refuseRemote(res, "could not resolve this repository's working-tree root, so abcd cannot tell "+
+			"which repository it would be acting on"), "", true
+	}
+	abs = top
 	det, err := Detect(abs)
 	if err != nil {
 		return refuseRemote(res, "could not classify this folder, so abcd will not act on a repository it cannot identify: "+errText(err)), "", true
@@ -296,10 +344,10 @@ func remotePrepare(cwd string) (res RemoteResult, abs string, done bool) {
 		return refuseRemote(res, "this is not a repo abcd manages ("+string(det.FolderKind)+
 			"); a remote write is never made on a folder that did not adopt abcd (run `abcd ahoy install` first)"), "", true
 	}
-	optedOut, readable := nativeScanningOptedOut(abs)
-	if !readable {
-		return refuseRemote(res, "this repo's .abcd/config.json cannot be read, so the opt-out cannot be checked — "+
-			"and an unreadable config is not consent"), "", true
+	optedOut, answerable := nativeScanningOptedOut(abs)
+	if !answerable {
+		return refuseRemote(res, "this repo's .abcd/config.json is absent or cannot be read, so the opt-out cannot "+
+			"be checked — and a config that does not answer is not consent"), "", true
 	}
 	if optedOut {
 		res.Status = "opted_out"
@@ -354,7 +402,7 @@ func displayStatus(s string) string {
 // side, whereas assuming enabled would leave a repo unprotected while reporting it
 // covered.
 func ghSecurityState(cwd, repo string) (RemoteSecurity, RemoteMergeHygiene, error) {
-	out, err := runGH(cwd, nil, "api", "-H", "Accept: application/vnd.github+json", "repos/"+repo)
+	out, err := runGH(cwd, nil, "api", "--hostname", githubHost, "-H", "Accept: application/vnd.github+json", "repos/"+repo)
 	if err != nil {
 		return RemoteSecurity{}, RemoteMergeHygiene{}, err
 	}
@@ -392,7 +440,8 @@ func ghEnable(cwd, repo, key string) error {
 	if err != nil {
 		return err
 	}
-	_, err = runGH(cwd, body, "api", "--method", "PATCH", "-H", "Accept: application/vnd.github+json", "repos/"+repo, "--input", "-")
+	_, err = runGH(cwd, body, "api", "--hostname", githubHost, "--method", "PATCH",
+		"-H", "Accept: application/vnd.github+json", "repos/"+repo, "--input", "-")
 	return err
 }
 

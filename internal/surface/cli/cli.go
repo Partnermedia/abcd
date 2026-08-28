@@ -2108,11 +2108,15 @@ func newAhoyRemoteCommand(asJSON *bool) *cobra.Command {
 			}); rerr != nil {
 				return rerr
 			}
-			if res.Status == "refused" {
-				// A refusal exits non-zero. A remote write that did not happen must not
-				// look to a script exactly like one that did; the reason is on stdout
-				// above, where it is legible whether or not anyone reads stderr.
-				return &exitError{Code: 1, Msg: "abcd ahoy remote apply: refused (the reason is in the result's notes above)"}
+			// A change that did not happen exits non-zero. `aborted` is on this list
+			// deliberately: a non-interactive run without --yes reads EOF, declines,
+			// and would otherwise print "aborted" and exit 0 — which to a script is
+			// indistinguishable from a write that landed. `opted_out` is the one
+			// non-change that exits clean, because leaving the repo alone IS what the
+			// repo asked for. The reason is on stdout above either way.
+			if res.Status == "refused" || res.Status == "aborted" {
+				return &exitError{Code: 1, Msg: "abcd ahoy remote apply: " + res.Status +
+					" — nothing was changed (the reason is in the result's notes above)"}
 			}
 			return nil
 		},
