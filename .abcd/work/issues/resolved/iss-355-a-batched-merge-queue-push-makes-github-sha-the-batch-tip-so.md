@@ -7,6 +7,10 @@ category: "bug"
 source: "agent-finding"
 found_during: "bughunt-round-2"
 found_at: ".github/workflows/release.yml"
+resolution: "the release content commit is derived from the receipts directory instead of HEAD^2^ ancestry, so a batched merge-queue tip cannot misresolve it"
+impact: fix
+resolved_by:
+  commit: "9106d2b5"
 ---
 
 a batched merge-queue push makes github.sha the batch tip, so auto-release tags the wrong commit and release.yml's HEAD-caret-2-caret receipt derivation resolves an unrelated PR's commit whenever the release roll is not the last entry in its queue batch; the ancestry guard passes and the run wedges after the immutable tag, the iss-326 outcome by a route itd-93's pre-merge check cannot close because batch composition is decided by the queue
