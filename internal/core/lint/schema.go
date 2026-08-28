@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 const ruleRecordSchema = "record_schema"
@@ -51,11 +52,21 @@ var (
 	// stores rather than spelled as a literal so it cannot drift from the pattern.
 	recordHandleKinds = "adr-N, itd-N, spc-N, or iss-N"
 	// Filename → id number for each store. An ADR filename is the zero-padded
-	// sequential form (0012-<slug>.md); the other three carry the prose handle.
-	adrFileNumRe    = regexp.MustCompile(`^(\d+)-.*\.md$`)
-	intentFileNumRe = regexp.MustCompile(`^itd-(\d+).*\.md$`)
-	specFileNumRe   = regexp.MustCompile(`^spc-(\d+).*\.md$`)
-	issueFileNumRe  = regexp.MustCompile(`^iss-(\d+).*\.md$`)
+	// sequential form (0012-<slug>.md); the other three carry the prose handle and
+	// borrow the recordid resolver's OWN grammar, not a looser local copy.
+	//
+	// The prose-handle stores match recordid.FilenameNumRe exactly, so lint reads a
+	// filename as a record iff the resolver does: the old `^iss-(\d+).*\.md$` and
+	// its siblings accepted an arbitrary tail (`iss-5_bad.md`), which capture's
+	// scanLedger silently dropped and the resolver hard-errored on when the record
+	// was cited — a record the gate passed but no consumer could read
+	// (iss-2608270908346617). The ADR store keeps its own pattern (it has no
+	// prose-handle prefix) but is tightened to a kebab slug tail for the same
+	// reason: no arbitrary bytes after the ordinal.
+	adrFileNumRe    = regexp.MustCompile(`^([0-9]+)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$`)
+	intentFileNumRe = recordid.FilenameNumRe("itd")
+	specFileNumRe   = recordid.FilenameNumRe("spc")
+	issueFileNumRe  = recordid.FilenameNumRe("iss")
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -110,7 +121,15 @@ type recordStore struct {
 // config: which lifecycle states exist is the record's schema, and a config that
 // could add a bucket could also hide one.
 var recordStores = []recordStore{
-	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md"},
+	// `id` is required for an ADR because the record dispatcher (record.describeADR)
+	// routes by the filename ordinal but CONFIRMS the frontmatter id before it will
+	// render the record — so an id-less ADR reads as "not found" though its file
+	// plainly sits in the store, while the lint that never asked for the id stayed
+	// green (iss-2608270908344426). This is parity with the prose-handle stores,
+	// whose loaders (intent.Load) fail closed on a missing id: the id is a required
+	// property, and its absence must be a finding, not silent invisibility.
+	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, filename: "<NNNN>-<slug>.md",
+		requiredFields: []string{"id"}},
 	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, filename: "itd-<N>-<slug>.md"},
 	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, filename: "spc-<N>-<slug>.md"},
 	// The issue store's required properties come from the schema's ONE definition
@@ -170,10 +189,28 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 
 	// index: what the corpus HAS. highWater: the highest id each store has ever
 	// issued, as far as the corpus can show.
+	//
+	// records is sorted by path, so on an ordinal collision the FIRST record wins
+	// the index slot and every later claimant is reported: two records sharing a
+	// (prefix, ordinal) handle are one handle that resolves to only the first, so
+	// the second is unreachable to every cross-reference and index that keys on it —
+	// silently, before this check, because the map assignment just overwrote it
+	// (iss-2608270908346940). For the prose-handle stores the id-unique rules
+	// (issue_id_unique, intent_lifecycle, spec_id_unique) catch the frontmatter-id
+	// collision; the ADR store has no such rule, so this is its only guard.
 	index := map[recordRef]schemaRecord{}
 	highWater := map[string]int{}
 	for _, r := range records {
-		index[recordRef{r.store.prefix, r.num}] = r
+		ref := recordRef{r.store.prefix, r.num}
+		if first, dup := index[ref]; dup {
+			out = append(out, Finding{
+				File: r.rel, Line: 1, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+				Message: "filename ordinal '" + r.handle() + "' collides with " + first.rel +
+					"; two " + r.store.noun + " records sharing an id are one handle that resolves to only the first, so this one is unreachable to every cross-reference and index that keys on it",
+			})
+		} else {
+			index[ref] = r
+		}
 		if r.num > highWater[r.store.prefix] {
 			highWater[r.store.prefix] = r.num
 		}
@@ -212,6 +249,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	for _, r := range records {
 		out = append(out, checkRecordFilename(r, cfg.Severity)...)
 		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
+		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
 		// retired by the record that replaced it.
@@ -351,6 +389,93 @@ func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 		})
 	}
 	return out
+}
+
+// checkIssueRecordShape mirrors capture's validateStrict shape checks for the
+// ISSUE store: the additionalProperties:false unknown-key check, enum membership
+// (severity/category/source), and the kebab-slug check. Each reads the ONE shared
+// schema data in core/issueschema — the same allow-list and value sets capture
+// validates against — so a record capture would REFUSE (and therefore skip,
+// making it invisible to every capture surface) is not lint-green
+// (iss-2608261447039180, iss-2608270908342889).
+//
+// It is scoped to the issue store: the other three stores carry different
+// schemas, judged by their own rules. It deliberately does NOT yet mirror
+// capture's folder<->field invariants (resolution in resolved/, wontfix_reason in
+// wontfix/) or its optional-field type checks — the enum, slug and unknown-key
+// checks are the determinate, highest-value half; the folder invariants are a
+// follow-up.
+//
+// An ABSENT required value is the required-fields check's business, not this
+// one's, so each value check skips a missing/null value rather than double-report.
+func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
+	if r.store.prefix != "iss" {
+		return nil
+	}
+	var out []Finding
+	add := func(line int, msg string) {
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
+		})
+	}
+
+	// Unknown property: capture's reader refuses any key outside the allow-list and
+	// skips the whole record.
+	for key, f := range r.fields {
+		if issueschema.Known[key] {
+			continue
+		}
+		add(f.line, "unknown frontmatter property '"+key+"'; capture's reader refuses a key outside the issue schema and skips the record, so it is invisible to every capture surface while it still sits in the ledger")
+	}
+
+	// Enum membership: a present but out-of-enum value is refused by capture.
+	enums := []struct {
+		field string
+		set   []string
+	}{
+		{"severity", issueschema.Severities},
+		{"category", issueschema.Categories},
+		{"source", issueschema.Sources},
+	}
+	for _, e := range enums {
+		f, present := r.fields[e.field]
+		if !present || isAbsentValue(f.value) {
+			continue
+		}
+		v := issueScalar(f.value)
+		if !inSet(v, e.set) {
+			add(f.line, "invalid "+e.field+" '"+v+"'; capture refuses a value outside {"+strings.Join(e.set, ", ")+"} and skips the record")
+		}
+	}
+
+	// Kebab-slug: the slug becomes a filename, and capture refuses any other shape.
+	if f, present := r.fields["slug"]; present && !isAbsentValue(f.value) {
+		v := issueScalar(f.value)
+		if !issueschema.SlugRe.MatchString(v) {
+			add(f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
+		}
+	}
+	return out
+}
+
+// issueScalar strips the surrounding whitespace and quotes off a frontmatter
+// value so a quoted enum (`severity: "minor"`) compares as capture's parser reads
+// it — unquoted.
+func issueScalar(value string) string {
+	return strings.Trim(strings.TrimSpace(value), `"'`)
+}
+
+// inSet reports membership in a small value list.
+func inSet(v string, set []string) bool {
+	for _, s := range set {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // noun renders the record kind for a message.

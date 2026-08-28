@@ -1,0 +1,170 @@
+package lint
+
+import (
+	"path/filepath"
+	"testing"
+)
+
+// seedRecRoot creates the `rec` root the shared schemaConfig declares, so a test
+// that populates only the issue store (which sits outside `rec`) still resolves
+// every configured root. The README is skipped by the record scan.
+func seedRecRoot(t *testing.T, root string) {
+	t.Helper()
+	writeFile(t, root, "rec/README.md", "# rec\n")
+}
+
+// validIssue is a complete, well-formed open-issue record. Each parity test below
+// mutates exactly one facet of it, so a single finding is the whole delta.
+func validIssue(id, slug string) string {
+	return "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+		"\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n"
+}
+
+// TestRecordSchemaFilenameGrammarMatchesRecordid (iss-2608270908346617) pins that
+// lint's per-store filename grammar is the recordid resolver's grammar, not a
+// looser `^iss-(\d+).*\.md$` that accepts an arbitrary tail. A divergent name is
+// silently dropped by capture's scanLedger and hard-errors when the record is
+// cited, yet the loose lint regex read it as a well-formed record — so the gate
+// passed a record every consumer refuses.
+func TestRecordSchemaFilenameGrammarMatchesRecordid(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	seedRecRoot(t, root)
+	// `iss-5_bad.md`: the loose grammar captures num 5 and accepts the `_bad`
+	// tail; the recordid grammar (and capture) refuse it — the slug must be a
+	// kebab tail, not arbitrary bytes after the ordinal.
+	writeFile(t, root, issues+"/open/iss-5_bad.md", validIssue("iss-5", "ok"))
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(issues, "open", "iss-5_bad.md"), ruleRecordSchema, "not a well-formed issue filename") {
+		t.Fatalf("expected a malformed-filename finding for iss-5_bad.md (recordid grammar): %+v", fs)
+	}
+}
+
+// TestRecordSchemaFilenameGrammarAcceptsKebab is the control: a well-formed name
+// with a kebab slug (and the bare ordinal form) stays silent, so the tightened
+// grammar refuses only what capture refuses.
+func TestRecordSchemaFilenameGrammarAcceptsKebab(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	seedRecRoot(t, root)
+	writeFile(t, root, issues+"/open/iss-5-a-good-slug.md", validIssue("iss-5", "a-good-slug"))
+	writeFile(t, root, issues+"/open/iss-6.md", validIssue("iss-6", "bare"))
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("well-formed kebab and bare-ordinal names must stay clean, got %d: %+v", n, fs)
+	}
+}
+
+// TestRecordSchemaFlagsIdlessADR (iss-2608270908344426) pins that an ADR whose
+// frontmatter carries no id is refused. describeADR resolves an ADR by matching
+// its filename ordinal AND confirming the frontmatter id, so an id-less ADR reads
+// as "not found" through the record dispatcher though its file plainly sits in
+// the store — while the lint that never asked for the id stayed green. `id` is a
+// required ADR property, the same way intent.Load fail-closes on a missing id.
+func TestRecordSchemaFlagsIdlessADR(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0007-no-id.md", "---\nstatus: accepted\n---\n# ADR-7\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(adrs, "0007-no-id.md"), ruleRecordSchema, "missing required property 'id'") {
+		t.Fatalf("expected a missing-id finding on the id-less ADR: %+v", fs)
+	}
+}
+
+// TestRecordSchemaFlagsOrdinalCollision (iss-2608270908346940) pins that two
+// records sharing a filename ordinal are reported. The corpus index keys on the
+// (prefix, ordinal) handle, so the second record silently overwrites the first
+// and becomes unreachable to every cross-reference and index that resolves the
+// handle — with no finding to mark it. The collision is now a record_schema
+// finding on the later (overwriting) record.
+func TestRecordSchemaFlagsOrdinalCollision(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0006-a.md", "---\nid: adr-6\nsupersedes: null\nsuperseded_by: null\n---\n# ADR-6 a\n")
+	writeFile(t, root, adrs+"/0006-b.md", "---\nid: adr-6\nsupersedes: null\nsuperseded_by: null\n---\n# ADR-6 b\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(adrs, "0006-b.md"), ruleRecordSchema, "collides") {
+		t.Fatalf("expected an ordinal-collision finding on the second adr-6: %+v", fs)
+	}
+}
+
+// TestRecordSchemaFlagsUnknownIssueKey (iss-2608261447039180) pins that an
+// UNKNOWN issue-frontmatter key is refused. capture's reader rejects a record
+// with a key outside the additionalProperties:false allow-list and skips it, so
+// the record goes invisible to every capture surface — while the lint, which
+// flagged only MISSING required properties, stayed green. The allow-list is the
+// one shared issueschema set, not a restated copy.
+func TestRecordSchemaFlagsUnknownIssueKey(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	seedRecRoot(t, root)
+	rec := "---\nschema_version: 1\nid: iss-5\nslug: ok\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\nbogus: x\n---\n\nan issue\n"
+	writeFile(t, root, issues+"/open/iss-5-ok.md", rec)
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(issues, "open", "iss-5-ok.md"), ruleRecordSchema, "unknown frontmatter property 'bogus'") {
+		t.Fatalf("expected an unknown-key finding on the issue record: %+v", fs)
+	}
+}
+
+// TestRecordSchemaFlagsIssueEnumAndSlug (iss-2608270908342889) pins that lint
+// mirrors capture's enum-membership and kebab-slug checks for the issue store. A
+// record with an out-of-enum severity/category/source, or a non-kebab slug, is
+// refused by capture's validateStrict and skipped — invisible everywhere — while
+// the lint that never checked the values stayed green.
+func TestRecordSchemaFlagsIssueEnumAndSlug(t *testing.T) {
+	issues := "work/issues"
+
+	cases := []struct {
+		name   string
+		file   string
+		rec    string
+		substr string
+	}{
+		{"severity", "iss-5-ok.md",
+			"---\nschema_version: 1\nid: iss-5\nslug: ok\nseverity: huge\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nx\n",
+			"severity 'huge'"},
+		{"category", "iss-6-ok.md",
+			"---\nschema_version: 1\nid: iss-6\nslug: ok\nseverity: minor\ncategory: nonsense\nsource: user-observation\nfound_during: t\n---\n\nx\n",
+			"category 'nonsense'"},
+		{"source", "iss-7-ok.md",
+			"---\nschema_version: 1\nid: iss-7\nslug: ok\nseverity: minor\ncategory: bug\nsource: telepathy\nfound_during: t\n---\n\nx\n",
+			"source 'telepathy'"},
+		{"slug", "iss-8-ok.md",
+			"---\nschema_version: 1\nid: iss-8\nslug: Not_Kebab\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nx\n",
+			"slug 'Not_Kebab'"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			seedRecRoot(t, root)
+			writeFile(t, root, issues+"/open/"+c.file, c.rec)
+			fs, err := Lint(schemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !findingWith(fs, filepath.Join(issues, "open", c.file), ruleRecordSchema, c.substr) {
+				t.Fatalf("expected an issue-shape finding quoting %q: %+v", c.substr, fs)
+			}
+		})
+	}
+}
