@@ -9,13 +9,14 @@
 #      a direct push to the protected branch, a deletion of it, and any
 #      non-fast-forward (force) push to any branch.
 #   2. `make preflight` must pass natively before a push leaves this machine —
-#      the four lint gates (lint-reviews, lint-issues, record-lint, docs-lint)
+#      the five lint gates (lint-reviews, lint-issues, lint-decisions,
+#      record-lint, docs-lint)
 #      plus the site-render gate, then build, vet, test and the race-enabled
 #      internal tests. CI's check job adds a `gofmt -l .` format gate on top of
 #      those Go steps; the secret-scan, workflow-audit, dependency-review,
 #      govulncheck and smoke lanes run in Actions only, and the record-lint job
-#      there repeats the reviews-charter and issue-resolution gates preflight
-#      already ran here.
+#      there repeats the reviews-charter, issue-resolution and decisions-append
+#      gates preflight already ran here.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 

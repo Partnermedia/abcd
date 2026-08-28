@@ -6,7 +6,7 @@ kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 related_adrs: [adr-28]
-prd_path: ".abcd/intents/itd-65/prd.md"
+prd_path: null
 grill_session_id: 65d0f1de-0065-4a65-9c0d-000000000065
 grilled_at: 2026-07-01
 grilled_intent_hash: e11007a63a6727350b011965544b548683256e4cb249d67e5b1ab7894d13809f

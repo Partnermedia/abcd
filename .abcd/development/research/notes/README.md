@@ -25,7 +25,7 @@ themselves.
   dated subdirectory when a cluster of notes serves one piece of work (design
   inputs a given phase consumes).
 - **Prompt R&D** — goes to `research/prompting/` (agent prompt drafts, templates).
-- **Run logs / ephemeral acceptance output** — go to `.abcd/logbook/`.
+- **Run logs / ephemeral acceptance output** — go to `.abcd/.work.local/logs/`.
 
 ## Naming convention
 

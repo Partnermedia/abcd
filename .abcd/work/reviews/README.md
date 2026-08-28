@@ -4,7 +4,7 @@ Commissioned reviews of this project — plan reviews, code reviews, external au
 
 ## What does NOT belong here
 
-- **Per-invocation artifacts from abcd surfaces** (oracle audits, grill reports, disembark audits) — those go to `.abcd/logbook/<verb>/<ts>/` as traces of the command run that produced them.
+- **Per-invocation artifacts from abcd surfaces** (oracle audits, grill reports, disembark audits) — those go to `.abcd/.work.local/logs/<verb>/<ts>/` as traces of the command run that produced them.
 - **Distilled outcomes** — when a review changes course, the settled decision graduates to `../../development/decisions/` (an ADR or a decision note). The review folder is the evidence trail, not the decision record.
 - **Individual open findings** — findings graduate into intents, issues, or ADRs. Reviews are not a shadow backlog.
 
@@ -30,3 +30,14 @@ Until these land in abcd's own lint (`internal/core/lint`), the standalone gate 
 - [`../CONTEXT.md`](../CONTEXT.md) — current working state
 - [`../DECISIONS.md`](../DECISIONS.md) — decisions pending graduation to ADRs
 - [`../../development/decisions/`](../../development/decisions/) — where review outcomes graduate
+
+## Receipt keys
+
+Semantic-gate receipt directories are keyed by the commit they gate, and five
+keys name commits unreachable from `main`. `33779807…`, `8e8abb88…` and
+`fa795d54…` are old-history ids from before the 2026-08-06 attribution rewrite
+and translate to current ids via the
+[attribution-rewrite sha map](../../development/research/data/attribution-rewrite-2026-08-06/sha-map-old-to-new.tsv);
+`3de51484…` and `5519d444…` are branch heads a squash or rebase merge left
+behind, with no translation row — their receipts stay as evidence of the runs,
+keyed by the sha each run saw.

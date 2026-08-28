@@ -736,3 +736,62 @@ func TestListSkippedErrorIsPathFree(t *testing.T) {
 		}
 	}
 }
+
+// TestMalformedRecordNameIsVisiblySkipped pins the difference between a file
+// that is NOT a record and a file that CLAIMS to be one and is malformed. The
+// ledger scan must ignore the first silently and report the second, because a
+// name carrying the family prefix and an ordinal is a record someone wrote: it
+// sits in the ledger, is counted by nothing, and is reported by nothing.
+//
+// The live shape is a non-kebab tail (iss-N-another_finding.md). It clears the
+// record-lint store's filename rule, whose pattern accepts an arbitrary tail
+// (`^iss-(\d+).*\.md$`), so the committed gate stays green; and it fails the
+// strict splitter here, so the reader used to drop it on a bare `continue` —
+// visible to neither `capture list` nor its Skipped roster. That grammar
+// divergence between the gate and the reader is iss-2608270908346617; this
+// closes only its silent-drop half, so the record stays open for the rest (the
+// lint-side grammar and the citation path).
+func TestMalformedRecordNameIsVisiblySkipped(t *testing.T) {
+	repo, ir := ledger(t)
+	if _, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "a finding", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "good-record", FoundDuring: "t",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Well-formed in every respect BUT its name, so nothing else can account for
+	// its disappearance.
+	record := "---\nschema_version: 1\nid: \"iss-2\"\nslug: \"another-finding\"\n" +
+		"severity: \"minor\"\ncategory: \"bug\"\nsource: \"manual-test\"\nfound_during: \"t\"\n---\n\nbody\n"
+	claimed := filepath.Join(ir, "open", "iss-2-another_finding.md")
+	if err := os.WriteFile(claimed, []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Files that claim NOTHING must stay silently ignored: a stray note, the
+	// store's README, and the allocator lock are not records, and reporting them
+	// would turn every ledger read into noise.
+	for _, quiet := range []string{"README.md", "notes.md", "iss-notes.md"} {
+		if err := os.WriteFile(filepath.Join(ir, "open", quiet), []byte("stray"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	lr, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lr.Issues) != 1 {
+		t.Fatalf("want the 1 well-formed issue, got %d: %+v", len(lr.Issues), lr.Issues)
+	}
+	if len(lr.Skipped) != 1 {
+		t.Fatalf("want exactly 1 skip (the malformed record name), got %d: %+v", len(lr.Skipped), lr.Skipped)
+	}
+	if !strings.Contains(lr.Skipped[0].Path, "iss-2-another_finding.md") {
+		t.Fatalf("the reported skip is not the malformed record: %+v", lr.Skipped)
+	}
+	// The skip must SAY what is wrong with the name, or a reader learns only that
+	// something was dropped.
+	if !strings.Contains(lr.Skipped[0].Error, "iss-2-another_finding.md") {
+		t.Errorf("skip message %q does not name the offending filename", lr.Skipped[0].Error)
+	}
+}

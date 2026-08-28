@@ -10,7 +10,7 @@ VERSION ?=
 # for public distribution.
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/intentdriven/abcd/internal/core.Version=$(VERSION),)
 
-.PHONY: build test vet clean preflight lint-reviews lint-issues record-lint docs-lint site-render smoke \
+.PHONY: build test vet clean preflight lint-reviews lint-issues lint-decisions record-lint docs-lint site-render smoke \
 	check-attribution scaffold-sync scaffold-sync-check
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
@@ -77,6 +77,47 @@ lint-issues:
 	@bash scripts/check-issue-resolution.sh ledger HEAD
 	@bash scripts/check-issue-resolution.sh commits origin/main HEAD
 
+# Deterministic append-only gate for .abcd/work/DECISIONS.md
+# (iss-2608271804494867). The ledger declares itself append-only and newest-last,
+# and nothing enforced it; the five backwards date steps already in the file are
+# historical and are NOT repaired, because reordering a committed append-only log
+# is the one thing append-only forbids. Position, not date order, is the first
+# rule: a back-dated entry appended at the tail is honest, an entry written above
+# existing ones is not. Three rules, each per-commit against that commit's own
+# parents:
+#
+#   DA001 position    — an added line lands after the last line the parent had.
+#   DA002 preservation — no committed line below the header is removed, against
+#                        EVERY parent. Position alone only fires while content
+#                        SURVIVES below the addition, so a rewrite that reaches
+#                        end-of-file, and its truncate-then-restore cousin, slip
+#                        past it entirely.
+#   DA003 merge authors nothing — a merge's ledger holds a line no more times
+#                        than its parents hold it between them. Merges cannot be
+#                        skipped (a forged resolution is an unchecked write path)
+#                        and DA001 cannot be applied to them (the ledger is
+#                        merge=union, and the driver's interleaving leaves the
+#                        result a tail extension of neither side), so the count
+#                        bound is what holds. Set membership alone was blind to a
+#                        merge that DUPLICATES a committed decision at the top.
+#   DA004 the ledger is text — no commit introduces a NUL byte. One NUL makes git
+#                        call the file binary, which empties the diff of hunks and
+#                        silently disarms every rule above, permanently. The diffs
+#                        are read with --text so that cannot happen; DA004 keeps
+#                        the byte out of the file, which --text does not.
+#
+# Both operations the gate legitimately refuses — redacting a leaked line, and
+# the ledger's own planned graduation to per-file decisions/ — are deliberate
+# gate-edit-and-review changes, not escape hatches: see the script's header.
+#
+# The cases run first, as in lint-reviews and lint-issues: a gate nobody has
+# watched fail is an enforcement claim with no evidence behind it. Needs full git
+# history, like its siblings: on a shallow checkout the script refuses (exit 2)
+# rather than read every append as a whole-file add.
+lint-decisions:
+	@bash scripts/check-decisions-append-cases.sh
+	@bash scripts/check-decisions-append.sh commits origin/main HEAD
+
 # Deterministic docs-currency gate (itd-60): the same internal/core/lint engine,
 # driven over docs/ and the repo root via the transport-agnostic `abcd docs lint`
 # verb. Blocking: change-narration in a doc body, a broken relative link, or a
@@ -88,7 +129,7 @@ docs-lint:
 # docs/ — 852 records at the 0.6.4 cut — and the renderer supports a fixed
 # markdown subset, refusing anything it would otherwise pass through unrendered.
 # So a record is a site input, and a malformed one breaks the render. Nothing
-# caught that before this target existed: the four lint gates read records but
+# caught that before this target existed: the other lint gates read records but
 # never render them, and site-screenshots.yml is path-filtered to the generator
 # and docs/, so a records-only pull request changed the rendered page and
 # triggered no audit. It reached a release, where `release.yml`'s site job failed
@@ -124,14 +165,14 @@ scaffold-sync:
 scaffold-sync-check:
 	@go run ./cmd/scaffold-sync -check
 
-# Pre-push gate (invoked by .githooks/pre-push): the four lint gates
-# (lint-reviews, lint-issues, record-lint, docs-lint) plus the site-render gate
-# as prerequisites, then build, vet, test,
+# Pre-push gate (invoked by .githooks/pre-push): the five lint gates
+# (lint-reviews, lint-issues, lint-decisions, record-lint, docs-lint) plus the
+# site-render gate as prerequisites, then build, vet, test,
 # and race-enabled internal tests natively. CI's check job runs those same four
 # Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
 # separately before pushing. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews lint-issues record-lint docs-lint site-render
+preflight: lint-reviews lint-issues lint-decisions record-lint docs-lint site-render
 	go build ./...
 	go vet ./...
 	go test ./...

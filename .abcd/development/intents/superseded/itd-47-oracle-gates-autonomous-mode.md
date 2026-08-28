@@ -1,6 +1,6 @@
 ---
 id: itd-47
-slug: spc-12-oracle-gates-autonomous-mode
+slug: oracle-gates-autonomous-mode
 spec_id: null
 kind: standalone
 suggested_kind: standalone
@@ -13,7 +13,7 @@ severity: nitpick
 
 > **⚠️ Superseded by [ADR-22](../../decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md)** (codex is dropped as a dependency and the Ralph autonomous loop is not ported; the RP→codex→in-session oracle cascade is replaced by host-delegated LLM and the pluggable autonomous seam — see also [ADR-25](../../decisions/adrs/0025-host-delegated-llm-default.md), [ADR-27](../../decisions/adrs/0027-autonomous-run-pluggable-seam.md)). Preserved as historical record per the supersession lifecycle.
 
-# spc-12's Oracle-Backed Gates Pass Honestly Without A Human In The Loop
+# Oracle-Backed Gates Pass Honestly Without A Human In The Loop
 
 ## Press Release
 
